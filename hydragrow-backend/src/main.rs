@@ -6,10 +6,10 @@ use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     env, fs,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::{
     RwLock,
@@ -29,6 +29,35 @@ pub mod models;
 pub mod mqtt;
 pub mod services;
 
+#[derive(Debug, Clone)]
+pub struct PhVoltageSample {
+    pub voltage_mv: f64,
+    pub observed_at: chrono::DateTime<chrono::Utc>,
+    pub received_at: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PhCalibrationMode {
+    TwoPoint,
+    ThreePoint,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PhCapturedPoint {
+    pub point: i32,
+    pub voltage_mv: f64,
+    pub sample_count: usize,
+    pub captured_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PhCalibrationSession {
+    pub mode: PhCalibrationMode,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub captured_points: HashMap<i32, PhCapturedPoint>,
+}
+
 pub struct AppState {
     pub pg_pool: sqlx::PgPool,
     pub influx_client: InfluxClient,
@@ -41,6 +70,8 @@ pub struct AppState {
     pub sensor_sender: broadcast::Sender<SensorData>,
     pub health_sender: broadcast::Sender<serde_json::Value>,
     pub fcm_tokens: Mutex<Vec<String>>,
+    pub ph_calibration_sessions: std::sync::Arc<RwLock<HashMap<String, PhCalibrationSession>>>,
+    pub ph_voltage_samples: std::sync::Arc<RwLock<HashMap<String, VecDeque<PhVoltageSample>>>>,
 }
 
 #[tokio::main]
@@ -162,6 +193,8 @@ async fn main() -> anyhow::Result<()> {
         sensor_sender,
         fcm_tokens: Mutex::new(Vec::new()),
         health_sender: health_tx,
+        ph_calibration_sessions: Arc::new(RwLock::new(HashMap::new())),
+        ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
     });
 
     mqtt_client
@@ -234,6 +267,7 @@ async fn main() -> anyhow::Result<()> {
                             .configure(api::sensor::init_routes)
                             .configure(api::ws::init_routes)
                             .configure(api::config::init_routes)
+                            .configure(api::calibration::init_routes)
                             .configure(api::crop_season::init_routes)
                             .configure(api::alert::init_routes),
                     ),

@@ -83,7 +83,15 @@ const Settings = () => {
     const options: any = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key } };
     if (body) options.body = JSON.stringify(body);
     const res = await fetch(url, options);
-    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    if (!res.ok) {
+      let errDetail = `HTTP ${res.status}`;
+      try {
+        const errBody = await res.text();
+        console.error(`[API Error] ${method} ${path} →`, res.status, errBody);
+        errDetail = `${res.status}: ${errBody}`;
+      } catch (_) { }
+      throw new Error(errDetail);
+    }
     return await res.json();
   };
 
@@ -369,7 +377,7 @@ const Settings = () => {
         dynamic_sample_count: Math.trunc(toNumberOr(savingConfig.dynamic_sample_count, 0)),
         dynamic_confidence: toNumberOr(savingConfig.dynamic_confidence, 0),
         dynamic_model_version: String(savingConfig.dynamic_model_version || 'v1'),
-        last_dynamic_update: null,
+        last_dynamic_update: toNumberOr(savingConfig.last_dynamic_update, 0),
 
         last_calibrated: ts
       };
@@ -388,8 +396,8 @@ const Settings = () => {
 
       toast.success('Đồng bộ cấu hình thành công!', { id: toastId });
     } catch (error: any) {
-      console.error(error);
-      toast.error('Lỗi kết nối. Vui lòng kiểm tra lại mạng.', { id: toastId });
+      console.error('Save error:', error);
+      toast.error(`Lỗi: ${error?.message || 'Không thể kết nối máy chủ'}`, { id: toastId });
     } finally {
       setIsSaving(false);
     }

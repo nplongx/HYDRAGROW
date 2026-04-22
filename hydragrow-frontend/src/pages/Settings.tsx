@@ -16,7 +16,7 @@ import { useDeviceContext } from '../context/DeviceContext';
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 
 const Settings = () => {
-  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId } = useDeviceContext();
+  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId, systemEvents } = useDeviceContext();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>('general');
@@ -64,6 +64,12 @@ const Settings = () => {
   const [countdown, setCountdown] = useState(0);
   const [stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
+  const [adaptivePhases, setAdaptivePhases] = useState({
+    observe: true,
+    recommend: true,
+    auto_apply: false,
+    confidence_threshold: 85
+  });
 
   const calibrationPoints = calibrationPointsCount === 3 ? [7, 4, 10] : [7, 4];
   const activePoint = calibrationPoints[wizardStep];
@@ -185,6 +191,55 @@ const Settings = () => {
       reliability
     };
   })();
+
+  const phaseConfigStorageKey = 'adaptive-calibration-phase-by-device';
+  const effectiveDeviceId = appSettings.device_id || ctxDeviceId || '';
+
+  useEffect(() => {
+    if (!effectiveDeviceId) return;
+    try {
+      const raw = localStorage.getItem(phaseConfigStorageKey);
+      const all = raw ? JSON.parse(raw) : {};
+      const perDevice = all?.[effectiveDeviceId];
+      if (perDevice && typeof perDevice === 'object') {
+        setAdaptivePhases((prev) => ({
+          ...prev,
+          ...perDevice,
+          confidence_threshold: Number(perDevice.confidence_threshold ?? prev.confidence_threshold)
+        }));
+      }
+    } catch (error) {
+      console.error('Không đọc được phase config từ localStorage', error);
+    }
+  }, [effectiveDeviceId]);
+
+  const saveAdaptivePhases = (nextValue: any) => {
+    setAdaptivePhases(nextValue);
+    if (!effectiveDeviceId) return;
+    try {
+      const raw = localStorage.getItem(phaseConfigStorageKey);
+      const all = raw ? JSON.parse(raw) : {};
+      all[effectiveDeviceId] = nextValue;
+      localStorage.setItem(phaseConfigStorageKey, JSON.stringify(all));
+    } catch (error) {
+      console.error('Không lưu được phase config vào localStorage', error);
+    }
+  };
+
+  const hasSafetyWarningIn24h = systemEvents.some((ev: any) => {
+    const ts = ev?.timestamp ? new Date(ev.timestamp).getTime() : 0;
+    if (!ts || Number.isNaN(ts)) return false;
+    const within24h = Date.now() - ts <= 24 * 60 * 60 * 1000;
+    const level = String(ev?.level || '').toLowerCase();
+    const title = String(ev?.title || '').toLowerCase();
+    const category = String(ev?.category || '').toLowerCase();
+    return within24h && (level === 'warning' || level === 'critical') && (category.includes('safe') || title.includes('cảnh báo') || title.includes('safety'));
+  });
+
+  const calibrationDeviation = {
+    ph_v7: calibrationSummary.ph_v7 !== null ? Number((calibrationSummary.ph_v7 - Number(config.ph_v7 || 0)).toFixed(3)) : null,
+    ph_v4: calibrationSummary.ph_v4 !== null ? Number((calibrationSummary.ph_v4 - Number(config.ph_v4 || 0)).toFixed(3)) : null
+  };
 
   const applyCalibrationToConfig = (): any | null => {
     if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null) {
@@ -773,6 +828,37 @@ const Settings = () => {
                 </button>
               </div>
 
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+                <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Pha triển khai hệ số (theo device_id)</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-200">Pha 1 - Observe (thu mẫu + tính hệ số đề xuất)</span>
+                    <Switch isOn={adaptivePhases.observe} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, observe: val })} colorClass="bg-cyan-500" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-200">Pha 2 - Recommend (so sánh hệ số cũ/mới + xác nhận tay)</span>
+                    <Switch isOn={adaptivePhases.recommend} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, recommend: val })} colorClass="bg-cyan-500" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-200">Pha 3 - Auto Apply (tự áp dụng nếu đủ điều kiện)</span>
+                    <Switch isOn={adaptivePhases.auto_apply} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, auto_apply: val })} colorClass="bg-cyan-500" />
+                  </div>
+                </div>
+                <InputGroup
+                  label="Ngưỡng confidence cho auto-apply (%)"
+                  type="number"
+                  step="1"
+                  value={adaptivePhases.confidence_threshold}
+                  onChange={(e: InputEvent) => saveAdaptivePhases({
+                    ...adaptivePhases,
+                    confidence_threshold: Math.max(0, Math.min(100, Number(e.target.value || 0)))
+                  })}
+                />
+                <p className="text-[11px] text-slate-400">
+                  Cấu hình này được lưu cục bộ theo <b>device_id = {effectiveDeviceId || '--'}</b>.
+                </p>
+              </div>
+
               {isCalibrationBlocked && (
                 <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-100">
                   <p className="text-xs font-black uppercase tracking-wider mb-2">Không thể bắt đầu calib</p>
@@ -842,15 +928,51 @@ const Settings = () => {
                   {calibrationSummary.ph_v10 !== null && (
                     <p className="text-xs text-slate-300">Điểm mở rộng pH 10: <b>{calibrationSummary.ph_v10}V</b> (dùng để đánh giá tuyến tính).</p>
                   )}
-                  <button
-                    onClick={async () => {
-                      const nextConfig = applyCalibrationToConfig();
-                      if (nextConfig) await handleSave(nextConfig);
-                    }}
-                    className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-emerald-500 text-slate-950"
-                  >
-                    ÁP DỤNG & LƯU
-                  </button>
+                  <div className="rounded-lg bg-slate-900/50 border border-white/10 p-3 text-xs text-slate-200 space-y-2">
+                    <p className="font-bold text-amber-300">Sai lệch so với hệ số cũ:</p>
+                    <p>Δ ph_v7: <b>{calibrationDeviation.ph_v7 ?? '--'} V</b> · Δ ph_v4: <b>{calibrationDeviation.ph_v4 ?? '--'} V</b></p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {adaptivePhases.observe && (
+                      <div className="px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-widest bg-indigo-500/20 border border-indigo-400/30 text-indigo-200">
+                        Pha 1: Chỉ quan sát, chưa điều khiển
+                      </div>
+                    )}
+
+                    {adaptivePhases.recommend && (
+                      <button
+                        onClick={async () => {
+                          const nextConfig = applyCalibrationToConfig();
+                          if (nextConfig) await handleSave(nextConfig);
+                        }}
+                        className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-amber-400 text-slate-950"
+                      >
+                        Pha 2: XÁC NHẬN THỦ CÔNG & LƯU
+                      </button>
+                    )}
+
+                    {adaptivePhases.auto_apply && (
+                      <button
+                        onClick={async () => {
+                          const confidenceOk = calibrationSummary.reliability >= adaptivePhases.confidence_threshold;
+                          if (!confidenceOk) {
+                            toast.error(`Confidence ${calibrationSummary.reliability}% chưa đạt ngưỡng ${adaptivePhases.confidence_threshold}%`);
+                            return;
+                          }
+                          if (hasSafetyWarningIn24h) {
+                            toast.error('Trong 24h gần nhất có cảnh báo an toàn. Auto-apply bị chặn.');
+                            return;
+                          }
+                          const nextConfig = applyCalibrationToConfig();
+                          if (nextConfig) await handleSave(nextConfig);
+                        }}
+                        className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-emerald-500 text-slate-950"
+                      >
+                        Pha 3: AUTO-APPLY NGAY
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

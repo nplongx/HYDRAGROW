@@ -44,6 +44,11 @@ pub struct PumpStatus {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub osaka_pwm: Option<u32>,
+
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub dosing_pulse_active: bool,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub dosing_pulse_count: u32,
 }
 
 impl Default for PumpStatus {
@@ -63,8 +68,18 @@ impl Default for PumpStatus {
             ph_up_pwm: Some(0),
             ph_down_pwm: Some(0),
             osaka_pwm: Some(0),
+            dosing_pulse_active: false,
+            dosing_pulse_count: 0,
         }
     }
+}
+
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 // 🟢 CẬP NHẬT: Thêm các trường sức khỏe gửi từ Sensor Node

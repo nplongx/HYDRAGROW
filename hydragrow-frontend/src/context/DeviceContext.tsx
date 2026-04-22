@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
-import { SensorData, StatusPayload } from '../types/models';
+import { SensorData, StatusPayload, PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
 
 interface DeviceContextType {
@@ -19,6 +19,45 @@ interface DeviceContextType {
 }
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
+
+const defaultPumpStatus: PumpStatus = {
+  pump_a: false,
+  pump_b: false,
+  ph_up: false,
+  ph_down: false,
+  osaka_pump: false,
+  mist_valve: false,
+  water_pump_in: false,
+  water_pump_out: false
+};
+
+const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
+  if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus;
+
+  const mapped: Record<string, string> = {
+    PUMP_A: 'pump_a',
+    PUMP_B: 'pump_b',
+    PH_UP: 'ph_up',
+    PH_DOWN: 'ph_down',
+    OSAKA: 'osaka_pump',
+    OSAKA_PUMP: 'osaka_pump',
+    MIST: 'mist_valve',
+    MIST_VALVE: 'mist_valve',
+    WATER_PUMP_IN: 'water_pump_in',
+    WATER_PUMP_OUT: 'water_pump_out'
+  };
+
+  const normalized = { ...defaultPumpStatus };
+
+  Object.entries(rawPumpStatus).forEach(([key, value]) => {
+    const normalizedKey = mapped[key] || mapped[key.toUpperCase()] || key.toLowerCase();
+    if (normalizedKey in normalized) {
+      normalized[normalizedKey as keyof PumpStatus] = Boolean(value);
+    }
+  });
+
+  return normalized;
+};
 
 export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [deviceId, setDeviceId] = useState<string | null>(null);
@@ -88,7 +127,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         });
         if (response.ok) {
           const resData = await response.json();
-          setSensorData(resData.data || resData);
+          const initialData = resData.data || resData;
+          setSensorData({
+            ...initialData,
+            pump_status: normalizePumpStatus(initialData?.pump_status)
+          });
         }
       } catch (err) { /* empty */ }
       setIsLoading(false);
@@ -218,6 +261,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 if (!prev) return incomingPayload;
                 return {
                   ...prev,
+                  pump_status: incomingPayload.pump_status !== undefined
+                    ? normalizePumpStatus(incomingPayload.pump_status)
+                    : prev.pump_status,
                   temp_value: incomingPayload.temp_value !== undefined ? incomingPayload.temp_value : prev.temp_value,
                   ec_value: incomingPayload.ec_value !== undefined ? incomingPayload.ec_value : prev.ec_value,
                   ph_value: incomingPayload.ph_value !== undefined ? incomingPayload.ph_value : prev.ph_value,
@@ -251,7 +297,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
               setSensorData(prev => {
                 if (!prev) return prev;
-                return { ...prev, pump_status: healthData.pump_status };
+                return { ...prev, pump_status: normalizePumpStatus(healthData.pump_status) };
               });
 
               // Mark controller online

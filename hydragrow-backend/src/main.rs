@@ -173,7 +173,15 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Lỗi sub");
     mqtt_client
+        .subscribe("AGITECH/+/sensor/status", QoS::AtLeastOnce)
+        .await
+        .expect("Lỗi sub");
+    mqtt_client
         .subscribe("AGITECH/+/fsm", QoS::AtLeastOnce)
+        .await
+        .expect("Lỗi sub");
+    mqtt_client
+        .subscribe("AGITECH/+/controller/status", QoS::AtLeastOnce)
         .await
         .expect("Lỗi sub");
     mqtt_client

@@ -296,6 +296,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                   rssi: incomingPayload.rssi !== undefined ? incomingPayload.rssi : prev.rssi,
                   free_heap: incomingPayload.free_heap !== undefined ? incomingPayload.free_heap : prev.free_heap,
                   uptime: incomingPayload.uptime !== undefined ? incomingPayload.uptime : prev.uptime,
+                  ph_voltage_mv: incomingPayload.ph_voltage_mv !== undefined ? incomingPayload.ph_voltage_mv : prev.ph_voltage_mv,
                 };
               });
 

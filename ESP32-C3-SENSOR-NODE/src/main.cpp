@@ -63,6 +63,7 @@ float current_avg_temp = 25.0;
 float current_avg_water = 20.0;
 float current_avg_ph = 7.0;
 float current_avg_ec = 0.0;
+float latest_ph_voltage_mv = NAN;
 float latest_raw_water = 20.0; // Lưu riêng giá trị nước thô (tức thời)
 
 // Cờ bật/tắt cảm biến
@@ -380,9 +381,11 @@ void loop() {
       int adc_ph = read_adc_filtered(PIN_PH_ADC);
       if (adc_ph <= 0 || adc_ph >= 4095) {
         err_ph_flag = true; // Lỗi đứt dây tín hiệu hoặc chạm chập
+        latest_ph_voltage_mv = NAN;
         Serial.println("⚠️ [DEBUG] Lỗi cảm biến pH: ADC rớt ngưỡng an toàn.");
       } else {
         float ph_mv = (adc_ph / ADC_MAX) * V_REF_MV * VOLTAGE_DIVIDER_RATIO;
+        latest_ph_voltage_mv = ph_mv;
         float ph_val = calculate_ph(ph_mv, current_avg_temp);
         current_avg_ph = calc_average(ph_history, ph_val);
       }
@@ -423,6 +426,9 @@ void loop() {
         continuous_level ? latest_raw_water : current_avg_water;
     doc["ph"] = current_avg_ph;
     doc["ec"] = current_avg_ec;
+    if (!isnan(latest_ph_voltage_mv)) {
+      doc["ph_voltage_mv"] = latest_ph_voltage_mv;
+    }
 
     // 2. Bổ sung Sức khỏe thiết bị (Device Health)
     doc["rssi"] = WiFi.RSSI();

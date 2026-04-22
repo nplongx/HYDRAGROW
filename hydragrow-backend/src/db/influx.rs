@@ -11,13 +11,19 @@ pub async fn write_sensor_data(client: &Client, bucket: &str, data: &SensorData)
     let pump_status_json = serde_json::to_string(&data.pump_status)
         .context("Failed to serialize pump_status to JSON")?;
 
-    let point = DataPoint::builder("sensor_data")
+    let mut point_builder = DataPoint::builder("sensor_data")
         .tag("device_id", &data.device_id)
         .field("ec_value", data.ec_value as f64)
         .field("ph_value", data.ph_value as f64)
         .field("temp_value", data.temp_value as f64)
         .field("water_level", data.water_level as f64)
-        .field("pump_status", pump_status_json)
+        .field("pump_status", pump_status_json);
+
+    if let Some(ph_voltage_mv) = data.ph_voltage_mv {
+        point_builder = point_builder.field("ph_voltage_mv", ph_voltage_mv);
+    }
+
+    let point = point_builder
         .build()
         .context("Failed to build InfluxDB DataPoint")?;
 

@@ -46,6 +46,7 @@ pub struct IncomingSensorPayload {
     pub err_ec: Option<bool>,
 
     pub is_continuous: Option<bool>,
+    pub ph_voltage_mv: Option<f64>,
 }
 
 /// Extracts (device_id, suffix) from a topic like "AGITECH/device_001/sensors"
@@ -171,6 +172,7 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
         err_ph: incoming.err_ph,
         err_ec: incoming.err_ec,
         is_continuous: incoming.is_continuous,
+        ph_voltage_mv: incoming.ph_voltage_mv,
     };
 
     debug!(

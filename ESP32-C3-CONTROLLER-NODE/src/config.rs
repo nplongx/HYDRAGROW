@@ -91,6 +91,11 @@ pub struct DeviceConfig {
 
     // 6. THÔNG SỐ LOCAL CỦA ESP32 (Backend không có cũng không sao)
     pub dosing_pwm_percent: u32,
+    pub dosing_min_pwm_percent: u32,
+    pub dosing_pulse_on_ms: u64,
+    pub dosing_pulse_off_ms: u64,
+    pub dosing_min_dose_ml: f32,
+    pub dosing_max_pulse_count_per_cycle: u32,
     pub osaka_mixing_pwm_percent: u32,
     pub osaka_misting_pwm_percent: u32,
     pub misting_temp_threshold: f32,
@@ -182,6 +187,11 @@ impl Default for DeviceConfig {
             enable_ph_tc: true,
 
             dosing_pwm_percent: 50,
+            dosing_min_pwm_percent: 35,
+            dosing_pulse_on_ms: 250,
+            dosing_pulse_off_ms: 300,
+            dosing_min_dose_ml: 0.4,
+            dosing_max_pulse_count_per_cycle: 40,
             osaka_mixing_pwm_percent: 60,
             osaka_misting_pwm_percent: 100,
             misting_temp_threshold: 30.0,
@@ -201,4 +211,3 @@ pub type SharedConfig = Arc<RwLock<DeviceConfig>>;
 pub fn create_shared_config() -> SharedConfig {
     Arc::new(RwLock::new(DeviceConfig::default()))
 }
-

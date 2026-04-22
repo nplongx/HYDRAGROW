@@ -43,6 +43,8 @@ const Settings = () => {
     active_mixing_sec: 5, sensor_stabilize_sec: 5, scheduled_mixing_interval_sec: 3600, scheduled_mixing_duration_sec: 300,
     dosing_pwm_percent: 50, osaka_mixing_pwm_percent: 60, osaka_misting_pwm_percent: 100, soft_start_duration: 3000,
     scheduled_dosing_enabled: false, scheduled_dosing_cron: '0 0 8 * * *', scheduled_dose_a_ml: 10.0, scheduled_dose_b_ml: 10.0,
+    ec_gain_dynamic: 0.01, ph_up_dynamic: 0.01, ph_down_dynamic: 0.01,
+    dynamic_sample_count: 0, dynamic_confidence: 0, dynamic_model_version: 'v1',
 
     min_ec_limit: 0.5, max_ec_limit: 3.0, min_ph_limit: 4.0, max_ph_limit: 8.0,
     min_temp_limit: 15.0, max_temp_limit: 35.0, max_ec_delta: 0.5, max_ph_delta: 0.3,
@@ -302,6 +304,10 @@ const Settings = () => {
     try {
       const savingConfig = configOverride || config;
       const devId = appSettings.device_id;
+      const toNumberOr = (value: any, fallback: number) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      };
       try { await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId }); } catch (e) { }
 
       const ts = new Date().toISOString();
@@ -357,6 +363,13 @@ const Settings = () => {
         scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron),
         scheduled_dose_a_ml: Number(savingConfig.scheduled_dose_a_ml),
         scheduled_dose_b_ml: Number(savingConfig.scheduled_dose_b_ml),
+        ec_gain_dynamic: toNumberOr(savingConfig.ec_gain_dynamic, 0.01),
+        ph_up_dynamic: toNumberOr(savingConfig.ph_up_dynamic, 0.01),
+        ph_down_dynamic: toNumberOr(savingConfig.ph_down_dynamic, 0.01),
+        dynamic_sample_count: Math.trunc(toNumberOr(savingConfig.dynamic_sample_count, 0)),
+        dynamic_confidence: toNumberOr(savingConfig.dynamic_confidence, 0),
+        dynamic_model_version: String(savingConfig.dynamic_model_version || 'v1'),
+        last_dynamic_update: null,
 
         last_calibrated: ts
       };

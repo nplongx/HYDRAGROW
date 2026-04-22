@@ -180,6 +180,27 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
         device_id, sensor_data.ph_value, sensor_data.ec_value
     );
 
+    if let Some(ph_voltage_mv) = incoming.ph_voltage_mv {
+        let observed_at = chrono::DateTime::parse_from_rfc3339(&sensor_data.time)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now());
+
+        let mut sample_map = app_state.ph_voltage_samples.write().await;
+        let samples = sample_map.entry(device_id.clone()).or_default();
+        samples.push_back(crate::PhVoltageSample {
+            voltage_mv: ph_voltage_mv,
+            observed_at,
+            received_at: std::time::Instant::now(),
+        });
+
+        while samples
+            .front()
+            .is_some_and(|sample| sample.received_at.elapsed().as_secs() > 120)
+        {
+            samples.pop_front();
+        }
+    }
+
     if let Ok(json_str) = serde_json::to_string(&sensor_data) {
         let mut states = app_state.device_states.write().await;
         states.insert(device_id.clone(), json_str);

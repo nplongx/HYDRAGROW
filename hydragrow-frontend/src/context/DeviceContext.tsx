@@ -119,7 +119,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           resetSensorTimeout();
 
           // 🟢 Ép Controller Node gửi toàn bộ trạng thái mới nhất lập tức!
-          fetch(`${settings.backend_url}/api/control/${deviceId}/sync`, {
+          fetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
           }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));

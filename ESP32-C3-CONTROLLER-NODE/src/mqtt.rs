@@ -155,9 +155,9 @@ pub fn init_mqtt_client(
     let topic_command_cb = topic_command.clone();
     let topic_sensors_cb = topic_sensors.clone();
 
-    // 1. Chuẩn bị thông tin LWT
+    // 1. Prepare LWT with more detailed initial state
     let lwt_topic = format!("AGITECH/{}/status", device_id);
-    let lwt_payload = r#"{"online": false}"#.as_bytes();
+    let lwt_payload = r#"{"online": false, "status": "booting"}"#.as_bytes();
 
     let lwt_config = LwtConfiguration {
         topic: &lwt_topic,
@@ -166,7 +166,10 @@ pub fn init_mqtt_client(
         retain: true,
     };
 
-    // 2. Thêm LWT vào cấu hình MQTT
+    // 2. Add small delay before connecting to ensure system is ready
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // 3. Configure MQTT with LWT
     let mqtt_config = MqttClientConfiguration {
         buffer_size: 4096,
         keep_alive_interval: Some(std::time::Duration::from_secs(15)),

@@ -370,6 +370,14 @@ pub fn start_fsm_control_loop(
         ctx.last_mixing_start_sec = current_time_on_boot;
 
         info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
+        
+        // Immediately publish online status after full initialization
+        let status_msg = serde_json::json!({
+            "online": true,
+            "status": "ready",
+            "current_state": "Monitoring"
+        }).to_string();
+        let _ = fsm_mqtt_tx.send(status_msg);
 
         loop {
             let config = shared_config.read().unwrap().clone();

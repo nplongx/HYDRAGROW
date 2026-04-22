@@ -543,34 +543,12 @@ fn build_sensor_snapshot(
     metadata_json: Option<serde_json::Value>,
 ) -> Option<serde_json::Value> {
     match metadata_json {
-        Some(sensor_snapshot) => {
-            let temp = read_numeric_field(&sensor_snapshot, &["temp_value", "temp"]);
-            let ec = read_numeric_field(&sensor_snapshot, &["ec_value", "ec"]);
-            let ph = read_numeric_field(&sensor_snapshot, &["ph_value", "ph"]);
-            let water_level = read_numeric_field(&sensor_snapshot, &["water_level"]);
-            let pump_status = sensor_snapshot.get("pump_status").cloned();
-
-            if temp.is_none() && ec.is_none() && ph.is_none() && water_level.is_none() {
-                warn!(
-                    "Snapshot cho device_id={} state={} thiếu dữ liệu cảm biến (temp/ec/ph/water_level)",
-                    device_id, fsm_state
-                );
-            }
-
-            Some(json!({
-                "captured_at": chrono::Utc::now().to_rfc3339(),
-                "fsm_state": fsm_state,
-                "snapshot_source": "device_state_cache",
-                "sensor_snapshot": {
-                    "temp": temp,
-                    "ec": ec,
-                    "ph": ph,
-                    "water_level": water_level,
-                    "pump_status": pump_status,
-                    "raw": sensor_snapshot
-                }
-            }))
-        }
+        Some(sensor_snapshot) => Some(json!({
+            "captured_at": chrono::Utc::now().to_rfc3339(),
+            "fsm_state": fsm_state,
+            "snapshot_source": "device_state_cache",
+            "sensor_snapshot": sensor_snapshot
+        })),
         None => {
             warn!(
                 "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
@@ -581,25 +559,11 @@ fn build_sensor_snapshot(
                 "fsm_state": fsm_state,
                 "snapshot_source": "fsm_fallback",
                 "sensor_snapshot": {
-                    "device_id": device_id,
-                    "temp": serde_json::Value::Null,
-                    "ec": serde_json::Value::Null,
-                    "ph": serde_json::Value::Null,
-                    "water_level": serde_json::Value::Null,
-                    "pump_status": serde_json::Value::Null
+                    "device_id": device_id
                 }
             }))
         }
     }
-}
-
-fn read_numeric_field(source: &serde_json::Value, keys: &[&str]) -> Option<f64> {
-    for key in keys {
-        if let Some(value) = source.get(key).and_then(|v| v.as_f64()) {
-            return Some(value);
-        }
-    }
-    None
 }
 
 async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {

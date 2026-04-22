@@ -38,6 +38,7 @@ export interface SensorData extends DeviceHealth {
   err_ph?: boolean;
   err_ec?: boolean;
   is_continuous?: boolean;
+  ph_voltage_mv?: number;
 }
 
 /**

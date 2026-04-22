@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use chrono::{DateTime, FixedOffset};
 use influxdb2::FromDataPoint;
 use serde::{Deserialize, Serialize};
@@ -66,6 +64,8 @@ pub struct SensorData {
     pub err_ec: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_continuous: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ph_voltage_mv: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromDataPoint, Default)]
@@ -102,6 +102,7 @@ impl From<SensorDataRow> for SensorData {
             err_temp: None,
             err_ph: None,
             err_ec: None,
+            ph_voltage_mv: None,
         }
     }
 }

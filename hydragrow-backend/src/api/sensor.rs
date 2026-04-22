@@ -36,6 +36,9 @@ pub async fn get_latest(path: web::Path<String>, app_state: web::Data<AppState>)
                     if let Some(ps) = cached_json.get("pump_status") {
                         json_data["pump_status"] = ps.clone();
                     }
+                    if let Some(ph_voltage_mv) = cached_json.get("ph_voltage_mv") {
+                        json_data["ph_voltage_mv"] = ph_voltage_mv.clone();
+                    }
                 }
             }
 

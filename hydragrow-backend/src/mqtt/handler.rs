@@ -98,27 +98,31 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             // Periodic health heartbeat from the Controller Node
             if let Ok(payload_json) = serde_json::from_slice::<serde_json::Value>(&payload_bytes) {
                 // 1. CẬP NHẬT CACHE TRONG RAM ĐỂ API /sensors/latest LẤY ĐƯỢC DỮ LIỆU MỚI NHẤT
-                if let Some(new_pump_status) = payload_json.get("pump_status") {
-                    let mut states = app_state.device_states.write().await;
+                // Merge toàn bộ heartbeat payload (không chỉ pump_status) để giữ snapshot cảm biến đầy đủ.
+                let mut states = app_state.device_states.write().await;
 
-                    if let Some(existing_str) = states.get(&device_id) {
-                        // Nếu đã có data cảm biến, ghi đè pump_status mới vào
-                        if let Ok(mut sensor_data) =
-                            serde_json::from_str::<serde_json::Value>(existing_str)
-                        {
-                            sensor_data["pump_status"] = new_pump_status.clone();
-                            if let Ok(updated_str) = serde_json::to_string(&sensor_data) {
-                                states.insert(device_id.clone(), updated_str);
-                            }
-                        }
-                    } else {
-                        // Nếu chưa có, tạo mới cache với pump_status
-                        let init_data = json!({
-                            "device_id": device_id.clone(),
-                            "pump_status": new_pump_status
-                        });
-                        states.insert(device_id.clone(), init_data.to_string());
+                let mut merged = states
+                    .get(&device_id)
+                    .and_then(|existing_str| {
+                        serde_json::from_str::<serde_json::Value>(existing_str).ok()
+                    })
+                    .unwrap_or_else(|| json!({ "device_id": device_id.clone() }));
+
+                if let (Some(merged_obj), Some(incoming_obj)) =
+                    (merged.as_object_mut(), payload_json.as_object())
+                {
+                    for (key, value) in incoming_obj {
+                        merged_obj.insert(key.clone(), value.clone());
                     }
+                    merged_obj.insert("device_id".to_string(), json!(device_id.clone()));
+                    merged_obj.insert(
+                        "controller_status_ts".to_string(),
+                        json!(chrono::Utc::now().to_rfc3339()),
+                    );
+                }
+
+                if let Ok(updated_str) = serde_json::to_string(&merged) {
+                    states.insert(device_id.clone(), updated_str);
                 }
 
                 // 2. Đẩy qua WebSocket (code cũ)
@@ -291,17 +295,8 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                 } else {
                     None
                 };
-                let alert_metadata = metadata_json.clone().or_else(|| {
-                    warn!(
-                        "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
-                        device_id, state
-                    );
-                    Some(json!({
-                        "device_id": device_id.clone(),
-                        "fsm_state": state,
-                        "metadata_source": "fsm_fallback"
-                    }))
-                });
+                let alert_metadata =
+                    build_sensor_snapshot(&device_id, state, metadata_json.clone());
 
                 match state {
                     "SystemBooting" => {
@@ -540,6 +535,71 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
             error!("❌ [MQTT-FSM] Cấu trúc JSON bị sai định dạng: {:?}", e);
         }
     }
+}
+
+fn build_sensor_snapshot(
+    device_id: &str,
+    fsm_state: &str,
+    metadata_json: Option<serde_json::Value>,
+) -> Option<serde_json::Value> {
+    match metadata_json {
+        Some(sensor_snapshot) => {
+            let temp = read_numeric_field(&sensor_snapshot, &["temp_value", "temp"]);
+            let ec = read_numeric_field(&sensor_snapshot, &["ec_value", "ec"]);
+            let ph = read_numeric_field(&sensor_snapshot, &["ph_value", "ph"]);
+            let water_level = read_numeric_field(&sensor_snapshot, &["water_level"]);
+            let pump_status = sensor_snapshot.get("pump_status").cloned();
+
+            if temp.is_none() && ec.is_none() && ph.is_none() && water_level.is_none() {
+                warn!(
+                    "Snapshot cho device_id={} state={} thiếu dữ liệu cảm biến (temp/ec/ph/water_level)",
+                    device_id, fsm_state
+                );
+            }
+
+            Some(json!({
+                "captured_at": chrono::Utc::now().to_rfc3339(),
+                "fsm_state": fsm_state,
+                "snapshot_source": "device_state_cache",
+                "sensor_snapshot": {
+                    "temp": temp,
+                    "ec": ec,
+                    "ph": ph,
+                    "water_level": water_level,
+                    "pump_status": pump_status,
+                    "raw": sensor_snapshot
+                }
+            }))
+        }
+        None => {
+            warn!(
+                "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
+                device_id, fsm_state
+            );
+            Some(json!({
+                "captured_at": chrono::Utc::now().to_rfc3339(),
+                "fsm_state": fsm_state,
+                "snapshot_source": "fsm_fallback",
+                "sensor_snapshot": {
+                    "device_id": device_id,
+                    "temp": serde_json::Value::Null,
+                    "ec": serde_json::Value::Null,
+                    "ph": serde_json::Value::Null,
+                    "water_level": serde_json::Value::Null,
+                    "pump_status": serde_json::Value::Null
+                }
+            }))
+        }
+    }
+}
+
+fn read_numeric_field(source: &serde_json::Value, keys: &[&str]) -> Option<f64> {
+    for key in keys {
+        if let Some(value) = source.get(key).and_then(|v| v.as_f64()) {
+            return Some(value);
+        }
+    }
+    None
 }
 
 async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {

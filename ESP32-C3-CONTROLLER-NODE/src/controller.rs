@@ -572,21 +572,29 @@ pub fn start_fsm_control_loop(
                 ctx.last_continuous_level = needs_continuous;
             }
 
-            report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
-
+            // First update shared sensors with latest pump status
             if let Ok(mut sensors_lock) = shared_sensors.write() {
                 sensors_lock.pump_status = ctx.pump_status.clone();
             }
 
-            if force_sync {
-                last_reported_state = "".to_string();
-                let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
-                // Also force publish controller status immediately
-                let _ = fsm_mqtt_tx.send(serde_json::json!({
+            // Report state changes and sync online status
+            let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
+            
+            if state_changed || force_sync {
+                // Always send full status when state changes or forced sync
+                let status_msg = serde_json::json!({
+                    "online": true,
                     "current_state": ctx.current_state.to_payload_string(),
                     "pump_status": ctx.pump_status
-                }).to_string());
-                info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
+                }).to_string();
+                
+                let _ = fsm_mqtt_tx.send(status_msg);
+                
+                if force_sync {
+                    last_reported_state = "".to_string();
+                    let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
+                    info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
+                }
             }
 
             std::thread::sleep(Duration::from_millis(100));
@@ -598,7 +606,7 @@ fn report_state_if_changed(
     current_state: &SystemState,
     last_reported_state: &mut String,
     fsm_mqtt_tx: &Sender<String>,
-) {
+) -> bool {
     let current_state_str = current_state.to_payload_string();
     if current_state_str != *last_reported_state {
         let payload = format!(r#"{{"current_state": "{}"}}"#, current_state_str);
@@ -606,6 +614,9 @@ fn report_state_if_changed(
             info!("📡 Trạng thái FSM: [{}]", current_state_str);
         }
         *last_reported_state = current_state_str;
+        true
+    } else {
+        false
     }
 }
 

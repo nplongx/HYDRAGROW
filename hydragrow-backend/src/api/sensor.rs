@@ -26,7 +26,21 @@ pub async fn get_latest(path: web::Path<String>, app_state: web::Data<AppState>)
     )
     .await
     {
-        Ok(data) => HttpResponse::Ok().json(json!({ "status": "success", "data": data })),
+        Ok(data) => {
+            let mut json_data = json!(data);
+
+            // 🟢 BẢN VÁ: Lấy pump_status thực tế đang chạy từ RAM đè lên dữ liệu cũ của DB
+            let states = app_state.device_states.read().await;
+            if let Some(cached_str) = states.get(&device_id) {
+                if let Ok(cached_json) = serde_json::from_str::<serde_json::Value>(cached_str) {
+                    if let Some(ps) = cached_json.get("pump_status") {
+                        json_data["pump_status"] = ps.clone();
+                    }
+                }
+            }
+
+            HttpResponse::Ok().json(json!({ "status": "success", "data": json_data }))
+        }
         Err(e) => {
             error!(
                 "Lỗi khi lấy dữ liệu sensor mới nhất cho {}: {:?}",
@@ -103,4 +117,3 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/sensors/latest", web::get().to(get_latest))
         .route("/sensors/history", web::get().to(get_history));
 }
-

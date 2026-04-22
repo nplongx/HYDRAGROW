@@ -191,6 +191,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
 };
 
 // --- Component: Khối Điều Khiển Pha Lê ---
+// --- Component: Khối Điều Khiển Pha Lê ---
 const AdvancedDeviceControl = ({
   deviceId, pumpId, title, icon: Icon, colorTheme, currentStatus, allowPwm = false, updatePumpStatusOptimistically, isOnline, isEmergency
 }: any) => {
@@ -201,6 +202,9 @@ const AdvancedDeviceControl = ({
 
   const theme = NEON_COLORS[colorTheme];
 
+  // Hàm chuyển đổi pumpId thành chữ thường để khớp với state của Backend (VD: "PUMP_A" -> "pump_a")
+  const stateKey = pumpId.toLowerCase();
+
   const handleToggle = async () => {
     if (isEmergency && !currentStatus) {
       toast.error(`🚨 FSM đang bảo vệ! Chỉ có thể dùng FORCE để bật ${title}.`);
@@ -209,24 +213,22 @@ const AdvancedDeviceControl = ({
 
     setIsProcessing(true);
     const targetAction = currentStatus ? 'off' : 'on';
-    // Optimistic update first
-    updatePumpStatusOptimistically(pumpId, targetAction);
+    const isNowOn = targetAction === 'on';
+
+    // 1. Optimistic update (Cập nhật UI ngay lập tức với key viết thường và giá trị boolean)
+    updatePumpStatusOptimistically(stateKey, isNowOn);
 
     try {
       const success = await togglePump(pumpId, targetAction);
       if (!success) {
-        // Revert if failed
-        updatePumpStatusOptimistically(pumpId, currentStatus ? 'on' : 'off');
+        // Khôi phục lại nếu lệnh thất bại
+        updatePumpStatusOptimistically(stateKey, !isNowOn);
         toast.error(`Lỗi khi điều khiển ${title}!`);
-      } else {
-        // Force refresh status after 1s to sync with actual state
-        setTimeout(() => {
-          updatePumpStatusOptimistically('force_refresh', '');
-        }, 1000);
       }
+      // Nếu thành công, cơ chế force_publish của ESP32 sẽ gửi bản tin WS về sau ~0.5s để chốt state thật.
     } catch (error) {
-      updatePumpStatusOptimistically(pumpId, currentStatus ? 'on' : 'off');
-      toast.error(`Lỗi kết nối khi điều khiển ${title}!`);
+      updatePumpStatusOptimistically(stateKey, !isNowOn);
+      toast.error(`Lỗi mạng khi điều khiển ${title}!`);
     } finally {
       setIsProcessing(false);
     }
@@ -235,23 +237,19 @@ const AdvancedDeviceControl = ({
   const handleForceOn = async () => {
     if (!window.confirm(`⚠️ CẢNH BÁO: Bật cưỡng chế ${title} trong ${duration}s?`)) return;
     setIsProcessing(true);
-    // Optimistic update first
-    updatePumpStatusOptimistically(pumpId, 'on');
+
+    // 1. Optimistic update
+    updatePumpStatusOptimistically(stateKey, true);
 
     try {
       const success = await forceOn(pumpId, duration);
       if (!success) {
-        // Revert if failed
-        updatePumpStatusOptimistically(pumpId, 'off');
+        // Khôi phục lại nếu lỗi
+        updatePumpStatusOptimistically(stateKey, false);
         toast.error(`Lỗi khi cưỡng chế ${title}!`);
-      } else {
-        // Force refresh status after 1s to sync with actual state
-        setTimeout(() => {
-          updatePumpStatusOptimistically('force_refresh', '');
-        }, 1000);
       }
     } catch (error) {
-      updatePumpStatusOptimistically(pumpId, 'off');
+      updatePumpStatusOptimistically(stateKey, false);
       toast.error(`Lỗi kết nối khi cưỡng chế ${title}!`);
     } finally {
       setIsProcessing(false);
@@ -265,7 +263,10 @@ const AdvancedDeviceControl = ({
     }
 
     setIsProcessing(true);
-    if (!currentStatus) updatePumpStatusOptimistically(pumpId, 'on');
+    if (!currentStatus) {
+      updatePumpStatusOptimistically(stateKey, true);
+    }
+
     await setPwm(pumpId, pwmValue);
     setIsProcessing(false);
   };
@@ -361,7 +362,6 @@ const AdvancedDeviceControl = ({
     </div>
   );
 };
-
 // --- Bảng Điều Khiển Chính ---
 const ControlPanel = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, updatePumpStatusOptimistically, fsmState, settings } = useDeviceContext();

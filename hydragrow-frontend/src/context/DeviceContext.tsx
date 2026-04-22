@@ -36,26 +36,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const [isSensorOnline, setIsSensorOnline] = useState<boolean>(false);
 
-  const controllerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const sensorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // ─── Controller timeout (65s) ──────────────────────────────────────────────
-  // This fires only if NO controller message (status/health/fsm) arrives for 65s.
-  // Any of these message types reset it:
-  //   - device_status (is_online: true)
-  //   - device_health
-  //   - alert with level "FSM_UPDATE"
-  const resetControllerTimeout = useCallback(() => {
-    if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
-
-    controllerTimeoutRef.current = setTimeout(() => {
-      setDeviceStatus({ is_online: false, last_seen: '' });
-      setIsControllerStatusKnown(true);
-      setFsmState("Offline");
-      setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
-      toast.error("Mất tín hiệu từ Trạm Điều Khiển (Controller)!");
-    }, 65000);
-  }, []);
+  const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─── Sensor timeout (65s) ─────────────────────────────────────────────────
   const resetSensorTimeout = useCallback(() => {
@@ -92,8 +73,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     if (!deviceId || !settings) return;
 
     let ws: WebSocket;
-    let pingInterval: NodeJS.Timeout;
-    let reconnectTimeout: NodeJS.Timeout;
+    let pingInterval: ReturnType<typeof setTimeout>;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     const setupConnection = async () => {
       setIsLoading(true);
@@ -131,12 +112,17 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
         ws.onopen = () => {
           console.log('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
-          // Chưa nhận heartbeat từ controller -> tạm thời chưa kết luận offline
           setIsInitialConnection(true);
-          setIsControllerStatusKnown(false);
-          // Start both timeouts when WS connects
-          resetControllerTimeout();
+
+          setDeviceStatus(prev => ({ ...prev, is_online: true, last_seen: new Date().toISOString() }));
+          setIsControllerStatusKnown(true);
           resetSensorTimeout();
+
+          // 🟢 Ép Controller Node gửi toàn bộ trạng thái mới nhất lập tức!
+          fetch(`${settings.backend_url}/api/control/${deviceId}/sync`, {
+            method: 'POST',
+            headers: { 'X-API-Key': settings.api_key }
+          }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));
 
           pingInterval = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) ws.send('ping');
@@ -153,13 +139,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data.type === 'device_status') {
               const isOnline: boolean = data.payload.is_online ?? false;
               setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
-              
+
               if (isOnline) {
                 setIsInitialConnection(false);
                 setIsControllerStatusKnown(true);
-                // ✅ KEY FIX: Reset the controller timeout whenever we get an online=true status.
-                // Without this, the 65s timer fires even though the device is alive.
-                resetControllerTimeout();
                 if (!isInitialConnection) {
                   toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
                 }
@@ -167,7 +150,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 // Only mark as known offline if not initial connection
                 if (!isInitialConnection) {
                   setIsControllerStatusKnown(true);
-                  if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
                   setFsmState("Offline");
                   setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
                   toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
@@ -187,10 +169,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
                 setIsControllerStatusKnown(true);
                 if (isOnline) {
-                  resetControllerTimeout();
                   toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
                 } else {
-                  if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
                   setFsmState("Offline");
                   setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
                   toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
@@ -213,11 +193,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 return;
               }
 
-              // FSM state update — also proves controller is alive
+              // FSM state update
               if (alert.level === 'FSM_UPDATE') {
                 setFsmState(alert.message);
-                // ✅ KEY FIX: FSM updates mean the controller is alive, reset its timeout
-                resetControllerTimeout();
                 return;
               }
 
@@ -276,11 +254,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 return { ...prev, pump_status: healthData.pump_status };
               });
 
-              // Mark controller online and reset its watchdog timer
+              // Mark controller online
               setDeviceStatus(prev => !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev);
               setIsControllerStatusKnown(true);
-              // ✅ Already correct — health messages reset the timeout
-              resetControllerTimeout();
               return;
             }
 
@@ -295,7 +271,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           setIsControllerStatusKnown(true);
           setIsSensorOnline(false);
           clearInterval(pingInterval);
-          if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
           if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
 
           reconnectTimeout = setTimeout(() => { connectWs(); }, 5000);
@@ -312,14 +287,13 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       clearInterval(pingInterval);
       clearTimeout(reconnectTimeout);
-      if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
       if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
       if (ws) {
         ws.onclose = null;
         ws.close();
       }
     };
-  }, [deviceId, settings, resetControllerTimeout, resetSensorTimeout]);
+  }, [deviceId, settings, resetSensorTimeout]);
 
   const updatePumpStatusOptimistically = useCallback((stateKey: string, isNowOn: boolean) => {
     setSensorData(prevData => {

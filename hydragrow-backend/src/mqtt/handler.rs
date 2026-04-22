@@ -97,6 +97,31 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
         "/controller/status" => {
             // Periodic health heartbeat from the Controller Node
             if let Ok(payload_json) = serde_json::from_slice::<serde_json::Value>(&payload_bytes) {
+                // 1. CẬP NHẬT CACHE TRONG RAM ĐỂ API /sensors/latest LẤY ĐƯỢC DỮ LIỆU MỚI NHẤT
+                if let Some(new_pump_status) = payload_json.get("pump_status") {
+                    let mut states = app_state.device_states.write().await;
+
+                    if let Some(existing_str) = states.get(&device_id) {
+                        // Nếu đã có data cảm biến, ghi đè pump_status mới vào
+                        if let Ok(mut sensor_data) =
+                            serde_json::from_str::<serde_json::Value>(existing_str)
+                        {
+                            sensor_data["pump_status"] = new_pump_status.clone();
+                            if let Ok(updated_str) = serde_json::to_string(&sensor_data) {
+                                states.insert(device_id.clone(), updated_str);
+                            }
+                        }
+                    } else {
+                        // Nếu chưa có, tạo mới cache với pump_status
+                        let init_data = json!({
+                            "device_id": device_id.clone(),
+                            "pump_status": new_pump_status
+                        });
+                        states.insert(device_id.clone(), init_data.to_string());
+                    }
+                }
+
+                // 2. Đẩy qua WebSocket (code cũ)
                 let _ = app_state.health_sender.send(payload_json);
             } else {
                 warn!("Lỗi parse JSON Health Data từ {}", device_id);
@@ -593,4 +618,3 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
         }
     }
 }
-

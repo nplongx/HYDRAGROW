@@ -100,7 +100,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const [deviceStatus, setDeviceStatus] = useState<StatusPayload>({ is_online: false, last_seen: '' });
   const [isControllerStatusKnown, setIsControllerStatusKnown] = useState(false);
-  const [isInitialConnection, setIsInitialConnection] = useState(true);
   const [fsmState, setFsmState] = useState<string>("Offline");
   const [systemEvents, setSystemEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -194,10 +193,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
         ws.onopen = () => {
           console.log('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
-          setIsInitialConnection(true);
-
-          setDeviceStatus(prev => ({ ...prev, is_online: true, last_seen: new Date().toISOString() }));
-          setIsControllerStatusKnown(true);
+          setIsControllerStatusKnown(false);
           resetSensorTimeout();
 
           fetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
@@ -216,21 +212,18 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
             if (data.type === 'device_status') {
               const isOnline: boolean = data.payload.is_online ?? false;
-              setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
+              setIsControllerStatusKnown(true);
+              setDeviceStatus(prev => {
+                if (prev.is_online !== isOnline) {
+                  if (isOnline) toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
+                  else toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                }
+                return { is_online: isOnline, last_seen: new Date().toISOString() };
+              });
 
-              if (isOnline) {
-                setIsInitialConnection(false);
-                setIsControllerStatusKnown(true);
-                if (!isInitialConnection) {
-                  toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
-                }
-              } else {
-                if (!isInitialConnection) {
-                  setIsControllerStatusKnown(true);
-                  setFsmState("Offline");
-                  setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
-                  toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
-                }
+              if (!isOnline) {
+                setFsmState("Offline");
+                setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
               }
               return;
             }

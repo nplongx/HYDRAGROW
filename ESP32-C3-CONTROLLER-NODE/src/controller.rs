@@ -166,6 +166,20 @@ pub struct ControlContext {
     pub pump_status: PumpStatus,
     pub manual_timeouts: HashMap<String, u64>,
     pub safety_override_until: u64,
+    pub adaptive_ec_step_ratio: f32,
+    pub adaptive_ph_step_ratio: f32,
+    pub best_known_ec_step_ratio: f32,
+    pub best_known_ph_step_ratio: f32,
+    pub auto_tune_locked: bool,
+    pub abnormal_sample_streak: u8,
+    pub tuning_last_update_sec: u64,
+    pub tuning_hour_anchor_sec: u64,
+    pub tuning_day_anchor_sec: u64,
+    pub tuning_hour_ec_delta: f32,
+    pub tuning_hour_ph_delta: f32,
+    pub tuning_day_ec_delta: f32,
+    pub tuning_day_ph_delta: f32,
+    pub hourly_dose_history_ml_by_pump: HashMap<String, Vec<(u64, f32)>>,
     pub pending_calibration_sample: Option<PendingCalibrationSample>,
     pub calibration_pending_publish_count: u32,
 }
@@ -218,6 +232,20 @@ impl Default for ControlContext {
             pump_status: PumpStatus::default(),
             manual_timeouts: HashMap::new(),
             safety_override_until: 0,
+            adaptive_ec_step_ratio: 0.4,
+            adaptive_ph_step_ratio: 0.2,
+            best_known_ec_step_ratio: 0.4,
+            best_known_ph_step_ratio: 0.2,
+            auto_tune_locked: false,
+            abnormal_sample_streak: 0,
+            tuning_last_update_sec: 0,
+            tuning_hour_anchor_sec: 0,
+            tuning_day_anchor_sec: 0,
+            tuning_hour_ec_delta: 0.0,
+            tuning_hour_ph_delta: 0.0,
+            tuning_day_ec_delta: 0.0,
+            tuning_day_ph_delta: 0.0,
+            hourly_dose_history_ml_by_pump: HashMap::new(),
             pending_calibration_sample: None,
             calibration_pending_publish_count: 0,
         }
@@ -319,6 +347,7 @@ impl ControlContext {
         is_noisy
     }
 
+    fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig, now_sec: u64) {
     fn mark_pending_sample_noise_violation(&mut self) {
         if let Some(sample) = self.pending_calibration_sample.as_mut() {
             sample.invalid_by_noise = true;
@@ -334,11 +363,27 @@ impl ControlContext {
     fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig) {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
-                if (sensors.ec_value - last_ec) >= config.ec_ack_threshold {
+                let response = sensors.ec_value - last_ec;
+                if response >= config.ec_ack_threshold {
                     self.ec_retry_count = 0;
+                    if !self.auto_tune_locked {
+                        let gain_vs_expected = response / config.ec_ack_threshold.max(0.001);
+                        let tune_delta = if gain_vs_expected > 2.0 {
+                            -0.01
+                        } else if gain_vs_expected < 1.0 {
+                            0.02
+                        } else {
+                            0.0
+                        };
+                        self.adjust_ec_step_ratio(config, now_sec, tune_delta);
+                        self.best_known_ec_step_ratio = self.adaptive_ec_step_ratio;
+                    }
                 } else {
                     self.ec_retry_count += 1;
                     warn!("⚠️ EC không tăng! Lần thử: {}/3", self.ec_retry_count);
+                    if !self.auto_tune_locked {
+                        self.adjust_ec_step_ratio(config, now_sec, 0.03);
+                    }
                 }
                 self.last_ec_before_dosing = None;
             }
@@ -346,16 +391,32 @@ impl ControlContext {
         if config.enable_ph_sensor && !sensors.err_ph {
             if let Some(last_ph) = self.last_ph_before_dosing {
                 let is_up = self.last_ph_dosing_is_up.unwrap_or(true);
-                let is_ack_ok = if is_up {
-                    (sensors.ph_value - last_ph) >= config.ph_ack_threshold
+                let response = if is_up {
+                    sensors.ph_value - last_ph
                 } else {
-                    (last_ph - sensors.ph_value) >= config.ph_ack_threshold
+                    last_ph - sensors.ph_value
                 };
+                let is_ack_ok = response >= config.ph_ack_threshold;
                 if is_ack_ok {
                     self.ph_retry_count = 0;
+                    if !self.auto_tune_locked {
+                        let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
+                        let tune_delta = if gain_vs_expected > 2.0 {
+                            -0.01
+                        } else if gain_vs_expected < 1.0 {
+                            0.02
+                        } else {
+                            0.0
+                        };
+                        self.adjust_ph_step_ratio(config, now_sec, tune_delta);
+                        self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
+                    }
                 } else {
                     self.ph_retry_count += 1;
                     warn!("⚠️ pH không đổi hướng! Lần thử: {}/3", self.ph_retry_count);
+                    if !self.auto_tune_locked {
+                        self.adjust_ph_step_ratio(config, now_sec, 0.03);
+                    }
                 }
                 self.last_ph_before_dosing = None;
                 self.last_ph_dosing_is_up = None;
@@ -379,6 +440,132 @@ impl ControlContext {
                 self.last_water_before_drain = None;
             }
         }
+    }
+
+    fn sync_adaptive_ratios_from_config(&mut self, config: &DeviceConfig) {
+        if self.tuning_last_update_sec == 0 {
+            self.adaptive_ec_step_ratio = config.ec_step_ratio;
+            self.adaptive_ph_step_ratio = config.ph_step_ratio;
+            self.best_known_ec_step_ratio = config.ec_step_ratio;
+            self.best_known_ph_step_ratio = config.ph_step_ratio;
+        }
+    }
+
+    fn ensure_tuning_windows(&mut self, now_sec: u64) {
+        if self.tuning_hour_anchor_sec == 0 {
+            self.tuning_hour_anchor_sec = now_sec;
+        }
+        if self.tuning_day_anchor_sec == 0 {
+            self.tuning_day_anchor_sec = now_sec;
+        }
+        if now_sec.saturating_sub(self.tuning_hour_anchor_sec) >= 3600 {
+            self.tuning_hour_anchor_sec = now_sec;
+            self.tuning_hour_ec_delta = 0.0;
+            self.tuning_hour_ph_delta = 0.0;
+        }
+        if now_sec.saturating_sub(self.tuning_day_anchor_sec) >= 86_400 {
+            self.tuning_day_anchor_sec = now_sec;
+            self.tuning_day_ec_delta = 0.0;
+            self.tuning_day_ph_delta = 0.0;
+        }
+    }
+
+    fn adjust_ec_step_ratio(&mut self, config: &DeviceConfig, now_sec: u64, requested_delta: f32) {
+        self.ensure_tuning_windows(now_sec);
+        let min_ratio = (config.ec_step_ratio * 0.4).max(0.05);
+        let max_ratio = (config.ec_step_ratio * 1.8).min(2.5);
+        let allowed_hour = (0.08 - self.tuning_hour_ec_delta.abs()).max(0.0);
+        let allowed_day = (0.25 - self.tuning_day_ec_delta.abs()).max(0.0);
+        let allowed = allowed_hour.min(allowed_day);
+        let applied_delta = requested_delta.clamp(-allowed, allowed);
+        self.adaptive_ec_step_ratio = (self.adaptive_ec_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
+        self.tuning_hour_ec_delta += applied_delta;
+        self.tuning_day_ec_delta += applied_delta;
+        self.tuning_last_update_sec = now_sec;
+    }
+
+    fn adjust_ph_step_ratio(&mut self, config: &DeviceConfig, now_sec: u64, requested_delta: f32) {
+        self.ensure_tuning_windows(now_sec);
+        let min_ratio = (config.ph_step_ratio * 0.4).max(0.05);
+        let max_ratio = (config.ph_step_ratio * 1.8).min(2.5);
+        let allowed_hour = (0.08 - self.tuning_hour_ph_delta.abs()).max(0.0);
+        let allowed_day = (0.25 - self.tuning_day_ph_delta.abs()).max(0.0);
+        let allowed = allowed_hour.min(allowed_day);
+        let applied_delta = requested_delta.clamp(-allowed, allowed);
+        self.adaptive_ph_step_ratio = (self.adaptive_ph_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
+        self.tuning_hour_ph_delta += applied_delta;
+        self.tuning_day_ph_delta += applied_delta;
+        self.tuning_last_update_sec = now_sec;
+    }
+
+    fn update_auto_tune_health(&mut self, abnormal_sample: bool) {
+        if abnormal_sample {
+            self.abnormal_sample_streak = self.abnormal_sample_streak.saturating_add(1);
+            if self.abnormal_sample_streak >= 3 && !self.auto_tune_locked {
+                self.auto_tune_locked = true;
+                self.adaptive_ec_step_ratio = self.best_known_ec_step_ratio;
+                self.adaptive_ph_step_ratio = self.best_known_ph_step_ratio;
+                warn!(
+                    "🔒 Khóa auto-tune do 3 mẫu liên tiếp bất thường. Fallback hệ số EC={:.3}, pH={:.3}",
+                    self.adaptive_ec_step_ratio, self.adaptive_ph_step_ratio
+                );
+            }
+        } else {
+            self.abnormal_sample_streak = 0;
+        }
+    }
+
+    fn get_hourly_total_dose_ml(&mut self, pump: &str, now_sec: u64) -> f32 {
+        let history = self
+            .hourly_dose_history_ml_by_pump
+            .entry(pump.to_string())
+            .or_default();
+        history.retain(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600);
+        history.iter().map(|(_, ml)| *ml).sum()
+    }
+
+    fn reserve_dose_if_within_hourly_limit(
+        &mut self,
+        pump: &str,
+        now_sec: u64,
+        dose_ml: f32,
+        max_hourly_ml: f32,
+    ) -> bool {
+        let used = self.get_hourly_total_dose_ml(pump, now_sec);
+        if used + dose_ml > max_hourly_ml {
+            warn!(
+                "⚠️ Giới hạn giờ cho {}: đã dùng {:.2}ml, yêu cầu thêm {:.2}ml (max {:.2}ml/h)",
+                pump, used, dose_ml, max_hourly_ml
+            );
+            return false;
+        }
+        self.hourly_dose_history_ml_by_pump
+            .entry(pump.to_string())
+            .or_default()
+            .push((now_sec, dose_ml));
+        true
+    }
+
+    fn can_dose_within_hourly_limit(
+        &mut self,
+        pump: &str,
+        now_sec: u64,
+        dose_ml: f32,
+        max_hourly_ml: f32,
+    ) -> bool {
+        let used = self.get_hourly_total_dose_ml(pump, now_sec);
+        used + dose_ml <= max_hourly_ml
+    }
+}
+
+fn soft_deadband_scale(error: f32, tolerance: f32) -> f32 {
+    let soft_zone_end = (tolerance * 3.0).max(tolerance + 0.01);
+    if error <= tolerance {
+        0.0
+    } else if error >= soft_zone_end {
+        1.0
+    } else {
+        0.35 + 0.65 * ((error - tolerance) / (soft_zone_end - tolerance))
     }
 }
 
@@ -628,6 +815,7 @@ pub fn start_fsm_control_loop(
             let sensors = shared_sensors.read().unwrap().clone();
             let current_time_ms = get_current_time_ms();
             let current_time_sec = current_time_ms / 1000;
+            ctx.sync_adaptive_ratios_from_config(&config);
 
             // 🟢 NHẬN LỆNH & XỬ LÝ CƯỠNG CHẾ
             let force_sync =
@@ -650,6 +838,14 @@ pub fn start_fsm_control_loop(
 
             if !is_safety_overridden {
                 // Kiểm tra nhiễu (Bỏ qua nhịp nếu nhiễu)
+                let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config);
+                let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
+                    || (config.enable_ec_sensor && sensors.err_ec)
+                    || (config.enable_ph_sensor && sensors.err_ph)
+                    || (config.enable_temp_sensor && sensors.err_temp);
+                ctx.update_auto_tune_health(is_noisy_sample || has_sensor_fault);
+
+                if is_noisy_sample && config.control_mode == ControlMode::Auto {
                 let is_noisy_now = ctx.check_and_update_noise(&sensors, &config);
                 if is_noisy_now {
                     ctx.mark_pending_sample_noise_violation();
@@ -1057,6 +1253,7 @@ fn run_auto_fsm(
     fsm_mqtt_tx: &Sender<String>,
 ) {
     let current_time_sec = current_time_ms / 1000;
+    const MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP: f32 = 30.0;
 
     match ctx.current_state {
         SystemState::SystemFault(ref reason) => {
@@ -1064,7 +1261,7 @@ fn run_auto_fsm(
         }
 
         SystemState::Monitoring => {
-            ctx.verify_sensor_ack(sensors, config);
+            ctx.verify_sensor_ack(sensors, config, current_time_sec);
 
             // 🟢 THAY NƯỚC ĐỊNH KỲ THEO LỊCH CRON
             if config.enable_water_level_sensor
@@ -1205,16 +1402,48 @@ fn run_auto_fsm(
                             let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
                             if config.scheduled_dose_a_ml > 0.0 || config.scheduled_dose_b_ml > 0.0
                             {
-                                ctx.current_state = SystemState::StartingOsakaPump {
-                                    finish_time: current_time_ms + config.soft_start_duration,
-                                    pending_action: PendingDose::ScheduledDose {
-                                        dose_a_ml: config.scheduled_dose_a_ml,
-                                        dose_b_ml: config.scheduled_dose_b_ml,
-                                        pwm_percent: safe_pwm,
-                                    },
-                                };
-                                ctx.fsm_osaka_active = true;
-                                is_dosing_active = true;
+                                let allow_a = config.scheduled_dose_a_ml <= 0.0
+                                    || ctx.can_dose_within_hourly_limit(
+                                        "NutrientA",
+                                        current_time_sec,
+                                        config.scheduled_dose_a_ml,
+                                        MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                    );
+                                let allow_b = config.scheduled_dose_b_ml <= 0.0
+                                    || ctx.can_dose_within_hourly_limit(
+                                        "NutrientB",
+                                        current_time_sec,
+                                        config.scheduled_dose_b_ml,
+                                        MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                    );
+                                if allow_a && allow_b {
+                                    if config.scheduled_dose_a_ml > 0.0 {
+                                        let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                            "NutrientA",
+                                            current_time_sec,
+                                            config.scheduled_dose_a_ml,
+                                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                        );
+                                    }
+                                    if config.scheduled_dose_b_ml > 0.0 {
+                                        let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                            "NutrientB",
+                                            current_time_sec,
+                                            config.scheduled_dose_b_ml,
+                                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                        );
+                                    }
+                                    ctx.current_state = SystemState::StartingOsakaPump {
+                                        finish_time: current_time_ms + config.soft_start_duration,
+                                        pending_action: PendingDose::ScheduledDose {
+                                            dose_a_ml: config.scheduled_dose_a_ml,
+                                            dose_b_ml: config.scheduled_dose_b_ml,
+                                            pwm_percent: safe_pwm,
+                                        },
+                                    };
+                                    ctx.fsm_osaka_active = true;
+                                    is_dosing_active = true;
+                                }
                             }
                         }
                     }
@@ -1232,12 +1461,44 @@ fn run_auto_fsm(
                         is_dosing_active = true;
                     } else {
                         let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
-                        let dose_ml = ((config.ec_target - sensors.ec_value)
+                        let ec_error = config.ec_target - sensors.ec_value;
+                        let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
+                        let active_ec_step_ratio = if ctx.auto_tune_locked {
+                            ctx.best_known_ec_step_ratio
+                        } else {
+                            ctx.adaptive_ec_step_ratio
+                        };
+                        let dose_ml = (ec_error
                             / config.ec_gain_per_ml
-                            * config.ec_step_ratio)
+                            * active_ec_step_ratio
+                            * deadband_scale)
                             .clamp(0.0, config.max_dose_per_cycle);
 
-                        if dose_ml > 0.0 {
+                        let can_dose_ec_a = ctx.can_dose_within_hourly_limit(
+                            "NutrientA",
+                            current_time_sec,
+                            dose_ml,
+                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                        );
+                        let can_dose_ec_b = ctx.can_dose_within_hourly_limit(
+                            "NutrientB",
+                            current_time_sec,
+                            dose_ml,
+                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                        );
+                        if dose_ml > 0.0 && can_dose_ec_a && can_dose_ec_b {
+                            let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                "NutrientA",
+                                current_time_sec,
+                                dose_ml,
+                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                            );
+                            let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                "NutrientB",
+                                current_time_sec,
+                                dose_ml,
+                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                            );
                             ctx.last_ec_before_dosing = Some(sensors.ec_value);
                             ctx.current_state = SystemState::StartingOsakaPump {
                                 finish_time: current_time_ms + config.soft_start_duration,
@@ -1273,6 +1534,33 @@ fn run_auto_fsm(
                         };
                         let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
 
+                        let base_capacity = if is_ph_up {
+                            config.pump_ph_up_capacity_ml_per_sec
+                        } else {
+                            config.pump_ph_down_capacity_ml_per_sec
+                        };
+
+                        let active_capacity = base_capacity * (safe_pwm as f32 / 100.0);
+
+                        let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
+                        let active_ph_step_ratio = if ctx.auto_tune_locked {
+                            ctx.best_known_ph_step_ratio
+                        } else {
+                            ctx.adaptive_ph_step_ratio
+                        };
+                        let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
+                            .clamp(0.0, config.max_dose_per_cycle);
+                        let duration_ms = ((dose_ml / active_capacity) * 1000.0) as u64;
+                        let ph_pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
+
+                        if duration_ms > 0
+                            && ctx.reserve_dose_if_within_hourly_limit(
+                                ph_pump_name,
+                                current_time_sec,
+                                dose_ml,
+                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                            )
+                        {
                         let dose_ml = (diff / ratio * config.ph_step_ratio)
                             .clamp(0.0, config.max_dose_per_cycle);
                         if dose_ml > 0.0 {

@@ -183,8 +183,6 @@ pub async fn request_device_sync(
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/control", web::post().to(control_pump)).route(
-        "/control/{device_id}/sync",
-        web::post().to(request_device_sync),
-    );
+    cfg.route("/control", web::post().to(control_pump))
+        .route("/control/sync", web::post().to(request_device_sync));
 }

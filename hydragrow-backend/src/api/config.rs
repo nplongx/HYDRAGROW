@@ -668,4 +668,3 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
             web::post().to(update_dosing_calibration),
         );
 }
-

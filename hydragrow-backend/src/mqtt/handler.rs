@@ -291,6 +291,17 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                 } else {
                     None
                 };
+                let alert_metadata = metadata_json.clone().or_else(|| {
+                    warn!(
+                        "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
+                        device_id, state
+                    );
+                    Some(json!({
+                        "device_id": device_id.clone(),
+                        "fsm_state": state,
+                        "metadata_source": "fsm_fallback"
+                    }))
+                });
 
                 match state {
                     "SystemBooting" => {
@@ -361,7 +372,7 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                             device_id: device_id.clone(),
                             timestamp: chrono::Utc::now().timestamp_millis() as u64,
                             reason: Some(reason_str),
-                            metadata: metadata_json.clone(),
+                            metadata: alert_metadata.clone(),
                         });
                     }
                     s if s.starts_with("LogInfo:") => {
@@ -385,7 +396,7 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                             device_id: device_id.clone(),
                             timestamp: chrono::Utc::now().timestamp_millis() as u64,
                             reason: Some(reason_str),
-                            metadata: metadata_json.clone(),
+                            metadata: alert_metadata.clone(),
                         });
                     }
                     "EmergencyStop" => {
@@ -397,7 +408,7 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                             device_id: device_id.clone(),
                             timestamp: chrono::Utc::now().timestamp_millis() as u64,
                             reason: None,
-                            metadata: metadata_json.clone(),
+                            metadata: alert_metadata.clone(),
                         });
                     }
                     s if s.starts_with("SystemFault:") => {
@@ -412,7 +423,7 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                             device_id: device_id.clone(),
                             timestamp: chrono::Utc::now().timestamp_millis() as u64,
                             reason: Some(reason_str),
-                            metadata: metadata_json.clone(),
+                            metadata: alert_metadata.clone(),
                         });
                     }
                     "WaterRefilling" => {

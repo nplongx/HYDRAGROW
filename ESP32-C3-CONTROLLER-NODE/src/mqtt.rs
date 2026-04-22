@@ -19,7 +19,7 @@ pub enum ConnectionState {
     MqttDisconnected,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PumpStatus {
     pub pump_a: bool,
     pub pump_b: bool,
@@ -44,6 +44,27 @@ pub struct PumpStatus {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub osaka_pwm: Option<u32>,
+}
+
+impl Default for PumpStatus {
+    fn default() -> Self {
+        Self {
+            pump_a: false,
+            pump_b: false,
+            ph_up: false,
+            ph_down: false,
+            osaka_pump: false,
+            mist_valve: false,
+            water_pump_in: false,
+            water_pump_out: false,
+            // Ép giá trị mặc định là 0% để luôn luôn hiện trong chuỗi JSON
+            pump_a_pwm: Some(0),
+            pump_b_pwm: Some(0),
+            ph_up_pwm: Some(0),
+            ph_down_pwm: Some(0),
+            osaka_pwm: Some(0),
+        }
+    }
 }
 
 // 🟢 CẬP NHẬT: Thêm các trường sức khỏe gửi từ Sensor Node

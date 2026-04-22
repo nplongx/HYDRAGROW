@@ -207,22 +207,27 @@ impl ControlContext {
         let _ = match pump_name {
             "A" | "PUMP_A" => {
                 self.pump_status.pump_a = false;
+                self.pump_status.pump_a_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
                 pump_ctrl.set_pump_state(PumpType::NutrientA, false)
             }
             "B" | "PUMP_B" => {
                 self.pump_status.pump_b = false;
+                self.pump_status.pump_b_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
                 pump_ctrl.set_pump_state(PumpType::NutrientB, false)
             }
             "PH_UP" | "PUMP_PH_UP" => {
                 self.pump_status.ph_up = false;
+                self.pump_status.ph_up_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
                 pump_ctrl.set_pump_state(PumpType::PhUp, false)
             }
             "PH_DOWN" | "PUMP_PH_DOWN" => {
                 self.pump_status.ph_down = false;
+                self.pump_status.ph_down_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
                 pump_ctrl.set_pump_state(PumpType::PhDown, false)
             }
             "OSAKA_PUMP" | "OSAKA" => {
                 self.pump_status.osaka_pump = false;
+                self.pump_status.osaka_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
                 pump_ctrl.set_osaka_pump(false)
             }
             "MIST_VALVE" | "MIST" => {
@@ -555,15 +560,18 @@ pub fn start_fsm_control_loop(
                             if !ctx.pump_status.osaka_pump {
                                 let _ = pump_ctrl.start_osaka_pump_soft(target_pwm);
                                 ctx.pump_status.osaka_pump = true;
+                                ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
                                 ctx.current_osaka_pwm = target_pwm;
                             } else if ctx.current_osaka_pwm != target_pwm {
                                 let _ = pump_ctrl.set_osaka_pump_pwm(target_pwm);
+                                ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
                                 ctx.current_osaka_pwm = target_pwm;
                             }
                         } else {
                             if ctx.pump_status.osaka_pump {
                                 let _ = pump_ctrl.set_osaka_pump_pwm(0);
                                 ctx.pump_status.osaka_pump = false;
+                                ctx.pump_status.osaka_pwm = Some(0); // 🟢 THÊM MỚI: Cập nhật PWM
                                 ctx.current_osaka_pwm = 0;
                             }
                         }
@@ -725,6 +733,7 @@ fn process_mqtt_commands(
         let _ = match pump_name.as_str() {
             "A" | "PUMP_A" => {
                 ctx.pump_status.pump_a = is_on;
+                ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
                 if cmd.pwm.is_some() || is_set_pwm {
                     pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, is_on, pwm_val)
                 } else {
@@ -733,6 +742,7 @@ fn process_mqtt_commands(
             }
             "B" | "PUMP_B" => {
                 ctx.pump_status.pump_b = is_on;
+                ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
                 if cmd.pwm.is_some() || is_set_pwm {
                     pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, is_on, pwm_val)
                 } else {
@@ -741,6 +751,7 @@ fn process_mqtt_commands(
             }
             "PH_UP" | "PUMP_PH_UP" => {
                 ctx.pump_status.ph_up = is_on;
+                ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
                 if cmd.pwm.is_some() || is_set_pwm {
                     pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, is_on, pwm_val)
                 } else {
@@ -749,6 +760,7 @@ fn process_mqtt_commands(
             }
             "PH_DOWN" | "PUMP_PH_DOWN" => {
                 ctx.pump_status.ph_down = is_on;
+                ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
                 if cmd.pwm.is_some() || is_set_pwm {
                     pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, is_on, pwm_val)
                 } else {
@@ -757,6 +769,7 @@ fn process_mqtt_commands(
             }
             "OSAKA_PUMP" | "OSAKA" => {
                 ctx.pump_status.osaka_pump = is_on;
+                ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
                 if cmd.pwm.is_some() || is_set_pwm {
                     pump_ctrl.set_osaka_pump_pwm(pwm_val)
                 } else {
@@ -1117,6 +1130,7 @@ fn run_auto_fsm(
                                 pwm_percent,
                             );
                             ctx.pump_status.pump_a = true;
+                            ctx.pump_status.pump_a_pwm = Some(pwm_percent); // 🟢 THÊM MỚI
                             let active_capacity_a =
                                 config.pump_a_capacity_ml_per_sec * (pwm_percent as f32 / 100.0);
                             let duration_ms_a = ((dose_a_ml / active_capacity_a) * 1000.0) as u64;
@@ -1153,6 +1167,7 @@ fn run_auto_fsm(
                         let _ =
                             pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, true, pwm_percent);
                         ctx.pump_status.pump_a = true;
+                        ctx.pump_status.pump_a_pwm = Some(pwm_percent); // 🟢 THÊM MỚI
                         let active_capacity_a =
                             config.pump_a_capacity_ml_per_sec * (pwm_percent as f32 / 100.0);
                         let duration_ms_a = ((dose_ml / active_capacity_a) * 1000.0) as u64;
@@ -1184,8 +1199,10 @@ fn run_auto_fsm(
                         );
                         if is_up {
                             ctx.pump_status.ph_up = true;
+                            ctx.pump_status.ph_up_pwm = Some(pwm_percent); // 🟢 THÊM MỚI
                         } else {
                             ctx.pump_status.ph_down = true;
+                            ctx.pump_status.ph_down_pwm = Some(pwm_percent); // 🟢 THÊM MỚI
                         }
 
                         ctx.current_state = SystemState::DosingPH {
@@ -1212,6 +1229,7 @@ fn run_auto_fsm(
             if current_time_ms >= finish_time {
                 let _ = pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, false, 0);
                 ctx.pump_status.pump_a = false;
+                ctx.pump_status.pump_a_pwm = Some(0); // 🟢 THÊM MỚI
                 ctx.current_state = SystemState::WaitingBetweenDose {
                     finish_time: current_time_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
                     dose_b_ml,
@@ -1236,6 +1254,7 @@ fn run_auto_fsm(
                     let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
                     let _ = pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, true, safe_pwm);
                     ctx.pump_status.pump_b = true;
+                    ctx.pump_status.pump_b_pwm = Some(safe_pwm); // 🟢 THÊM MỚI
                     let active_capacity_b =
                         config.pump_b_capacity_ml_per_sec * (safe_pwm as f32 / 100.0);
                     let duration_ms_b = ((dose_b_ml / active_capacity_b) * 1000.0) as u64;
@@ -1272,6 +1291,7 @@ fn run_auto_fsm(
             if current_time_ms >= finish_time {
                 let _ = pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, false, 0);
                 ctx.pump_status.pump_b = false;
+                ctx.pump_status.pump_b_pwm = Some(0); // 🟢 THÊM MỚI
                 let report_json = format!(
                     r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
                     start_ec, start_ph, dose_a_ml_reported, dose_b_ml, target_ec, config.ph_target
@@ -1294,8 +1314,10 @@ fn run_auto_fsm(
             if current_time_ms >= finish_time {
                 let _ = pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, false, 0);
                 ctx.pump_status.ph_up = false;
+                ctx.pump_status.ph_up_pwm = Some(0); // 🟢 THÊM MỚI
                 let _ = pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, false, 0);
                 ctx.pump_status.ph_down = false;
+                ctx.pump_status.ph_down_pwm = Some(0); // 🟢 THÊM MỚI
 
                 let ph_up_ml = if is_up { dose_ml } else { 0.0 };
                 let ph_down_ml = if !is_up { dose_ml } else { 0.0 };
@@ -1328,3 +1350,4 @@ fn run_auto_fsm(
         SystemState::EmergencyStop(_) => {} // Không làm gì cả, chờ user FORCE hoặc Reset lỗi
     }
 }
+

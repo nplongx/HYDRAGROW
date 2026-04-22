@@ -53,7 +53,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
     setVolumeMl(0);
   }, [selectedPump, dosingCalibration]);
 
-  // 🟢 TOÁN HỌC: Tự động tính số mL cần châm khi nhập Ngưỡng Mục Tiêu
+  // TOÁN HỌC: Tự động tính số mL cần châm khi nhập Ngưỡng Mục Tiêu
   useEffect(() => {
     if (targetValue === '' || typeof targetValue !== 'number') return;
 
@@ -108,7 +108,6 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-
           {/* Cột 1: Chọn Dung Dịch */}
           <div className="space-y-1.5 col-span-2 lg:col-span-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Loại Dung Dịch</label>
@@ -125,7 +124,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
             </select>
           </div>
 
-          {/* Cột 2: Nhập Ngưỡng (Kèm hiển thị Hiện tại) */}
+          {/* Cột 2: Nhập Ngưỡng */}
           <div className="space-y-1.5 col-span-1 lg:col-span-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1 flex items-center justify-between">
               <span>Đích đến ({unit})</span>
@@ -142,7 +141,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
             />
           </div>
 
-          {/* Cột 3: Thể Tích Tính Được (Vẫn cho phép sửa tay) */}
+          {/* Cột 3: Thể Tích */}
           <div className="space-y-1.5 col-span-1 lg:col-span-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Tính ra (mL)</label>
             <input
@@ -154,7 +153,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
             />
           </div>
 
-          {/* Cột 4: Lưu lượng (Đã đồng bộ) */}
+          {/* Cột 4: Lưu lượng */}
           <div className="space-y-1.5 col-span-1 lg:col-span-1">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1 flex justify-between">
               <span>Lưu lượng (mL/s)</span>
@@ -183,7 +182,6 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
             <Play size={14} className={isProcessing ? "animate-pulse" : ""} />
             Châm {durationSec} Giây
           </button>
-
         </div>
       </div>
     </div>
@@ -191,19 +189,29 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
 };
 
 // --- Component: Khối Điều Khiển Pha Lê ---
-// --- Component: Khối Điều Khiển Pha Lê ---
 const AdvancedDeviceControl = ({
   deviceId, pumpId, title, icon: Icon, colorTheme, currentStatus, allowPwm = false, updatePumpStatusOptimistically, isOnline, isEmergency
 }: any) => {
   const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId);
-  const [pwmValue, setPwmValue] = useState(100);
+
+  // 🟢 HÚT PWM PREFERENCES TỪ CONTEXT
+  const { pwmPreferences, savePwmPreference } = useDeviceContext();
+
+  // 🟢 KHỞI TẠO TỪ CACHE CỤC BỘ HOẶC MẶC ĐỊNH LÀ 100
+  const [pwmValue, setPwmValue] = useState(pwmPreferences[pumpId] || 100);
+
   const [duration, setDuration] = useState(120);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const theme = NEON_COLORS[colorTheme];
-
-  // Hàm chuyển đổi pumpId thành chữ thường để khớp với state của Backend (VD: "PUMP_A" -> "pump_a")
   const stateKey = pumpId.toLowerCase();
+
+  // 🟢 CẬP NHẬT LẠI SLIDER NẾU CÓ DỮ LIỆU TỪ Ổ CỨNG HOẶC MẠCH
+  useEffect(() => {
+    if (pwmPreferences[pumpId] !== undefined) {
+      setPwmValue(pwmPreferences[pumpId]);
+    }
+  }, [pwmPreferences, pumpId]);
 
   const handleToggle = async () => {
     if (isEmergency && !currentStatus) {
@@ -215,17 +223,14 @@ const AdvancedDeviceControl = ({
     const targetAction = currentStatus ? 'off' : 'on';
     const isNowOn = targetAction === 'on';
 
-    // 1. Optimistic update (Cập nhật UI ngay lập tức với key viết thường và giá trị boolean)
     updatePumpStatusOptimistically(stateKey, isNowOn);
 
     try {
       const success = await togglePump(pumpId, targetAction);
       if (!success) {
-        // Khôi phục lại nếu lệnh thất bại
         updatePumpStatusOptimistically(stateKey, !isNowOn);
         toast.error(`Lỗi khi điều khiển ${title}!`);
       }
-      // Nếu thành công, cơ chế force_publish của ESP32 sẽ gửi bản tin WS về sau ~0.5s để chốt state thật.
     } catch (error) {
       updatePumpStatusOptimistically(stateKey, !isNowOn);
       toast.error(`Lỗi mạng khi điều khiển ${title}!`);
@@ -238,13 +243,11 @@ const AdvancedDeviceControl = ({
     if (!window.confirm(`⚠️ CẢNH BÁO: Bật cưỡng chế ${title} trong ${duration}s?`)) return;
     setIsProcessing(true);
 
-    // 1. Optimistic update
     updatePumpStatusOptimistically(stateKey, true);
 
     try {
       const success = await forceOn(pumpId, duration);
       if (!success) {
-        // Khôi phục lại nếu lỗi
         updatePumpStatusOptimistically(stateKey, false);
         toast.error(`Lỗi khi cưỡng chế ${title}!`);
       }
@@ -268,6 +271,10 @@ const AdvancedDeviceControl = ({
     }
 
     await setPwm(pumpId, pwmValue);
+
+    // 🟢 GHI NHẬN VÀ LƯU VÀO TỆP device-state.json KHI SET THÀNH CÔNG
+    savePwmPreference(pumpId, pwmValue);
+
     setIsProcessing(false);
   };
 
@@ -362,6 +369,7 @@ const AdvancedDeviceControl = ({
     </div>
   );
 };
+
 // --- Bảng Điều Khiển Chính ---
 const ControlPanel = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, updatePumpStatusOptimistically, fsmState, settings } = useDeviceContext();

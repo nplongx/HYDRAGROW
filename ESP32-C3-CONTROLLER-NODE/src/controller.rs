@@ -370,14 +370,27 @@ pub fn start_fsm_control_loop(
         ctx.last_mixing_start_sec = current_time_on_boot;
 
         info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
+
+        // Ensure all systems are ready before announcing online status
+        std::thread::sleep(std::time::Duration::from_secs(1));
         
-        // Immediately publish online status after full initialization
-        let status_msg = serde_json::json!({
-            "online": true,
-            "status": "ready",
-            "current_state": "Monitoring"
-        }).to_string();
-        let _ = fsm_mqtt_tx.send(status_msg);
+        // Publish robust online status with retry mechanism
+        for _ in 0..3 {
+            let status_msg = serde_json::json!({
+                "online": true,
+                "status": "ready",
+                "current_state": "Monitoring",
+                "boot_time": current_time_on_boot
+            }).to_string();
+            
+            if fsm_mqtt_tx.send(status_msg).is_ok() {
+                info!("✅ Published online status");
+                break;
+            } else {
+                warn!("⚠️ Failed to publish online status, retrying...");
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
 
         loop {
             let config = shared_config.read().unwrap().clone();

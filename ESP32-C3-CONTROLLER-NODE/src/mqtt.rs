@@ -155,17 +155,27 @@ pub fn init_mqtt_client(
     let topic_command_cb = topic_command.clone();
     let topic_sensors_cb = topic_sensors.clone();
 
-    // 1. Configure MQTT without LWT initially
+    // Configure LWT first
+    let lwt_topic = format!("AGITECH/{}/status", device_id);
+    let lwt_payload = r#"{"online": false, "status": "disconnected"}"#.as_bytes();
+    let lwt_config = LwtConfiguration {
+        topic: &lwt_topic,
+        message: lwt_payload,
+        qos: QoS::AtLeastOnce,
+        retain: true,
+    };
+
+    // Configure MQTT with LWT
     let mqtt_config = MqttClientConfiguration {
         buffer_size: 4096,
         keep_alive_interval: Some(std::time::Duration::from_secs(15)),
         password: Some("53zx37kxq3epbexgqt6rjlce1d0e0gwq"),
         username: Some("long"),
-        lwt: None, // Will be set later after initialization
+        lwt: Some(lwt_config),
         ..Default::default()
     };
 
-    // 2. Add delay to ensure system stability
+    // Add delay to ensure system stability
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let client = EspMqttClient::new_cb(broker_url, &mqtt_config, move |event| {
@@ -279,18 +289,6 @@ pub fn init_mqtt_client(
         }
     })?;
 
-    info!("✅ MQTT client initialized (without LWT)");
-
-    // After client is connected, we'll set up LWT properly
-    let lwt_topic = format!("AGITECH/{}/status", device_id);
-    let lwt_payload = r#"{"online": false, "status": "disconnected"}"#.as_bytes();
-
-    // Set LWT only after we're sure the system is ready
-    if let Err(e) = client.set_lwt(&lwt_topic, lwt_payload, QoS::AtLeastOnce, true) {
-        error!("Failed to set LWT: {:?}", e);
-    } else {
-        info!("✅ LWT configured with 'disconnected' state");
-    }
-
+    info!("✅ MQTT client initialized with LWT configured");
     Ok(client)
 }

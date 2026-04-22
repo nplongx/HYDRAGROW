@@ -581,6 +581,11 @@ pub fn start_fsm_control_loop(
             if force_sync {
                 last_reported_state = "".to_string();
                 let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
+                // Also force publish controller status immediately
+                let _ = fsm_mqtt_tx.send(serde_json::json!({
+                    "current_state": ctx.current_state.to_payload_string(),
+                    "pump_status": ctx.pump_status
+                }).to_string());
                 info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
             }
 

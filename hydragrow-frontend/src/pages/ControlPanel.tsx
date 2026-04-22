@@ -209,19 +209,53 @@ const AdvancedDeviceControl = ({
 
     setIsProcessing(true);
     const targetAction = currentStatus ? 'off' : 'on';
+    // Optimistic update first
     updatePumpStatusOptimistically(pumpId, targetAction);
-    const success = await togglePump(pumpId, targetAction);
-    if (!success) updatePumpStatusOptimistically(pumpId, currentStatus ? 'on' : 'off');
-    setIsProcessing(false);
+    
+    try {
+      const success = await togglePump(pumpId, targetAction);
+      if (!success) {
+        // Revert if failed
+        updatePumpStatusOptimistically(pumpId, currentStatus ? 'on' : 'off');
+        toast.error(`Lỗi khi điều khiển ${title}!`);
+      } else {
+        // Force refresh status after 1s to sync with actual state
+        setTimeout(() => {
+          updatePumpStatusOptimistically('force_refresh', '');
+        }, 1000);
+      }
+    } catch (error) {
+      updatePumpStatusOptimistically(pumpId, currentStatus ? 'on' : 'off');
+      toast.error(`Lỗi kết nối khi điều khiển ${title}!`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleForceOn = async () => {
     if (!window.confirm(`⚠️ CẢNH BÁO: Bật cưỡng chế ${title} trong ${duration}s?`)) return;
     setIsProcessing(true);
+    // Optimistic update first
     updatePumpStatusOptimistically(pumpId, 'on');
-    const success = await forceOn(pumpId, duration);
-    if (!success) updatePumpStatusOptimistically(pumpId, 'off');
-    setIsProcessing(false);
+    
+    try {
+      const success = await forceOn(pumpId, duration);
+      if (!success) {
+        // Revert if failed
+        updatePumpStatusOptimistically(pumpId, 'off');
+        toast.error(`Lỗi khi cưỡng chế ${title}!`);
+      } else {
+        // Force refresh status after 1s to sync with actual state
+        setTimeout(() => {
+          updatePumpStatusOptimistically('force_refresh', '');
+        }, 1000);
+      }
+    } catch (error) {
+      updatePumpStatusOptimistically(pumpId, 'off');
+      toast.error(`Lỗi kết nối khi cưỡng chế ${title}!`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleSetPwm = async () => {

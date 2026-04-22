@@ -58,6 +58,28 @@ pub struct PhCalibrationSession {
     pub captured_points: HashMap<i32, PhCapturedPoint>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct DosingLearningSample {
+    pub before_ec: Option<f32>,
+    pub after_ec: Option<f32>,
+    pub stabilized_ec: Option<f32>,
+    pub before_ph: Option<f32>,
+    pub after_ph: Option<f32>,
+    pub stabilized_ph: Option<f32>,
+    pub stabilized_window_sec: Option<u32>,
+    pub reported_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DosingDynamicState {
+    pub base_ec_gain_per_ml: f32,
+    pub dynamic_ec_gain_per_ml: f32,
+    pub confidence: f32,
+    pub sample_count: u32,
+    pub last_updated: chrono::DateTime<chrono::Utc>,
+    pub samples: VecDeque<DosingLearningSample>,
+}
+
 pub struct AppState {
     pub pg_pool: sqlx::PgPool,
     pub influx_client: InfluxClient,
@@ -72,6 +94,7 @@ pub struct AppState {
     pub fcm_tokens: Mutex<Vec<String>>,
     pub ph_calibration_sessions: std::sync::Arc<RwLock<HashMap<String, PhCalibrationSession>>>,
     pub ph_voltage_samples: std::sync::Arc<RwLock<HashMap<String, VecDeque<PhVoltageSample>>>>,
+    pub dosing_dynamic_states: std::sync::Arc<RwLock<HashMap<String, DosingDynamicState>>>,
 }
 
 #[tokio::main]
@@ -195,6 +218,7 @@ async fn main() -> anyhow::Result<()> {
         health_sender: health_tx,
         ph_calibration_sessions: Arc::new(RwLock::new(HashMap::new())),
         ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
+        dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
     });
 
     mqtt_client

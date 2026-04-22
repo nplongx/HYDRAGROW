@@ -12,6 +12,15 @@ use crate::models::config::{
     WaterConfig,
 };
 
+#[derive(Debug, Serialize)]
+struct DosingDynamicResponse {
+    dynamic_ec_gain_per_ml: f32,
+    base_ec_gain_per_ml: f32,
+    confidence: f32,
+    sample_count: u32,
+    last_updated: DateTime<Utc>,
+}
+
 // ==========================================
 // HELPER FUNCTIONS (Đã khôi phục các hàm nội bộ)
 // ==========================================
@@ -837,6 +846,93 @@ pub async fn update_dosing_calibration(
     HttpResponse::Ok().json(json!({"status": "success"}))
 }
 
+#[instrument(skip(app_state))]
+pub async fn get_dosing_dynamic_calibration(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+
+    let dosing_cfg_res = sqlx::query_as::<_, DosingCalibration>(
+        "SELECT * FROM dosing_calibration WHERE device_id = $1",
+    )
+    .bind(&device_id)
+    .fetch_optional(&app_state.pg_pool)
+    .await;
+
+    let dosing_cfg = match dosing_cfg_res {
+        Ok(Some(cfg)) => cfg,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(json!({"error": "Dosing calibration not found"}));
+        }
+        Err(_) => return HttpResponse::InternalServerError().json(json!({"error": "DB Error"})),
+    };
+
+    let state_map = app_state.dosing_dynamic_states.read().await;
+    if let Some(state) = state_map.get(&device_id) {
+        return HttpResponse::Ok().json(DosingDynamicResponse {
+            dynamic_ec_gain_per_ml: state.dynamic_ec_gain_per_ml,
+            base_ec_gain_per_ml: state.base_ec_gain_per_ml,
+            confidence: state.confidence,
+            sample_count: state.sample_count,
+            last_updated: state.last_updated,
+        });
+    }
+
+    HttpResponse::Ok().json(DosingDynamicResponse {
+        dynamic_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
+        base_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
+        confidence: 0.0,
+        sample_count: 0,
+        last_updated: Utc::now(),
+    })
+}
+
+#[instrument(skip(app_state))]
+pub async fn reset_dosing_dynamic_calibration(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+
+    let dosing_cfg_res = sqlx::query_as::<_, DosingCalibration>(
+        "SELECT * FROM dosing_calibration WHERE device_id = $1",
+    )
+    .bind(&device_id)
+    .fetch_optional(&app_state.pg_pool)
+    .await;
+
+    let dosing_cfg = match dosing_cfg_res {
+        Ok(Some(cfg)) => cfg,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(json!({"error": "Dosing calibration not found"}));
+        }
+        Err(_) => return HttpResponse::InternalServerError().json(json!({"error": "DB Error"})),
+    };
+
+    {
+        let mut state_map = app_state.dosing_dynamic_states.write().await;
+        state_map.insert(
+            device_id.clone(),
+            crate::DosingDynamicState {
+                base_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
+                dynamic_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
+                confidence: 0.0,
+                sample_count: 0,
+                last_updated: Utc::now(),
+                samples: std::collections::VecDeque::new(),
+            },
+        );
+    }
+
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "dynamic_ec_gain_per_ml": dosing_cfg.ec_gain_per_ml,
+        "confidence": 0.0,
+        "sample_count": 0
+    }))
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/config/unified", web::put().to(update_unified_config))
         .route("/config/unified", web::get().to(get_unified_device_config))
@@ -863,5 +959,13 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route(
             "/calibration/dosing",
             web::post().to(update_dosing_calibration),
+        )
+        .route(
+            "/calibration/dosing/dynamic",
+            web::get().to(get_dosing_dynamic_calibration),
+        )
+        .route(
+            "/calibration/dosing/dynamic/reset",
+            web::post().to(reset_dosing_dynamic_calibration),
         );
 }

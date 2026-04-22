@@ -143,6 +143,24 @@ pub struct ControlContext {
     pub pump_status: PumpStatus,
     pub manual_timeouts: HashMap<String, u64>,
     pub safety_override_until: u64,
+    pub pending_calibration_sample: Option<PendingCalibrationSample>,
+    pub calibration_pending_publish_count: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingCalibrationSample {
+    pub start_ec: f32,
+    pub start_ph: f32,
+    pub pump_a_ml: f32,
+    pub pump_b_ml: f32,
+    pub ph_up_ml: f32,
+    pub ph_down_ml: f32,
+    pub active_mixing_start_ms: u64,
+    pub active_mixing_finish_ms: u64,
+    pub stabilizing_start_ms: Option<u64>,
+    pub stabilizing_finish_ms: Option<u64>,
+    pub invalid_by_noise: bool,
+    pub invalid_by_water_change: bool,
 }
 
 impl Default for ControlContext {
@@ -177,6 +195,8 @@ impl Default for ControlContext {
             pump_status: PumpStatus::default(),
             manual_timeouts: HashMap::new(),
             safety_override_until: 0,
+            pending_calibration_sample: None,
+            calibration_pending_publish_count: 0,
         }
     }
 }
@@ -270,6 +290,18 @@ impl ControlContext {
         is_noisy
     }
 
+    fn mark_pending_sample_noise_violation(&mut self) {
+        if let Some(sample) = self.pending_calibration_sample.as_mut() {
+            sample.invalid_by_noise = true;
+        }
+    }
+
+    fn mark_pending_sample_water_change_violation(&mut self) {
+        if let Some(sample) = self.pending_calibration_sample.as_mut() {
+            sample.invalid_by_water_change = true;
+        }
+    }
+
     fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig) {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
@@ -318,6 +350,170 @@ impl ControlContext {
                 self.last_water_before_drain = None;
             }
         }
+    }
+}
+
+const EMA_ALPHA: f32 = 0.1;
+const MIN_TOTAL_EC_DOSE_ML: f32 = 0.05;
+const MIN_PH_DOSE_ML: f32 = 0.05;
+const MIN_ACTIVE_MIXING_SEC_FOR_CALIB: u64 = 3;
+const MIN_STABILIZING_SEC_FOR_CALIB: u64 = 3;
+const CALIBRATION_PERSIST_BATCH_SIZE: u32 = 3;
+
+fn start_pending_calibration_sample(
+    ctx: &mut ControlContext,
+    start_ec: f32,
+    start_ph: f32,
+    pump_a_ml: f32,
+    pump_b_ml: f32,
+    ph_up_ml: f32,
+    ph_down_ml: f32,
+    current_time_ms: u64,
+    config: &DeviceConfig,
+) {
+    ctx.pending_calibration_sample = Some(PendingCalibrationSample {
+        start_ec,
+        start_ph,
+        pump_a_ml,
+        pump_b_ml,
+        ph_up_ml,
+        ph_down_ml,
+        active_mixing_start_ms: current_time_ms,
+        active_mixing_finish_ms: current_time_ms + (config.active_mixing_sec as u64 * 1000),
+        stabilizing_start_ms: None,
+        stabilizing_finish_ms: None,
+        invalid_by_noise: false,
+        invalid_by_water_change: false,
+    });
+}
+
+fn apply_runtime_calibration_ema(
+    sensors: &SensorData,
+    shared_config: &SharedConfig,
+    ctx: &mut ControlContext,
+    fsm_mqtt_tx: &Sender<String>,
+) {
+    let sample = match ctx.pending_calibration_sample.take() {
+        Some(sample) => sample,
+        None => return,
+    };
+    let stabilizing_start_ms = match sample.stabilizing_start_ms {
+        Some(v) => v,
+        None => return,
+    };
+    let stabilizing_finish_ms = match sample.stabilizing_finish_ms {
+        Some(v) => v,
+        None => return,
+    };
+
+    let active_mixing_elapsed_ms = sample
+        .active_mixing_finish_ms
+        .saturating_sub(sample.active_mixing_start_ms);
+    let stabilizing_elapsed_ms = stabilizing_finish_ms.saturating_sub(stabilizing_start_ms);
+    let mixing_ok = active_mixing_elapsed_ms >= MIN_ACTIVE_MIXING_SEC_FOR_CALIB * 1000;
+    let stabilizing_ok = stabilizing_elapsed_ms >= MIN_STABILIZING_SEC_FOR_CALIB * 1000;
+
+    if sample.invalid_by_noise
+        || sample.invalid_by_water_change
+        || !mixing_ok
+        || !stabilizing_ok
+        || sensors.err_ec
+        || sensors.err_ph
+    {
+        info!(
+            "⏭️ Bỏ qua EMA sample (noise={}, water_change={}, mixing_ok={}, stabilizing_ok={}, err_ec={}, err_ph={})",
+            sample.invalid_by_noise,
+            sample.invalid_by_water_change,
+            mixing_ok,
+            stabilizing_ok,
+            sensors.err_ec,
+            sensors.err_ph
+        );
+        return;
+    }
+
+    let ec_after = sensors.ec_value;
+    let ph_after = sensors.ph_value;
+    let total_ec_ml = sample.pump_a_ml + sample.pump_b_ml;
+
+    let observed_ec_gain_per_ml = if total_ec_ml > MIN_TOTAL_EC_DOSE_ML {
+        Some((ec_after - sample.start_ec) / total_ec_ml)
+    } else {
+        None
+    };
+    let observed_ph_up_per_ml = if sample.ph_up_ml > MIN_PH_DOSE_ML {
+        Some((ph_after - sample.start_ph) / sample.ph_up_ml)
+    } else {
+        None
+    };
+    let observed_ph_down_per_ml = if sample.ph_down_ml > MIN_PH_DOSE_ML {
+        Some((sample.start_ph - ph_after) / sample.ph_down_ml)
+    } else {
+        None
+    };
+
+    let mut updated = false;
+    let mut applied_ec_gain = None;
+    let mut applied_ph_up = None;
+    let mut applied_ph_down = None;
+    if let Ok(mut cfg) = shared_config.write() {
+        if let Some(observed) = observed_ec_gain_per_ml {
+            if observed.is_finite() && observed > 0.0 {
+                cfg.ec_gain_per_ml = cfg.ec_gain_per_ml * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
+                applied_ec_gain = Some(cfg.ec_gain_per_ml);
+                updated = true;
+            }
+        }
+
+        if let Some(observed) = observed_ph_up_per_ml {
+            if observed.is_finite() && observed > 0.0 {
+                cfg.ph_shift_up_per_ml =
+                    cfg.ph_shift_up_per_ml * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
+                applied_ph_up = Some(cfg.ph_shift_up_per_ml);
+                updated = true;
+            }
+        }
+
+        if let Some(observed) = observed_ph_down_per_ml {
+            if observed.is_finite() && observed > 0.0 {
+                cfg.ph_shift_down_per_ml =
+                    cfg.ph_shift_down_per_ml * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
+                applied_ph_down = Some(cfg.ph_shift_down_per_ml);
+                updated = true;
+            }
+        }
+    }
+
+    if !updated {
+        return;
+    }
+
+    ctx.calibration_pending_publish_count += 1;
+    if ctx.calibration_pending_publish_count >= CALIBRATION_PERSIST_BATCH_SIZE {
+        ctx.calibration_pending_publish_count = 0;
+        let payload = serde_json::json!({
+            "type": "runtime_calibration_update",
+            "alpha": EMA_ALPHA,
+            "persist": true,
+            "persist_target": "backend_api",
+            "start_ec": sample.start_ec,
+            "start_ph": sample.start_ph,
+            "ec_after": ec_after,
+            "ph_after": ph_after,
+            "pump_a_ml": sample.pump_a_ml,
+            "pump_b_ml": sample.pump_b_ml,
+            "ph_up_ml": sample.ph_up_ml,
+            "ph_down_ml": sample.ph_down_ml,
+            "observed_ec_gain_per_ml": observed_ec_gain_per_ml,
+            "observed_ph_up_per_ml": observed_ph_up_per_ml,
+            "observed_ph_down_per_ml": observed_ph_down_per_ml,
+            "runtime_coefficients": {
+                "ec_gain_per_ml": applied_ec_gain,
+                "ph_shift_up_per_ml": applied_ph_up,
+                "ph_shift_down_per_ml": applied_ph_down
+            }
+        });
+        let _ = fsm_mqtt_tx.send(payload.to_string());
     }
 }
 
@@ -425,9 +621,12 @@ pub fn start_fsm_control_loop(
 
             if !is_safety_overridden {
                 // Kiểm tra nhiễu (Bỏ qua nhịp nếu nhiễu)
-                if ctx.check_and_update_noise(&sensors, &config)
-                    && config.control_mode == ControlMode::Auto
-                {
+                let is_noisy_now = ctx.check_and_update_noise(&sensors, &config);
+                if is_noisy_now {
+                    ctx.mark_pending_sample_noise_violation();
+                }
+
+                if is_noisy_now && config.control_mode == ControlMode::Auto {
                     // Skip
                 } else {
                     let is_water_critical = config.enable_water_level_sensor
@@ -543,8 +742,10 @@ pub fn start_fsm_control_loop(
                                 &sensors,
                                 &mut ctx,
                                 &mut pump_ctrl,
+                                &shared_config,
                                 &mut nvs,
                                 &dosing_report_tx,
+                                &fsm_mqtt_tx,
                             );
                         }
 
@@ -821,8 +1022,10 @@ fn run_auto_fsm(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
+    shared_config: &SharedConfig,
     nvs: &mut Option<EspDefaultNvs>,
     dosing_report_tx: &Sender<String>,
+    fsm_mqtt_tx: &Sender<String>,
 ) {
     let current_time_sec = current_time_ms / 1000;
 
@@ -873,6 +1076,7 @@ fn run_auto_fsm(
                             let _ = flash.set_u64("last_w_change", current_time_sec);
                         }
 
+                        ctx.mark_pending_sample_water_change_violation();
                         ctx.current_state = SystemState::WaterDraining {
                             target_level: target,
                             start_time: current_time_ms,
@@ -896,6 +1100,7 @@ fn run_auto_fsm(
                     ctx.current_state = SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
                 } else {
                     ctx.last_water_before_refill = Some(sensors.water_level);
+                    ctx.mark_pending_sample_water_change_violation();
                     ctx.current_state = SystemState::WaterRefilling {
                         target_level: config.water_level_target,
                         start_time: current_time_ms,
@@ -909,6 +1114,7 @@ fn run_auto_fsm(
                 && config.auto_drain_overflow
                 && sensors.water_level > config.water_level_max
             {
+                ctx.mark_pending_sample_water_change_violation();
                 ctx.current_state = SystemState::WaterDraining {
                     target_level: config.water_level_target,
                     start_time: current_time_ms,
@@ -924,6 +1130,7 @@ fn run_auto_fsm(
             {
                 let target = (sensors.water_level - config.dilute_drain_amount_cm)
                     .max(config.water_level_min);
+                ctx.mark_pending_sample_water_change_violation();
                 ctx.current_state = SystemState::WaterDraining {
                     target_level: target,
                     start_time: current_time_ms,
@@ -1273,6 +1480,17 @@ fn run_auto_fsm(
                         start_ec, start_ph, dose_a_ml_reported, target_ec, config.ph_target
                     );
                     let _ = dosing_report_tx.send(report_json);
+                    start_pending_calibration_sample(
+                        ctx,
+                        start_ec,
+                        start_ph,
+                        dose_a_ml_reported,
+                        0.0,
+                        0.0,
+                        0.0,
+                        current_time_ms,
+                        config,
+                    );
                     ctx.current_state = SystemState::ActiveMixing {
                         finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
                     };
@@ -1297,6 +1515,17 @@ fn run_auto_fsm(
                     start_ec, start_ph, dose_a_ml_reported, dose_b_ml, target_ec, config.ph_target
                 );
                 let _ = dosing_report_tx.send(report_json);
+                start_pending_calibration_sample(
+                    ctx,
+                    start_ec,
+                    start_ph,
+                    dose_a_ml_reported,
+                    dose_b_ml,
+                    0.0,
+                    0.0,
+                    current_time_ms,
+                    config,
+                );
                 ctx.current_state = SystemState::ActiveMixing {
                     finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
                 };
@@ -1326,6 +1555,17 @@ fn run_auto_fsm(
                     start_ec, start_ph, ph_up_ml, ph_down_ml, config.ec_target, target_ph
                 );
                 let _ = dosing_report_tx.send(report_json);
+                start_pending_calibration_sample(
+                    ctx,
+                    start_ec,
+                    start_ph,
+                    0.0,
+                    0.0,
+                    ph_up_ml,
+                    ph_down_ml,
+                    current_time_ms,
+                    config,
+                );
                 ctx.current_state = SystemState::ActiveMixing {
                     finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
                 };
@@ -1335,6 +1575,12 @@ fn run_auto_fsm(
         SystemState::ActiveMixing { finish_time } => {
             if current_time_ms >= finish_time {
                 ctx.fsm_osaka_active = false;
+                if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
+                    sample.active_mixing_finish_ms = current_time_ms;
+                    sample.stabilizing_start_ms = Some(current_time_ms);
+                    sample.stabilizing_finish_ms =
+                        Some(current_time_ms + (config.sensor_stabilize_sec as u64 * 1000));
+                }
                 ctx.current_state = SystemState::Stabilizing {
                     finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
                 };
@@ -1343,6 +1589,10 @@ fn run_auto_fsm(
 
         SystemState::Stabilizing { finish_time } => {
             if current_time_ms >= finish_time {
+                if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
+                    sample.stabilizing_finish_ms = Some(current_time_ms);
+                }
+                apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
                 ctx.current_state = SystemState::Monitoring;
             }
         }
@@ -1350,4 +1600,3 @@ fn run_auto_fsm(
         SystemState::EmergencyStop(_) => {} // Không làm gì cả, chờ user FORCE hoặc Reset lỗi
     }
 }
-

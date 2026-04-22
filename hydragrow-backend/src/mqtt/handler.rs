@@ -291,17 +291,8 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                 } else {
                     None
                 };
-                let alert_metadata = metadata_json.clone().or_else(|| {
-                    warn!(
-                        "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
-                        device_id, state
-                    );
-                    Some(json!({
-                        "device_id": device_id.clone(),
-                        "fsm_state": state,
-                        "metadata_source": "fsm_fallback"
-                    }))
-                });
+                let alert_metadata =
+                    build_sensor_snapshot(&device_id, state, metadata_json.clone());
 
                 match state {
                     "SystemBooting" => {
@@ -538,6 +529,35 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
         Err(e) => {
             error!("❌ [MQTT-FSM] Cấu trúc JSON bị sai định dạng: {:?}", e);
+        }
+    }
+}
+
+fn build_sensor_snapshot(
+    device_id: &str,
+    fsm_state: &str,
+    metadata_json: Option<serde_json::Value>,
+) -> Option<serde_json::Value> {
+    match metadata_json {
+        Some(sensor_snapshot) => Some(json!({
+            "captured_at": chrono::Utc::now().to_rfc3339(),
+            "fsm_state": fsm_state,
+            "snapshot_source": "device_state_cache",
+            "sensor_snapshot": sensor_snapshot
+        })),
+        None => {
+            warn!(
+                "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
+                device_id, fsm_state
+            );
+            Some(json!({
+                "captured_at": chrono::Utc::now().to_rfc3339(),
+                "fsm_state": fsm_state,
+                "snapshot_source": "fsm_fallback",
+                "sensor_snapshot": {
+                    "device_id": device_id
+                }
+            }))
         }
     }
 }

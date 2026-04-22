@@ -98,27 +98,31 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             // Periodic health heartbeat from the Controller Node
             if let Ok(payload_json) = serde_json::from_slice::<serde_json::Value>(&payload_bytes) {
                 // 1. CẬP NHẬT CACHE TRONG RAM ĐỂ API /sensors/latest LẤY ĐƯỢC DỮ LIỆU MỚI NHẤT
-                if let Some(new_pump_status) = payload_json.get("pump_status") {
-                    let mut states = app_state.device_states.write().await;
+                // Merge toàn bộ heartbeat payload (không chỉ pump_status) để giữ snapshot cảm biến đầy đủ.
+                let mut states = app_state.device_states.write().await;
 
-                    if let Some(existing_str) = states.get(&device_id) {
-                        // Nếu đã có data cảm biến, ghi đè pump_status mới vào
-                        if let Ok(mut sensor_data) =
-                            serde_json::from_str::<serde_json::Value>(existing_str)
-                        {
-                            sensor_data["pump_status"] = new_pump_status.clone();
-                            if let Ok(updated_str) = serde_json::to_string(&sensor_data) {
-                                states.insert(device_id.clone(), updated_str);
-                            }
-                        }
-                    } else {
-                        // Nếu chưa có, tạo mới cache với pump_status
-                        let init_data = json!({
-                            "device_id": device_id.clone(),
-                            "pump_status": new_pump_status
-                        });
-                        states.insert(device_id.clone(), init_data.to_string());
+                let mut merged = states
+                    .get(&device_id)
+                    .and_then(|existing_str| {
+                        serde_json::from_str::<serde_json::Value>(existing_str).ok()
+                    })
+                    .unwrap_or_else(|| json!({ "device_id": device_id.clone() }));
+
+                if let (Some(merged_obj), Some(incoming_obj)) =
+                    (merged.as_object_mut(), payload_json.as_object())
+                {
+                    for (key, value) in incoming_obj {
+                        merged_obj.insert(key.clone(), value.clone());
                     }
+                    merged_obj.insert("device_id".to_string(), json!(device_id.clone()));
+                    merged_obj.insert(
+                        "controller_status_ts".to_string(),
+                        json!(chrono::Utc::now().to_rfc3339()),
+                    );
+                }
+
+                if let Ok(updated_str) = serde_json::to_string(&merged) {
+                    states.insert(device_id.clone(), updated_str);
                 }
 
                 // 2. Đẩy qua WebSocket (code cũ)

@@ -133,6 +133,15 @@ impl PumpController {
         self.set_dosing_pump_pwm(pump, state, 100)
     }
 
+    pub fn set_dosing_pump_pulse(
+        &mut self,
+        pump: PumpType,
+        pulse_on: bool,
+        percent: u32,
+    ) -> anyhow::Result<()> {
+        self.set_dosing_pump_pwm(pump, pulse_on, percent)
+    }
+
     pub fn set_water_pump(&mut self, direction: WaterDirection) -> anyhow::Result<()> {
         match direction {
             WaterDirection::In => {

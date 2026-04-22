@@ -78,6 +78,13 @@ pub struct DosingCalibration {
     pub scheduled_dosing_cron: String, // 🟢 MỚI: Thay thế Interval bằng Cron String
     pub scheduled_dose_a_ml: f32,
     pub scheduled_dose_b_ml: f32,
+    pub ec_gain_dynamic: f32,
+    pub ph_up_dynamic: f32,
+    pub ph_down_dynamic: f32,
+    pub dynamic_sample_count: i32,
+    pub dynamic_confidence: f32,
+    pub last_dynamic_update: Option<DateTime<Utc>>,
+    pub dynamic_model_version: String,
 }
 
 impl Default for DosingCalibration {
@@ -111,6 +118,13 @@ impl Default for DosingCalibration {
             scheduled_dosing_cron: "0 0 8 * * *".to_string(), // Mặc định 8h sáng
             scheduled_dose_a_ml: 10.0,
             scheduled_dose_b_ml: 10.0,
+            ec_gain_dynamic: 0.01,
+            ph_up_dynamic: 0.01,
+            ph_down_dynamic: 0.01,
+            dynamic_sample_count: 0,
+            dynamic_confidence: 0.0,
+            last_dynamic_update: None,
+            dynamic_model_version: "v1".to_string(),
         }
     }
 }
@@ -297,6 +311,13 @@ pub struct MqttConfigPayload {
     pub scheduled_dosing_cron: String, // 🟢 Cập nhật sang String (Cron)
     pub scheduled_dose_a_ml: f32,
     pub scheduled_dose_b_ml: f32,
+    pub ec_gain_dynamic: f32,
+    pub ph_up_dynamic: f32,
+    pub ph_down_dynamic: f32,
+    pub dynamic_sample_count: i32,
+    pub dynamic_confidence: f32,
+    pub last_dynamic_update: Option<DateTime<Utc>>,
+    pub dynamic_model_version: String,
 }
 
 impl MqttConfigPayload {
@@ -379,6 +400,13 @@ impl MqttConfigPayload {
             scheduled_dosing_cron: dose.scheduled_dosing_cron.clone(), // 🟢 Parse chuỗi
             scheduled_dose_a_ml: dose.scheduled_dose_a_ml,
             scheduled_dose_b_ml: dose.scheduled_dose_b_ml,
+            ec_gain_dynamic: dose.ec_gain_dynamic,
+            ph_up_dynamic: dose.ph_up_dynamic,
+            ph_down_dynamic: dose.ph_down_dynamic,
+            dynamic_sample_count: dose.dynamic_sample_count,
+            dynamic_confidence: dose.dynamic_confidence,
+            last_dynamic_update: dose.last_dynamic_update,
+            dynamic_model_version: dose.dynamic_model_version.clone(),
         }
     }
 }

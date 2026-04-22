@@ -168,8 +168,8 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
               onChange={(e) => setCapacityMlPerSec(Number(e.target.value))}
               disabled={!isOnline || isProcessing}
               className={`w-full bg-slate-800/80 border text-sm font-bold rounded-xl px-4 py-2.5 focus:ring-2 outline-none transition-colors ${capacityMlPerSec === getCalibratedCapacity(selectedPump)
-                  ? 'border-emerald-500/50 text-emerald-300 focus:ring-emerald-500'
-                  : 'border-amber-500/50 text-amber-300 focus:ring-amber-500'
+                ? 'border-emerald-500/50 text-emerald-300 focus:ring-emerald-500'
+                : 'border-amber-500/50 text-amber-300 focus:ring-amber-500'
                 }`}
             />
           </div>
@@ -211,7 +211,7 @@ const AdvancedDeviceControl = ({
     const targetAction = currentStatus ? 'off' : 'on';
     // Optimistic update first
     updatePumpStatusOptimistically(pumpId, targetAction);
-    
+
     try {
       const success = await togglePump(pumpId, targetAction);
       if (!success) {
@@ -237,7 +237,7 @@ const AdvancedDeviceControl = ({
     setIsProcessing(true);
     // Optimistic update first
     updatePumpStatusOptimistically(pumpId, 'on');
-    
+
     try {
       const success = await forceOn(pumpId, duration);
       if (!success) {

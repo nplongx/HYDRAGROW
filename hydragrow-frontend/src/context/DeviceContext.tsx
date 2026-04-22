@@ -153,19 +153,25 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data.type === 'device_status') {
               const isOnline: boolean = data.payload.is_online ?? false;
               setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
-              setIsControllerStatusKnown(true);
-
+              
               if (isOnline) {
+                setIsInitialConnection(false);
+                setIsControllerStatusKnown(true);
                 // ✅ KEY FIX: Reset the controller timeout whenever we get an online=true status.
                 // Without this, the 65s timer fires even though the device is alive.
                 resetControllerTimeout();
-                toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
+                if (!isInitialConnection) {
+                  toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
+                }
               } else {
-                // Device explicitly said it's going offline (LWT)
-                if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
-                setFsmState("Offline");
-                setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
-                toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                // Only mark as known offline if not initial connection
+                if (!isInitialConnection) {
+                  setIsControllerStatusKnown(true);
+                  if (controllerTimeoutRef.current) clearTimeout(controllerTimeoutRef.current);
+                  setFsmState("Offline");
+                  setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
+                  toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                }
               }
               return;
             }

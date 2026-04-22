@@ -160,7 +160,7 @@ pub fn init_mqtt_client(
     let lwt_payload = r#"{"online": false, "status": "disconnected"}"#.as_bytes();
     let lwt_config = LwtConfiguration {
         topic: &lwt_topic,
-        message: lwt_payload,
+        msg: lwt_payload,
         qos: QoS::AtLeastOnce,
         retain: true,
     };

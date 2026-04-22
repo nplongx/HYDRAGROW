@@ -373,7 +373,7 @@ pub fn start_fsm_control_loop(
 
         // Ensure all systems are ready before announcing online status
         std::thread::sleep(std::time::Duration::from_secs(1));
-        
+
         // Publish robust online status with retry mechanism
         for _ in 0..3 {
             let status_msg = serde_json::json!({
@@ -381,8 +381,9 @@ pub fn start_fsm_control_loop(
                 "status": "ready",
                 "current_state": "Monitoring",
                 "boot_time": current_time_on_boot
-            }).to_string();
-            
+            })
+            .to_string();
+
             if fsm_mqtt_tx.send(status_msg).is_ok() {
                 info!("✅ Published online status");
                 break;
@@ -599,18 +600,20 @@ pub fn start_fsm_control_loop(
             }
 
             // Report state changes and sync online status
-            let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
-            
+            let state_changed =
+                report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
+
             if state_changed || force_sync {
                 // Always send full status when state changes or forced sync
                 let status_msg = serde_json::json!({
                     "online": true,
                     "current_state": ctx.current_state.to_payload_string(),
                     "pump_status": ctx.pump_status
-                }).to_string();
-                
+                })
+                .to_string();
+
                 let _ = fsm_mqtt_tx.send(status_msg);
-                
+
                 if force_sync {
                     last_reported_state = "".to_string();
                     let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
@@ -1325,4 +1328,3 @@ fn run_auto_fsm(
         SystemState::EmergencyStop(_) => {} // Không làm gì cả, chờ user FORCE hoặc Reset lỗi
     }
 }
-

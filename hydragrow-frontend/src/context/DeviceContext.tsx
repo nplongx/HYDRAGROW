@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import { SensorData, StatusPayload, PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
+import { Store } from '@tauri-apps/plugin-store';
 
 interface DeviceContextType {
   deviceId: string | null;
@@ -16,6 +17,9 @@ interface DeviceContextType {
   updatePumpStatusOptimistically: (stateKey: string, isNowOn: boolean) => void;
   systemEvents: any[];
   isSensorOnline: boolean;
+  // 🟢 THÊM MỚI: Quản lý PWM Preferences
+  pwmPreferences: Record<string, number>;
+  savePwmPreference: (pumpId: string, pwm: number) => void;
 }
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
@@ -59,6 +63,34 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   return normalized;
 };
 
+const PUMP_STATUS_STORE_KEY = 'last_pump_status';
+const PWM_PREFS_STORE_KEY = 'pump_pwm_prefs'; // 🟢 THÊM MỚI: Key lưu PWM
+
+const savePumpStatusToStore = async (pumpStatus: PumpStatus) => {
+  try {
+    const store = await Store.load('device-state.json');
+    await store.set(PUMP_STATUS_STORE_KEY, pumpStatus);
+    await store.save();
+  } catch (e) { /* bỏ qua */ }
+};
+
+const loadPumpStatusFromStore = async (): Promise<PumpStatus | null> => {
+  try {
+    const store = await Store.load('device-state.json');
+    const val = await store.get<PumpStatus>(PUMP_STATUS_STORE_KEY);
+    return val ?? null;
+  } catch (e) { return null; }
+};
+
+// 🟢 THÊM MỚI: Hàm load PWM từ ổ cứng
+const loadPwmPrefsFromStore = async (): Promise<Record<string, number> | null> => {
+  try {
+    const store = await Store.load('device-state.json');
+    const val = await store.get<Record<string, number>>(PWM_PREFS_STORE_KEY);
+    return val ?? null;
+  } catch (e) { return null; }
+};
+
 export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>(null);
@@ -75,9 +107,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const [isSensorOnline, setIsSensorOnline] = useState<boolean>(false);
 
+  // 🟢 THÊM MỚI: State chứa danh sách PWM của các bơm
+  const [pwmPreferences, setPwmPreferences] = useState<Record<string, number>>({});
+
   const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Sensor timeout (65s) ─────────────────────────────────────────────────
   const resetSensorTimeout = useCallback(() => {
     if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
 
@@ -88,7 +122,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     }, 65000);
   }, []);
 
-  // ─── Load settings on mount ───────────────────────────────────────────────
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -107,7 +140,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     loadSettings();
   }, []);
 
-  // ─── Main WebSocket + HTTP setup ──────────────────────────────────────────
   useEffect(() => {
     if (!deviceId || !settings) return;
 
@@ -118,7 +150,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     const setupConnection = async () => {
       setIsLoading(true);
 
-      // Initial HTTP fetch for latest sensor data
       try {
         const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/latest`;
         const response = await fetch(url, {
@@ -128,15 +159,23 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         if (response.ok) {
           const resData = await response.json();
           const initialData = resData.data || resData;
+
+          const cachedPumpStatus = await loadPumpStatusFromStore();
+
+          // 🟢 THÊM MỚI: Đọc PWM từ App Storage khi vừa khởi động
+          const cachedPwmPrefs = await loadPwmPrefsFromStore();
+          if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
+
           setSensorData({
             ...initialData,
-            pump_status: normalizePumpStatus(initialData?.pump_status)
+            pump_status: cachedPumpStatus
+              ? cachedPumpStatus
+              : normalizePumpStatus(initialData?.pump_status)
           });
         }
       } catch (err) { /* empty */ }
       setIsLoading(false);
 
-      // Initial fetch for system events
       try {
         const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
           method: 'GET',
@@ -161,7 +200,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           setIsControllerStatusKnown(true);
           resetSensorTimeout();
 
-          // 🟢 Ép Controller Node gửi toàn bộ trạng thái mới nhất lập tức!
           fetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
@@ -176,9 +214,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           try {
             const data = JSON.parse(event.data);
 
-            // ── device_status ────────────────────────────────────────────────
-            // Comes from health_sender when MQTT /status topic is received.
-            // Payload: { type: "device_status", payload: { is_online, last_seen } }
             if (data.type === 'device_status') {
               const isOnline: boolean = data.payload.is_online ?? false;
               setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
@@ -190,7 +225,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                   toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
                 }
               } else {
-                // Only mark as known offline if not initial connection
                 if (!isInitialConnection) {
                   setIsControllerStatusKnown(true);
                   setFsmState("Offline");
@@ -201,12 +235,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
 
-            // ── alert messages ───────────────────────────────────────────────
             if (data.type === 'alert') {
               const alert = data.payload;
 
-              // Legacy path: device_status sent via alert_sender
-              // Backend sends title "Trạng thái Trạm Điều Khiển" for controller LWT
               if (alert.title === 'Trạng thái Trạm Điều Khiển') {
                 const isOnline = alert.level === 'success';
                 setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
@@ -221,7 +252,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 return;
               }
 
-              // Sensor node LWT
               if (alert.title === 'Trạng thái Mạch Cảm Biến') {
                 const onlineStatus = alert.level === 'success';
                 setIsSensorOnline(onlineStatus);
@@ -236,13 +266,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 return;
               }
 
-              // FSM state update
               if (alert.level === 'FSM_UPDATE') {
                 setFsmState(alert.message);
                 return;
               }
 
-              // Regular alert — add to event log
               setSystemEvents(prev => [alert, ...prev].slice(0, 50));
               switch (alert.level) {
                 case 'critical': toast.error(`🚨 ${alert.title}\n${alert.message}`, { duration: 10000 }); break;
@@ -253,7 +281,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
 
-            // ── sensor_update ────────────────────────────────────────────────
             if (data.type === 'sensor_update') {
               const incomingPayload = data.payload.data || data.payload;
 
@@ -284,8 +311,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
 
-            // ── device_health ────────────────────────────────────────────────
-            // Sent by backend when it receives MQTT on AGITECH/+/controller/status
             if (data.type === 'device_health') {
               const healthData = data.payload;
 
@@ -295,12 +320,24 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 uptime: healthData.uptime_sec
               });
 
+              const confirmedPumpStatus = normalizePumpStatus(healthData.pump_status);
+              savePumpStatusToStore(confirmedPumpStatus);
+
+              // 🟢 THÊM MỚI: Cập nhật lại PWM vào App nếu ESP32 có gửi kèm
+              if (healthData.pump_status) {
+                const raw = healthData.pump_status;
+                if (raw.pump_a_pwm !== undefined && raw.pump_a_pwm > 0) savePwmPreference('PUMP_A', raw.pump_a_pwm);
+                if (raw.pump_b_pwm !== undefined && raw.pump_b_pwm > 0) savePwmPreference('PUMP_B', raw.pump_b_pwm);
+                if (raw.ph_up_pwm !== undefined && raw.ph_up_pwm > 0) savePwmPreference('PH_UP', raw.ph_up_pwm);
+                if (raw.ph_down_pwm !== undefined && raw.ph_down_pwm > 0) savePwmPreference('PH_DOWN', raw.ph_down_pwm);
+                if (raw.osaka_pwm !== undefined && raw.osaka_pwm > 0) savePwmPreference('OSAKA', raw.osaka_pwm);
+              }
+
               setSensorData(prev => {
                 if (!prev) return prev;
-                return { ...prev, pump_status: normalizePumpStatus(healthData.pump_status) };
+                return { ...prev, pump_status: confirmedPumpStatus };
               });
 
-              // Mark controller online
               setDeviceStatus(prev => !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev);
               setIsControllerStatusKnown(true);
               return;
@@ -344,20 +381,35 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const updatePumpStatusOptimistically = useCallback((stateKey: string, isNowOn: boolean) => {
     setSensorData(prevData => {
       if (!prevData) return prevData;
-      return {
-        ...prevData,
-        pump_status: {
-          ...prevData.pump_status,
-          [stateKey]: isNowOn
-        }
+      const newPumpStatus = {
+        ...prevData.pump_status,
+        [stateKey]: isNowOn
       };
+
+      savePumpStatusToStore(newPumpStatus as PumpStatus);
+
+      return { ...prevData, pump_status: newPumpStatus };
+    });
+  }, []);
+
+  // 🟢 THÊM MỚI: Cài đặt logic cho hàm savePwmPreference
+  const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
+    setPwmPreferences(prev => {
+      const updated = { ...prev, [pumpId]: pwm };
+      Store.load('device-state.json').then(store => {
+        store.set(PWM_PREFS_STORE_KEY, updated);
+        store.save();
+      }).catch(() => { });
+      return updated;
     });
   }, []);
 
   return (
     <DeviceContext.Provider value={{
       deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
-      updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline
+      updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline,
+      // 🟢 THÊM MỚI: Export các biến/hàm này ra để ControlPanel.tsx có thể xài được
+      pwmPreferences, savePwmPreference
     }}>
       {children}
     </DeviceContext.Provider>

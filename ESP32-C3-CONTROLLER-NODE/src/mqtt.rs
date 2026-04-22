@@ -29,6 +29,21 @@ pub struct PumpStatus {
     pub mist_valve: bool,
     pub water_pump_in: bool,
     pub water_pump_out: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pump_a_pwm: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pump_b_pwm: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ph_up_pwm: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ph_down_pwm: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub osaka_pwm: Option<u32>,
 }
 
 // 🟢 CẬP NHẬT: Thêm các trường sức khỏe gửi từ Sensor Node

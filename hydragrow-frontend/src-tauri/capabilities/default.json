@@ -22,6 +22,7 @@
     "notification:default",
     "fs:allow-write-text-file",
     "fs:allow-download-write",
-    "dialog:default"
+    "dialog:default",
+    "store:default"
   ]
 }

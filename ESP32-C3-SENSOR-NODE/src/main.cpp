@@ -25,7 +25,7 @@ PubSubClient client(espClient);
 // ================= PIN MAPS =================
 #define PIN_DS18B20 2
 #define PIN_TRIG 3
-#define PIN_ECHO 4
+#define PIN_ECHO 5
 #define PIN_PH_ADC 0
 #define PIN_EC_ADC 1
 

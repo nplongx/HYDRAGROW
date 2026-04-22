@@ -119,11 +119,10 @@ const Dashboard = () => {
               TRẠM TRUNG TÂM
             </h1>
             <div className="flex items-center mt-1 space-x-2">
-              <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border backdrop-blur-md ${
-                isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' :
-                isControllerStatusKnown ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.2)]' :
-                'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
-              }`}>
+              <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border backdrop-blur-md ${isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' :
+                  isControllerStatusKnown ? 'bg-rose-499/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.2)]' :
+                    'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                }`}>
                 <span className={`relative flex h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-400' : (isControllerStatusKnown ? 'bg-rose-500' : 'bg-amber-500')}`}>
                   {isOnline && <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
                 </span>

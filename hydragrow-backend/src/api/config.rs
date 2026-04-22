@@ -1,11 +1,12 @@
 use actix_web::{HttpResponse, Responder, web};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use rumqttc::QoS;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, instrument};
 
 use crate::AppState;
+use crate::db::postgres::{NewSystemEventRecord, SystemEventRecord, insert_system_event};
 use crate::models::config::{
     DeviceConfig, DosingCalibration, MqttConfigPayload, SafetyConfig, SensorCalibration,
     WaterConfig,
@@ -261,6 +262,35 @@ async fn upsert_sensor_db(
     .bind(now)
     .execute(pool).await?;
     Ok(())
+}
+
+fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCalibration {
+    SensorCalibration {
+        device_id: device_id.to_string(),
+        ph_v7: 2.5,
+        ph_v4: 1.428,
+        ec_factor: 880.0,
+        ec_offset: 0.0,
+        temp_offset: 0.0,
+        temp_compensation_beta: 0.02,
+        publish_interval: 5000,
+        moving_average_window: 10,
+        is_ph_enabled: true,
+        is_ec_enabled: true,
+        is_temp_enabled: true,
+        is_water_level_enabled: true,
+        last_calibrated: now,
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FinishCalibrationRequest {
+    pub mode: String,
+    pub sample_points: Vec<f32>,
+    pub ph_v7: f32,
+    pub ph_v4: f32,
+    pub error: f32,
+    pub finished_at: Option<DateTime<Utc>>,
 }
 
 async fn upsert_dosing_db(
@@ -613,6 +643,149 @@ pub async fn update_sensor_calibration(
     HttpResponse::Ok().json(json!({"status": "success"}))
 }
 
+#[instrument(skip(app_state, req))]
+pub async fn finish_sensor_calibration(
+    path: web::Path<String>,
+    req: web::Json<FinishCalibrationRequest>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let payload = req.into_inner();
+    let now = payload.finished_at.unwrap_or_else(Utc::now);
+    let mut tx = match app_state.pg_pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return HttpResponse::InternalServerError().json(json!({"error": "DB Error"})),
+    };
+
+    let existing = sqlx::query_as::<_, SensorCalibration>(
+        "SELECT * FROM sensor_calibration WHERE device_id = $1",
+    )
+    .bind(&device_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| default_sensor_calibration(&device_id, now));
+
+    let applied = match sqlx::query(
+        r#"
+        INSERT INTO sensor_calibration (
+            device_id, ph_v7, ph_v4, ec_factor, ec_offset, temp_offset,
+            temp_compensation_beta, publish_interval, moving_average_window,
+            is_ph_enabled, is_ec_enabled, is_temp_enabled, is_water_level_enabled, last_calibrated
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10, $11, $12, $13, $14
+        )
+        ON CONFLICT(device_id) DO UPDATE SET
+            ph_v7 = EXCLUDED.ph_v7,
+            ph_v4 = EXCLUDED.ph_v4,
+            ec_factor = EXCLUDED.ec_factor,
+            ec_offset = EXCLUDED.ec_offset,
+            temp_offset = EXCLUDED.temp_offset,
+            temp_compensation_beta = EXCLUDED.temp_compensation_beta,
+            publish_interval = EXCLUDED.publish_interval,
+            moving_average_window = EXCLUDED.moving_average_window,
+            is_ph_enabled = EXCLUDED.is_ph_enabled,
+            is_ec_enabled = EXCLUDED.is_ec_enabled,
+            is_temp_enabled = EXCLUDED.is_temp_enabled,
+            is_water_level_enabled = EXCLUDED.is_water_level_enabled,
+            last_calibrated = EXCLUDED.last_calibrated
+        WHERE sensor_calibration.last_calibrated <= EXCLUDED.last_calibrated
+        "#,
+    )
+    .bind(&device_id)
+    .bind(payload.ph_v7)
+    .bind(payload.ph_v4)
+    .bind(existing.ec_factor)
+    .bind(existing.ec_offset)
+    .bind(existing.temp_offset)
+    .bind(existing.temp_compensation_beta)
+    .bind(existing.publish_interval)
+    .bind(existing.moving_average_window)
+    .bind(existing.is_ph_enabled)
+    .bind(existing.is_ec_enabled)
+    .bind(existing.is_temp_enabled)
+    .bind(existing.is_water_level_enabled)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    {
+        Ok(result) => result.rows_affected() > 0,
+        Err(_) => {
+            return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
+        }
+    };
+
+    if applied {
+        let event = NewSystemEventRecord {
+            device_id: device_id.clone(),
+            level: "success".to_string(),
+            category: "calibration".to_string(),
+            title: "Hoàn tất hiệu chuẩn pH".to_string(),
+            message: format!(
+                "Hiệu chuẩn thành công (mode: {}). pH_V7={:.4}, pH_V4={:.4}, sai số={:.4}",
+                payload.mode, payload.ph_v7, payload.ph_v4, payload.error
+            ),
+            reason: None,
+            metadata: Some(json!({
+                "mode": payload.mode,
+                "sample_points": payload.sample_points,
+                "result": {
+                    "ph_v7": payload.ph_v7,
+                    "ph_v4": payload.ph_v4
+                },
+                "error": payload.error,
+                "finished_at": now
+            })),
+            timestamp: now.timestamp_millis(),
+        };
+
+        if insert_system_event(&mut *tx, &event).await.is_err() {
+            return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
+        }
+    }
+
+    if tx.commit().await.is_err() {
+        return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
+    }
+
+    if applied {
+        let _ = sync_config_to_esp32(&app_state, &device_id).await;
+        HttpResponse::Ok().json(json!({"status": "success", "applied": true}))
+    } else {
+        HttpResponse::Ok().json(json!({
+            "status": "ignored_stale_request",
+            "applied": false
+        }))
+    }
+}
+
+#[instrument(skip(app_state))]
+pub async fn get_sensor_calibration_history(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let result = sqlx::query_as::<_, SystemEventRecord>(
+        r#"
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
+        FROM system_events
+        WHERE device_id = $1 AND category = 'calibration'
+        ORDER BY timestamp DESC
+        LIMIT 20
+        "#,
+    )
+    .bind(device_id)
+    .fetch_all(&app_state.pg_pool)
+    .await;
+
+    match result {
+        Ok(events) => HttpResponse::Ok().json(json!({ "data": events })),
+        Err(_) => HttpResponse::InternalServerError().json(json!({"error": "DB Error"})),
+    }
+}
+
 #[instrument(skip(app_state))]
 pub async fn get_dosing_calibration(
     path: web::Path<String>,
@@ -661,6 +834,14 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route(
             "/calibration/sensor",
             web::post().to(update_sensor_calibration),
+        )
+        .route(
+            "/calibration/sensor/finish",
+            web::post().to(finish_sensor_calibration),
+        )
+        .route(
+            "/calibration/sensor/history",
+            web::get().to(get_sensor_calibration_history),
         )
         .route("/calibration/dosing", web::get().to(get_dosing_calibration))
         .route(

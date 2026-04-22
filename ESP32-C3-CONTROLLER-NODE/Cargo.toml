@@ -1,0 +1,41 @@
+[package]
+name = "esp32-c3-mist-weaver-os"
+version = "0.1.0"
+authors = ["nplongx <nplong.dev@gmail.com>"]
+edition = "2021"
+resolver = "2"
+rust-version = "1.82"
+
+[[bin]]
+name = "esp32-c3-mist-weaver-os"
+harness = false                  # do not use the built-in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+[patch.crates-io]
+esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys.git" }
+esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal.git" }
+esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git" }
+
+[dependencies]
+log = "0.4"
+serde = "1.0.228"
+anyhow = "1.0.102"
+serde_json = "1.0.149"
+
+esp-idf-svc = "0.52.1"
+esp-idf-hal = "0.46.2"
+ds18b20 = "0.1.1"
+one-wire-bus = "0.1.1"
+
+esp-idf-sys = "0.37.2"
+
+chrono = "0.4"
+cron = "0.12"
+
+[build-dependencies]
+embuild = "0.33"

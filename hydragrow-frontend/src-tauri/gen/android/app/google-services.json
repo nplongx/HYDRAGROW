@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "810716913891",
+    "project_id": "hydragrow-iot",
+    "storage_bucket": "hydragrow-iot.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:810716913891:android:8e35b3dd0fbe9108bfa5d6",
+        "android_client_info": {
+          "package_name": "com.hydragrow_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARgRKfwtLm8ktgJu1m7p0QWDcKCxstDxE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

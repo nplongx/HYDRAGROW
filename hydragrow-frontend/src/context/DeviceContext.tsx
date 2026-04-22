@@ -29,6 +29,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const [deviceStatus, setDeviceStatus] = useState<StatusPayload>({ is_online: false, last_seen: '' });
   const [isControllerStatusKnown, setIsControllerStatusKnown] = useState(false);
+  const [isInitialConnection, setIsInitialConnection] = useState(true);
   const [fsmState, setFsmState] = useState<string>("Offline");
   const [systemEvents, setSystemEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,6 +132,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         ws.onopen = () => {
           console.log('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
           // Chưa nhận heartbeat từ controller -> tạm thời chưa kết luận offline
+          setIsInitialConnection(true);
           setIsControllerStatusKnown(false);
           // Start both timeouts when WS connects
           resetControllerTimeout();

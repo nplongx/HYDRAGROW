@@ -11,10 +11,12 @@ import { Switch } from '../components/ui/Switch';
 import { InputGroup } from '../components/ui/InputGroup';
 import { SubCard } from '../components/ui/SubCard';
 import { AccordionSection } from '../components/ui/AccordionSection';
+import { useDeviceContext } from '../context/DeviceContext';
 
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 
 const Settings = () => {
+  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId } = useDeviceContext();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>('general');
@@ -56,6 +58,17 @@ const Settings = () => {
   const [appSettings, setAppSettings] = useState({
     api_key: '', backend_url: 'http://localhost:8000', device_id: ''
   });
+  const [calibrationPointsCount, setCalibrationPointsCount] = useState<2 | 3>(2);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [isCapturingPoint, setIsCapturingPoint] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
+  const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
+
+  const calibrationPoints = calibrationPointsCount === 3 ? [7, 4, 10] : [7, 4];
+  const activePoint = calibrationPoints[wizardStep];
+  const isPhError = sensorData?.err_ph === true;
+  const isCalibrationBlocked = !isSensorOnline || isPhError;
 
   const callApi = async (path: string, method: string = 'GET', body: any = null, currentSettings: any = appSettings) => {
     const url = `${currentSettings.backend_url}${path}`;
@@ -64,6 +77,128 @@ const Settings = () => {
     const res = await fetch(url, options);
     if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     return await res.json();
+  };
+
+  const normalizeVoltage = (payload: any): number | null => {
+    if (!payload) return null;
+    const candidates = [
+      payload.voltage,
+      payload.ph_voltage,
+      payload.raw_voltage,
+      payload?.data?.voltage,
+      payload?.data?.ph_voltage,
+      payload?.result?.voltage,
+      payload?.result?.ph_voltage
+    ];
+    for (const value of candidates) {
+      const numberValue = Number(value);
+      if (Number.isFinite(numberValue)) return numberValue;
+    }
+    return null;
+  };
+
+  const normalizeConfidence = (payload: any): number => {
+    const candidates = [payload?.confidence, payload?.data?.confidence, payload?.result?.confidence];
+    for (const value of candidates) {
+      const numberValue = Number(value);
+      if (Number.isFinite(numberValue)) return Math.max(0, Math.min(100, numberValue));
+    }
+    return 0;
+  };
+
+  const handleCapturePoint = async () => {
+    if (!activePoint || isCalibrationBlocked || isCapturingPoint) return;
+    const currentDeviceId = appSettings.device_id || ctxDeviceId;
+    const currentSettings = runtimeSettings || appSettings;
+
+    if (!currentDeviceId || !currentSettings?.backend_url) {
+      toast.error('Thiếu Device ID hoặc Backend URL để đo điểm chuẩn.');
+      return;
+    }
+
+    setIsCapturingPoint(true);
+    setCountdown(8);
+    setStabilityStatus('waiting');
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setStabilityStatus('stable');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 8000));
+      const captureRes = await callApi(
+        `/api/devices/${currentDeviceId}/calibration/ph/capture`,
+        'POST',
+        { point_ph: activePoint },
+        currentSettings
+      );
+      const voltage = normalizeVoltage(captureRes);
+      if (voltage === null) throw new Error('Không nhận được giá trị điện áp từ API capture');
+      const confidence = normalizeConfidence(captureRes);
+
+      setCapturedPoints((prev) => ({
+        ...prev,
+        [activePoint]: { voltage, confidence, capturedAt: new Date().toISOString() }
+      }));
+      toast.success(`Đã ghi nhận điểm pH ${activePoint}.`);
+    } catch (error) {
+      console.error(error);
+      toast.error(`Không thể đo điểm pH ${activePoint}. Vui lòng thử lại.`);
+    } finally {
+      clearInterval(timer);
+      setIsCapturingPoint(false);
+      setCountdown(0);
+      setStabilityStatus('idle');
+    }
+  };
+
+  const goToNextPoint = () => {
+    if (wizardStep < calibrationPoints.length - 1) {
+      setWizardStep((prev) => prev + 1);
+      return;
+    }
+    setWizardStep(calibrationPoints.length);
+  };
+
+  const calibrationSummary = (() => {
+    const p7 = capturedPoints[7]?.voltage;
+    const p4 = capturedPoints[4]?.voltage;
+    const p10 = capturedPoints[10]?.voltage;
+    const confidenceList = Object.values(capturedPoints).map((point) => point.confidence);
+    const avgConfidence = confidenceList.length
+      ? Math.round(confidenceList.reduce((sum, value) => sum + value, 0) / confidenceList.length)
+      : 0;
+    const spread = Number.isFinite(p7) && Number.isFinite(p4) ? Math.abs((p7 as number) - (p4 as number)) : 0;
+    const spreadBonus = spread >= 0.2 ? 15 : spread >= 0.1 ? 8 : 0;
+    const reliability = Math.max(0, Math.min(100, avgConfidence + spreadBonus));
+    return {
+      ph_v7: Number.isFinite(p7) ? Number((p7 as number).toFixed(3)) : null,
+      ph_v4: Number.isFinite(p4) ? Number((p4 as number).toFixed(3)) : null,
+      ph_v10: Number.isFinite(p10) ? Number((p10 as number).toFixed(3)) : null,
+      reliability
+    };
+  })();
+
+  const applyCalibrationToConfig = (): any | null => {
+    if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null) {
+      toast.error('Cần đủ dữ liệu pH 7 và pH 4 để áp dụng.');
+      return null;
+    }
+    const nextConfig = {
+      ...config,
+      ph_v7: calibrationSummary.ph_v7,
+      ph_v4: calibrationSummary.ph_v4
+    };
+    setConfig(nextConfig);
+    toast.success('Đã áp dụng kết quả calib vào cấu hình.');
+    return nextConfig;
   };
 
   useEffect(() => {
@@ -100,7 +235,7 @@ const Settings = () => {
     loadConfig();
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (configOverride?: any) => {
     if (!appSettings.device_id || !appSettings.backend_url) {
       toast.error('Vui lòng điền đầy đủ Device ID và URL Máy chủ!');
       return;
@@ -110,72 +245,73 @@ const Settings = () => {
     const toastId = toast.loading("Đang đồng bộ dữ liệu với máy chủ...");
 
     try {
+      const savingConfig = configOverride || config;
       const devId = appSettings.device_id;
       try { await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId }); } catch (e) { }
 
       const ts = new Date().toISOString();
 
       const devConf = {
-        device_id: devId, control_mode: config.control_mode, is_enabled: config.is_enabled,
-        ec_target: Number(config.ec_target), ec_tolerance: Number(config.ec_tolerance),
-        ph_target: Number(config.ph_target), ph_tolerance: Number(config.ph_tolerance),
-        temp_target: Number(config.temp_target), temp_tolerance: Number(config.temp_tolerance),
-        last_updated: ts, delay_between_a_and_b_sec: Number(config.delay_between_a_and_b_sec),
+        device_id: devId, control_mode: savingConfig.control_mode, is_enabled: savingConfig.is_enabled,
+        ec_target: Number(savingConfig.ec_target), ec_tolerance: Number(savingConfig.ec_tolerance),
+        ph_target: Number(savingConfig.ph_target), ph_tolerance: Number(savingConfig.ph_tolerance),
+        temp_target: Number(savingConfig.temp_target), temp_tolerance: Number(savingConfig.temp_tolerance),
+        last_updated: ts, delay_between_a_and_b_sec: Number(savingConfig.delay_between_a_and_b_sec),
       };
 
       const waterConf = {
-        device_id: devId, tank_height: Number(config.tank_height), water_level_min: Number(config.water_level_min), water_level_target: Number(config.water_level_target),
-        water_level_max: Number(config.water_level_max), water_level_drain: Number(config.water_level_drain),
-        circulation_mode: config.circulation_mode, circulation_on_sec: Number(config.circulation_on_sec), circulation_off_sec: Number(config.circulation_off_sec),
-        water_level_tolerance: Number(config.water_level_tolerance), auto_refill_enabled: config.auto_refill_enabled,
-        auto_drain_overflow: config.auto_drain_overflow, auto_dilute_enabled: config.auto_dilute_enabled,
-        dilute_drain_amount_cm: Number(config.dilute_drain_amount_cm), scheduled_water_change_enabled: config.scheduled_water_change_enabled,
-        water_change_cron: String(config.water_change_cron), scheduled_drain_amount_cm: Number(config.scheduled_drain_amount_cm),
-        misting_on_duration_ms: Number(config.misting_on_duration_ms), misting_off_duration_ms: Number(config.misting_off_duration_ms), last_updated: ts
+        device_id: devId, tank_height: Number(savingConfig.tank_height), water_level_min: Number(savingConfig.water_level_min), water_level_target: Number(savingConfig.water_level_target),
+        water_level_max: Number(savingConfig.water_level_max), water_level_drain: Number(savingConfig.water_level_drain),
+        circulation_mode: savingConfig.circulation_mode, circulation_on_sec: Number(savingConfig.circulation_on_sec), circulation_off_sec: Number(savingConfig.circulation_off_sec),
+        water_level_tolerance: Number(savingConfig.water_level_tolerance), auto_refill_enabled: savingConfig.auto_refill_enabled,
+        auto_drain_overflow: savingConfig.auto_drain_overflow, auto_dilute_enabled: savingConfig.auto_dilute_enabled,
+        dilute_drain_amount_cm: Number(savingConfig.dilute_drain_amount_cm), scheduled_water_change_enabled: savingConfig.scheduled_water_change_enabled,
+        water_change_cron: String(savingConfig.water_change_cron), scheduled_drain_amount_cm: Number(savingConfig.scheduled_drain_amount_cm),
+        misting_on_duration_ms: Number(savingConfig.misting_on_duration_ms), misting_off_duration_ms: Number(savingConfig.misting_off_duration_ms), last_updated: ts
       };
 
       const safeConf = {
-        device_id: devId, emergency_shutdown: config.emergency_shutdown,
-        max_ec_limit: Number(config.max_ec_limit),
-        min_ec_limit: Number(config.min_ec_limit), min_ph_limit: Number(config.min_ph_limit), max_ph_limit: Number(config.max_ph_limit),
-        max_ec_delta: Number(config.max_ec_delta), max_ph_delta: Number(config.max_ph_delta), max_dose_per_cycle: Number(config.max_dose_per_cycle),
-        cooldown_sec: Number(config.cooldown_sec), max_dose_per_hour: Number(config.max_dose_per_hour), water_level_critical_min: Number(config.water_level_critical_min),
-        max_refill_cycles_per_hour: Number(config.max_refill_cycles_per_hour), max_drain_cycles_per_hour: Number(config.max_drain_cycles_per_hour),
-        max_refill_duration_sec: Number(config.max_refill_duration_sec), max_drain_duration_sec: Number(config.max_drain_duration_sec),
-        min_temp_limit: Number(config.min_temp_limit), max_temp_limit: Number(config.max_temp_limit), ec_ack_threshold: Number(config.ec_ack_threshold),
-        ph_ack_threshold: Number(config.ph_ack_threshold), water_ack_threshold: Number(config.water_ack_threshold), last_updated: ts
+        device_id: devId, emergency_shutdown: savingConfig.emergency_shutdown,
+        max_ec_limit: Number(savingConfig.max_ec_limit),
+        min_ec_limit: Number(savingConfig.min_ec_limit), min_ph_limit: Number(savingConfig.min_ph_limit), max_ph_limit: Number(savingConfig.max_ph_limit),
+        max_ec_delta: Number(savingConfig.max_ec_delta), max_ph_delta: Number(savingConfig.max_ph_delta), max_dose_per_cycle: Number(savingConfig.max_dose_per_cycle),
+        cooldown_sec: Number(savingConfig.cooldown_sec), max_dose_per_hour: Number(savingConfig.max_dose_per_hour), water_level_critical_min: Number(savingConfig.water_level_critical_min),
+        max_refill_cycles_per_hour: Number(savingConfig.max_refill_cycles_per_hour), max_drain_cycles_per_hour: Number(savingConfig.max_drain_cycles_per_hour),
+        max_refill_duration_sec: Number(savingConfig.max_refill_duration_sec), max_drain_duration_sec: Number(savingConfig.max_drain_duration_sec),
+        min_temp_limit: Number(savingConfig.min_temp_limit), max_temp_limit: Number(savingConfig.max_temp_limit), ec_ack_threshold: Number(savingConfig.ec_ack_threshold),
+        ph_ack_threshold: Number(savingConfig.ph_ack_threshold), water_ack_threshold: Number(savingConfig.water_ack_threshold), last_updated: ts
       };
 
       const doseConf = {
-        device_id: devId, tank_volume_l: Number(config.tank_volume_l), ec_gain_per_ml: Number(config.ec_gain_per_ml),
-        ph_shift_up_per_ml: Number(config.ph_shift_up_per_ml), ph_shift_down_per_ml: Number(config.ph_shift_down_per_ml),
-        active_mixing_sec: Number(config.active_mixing_sec), sensor_stabilize_sec: Number(config.sensor_stabilize_sec),
-        ec_step_ratio: Number(config.ec_step_ratio), ph_step_ratio: Number(config.ph_step_ratio),
+        device_id: devId, tank_volume_l: Number(savingConfig.tank_volume_l), ec_gain_per_ml: Number(savingConfig.ec_gain_per_ml),
+        ph_shift_up_per_ml: Number(savingConfig.ph_shift_up_per_ml), ph_shift_down_per_ml: Number(savingConfig.ph_shift_down_per_ml),
+        active_mixing_sec: Number(savingConfig.active_mixing_sec), sensor_stabilize_sec: Number(savingConfig.sensor_stabilize_sec),
+        ec_step_ratio: Number(savingConfig.ec_step_ratio), ph_step_ratio: Number(savingConfig.ph_step_ratio),
 
-        pump_a_capacity_ml_per_sec: Number(config.pump_a_capacity_ml_per_sec),
-        pump_b_capacity_ml_per_sec: Number(config.pump_b_capacity_ml_per_sec),
-        pump_ph_up_capacity_ml_per_sec: Number(config.pump_ph_up_capacity_ml_per_sec),
-        pump_ph_down_capacity_ml_per_sec: Number(config.pump_ph_down_capacity_ml_per_sec),
+        pump_a_capacity_ml_per_sec: Number(savingConfig.pump_a_capacity_ml_per_sec),
+        pump_b_capacity_ml_per_sec: Number(savingConfig.pump_b_capacity_ml_per_sec),
+        pump_ph_up_capacity_ml_per_sec: Number(savingConfig.pump_ph_up_capacity_ml_per_sec),
+        pump_ph_down_capacity_ml_per_sec: Number(savingConfig.pump_ph_down_capacity_ml_per_sec),
 
-        soft_start_duration: Number(config.soft_start_duration),
-        scheduled_mixing_interval_sec: Number(config.scheduled_mixing_interval_sec), scheduled_mixing_duration_sec: Number(config.scheduled_mixing_duration_sec),
-        dosing_pwm_percent: Number(config.dosing_pwm_percent), osaka_mixing_pwm_percent: Number(config.osaka_mixing_pwm_percent),
-        osaka_misting_pwm_percent: Number(config.osaka_misting_pwm_percent),
+        soft_start_duration: Number(savingConfig.soft_start_duration),
+        scheduled_mixing_interval_sec: Number(savingConfig.scheduled_mixing_interval_sec), scheduled_mixing_duration_sec: Number(savingConfig.scheduled_mixing_duration_sec),
+        dosing_pwm_percent: Number(savingConfig.dosing_pwm_percent), osaka_mixing_pwm_percent: Number(savingConfig.osaka_mixing_pwm_percent),
+        osaka_misting_pwm_percent: Number(savingConfig.osaka_misting_pwm_percent),
 
-        scheduled_dosing_enabled: config.scheduled_dosing_enabled,
-        scheduled_dosing_cron: String(config.scheduled_dosing_cron),
-        scheduled_dose_a_ml: Number(config.scheduled_dose_a_ml),
-        scheduled_dose_b_ml: Number(config.scheduled_dose_b_ml),
+        scheduled_dosing_enabled: savingConfig.scheduled_dosing_enabled,
+        scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron),
+        scheduled_dose_a_ml: Number(savingConfig.scheduled_dose_a_ml),
+        scheduled_dose_b_ml: Number(savingConfig.scheduled_dose_b_ml),
 
         last_calibrated: ts
       };
 
       const sensConf = {
-        device_id: devId, ph_v7: Number(config.ph_v7), ph_v4: Number(config.ph_v4), ec_factor: Number(config.ec_factor),
-        ec_offset: Number(config.ec_offset), temp_offset: Number(config.temp_offset), temp_compensation_beta: Number(config.temp_compensation_beta),
-        publish_interval: Number(config.publish_interval), moving_average_window: Number(config.moving_average_window),
-        is_ph_enabled: config.is_ph_enabled, is_ec_enabled: config.is_ec_enabled,
-        is_temp_enabled: config.is_temp_enabled, is_water_level_enabled: config.is_water_level_enabled, last_calibrated: ts
+        device_id: devId, ph_v7: Number(savingConfig.ph_v7), ph_v4: Number(savingConfig.ph_v4), ec_factor: Number(savingConfig.ec_factor),
+        ec_offset: Number(savingConfig.ec_offset), temp_offset: Number(savingConfig.temp_offset), temp_compensation_beta: Number(savingConfig.temp_compensation_beta),
+        publish_interval: Number(savingConfig.publish_interval), moving_average_window: Number(savingConfig.moving_average_window),
+        is_ph_enabled: savingConfig.is_ph_enabled, is_ec_enabled: savingConfig.is_ec_enabled,
+        is_temp_enabled: savingConfig.is_temp_enabled, is_water_level_enabled: savingConfig.is_water_level_enabled, last_calibrated: ts
       };
 
       const unifiedPayload = { device_config: devConf, water_config: waterConf, safety_config: safeConf, sensor_calibration: sensConf, dosing_calibration: doseConf };
@@ -605,15 +741,123 @@ const Settings = () => {
             </div>
           </SubCard>
 
-          <div className="px-5 py-4 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl mt-5 mb-3 flex items-start space-x-3 shadow-inner">
-            <FlaskConical size={20} className="text-indigo-400 flex-shrink-0 animate-pulse" />
-            <p className="text-xs text-indigo-200 leading-relaxed font-medium">Bảo trì phần cứng (Dành cho kỹ thuật): Vui lòng nhúng đầu dò vào dung dịch chuẩn trước khi nhập các hệ số Voltage bên dưới.</p>
-          </div>
+          <SubCard title="Wizard cân chỉnh đầu dò pH">
+            <div className="space-y-4">
+              <div className="px-5 py-4 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-start space-x-3 shadow-inner">
+                <FlaskConical size={20} className="text-indigo-400 flex-shrink-0 animate-pulse" />
+                <p className="text-xs text-indigo-200 leading-relaxed font-medium">
+                  Chuẩn bị dung dịch chuẩn sạch, rửa đầu dò bằng nước cất trước mỗi lần đo. Wizard sẽ tự gọi API <b>capture</b> ở từng điểm, không cần nhập điện áp thủ công.
+                </p>
+              </div>
 
-          <SubCard title="Thông Số Calib Analog">
+              <div className="flex flex-wrap items-center gap-2 bg-slate-900/40 border border-slate-700 rounded-xl p-2">
+                <button
+                  onClick={() => {
+                    setCalibrationPointsCount(2);
+                    setWizardStep(0);
+                    setCapturedPoints({});
+                  }}
+                  className={`px-3 py-2 rounded-lg text-xs font-black tracking-widest transition-all ${calibrationPointsCount === 2 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-400 hover:bg-slate-800'}`}
+                >
+                  2 ĐIỂM (pH 7, pH 4)
+                </button>
+                <button
+                  onClick={() => {
+                    setCalibrationPointsCount(3);
+                    setWizardStep(0);
+                    setCapturedPoints({});
+                  }}
+                  className={`px-3 py-2 rounded-lg text-xs font-black tracking-widest transition-all ${calibrationPointsCount === 3 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-400 hover:bg-slate-800'}`}
+                >
+                  3 ĐIỂM (pH 7, pH 4, pH 10)
+                </button>
+              </div>
+
+              {isCalibrationBlocked && (
+                <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-100">
+                  <p className="text-xs font-black uppercase tracking-wider mb-2">Không thể bắt đầu calib</p>
+                  <ul className="text-xs space-y-1 list-disc pl-4">
+                    {!isSensorOnline && <li>Sensor đang offline. Kiểm tra nguồn cảm biến hoặc kết nối mạng.</li>}
+                    {isPhError && <li>err_ph=true. Rửa đầu dò, kiểm tra dây tín hiệu và chờ nhiệt độ ổn định trước khi đo lại.</li>}
+                    <li>Đảm bảo đầu dò ngập đủ dung dịch chuẩn và không có bọt khí bám đầu cảm biến.</li>
+                  </ul>
+                </div>
+              )}
+
+              {wizardStep < calibrationPoints.length ? (
+                <div className="p-4 rounded-xl border border-indigo-500/25 bg-slate-900/60 space-y-3">
+                  <p className="text-xs text-slate-400 uppercase tracking-widest font-black">
+                    Bước {wizardStep + 1}/{calibrationPoints.length}
+                  </p>
+                  <p className="text-sm font-bold text-slate-100">
+                    Nhúng đầu dò vào dung dịch <span className="text-indigo-300">pH {activePoint}</span>, sau đó bấm <span className="text-emerald-300">Bắt đầu đo</span>.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleCapturePoint}
+                      disabled={isCalibrationBlocked || isCapturingPoint}
+                      className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-emerald-500 text-slate-950 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isCapturingPoint ? 'ĐANG ĐO...' : 'BẮT ĐẦU ĐO'}
+                    </button>
+
+                    {isCapturingPoint && (
+                      <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
+                        <Clock size={14} />
+                        Countdown: {countdown}s · {stabilityStatus === 'stable' ? 'Đã ổn định' : 'Đang chờ ổn định'}
+                      </span>
+                    )}
+
+                    {capturedPoints[activePoint] && !isCapturingPoint && (
+                      <>
+                        <span className="text-xs text-emerald-300 font-bold">Đã ghi nhận: {capturedPoints[activePoint].voltage.toFixed(3)}V</span>
+                        <button
+                          onClick={goToNextPoint}
+                          className="px-3 py-2 rounded-lg text-xs font-black tracking-widest bg-indigo-500 text-white"
+                        >
+                          ĐÃ GHI NHẬN
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-3">
+                  <p className="text-xs uppercase tracking-widest font-black text-emerald-300">Kết quả tự tính sau calib</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-lg bg-slate-900/60 p-3 border border-white/10">
+                      <p className="text-slate-400 text-xs">ph_v7</p>
+                      <p className="font-black text-slate-100">{calibrationSummary.ph_v7 ?? '--'} V</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-900/60 p-3 border border-white/10">
+                      <p className="text-slate-400 text-xs">ph_v4</p>
+                      <p className="font-black text-slate-100">{calibrationSummary.ph_v4 ?? '--'} V</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-900/60 p-3 border border-white/10">
+                      <p className="text-slate-400 text-xs">Độ tin cậy</p>
+                      <p className="font-black text-slate-100">{calibrationSummary.reliability}%</p>
+                    </div>
+                  </div>
+                  {calibrationSummary.ph_v10 !== null && (
+                    <p className="text-xs text-slate-300">Điểm mở rộng pH 10: <b>{calibrationSummary.ph_v10}V</b> (dùng để đánh giá tuyến tính).</p>
+                  )}
+                  <button
+                    onClick={async () => {
+                      const nextConfig = applyCalibrationToConfig();
+                      if (nextConfig) await handleSave(nextConfig);
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-emerald-500 text-slate-950"
+                  >
+                    ÁP DỤNG & LƯU
+                  </button>
+                </div>
+              )}
+            </div>
+          </SubCard>
+
+          <SubCard title="Thông Số Calib Analog (khác)">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Điện áp chuẩn pH 7 (Voltage)" step="0.01" value={config.ph_v7} onChange={(e: InputEvent) => setConfig({ ...config, ph_v7: e.target.value })} />
-              <InputGroup label="Điện áp chuẩn pH 4 (Voltage)" step="0.01" value={config.ph_v4} onChange={(e: InputEvent) => setConfig({ ...config, ph_v4: e.target.value })} />
               <InputGroup label="Hệ số nhân EC (K Factor)" step="1.0" value={config.ec_factor} onChange={(e: InputEvent) => setConfig({ ...config, ec_factor: e.target.value })} />
               <InputGroup label="Bù trừ sai số EC tĩnh (Offset)" step="0.1" value={config.ec_offset} onChange={(e: InputEvent) => setConfig({ ...config, ec_offset: e.target.value })} />
               <InputGroup label="Bù sai số Nhiệt độ đo được (Offset)" step="0.1" value={config.temp_offset} onChange={(e: InputEvent) => setConfig({ ...config, temp_offset: e.target.value })} />

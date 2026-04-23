@@ -7,6 +7,7 @@ on:
       - 'hydragrow-frontend/**'
       - 'ESP32-C3-CONTROLLER-NODE/**'
       - 'scripts/**'
+      - 'docs/process/**'
       - '.github/workflows/quality-roadmap.yml'
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - 'hydragrow-frontend/**'
       - 'ESP32-C3-CONTROLLER-NODE/**'
       - 'scripts/**'
+      - 'docs/process/**'
       - '.github/workflows/quality-roadmap.yml'
 
 jobs:
@@ -70,6 +72,12 @@ jobs:
       - name: Weekly report snapshot
         run: ./scripts/generate_quality_report.sh weekly docs/process/reports/weekly-${{ github.run_id }}.md
 
+      - name: Upload quality report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-weekly-report-${{ github.run_id }}
+          path: docs/process/reports/weekly-${{ github.run_id }}.md
+
       - name: Quality summary
         if: always()
         run: |
@@ -82,3 +90,15 @@ jobs:
             echo "";
             echo "> Week 2 policy: warning-only (job remains green while surfacing violations).";
           } >> "$GITHUB_STEP_SUMMARY"
+
+  quality-regression-lock:
+    name: Week-3 fail-on-new-violations (toggle)
+    runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_BASELINE_LOCK == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Baseline regression check
+        run: ./scripts/check_quality_regression.sh

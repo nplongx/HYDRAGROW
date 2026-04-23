@@ -9,7 +9,7 @@ Tài liệu gốc: `docs/rollout-plan.md`.
 - [x] Tuần 1 — Có baseline báo cáo ban đầu tại `docs/process/reports/weekly-2026-04-23.md`.
 - [x] Tuần 2 — Bật quality gate ở chế độ warning-only qua workflow `.github/workflows/quality-roadmap.yml`.
 - [ ] Tuần 2 — Đóng toàn bộ backlog P0 cross-module.
-- [ ] Tuần 3 — Chuyển sang fail-on-new-violations + baseline lock.
+- [~] Tuần 3 — Chuẩn bị fail-on-new-violations + baseline lock (đã có script + toggle CI).
 - [ ] Tuần 4 — Bật full governance gates (pre-push + reviewer gate + SLA xử lý vi phạm).
 
 ## Backlog P0 mở (khởi tạo)
@@ -29,3 +29,10 @@ Tài liệu gốc: `docs/rollout-plan.md`.
 ```
 
 - Khi hoàn tất một P0, tick trạng thái + bổ sung PR link ngay trong bảng backlog.
+
+
+## Baseline lock (chuẩn bị tuần 3)
+
+- Baseline hiện tại lưu tại `docs/process/baseline-metrics.env`.
+- Script kiểm tra regression: `./scripts/check_quality_regression.sh`.
+- Trên GitHub Actions, bật khóa bằng cách đặt Repository Variable `ENABLE_BASELINE_LOCK=true`.

@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+
+  - repo: local
+    hooks:
+      - id: rustfmt-backend
+        name: Rust fmt (backend)
+        entry: bash -c 'cd hydragrow-backend && cargo fmt --all -- --check'
+        language: system
+        pass_filenames: false
+      - id: rustfmt-controller
+        name: Rust fmt (controller)
+        entry: bash -c 'cd ESP32-C3-CONTROLLER-NODE && cargo fmt --all -- --check'
+        language: system
+        pass_filenames: false
+      - id: alias-naming
+        name: Alias naming convention
+        entry: ./scripts/check_alias_naming.sh
+        language: system
+        pass_filenames: false

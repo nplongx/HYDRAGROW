@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   X,
   Zap,
-  ActivityIcon
 } from 'lucide-react';
 
 const MainLayout = () => {

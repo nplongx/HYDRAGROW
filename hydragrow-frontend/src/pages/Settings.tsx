@@ -1164,7 +1164,7 @@ const Settings = () => {
           <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent -z-10 pointer-events-none"></div>
 
           <button
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={isSaving || hasDosingValidationError}
             className="w-full pointer-events-auto bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 py-4 rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-[0_10px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_10px_40px_rgba(16,185,129,0.6)] hover:scale-[1.01] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 relative overflow-hidden"
           >

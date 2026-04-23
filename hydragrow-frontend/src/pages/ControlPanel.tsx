@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Settings2, FlaskConical, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw, Zap,
-  Waves, Beaker, Play, Target
+  Waves, Play, Target
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';

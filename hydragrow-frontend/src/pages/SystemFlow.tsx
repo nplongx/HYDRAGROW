@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, Power, Settings, Droplets, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Activity, ShieldAlert } from 'lucide-react';
 
 // Nếu đường dẫn context của bạn khác, hãy điều chỉnh lại
 // import { useDeviceContext } from '../context/DeviceContext'; 

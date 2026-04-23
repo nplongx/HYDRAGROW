@@ -92,6 +92,10 @@ pub struct DeviceConfig {
     // 6. THÔNG SỐ LOCAL CỦA ESP32 (Backend không có cũng không sao)
     pub dosing_pwm_percent: u32,
     pub dosing_min_pwm_percent: u32,
+    pub pump_a_min_pwm_percent: Option<u32>,
+    pub pump_b_min_pwm_percent: Option<u32>,
+    pub pump_ph_up_min_pwm_percent: Option<u32>,
+    pub pump_ph_down_min_pwm_percent: Option<u32>,
     pub dosing_pulse_on_ms: u64,
     pub dosing_pulse_off_ms: u64,
     pub dosing_min_dose_ml: f32,
@@ -188,6 +192,10 @@ impl Default for DeviceConfig {
 
             dosing_pwm_percent: 50,
             dosing_min_pwm_percent: 35,
+            pump_a_min_pwm_percent: None,
+            pump_b_min_pwm_percent: None,
+            pump_ph_up_min_pwm_percent: None,
+            pump_ph_down_min_pwm_percent: None,
             dosing_pulse_on_ms: 250,
             dosing_pulse_off_ms: 300,
             dosing_min_dose_ml: 0.4,

@@ -16,6 +16,7 @@ pre-commit install
 
 ### Current gates
 - Basic hygiene: merge conflict markers, trailing whitespace, EOF, YAML/JSON/TOML validation.
+- CI warning-only gate cho lộ trình tuần 2 được cấu hình tại `.github/workflows/quality-roadmap.yml` (không chặn merge, chỉ hiển thị cảnh báo).
 - Rust formatting checks for:
   - `hydragrow-backend`
   - `ESP32-C3-CONTROLLER-NODE`

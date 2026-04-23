@@ -300,6 +300,9 @@ const Settings = () => {
     loadConfig();
   }, []);
 
+  // Tìm và thay toàn bộ hàm handleSave trong Settings.tsx bằng phiên bản này.
+  // Vị trí: khoảng dòng 305-490 trong file gốc.
+
   const handleSave = async (configOverride?: any) => {
     if (!appSettings.device_id || !appSettings.backend_url) {
       toast.error('Vui lòng điền đầy đủ Device ID và URL Máy chủ!');
@@ -312,85 +315,145 @@ const Settings = () => {
     try {
       const savingConfig = configOverride || config;
       const devId = appSettings.device_id;
+
+      // Helper đã có sẵn — đảm bảo không bao giờ trả về NaN
       const toNumberOr = (value: any, fallback: number) => {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
       };
+
       try { await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId }); } catch (e) { }
 
       const ts = new Date().toISOString();
 
+      // ── device_config ──────────────────────────────────────────────────────
       const devConf = {
-        device_id: devId, control_mode: savingConfig.control_mode, is_enabled: savingConfig.is_enabled,
-        ec_target: Number(savingConfig.ec_target), ec_tolerance: Number(savingConfig.ec_tolerance),
-        ph_target: Number(savingConfig.ph_target), ph_tolerance: Number(savingConfig.ph_tolerance),
-        temp_target: Number(savingConfig.temp_target), temp_tolerance: Number(savingConfig.temp_tolerance),
-        last_updated: ts, delay_between_a_and_b_sec: Number(savingConfig.delay_between_a_and_b_sec),
+        device_id: devId,
+        control_mode: savingConfig.control_mode || 'manual',
+        is_enabled: savingConfig.is_enabled ?? true,
+        ec_target: toNumberOr(savingConfig.ec_target, 1.5),
+        ec_tolerance: toNumberOr(savingConfig.ec_tolerance, 0.05),
+        ph_target: toNumberOr(savingConfig.ph_target, 6.0),
+        ph_tolerance: toNumberOr(savingConfig.ph_tolerance, 0.5),
+        temp_target: toNumberOr(savingConfig.temp_target, 24.0),
+        temp_tolerance: toNumberOr(savingConfig.temp_tolerance, 2.0),
+        last_updated: ts,
+        delay_between_a_and_b_sec: toNumberOr(savingConfig.delay_between_a_and_b_sec, 10),
       };
 
+      // ── water_config ───────────────────────────────────────────────────────
       const waterConf = {
-        device_id: devId, tank_height: Number(savingConfig.tank_height), water_level_min: Number(savingConfig.water_level_min), water_level_target: Number(savingConfig.water_level_target),
-        water_level_max: Number(savingConfig.water_level_max), water_level_drain: Number(savingConfig.water_level_drain),
-        circulation_mode: savingConfig.circulation_mode, circulation_on_sec: Number(savingConfig.circulation_on_sec), circulation_off_sec: Number(savingConfig.circulation_off_sec),
-        water_level_tolerance: Number(savingConfig.water_level_tolerance), auto_refill_enabled: savingConfig.auto_refill_enabled,
-        auto_drain_overflow: savingConfig.auto_drain_overflow, auto_dilute_enabled: savingConfig.auto_dilute_enabled,
-        dilute_drain_amount_cm: Number(savingConfig.dilute_drain_amount_cm), scheduled_water_change_enabled: savingConfig.scheduled_water_change_enabled,
-        water_change_cron: String(savingConfig.water_change_cron), scheduled_drain_amount_cm: Number(savingConfig.scheduled_drain_amount_cm),
-        misting_on_duration_ms: Number(savingConfig.misting_on_duration_ms), misting_off_duration_ms: Number(savingConfig.misting_off_duration_ms), last_updated: ts
+        device_id: devId,
+        tank_height: toNumberOr(savingConfig.tank_height, 50),
+        water_level_min: toNumberOr(savingConfig.water_level_min, 20.0),
+        water_level_target: toNumberOr(savingConfig.water_level_target, 80.0),
+        water_level_max: toNumberOr(savingConfig.water_level_max, 90.0),
+        water_level_drain: toNumberOr(savingConfig.water_level_drain, 5.0),
+        circulation_mode: savingConfig.circulation_mode || 'always_on',
+        circulation_on_sec: toNumberOr(savingConfig.circulation_on_sec, 1800),
+        circulation_off_sec: toNumberOr(savingConfig.circulation_off_sec, 900),
+        water_level_tolerance: toNumberOr(savingConfig.water_level_tolerance, 5.0),
+        auto_refill_enabled: savingConfig.auto_refill_enabled ?? true,
+        auto_drain_overflow: savingConfig.auto_drain_overflow ?? true,
+        auto_dilute_enabled: savingConfig.auto_dilute_enabled ?? false,
+        dilute_drain_amount_cm: toNumberOr(savingConfig.dilute_drain_amount_cm, 5.0),
+        scheduled_water_change_enabled: savingConfig.scheduled_water_change_enabled ?? false,
+        water_change_cron: String(savingConfig.water_change_cron || '0 0 7 * * SUN'),
+        scheduled_drain_amount_cm: toNumberOr(savingConfig.scheduled_drain_amount_cm, 10.0),
+        misting_on_duration_ms: toNumberOr(savingConfig.misting_on_duration_ms, 10000),
+        misting_off_duration_ms: toNumberOr(savingConfig.misting_off_duration_ms, 180000),
+        last_updated: ts,
       };
 
+      // ── safety_config ──────────────────────────────────────────────────────
       const safeConf = {
-        device_id: devId, emergency_shutdown: savingConfig.emergency_shutdown,
-        max_ec_limit: Number(savingConfig.max_ec_limit),
-        min_ec_limit: Number(savingConfig.min_ec_limit), min_ph_limit: Number(savingConfig.min_ph_limit), max_ph_limit: Number(savingConfig.max_ph_limit),
-        max_ec_delta: Number(savingConfig.max_ec_delta), max_ph_delta: Number(savingConfig.max_ph_delta), max_dose_per_cycle: Number(savingConfig.max_dose_per_cycle),
-        cooldown_sec: Number(savingConfig.cooldown_sec), max_dose_per_hour: Number(savingConfig.max_dose_per_hour), water_level_critical_min: Number(savingConfig.water_level_critical_min),
-        max_refill_cycles_per_hour: Number(savingConfig.max_refill_cycles_per_hour), max_drain_cycles_per_hour: Number(savingConfig.max_drain_cycles_per_hour),
-        max_refill_duration_sec: Number(savingConfig.max_refill_duration_sec), max_drain_duration_sec: Number(savingConfig.max_drain_duration_sec),
-        min_temp_limit: Number(savingConfig.min_temp_limit), max_temp_limit: Number(savingConfig.max_temp_limit), ec_ack_threshold: Number(savingConfig.ec_ack_threshold),
-        ph_ack_threshold: Number(savingConfig.ph_ack_threshold), water_ack_threshold: Number(savingConfig.water_ack_threshold), last_updated: ts
+        device_id: devId,
+        emergency_shutdown: savingConfig.emergency_shutdown ?? false,
+        max_ec_limit: toNumberOr(savingConfig.max_ec_limit, 3.0),
+        min_ec_limit: toNumberOr(savingConfig.min_ec_limit, 0.5),
+        min_ph_limit: toNumberOr(savingConfig.min_ph_limit, 4.0),
+        max_ph_limit: toNumberOr(savingConfig.max_ph_limit, 8.0),
+        max_ec_delta: toNumberOr(savingConfig.max_ec_delta, 0.5),
+        max_ph_delta: toNumberOr(savingConfig.max_ph_delta, 0.3),
+        max_dose_per_cycle: toNumberOr(savingConfig.max_dose_per_cycle, 50.0),
+        cooldown_sec: toNumberOr(savingConfig.cooldown_sec, 60),
+        max_dose_per_hour: toNumberOr(savingConfig.max_dose_per_hour, 200.0),
+        water_level_critical_min: toNumberOr(savingConfig.water_level_critical_min, 10.0),
+        max_refill_cycles_per_hour: toNumberOr(savingConfig.max_refill_cycles_per_hour, 3),
+        max_drain_cycles_per_hour: toNumberOr(savingConfig.max_drain_cycles_per_hour, 3),
+        max_refill_duration_sec: toNumberOr(savingConfig.max_refill_duration_sec, 120),
+        max_drain_duration_sec: toNumberOr(savingConfig.max_drain_duration_sec, 120),
+        min_temp_limit: toNumberOr(savingConfig.min_temp_limit, 15.0),
+        max_temp_limit: toNumberOr(savingConfig.max_temp_limit, 35.0),
+        ec_ack_threshold: toNumberOr(savingConfig.ec_ack_threshold, 0.05),
+        ph_ack_threshold: toNumberOr(savingConfig.ph_ack_threshold, 0.1),
+        water_ack_threshold: toNumberOr(savingConfig.water_ack_threshold, 0.5),
+        last_updated: ts,
       };
 
+      // ── dosing_calibration ─────────────────────────────────────────────────
       const doseConf = {
-        device_id: devId, tank_volume_l: Number(savingConfig.tank_volume_l), ec_gain_per_ml: Number(savingConfig.ec_gain_per_ml),
-        ph_shift_up_per_ml: Number(savingConfig.ph_shift_up_per_ml), ph_shift_down_per_ml: Number(savingConfig.ph_shift_down_per_ml),
-        active_mixing_sec: Number(savingConfig.active_mixing_sec), sensor_stabilize_sec: Number(savingConfig.sensor_stabilize_sec),
-        ec_step_ratio: Number(savingConfig.ec_step_ratio), ph_step_ratio: Number(savingConfig.ph_step_ratio),
-
-        pump_a_capacity_ml_per_sec: Number(savingConfig.pump_a_capacity_ml_per_sec),
-        pump_b_capacity_ml_per_sec: Number(savingConfig.pump_b_capacity_ml_per_sec),
-        pump_ph_up_capacity_ml_per_sec: Number(savingConfig.pump_ph_up_capacity_ml_per_sec),
-        pump_ph_down_capacity_ml_per_sec: Number(savingConfig.pump_ph_down_capacity_ml_per_sec),
-
-        soft_start_duration: Number(savingConfig.soft_start_duration),
-        scheduled_mixing_interval_sec: Number(savingConfig.scheduled_mixing_interval_sec), scheduled_mixing_duration_sec: Number(savingConfig.scheduled_mixing_duration_sec),
-        dosing_pwm_percent: Number(savingConfig.dosing_pwm_percent), osaka_mixing_pwm_percent: Number(savingConfig.osaka_mixing_pwm_percent),
-        osaka_misting_pwm_percent: Number(savingConfig.osaka_misting_pwm_percent),
-
-        scheduled_dosing_enabled: savingConfig.scheduled_dosing_enabled,
-        scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron),
-        scheduled_dose_a_ml: Number(savingConfig.scheduled_dose_a_ml),
-        scheduled_dose_b_ml: Number(savingConfig.scheduled_dose_b_ml),
+        device_id: devId,
+        tank_volume_l: toNumberOr(savingConfig.tank_volume_l, 50.0),
+        ec_gain_per_ml: toNumberOr(savingConfig.ec_gain_per_ml, 0.1),
+        ph_shift_up_per_ml: toNumberOr(savingConfig.ph_shift_up_per_ml, 0.2),
+        ph_shift_down_per_ml: toNumberOr(savingConfig.ph_shift_down_per_ml, 0.2),
+        active_mixing_sec: toNumberOr(savingConfig.active_mixing_sec, 5),
+        sensor_stabilize_sec: toNumberOr(savingConfig.sensor_stabilize_sec, 5),
+        ec_step_ratio: toNumberOr(savingConfig.ec_step_ratio, 0.4),
+        ph_step_ratio: toNumberOr(savingConfig.ph_step_ratio, 0.1),
+        pump_a_capacity_ml_per_sec: toNumberOr(savingConfig.pump_a_capacity_ml_per_sec, 1.2),
+        pump_b_capacity_ml_per_sec: toNumberOr(savingConfig.pump_b_capacity_ml_per_sec, 1.2),
+        pump_ph_up_capacity_ml_per_sec: toNumberOr(savingConfig.pump_ph_up_capacity_ml_per_sec, 1.2),
+        pump_ph_down_capacity_ml_per_sec: toNumberOr(savingConfig.pump_ph_down_capacity_ml_per_sec, 1.2),
+        soft_start_duration: toNumberOr(savingConfig.soft_start_duration, 3000),
+        last_calibrated: ts,
+        scheduled_mixing_interval_sec: toNumberOr(savingConfig.scheduled_mixing_interval_sec, 3600),
+        scheduled_mixing_duration_sec: toNumberOr(savingConfig.scheduled_mixing_duration_sec, 300),
+        dosing_pwm_percent: toNumberOr(savingConfig.dosing_pwm_percent, 50),
+        osaka_mixing_pwm_percent: toNumberOr(savingConfig.osaka_mixing_pwm_percent, 60),
+        osaka_misting_pwm_percent: toNumberOr(savingConfig.osaka_misting_pwm_percent, 100),
+        scheduled_dosing_enabled: savingConfig.scheduled_dosing_enabled ?? false,
+        scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron || '0 0 8 * * *'),
+        scheduled_dose_a_ml: toNumberOr(savingConfig.scheduled_dose_a_ml, 10.0),
+        scheduled_dose_b_ml: toNumberOr(savingConfig.scheduled_dose_b_ml, 10.0),
         ec_gain_dynamic: toNumberOr(savingConfig.ec_gain_dynamic, 0.01),
         ph_up_dynamic: toNumberOr(savingConfig.ph_up_dynamic, 0.01),
         ph_down_dynamic: toNumberOr(savingConfig.ph_down_dynamic, 0.01),
         dynamic_sample_count: Math.trunc(toNumberOr(savingConfig.dynamic_sample_count, 0)),
         dynamic_confidence: toNumberOr(savingConfig.dynamic_confidence, 0),
+        // QUAN TRỌNG: Option<DateTime<Utc>> → phải là null hoặc ISO string, không phải số
+        last_dynamic_update: (typeof savingConfig.last_dynamic_update === 'string' && savingConfig.last_dynamic_update)
+          ? savingConfig.last_dynamic_update
+          : null,
         dynamic_model_version: String(savingConfig.dynamic_model_version || 'v1'),
-        last_dynamic_update: toNumberOr(savingConfig.last_dynamic_update, 0),
-
-        last_calibrated: ts
       };
 
+      // ── sensor_calibration ─────────────────────────────────────────────────
       const sensConf = {
-        device_id: devId, ph_v7: Number(savingConfig.ph_v7), ph_v4: Number(savingConfig.ph_v4), ec_factor: Number(savingConfig.ec_factor),
-        ec_offset: Number(savingConfig.ec_offset), temp_offset: Number(savingConfig.temp_offset), temp_compensation_beta: Number(savingConfig.temp_compensation_beta),
-        publish_interval: Number(savingConfig.publish_interval), moving_average_window: Number(savingConfig.moving_average_window),
-        is_ph_enabled: savingConfig.is_ph_enabled, is_ec_enabled: savingConfig.is_ec_enabled,
-        is_temp_enabled: savingConfig.is_temp_enabled, is_water_level_enabled: savingConfig.is_water_level_enabled, last_calibrated: ts
+        device_id: devId,
+        ph_v7: toNumberOr(savingConfig.ph_v7, 2.5),
+        ph_v4: toNumberOr(savingConfig.ph_v4, 1.428),
+        ec_factor: toNumberOr(savingConfig.ec_factor, 880.0),
+        ec_offset: toNumberOr(savingConfig.ec_offset, 0.0),
+        temp_offset: toNumberOr(savingConfig.temp_offset, 0.0),
+        temp_compensation_beta: toNumberOr(savingConfig.temp_compensation_beta, 0.02),
+        publish_interval: toNumberOr(savingConfig.publish_interval, 5000),
+        moving_average_window: toNumberOr(savingConfig.moving_average_window, 15),
+        is_ph_enabled: savingConfig.is_ph_enabled ?? true,
+        is_ec_enabled: savingConfig.is_ec_enabled ?? true,
+        is_temp_enabled: savingConfig.is_temp_enabled ?? true,
+        is_water_level_enabled: savingConfig.is_water_level_enabled ?? true,
+        last_calibrated: ts,
       };
 
-      const unifiedPayload = { device_config: devConf, water_config: waterConf, safety_config: safeConf, sensor_calibration: sensConf, dosing_calibration: doseConf };
+      const unifiedPayload = {
+        device_config: devConf,
+        water_config: waterConf,
+        safety_config: safeConf,
+        sensor_calibration: sensConf,
+        dosing_calibration: doseConf,
+      };
 
       await callApi(`/api/devices/${devId}/config/unified`, 'PUT', unifiedPayload);
 

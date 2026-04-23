@@ -292,6 +292,50 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
     }
 }
 
+const MAX_SCHEDULED_DOSING_DURATION_SEC: f32 = 120.0;
+
+fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
+    if !(1..=100).contains(&dose.dosing_pwm_percent) {
+        return Err("dosing_pwm_percent must be in range [1..100]".to_string());
+    }
+
+    if dose.pump_a_capacity_ml_per_sec <= 0.0 {
+        return Err("pump_a_capacity_ml_per_sec must be > 0".to_string());
+    }
+    if dose.pump_b_capacity_ml_per_sec <= 0.0 {
+        return Err("pump_b_capacity_ml_per_sec must be > 0".to_string());
+    }
+    if dose.pump_ph_up_capacity_ml_per_sec <= 0.0 {
+        return Err("pump_ph_up_capacity_ml_per_sec must be > 0".to_string());
+    }
+    if dose.pump_ph_down_capacity_ml_per_sec <= 0.0 {
+        return Err("pump_ph_down_capacity_ml_per_sec must be > 0".to_string());
+    }
+
+    if dose.scheduled_dosing_enabled {
+        let pwm_ratio = dose.dosing_pwm_percent as f32 / 100.0;
+        let effective_capacity_a = dose.pump_a_capacity_ml_per_sec * pwm_ratio;
+        let expected_duration_a_sec = dose.scheduled_dose_a_ml / effective_capacity_a;
+        if expected_duration_a_sec > MAX_SCHEDULED_DOSING_DURATION_SEC {
+            return Err(format!(
+                "scheduled_dose_a_ml causes expected_duration_sec={:.2}s > {:.0}s safety limit",
+                expected_duration_a_sec, MAX_SCHEDULED_DOSING_DURATION_SEC
+            ));
+        }
+
+        let effective_capacity_b = dose.pump_b_capacity_ml_per_sec * pwm_ratio;
+        let expected_duration_b_sec = dose.scheduled_dose_b_ml / effective_capacity_b;
+        if expected_duration_b_sec > MAX_SCHEDULED_DOSING_DURATION_SEC {
+            return Err(format!(
+                "scheduled_dose_b_ml causes expected_duration_sec={:.2}s > {:.0}s safety limit",
+                expected_duration_b_sec, MAX_SCHEDULED_DOSING_DURATION_SEC
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 pub struct FinishCalibrationRequest {
     pub mode: String,
@@ -432,6 +476,9 @@ pub async fn update_unified_config(
     }
 
     payload.dosing_calibration.device_id = device_id.clone();
+    if let Err(msg) = validate_dosing_constraints(&payload.dosing_calibration) {
+        return HttpResponse::BadRequest().json(json!({"error": msg}));
+    }
     if let Err(e) = upsert_dosing_db(&app_state.pg_pool, &payload.dosing_calibration, &now).await {
         error!("Failed to update dosing config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Dosing"}));
@@ -837,7 +884,11 @@ pub async fn update_dosing_calibration(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
-    let config = req.into_inner();
+    let mut config = req.into_inner();
+    config.device_id = device_id.clone();
+    if let Err(msg) = validate_dosing_constraints(&config) {
+        return HttpResponse::BadRequest().json(json!({"error": msg}));
+    }
     let now = Utc::now();
     if let Err(_) = upsert_dosing_db(&app_state.pg_pool, &config, &now).await {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
@@ -968,4 +1019,49 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
             "/calibration/dosing/dynamic/reset",
             web::post().to(reset_dosing_dynamic_calibration),
         );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_dosing_constraints_accepts_pwm_boundaries() {
+        let mut dose = DosingCalibration::default();
+        dose.dosing_pwm_percent = 1;
+        assert!(validate_dosing_constraints(&dose).is_ok());
+
+        dose.dosing_pwm_percent = 100;
+        assert!(validate_dosing_constraints(&dose).is_ok());
+    }
+
+    #[test]
+    fn validate_dosing_constraints_rejects_zero_capacity() {
+        let mut dose = DosingCalibration::default();
+        dose.pump_a_capacity_ml_per_sec = 0.0;
+        let result = validate_dosing_constraints(&dose);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("pump_a_capacity_ml_per_sec"));
+    }
+
+    #[test]
+    fn validate_dosing_constraints_rejects_pwm_zero() {
+        let mut dose = DosingCalibration::default();
+        dose.dosing_pwm_percent = 0;
+        let result = validate_dosing_constraints(&dose);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("dosing_pwm_percent"));
+    }
+
+    #[test]
+    fn validate_dosing_constraints_rejects_too_long_scheduled_duration() {
+        let mut dose = DosingCalibration::default();
+        dose.scheduled_dosing_enabled = true;
+        dose.dosing_pwm_percent = 50;
+        dose.pump_a_capacity_ml_per_sec = 1.0;
+        dose.scheduled_dose_a_ml = 121.0;
+        let result = validate_dosing_constraints(&dose);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("scheduled_dose_a_ml"));
+    }
 }

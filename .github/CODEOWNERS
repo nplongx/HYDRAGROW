@@ -1,0 +1,23 @@
+# Global fallback owner
+* @nplongx
+
+# Critical backend business logic
+/hydragrow-backend/src/api/ @nplongx
+/hydragrow-backend/src/services/ @nplongx
+/hydragrow-backend/src/db/ @nplongx
+/hydragrow-backend/migrations/ @nplongx
+
+# Critical firmware/controller logic
+/ESP32-C3-CONTROLLER-NODE/src/ @nplongx
+
+# Frontend control and context areas
+/hydragrow-frontend/src/context/ @nplongx
+/hydragrow-frontend/src/components/ @nplongx
+
+# Governance and quality gates
+/.pre-commit-config.yaml @nplongx
+/.githooks/ @nplongx
+/.github/ @nplongx
+/docs/process/ @nplongx
+/scripts/check_alias_naming.sh @nplongx
+/scripts/generate_quality_report.sh @nplongx

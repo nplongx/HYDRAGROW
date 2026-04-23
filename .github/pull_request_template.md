@@ -1,18 +1,28 @@
-## Summary
+## Phạm vi PR (chỉ 1 phạm vi rõ ràng)
 
-<!-- Mô tả ngắn gọn thay đổi -->
+- Layer: <!-- core | service | api | tests -->
+- Scope: <!-- ví dụ: naming chuẩn cho module user -->
+- Mục tiêu chính: <!-- mô tả ngắn 1 câu -->
 
-## Changes
+## Changelog ngắn
 
 - 
+- 
+- 
 
-## Validation
+## Checklist ảnh hưởng
 
-- [ ] Đã chạy format/lint/check trước commit (theo README).
-- [ ] Đã tuân thủ glossary và naming rules trong `CONTRIBUTING.md`.
+- [ ] Ảnh hưởng DB schema
+- [ ] Ảnh hưởng API contract
+- [ ] Ảnh hưởng business rule
+- [ ] Ảnh hưởng UI/integration
+- [ ] Ảnh hưởng test hiện có
+- [ ] Cần migration/backfill
+- [ ] Cần feature flag/rollout từng phần
+- [ ] Cần phối hợp team khác
 
-## Checklist
+## Validate trước merge
 
-- [ ] PR title rõ ràng, đúng phạm vi thay đổi.
-- [ ] Không chứa secrets hoặc thông tin nhạy cảm.
-- [ ] Đính kèm ảnh/video nếu thay đổi UI.
+- [ ] Đã tự review theo đúng 1 phạm vi
+- [ ] Đã cập nhật test liên quan (hoặc nêu lý do chưa cập nhật)
+- [ ] Đã ghi chú breaking change (nếu có)

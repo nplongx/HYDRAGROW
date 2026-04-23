@@ -26,3 +26,9 @@
 - [ ] Đã tự review theo đúng 1 phạm vi
 - [ ] Đã cập nhật test liên quan (hoặc nêu lý do chưa cập nhật)
 - [ ] Đã ghi chú breaking change (nếu có)
+
+
+## Quality gate / SLA
+
+- [ ] Nếu gate fail, đã gán owner + ETA theo `docs/process/quality-gate-sla.md`
+- [ ] Nếu có re-baseline, đã nêu rõ lý do và phạm vi thay đổi

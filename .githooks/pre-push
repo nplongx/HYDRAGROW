@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "Running quality regression lock before push..."
+./scripts/check_quality_regression.sh
+
 if command -v pre-commit >/dev/null 2>&1; then
   echo "Running pre-commit before push..."
   pre-commit run --all-files

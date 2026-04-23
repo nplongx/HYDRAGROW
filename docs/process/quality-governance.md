@@ -16,6 +16,8 @@ pre-commit install
 
 ### Current gates
 - Basic hygiene: merge conflict markers, trailing whitespace, EOF, YAML/JSON/TOML validation.
+- CI warning-only gate cho lộ trình tuần 2 được cấu hình tại `.github/workflows/quality-roadmap.yml` (không chặn merge, chỉ hiển thị cảnh báo).
+- Baseline lock script cho tuần 3: `scripts/check_quality_regression.sh` với baseline lock snapshot tại `docs/process/baseline-lock.txt` (enforce mặc định trên pull request).
 - Rust formatting checks for:
   - `hydragrow-backend`
   - `ESP32-C3-CONTROLLER-NODE`
@@ -48,6 +50,11 @@ Reports are generated under `docs/process/reports/`.
 - Number of alias naming violations.
 - Technical inconsistency trend (currently proxied by `TODO(tech-debt)` and `FIXME` markers).
 
+## P0 remediation tracking (Week 2)
+
+- Theo dõi backlog P0 tại `docs/process/p0-remediation-week2.md`.
+- Điều kiện hoàn thành tuần 2: mọi P0 còn tồn phải có owner + deadline rõ ràng.
+
 ## 4) Milestone targets (decreasing inconsistency)
 
 - **M1**: Reduce total lint warnings by at least **20%** from baseline.
@@ -55,3 +62,9 @@ Reports are generated under `docs/process/reports/`.
 - **M3**: Keep newly introduced technical inconsistency markers at **0 per sprint**.
 
 If a milestone misses target, define a corrective action owner and date in the next report.
+
+
+## 5) Failure handling & SLA
+
+- Quy trình xử lý khi gate fail và SLA chuẩn được định nghĩa tại `docs/process/quality-gate-sla.md`.
+- Đây là tài liệu vận hành bắt buộc khi xử lý fail trên local flow hoặc PR flow.

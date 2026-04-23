@@ -26,3 +26,8 @@ repos:
         entry: ./scripts/check_alias_naming.sh
         language: system
         pass_filenames: false
+      - id: quality-regression-lock
+        name: Quality regression lock
+        entry: ./scripts/check_quality_regression.sh
+        language: system
+        pass_filenames: false

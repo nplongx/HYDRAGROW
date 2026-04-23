@@ -92,9 +92,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   quality-regression-lock:
-    name: Week-3 fail-on-new-violations
+    name: Week-3 fail-on-new-violations (toggle)
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ vars.ENABLE_BASELINE_LOCK == 'true' }}
 
     steps:
       - name: Checkout

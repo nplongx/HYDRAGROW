@@ -2,9 +2,11 @@ use actix_web::{HttpResponse, Responder, web};
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::PgPool;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
+use crate::models::config::{DosingCalibration, SafetyConfig};
 use crate::services::tuya; // Giả sử file tuya nằm trong folder services
 
 #[derive(Debug, Deserialize)]
@@ -13,6 +15,8 @@ pub struct PumpControlReq {
     pub action: String, // "on", "off", "reset_fault", "set_pwm"
     pub duration_sec: Option<u64>,
     pub pwm: Option<u32>,
+    #[serde(default, alias = "max_allowed_ml", alias = "manual_max_dose_per_cycle")]
+    pub manual_max_allowed_ml: Option<f32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,6 +69,21 @@ pub async fn control_pump(
         warn!("Từ chối lệnh: Hành động không hợp lệ ({})", req_data.action);
         return HttpResponse::BadRequest()
             .json(json!({"error": "Action must be 'on', 'off', 'reset_fault', or 'set_pwm'"}));
+    }
+
+    if let (Some(pwm), Some(duration_sec)) = (req_data.pwm, req_data.duration_sec) {
+        if let Err(resp) = validate_manual_dose_safety(
+            &app_state.pg_pool,
+            &device_id,
+            &req_data.pump,
+            pwm,
+            duration_sec,
+            req_data.manual_max_allowed_ml,
+        )
+        .await
+        {
+            return resp;
+        }
     }
 
     // 🟢 Xử lý riêng cho CIRCULATION_PUMP qua Tuya Cloud
@@ -134,6 +153,112 @@ pub async fn control_pump(
     let _ = app_state.alert_sender.send(alert_msg);
 
     HttpResponse::Ok().json(json!({"status": "success", "message": "Command sent"}))
+}
+
+async fn validate_manual_dose_safety(
+    pg_pool: &PgPool,
+    device_id: &str,
+    pump: &str,
+    pwm: u32,
+    duration_sec: u64,
+    manual_max_allowed_ml: Option<f32>,
+) -> Result<(), HttpResponse> {
+    let normalized_pump = normalize_dosing_pump_name(pump);
+    let Some(normalized_pump) = normalized_pump else {
+        return Ok(());
+    };
+
+    let dosing_cfg = load_dosing_calibration(pg_pool, device_id)
+        .await
+        .map_err(|e| {
+            error!(
+                "Không thể tải dosing_calibration cho kiểm tra an toàn manual [{}]: {:?}",
+                device_id, e
+            );
+            HttpResponse::InternalServerError().json(json!({"error": "DB Error"}))
+        })?;
+
+    let capacity_ml_per_sec = capacity_ml_per_sec(&dosing_cfg, normalized_pump);
+    let estimated_ml = capacity_ml_per_sec * (pwm as f32 / 100.0) * duration_sec as f32;
+
+    let max_allowed_ml = match manual_max_allowed_ml {
+        Some(v) if v > 0.0 => v,
+        _ => load_max_dose_per_cycle(pg_pool, device_id)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Không thể tải safety_config cho kiểm tra an toàn manual [{}]: {:?}",
+                    device_id, e
+                );
+                HttpResponse::InternalServerError().json(json!({"error": "DB Error"}))
+            })?,
+    };
+
+    if estimated_ml > max_allowed_ml {
+        warn!(
+            "Chặn lệnh manual vượt ngưỡng an toàn: device={} pump={} normalized={} pwm={} duration={}s estimated_ml={:.3} max_allowed_ml={:.3}",
+            device_id, pump, normalized_pump, pwm, duration_sec, estimated_ml, max_allowed_ml
+        );
+        return Err(HttpResponse::BadRequest().json(json!({
+            "error": "Manual dose exceeds safe limit",
+            "estimated_ml": estimated_ml,
+            "max_allowed_ml": max_allowed_ml,
+            "pump": normalized_pump,
+            "pwm": pwm,
+            "duration_sec": duration_sec
+        })));
+    }
+
+    Ok(())
+}
+
+async fn load_dosing_calibration(
+    pg_pool: &PgPool,
+    device_id: &str,
+) -> anyhow::Result<DosingCalibration> {
+    let dosing_cfg_res = sqlx::query_as::<_, DosingCalibration>(
+        "SELECT * FROM dosing_calibration WHERE device_id = $1",
+    )
+    .bind(device_id)
+    .fetch_optional(pg_pool)
+    .await?;
+
+    dosing_cfg_res.ok_or_else(|| anyhow::anyhow!("Dosing calibration not found for {}", device_id))
+}
+
+async fn load_max_dose_per_cycle(pg_pool: &PgPool, device_id: &str) -> anyhow::Result<f32> {
+    let safety_cfg_res =
+        sqlx::query_as::<_, SafetyConfig>("SELECT * FROM safety_config WHERE device_id = $1")
+            .bind(device_id)
+            .fetch_optional(pg_pool)
+            .await?;
+
+    Ok(safety_cfg_res
+        .unwrap_or_else(|| SafetyConfig {
+            device_id: device_id.to_string(),
+            ..Default::default()
+        })
+        .max_dose_per_cycle)
+}
+
+fn normalize_dosing_pump_name(pump: &str) -> Option<&'static str> {
+    match pump {
+        "A" | "PUMP_A" => Some("PUMP_A"),
+        "B" | "PUMP_B" => Some("PUMP_B"),
+        "PH_UP" => Some("PH_UP"),
+        "PH_DOWN" => Some("PH_DOWN"),
+        _ => None,
+    }
+}
+
+fn capacity_ml_per_sec(dosing_cfg: &DosingCalibration, normalized_pump: &str) -> f32 {
+    match normalized_pump {
+        "PUMP_A" => dosing_cfg.pump_a_capacity_ml_per_sec,
+        "PUMP_B" => dosing_cfg.pump_b_capacity_ml_per_sec,
+        "PH_UP" => dosing_cfg.pump_ph_up_capacity_ml_per_sec,
+        "PH_DOWN" => dosing_cfg.pump_ph_down_capacity_ml_per_sec,
+        _ => 0.0,
+    }
 }
 
 async fn publish_command(

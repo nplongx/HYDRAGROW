@@ -25,10 +25,6 @@ type DosingFieldKey =
 
 type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 
-const DOSING_RUNTIME_LIMIT_SEC = 180;
-const MAX_REASONABLE_FLOW_ML_PER_SEC = 30;
-const MIN_EFFECTIVE_FLOW_ML_PER_SEC = 0.01;
-
 const toFiniteNumber = (value: any): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : NaN;
@@ -38,6 +34,7 @@ const backendLikeError = (field: string, detail: string) => `Giá trị không h
 
 const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   const errors: DosingValidationErrors = {};
+  const scheduledDosingEnabled = Boolean(inputConfig.scheduled_dosing_enabled);
 
   const dosingPwm = toFiniteNumber(inputConfig.dosing_pwm_percent);
   const doseA = toFiniteNumber(inputConfig.scheduled_dose_a_ml);
@@ -54,10 +51,6 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   const validateCapacity = (field: DosingFieldKey, value: number) => {
     if (!Number.isFinite(value) || value <= 0) {
       errors[field] = backendLikeError(field, 'phải lớn hơn 0');
-      return;
-    }
-    if (value > MAX_REASONABLE_FLOW_ML_PER_SEC) {
-      errors[field] = backendLikeError(field, `vượt ngưỡng lưu lượng hợp lý (${MAX_REASONABLE_FLOW_ML_PER_SEC} ml/giây)`);
     }
   };
 
@@ -66,35 +59,11 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   validateCapacity('pump_ph_up_capacity_ml_per_sec', pumpPhUp);
   validateCapacity('pump_ph_down_capacity_ml_per_sec', pumpPhDown);
 
-  if (!Number.isFinite(doseA) || doseA < 0) {
+  if (scheduledDosingEnabled && (!Number.isFinite(doseA) || doseA < 0)) {
     errors.scheduled_dose_a_ml = backendLikeError('scheduled_dose_a_ml', 'phải lớn hơn hoặc bằng 0');
   }
-  if (!Number.isFinite(doseB) || doseB < 0) {
+  if (scheduledDosingEnabled && (!Number.isFinite(doseB) || doseB < 0)) {
     errors.scheduled_dose_b_ml = backendLikeError('scheduled_dose_b_ml', 'phải lớn hơn hoặc bằng 0');
-  }
-
-  if (!errors.dosing_pwm_percent && !errors.pump_a_capacity_ml_per_sec && !errors.scheduled_dose_a_ml) {
-    const effectiveFlowA = pumpA * (dosingPwm / 100);
-    if (effectiveFlowA < MIN_EFFECTIVE_FLOW_ML_PER_SEC) {
-      errors.pump_a_capacity_ml_per_sec = backendLikeError('pump_a_capacity_ml_per_sec', 'khi áp PWM hiện tại tạo lưu lượng quá thấp');
-    } else {
-      const runtimeA = doseA / effectiveFlowA;
-      if (runtimeA > DOSING_RUNTIME_LIMIT_SEC) {
-        errors.scheduled_dose_a_ml = backendLikeError('scheduled_dose_a_ml', `thời gian bơm dự kiến ${runtimeA.toFixed(1)}s vượt ngưỡng ${DOSING_RUNTIME_LIMIT_SEC}s`);
-      }
-    }
-  }
-
-  if (!errors.dosing_pwm_percent && !errors.pump_b_capacity_ml_per_sec && !errors.scheduled_dose_b_ml) {
-    const effectiveFlowB = pumpB * (dosingPwm / 100);
-    if (effectiveFlowB < MIN_EFFECTIVE_FLOW_ML_PER_SEC) {
-      errors.pump_b_capacity_ml_per_sec = backendLikeError('pump_b_capacity_ml_per_sec', 'khi áp PWM hiện tại tạo lưu lượng quá thấp');
-    } else {
-      const runtimeB = doseB / effectiveFlowB;
-      if (runtimeB > DOSING_RUNTIME_LIMIT_SEC) {
-        errors.scheduled_dose_b_ml = backendLikeError('scheduled_dose_b_ml', `thời gian bơm dự kiến ${runtimeB.toFixed(1)}s vượt ngưỡng ${DOSING_RUNTIME_LIMIT_SEC}s`);
-      }
-    }
   }
 
   return errors;

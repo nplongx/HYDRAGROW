@@ -1,0 +1,7 @@
+# quality baseline lock snapshot
+# generated_at_utc=2026-04-23T14:32:14Z
+# format: TYPE|path:line:content
+ALIAS|./hydragrow-backend/src/api/ws.rs:3:use futures_util::StreamExt as _;
+DEBT|./scripts/generate_quality_report.sh:37:tech_debt_count=$(rg --glob '!ESP32-C3-SENSOR-NODE/libraries/**' --glob '!**/node_modules/**' --glob '!**/target/**' -n "TODO\\(tech-debt\\)|FIXME" . | wc -l | tr -d ' ')
+DEBT|./scripts/generate_quality_report.sh:46:- Technical inconsistency markers (TODO(tech-debt)/FIXME): ${tech_debt_count}
+DEBT|./scripts/update_quality_baseline_lock.sh:13:  -n "TODO\\(tech-debt\\)|FIXME" . || true)

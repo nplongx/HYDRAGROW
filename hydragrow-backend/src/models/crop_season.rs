@@ -10,12 +10,12 @@ pub struct CropSeason {
     pub start_time: String,
     pub end_time: Option<String>,
     pub status: String,
-    pub description: Option<String>, // 🟢 THÊM DÒNG NÀY VÀO
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateCropSeasonRequest {
     pub name: String,
     pub plant_type: Option<String>,
-    pub description: Option<String>, // Bổ sung dòng này
+    pub description: Option<String>,
 }

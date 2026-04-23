@@ -15,7 +15,6 @@ pub async fn ws_handler(
 
     let mut alert_rx = app_state.alert_sender.subscribe();
     let mut sensor_rx = app_state.sensor_sender.subscribe();
-    // 🟢 MỚI: Đăng ký nhận dữ liệu sức khỏe thiết bị
     let mut health_rx = app_state.health_sender.subscribe();
 
     let client_ip = req
@@ -32,7 +31,7 @@ pub async fn ws_handler(
     actix_web::rt::spawn(async move {
         loop {
             tokio::select! {
-                // 🟢 LUỒNG NGHE CÁC BẢN TIN TỔNG HỢP (Alert, FSM, Blockchain)
+                // LUỒNG NGHE CÁC BẢN TIN TỔNG HỢP (Alert, FSM, Blockchain)
                 alert_result = alert_rx.recv() => {
                     match alert_result {
                         Ok(alert_msg) => {
@@ -54,7 +53,7 @@ pub async fn ws_handler(
                     }
                 }
 
-                // 🟢 LUỒNG NGHE SENSOR DATA
+                // LUỒNG NGHE SENSOR DATA
                 sensor_result = sensor_rx.recv() => {
                     match sensor_result {
                         Ok(sensor_data) => {
@@ -76,17 +75,14 @@ pub async fn ws_handler(
                     }
                 }
 
-                // Sửa luồng health_result trong tokio::select!
                 health_result = health_rx.recv() => {
                     match health_result {
                         Ok(health_data) => {
-                            // Kiểm tra xem đây là Health hay là Status mượn đường
                             let is_status_msg = health_data.get("_msg_type")
                                 .and_then(|v| v.as_str())
                                 .map_or(false, |s| s == "device_status");
 
                             let ws_msg = if is_status_msg {
-                                // Khớp đúng với WsMessage::DeviceStatus ở Tauri Client
                                 serde_json::json!({
                                     "type": "device_status",
                                     "payload": {
@@ -95,7 +91,6 @@ pub async fn ws_handler(
                                     }
                                 })
                             } else {
-                                // Gói tin sức khoẻ thiết bị thông thường
                                 serde_json::json!({
                                     "type": "device_health",
                                     "payload": health_data
@@ -115,7 +110,7 @@ pub async fn ws_handler(
                     }
                 }
 
-                // 🟢 LUỒNG XỬ LÝ CÁC EVENT WEBSOCKET KHÁC
+                // LUỒNG XỬ LÝ CÁC EVENT WEBSOCKET KHÁC
                 Some(Ok(msg)) = msg_stream.next() => {
                     match msg {
                         Message::Ping(bytes) => {

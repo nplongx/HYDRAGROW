@@ -7,7 +7,6 @@ use crate::AppState;
 use crate::db::influx::get_latest_sensor_data;
 use crate::models::sensor::SensorDataRow;
 
-// 🟢 BƯỚC 1: Bổ sung `start` và `end` vào cấu trúc nhận Query Params
 #[derive(Deserialize, Debug)]
 pub struct HistoryQuery {
     pub range: Option<String>,
@@ -29,7 +28,6 @@ pub async fn get_latest(path: web::Path<String>, app_state: web::Data<AppState>)
         Ok(data) => {
             let mut json_data = json!(data);
 
-            // 🟢 BẢN VÁ: Lấy pump_status thực tế đang chạy từ RAM đè lên dữ liệu cũ của DB
             let states = app_state.device_states.read().await;
             if let Some(cached_str) = states.get(&device_id) {
                 if let Ok(cached_json) = serde_json::from_str::<serde_json::Value>(cached_str) {
@@ -65,23 +63,15 @@ pub async fn get_history(
 ) -> impl Responder {
     let device_id = path.into_inner();
 
-    // 🟢 BƯỚC 2: Xử lý logic thời gian linh hoạt (Tuyệt đối vs Tương đối)
     let range_clause = if let (Some(start), Some(end)) = (&query.start, &query.end) {
-        // Nếu Frontend gửi lên chuỗi ISO (VD: 2023-10-05T14:48:00.000Z)
         format!("start: time(v: \"{}\"), stop: time(v: \"{}\")", start, end)
     } else if let Some(start) = &query.start {
         format!("start: time(v: \"{}\")", start)
     } else {
-        // Fallback về cách cũ nếu không có start/end
         let range_val = query.range.as_deref().unwrap_or("24h");
         format!("start: -{}", range_val)
     };
 
-    // 🟢 BƯỚC 3: Cập nhật Flux Query
-    // 1. Dùng range_clause động
-    // 2. Thêm thực sự lệnh `pivot` (để gộp các trường ec, ph, temp vào cùng 1 dòng time)
-    // 3. Tăng limit lên 1000 để chứa đủ dữ liệu nhiều ngày
-    // 4. sort desc: false (từ cũ đến mới) để biểu đồ Recharts vẽ đúng chiều
     let flux_query = format!(
         r#"
         from(bucket: "{}")

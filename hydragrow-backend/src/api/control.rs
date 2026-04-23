@@ -7,7 +7,6 @@ use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
 use crate::models::config::{DosingCalibration, SafetyConfig};
-use crate::services::tuya; // Giả sử file tuya nằm trong folder services
 
 #[derive(Debug, Deserialize)]
 pub struct PumpControlReq {
@@ -86,14 +85,6 @@ pub async fn control_pump(
         }
     }
 
-    // 🟢 Xử lý riêng cho CIRCULATION_PUMP qua Tuya Cloud
-    // if req_data.pump == "CIRCULATION_PUMP" {
-    //     ... (Giữ nguyên code cũ của bạn)
-    // }
-
-    // 🟢 ĐỊNH TUYẾN LỆNH THÔNG MINH (SMART ROUTING)
-    // Nếu Frontend gửi action="on" nhưng có kèm theo giá trị PWM,
-    // Backend sẽ tự dịch thành "set_pwm" để ESP32 hiểu đúng ý đồ chỉnh tốc độ.
     let mqtt_action = match req_data.action.as_str() {
         "on" => {
             if req_data.pwm.is_some() {
@@ -122,7 +113,6 @@ pub async fn control_pump(
             .json(json!({"error": "Không thể gửi lệnh xuống thiết bị"}));
     }
 
-    // Nâng cấp Log để dễ theo dõi các lệnh Smart Dosing
     info!(
         "📡 Đã xuất lệnh MQTT [{}] -> Bơm: {} | PWM: {:?}% | Timeout: {:?}s | (Thiết bị: {})",
         mqtt_action, req_data.pump, req_data.pwm, req_data.duration_sec, device_id
@@ -146,7 +136,7 @@ pub async fn control_pump(
         ),
         device_id: device_id.clone(),
         reason: Some(format!("Người dùng bấm nút điều khiển qua Web/App")), // 🟢 Bổ sung reason
-        metadata: None, // 🟢 Bổ sung metadata (để None vì không cần lưu chi tiết sensor lúc người dùng bấm)
+        metadata: None,
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
     };
 

@@ -8,8 +8,6 @@ use crate::models::alert::AlertMessage;
 use crate::models::config::{DeviceConfig, SafetyConfig};
 use crate::models::crop_season::{CreateCropSeasonRequest, CropSeason};
 
-// ─── Blockchain ───────────────────────────────────────────────────────────────
-
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct BlockchainRecord {
     pub id: i32,
@@ -20,7 +18,7 @@ pub struct BlockchainRecord {
     pub created_at: DateTime<Utc>,
 }
 
-// ─── System Events ────────────────────────────────────────────────────────────
+// System Events
 
 /// Struct dùng để GHI vào DB (không có id – SERIAL tự sinh).
 pub struct NewSystemEventRecord {
@@ -48,7 +46,7 @@ pub struct SystemEventRecord {
     pub timestamp: i64,
 }
 
-// ─── Device Config ────────────────────────────────────────────────────────────
+// Device Config
 
 #[instrument(skip(pool))]
 pub async fn get_device_config(pool: &PgPool, device_id: &str) -> Result<DeviceConfig> {
@@ -110,7 +108,7 @@ pub async fn upsert_device_config(
     Ok(())
 }
 
-// ─── Safety Config ────────────────────────────────────────────────────────────
+// Safety Config
 
 #[instrument(skip(pool))]
 pub async fn get_safety_config(pool: &PgPool, device_id: &str) -> Result<SafetyConfig> {
@@ -201,7 +199,7 @@ pub async fn upsert_safety_config(
     Ok(())
 }
 
-// ─── Blockchain History ───────────────────────────────────────────────────────
+// Blockchain History
 
 pub async fn insert_blockchain_tx(
     pool: &PgPool,
@@ -251,7 +249,7 @@ pub async fn get_device_blockchain_history(
     }
 }
 
-// ─── Crop Season ──────────────────────────────────────────────────────────────
+// Crop Season
 
 pub async fn get_active_crop_season(
     pool: &PgPool,
@@ -359,9 +357,8 @@ pub async fn update_active_crop_season(
     }
 }
 
-// ─── System Events ────────────────────────────────────────────────────────────
+// System Events
 
-/// Ghi một sự kiện mới vào DB. Dùng `NewSystemEventRecord` – không cần id.
 pub async fn insert_system_event(
     executor: impl Executor<'_, Database = sqlx::Postgres>,
     log: &NewSystemEventRecord,
@@ -386,7 +383,6 @@ pub async fn insert_system_event(
     Ok(())
 }
 
-/// Đọc danh sách sự kiện từ DB, trả về `SystemEventRecord` (có id i32).
 pub async fn get_system_events(
     pool: &PgPool,
     device_id: &str,
@@ -408,4 +404,3 @@ pub async fn get_system_events(
 
     Ok(events)
 }
-

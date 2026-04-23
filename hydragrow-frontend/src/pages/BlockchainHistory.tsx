@@ -202,8 +202,6 @@ const BlockchainHistory = () => {
   // Lấy thông tin vụ mùa đang được chọn
   const activeSeasonData = seasons.find(s => s.id === selectedSeason);
 
-  // --- RENDERING ---
-
   if (isLoading && !selectedSeason) {
     return (
       <div className="flex flex-col items-center justify-center h-screen space-y-4 bg-slate-950">

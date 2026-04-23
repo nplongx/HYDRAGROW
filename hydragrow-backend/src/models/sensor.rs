@@ -11,8 +11,6 @@ pub enum DeviceState {
     Off,
 }
 
-/// Trạng thái hoạt động của các máy bơm (Pump)
-/// ĐÃ SỬA: Chuyển sang dùng bool và tên biến chuẩn khớp 100% với ESP32
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct PumpStatus {
     pub pump_a: bool,
@@ -77,7 +75,6 @@ pub struct SensorDataRow {
     pub water_level: f64,
     pub pump_status: String,
 
-    // ĐÃ SỬA: Bỏ serde rename, đổi String thành DateTime<FixedOffset>
     pub time: DateTime<FixedOffset>,
 }
 
@@ -92,7 +89,6 @@ impl From<SensorDataRow> for SensorData {
             water_level: row.water_level,
             pump_status,
 
-            // ĐÃ SỬA: Format thời gian về lại String chuẩn RFC3339 cho Client
             time: row.time.to_rfc3339(),
             rssi: None,
             free_heap: None,
@@ -107,17 +103,14 @@ impl From<SensorDataRow> for SensorData {
     }
 }
 
-// Trong src/models/sensor.rs (Backend)
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct PumpCommandReq {
     #[validate(length(min = 1))]
     #[serde(rename = "pump")]
-    // SỬA Ở ĐÂY: Giao tiếp với FE/MQTT bằng key "pump" thay vì "pump_id"
     pub pump_id: String,
 
     pub action: String,
 
-    // NÊN BỔ SUNG: Khớp với MqttCommandPayload của ESP32 để hỗ trợ Set PWM và Auto Timeout
     pub duration_sec: Option<u64>,
     pub pwm: Option<u32>,
 }

@@ -1,8 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow; // THÊM DÒNG NÀY
+use sqlx::prelude::FromRow;
 
-// --- CÁC STRUCT DATABASE ---
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct DeviceConfig {
     pub device_id: String,
@@ -59,7 +58,6 @@ pub struct DosingCalibration {
     pub ec_step_ratio: f32,
     pub ph_step_ratio: f32,
 
-    // 🟢 MỚI: Tách riêng lưu lượng của 4 bơm
     pub pump_a_capacity_ml_per_sec: f32,
     pub pump_b_capacity_ml_per_sec: f32,
     pub pump_ph_up_capacity_ml_per_sec: f32,
@@ -75,7 +73,7 @@ pub struct DosingCalibration {
     pub osaka_misting_pwm_percent: i32,
 
     pub scheduled_dosing_enabled: bool,
-    pub scheduled_dosing_cron: String, // 🟢 MỚI: Thay thế Interval bằng Cron String
+    pub scheduled_dosing_cron: String,
     pub scheduled_dose_a_ml: f32,
     pub scheduled_dose_b_ml: f32,
     pub ec_gain_dynamic: f32,
@@ -115,7 +113,7 @@ impl Default for DosingCalibration {
             osaka_misting_pwm_percent: 100,
 
             scheduled_dosing_enabled: false,
-            scheduled_dosing_cron: "0 0 8 * * *".to_string(), // Mặc định 8h sáng
+            scheduled_dosing_cron: "0 0 8 * * *".to_string(),
             scheduled_dose_a_ml: 10.0,
             scheduled_dose_b_ml: 10.0,
             ec_gain_dynamic: 0.01,
@@ -201,7 +199,7 @@ pub struct WaterConfig {
     pub auto_dilute_enabled: bool,
     pub dilute_drain_amount_cm: f32,
     pub scheduled_water_change_enabled: bool,
-    pub water_change_cron: String, // 🟢 MỚI: Thay thế Interval bằng Cron String
+    pub water_change_cron: String,
     pub scheduled_drain_amount_cm: f32,
     pub misting_on_duration_ms: i32,
     pub misting_off_duration_ms: i32,
@@ -212,7 +210,7 @@ impl Default for WaterConfig {
     fn default() -> Self {
         Self {
             device_id: String::new(),
-            tank_height: 50, // Mặc định 50cm
+            tank_height: 50,
             water_level_min: 10.0,
             water_level_target: 20.0,
             water_level_max: 30.0,
@@ -226,7 +224,7 @@ impl Default for WaterConfig {
             auto_dilute_enabled: false,
             dilute_drain_amount_cm: 2.0,
             scheduled_water_change_enabled: false,
-            water_change_cron: "0 0 7 * * SUN".to_string(), // Mặc định 7h sáng CN
+            water_change_cron: "0 0 7 * * SUN".to_string(),
             scheduled_drain_amount_cm: 5.0,
             misting_on_duration_ms: 5000,
             misting_off_duration_ms: 10000,
@@ -235,9 +233,7 @@ impl Default for WaterConfig {
     }
 }
 
-// =========================================================================
-// 🟢 PAYLOAD HỢP NHẤT DÀNH RIÊNG ĐỂ BẮN MQTT XUỐNG ESP32 (GIỮ NGUYÊN)
-// =========================================================================
+// PAYLOAD HỢP NHẤT DÀNH RIÊNG ĐỂ BẮN MQTT XUỐNG ESP32
 #[derive(Debug, Serialize)]
 pub struct MqttConfigPayload {
     pub device_id: String,
@@ -258,7 +254,7 @@ pub struct MqttConfigPayload {
     pub auto_dilute_enabled: bool,
     pub dilute_drain_amount_cm: f32,
     pub scheduled_water_change_enabled: bool,
-    pub water_change_cron: String, // 🟢 Cập nhật sang String (Cron)
+    pub water_change_cron: String,
     pub scheduled_drain_amount_cm: f32,
     pub misting_on_duration_ms: u32,
     pub misting_off_duration_ms: u32,
@@ -308,7 +304,7 @@ pub struct MqttConfigPayload {
     pub osaka_mixing_pwm_percent: u32,
     pub osaka_misting_pwm_percent: u32,
     pub scheduled_dosing_enabled: bool,
-    pub scheduled_dosing_cron: String, // 🟢 Cập nhật sang String (Cron)
+    pub scheduled_dosing_cron: String,
     pub scheduled_dose_a_ml: f32,
     pub scheduled_dose_b_ml: f32,
     pub ec_gain_dynamic: f32,
@@ -397,7 +393,7 @@ impl MqttConfigPayload {
             osaka_mixing_pwm_percent: dose.osaka_mixing_pwm_percent as u32,
             osaka_misting_pwm_percent: dose.osaka_misting_pwm_percent as u32,
             scheduled_dosing_enabled: dose.scheduled_dosing_enabled,
-            scheduled_dosing_cron: dose.scheduled_dosing_cron.clone(), // 🟢 Parse chuỗi
+            scheduled_dosing_cron: dose.scheduled_dosing_cron.clone(),
             scheduled_dose_a_ml: dose.scheduled_dose_a_ml,
             scheduled_dose_b_ml: dose.scheduled_dose_b_ml,
             ec_gain_dynamic: dose.ec_gain_dynamic,

@@ -18,17 +18,11 @@ pub struct CalibrationSample {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhCalibrationResult {
-    /// Điện áp chuẩn tại pH=7 theo format firmware (`ph_v7`).
     pub ph_v7: f32,
-    /// Điện áp chuẩn tại pH=4 theo format firmware (`ph_v4`).
     pub ph_v4: f32,
-    /// Hệ số góc của mô hình pH = slope * V + intercept.
     pub slope: f32,
-    /// Hệ số chặn của mô hình pH = slope * V + intercept.
     pub intercept: f32,
-    /// Hệ số xác định (0..1, có thể âm nếu fit tệ).
     pub r2: f32,
-    /// Sai số tuyệt đối lớn nhất trên các điểm dùng để fit.
     pub max_abs_error: f32,
 }
 

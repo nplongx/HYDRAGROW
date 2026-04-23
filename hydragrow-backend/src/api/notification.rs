@@ -16,7 +16,6 @@ pub async fn register_token(
 ) -> impl Responder {
     let mut tokens = state.fcm_tokens.lock().unwrap();
 
-    // Nếu token chưa có trong RAM thì thêm vào
     if !tokens.contains(&req.fcm_token) {
         tokens.push(req.fcm_token.clone());
         info!("📱 Đã lưu FCM Token mới của thiết bị Android!");

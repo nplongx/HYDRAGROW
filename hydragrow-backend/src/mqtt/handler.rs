@@ -65,18 +65,15 @@ pub struct IncomingSensorPayload {
     pub ph_voltage_mv: Option<f64>,
 }
 
-/// Extracts (device_id, suffix) from a topic like "AGITECH/device_001/sensors"
-/// Returns None if the topic doesn't start with "AGITECH/".
 fn parse_agitech_topic(topic: &str) -> Option<(String, String)> {
     let prefix = "AGITECH/";
     if !topic.starts_with(prefix) {
         return None;
     }
     let rest = &topic[prefix.len()..];
-    // rest is now "device_001/sensors" or similar
     let slash = rest.find('/')?;
     let device_id = rest[..slash].to_string();
-    let suffix = rest[slash..].to_string(); // includes leading slash, e.g. "/sensors"
+    let suffix = rest[slash..].to_string();
     Some((device_id, suffix))
 }
 
@@ -112,10 +109,7 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handle_dosing_report(device_id, &payload_bytes, app_state).await;
         }
         "/controller/status" => {
-            // Periodic health heartbeat from the Controller Node
             if let Ok(payload_json) = serde_json::from_slice::<serde_json::Value>(&payload_bytes) {
-                // 1. CẬP NHẬT CACHE TRONG RAM ĐỂ API /sensors/latest LẤY ĐƯỢC DỮ LIỆU MỚI NHẤT
-                // Merge toàn bộ heartbeat payload (không chỉ pump_status) để giữ snapshot cảm biến đầy đủ.
                 let mut states = app_state.device_states.write().await;
 
                 let mut merged = states
@@ -235,14 +229,6 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
     let _ = app_state.sensor_sender.send(sensor_data);
 }
 
-/// Handles LWT-style status messages from either the Controller or Sensor node.
-///
-/// We send the status via TWO channels so the frontend can always receive it:
-///   1. `alert_sender`  — goes through the "alert" WS message path (legacy support)
-///   2. `health_sender` — goes through the "device_status" WS message path (preferred)
-///
-/// The frontend's DeviceContext handles both paths and calls `resetControllerTimeout()`
-/// on either, so there is no race between the two.
 async fn handle_device_status(
     device_id: String,
     node_type: &str,
@@ -270,7 +256,6 @@ async fn handle_device_status(
         if is_online { "ONLINE" } else { "OFFLINE (LWT)" }
     );
 
-    // ── 1. Send via alert_sender (renders in SystemLog, legacy WS path) ───────
     let alert = AlertMessage {
         level: if is_online {
             "success".to_string()
@@ -295,10 +280,6 @@ async fn handle_device_status(
     };
     let _ = app_state.alert_sender.send(alert);
 
-    // ── 2. Send via health_sender as a proper device_status packet ────────────
-    // The WS handler (ws.rs) checks for `_msg_type == "device_status"` and
-    // re-wraps this as { type: "device_status", payload: { is_online, last_seen } }
-    // which the frontend DeviceContext handles in the `data.type === 'device_status'` branch.
     let status_payload = serde_json::json!({
         "_msg_type": "device_status",
         "is_online": is_online,
@@ -314,7 +295,6 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
     match serde_json::from_slice::<serde_json::Value>(payload) {
         Ok(json) => {
             if let Some(state) = json["current_state"].as_str() {
-                // Always broadcast FSM state to frontend first
                 let fsm_sync_msg = AlertMessage {
                     level: "FSM_UPDATE".to_string(),
                     title: "FSM_SYNC".to_string(),

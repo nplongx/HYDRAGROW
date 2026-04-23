@@ -16,7 +16,6 @@ pub struct SolanaTraceability {
 }
 
 impl SolanaTraceability {
-    /// Khởi tạo kết nối đến Solana
     pub fn new(rpc_url: &str, private_key_bytes: &[u8]) -> Self {
         let client =
             RpcClient::new_with_commitment(rpc_url.to_string(), CommitmentConfig::confirmed());
@@ -30,29 +29,22 @@ impl SolanaTraceability {
         }
     }
 
-    /// Hàm bắn dữ liệu JSON lên Blockchain
     pub async fn record_dosing_history(&self, json_payload: &str) -> Result<String, String> {
-        // Memo Program ID chuẩn của Solana
         let memo_program_id =
             Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr").unwrap();
 
-        // 1. Tạo Lệnh (Instruction)
         let memo_ix = Instruction {
             program_id: memo_program_id,
-            // Đưa ví của Server vào làm người ký (Signer).
-            // Điều này chứng minh log này là CHÍNH CHỦ, không ai fake được.
             accounts: vec![AccountMeta::new_readonly(self.keypair.pubkey(), true)],
             data: json_payload.as_bytes().to_vec(),
         };
 
-        // 2. Lấy Blockhash mới nhất
         let recent_blockhash = self
             .client
             .get_latest_blockhash()
             .await
             .map_err(|e| format!("Lỗi lấy Blockhash: {}", e))?;
 
-        // 3. Đóng gói và Ký Giao dịch (Dùng hàm này gọn và chuẩn Rust hơn)
         let transaction = Transaction::new_signed_with_payer(
             &[memo_ix],                   // Danh sách các lệnh (ở đây chỉ có 1 lệnh ghi Memo)
             Some(&self.keypair.pubkey()), // Ai là người trả phí Gas? (Ví server)

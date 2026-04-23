@@ -8,7 +8,6 @@ import { useDeviceContext } from '../context/DeviceContext';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { fetch } from '@tauri-apps/plugin-http';
 
-// 🟢 TỪ ĐIỂN MÀU SẮC HOLOGRAM (Dành riêng cho Biểu đồ)
 const CHART_THEMES: Record<string, any> = {
   cyan: { stroke: '#22d3ee', fill1: '#06b6d4', fill2: '#164e63', text: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', glow: 'shadow-[0_0_15px_rgba(34,211,238,0.2)]' },
   fuchsia: { stroke: '#e879f9', fill1: '#d946ef', fill2: '#701a75', text: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', glow: 'shadow-[0_0_15px_rgba(232,121,249,0.2)]' },

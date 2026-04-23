@@ -41,7 +41,6 @@ pub async fn get_latest_sensor_data(
     bucket: &str,
     device_id: &str,
 ) -> Result<SensorData> {
-    // 🟢 ĐÃ THÊM HÀM PIVOT BẮT BUỘC CỦA INFLUXDB2
     let flux_query = format!(
         r#"
         from(bucket: "{}")

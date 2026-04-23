@@ -357,9 +357,6 @@ const Settings = () => {
   const dosingValidationErrors = useMemo(() => validateDosingConfig(config), [config]);
   const hasDosingValidationError = Object.keys(dosingValidationErrors).length > 0;
 
-  // Tìm và thay toàn bộ hàm handleSave trong Settings.tsx bằng phiên bản này.
-  // Vị trí: khoảng dòng 305-490 trong file gốc.
-
   const handleSave = async (configOverride?: any) => {
     if (!appSettings.device_id || !appSettings.backend_url) {
       toast.error('Vui lòng điền đầy đủ Device ID và URL Máy chủ!');
@@ -378,7 +375,6 @@ const Settings = () => {
       }
       const devId = appSettings.device_id;
 
-      // Helper đã có sẵn — đảm bảo không bao giờ trả về NaN
       const toNumberOr = (value: any, fallback: number) => {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -388,7 +384,6 @@ const Settings = () => {
 
       const ts = new Date().toISOString();
 
-      // ── device_config ──────────────────────────────────────────────────────
       const devConf = {
         device_id: devId,
         control_mode: savingConfig.control_mode || 'manual',
@@ -403,7 +398,6 @@ const Settings = () => {
         delay_between_a_and_b_sec: toNumberOr(savingConfig.delay_between_a_and_b_sec, 10),
       };
 
-      // ── water_config ───────────────────────────────────────────────────────
       const waterConf = {
         device_id: devId,
         tank_height: toNumberOr(savingConfig.tank_height, 50),
@@ -427,7 +421,6 @@ const Settings = () => {
         last_updated: ts,
       };
 
-      // ── safety_config ──────────────────────────────────────────────────────
       const safeConf = {
         device_id: devId,
         emergency_shutdown: savingConfig.emergency_shutdown ?? false,
@@ -453,7 +446,6 @@ const Settings = () => {
         last_updated: ts,
       };
 
-      // ── dosing_calibration ─────────────────────────────────────────────────
       const doseConf = {
         device_id: devId,
         tank_volume_l: toNumberOr(savingConfig.tank_volume_l, 50.0),
@@ -484,14 +476,12 @@ const Settings = () => {
         ph_down_dynamic: toNumberOr(savingConfig.ph_down_dynamic, 0.01),
         dynamic_sample_count: Math.trunc(toNumberOr(savingConfig.dynamic_sample_count, 0)),
         dynamic_confidence: toNumberOr(savingConfig.dynamic_confidence, 0),
-        // QUAN TRỌNG: Option<DateTime<Utc>> → phải là null hoặc ISO string, không phải số
         last_dynamic_update: (typeof savingConfig.last_dynamic_update === 'string' && savingConfig.last_dynamic_update)
           ? savingConfig.last_dynamic_update
           : null,
         dynamic_model_version: String(savingConfig.dynamic_model_version || 'v1'),
       };
 
-      // ── sensor_calibration ─────────────────────────────────────────────────
       const sensConf = {
         device_id: devId,
         ph_v7: toNumberOr(savingConfig.ph_v7, 2.5),

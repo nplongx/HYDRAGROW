@@ -13,9 +13,6 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 
-// THÊM THƯ VIỆN UART ĐỂ GIAO TIẾP VỚI ESP32-C3 SENSOR NODE
-use esp_idf_hal::uart::{config::Config as UartConfig, UartDriver};
-
 mod config;
 mod controller;
 mod mqtt;
@@ -44,7 +41,6 @@ fn main() -> anyhow::Result<()> {
     let shared_config = create_shared_config();
     let shared_sensor_data = create_shared_sensor_data();
 
-    // Khởi tạo các Channel giao tiếp giữa các luồng
     let (conn_tx, conn_rx) = mpsc::channel::<ConnectionState>();
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let (fsm_tx, fsm_rx) = mpsc::channel::<String>();
@@ -56,9 +52,7 @@ fn main() -> anyhow::Result<()> {
         &TimerConfig::new().frequency(20000.Hz()),
     )?);
 
-    // ===============================
-    // 1. KHỞI TẠO BƠM VÀ VAN (Map lại chân cho ESP32-C3)
-    // ===============================
+    // 1. KHỞI TẠO BƠM VÀ VAN
     let valve_mist = PinDriver::output(peripherals.pins.gpio10)?;
     let osaka_en = PinDriver::output(peripherals.pins.gpio0)?;
 
@@ -103,9 +97,7 @@ fn main() -> anyhow::Result<()> {
         osaka_rpwm,
     )?;
 
-    // ===============================
     // 3. KHỞI CHẠY BỘ ĐIỀU KHIỂN FSM
-    // ===============================
     let fsm_config = shared_config.clone();
     let fsm_sensor_data = shared_sensor_data.clone();
     let fsm_nvs = nvs.clone();
@@ -126,9 +118,7 @@ fn main() -> anyhow::Result<()> {
             );
         })?;
 
-    // ===============================
     // 4. KẾT NỐI WIFI
-    // ===============================
     let mut wifi = EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs.clone()))?;
     wifi.set_configuration(&Configuration::Client(ClientConfiguration {
         ssid: WIFI_SSID.try_into().unwrap(),
@@ -166,9 +156,7 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
-    // ===============================
     // 5. MAIN EVENT LOOP (MQTT & STATUS)
-    // ===============================
     let mut mqtt_client: Option<EspMqttClient> = None;
     let mut is_mqtt_connected = false;
 
@@ -177,11 +165,10 @@ fn main() -> anyhow::Result<()> {
     let mut force_publish_next = false;
     let mut last_config_hash = String::new();
 
-    // 🟢 MỚI: Biến lưu thời điểm cuối cùng gửi Health Status
     let mut last_health_publish = std::time::Instant::now();
 
     loop {
-        // --- XỬ LÝ TRẠNG THÁI KẾT NỐI ---
+        // XỬ LÝ TRẠNG THÁI KẾT NỐI
         if let Ok(state) = conn_rx.try_recv() {
             match state {
                 ConnectionState::WifiConnected => {
@@ -232,7 +219,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        // --- XỬ LÝ PAYLOAD TỪ FSM THREAD ---
+        // XỬ LÝ PAYLOAD TỪ FSM
         if let Ok(payload) = fsm_rx.try_recv() {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
@@ -267,9 +254,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        // ==========================================
-        // 🟢 MỚI: GỬI SỨC KHỎE THIẾT BỊ MỖI 10 GIÂY
-        // ==========================================
+        // GỬI SỨC KHỎE THIẾT BỊ MỖI 10 GIÂY
         if is_mqtt_connected && last_health_publish.elapsed().as_secs() >= 10 {
             last_health_publish = std::time::Instant::now();
 
@@ -289,7 +274,7 @@ fn main() -> anyhow::Result<()> {
                     let topic_health = format!("AGITECH/{}/controller/status", DEVICE_ID);
                     let _ = client.publish(
                         &topic_health,
-                        QoS::AtMostOnce, // QoS 0 cho bản tin telemetry tần suất cao
+                        QoS::AtMostOnce,
                         false,
                         json_string.as_bytes(),
                     );

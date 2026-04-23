@@ -6,7 +6,6 @@ use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
-// 🟢 MỚI: Import thư viện hệ thống của ESP-IDF để lấy thông số phần cứng
 use esp_idf_sys::{
     esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t,
 };
@@ -62,7 +61,6 @@ impl Default for PumpStatus {
             mist_valve: false,
             water_pump_in: false,
             water_pump_out: false,
-            // Ép giá trị mặc định là 0% để luôn luôn hiện trong chuỗi JSON
             pump_a_pwm: Some(0),
             pump_b_pwm: Some(0),
             ph_up_pwm: Some(0),
@@ -82,7 +80,6 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-// 🟢 CẬP NHẬT: Thêm các trường sức khỏe gửi từ Sensor Node
 #[derive(Debug, Deserialize)]
 pub struct IncomingSensorPayload {
     pub temp: Option<f32>,
@@ -91,7 +88,6 @@ pub struct IncomingSensorPayload {
     pub water_level: Option<f32>,
     pub timestamp_ms: Option<u64>,
 
-    // Các trường Device Health mới từ Sensor Node
     pub rssi: Option<i32>,
     pub free_heap: Option<u32>,
     pub uptime: Option<u32>,
@@ -153,7 +149,6 @@ pub struct MqttCommandPayload {
     pub pwm: Option<u32>,
 }
 
-// 🟢 MỚI: Struct dùng để publish trạng thái sức khỏe của Controller
 #[derive(Debug, Serialize)]
 pub struct ControllerHealthPayload {
     pub free_heap: u32,
@@ -162,7 +157,6 @@ pub struct ControllerHealthPayload {
     pub pump_status: PumpStatus,
 }
 
-// 🟢 MỚI: Các hàm tiện ích lấy thông số phần cứng
 pub fn get_free_heap() -> u32 {
     unsafe { esp_get_free_heap_size() as u32 }
 }
@@ -206,7 +200,6 @@ pub fn init_mqtt_client(
     let topic_command_cb = topic_command.clone();
     let topic_sensors_cb = topic_sensors.clone();
 
-    // Configure LWT first
     let lwt_topic = format!("AGITECH/{}/status", device_id);
     let lwt_payload = r#"{"online": false, "status": "disconnected"}"#.as_bytes();
     let lwt_config = LwtConfiguration {
@@ -216,7 +209,6 @@ pub fn init_mqtt_client(
         retain: true,
     };
 
-    // Configure MQTT with LWT
     let mqtt_config = MqttClientConfiguration {
         buffer_size: 4096,
         keep_alive_interval: Some(std::time::Duration::from_secs(15)),
@@ -226,7 +218,6 @@ pub fn init_mqtt_client(
         ..Default::default()
     };
 
-    // Add delay to ensure system stability
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let client = EspMqttClient::new_cb(broker_url, &mqtt_config, move |event| {
@@ -250,7 +241,7 @@ pub fn init_mqtt_client(
             EventPayload::Received { topic, data, .. } => {
                 let topic_str = topic.unwrap_or("");
 
-                // ---- CONFIG UPDATE ----
+                // CONFIG UPDATE
                 if topic_str == topic_config_cb {
                     debug!("⚙️ Processing CONFIG update");
                     match serde_json::from_slice::<DeviceConfig>(data) {
@@ -266,7 +257,7 @@ pub fn init_mqtt_client(
                         Err(e) => error!("❌ Config JSON parse error: {:?}", e),
                     }
                 }
-                // ---- COMMAND ----
+                // COMMAND
                 else if topic_str == topic_command_cb {
                     debug!("🎮 Processing COMMAND");
                     match serde_json::from_slice::<MqttCommandPayload>(data) {
@@ -279,7 +270,7 @@ pub fn init_mqtt_client(
                         Err(e) => error!("❌ Command JSON parse error: {:?}", e),
                     }
                 }
-                // ---- SENSOR DATA ----
+                // SENSOR DATA
                 else if topic_str == topic_sensors_cb {
                     debug!("📊 Processing SENSOR data snapshot");
                     match serde_json::from_slice::<IncomingSensorPayload>(data) {
@@ -301,7 +292,6 @@ pub fn init_mqtt_client(
                                 if let Some(w) = payload.water_level {
                                     sensors.water_level = w;
                                 }
-                                // 🟢 ÁNH XẠ CỜ LỖI VÀO RAM CHO FSM
                                 if let Some(err) = payload.err_water {
                                     sensors.err_water = err;
                                 }
@@ -321,7 +311,6 @@ pub fn init_mqtt_client(
                                     .as_millis()
                                     as u64;
 
-                                // In ra log bao gồm cả một số thông số sức khỏe (nếu có)
                                 info!(
                                     "🌱 CẢM BIẾN | T: {:.1}°C | EC: {:.2} | pH: {:.2} | Lv: {:.1}cm | Sóng: {:?}dBm | Lỗi nước: {:?}",
                                     sensors.temp_value, sensors.ec_value, sensors.ph_value, sensors.water_level, payload.rssi, payload.err_water

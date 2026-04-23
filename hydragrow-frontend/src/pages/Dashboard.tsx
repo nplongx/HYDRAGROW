@@ -32,7 +32,6 @@ const getWifiColor = (rssi?: number) => {
   return "text-rose-500";
 };
 
-// 🟢 KHỐI HEALTH BAR ĐÃ ĐƯỢC KHÔI PHỤC VÀ TỐI ƯU UI
 const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, icon: any, data?: any, isNodeOnline: boolean }) => (
   <div className={`flex flex-col gap-2 bg-slate-900/60 border p-3 rounded-2xl shadow-inner transition-colors duration-500 ${isNodeOnline ? 'border-slate-700/80 shadow-[0_0_15px_rgba(16,185,129,0.05)]' : 'border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.1)]'}`}>
     <div className="flex items-center justify-between">
@@ -120,8 +119,8 @@ const Dashboard = () => {
             </h1>
             <div className="flex items-center mt-1 space-x-2">
               <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border backdrop-blur-md ${isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' :
-                  isControllerStatusKnown ? 'bg-rose-499/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.2)]' :
-                    'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                isControllerStatusKnown ? 'bg-rose-499/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.2)]' :
+                  'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
                 }`}>
                 <span className={`relative flex h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-400' : (isControllerStatusKnown ? 'bg-rose-500' : 'bg-amber-500')}`}>
                   {isOnline && <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
@@ -135,7 +134,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* 🟢 KHU VỰC HIỂN THỊ SỨC KHỎE 2 NODE ĐỘC LẬP */}
+        {/* KHU VỰC HIỂN THỊ SỨC KHỎE 2 NODE */}
         {isOnline && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
             <HealthBar title="Controller Node" icon={Server} data={controllerHealth} isNodeOnline={true} />
@@ -181,7 +180,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 3. LƯỚI CẢM BIẾN (Đã sửa lỗi hiển thị Mực nước và các cờ lỗi) */}
+      {/* 3. LƯỚI CẢM BIẾN */}
       <div className="grid grid-cols-2 gap-4 relative z-10">
 
         {/* Thẻ Dinh Dưỡng EC */}

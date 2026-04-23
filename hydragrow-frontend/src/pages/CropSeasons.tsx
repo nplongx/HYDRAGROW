@@ -30,7 +30,6 @@ export const CropSeasons = () => {
     e.preventDefault();
     if (!newName) return;
 
-    // 🟢 ĐÃ SỬA: Bỏ comment, truyền newDesc vào để lưu description xuống DB
     const success = await createSeason(newName, newPlant, newDesc);
     if (success) {
       setNewName(''); setNewPlant(''); setNewDesc('');
@@ -55,7 +54,6 @@ export const CropSeasons = () => {
     );
   }
 
-  // 🟢 ĐÃ SỬA: Lọc bỏ mùa vụ đang chạy (activeSeason) ra khỏi danh sách lịch sử để tránh hiển thị 2 lần
   const filteredHistory = history.filter(season => season.id !== activeSeason?.id);
 
   return (
@@ -187,7 +185,6 @@ export const CropSeasons = () => {
                 <textarea rows={2} placeholder="Nguồn gốc hạt giống, EC mục tiêu khởi điểm..." value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all outline-none resize-none"></textarea>
               </div>
             </div>
-            {/* 🟢 ĐÃ SỬA: Khóa nút khi đang load (chống double-click tạo 2 mùa) */}
             <button
               type="submit"
               disabled={isLoading}
@@ -209,7 +206,6 @@ export const CropSeasons = () => {
         </div>
 
         <div className="divide-y divide-white/5">
-          {/* 🟢 ĐÃ SỬA: Render từ mảng filteredHistory thay vì history gốc */}
           {filteredHistory.length === 0 ? (
             <div className="p-10 flex flex-col items-center justify-center text-slate-500 opacity-60">
               <History size={40} className="mb-3" />

@@ -22,10 +22,9 @@ struct DosingDynamicResponse {
 }
 
 // ==========================================
-// HELPER FUNCTIONS (Đã khôi phục các hàm nội bộ)
+// HELPER FUNCTIONS
 // ==========================================
 
-// 🔥 TỐI ƯU: Đọc 5 bảng DB cùng lúc song song (Tiết kiệm 80% thời gian)
 async fn fetch_unified_config_concurrently(
     pool: &sqlx::PgPool,
     device_id: &str,
@@ -103,7 +102,7 @@ pub async fn sync_config_to_esp32(
     app_state: &web::Data<AppState>,
     device_id: &str,
 ) -> Result<(), String> {
-    // 1. GỬI CẤU HÌNH TỔNG HỢP CHO CONTROLLER NODE (Dùng hàm chạy song song)
+    // 1. GỬI CẤU HÌNH TỔNG HỢP CHO CONTROLLER NODE
     let payload = fetch_unified_config_concurrently(&app_state.pg_pool, device_id).await?;
     let mqtt_topic_controller = format!("AGITECH/{}/controller/config", device_id);
     let mqtt_bytes_controller =

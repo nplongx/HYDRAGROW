@@ -8,26 +8,21 @@ use crate::db::postgres::{
     get_device_blockchain_history as fetch_history_from_db, insert_blockchain_tx,
 };
 
-// 🟢 1. CẬP NHẬT PAYLOAD: Thêm season_id để đóng gói dữ liệu lên Blockchain
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DeviceLogPayload {
     pub device_id: String,
-    pub season_id: String, // Định danh vụ mùa (VD: DUA_LUOI_XUAN_2026)
+    pub season_id: String,
     pub action: String,
     pub value: f64,
     pub timestamp: String,
 }
 
-// 🟢 2. TẠO STRUCT QUERY: Lọc lịch sử theo từng mẻ trồng
 #[derive(Deserialize, Debug)]
 pub struct HistoryQuery {
     pub season_id: Option<String>,
 }
 
-/* ==============================================================
-   1. ENDPOINT: GHI LOG LÊN BLOCKCHAIN & LƯU SQLITE
-   POST /api/blockchain/log
-============================================================== */
+// POST /api/blockchain/log
 #[instrument(skip(app_state))]
 pub async fn push_log_to_blockchain(
     payload: web::Json<DeviceLogPayload>,
@@ -116,10 +111,7 @@ pub async fn get_device_blockchain_history(
     }
 }
 
-/* ==============================================================
-   3. ENDPOINT: XÁC THỰC TRỰC TIẾP TỪ MẠNG SOLANA
-   GET /api/blockchain/verify/{tx_id}
-============================================================== */
+// GET /api/blockchain/verify/{tx_id}
 #[instrument(skip(_app_state))]
 pub async fn verify_transaction_onchain(
     path: web::Path<String>,
@@ -143,9 +135,6 @@ pub async fn verify_transaction_onchain(
     }))
 }
 
-/* ==============================================================
-   ĐĂNG KÝ ROUTER
-============================================================== */
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/blockchain/log", web::post().to(push_log_to_blockchain))
         .route(

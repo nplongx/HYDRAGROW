@@ -5,7 +5,6 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 
-// ================= NETWORK & MQTT CONFIG =================
 const char *ssid = "Huynh Hong";
 const char *password = "123443215";
 const char *mqtt_server = "interchange.proxy.rlwy.net";
@@ -22,7 +21,6 @@ String topic_status = String("AGITECH/") + device_id + "/sensor/status";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// ================= PIN MAPS =================
 #define PIN_DS18B20 2
 #define PIN_TRIG 3
 #define PIN_ECHO 5
@@ -32,52 +30,41 @@ PubSubClient client(espClient);
 OneWire oneWire(PIN_DS18B20);
 DallasTemperature sensors(&oneWire);
 
-// ================= CALIBRATION & CONFIG =================
 #define MAX_WINDOW 50
 
 float ph_v7 = 2650.0, ph_v4 = 3555.0;
 float ec_factor = 0.88, ec_offset = 0.0;
 float temp_offset = 0.0;
 
-// Các biến cấu hình từ xa
-int ma_window = 15;          // Mặc định CHUẨN (lọc trong 3 giây)
-int publish_interval = 5000; // Mặc định gửi 5s/lần
+int ma_window = 15;
+int publish_interval = 5000;
 
-float tank_height = 100.0;     // Độ cao bể (cm)
-bool continuous_level = false; // Cờ trạng thái đo liên tục (Bơm đang chạy)
-
+float tank_height = 100.0;
+bool continuous_level = false;
 #define V_REF_MV 3300.0
 #define ADC_MAX 4095.0
 #define VOLTAGE_DIVIDER_RATIO 1.5
 
-// 🟢 MỚI: TỐC ĐỘ LẤY MẪU CỨNG
-const int SAMPLING_INTERVAL = 200; // Đọc cảm biến liên tục mỗi 200ms
-
-// Bộ đệm Lọc MA
+const int SAMPLING_INTERVAL = 200;
 float temp_history[MAX_WINDOW], water_history[MAX_WINDOW];
 float ph_history[MAX_WINDOW], ec_history[MAX_WINDOW];
 int history_idx = 0;
 
-// Các biến lưu giá trị trung bình toàn cục
 float current_avg_temp = 25.0;
 float current_avg_water = 20.0;
 float current_avg_ph = 7.0;
 float current_avg_ec = 0.0;
 float latest_ph_voltage_mv = NAN;
-float latest_raw_water = 20.0; // Lưu riêng giá trị nước thô (tức thời)
+float latest_raw_water = 20.0;
 
-// Cờ bật/tắt cảm biến
 bool enable_ph = true;
 bool enable_ec = true;
 bool enable_temp = true;
 bool enable_water = true;
 
-// CỜ BÙ NHIỆT
 bool enable_ec_tc = true;
 bool enable_ph_tc = true;
 float temp_compensation_beta = 0.02;
-
-// ================= HÀM TIỆN ÍCH =================
 
 int read_adc_filtered(int pin) {
   int buffer[10];
@@ -202,13 +189,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     DeserializationError error = deserializeJson(doc, message);
 
     if (error) {
-      // Nếu lỗi sẽ in ra lý do tại đây
       Serial.print("❌ Lỗi Parse JSON Config: ");
       Serial.println(error.c_str());
       return;
     }
 
-    // [DEBUG] Bắt đầu đọc cấu hình mới
     Serial.println("⚙️ [DEBUG] Đang nạp cấu hình mới...");
 
     if (doc.containsKey("ph_v7"))
@@ -248,11 +233,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
 }
 
-// ================= SETUP & TIMERS =================
 void setup() {
   Serial.begin(115200);
-  delay(1000); // [DEBUG] Đợi Serial Monitor sẵn sàng
-  Serial.println("\n\n🚀 Bắt đầu khởi động thiết bị..."); // [DEBUG]
+  delay(1000);
+  Serial.println("\n\n🚀 Bắt đầu khởi động thiết bị...");
 
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
@@ -260,7 +244,7 @@ void setup() {
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
 
-  Serial.println("🌡️ Khởi tạo cảm biến nhiệt độ..."); // [DEBUG]
+  Serial.println("🌡️ Khởi tạo cảm biến nhiệt độ...");
   sensors.begin();
 
   for (int i = 0; i < MAX_WINDOW; i++) {
@@ -270,15 +254,15 @@ void setup() {
     ec_history[i] = 0.0;
   }
 
-  Serial.printf("🌐 Đang kết nối WiFi: %s...\n", ssid); // [DEBUG]
+  Serial.printf("🌐 Đang kết nối WiFi: %s...\n", ssid);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) { // [DEBUG] Chờ kết nối WiFi
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\n✅ Kết nối WiFi thành công!"); // [DEBUG]
-  Serial.print("📡 IP Address: ");                 // [DEBUG]
-  Serial.println(WiFi.localIP());                  // [DEBUG]
+  Serial.println("\n✅ Kết nối WiFi thành công!");
+  Serial.print("📡 IP Address: ");
+  Serial.println(WiFi.localIP());
 
   client.setBufferSize(1024);
   client.setServer(mqtt_server, mqtt_port);
@@ -290,22 +274,18 @@ void reconnect() {
     Serial.print("Đang kết nối MQTT...");
     String clientId = "SensorNode_" + String(device_id);
 
-    // Cấu hình thông số LWT (Sẽ tự động gửi khi ESP32 mất kết nối đột ngột)
     const char *willTopic = topic_status.c_str();
     const char *willMessage = "{\"online\": false}";
     int willQos = 1;
     boolean willRetain = true; // Giữ lại bản tin cuối cùng trên Broker
 
-    // Sử dụng hàm connect có hỗ trợ LWT
     if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass, willTopic,
                        willQos, willRetain, willMessage)) {
       Serial.println("Thành công!");
 
-      // Báo cáo trạng thái Online ngay khi kết nối thành công
       client.publish(willTopic, "{\"online\": true}",
                      true); // Tham số true ở cuối là để Retain bản tin
 
-      // Đăng ký nhận bản tin
       client.subscribe(topic_config.c_str());
       client.subscribe(topic_cmd.c_str());
     } else {
@@ -317,7 +297,6 @@ void reconnect() {
   }
 }
 
-// Khai báo 2 bộ đếm thời gian độc lập
 unsigned long last_sample_time = 0;
 unsigned long last_publish_time = 0;
 
@@ -335,25 +314,21 @@ void loop() {
 
   unsigned long current_millis = millis();
 
-  // Các biến cờ lỗi cục bộ trong vòng lặp này
   static bool err_water_flag = false;
   static bool err_temp_flag = false;
   static bool err_ph_flag = false;
   static bool err_ec_flag = false;
 
-  // ==========================================
   // LUỒNG 1: LẤY MẪU VÀ LỌC NHIỄU (Mỗi 200ms)
-  // ==========================================
   if (current_millis - last_sample_time >= SAMPLING_INTERVAL) {
     last_sample_time = current_millis;
 
     // 1. Nhiệt độ
     float raw_temp = current_avg_temp;
-    err_temp_flag = false; // Reset cờ lỗi
+    err_temp_flag = false;
     if (enable_temp) {
       sensors.requestTemperatures();
       float t = sensors.getTempCByIndex(0);
-      // DEVICE_DISCONNECTED_C = -127.00
       if (t > -50.0 && t <= 80.0) {
         raw_temp = t + temp_offset;
       } else {
@@ -364,7 +339,7 @@ void loop() {
     current_avg_temp = calc_average(temp_history, raw_temp);
 
     // 2. Mực nước
-    err_water_flag = false; // Reset cờ
+    err_water_flag = false;
     if (enable_water) {
       float w = readWaterLevel();
       if (w >= 0) {
@@ -376,11 +351,11 @@ void loop() {
     }
 
     // 3. pH
-    err_ph_flag = false; // Reset cờ
+    err_ph_flag = false;
     if (enable_ph) {
       int adc_ph = read_adc_filtered(PIN_PH_ADC);
       if (adc_ph <= 0 || adc_ph >= 4095) {
-        err_ph_flag = true; // Lỗi đứt dây tín hiệu hoặc chạm chập
+        err_ph_flag = true;
         latest_ph_voltage_mv = NAN;
         Serial.println("⚠️ [DEBUG] Lỗi cảm biến pH: ADC rớt ngưỡng an toàn.");
       } else {
@@ -392,7 +367,7 @@ void loop() {
     }
 
     // 4. EC
-    err_ec_flag = false; // Reset cờ
+    err_ec_flag = false;
     if (enable_ec) {
       int adc_ec = read_adc_filtered(PIN_EC_ADC);
       if (adc_ec <= 0 || adc_ec >= 4095) {
@@ -405,13 +380,10 @@ void loop() {
       }
     }
 
-    // Tăng index đệm MA (Chỉ tăng 1 lần sau khi đã nạp đủ 4 mảng)
     history_idx = (history_idx + 1) % ma_window;
   }
 
-  // ==========================================
   // LUỒNG 2: GỬI DỮ LIỆU LÊN SERVER (Publish)
-  // ==========================================
   int current_pub_interval = continuous_level ? 500 : publish_interval;
 
   if (current_millis - last_publish_time >= current_pub_interval) {
@@ -419,8 +391,6 @@ void loop() {
 
     DynamicJsonDocument doc(512);
 
-    // 1. Dữ liệu cảm biến cốt lõi (Gửi giá trị thô thay vì avg nếu bị lỗi nước
-    // liên tục)
     doc["temp"] = current_avg_temp;
     doc["water_level"] =
         continuous_level ? latest_raw_water : current_avg_water;
@@ -430,14 +400,12 @@ void loop() {
       doc["ph_voltage_mv"] = latest_ph_voltage_mv;
     }
 
-    // 2. Bổ sung Sức khỏe thiết bị (Device Health)
     doc["rssi"] = WiFi.RSSI();
     doc["free_heap"] = ESP.getFreeHeap();
     doc["uptime"] = millis() / 1000;
 
     doc["is_continuous"] = continuous_level;
 
-    // 3. Cờ báo lỗi của TOÀN BỘ CẢM BIẾN
     doc["err_water"] = err_water_flag;
     doc["err_temp"] = err_temp_flag;
     doc["err_ph"] = err_ph_flag;

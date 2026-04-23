@@ -114,12 +114,6 @@ async fn main() -> anyhow::Result<()> {
         .connect(&database_url)
         .await?;
 
-    // Chạy migration tự động
-    // sqlx::migrate!("./migrations")
-    //     .run(&pg_pool)
-    //     .await
-    //     .context("Lỗi chạy migration DB")?;
-
     let influx_url = env::var("INFLUX_URL").expect("Thiếu biến INFLUX_URL");
     let influx_org = env::var("INFLUX_ORG").expect("Thiếu biến INFLUX_ORG");
     let influx_token = env::var("INFLUX_TOKEN").expect("Thiếu biến INFLUX_TOKEN");
@@ -159,7 +153,6 @@ async fn main() -> anyhow::Result<()> {
 
     let db_pool_clone = pg_pool.clone();
 
-    // Lắng nghe alert và lưu vào DB dùng NewSystemEventRecord (không cần id)
     tokio::spawn(async move {
         while let Ok(alert) = alert_rx_for_db.recv().await {
             // Bỏ qua FSM_UPDATE thuần (chỉ dùng để đồng bộ badge trên FE)
@@ -181,7 +174,6 @@ async fn main() -> anyhow::Result<()> {
                 "system".to_string()
             };
 
-            // Dùng NewSystemEventRecord – id do SERIAL tự sinh
             let record = crate::db::postgres::NewSystemEventRecord {
                 category,
                 device_id: alert.device_id.clone(),

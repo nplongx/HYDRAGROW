@@ -29,13 +29,11 @@ pub struct PumpController {
 
     valve_mist: PinDriver<'static, Output>,
 
-    // Bơm nước vào/ra chuyển sang Bật/Tắt (Digital Out)
     water_pump_in: PinDriver<'static, Output>,
     water_pump_out: PinDriver<'static, Output>,
 
     osaka_en: PinDriver<'static, Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
-    // osaka_lpwm: Arc<Mutex<LedcDriver<'static>>>,
     cancel_soft_start: Arc<AtomicBool>,
 }
 
@@ -51,7 +49,6 @@ impl PumpController {
         mut water_pump_out: PinDriver<'static, Output>,
         mut osaka_en: PinDriver<'static, Output>,
         mut osaka_rpwm: LedcDriver<'static>,
-        // mut osaka_lpwm: LedcDriver<'static>,
     ) -> anyhow::Result<Self> {
         pump_a.set_duty(0)?;
         pump_b.set_duty(0)?;
@@ -60,13 +57,11 @@ impl PumpController {
 
         valve_mist.set_low()?;
 
-        // Đổi khởi tạo bơm nước thành set_low
         water_pump_in.set_low()?;
         water_pump_out.set_low()?;
 
         osaka_en.set_low()?;
         osaka_rpwm.set_duty(0)?;
-        // osaka_lpwm.set_duty(0)?;
 
         info!("✅ Đã khởi tạo PumpController (Bơm nước In/Out dạng Relay Bật/Tắt).");
 
@@ -80,7 +75,6 @@ impl PumpController {
             water_pump_out,
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
-            // osaka_lpwm: Arc::new(Mutex::new(osaka_lpwm)),
             cancel_soft_start: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -157,7 +151,6 @@ impl PumpController {
                 self.water_pump_out.set_high()?;
             }
             WaterDirection::Stop => {
-                // Tắt cả hai bơm
                 self.water_pump_in.set_low()?;
                 self.water_pump_out.set_low()?;
             }

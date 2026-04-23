@@ -8,7 +8,6 @@ import { useDeviceControl } from '../hooks/useDeviceControl';
 import { PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
 
-// 🟢 TỪ ĐIỂN MÀU SẮC NEON
 const NEON_COLORS: Record<string, any> = {
   orange: { bg: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/50', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]', glow: 'from-orange-500/20' },
   purple: { bg: 'bg-purple-500', text: 'text-purple-400', border: 'border-purple-500/50', shadow: 'shadow-[0_0_20px_rgba(168,85,247,0.3)]', glow: 'from-purple-500/20' },
@@ -53,7 +52,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
     setVolumeMl(0);
   }, [selectedPump, dosingCalibration]);
 
-  // TOÁN HỌC: Tự động tính số mL cần châm khi nhập Ngưỡng Mục Tiêu
+  // Tự động tính số mL cần châm khi nhập Ngưỡng Mục Tiêu
   useEffect(() => {
     if (targetValue === '' || typeof targetValue !== 'number') return;
 
@@ -194,10 +193,8 @@ const AdvancedDeviceControl = ({
 }: any) => {
   const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId);
 
-  // 🟢 HÚT PWM PREFERENCES TỪ CONTEXT
   const { pwmPreferences, savePwmPreference } = useDeviceContext();
 
-  // 🟢 KHỞI TẠO TỪ CACHE CỤC BỘ HOẶC MẶC ĐỊNH LÀ 100
   const [pwmValue, setPwmValue] = useState(pwmPreferences[pumpId] || 100);
 
   const [duration, setDuration] = useState(120);
@@ -206,7 +203,6 @@ const AdvancedDeviceControl = ({
   const theme = NEON_COLORS[colorTheme];
   const stateKey = pumpId.toLowerCase();
 
-  // 🟢 CẬP NHẬT LẠI SLIDER NẾU CÓ DỮ LIỆU TỪ Ổ CỨNG HOẶC MẠCH
   useEffect(() => {
     if (pwmPreferences[pumpId] !== undefined) {
       setPwmValue(pwmPreferences[pumpId]);
@@ -272,7 +268,6 @@ const AdvancedDeviceControl = ({
 
     await setPwm(pumpId, pwmValue);
 
-    // 🟢 GHI NHẬN VÀ LƯU VÀO TỆP device-state.json KHI SET THÀNH CÔNG
     savePwmPreference(pumpId, pwmValue);
 
     setIsProcessing(false);
@@ -440,7 +435,7 @@ const ControlPanel = () => {
         </div>
       )}
 
-      {/* 🟢 KHỐI CHÂM BÁN THỦ CÔNG MỚI */}
+      {/* KHỐI CHÂM BÁN THỦ CÔNG */}
       <SemiAutoDosingAssistant
         deviceId={deviceId}
         isOnline={isOnline}

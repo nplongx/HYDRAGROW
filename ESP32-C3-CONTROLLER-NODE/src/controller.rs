@@ -5,7 +5,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-// Import thư viện cho Cron
 use chrono::{Local, TimeZone};
 use cron::Schedule;
 use std::str::FromStr;
@@ -332,27 +331,27 @@ impl ControlContext {
         let _ = match pump_name {
             "A" | "PUMP_A" => {
                 self.pump_status.pump_a = false;
-                self.pump_status.pump_a_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
+                self.pump_status.pump_a_pwm = Some(0);
                 pump_ctrl.set_pump_state(PumpType::NutrientA, false)
             }
             "B" | "PUMP_B" => {
                 self.pump_status.pump_b = false;
-                self.pump_status.pump_b_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
+                self.pump_status.pump_b_pwm = Some(0);
                 pump_ctrl.set_pump_state(PumpType::NutrientB, false)
             }
             "PH_UP" | "PUMP_PH_UP" => {
                 self.pump_status.ph_up = false;
-                self.pump_status.ph_up_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
+                self.pump_status.ph_up_pwm = Some(0);
                 pump_ctrl.set_pump_state(PumpType::PhUp, false)
             }
             "PH_DOWN" | "PUMP_PH_DOWN" => {
                 self.pump_status.ph_down = false;
-                self.pump_status.ph_down_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
+                self.pump_status.ph_down_pwm = Some(0);
                 pump_ctrl.set_pump_state(PumpType::PhDown, false)
             }
             "OSAKA_PUMP" | "OSAKA" => {
                 self.pump_status.osaka_pump = false;
-                self.pump_status.osaka_pwm = Some(0); // 🟢 THÊM MỚI: Reset PWM
+                self.pump_status.osaka_pwm = Some(0);
                 pump_ctrl.set_osaka_pump(false)
             }
             "MIST_VALVE" | "MIST" => {
@@ -838,10 +837,8 @@ pub fn start_fsm_control_loop(
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
 
-    // Ensure all systems are ready before announcing online status
     std::thread::sleep(std::time::Duration::from_secs(1));
 
-    // Publish robust online status with retry mechanism
     for _ in 0..3 {
         let status_msg = serde_json::json!({
             "online": true,
@@ -867,7 +864,6 @@ pub fn start_fsm_control_loop(
         let current_time_sec = current_time_ms / 1000;
         ctx.sync_adaptive_ratios_from_config(&config);
 
-        // 🟢 NHẬN LỆNH & XỬ LÝ CƯỠNG CHẾ
         let force_sync =
             process_mqtt_commands(&cmd_rx, &config, &mut pump_ctrl, &mut ctx, current_time_ms);
 
@@ -883,11 +879,9 @@ pub fn start_fsm_control_loop(
             ctx.turn_off_pump(&pump, &mut pump_ctrl);
         }
 
-        // 🟢 Thay vì Timeout (Vì giờ có 2 node, timeout có thể do Node Controller tự đếm), FSM kiểm tra qua Error Flags.
         let is_safety_overridden = current_time_ms < ctx.safety_override_until;
 
         if !is_safety_overridden {
-            // Kiểm tra nhiễu (Bỏ qua nhịp nếu nhiễu)
             let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config);
             let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
                 || (config.enable_ec_sensor && sensors.err_ec)
@@ -911,7 +905,6 @@ pub fn start_fsm_control_loop(
                     && (sensors.ph_value < config.min_ph_limit
                         || sensors.ph_value > config.max_ph_limit);
 
-                // 🟢 MỚI: Bóc tách lý do Emergency cụ thể, BAO GỒM CỜ LỖI CẢM BIẾN (Từ Sensor Node gửi sang)
                 let mut emergency_reason = String::new();
                 if config.emergency_shutdown {
                     emergency_reason = "MANUAL_STOP".to_string();
@@ -933,7 +926,6 @@ pub fn start_fsm_control_loop(
 
                 let should_emergency_stop = !emergency_reason.is_empty();
 
-                // 🟢 NẾU NGUY HIỂM VÀ KHÔNG BỊ CƯỠNG CHẾ -> NGẮT
                 if should_emergency_stop {
                     if !matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
                         error!(
@@ -949,13 +941,11 @@ pub fn start_fsm_control_loop(
                         ctx.current_state = SystemState::Monitoring;
                     }
                 } else if matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
-                    // 🟢 NẾU MÔI TRƯỜNG ĐÃ AN TOÀN LẠI -> HỦY DỪNG KHẨN CẤP
                     if !should_emergency_stop {
                         info!("✅ Hệ thống an toàn trở lại (hoặc đang Cưỡng chế).");
                         ctx.current_state = SystemState::Monitoring;
                     }
                 } else if config.control_mode == ControlMode::Auto {
-                    // ==== LOGIC AUTO ====
                     let is_hot = config.enable_temp_sensor
                         && (sensors.temp_value >= config.misting_temp_threshold);
                     let on_duration = if is_hot {
@@ -1032,11 +1022,11 @@ pub fn start_fsm_control_loop(
                         if !ctx.pump_status.osaka_pump {
                             let _ = pump_ctrl.start_osaka_pump_soft(target_pwm);
                             ctx.pump_status.osaka_pump = true;
-                            ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
+                            ctx.pump_status.osaka_pwm = Some(target_pwm);
                             ctx.current_osaka_pwm = target_pwm;
                         } else if ctx.current_osaka_pwm != target_pwm {
                             let _ = pump_ctrl.set_osaka_pump_pwm(target_pwm);
-                            ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
+                            ctx.pump_status.osaka_pwm = Some(target_pwm);
                             ctx.current_osaka_pwm = target_pwm;
                         }
                     } else {
@@ -1103,596 +1093,683 @@ pub fn start_fsm_control_loop(
 
         std::thread::sleep(Duration::from_millis(100));
     }
-    // }); // <--- FIX ERROR [809, 5]: Dấu chấm phẩy ở cuối hàm thread::spawn
-}
 
-fn report_state_if_changed(
-    current_state: &SystemState,
-    last_reported_state: &mut String,
-    fsm_mqtt_tx: &Sender<String>,
-) -> bool {
-    let current_state_str = current_state.to_payload_string();
-    if current_state_str != *last_reported_state {
-        let payload = format!(r#"{{"current_state": "{}"}}"#, current_state_str);
-        if fsm_mqtt_tx.send(payload).is_ok() {
-            info!("📡 Trạng thái FSM: [{}]", current_state_str);
-        }
-        *last_reported_state = current_state_str;
-        true
-    } else {
-        false
-    }
-}
-
-fn process_mqtt_commands(
-    cmd_rx: &Receiver<MqttCommandPayload>,
-    config: &DeviceConfig,
-    pump_ctrl: &mut PumpController,
-    ctx: &mut ControlContext,
-    current_time_ms: u64,
-) -> bool {
-    let mut force_sync = false;
-
-    let is_emergency_state = matches!(
-        ctx.current_state,
-        SystemState::EmergencyStop(_) | SystemState::SystemFault(_)
-    );
-
-    while let Ok(cmd) = cmd_rx.try_recv() {
-        if cmd.action == "SYNC_STATUS" {
-            force_sync = true;
-            continue;
-        }
-
-        if cmd.action == "reset_fault" {
-            info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
-            ctx.stop_all_pumps(pump_ctrl);
-            ctx.reset_faults();
-            force_sync = true;
-            continue;
-        }
-
-        if config.control_mode == ControlMode::Auto {
-            warn!("Bỏ qua lệnh thủ công vì đang ở AUTO.");
-            continue;
-        }
-
-        let pump_name = cmd.pump.to_uppercase();
-        let action_lower = cmd.action.to_lowercase();
-
-        let is_force_on = action_lower == "force_on";
-        let is_set_pwm = action_lower == "set_pwm";
-
-        let is_on = is_force_on
-            || action_lower == "pump_on"
-            || action_lower == "on"
-            || action_lower == "true"
-            || action_lower == "1"
-            || (is_set_pwm && cmd.pwm.unwrap_or(0) > 0);
-
-        if is_emergency_state && is_on && !is_force_on {
-            warn!("❌ BLOCKED: Không thể điều khiển {} bình thường vì hệ thống đang Lỗi / EmergencyStop. Vui lòng dùng FORCE.", pump_name);
-            continue;
-        }
-
-        if is_force_on {
-            info!("⚠️ NGƯỜI DÙNG CƯỠNG CHẾ BẬT {}!", pump_name);
-            let duration = cmd.duration_sec.unwrap_or(120);
-            ctx.safety_override_until = current_time_ms + (duration as u64 * 1000);
-        }
-
-        if is_on {
-            if let Some(duration) = cmd.duration_sec {
-                if duration > 0 {
-                    let finish_time = current_time_ms + (duration as u64 * 1000);
-                    ctx.manual_timeouts.insert(pump_name.clone(), finish_time);
-                }
+    fn report_state_if_changed(
+        current_state: &SystemState,
+        last_reported_state: &mut String,
+        fsm_mqtt_tx: &Sender<String>,
+    ) -> bool {
+        let current_state_str = current_state.to_payload_string();
+        if current_state_str != *last_reported_state {
+            let payload = format!(r#"{{"current_state": "{}"}}"#, current_state_str);
+            if fsm_mqtt_tx.send(payload).is_ok() {
+                info!("📡 Trạng thái FSM: [{}]", current_state_str);
             }
+            *last_reported_state = current_state_str;
+            true
         } else {
-            ctx.manual_timeouts.remove(&pump_name);
+            false
         }
+    }
 
-        let pwm_val = if let Some(p) = cmd.pwm {
-            p
-        } else {
+    fn process_mqtt_commands(
+        cmd_rx: &Receiver<MqttCommandPayload>,
+        config: &DeviceConfig,
+        pump_ctrl: &mut PumpController,
+        ctx: &mut ControlContext,
+        current_time_ms: u64,
+    ) -> bool {
+        let mut force_sync = false;
+
+        let is_emergency_state = matches!(
+            ctx.current_state,
+            SystemState::EmergencyStop(_) | SystemState::SystemFault(_)
+        );
+
+        while let Ok(cmd) = cmd_rx.try_recv() {
+            if cmd.action == "SYNC_STATUS" {
+                force_sync = true;
+                continue;
+            }
+
+            if cmd.action == "reset_fault" {
+                info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
+                ctx.stop_all_pumps(pump_ctrl);
+                ctx.reset_faults();
+                force_sync = true;
+                continue;
+            }
+
+            if config.control_mode == ControlMode::Auto {
+                warn!("Bỏ qua lệnh thủ công vì đang ở AUTO.");
+                continue;
+            }
+
+            let pump_name = cmd.pump.to_uppercase();
+            let action_lower = cmd.action.to_lowercase();
+
+            let is_force_on = action_lower == "force_on";
+            let is_set_pwm = action_lower == "set_pwm";
+
+            let is_on = is_force_on
+                || action_lower == "pump_on"
+                || action_lower == "on"
+                || action_lower == "true"
+                || action_lower == "1"
+                || (is_set_pwm && cmd.pwm.unwrap_or(0) > 0);
+
+            if is_emergency_state && is_on && !is_force_on {
+                warn!("❌ BLOCKED: Không thể điều khiển {} bình thường vì hệ thống đang Lỗi / EmergencyStop. Vui lòng dùng FORCE.", pump_name);
+                continue;
+            }
+
+            if is_force_on {
+                info!("⚠️ NGƯỜI DÙNG CƯỠNG CHẾ BẬT {}!", pump_name);
+                let duration = cmd.duration_sec.unwrap_or(120);
+                ctx.safety_override_until = current_time_ms + (duration as u64 * 1000);
+            }
+
             if is_on {
-                100
-            } else {
-                0
-            }
-        };
-
-        let _ = match pump_name.as_str() {
-            "A" | "PUMP_A" => {
-                ctx.pump_status.pump_a = is_on;
-                ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                if cmd.pwm.is_some() || is_set_pwm {
-                    pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, is_on, pwm_val)
-                } else {
-                    pump_ctrl.set_pump_state(PumpType::NutrientA, is_on)
-                }
-            }
-            "B" | "PUMP_B" => {
-                ctx.pump_status.pump_b = is_on;
-                ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                if cmd.pwm.is_some() || is_set_pwm {
-                    pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, is_on, pwm_val)
-                } else {
-                    pump_ctrl.set_pump_state(PumpType::NutrientB, is_on)
-                }
-            }
-            "PH_UP" | "PUMP_PH_UP" => {
-                ctx.pump_status.ph_up = is_on;
-                ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                if cmd.pwm.is_some() || is_set_pwm {
-                    pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, is_on, pwm_val)
-                } else {
-                    pump_ctrl.set_pump_state(PumpType::PhUp, is_on)
-                }
-            }
-            "PH_DOWN" | "PUMP_PH_DOWN" => {
-                ctx.pump_status.ph_down = is_on;
-                ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                if cmd.pwm.is_some() || is_set_pwm {
-                    pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, is_on, pwm_val)
-                } else {
-                    pump_ctrl.set_pump_state(PumpType::PhDown, is_on)
-                }
-            }
-            "OSAKA_PUMP" | "OSAKA" => {
-                ctx.pump_status.osaka_pump = is_on;
-                ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                if cmd.pwm.is_some() || is_set_pwm {
-                    pump_ctrl.set_osaka_pump_pwm(pwm_val)
-                } else {
-                    pump_ctrl.set_osaka_pump(is_on)
-                }
-            }
-            "MIST_VALVE" | "MIST" => {
-                ctx.pump_status.mist_valve = is_on;
-                ctx.is_misting_active = is_on;
-                if is_on {
-                    ctx.last_mist_toggle_time = current_time_ms;
-                }
-                pump_ctrl.set_mist_valve(is_on)
-            }
-            "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
-                ctx.pump_status.water_pump_in = is_on;
-                if is_on {
-                    ctx.pump_status.water_pump_out = false;
-                }
-                pump_ctrl.set_water_pump(if is_on {
-                    WaterDirection::In
-                } else {
-                    WaterDirection::Stop
-                })
-            }
-            "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
-                ctx.pump_status.water_pump_out = is_on;
-                if is_on {
-                    ctx.pump_status.water_pump_in = false;
-                }
-                pump_ctrl.set_water_pump(if is_on {
-                    WaterDirection::Out
-                } else {
-                    WaterDirection::Stop
-                })
-            }
-            _ => Ok(()),
-        };
-
-        force_sync = true;
-    }
-
-    force_sync
-}
-
-fn run_auto_fsm(
-    current_time_ms: u64,
-    config: &DeviceConfig,
-    sensors: &SensorData,
-    ctx: &mut ControlContext,
-    pump_ctrl: &mut PumpController,
-    shared_config: &SharedConfig,
-    nvs: &mut Option<EspDefaultNvs>,
-    dosing_report_tx: &Sender<String>,
-    fsm_mqtt_tx: &Sender<String>,
-) {
-    let current_time_sec = current_time_ms / 1000;
-    const MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP: f32 = 30.0;
-
-    match ctx.current_state {
-        SystemState::SystemFault(ref reason) => {
-            warn!("🚨 BÁO LỖI: [{}]. Chờ reset...", reason);
-        }
-
-        SystemState::Monitoring => {
-            ctx.verify_sensor_ack(sensors, config, current_time_sec);
-
-            // 🟢 THAY NƯỚC ĐỊNH KỲ THEO LỊCH CRON
-            if config.enable_water_level_sensor
-                && config.scheduled_water_change_enabled
-                && !config.water_change_cron.is_empty()
-            {
-                if ctx.current_water_change_cron_expr != config.water_change_cron {
-                    ctx.current_water_change_cron_expr = config.water_change_cron.clone();
-                    if let Ok(schedule) = Schedule::from_str(&ctx.current_water_change_cron_expr) {
-                        if let Some(next) = schedule.upcoming(Local).next() {
-                            ctx.next_water_change_trigger_sec = Some(next.timestamp() as u64);
-                            info!("⏰ Cập nhật lịch Thay nước Cron: {}", next);
-                        }
-                    } else {
-                        warn!("⚠️ Lỗi cú pháp Cron Thay nước!");
-                        ctx.next_water_change_trigger_sec = None;
+                if let Some(duration) = cmd.duration_sec {
+                    if duration > 0 {
+                        let finish_time = current_time_ms + (duration as u64 * 1000);
+                        ctx.manual_timeouts.insert(pump_name.clone(), finish_time);
                     }
                 }
+            } else {
+                ctx.manual_timeouts.remove(&pump_name);
+            }
 
-                if let Some(next_trigger) = ctx.next_water_change_trigger_sec {
-                    if current_time_sec >= next_trigger {
-                        info!("⏰ Đã đến giờ THAY NƯỚC ĐỊNH KỲ theo lịch CRON!");
+            let pwm_val = if let Some(p) = cmd.pwm {
+                p
+            } else {
+                if is_on {
+                    100
+                } else {
+                    0
+                }
+            };
 
+            let _ = match pump_name.as_str() {
+                "A" | "PUMP_A" => {
+                    ctx.pump_status.pump_a = is_on;
+                    ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    if cmd.pwm.is_some() || is_set_pwm {
+                        pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, is_on, pwm_val)
+                    } else {
+                        pump_ctrl.set_pump_state(PumpType::NutrientA, is_on)
+                    }
+                }
+                "B" | "PUMP_B" => {
+                    ctx.pump_status.pump_b = is_on;
+                    ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    if cmd.pwm.is_some() || is_set_pwm {
+                        pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, is_on, pwm_val)
+                    } else {
+                        pump_ctrl.set_pump_state(PumpType::NutrientB, is_on)
+                    }
+                }
+                "PH_UP" | "PUMP_PH_UP" => {
+                    ctx.pump_status.ph_up = is_on;
+                    ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    if cmd.pwm.is_some() || is_set_pwm {
+                        pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, is_on, pwm_val)
+                    } else {
+                        pump_ctrl.set_pump_state(PumpType::PhUp, is_on)
+                    }
+                }
+                "PH_DOWN" | "PUMP_PH_DOWN" => {
+                    ctx.pump_status.ph_down = is_on;
+                    ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    if cmd.pwm.is_some() || is_set_pwm {
+                        pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, is_on, pwm_val)
+                    } else {
+                        pump_ctrl.set_pump_state(PumpType::PhDown, is_on)
+                    }
+                }
+                "OSAKA_PUMP" | "OSAKA" => {
+                    ctx.pump_status.osaka_pump = is_on;
+                    ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    if cmd.pwm.is_some() || is_set_pwm {
+                        pump_ctrl.set_osaka_pump_pwm(pwm_val)
+                    } else {
+                        pump_ctrl.set_osaka_pump(is_on)
+                    }
+                }
+                "MIST_VALVE" | "MIST" => {
+                    ctx.pump_status.mist_valve = is_on;
+                    ctx.is_misting_active = is_on;
+                    if is_on {
+                        ctx.last_mist_toggle_time = current_time_ms;
+                    }
+                    pump_ctrl.set_mist_valve(is_on)
+                }
+                "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
+                    ctx.pump_status.water_pump_in = is_on;
+                    if is_on {
+                        ctx.pump_status.water_pump_out = false;
+                    }
+                    pump_ctrl.set_water_pump(if is_on {
+                        WaterDirection::In
+                    } else {
+                        WaterDirection::Stop
+                    })
+                }
+                "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
+                    ctx.pump_status.water_pump_out = is_on;
+                    if is_on {
+                        ctx.pump_status.water_pump_in = false;
+                    }
+                    pump_ctrl.set_water_pump(if is_on {
+                        WaterDirection::Out
+                    } else {
+                        WaterDirection::Stop
+                    })
+                }
+                _ => Ok(()),
+            };
+
+            force_sync = true;
+        }
+
+        force_sync
+    }
+
+    fn run_auto_fsm(
+        current_time_ms: u64,
+        config: &DeviceConfig,
+        sensors: &SensorData,
+        ctx: &mut ControlContext,
+        pump_ctrl: &mut PumpController,
+        shared_config: &SharedConfig,
+        nvs: &mut Option<EspDefaultNvs>,
+        dosing_report_tx: &Sender<String>,
+        fsm_mqtt_tx: &Sender<String>,
+    ) {
+        let current_time_sec = current_time_ms / 1000;
+        const MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP: f32 = 30.0;
+
+        match ctx.current_state {
+            SystemState::SystemFault(ref reason) => {
+                warn!("🚨 BÁO LỖI: [{}]. Chờ reset...", reason);
+            }
+
+            SystemState::Monitoring => {
+                ctx.verify_sensor_ack(sensors, config, current_time_sec);
+
+                // 🟢 THAY NƯỚC ĐỊNH KỲ THEO LỊCH CRON
+                if config.enable_water_level_sensor
+                    && config.scheduled_water_change_enabled
+                    && !config.water_change_cron.is_empty()
+                {
+                    if ctx.current_water_change_cron_expr != config.water_change_cron {
+                        ctx.current_water_change_cron_expr = config.water_change_cron.clone();
                         if let Ok(schedule) =
                             Schedule::from_str(&ctx.current_water_change_cron_expr)
                         {
-                            let future = Local::now() + chrono::Duration::seconds(1);
-                            if let Some(next) = schedule.after(&future).next() {
-                                ctx.next_water_change_trigger_sec = Some(next.timestamp() as u64);
-                            }
-                        }
-
-                        let target = (sensors.water_level - config.scheduled_drain_amount_cm)
-                            .max(config.water_level_min);
-                        ctx.last_water_change_time = current_time_sec;
-
-                        if let Some(flash) = nvs.as_mut() {
-                            let _ = flash.set_u64("last_w_change", current_time_sec);
-                        }
-
-                        ctx.mark_pending_sample_water_change_violation();
-                        ctx.current_state = SystemState::WaterDraining {
-                            target_level: target,
-                            start_time: current_time_ms,
-                        };
-                        let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
-                        ctx.pump_status.water_pump_out = true;
-                        ctx.pump_status.water_pump_in = false;
-                        ctx.fsm_osaka_active = false;
-
-                        return;
-                    }
-                }
-            }
-
-            if config.enable_water_level_sensor
-                && config.auto_refill_enabled
-                && sensors.water_level < (config.water_level_target - config.water_level_tolerance)
-            {
-                if ctx.water_refill_retry_count >= 3 {
-                    ctx.stop_all_pumps(pump_ctrl);
-                    ctx.current_state = SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
-                } else {
-                    ctx.last_water_before_refill = Some(sensors.water_level);
-                    ctx.mark_pending_sample_water_change_violation();
-                    ctx.current_state = SystemState::WaterRefilling {
-                        target_level: config.water_level_target,
-                        start_time: current_time_ms,
-                    };
-                    let _ = pump_ctrl.set_water_pump(WaterDirection::In);
-                    ctx.pump_status.water_pump_in = true;
-                    ctx.pump_status.water_pump_out = false;
-                    ctx.fsm_osaka_active = false;
-                }
-            } else if config.enable_water_level_sensor
-                && config.auto_drain_overflow
-                && sensors.water_level > config.water_level_max
-            {
-                ctx.mark_pending_sample_water_change_violation();
-                ctx.current_state = SystemState::WaterDraining {
-                    target_level: config.water_level_target,
-                    start_time: current_time_ms,
-                };
-                let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
-                ctx.pump_status.water_pump_out = true;
-                ctx.pump_status.water_pump_in = false;
-                ctx.fsm_osaka_active = false;
-            } else if config.enable_ec_sensor
-                && config.enable_water_level_sensor
-                && config.auto_dilute_enabled
-                && sensors.ec_value > (config.ec_target + config.ec_tolerance)
-            {
-                let target = (sensors.water_level - config.dilute_drain_amount_cm)
-                    .max(config.water_level_min);
-                ctx.mark_pending_sample_water_change_violation();
-                ctx.current_state = SystemState::WaterDraining {
-                    target_level: target,
-                    start_time: current_time_ms,
-                };
-                let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
-                ctx.pump_status.water_pump_out = true;
-                ctx.pump_status.water_pump_in = false;
-                ctx.fsm_osaka_active = false;
-            } else {
-                let mut is_dosing_active = false;
-
-                // 🟢 BƠM ĐỊNH KỲ THEO LỊCH CRON
-                if config.scheduled_dosing_enabled && !config.scheduled_dosing_cron.is_empty() {
-                    if ctx.current_cron_expr != config.scheduled_dosing_cron {
-                        ctx.current_cron_expr = config.scheduled_dosing_cron.clone();
-                        if let Ok(schedule) = Schedule::from_str(&ctx.current_cron_expr) {
                             if let Some(next) = schedule.upcoming(Local).next() {
-                                ctx.next_cron_trigger_sec = Some(next.timestamp() as u64);
-                                info!("⏰ Cập nhật lịch Dosing Cron: {}", next);
+                                ctx.next_water_change_trigger_sec = Some(next.timestamp() as u64);
+                                info!("⏰ Cập nhật lịch Thay nước Cron: {}", next);
                             }
                         } else {
-                            warn!("⚠️ Biểu thức Cron Dosing không hợp lệ!");
-                            ctx.next_cron_trigger_sec = None;
+                            warn!("⚠️ Lỗi cú pháp Cron Thay nước!");
+                            ctx.next_water_change_trigger_sec = None;
                         }
                     }
 
-                    if let Some(next_trigger) = ctx.next_cron_trigger_sec {
+                    if let Some(next_trigger) = ctx.next_water_change_trigger_sec {
                         if current_time_sec >= next_trigger {
-                            info!("⏰ Đã đến giờ BƠM DINH DƯỠNG theo lịch CRON!");
+                            info!("⏰ Đã đến giờ THAY NƯỚC ĐỊNH KỲ theo lịch CRON!");
 
-                            if let Ok(schedule) = Schedule::from_str(&ctx.current_cron_expr) {
+                            if let Ok(schedule) =
+                                Schedule::from_str(&ctx.current_water_change_cron_expr)
+                            {
                                 let future = Local::now() + chrono::Duration::seconds(1);
                                 if let Some(next) = schedule.after(&future).next() {
-                                    ctx.next_cron_trigger_sec = Some(next.timestamp() as u64);
+                                    ctx.next_water_change_trigger_sec =
+                                        Some(next.timestamp() as u64);
                                 }
                             }
 
-                            ctx.last_scheduled_dose_time_sec = current_time_sec;
+                            let target = (sensors.water_level - config.scheduled_drain_amount_cm)
+                                .max(config.water_level_min);
+                            ctx.last_water_change_time = current_time_sec;
+
                             if let Some(flash) = nvs.as_mut() {
-                                let _ = flash.set_u64("last_sched_dose", current_time_sec);
+                                let _ = flash.set_u64("last_w_change", current_time_sec);
                             }
 
-                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
-                            if config.scheduled_dose_a_ml > 0.0 || config.scheduled_dose_b_ml > 0.0
-                            {
-                                let allow_a = config.scheduled_dose_a_ml <= 0.0
-                                    || ctx.can_dose_within_hourly_limit(
-                                        "NutrientA",
-                                        current_time_sec,
-                                        config.scheduled_dose_a_ml,
-                                        MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
-                                    );
-                                let allow_b = config.scheduled_dose_b_ml <= 0.0
-                                    || ctx.can_dose_within_hourly_limit(
-                                        "NutrientB",
-                                        current_time_sec,
-                                        config.scheduled_dose_b_ml,
-                                        MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
-                                    );
-                                if allow_a && allow_b {
-                                    if config.scheduled_dose_a_ml > 0.0 {
-                                        let _ = ctx.reserve_dose_if_within_hourly_limit(
+                            ctx.mark_pending_sample_water_change_violation();
+                            ctx.current_state = SystemState::WaterDraining {
+                                target_level: target,
+                                start_time: current_time_ms,
+                            };
+                            let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
+                            ctx.pump_status.water_pump_out = true;
+                            ctx.pump_status.water_pump_in = false;
+                            ctx.fsm_osaka_active = false;
+
+                            return;
+                        }
+                    }
+                }
+
+                if config.enable_water_level_sensor
+                    && config.auto_refill_enabled
+                    && sensors.water_level
+                        < (config.water_level_target - config.water_level_tolerance)
+                {
+                    if ctx.water_refill_retry_count >= 3 {
+                        ctx.stop_all_pumps(pump_ctrl);
+                        ctx.current_state =
+                            SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
+                    } else {
+                        ctx.last_water_before_refill = Some(sensors.water_level);
+                        ctx.mark_pending_sample_water_change_violation();
+                        ctx.current_state = SystemState::WaterRefilling {
+                            target_level: config.water_level_target,
+                            start_time: current_time_ms,
+                        };
+                        let _ = pump_ctrl.set_water_pump(WaterDirection::In);
+                        ctx.pump_status.water_pump_in = true;
+                        ctx.pump_status.water_pump_out = false;
+                        ctx.fsm_osaka_active = false;
+                    }
+                } else if config.enable_water_level_sensor
+                    && config.auto_drain_overflow
+                    && sensors.water_level > config.water_level_max
+                {
+                    ctx.mark_pending_sample_water_change_violation();
+                    ctx.current_state = SystemState::WaterDraining {
+                        target_level: config.water_level_target,
+                        start_time: current_time_ms,
+                    };
+                    let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
+                    ctx.pump_status.water_pump_out = true;
+                    ctx.pump_status.water_pump_in = false;
+                    ctx.fsm_osaka_active = false;
+                } else if config.enable_ec_sensor
+                    && config.enable_water_level_sensor
+                    && config.auto_dilute_enabled
+                    && sensors.ec_value > (config.ec_target + config.ec_tolerance)
+                {
+                    let target = (sensors.water_level - config.dilute_drain_amount_cm)
+                        .max(config.water_level_min);
+                    ctx.mark_pending_sample_water_change_violation();
+                    ctx.current_state = SystemState::WaterDraining {
+                        target_level: target,
+                        start_time: current_time_ms,
+                    };
+                    let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
+                    ctx.pump_status.water_pump_out = true;
+                    ctx.pump_status.water_pump_in = false;
+                    ctx.fsm_osaka_active = false;
+                } else {
+                    let mut is_dosing_active = false;
+
+                    // 🟢 BƠM ĐỊNH KỲ THEO LỊCH CRON
+                    if config.scheduled_dosing_enabled && !config.scheduled_dosing_cron.is_empty() {
+                        if ctx.current_cron_expr != config.scheduled_dosing_cron {
+                            ctx.current_cron_expr = config.scheduled_dosing_cron.clone();
+                            if let Ok(schedule) = Schedule::from_str(&ctx.current_cron_expr) {
+                                if let Some(next) = schedule.upcoming(Local).next() {
+                                    ctx.next_cron_trigger_sec = Some(next.timestamp() as u64);
+                                    info!("⏰ Cập nhật lịch Dosing Cron: {}", next);
+                                }
+                            } else {
+                                warn!("⚠️ Biểu thức Cron Dosing không hợp lệ!");
+                                ctx.next_cron_trigger_sec = None;
+                            }
+                        }
+
+                        if let Some(next_trigger) = ctx.next_cron_trigger_sec {
+                            if current_time_sec >= next_trigger {
+                                info!("⏰ Đã đến giờ BƠM DINH DƯỠNG theo lịch CRON!");
+
+                                if let Ok(schedule) = Schedule::from_str(&ctx.current_cron_expr) {
+                                    let future = Local::now() + chrono::Duration::seconds(1);
+                                    if let Some(next) = schedule.after(&future).next() {
+                                        ctx.next_cron_trigger_sec = Some(next.timestamp() as u64);
+                                    }
+                                }
+
+                                ctx.last_scheduled_dose_time_sec = current_time_sec;
+                                if let Some(flash) = nvs.as_mut() {
+                                    let _ = flash.set_u64("last_sched_dose", current_time_sec);
+                                }
+
+                                let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                                if config.scheduled_dose_a_ml > 0.0
+                                    || config.scheduled_dose_b_ml > 0.0
+                                {
+                                    let allow_a = config.scheduled_dose_a_ml <= 0.0
+                                        || ctx.can_dose_within_hourly_limit(
                                             "NutrientA",
                                             current_time_sec,
                                             config.scheduled_dose_a_ml,
                                             MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
                                         );
-                                    }
-                                    if config.scheduled_dose_b_ml > 0.0 {
-                                        let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                    let allow_b = config.scheduled_dose_b_ml <= 0.0
+                                        || ctx.can_dose_within_hourly_limit(
                                             "NutrientB",
                                             current_time_sec,
                                             config.scheduled_dose_b_ml,
                                             MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
                                         );
+                                    if allow_a && allow_b {
+                                        if config.scheduled_dose_a_ml > 0.0 {
+                                            let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                                "NutrientA",
+                                                current_time_sec,
+                                                config.scheduled_dose_a_ml,
+                                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                            );
+                                        }
+                                        if config.scheduled_dose_b_ml > 0.0 {
+                                            let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                                "NutrientB",
+                                                current_time_sec,
+                                                config.scheduled_dose_b_ml,
+                                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                            );
+                                        }
+                                        ctx.current_state = SystemState::StartingOsakaPump {
+                                            finish_time: current_time_ms
+                                                + config.soft_start_duration,
+                                            pending_action: PendingDose::ScheduledDose {
+                                                dose_a_ml: config.scheduled_dose_a_ml,
+                                                dose_b_ml: config.scheduled_dose_b_ml,
+                                                pwm_percent: safe_pwm,
+                                            },
+                                        };
+                                        ctx.fsm_osaka_active = true;
+                                        is_dosing_active = true;
                                     }
-                                    ctx.current_state = SystemState::StartingOsakaPump {
-                                        finish_time: current_time_ms + config.soft_start_duration,
-                                        pending_action: PendingDose::ScheduledDose {
-                                            dose_a_ml: config.scheduled_dose_a_ml,
-                                            dose_b_ml: config.scheduled_dose_b_ml,
-                                            pwm_percent: safe_pwm,
-                                        },
-                                    };
-                                    ctx.fsm_osaka_active = true;
-                                    is_dosing_active = true;
                                 }
                             }
                         }
                     }
-                }
 
-                // 🟢 BÙ EC TỰ ĐỘNG
-                if config.enable_ec_sensor
-                    && !is_dosing_active
-                    && sensors.ec_value < (config.ec_target - config.ec_tolerance)
-                {
-                    if ctx.ec_retry_count >= 3 {
-                        ctx.stop_all_pumps(pump_ctrl);
-                        ctx.current_state =
-                            SystemState::SystemFault("EC_DOSING_FAILED".to_string());
-                        is_dosing_active = true;
-                    } else {
-                        let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
-                        let ec_error = config.ec_target - sensors.ec_value;
-                        let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
-                        let active_ec_step_ratio = if ctx.auto_tune_locked {
-                            ctx.best_known_ec_step_ratio
+                    // 🟢 BÙ EC TỰ ĐỘNG
+                    if config.enable_ec_sensor
+                        && !is_dosing_active
+                        && sensors.ec_value < (config.ec_target - config.ec_tolerance)
+                    {
+                        if ctx.ec_retry_count >= 3 {
+                            ctx.stop_all_pumps(pump_ctrl);
+                            ctx.current_state =
+                                SystemState::SystemFault("EC_DOSING_FAILED".to_string());
+                            is_dosing_active = true;
                         } else {
-                            ctx.adaptive_ec_step_ratio
-                        };
-                        let dose_ml = (ec_error / config.ec_gain_per_ml
-                            * active_ec_step_ratio
-                            * deadband_scale)
-                            .clamp(0.0, config.max_dose_per_cycle);
+                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                            let ec_error = config.ec_target - sensors.ec_value;
+                            let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
+                            let active_ec_step_ratio = if ctx.auto_tune_locked {
+                                ctx.best_known_ec_step_ratio
+                            } else {
+                                ctx.adaptive_ec_step_ratio
+                            };
+                            let dose_ml = (ec_error / config.ec_gain_per_ml
+                                * active_ec_step_ratio
+                                * deadband_scale)
+                                .clamp(0.0, config.max_dose_per_cycle);
 
-                        let can_dose_ec_a = ctx.can_dose_within_hourly_limit(
-                            "NutrientA",
-                            current_time_sec,
-                            dose_ml,
-                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
-                        );
-                        let can_dose_ec_b = ctx.can_dose_within_hourly_limit(
-                            "NutrientB",
-                            current_time_sec,
-                            dose_ml,
-                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
-                        );
-                        if dose_ml > 0.0 && can_dose_ec_a && can_dose_ec_b {
-                            let _ = ctx.reserve_dose_if_within_hourly_limit(
+                            let can_dose_ec_a = ctx.can_dose_within_hourly_limit(
                                 "NutrientA",
                                 current_time_sec,
                                 dose_ml,
                                 MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
                             );
-                            let _ = ctx.reserve_dose_if_within_hourly_limit(
+                            let can_dose_ec_b = ctx.can_dose_within_hourly_limit(
                                 "NutrientB",
                                 current_time_sec,
                                 dose_ml,
                                 MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
                             );
-                            ctx.last_ec_before_dosing = Some(sensors.ec_value);
-                            ctx.current_state = SystemState::StartingOsakaPump {
-                                finish_time: current_time_ms + config.soft_start_duration,
-                                pending_action: PendingDose::EC {
-                                    dose_ml,
-                                    target_ec: config.ec_target,
-                                    pwm_percent: safe_pwm,
-                                },
-                            };
-                            ctx.fsm_osaka_active = true;
-                            is_dosing_active = true;
-                        }
-                    }
-                }
-
-                // 🟢 BÙ PH TỰ ĐỘNG
-                if config.enable_ph_sensor
-                    && !is_dosing_active
-                    && (sensors.ph_value - config.ph_target).abs() > config.ph_tolerance
-                {
-                    if ctx.ph_retry_count >= 3 {
-                        ctx.stop_all_pumps(pump_ctrl);
-                        ctx.current_state =
-                            SystemState::SystemFault("PH_DOSING_FAILED".to_string());
-                        is_dosing_active = true;
-                    } else {
-                        let is_ph_up = sensors.ph_value < config.ph_target;
-                        let diff = (sensors.ph_value - config.ph_target).abs();
-                        let ratio = if is_ph_up {
-                            config.ph_shift_up_per_ml
-                        } else {
-                            config.ph_shift_down_per_ml
-                        };
-                        let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
-
-                        let pump_kind = if is_ph_up {
-                            DosePumpKind::PhUp
-                        } else {
-                            DosePumpKind::PhDown
-                        };
-
-                        let active_capacity =
-                            effective_flow_ml_per_sec(pump_kind, safe_pwm, config);
-
-                        let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
-                        let active_ph_step_ratio = if ctx.auto_tune_locked {
-                            ctx.best_known_ph_step_ratio
-                        } else {
-                            ctx.adaptive_ph_step_ratio
-                        };
-                        let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
-                            .clamp(0.0, config.max_dose_per_cycle);
-                        let ph_pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
-
-                        if let Some(cap) = active_capacity {
-                            let duration_ms = ((dose_ml / cap) * 1000.0) as u64;
-                            if duration_ms > 0
-                                && ctx.reserve_dose_if_within_hourly_limit(
-                                    ph_pump_name,
+                            if dose_ml > 0.0 && can_dose_ec_a && can_dose_ec_b {
+                                let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                    "NutrientA",
                                     current_time_sec,
                                     dose_ml,
                                     MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
-                                )
-                            {
-                                let final_dose_ml = (diff / ratio * config.ph_step_ratio)
-                                    .clamp(0.0, config.max_dose_per_cycle);
-                                if final_dose_ml > 0.0 {
-                                    ctx.last_ph_before_dosing = Some(sensors.ph_value);
-                                    ctx.last_ph_dosing_is_up = Some(is_ph_up);
-
-                                    ctx.current_state = SystemState::StartingOsakaPump {
-                                        finish_time: current_time_ms + config.soft_start_duration,
-                                        pending_action: PendingDose::PH {
-                                            is_up: is_ph_up,
-                                            dose_ml: final_dose_ml,
-                                            target_ph: config.ph_target,
-                                            pwm_percent: safe_pwm,
-                                        },
-                                    };
-                                    ctx.fsm_osaka_active = true;
-                                    is_dosing_active = true;
-                                }
+                                );
+                                let _ = ctx.reserve_dose_if_within_hourly_limit(
+                                    "NutrientB",
+                                    current_time_sec,
+                                    dose_ml,
+                                    MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                );
+                                ctx.last_ec_before_dosing = Some(sensors.ec_value);
+                                ctx.current_state = SystemState::StartingOsakaPump {
+                                    finish_time: current_time_ms + config.soft_start_duration,
+                                    pending_action: PendingDose::EC {
+                                        dose_ml,
+                                        target_ec: config.ec_target,
+                                        pwm_percent: safe_pwm,
+                                    },
+                                };
+                                ctx.fsm_osaka_active = true;
+                                is_dosing_active = true;
                             }
+                        }
+                    }
+
+                    // 🟢 BÙ PH TỰ ĐỘNG
+                    if config.enable_ph_sensor
+                        && !is_dosing_active
+                        && (sensors.ph_value - config.ph_target).abs() > config.ph_tolerance
+                    {
+                        if ctx.ph_retry_count >= 3 {
+                            ctx.stop_all_pumps(pump_ctrl);
+                            ctx.current_state =
+                                SystemState::SystemFault("PH_DOSING_FAILED".to_string());
+                            is_dosing_active = true;
                         } else {
-                            warn!(
+                            let is_ph_up = sensors.ph_value < config.ph_target;
+                            let diff = (sensors.ph_value - config.ph_target).abs();
+                            let ratio = if is_ph_up {
+                                config.ph_shift_up_per_ml
+                            } else {
+                                config.ph_shift_down_per_ml
+                            };
+                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
+
+                            let pump_kind = if is_ph_up {
+                                DosePumpKind::PhUp
+                            } else {
+                                DosePumpKind::PhDown
+                            };
+
+                            let active_capacity =
+                                effective_flow_ml_per_sec(pump_kind, safe_pwm, config);
+
+                            let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
+                            let active_ph_step_ratio = if ctx.auto_tune_locked {
+                                ctx.best_known_ph_step_ratio
+                            } else {
+                                ctx.adaptive_ph_step_ratio
+                            };
+                            let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
+                                .clamp(0.0, config.max_dose_per_cycle);
+                            let ph_pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
+
+                            if let Some(cap) = active_capacity {
+                                let duration_ms = ((dose_ml / cap) * 1000.0) as u64;
+                                if duration_ms > 0
+                                    && ctx.reserve_dose_if_within_hourly_limit(
+                                        ph_pump_name,
+                                        current_time_sec,
+                                        dose_ml,
+                                        MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                    )
+                                {
+                                    let final_dose_ml = (diff / ratio * config.ph_step_ratio)
+                                        .clamp(0.0, config.max_dose_per_cycle);
+                                    if final_dose_ml > 0.0 {
+                                        ctx.last_ph_before_dosing = Some(sensors.ph_value);
+                                        ctx.last_ph_dosing_is_up = Some(is_ph_up);
+
+                                        ctx.current_state = SystemState::StartingOsakaPump {
+                                            finish_time: current_time_ms
+                                                + config.soft_start_duration,
+                                            pending_action: PendingDose::PH {
+                                                is_up: is_ph_up,
+                                                dose_ml: final_dose_ml,
+                                                target_ph: config.ph_target,
+                                                pwm_percent: safe_pwm,
+                                            },
+                                        };
+                                        ctx.fsm_osaka_active = true;
+                                        is_dosing_active = true;
+                                    }
+                                }
+                            } else {
+                                warn!(
                                 "Skip PH dosing: invalid pump config or PWM below min (pump={}, pwm={}%)",
                                 ph_pump_name, safe_pwm
                             );
-                            ctx.stop_all_pumps(pump_ctrl);
-                            ctx.current_state = SystemState::Monitoring;
+                                ctx.stop_all_pumps(pump_ctrl);
+                                ctx.current_state = SystemState::Monitoring;
+                            }
                         }
                     }
-                }
 
-                if !is_dosing_active {
+                    if !is_dosing_active {
+                        ctx.fsm_osaka_active = false;
+                    }
+                }
+            }
+
+            SystemState::WaterRefilling {
+                target_level,
+                start_time,
+            } => {
+                if sensors.water_level >= target_level
+                    || current_time_ms.saturating_sub(start_time)
+                        > (config.max_refill_duration_sec as u64 * 1000)
+                {
+                    let _ = pump_ctrl.set_water_pump(WaterDirection::Stop);
+                    ctx.pump_status.water_pump_in = false;
+                    ctx.pump_status.water_pump_out = false;
+                    ctx.fsm_osaka_active = true;
+                    ctx.current_state = SystemState::ActiveMixing {
+                        finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
+                    };
+                }
+            }
+
+            SystemState::WaterDraining {
+                target_level,
+                start_time,
+            } => {
+                if sensors.water_level <= target_level
+                    || current_time_ms.saturating_sub(start_time)
+                        > (config.max_drain_duration_sec as u64 * 1000)
+                {
+                    let _ = pump_ctrl.set_water_pump(WaterDirection::Stop);
+                    ctx.pump_status.water_pump_in = false;
+                    ctx.pump_status.water_pump_out = false;
                     ctx.fsm_osaka_active = false;
+                    ctx.current_state = SystemState::Stabilizing {
+                        finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
+                    };
                 }
             }
-        }
 
-        SystemState::WaterRefilling {
-            target_level,
-            start_time,
-        } => {
-            if sensors.water_level >= target_level
-                || current_time_ms.saturating_sub(start_time)
-                    > (config.max_refill_duration_sec as u64 * 1000)
-            {
-                let _ = pump_ctrl.set_water_pump(WaterDirection::Stop);
-                ctx.pump_status.water_pump_in = false;
-                ctx.pump_status.water_pump_out = false;
-                ctx.fsm_osaka_active = true;
-                ctx.current_state = SystemState::ActiveMixing {
-                    finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
-                };
-            }
-        }
+            SystemState::StartingOsakaPump {
+                finish_time,
+                ref pending_action,
+            } => {
+                if current_time_ms >= finish_time {
+                    let action = pending_action.clone();
+                    match action {
+                        PendingDose::ScheduledDose {
+                            dose_a_ml,
+                            dose_b_ml,
+                            pwm_percent,
+                        } => {
+                            if dose_a_ml > 0.0 {
+                                let dose_pwm = pwm_percent.clamp(1, 100);
+                                let active_capacity_a = if let Some(cap) =
+                                    effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
+                                {
+                                    cap
+                                } else {
+                                    warn!(
+                                        "Skip scheduled dose pump A: invalid config/pwm (pwm={}%)",
+                                        dose_pwm
+                                    );
+                                    ctx.stop_all_pumps(pump_ctrl);
+                                    ctx.current_state = SystemState::Monitoring;
+                                    return;
+                                };
+                                let is_pulse_mode = dose_a_ml < config.dosing_min_dose_ml;
+                                let pulse_on_ms = if is_pulse_mode {
+                                    config.dosing_pulse_on_ms.max(1)
+                                } else {
+                                    ((dose_a_ml / active_capacity_a) * 1000.0) as u64
+                                };
+                                let pulse_off_ms = if is_pulse_mode {
+                                    config.dosing_pulse_off_ms
+                                } else {
+                                    0
+                                };
+                                let max_pulse_count = if is_pulse_mode {
+                                    config.dosing_max_pulse_count_per_cycle.max(1)
+                                } else {
+                                    1
+                                };
+                                let _ = pump_ctrl.set_dosing_pump_pulse(
+                                    PumpType::NutrientA,
+                                    true,
+                                    dose_pwm,
+                                );
+                                ctx.pump_status.pump_a = true;
+                                ctx.pump_status.pump_a_pwm = Some(dose_pwm);
+                                ctx.set_pulse_status(
+                                    is_pulse_mode,
+                                    if is_pulse_mode { 1 } else { 0 },
+                                );
+                                let delivered_ml_est =
+                                    active_capacity_a * (pulse_on_ms as f32 / 1000.0);
 
-        SystemState::WaterDraining {
-            target_level,
-            start_time,
-        } => {
-            if sensors.water_level <= target_level
-                || current_time_ms.saturating_sub(start_time)
-                    > (config.max_drain_duration_sec as u64 * 1000)
-            {
-                let _ = pump_ctrl.set_water_pump(WaterDirection::Stop);
-                ctx.pump_status.water_pump_in = false;
-                ctx.pump_status.water_pump_out = false;
-                ctx.fsm_osaka_active = false;
-                ctx.current_state = SystemState::Stabilizing {
-                    finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
-                };
-            }
-        }
-
-        SystemState::StartingOsakaPump {
-            finish_time,
-            ref pending_action,
-        } => {
-            if current_time_ms >= finish_time {
-                let action = pending_action.clone();
-                match action {
-                    PendingDose::ScheduledDose {
-                        dose_a_ml,
-                        dose_b_ml,
-                        pwm_percent,
-                    } => {
-                        if dose_a_ml > 0.0 {
+                                ctx.current_state = SystemState::DosingPumpA {
+                                    next_toggle_time: current_time_ms + pulse_on_ms,
+                                    dose_target_ml: dose_a_ml,
+                                    delivered_ml_est,
+                                    dose_b_ml,
+                                    pulse_on: true,
+                                    pulse_count: 1,
+                                    max_pulse_count,
+                                    pulse_on_ms,
+                                    pulse_off_ms,
+                                    pwm_percent: dose_pwm,
+                                    active_capacity_ml_per_sec: active_capacity_a,
+                                    target_ec: sensors.ec_value,
+                                    start_ec: sensors.ec_value,
+                                    start_ph: sensors.ph_value,
+                                };
+                            } else if dose_b_ml > 0.0 {
+                                ctx.current_state = SystemState::WaitingBetweenDose {
+                                    finish_time: current_time_ms,
+                                    dose_b_ml,
+                                    target_ec: sensors.ec_value,
+                                    start_ec: sensors.ec_value,
+                                    start_ph: sensors.ph_value,
+                                    dose_a_ml_reported: 0.0,
+                                };
+                            } else {
+                                ctx.current_state = SystemState::ActiveMixing {
+                                    finish_time: current_time_ms
+                                        + (config.active_mixing_sec as u64 * 1000),
+                                };
+                            }
+                        }
+                        PendingDose::EC {
+                            dose_ml,
+                            target_ec,
+                            pwm_percent,
+                        } => {
                             let dose_pwm = pwm_percent.clamp(1, 100);
                             let active_capacity_a = if let Some(cap) =
                                 effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
@@ -1700,18 +1777,18 @@ fn run_auto_fsm(
                                 cap
                             } else {
                                 warn!(
-                                    "Skip scheduled dose pump A: invalid config/pwm (pwm={}%)",
+                                    "Skip EC dosing pump A: invalid config/pwm (pwm={}%)",
                                     dose_pwm
                                 );
                                 ctx.stop_all_pumps(pump_ctrl);
                                 ctx.current_state = SystemState::Monitoring;
                                 return;
                             };
-                            let is_pulse_mode = dose_a_ml < config.dosing_min_dose_ml;
+                            let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
                             let pulse_on_ms = if is_pulse_mode {
                                 config.dosing_pulse_on_ms.max(1)
                             } else {
-                                ((dose_a_ml / active_capacity_a) * 1000.0) as u64
+                                ((dose_ml / active_capacity_a) * 1000.0) as u64
                             };
                             let pulse_off_ms = if is_pulse_mode {
                                 config.dosing_pulse_off_ms
@@ -1736,9 +1813,9 @@ fn run_auto_fsm(
 
                             ctx.current_state = SystemState::DosingPumpA {
                                 next_toggle_time: current_time_ms + pulse_on_ms,
-                                dose_target_ml: dose_a_ml,
+                                dose_target_ml: dose_ml,
                                 delivered_ml_est,
-                                dose_b_ml,
+                                dose_b_ml: dose_ml,
                                 pulse_on: true,
                                 pulse_count: 1,
                                 max_pulse_count,
@@ -1746,50 +1823,203 @@ fn run_auto_fsm(
                                 pulse_off_ms,
                                 pwm_percent: dose_pwm,
                                 active_capacity_ml_per_sec: active_capacity_a,
-                                target_ec: sensors.ec_value,
+                                target_ec,
                                 start_ec: sensors.ec_value,
                                 start_ph: sensors.ph_value,
                             };
-                        } else if dose_b_ml > 0.0 {
-                            ctx.current_state = SystemState::WaitingBetweenDose {
-                                finish_time: current_time_ms,
-                                dose_b_ml,
-                                target_ec: sensors.ec_value,
+                        }
+                        PendingDose::PH {
+                            is_up,
+                            dose_ml,
+                            target_ph,
+                            pwm_percent,
+                        } => {
+                            let dose_pwm = pwm_percent.clamp(1, 100);
+                            let pump_kind = if is_up {
+                                DosePumpKind::PhUp
+                            } else {
+                                DosePumpKind::PhDown
+                            };
+
+                            let active_capacity = if let Some(cap) =
+                                effective_flow_ml_per_sec(pump_kind, dose_pwm, config)
+                            {
+                                cap
+                            } else {
+                                warn!(
+                                    "Skip PH dosing: invalid config/pwm (is_up={}, pwm={}%)",
+                                    is_up, dose_pwm
+                                );
+                                ctx.stop_all_pumps(pump_ctrl);
+                                ctx.current_state = SystemState::Monitoring;
+                                return;
+                            };
+
+                            let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
+                            let pulse_on_ms = if is_pulse_mode {
+                                config.dosing_pulse_on_ms.max(1)
+                            } else {
+                                ((dose_ml / active_capacity) * 1000.0) as u64
+                            };
+                            let pulse_off_ms = if is_pulse_mode {
+                                config.dosing_pulse_off_ms
+                            } else {
+                                0
+                            };
+                            let max_pulse_count = if is_pulse_mode {
+                                config.dosing_max_pulse_count_per_cycle.max(1)
+                            } else {
+                                1
+                            };
+                            let _ = pump_ctrl.set_dosing_pump_pulse(
+                                if is_up {
+                                    PumpType::PhUp
+                                } else {
+                                    PumpType::PhDown
+                                },
+                                true,
+                                dose_pwm,
+                            );
+                            if is_up {
+                                ctx.pump_status.ph_up = true;
+                                ctx.pump_status.ph_up_pwm = Some(dose_pwm);
+                            } else {
+                                ctx.pump_status.ph_down = true;
+                                ctx.pump_status.ph_down_pwm = Some(dose_pwm);
+                            }
+                            ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
+                            let delivered_ml_est = active_capacity * (pulse_on_ms as f32 / 1000.0);
+
+                            ctx.current_state = SystemState::DosingPH {
+                                next_toggle_time: current_time_ms + pulse_on_ms,
+                                is_up,
+                                dose_target_ml: dose_ml,
+                                delivered_ml_est,
+                                pulse_on: true,
+                                pulse_count: 1,
+                                max_pulse_count,
+                                pulse_on_ms,
+                                pulse_off_ms,
+                                pwm_percent: dose_pwm,
+                                active_capacity_ml_per_sec: active_capacity,
+                                target_ph,
                                 start_ec: sensors.ec_value,
                                 start_ph: sensors.ph_value,
-                                dose_a_ml_reported: 0.0,
-                            };
-                        } else {
-                            ctx.current_state = SystemState::ActiveMixing {
-                                finish_time: current_time_ms
-                                    + (config.active_mixing_sec as u64 * 1000),
                             };
                         }
                     }
-                    PendingDose::EC {
-                        dose_ml,
-                        target_ec,
-                        pwm_percent,
-                    } => {
-                        let dose_pwm = pwm_percent.clamp(1, 100);
-                        let active_capacity_a = if let Some(cap) =
-                            effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
+                }
+            }
+
+            SystemState::DosingPumpA {
+                next_toggle_time,
+                dose_target_ml,
+                delivered_ml_est,
+                dose_b_ml,
+                pulse_on,
+                pulse_count,
+                max_pulse_count,
+                pulse_on_ms,
+                pulse_off_ms,
+                pwm_percent,
+                active_capacity_ml_per_sec,
+                target_ec,
+                start_ec,
+                start_ph,
+            } => {
+                if current_time_ms >= next_toggle_time {
+                    if pulse_on {
+                        let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, false, 0);
+                        ctx.pump_status.pump_a = false;
+                        ctx.pump_status.pump_a_pwm = Some(0);
+                        let hit_target = delivered_ml_est >= dose_target_ml;
+                        let hit_limit = pulse_count >= max_pulse_count;
+                        if hit_target || hit_limit {
+                            ctx.set_pulse_status(false, pulse_count);
+                            ctx.current_state = SystemState::WaitingBetweenDose {
+                                finish_time: current_time_ms
+                                    + (config.delay_between_a_and_b_sec as u64 * 1000),
+                                dose_b_ml,
+                                target_ec,
+                                start_ec,
+                                start_ph,
+                                dose_a_ml_reported: delivered_ml_est.min(dose_target_ml),
+                            };
+                        } else {
+                            ctx.set_pulse_status(true, pulse_count);
+                            ctx.current_state = SystemState::DosingPumpA {
+                                next_toggle_time: current_time_ms + pulse_off_ms,
+                                dose_target_ml,
+                                delivered_ml_est,
+                                dose_b_ml,
+                                pulse_on: false,
+                                pulse_count,
+                                max_pulse_count,
+                                pulse_on_ms,
+                                pulse_off_ms,
+                                pwm_percent,
+                                active_capacity_ml_per_sec,
+                                target_ec,
+                                start_ec,
+                                start_ph,
+                            };
+                        }
+                    } else {
+                        let _ =
+                            pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, pwm_percent);
+                        ctx.pump_status.pump_a = true;
+                        ctx.pump_status.pump_a_pwm = Some(pwm_percent);
+                        let next_count = pulse_count + 1;
+                        let next_delivered = delivered_ml_est
+                            + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
+                        ctx.set_pulse_status(true, next_count);
+                        ctx.current_state = SystemState::DosingPumpA {
+                            next_toggle_time: current_time_ms + pulse_on_ms,
+                            dose_target_ml,
+                            delivered_ml_est: next_delivered,
+                            dose_b_ml,
+                            pulse_on: true,
+                            pulse_count: next_count,
+                            max_pulse_count,
+                            pulse_on_ms,
+                            pulse_off_ms,
+                            pwm_percent,
+                            active_capacity_ml_per_sec,
+                            target_ec,
+                            start_ec,
+                            start_ph,
+                        };
+                    }
+                }
+            }
+
+            SystemState::WaitingBetweenDose {
+                finish_time,
+                dose_b_ml,
+                target_ec,
+                start_ec,
+                start_ph,
+                dose_a_ml_reported,
+            } => {
+                if current_time_ms >= finish_time {
+                    if dose_b_ml > 0.0 {
+                        let dose_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                        let is_pulse_mode = dose_b_ml < config.dosing_min_dose_ml;
+                        let active_capacity_b = if let Some(cap) =
+                            effective_flow_ml_per_sec(DosePumpKind::PumpB, dose_pwm, config)
                         {
                             cap
                         } else {
-                            warn!(
-                                "Skip EC dosing pump A: invalid config/pwm (pwm={}%)",
-                                dose_pwm
-                            );
+                            warn!("Skip dose pump B: invalid config/pwm (pwm={}%)", dose_pwm);
                             ctx.stop_all_pumps(pump_ctrl);
                             ctx.current_state = SystemState::Monitoring;
                             return;
                         };
-                        let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
+
                         let pulse_on_ms = if is_pulse_mode {
                             config.dosing_pulse_on_ms.max(1)
                         } else {
-                            ((dose_ml / active_capacity_a) * 1000.0) as u64
+                            ((dose_b_ml / active_capacity_b) * 1000.0) as u64
                         };
                         let pulse_off_ms = if is_pulse_mode {
                             config.dosing_pulse_off_ms
@@ -1802,424 +2032,237 @@ fn run_auto_fsm(
                             1
                         };
                         let _ =
-                            pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, dose_pwm);
-                        ctx.pump_status.pump_a = true;
-                        ctx.pump_status.pump_a_pwm = Some(dose_pwm);
+                            pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, true, dose_pwm);
+                        ctx.pump_status.pump_b = true;
+                        ctx.pump_status.pump_b_pwm = Some(dose_pwm);
                         ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                        let delivered_ml_est = active_capacity_a * (pulse_on_ms as f32 / 1000.0);
+                        let delivered_ml_est = active_capacity_b * (pulse_on_ms as f32 / 1000.0);
 
-                        ctx.current_state = SystemState::DosingPumpA {
+                        ctx.current_state = SystemState::DosingPumpB {
                             next_toggle_time: current_time_ms + pulse_on_ms,
-                            dose_target_ml: dose_ml,
+                            dose_target_ml: dose_b_ml,
                             delivered_ml_est,
-                            dose_b_ml: dose_ml,
                             pulse_on: true,
                             pulse_count: 1,
                             max_pulse_count,
                             pulse_on_ms,
                             pulse_off_ms,
                             pwm_percent: dose_pwm,
-                            active_capacity_ml_per_sec: active_capacity_a,
+                            active_capacity_ml_per_sec: active_capacity_b,
                             target_ec,
-                            start_ec: sensors.ec_value,
-                            start_ph: sensors.ph_value,
+                            start_ec,
+                            start_ph,
+                            dose_a_ml_reported,
+                        };
+                    } else {
+                        let report_json = format!(
+                            r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":0.0,"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
+                            start_ec, start_ph, dose_a_ml_reported, target_ec, config.ph_target
+                        );
+                        let _ = dosing_report_tx.send(report_json);
+                        start_pending_calibration_sample(
+                            ctx,
+                            start_ec,
+                            start_ph,
+                            dose_a_ml_reported,
+                            0.0,
+                            0.0,
+                            0.0,
+                            current_time_ms,
+                            config,
+                        );
+                        ctx.current_state = SystemState::ActiveMixing {
+                            finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
                         };
                     }
-                    PendingDose::PH {
-                        is_up,
-                        dose_ml,
-                        target_ph,
-                        pwm_percent,
-                    } => {
-                        let dose_pwm = pwm_percent.clamp(1, 100);
-                        let pump_kind = if is_up {
-                            DosePumpKind::PhUp
-                        } else {
-                            DosePumpKind::PhDown
-                        };
+                }
+            }
 
-                        let active_capacity = if let Some(cap) =
-                            effective_flow_ml_per_sec(pump_kind, dose_pwm, config)
-                        {
-                            cap
-                        } else {
-                            warn!(
-                                "Skip PH dosing: invalid config/pwm (is_up={}, pwm={}%)",
-                                is_up, dose_pwm
+            SystemState::DosingPumpB {
+                next_toggle_time,
+                dose_target_ml,
+                delivered_ml_est,
+                pulse_on,
+                pulse_count,
+                max_pulse_count,
+                pulse_on_ms,
+                pulse_off_ms,
+                pwm_percent,
+                active_capacity_ml_per_sec,
+                target_ec,
+                start_ec,
+                start_ph,
+                dose_a_ml_reported,
+            } => {
+                if current_time_ms >= next_toggle_time {
+                    if pulse_on {
+                        let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, false, 0);
+                        ctx.pump_status.pump_b = false;
+                        ctx.pump_status.pump_b_pwm = Some(0);
+                        let hit_target = delivered_ml_est >= dose_target_ml;
+                        let hit_limit = pulse_count >= max_pulse_count;
+                        if hit_target || hit_limit {
+                            ctx.set_pulse_status(false, pulse_count);
+                            let report_json = format!(
+                                r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
+                                start_ec,
+                                start_ph,
+                                dose_a_ml_reported,
+                                delivered_ml_est.min(dose_target_ml),
+                                target_ec,
+                                config.ph_target
                             );
-                            ctx.stop_all_pumps(pump_ctrl);
-                            ctx.current_state = SystemState::Monitoring;
-                            return;
+                            let _ = dosing_report_tx.send(report_json);
+                            ctx.current_state = SystemState::ActiveMixing {
+                                finish_time: current_time_ms
+                                    + (config.active_mixing_sec as u64 * 1000),
+                            };
+                        } else {
+                            ctx.set_pulse_status(true, pulse_count);
+                            ctx.current_state = SystemState::DosingPumpB {
+                                next_toggle_time: current_time_ms + pulse_off_ms,
+                                dose_target_ml,
+                                delivered_ml_est,
+                                pulse_on: false,
+                                pulse_count,
+                                max_pulse_count,
+                                pulse_on_ms,
+                                pulse_off_ms,
+                                pwm_percent,
+                                active_capacity_ml_per_sec,
+                                target_ec,
+                                start_ec,
+                                start_ph,
+                                dose_a_ml_reported,
+                            };
+                        }
+                    } else {
+                        let _ =
+                            pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, true, pwm_percent);
+                        ctx.pump_status.pump_b = true;
+                        ctx.pump_status.pump_b_pwm = Some(pwm_percent);
+                        let next_count = pulse_count + 1;
+                        let next_delivered = delivered_ml_est
+                            + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
+                        ctx.set_pulse_status(true, next_count);
+                        ctx.current_state = SystemState::DosingPumpB {
+                            next_toggle_time: current_time_ms + pulse_on_ms,
+                            dose_target_ml,
+                            delivered_ml_est: next_delivered,
+                            pulse_on: true,
+                            pulse_count: next_count,
+                            max_pulse_count,
+                            pulse_on_ms,
+                            pulse_off_ms,
+                            pwm_percent,
+                            active_capacity_ml_per_sec,
+                            target_ec,
+                            start_ec,
+                            start_ph,
+                            dose_a_ml_reported,
                         };
+                    }
+                }
+            }
 
-                        let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
-                        let pulse_on_ms = if is_pulse_mode {
-                            config.dosing_pulse_on_ms.max(1)
+            SystemState::DosingPH {
+                next_toggle_time,
+                is_up,
+                dose_target_ml,
+                delivered_ml_est,
+                pulse_on,
+                pulse_count,
+                max_pulse_count,
+                pulse_on_ms,
+                pulse_off_ms,
+                pwm_percent,
+                active_capacity_ml_per_sec,
+                target_ph,
+                start_ec,
+                start_ph,
+            } => {
+                if current_time_ms >= next_toggle_time {
+                    let pump_type = if is_up {
+                        PumpType::PhUp
+                    } else {
+                        PumpType::PhDown
+                    };
+                    if pulse_on {
+                        let _ = pump_ctrl.set_dosing_pump_pulse(pump_type, false, 0);
+                        if is_up {
+                            ctx.pump_status.ph_up = false;
+                            ctx.pump_status.ph_up_pwm = Some(0);
                         } else {
-                            ((dose_ml / active_capacity) * 1000.0) as u64
-                        };
-                        let pulse_off_ms = if is_pulse_mode {
-                            config.dosing_pulse_off_ms
-                        } else {
-                            0
-                        };
-                        let max_pulse_count = if is_pulse_mode {
-                            config.dosing_max_pulse_count_per_cycle.max(1)
-                        } else {
-                            1
-                        };
-                        let _ = pump_ctrl.set_dosing_pump_pulse(
-                            if is_up {
-                                PumpType::PhUp
+                            ctx.pump_status.ph_down = false;
+                            ctx.pump_status.ph_down_pwm = Some(0);
+                        }
+                        let hit_target = delivered_ml_est >= dose_target_ml;
+                        let hit_limit = pulse_count >= max_pulse_count;
+                        if hit_target || hit_limit {
+                            ctx.set_pulse_status(false, pulse_count);
+                            let ph_up_ml = if is_up {
+                                delivered_ml_est.min(dose_target_ml)
                             } else {
-                                PumpType::PhDown
-                            },
-                            true,
-                            dose_pwm,
-                        );
+                                0.0
+                            };
+                            let ph_down_ml = if !is_up {
+                                delivered_ml_est.min(dose_target_ml)
+                            } else {
+                                0.0
+                            };
+                            let report_json = format!(
+                                r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":0.0,"pump_b_ml":0.0,"ph_up_ml":{:.2},"ph_down_ml":{:.2},"target_ec":{:.2},"target_ph":{:.2}}}"#,
+                                start_ec,
+                                start_ph,
+                                ph_up_ml,
+                                ph_down_ml,
+                                config.ec_target,
+                                target_ph
+                            );
+                            let _ = dosing_report_tx.send(report_json);
+                            ctx.current_state = SystemState::ActiveMixing {
+                                finish_time: current_time_ms
+                                    + (config.active_mixing_sec as u64 * 1000),
+                            };
+                        } else {
+                            ctx.set_pulse_status(true, pulse_count);
+                            ctx.current_state = SystemState::DosingPH {
+                                next_toggle_time: current_time_ms + pulse_off_ms,
+                                is_up,
+                                dose_target_ml,
+                                delivered_ml_est,
+                                pulse_on: false,
+                                pulse_count,
+                                max_pulse_count,
+                                pulse_on_ms,
+                                pulse_off_ms,
+                                pwm_percent,
+                                active_capacity_ml_per_sec,
+                                target_ph,
+                                start_ec,
+                                start_ph,
+                            };
+                        }
+                    } else {
+                        let _ = pump_ctrl.set_dosing_pump_pulse(pump_type, true, pwm_percent);
                         if is_up {
                             ctx.pump_status.ph_up = true;
-                            ctx.pump_status.ph_up_pwm = Some(dose_pwm);
+                            ctx.pump_status.ph_up_pwm = Some(pwm_percent);
                         } else {
                             ctx.pump_status.ph_down = true;
-                            ctx.pump_status.ph_down_pwm = Some(dose_pwm);
+                            ctx.pump_status.ph_down_pwm = Some(pwm_percent);
                         }
-                        ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                        let delivered_ml_est = active_capacity * (pulse_on_ms as f32 / 1000.0);
-
+                        let next_count = pulse_count + 1;
+                        let next_delivered = delivered_ml_est
+                            + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
+                        ctx.set_pulse_status(true, next_count);
                         ctx.current_state = SystemState::DosingPH {
                             next_toggle_time: current_time_ms + pulse_on_ms,
                             is_up,
-                            dose_target_ml: dose_ml,
-                            delivered_ml_est,
+                            dose_target_ml,
+                            delivered_ml_est: next_delivered,
                             pulse_on: true,
-                            pulse_count: 1,
-                            max_pulse_count,
-                            pulse_on_ms,
-                            pulse_off_ms,
-                            pwm_percent: dose_pwm,
-                            active_capacity_ml_per_sec: active_capacity,
-                            target_ph,
-                            start_ec: sensors.ec_value,
-                            start_ph: sensors.ph_value,
-                        };
-                    }
-                }
-            }
-        }
-
-        SystemState::DosingPumpA {
-            next_toggle_time,
-            dose_target_ml,
-            delivered_ml_est,
-            dose_b_ml,
-            pulse_on,
-            pulse_count,
-            max_pulse_count,
-            pulse_on_ms,
-            pulse_off_ms,
-            pwm_percent,
-            active_capacity_ml_per_sec,
-            target_ec,
-            start_ec,
-            start_ph,
-        } => {
-            if current_time_ms >= next_toggle_time {
-                if pulse_on {
-                    let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, false, 0);
-                    ctx.pump_status.pump_a = false;
-                    ctx.pump_status.pump_a_pwm = Some(0);
-                    let hit_target = delivered_ml_est >= dose_target_ml;
-                    let hit_limit = pulse_count >= max_pulse_count;
-                    if hit_target || hit_limit {
-                        ctx.set_pulse_status(false, pulse_count);
-                        ctx.current_state = SystemState::WaitingBetweenDose {
-                            finish_time: current_time_ms
-                                + (config.delay_between_a_and_b_sec as u64 * 1000),
-                            dose_b_ml,
-                            target_ec,
-                            start_ec,
-                            start_ph,
-                            dose_a_ml_reported: delivered_ml_est.min(dose_target_ml),
-                        };
-                    } else {
-                        ctx.set_pulse_status(true, pulse_count);
-                        ctx.current_state = SystemState::DosingPumpA {
-                            next_toggle_time: current_time_ms + pulse_off_ms,
-                            dose_target_ml,
-                            delivered_ml_est,
-                            dose_b_ml,
-                            pulse_on: false,
-                            pulse_count,
-                            max_pulse_count,
-                            pulse_on_ms,
-                            pulse_off_ms,
-                            pwm_percent,
-                            active_capacity_ml_per_sec,
-                            target_ec,
-                            start_ec,
-                            start_ph,
-                        };
-                    }
-                } else {
-                    let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, pwm_percent);
-                    ctx.pump_status.pump_a = true;
-                    ctx.pump_status.pump_a_pwm = Some(pwm_percent);
-                    let next_count = pulse_count + 1;
-                    let next_delivered = delivered_ml_est
-                        + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
-                    ctx.set_pulse_status(true, next_count);
-                    ctx.current_state = SystemState::DosingPumpA {
-                        next_toggle_time: current_time_ms + pulse_on_ms,
-                        dose_target_ml,
-                        delivered_ml_est: next_delivered,
-                        dose_b_ml,
-                        pulse_on: true,
-                        pulse_count: next_count,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent,
-                        active_capacity_ml_per_sec,
-                        target_ec,
-                        start_ec,
-                        start_ph,
-                    };
-                }
-            }
-        }
-
-        SystemState::WaitingBetweenDose {
-            finish_time,
-            dose_b_ml,
-            target_ec,
-            start_ec,
-            start_ph,
-            dose_a_ml_reported,
-        } => {
-            if current_time_ms >= finish_time {
-                if dose_b_ml > 0.0 {
-                    let dose_pwm = config.dosing_pwm_percent.clamp(1, 100);
-                    let is_pulse_mode = dose_b_ml < config.dosing_min_dose_ml;
-                    let active_capacity_b = if let Some(cap) =
-                        effective_flow_ml_per_sec(DosePumpKind::PumpB, dose_pwm, config)
-                    {
-                        cap
-                    } else {
-                        warn!("Skip dose pump B: invalid config/pwm (pwm={}%)", dose_pwm);
-                        ctx.stop_all_pumps(pump_ctrl);
-                        ctx.current_state = SystemState::Monitoring;
-                        return;
-                    };
-
-                    let pulse_on_ms = if is_pulse_mode {
-                        config.dosing_pulse_on_ms.max(1)
-                    } else {
-                        ((dose_b_ml / active_capacity_b) * 1000.0) as u64
-                    };
-                    let pulse_off_ms = if is_pulse_mode {
-                        config.dosing_pulse_off_ms
-                    } else {
-                        0
-                    };
-                    let max_pulse_count = if is_pulse_mode {
-                        config.dosing_max_pulse_count_per_cycle.max(1)
-                    } else {
-                        1
-                    };
-                    let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, true, dose_pwm);
-                    ctx.pump_status.pump_b = true;
-                    ctx.pump_status.pump_b_pwm = Some(dose_pwm);
-                    ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                    let delivered_ml_est = active_capacity_b * (pulse_on_ms as f32 / 1000.0);
-
-                    ctx.current_state = SystemState::DosingPumpB {
-                        next_toggle_time: current_time_ms + pulse_on_ms,
-                        dose_target_ml: dose_b_ml,
-                        delivered_ml_est,
-                        pulse_on: true,
-                        pulse_count: 1,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent: dose_pwm,
-                        active_capacity_ml_per_sec: active_capacity_b,
-                        target_ec,
-                        start_ec,
-                        start_ph,
-                        dose_a_ml_reported,
-                    };
-                } else {
-                    let report_json = format!(
-                        r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":0.0,"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
-                        start_ec, start_ph, dose_a_ml_reported, target_ec, config.ph_target
-                    );
-                    let _ = dosing_report_tx.send(report_json);
-                    start_pending_calibration_sample(
-                        ctx,
-                        start_ec,
-                        start_ph,
-                        dose_a_ml_reported,
-                        0.0,
-                        0.0,
-                        0.0,
-                        current_time_ms,
-                        config,
-                    );
-                    ctx.current_state = SystemState::ActiveMixing {
-                        finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
-                    };
-                }
-            }
-        }
-
-        SystemState::DosingPumpB {
-            next_toggle_time,
-            dose_target_ml,
-            delivered_ml_est,
-            pulse_on,
-            pulse_count,
-            max_pulse_count,
-            pulse_on_ms,
-            pulse_off_ms,
-            pwm_percent,
-            active_capacity_ml_per_sec,
-            target_ec,
-            start_ec,
-            start_ph,
-            dose_a_ml_reported,
-        } => {
-            if current_time_ms >= next_toggle_time {
-                if pulse_on {
-                    let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, false, 0);
-                    ctx.pump_status.pump_b = false;
-                    ctx.pump_status.pump_b_pwm = Some(0);
-                    let hit_target = delivered_ml_est >= dose_target_ml;
-                    let hit_limit = pulse_count >= max_pulse_count;
-                    if hit_target || hit_limit {
-                        ctx.set_pulse_status(false, pulse_count);
-                        let report_json = format!(
-                            r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
-                            start_ec,
-                            start_ph,
-                            dose_a_ml_reported,
-                            delivered_ml_est.min(dose_target_ml),
-                            target_ec,
-                            config.ph_target
-                        );
-                        let _ = dosing_report_tx.send(report_json);
-                        ctx.current_state = SystemState::ActiveMixing {
-                            finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
-                        };
-                    } else {
-                        ctx.set_pulse_status(true, pulse_count);
-                        ctx.current_state = SystemState::DosingPumpB {
-                            next_toggle_time: current_time_ms + pulse_off_ms,
-                            dose_target_ml,
-                            delivered_ml_est,
-                            pulse_on: false,
-                            pulse_count,
-                            max_pulse_count,
-                            pulse_on_ms,
-                            pulse_off_ms,
-                            pwm_percent,
-                            active_capacity_ml_per_sec,
-                            target_ec,
-                            start_ec,
-                            start_ph,
-                            dose_a_ml_reported,
-                        };
-                    }
-                } else {
-                    let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, true, pwm_percent);
-                    ctx.pump_status.pump_b = true;
-                    ctx.pump_status.pump_b_pwm = Some(pwm_percent);
-                    let next_count = pulse_count + 1;
-                    let next_delivered = delivered_ml_est
-                        + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
-                    ctx.set_pulse_status(true, next_count);
-                    ctx.current_state = SystemState::DosingPumpB {
-                        next_toggle_time: current_time_ms + pulse_on_ms,
-                        dose_target_ml,
-                        delivered_ml_est: next_delivered,
-                        pulse_on: true,
-                        pulse_count: next_count,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent,
-                        active_capacity_ml_per_sec,
-                        target_ec,
-                        start_ec,
-                        start_ph,
-                        dose_a_ml_reported,
-                    };
-                }
-            }
-        }
-
-        SystemState::DosingPH {
-            next_toggle_time,
-            is_up,
-            dose_target_ml,
-            delivered_ml_est,
-            pulse_on,
-            pulse_count,
-            max_pulse_count,
-            pulse_on_ms,
-            pulse_off_ms,
-            pwm_percent,
-            active_capacity_ml_per_sec,
-            target_ph,
-            start_ec,
-            start_ph,
-        } => {
-            if current_time_ms >= next_toggle_time {
-                let pump_type = if is_up {
-                    PumpType::PhUp
-                } else {
-                    PumpType::PhDown
-                };
-                if pulse_on {
-                    let _ = pump_ctrl.set_dosing_pump_pulse(pump_type, false, 0);
-                    if is_up {
-                        ctx.pump_status.ph_up = false;
-                        ctx.pump_status.ph_up_pwm = Some(0);
-                    } else {
-                        ctx.pump_status.ph_down = false;
-                        ctx.pump_status.ph_down_pwm = Some(0);
-                    }
-                    let hit_target = delivered_ml_est >= dose_target_ml;
-                    let hit_limit = pulse_count >= max_pulse_count;
-                    if hit_target || hit_limit {
-                        ctx.set_pulse_status(false, pulse_count);
-                        let ph_up_ml = if is_up {
-                            delivered_ml_est.min(dose_target_ml)
-                        } else {
-                            0.0
-                        };
-                        let ph_down_ml = if !is_up {
-                            delivered_ml_est.min(dose_target_ml)
-                        } else {
-                            0.0
-                        };
-                        let report_json = format!(
-                            r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":0.0,"pump_b_ml":0.0,"ph_up_ml":{:.2},"ph_down_ml":{:.2},"target_ec":{:.2},"target_ph":{:.2}}}"#,
-                            start_ec, start_ph, ph_up_ml, ph_down_ml, config.ec_target, target_ph
-                        );
-                        let _ = dosing_report_tx.send(report_json);
-                        ctx.current_state = SystemState::ActiveMixing {
-                            finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
-                        };
-                    } else {
-                        ctx.set_pulse_status(true, pulse_count);
-                        ctx.current_state = SystemState::DosingPH {
-                            next_toggle_time: current_time_ms + pulse_off_ms,
-                            is_up,
-                            dose_target_ml,
-                            delivered_ml_est,
-                            pulse_on: false,
-                            pulse_count,
+                            pulse_count: next_count,
                             max_pulse_count,
                             pulse_on_ms,
                             pulse_off_ms,
@@ -2230,64 +2273,35 @@ fn run_auto_fsm(
                             start_ph,
                         };
                     }
-                } else {
-                    let _ = pump_ctrl.set_dosing_pump_pulse(pump_type, true, pwm_percent);
-                    if is_up {
-                        ctx.pump_status.ph_up = true;
-                        ctx.pump_status.ph_up_pwm = Some(pwm_percent);
-                    } else {
-                        ctx.pump_status.ph_down = true;
-                        ctx.pump_status.ph_down_pwm = Some(pwm_percent);
+                }
+            }
+
+            SystemState::ActiveMixing { finish_time } => {
+                if current_time_ms >= finish_time {
+                    ctx.fsm_osaka_active = false;
+                    if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
+                        sample.active_mixing_finish_ms = current_time_ms;
+                        sample.stabilizing_start_ms = Some(current_time_ms);
+                        sample.stabilizing_finish_ms =
+                            Some(current_time_ms + (config.sensor_stabilize_sec as u64 * 1000));
                     }
-                    let next_count = pulse_count + 1;
-                    let next_delivered = delivered_ml_est
-                        + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
-                    ctx.set_pulse_status(true, next_count);
-                    ctx.current_state = SystemState::DosingPH {
-                        next_toggle_time: current_time_ms + pulse_on_ms,
-                        is_up,
-                        dose_target_ml,
-                        delivered_ml_est: next_delivered,
-                        pulse_on: true,
-                        pulse_count: next_count,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent,
-                        active_capacity_ml_per_sec,
-                        target_ph,
-                        start_ec,
-                        start_ph,
+                    ctx.current_state = SystemState::Stabilizing {
+                        finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
                     };
                 }
             }
-        }
 
-        SystemState::ActiveMixing { finish_time } => {
-            if current_time_ms >= finish_time {
-                ctx.fsm_osaka_active = false;
-                if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
-                    sample.active_mixing_finish_ms = current_time_ms;
-                    sample.stabilizing_start_ms = Some(current_time_ms);
-                    sample.stabilizing_finish_ms =
-                        Some(current_time_ms + (config.sensor_stabilize_sec as u64 * 1000));
+            SystemState::Stabilizing { finish_time } => {
+                if current_time_ms >= finish_time {
+                    if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
+                        sample.stabilizing_finish_ms = Some(current_time_ms);
+                    }
+                    apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
+                    ctx.current_state = SystemState::Monitoring;
                 }
-                ctx.current_state = SystemState::Stabilizing {
-                    finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
-                };
             }
-        }
 
-        SystemState::Stabilizing { finish_time } => {
-            if current_time_ms >= finish_time {
-                if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
-                    sample.stabilizing_finish_ms = Some(current_time_ms);
-                }
-                apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
-                ctx.current_state = SystemState::Monitoring;
-            }
+            SystemState::EmergencyStop(_) => {} // Không làm gì cả, chờ user FORCE hoặc Reset lỗi
         }
-
-        SystemState::EmergencyStop(_) => {} // Không làm gì cả, chờ user FORCE hoặc Reset lỗi
     }
 }

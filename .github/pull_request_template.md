@@ -1,25 +1,28 @@
-## Summary
--
+## Phạm vi PR (chỉ 1 phạm vi rõ ràng)
 
-## Reviewer checklist (critical areas)
-- [ ] Pre-commit checks pass locally (`pre-commit run --all-files`).
-- [ ] No new alias naming violations (`./scripts/check_alias_naming.sh`).
-- [ ] Backend API/service/db changes include tests or clear validation notes.
-- [ ] Firmware/controller changes include hardware safety impact notes.
-- [ ] Migration changes are backward-compatible and rollback-aware.
-- [ ] Frontend control/context changes include state transition review.
-- [ ] Security/privacy impact reviewed (auth, secrets, device control path).
-- [ ] Technical inconsistency impact is stated (increase/decrease/no-change).
+- Layer: <!-- core | service | api | tests -->
+- Scope: <!-- ví dụ: naming chuẩn cho module user -->
+- Mục tiêu chính: <!-- mô tả ngắn 1 câu -->
 
-## Quality metrics impact
-- Lint violations (before -> after):
-- Alias naming violations (before -> after):
-- Technical inconsistency notes:
+## Changelog ngắn
 
-## Deployment risk
-- [ ] Low
-- [ ] Medium
-- [ ] High
+- 
+- 
+- 
 
-## Post-merge follow-ups
--
+## Checklist ảnh hưởng
+
+- [ ] Ảnh hưởng DB schema
+- [ ] Ảnh hưởng API contract
+- [ ] Ảnh hưởng business rule
+- [ ] Ảnh hưởng UI/integration
+- [ ] Ảnh hưởng test hiện có
+- [ ] Cần migration/backfill
+- [ ] Cần feature flag/rollout từng phần
+- [ ] Cần phối hợp team khác
+
+## Validate trước merge
+
+- [ ] Đã tự review theo đúng 1 phạm vi
+- [ ] Đã cập nhật test liên quan (hoặc nêu lý do chưa cập nhật)
+- [ ] Đã ghi chú breaking change (nếu có)

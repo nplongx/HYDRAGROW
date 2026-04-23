@@ -200,6 +200,55 @@ pub struct PendingCalibrationSample {
     pub invalid_by_water_change: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum DosePumpKind {
+    PumpA,
+    PumpB,
+    PhUp,
+    PhDown,
+}
+
+fn effective_flow_ml_per_sec(
+    pump: DosePumpKind,
+    pwm_percent: u32,
+    config: &DeviceConfig,
+) -> Option<f32> {
+    let (capacity, min_pwm) = match pump {
+        DosePumpKind::PumpA => (
+            config.pump_a_capacity_ml_per_sec,
+            config
+                .pump_a_min_pwm_percent
+                .unwrap_or(config.dosing_min_pwm_percent),
+        ),
+        DosePumpKind::PumpB => (
+            config.pump_b_capacity_ml_per_sec,
+            config
+                .pump_b_min_pwm_percent
+                .unwrap_or(config.dosing_min_pwm_percent),
+        ),
+        DosePumpKind::PhUp => (
+            config.pump_ph_up_capacity_ml_per_sec,
+            config
+                .pump_ph_up_min_pwm_percent
+                .unwrap_or(config.dosing_min_pwm_percent),
+        ),
+        DosePumpKind::PhDown => (
+            config.pump_ph_down_capacity_ml_per_sec,
+            config
+                .pump_ph_down_min_pwm_percent
+                .unwrap_or(config.dosing_min_pwm_percent),
+        ),
+    };
+
+    let safe_pwm = pwm_percent.clamp(1, 100);
+    let safe_min_pwm = min_pwm.clamp(1, 100);
+    if capacity <= 0.0 || safe_pwm < safe_min_pwm {
+        return None;
+    }
+
+    Some(capacity * (safe_pwm as f32 / 100.0))
+}
+
 impl Default for ControlContext {
     fn default() -> Self {
         Self {
@@ -1534,13 +1583,15 @@ fn run_auto_fsm(
                         };
                         let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
 
-                        let base_capacity = if is_ph_up {
-                            config.pump_ph_up_capacity_ml_per_sec
-                        } else {
-                            config.pump_ph_down_capacity_ml_per_sec
-                        };
-
-                        let active_capacity = base_capacity * (safe_pwm as f32 / 100.0);
+                        let active_capacity = effective_flow_ml_per_sec(
+                            if is_ph_up {
+                                DosePumpKind::PhUp
+                            } else {
+                                DosePumpKind::PhDown
+                            },
+                            safe_pwm,
+                            config,
+                        );
 
                         let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
                         let active_ph_step_ratio = if ctx.auto_tune_locked {
@@ -1550,34 +1601,43 @@ fn run_auto_fsm(
                         };
                         let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
                             .clamp(0.0, config.max_dose_per_cycle);
-                        let duration_ms = ((dose_ml / active_capacity) * 1000.0) as u64;
                         let ph_pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
-
-                        if duration_ms > 0
-                            && ctx.reserve_dose_if_within_hourly_limit(
-                                ph_pump_name,
-                                current_time_sec,
-                                dose_ml,
-                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
-                            )
-                        {
-                        let dose_ml = (diff / ratio * config.ph_step_ratio)
-                            .clamp(0.0, config.max_dose_per_cycle);
-                        if dose_ml > 0.0 {
-                            ctx.last_ph_before_dosing = Some(sensors.ph_value);
-                            ctx.last_ph_dosing_is_up = Some(is_ph_up);
-
-                            ctx.current_state = SystemState::StartingOsakaPump {
-                                finish_time: current_time_ms + config.soft_start_duration,
-                                pending_action: PendingDose::PH {
-                                    is_up: is_ph_up,
+                        if let Some(active_capacity) = active_capacity {
+                            let duration_ms = ((dose_ml / active_capacity) * 1000.0) as u64;
+                            if duration_ms > 0
+                                && ctx.reserve_dose_if_within_hourly_limit(
+                                    ph_pump_name,
+                                    current_time_sec,
                                     dose_ml,
-                                    target_ph: config.ph_target,
-                                    pwm_percent: safe_pwm,
-                                },
-                            };
-                            ctx.fsm_osaka_active = true;
-                            is_dosing_active = true;
+                                    MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                )
+                            {
+                                let dose_ml = (diff / ratio * config.ph_step_ratio)
+                                    .clamp(0.0, config.max_dose_per_cycle);
+                                if dose_ml > 0.0 {
+                                    ctx.last_ph_before_dosing = Some(sensors.ph_value);
+                                    ctx.last_ph_dosing_is_up = Some(is_ph_up);
+
+                                    ctx.current_state = SystemState::StartingOsakaPump {
+                                        finish_time: current_time_ms + config.soft_start_duration,
+                                        pending_action: PendingDose::PH {
+                                            is_up: is_ph_up,
+                                            dose_ml,
+                                            target_ph: config.ph_target,
+                                            pwm_percent: safe_pwm,
+                                        },
+                                    };
+                                    ctx.fsm_osaka_active = true;
+                                    is_dosing_active = true;
+                                }
+                            }
+                        } else {
+                            warn!(
+                                "Skip PH dosing: invalid pump config or PWM below min (pump={}, pwm={}%)",
+                                ph_pump_name, safe_pwm
+                            );
+                            ctx.stop_all_pumps(pump_ctrl);
+                            ctx.current_state = SystemState::Monitoring;
                         }
                     }
                 }
@@ -1637,14 +1697,20 @@ fn run_auto_fsm(
                         pwm_percent,
                     } => {
                         if dose_a_ml > 0.0 {
-                            let dose_pwm = pwm_percent.max(config.dosing_min_pwm_percent).clamp(1, 100);
+                            let dose_pwm = pwm_percent.clamp(1, 100);
+                            let Some(active_capacity_a) =
+                                effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
+                            else {
+                                warn!("Skip scheduled dose pump A: invalid config/pwm (pwm={}%)", dose_pwm);
+                                ctx.stop_all_pumps(pump_ctrl);
+                                ctx.current_state = SystemState::Monitoring;
+                                return;
+                            };
                             let is_pulse_mode = dose_a_ml < config.dosing_min_dose_ml;
                             let pulse_on_ms = if is_pulse_mode {
                                 config.dosing_pulse_on_ms.max(1)
                             } else {
-                                ((dose_a_ml
-                                    / (config.pump_a_capacity_ml_per_sec * (dose_pwm as f32 / 100.0)))
-                                    * 1000.0) as u64
+                                ((dose_a_ml / active_capacity_a) * 1000.0) as u64
                             };
                             let pulse_off_ms = if is_pulse_mode {
                                 config.dosing_pulse_off_ms
@@ -1660,8 +1726,6 @@ fn run_auto_fsm(
                             ctx.pump_status.pump_a = true;
                             ctx.pump_status.pump_a_pwm = Some(dose_pwm);
                             ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                            let active_capacity_a =
-                                config.pump_a_capacity_ml_per_sec * (dose_pwm as f32 / 100.0);
                             let delivered_ml_est =
                                 active_capacity_a * (pulse_on_ms as f32 / 1000.0);
 
@@ -1702,14 +1766,20 @@ fn run_auto_fsm(
                         target_ec,
                         pwm_percent,
                     } => {
-                        let dose_pwm = pwm_percent.max(config.dosing_min_pwm_percent).clamp(1, 100);
+                        let dose_pwm = pwm_percent.clamp(1, 100);
+                        let Some(active_capacity_a) =
+                            effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
+                        else {
+                            warn!("Skip EC dosing pump A: invalid config/pwm (pwm={}%)", dose_pwm);
+                            ctx.stop_all_pumps(pump_ctrl);
+                            ctx.current_state = SystemState::Monitoring;
+                            return;
+                        };
                         let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
                         let pulse_on_ms = if is_pulse_mode {
                             config.dosing_pulse_on_ms.max(1)
                         } else {
-                            ((dose_ml
-                                / (config.pump_a_capacity_ml_per_sec * (dose_pwm as f32 / 100.0)))
-                                * 1000.0) as u64
+                            ((dose_ml / active_capacity_a) * 1000.0) as u64
                         };
                         let pulse_off_ms = if is_pulse_mode {
                             config.dosing_pulse_off_ms
@@ -1725,8 +1795,6 @@ fn run_auto_fsm(
                         ctx.pump_status.pump_a = true;
                         ctx.pump_status.pump_a_pwm = Some(dose_pwm);
                         ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                        let active_capacity_a =
-                            config.pump_a_capacity_ml_per_sec * (dose_pwm as f32 / 100.0);
                         let delivered_ml_est =
                             active_capacity_a * (pulse_on_ms as f32 / 1000.0);
 
@@ -1753,13 +1821,21 @@ fn run_auto_fsm(
                         target_ph,
                         pwm_percent,
                     } => {
-                        let dose_pwm = pwm_percent.max(config.dosing_min_pwm_percent).clamp(1, 100);
-                        let base_capacity = if is_up {
-                            config.pump_ph_up_capacity_ml_per_sec
-                        } else {
-                            config.pump_ph_down_capacity_ml_per_sec
+                        let dose_pwm = pwm_percent.clamp(1, 100);
+                        let Some(active_capacity) = effective_flow_ml_per_sec(
+                            if is_up {
+                                DosePumpKind::PhUp
+                            } else {
+                                DosePumpKind::PhDown
+                            },
+                            dose_pwm,
+                            config,
+                        ) else {
+                            warn!("Skip PH dosing: invalid config/pwm (is_up={}, pwm={}%)", is_up, dose_pwm);
+                            ctx.stop_all_pumps(pump_ctrl);
+                            ctx.current_state = SystemState::Monitoring;
+                            return;
                         };
-                        let active_capacity = base_capacity * (dose_pwm as f32 / 100.0);
                         let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
                         let pulse_on_ms = if is_pulse_mode {
                             config.dosing_pulse_on_ms.max(1)
@@ -1907,13 +1983,16 @@ fn run_auto_fsm(
         } => {
             if current_time_ms >= finish_time {
                 if dose_b_ml > 0.0 {
-                    let dose_pwm = config
-                        .dosing_pwm_percent
-                        .max(config.dosing_min_pwm_percent)
-                        .clamp(1, 100);
+                    let dose_pwm = config.dosing_pwm_percent.clamp(1, 100);
                     let is_pulse_mode = dose_b_ml < config.dosing_min_dose_ml;
-                    let active_capacity_b =
-                        config.pump_b_capacity_ml_per_sec * (dose_pwm as f32 / 100.0);
+                    let Some(active_capacity_b) =
+                        effective_flow_ml_per_sec(DosePumpKind::PumpB, dose_pwm, config)
+                    else {
+                        warn!("Skip dose pump B: invalid config/pwm (pwm={}%)", dose_pwm);
+                        ctx.stop_all_pumps(pump_ctrl);
+                        ctx.current_state = SystemState::Monitoring;
+                        return;
+                    };
                     let pulse_on_ms = if is_pulse_mode {
                         config.dosing_pulse_on_ms.max(1)
                     } else {

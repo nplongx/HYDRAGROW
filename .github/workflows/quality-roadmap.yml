@@ -92,9 +92,15 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   quality-regression-lock:
+<<<<<<< codex/start-4-week-roadmap-execution-6lx4kz
     name: Week-3 fail-on-new-violations
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'pull_request' }}
+=======
+    name: Week-3 fail-on-new-violations (toggle)
+    runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_BASELINE_LOCK == 'true' }}
+>>>>>>> main
 
     steps:
       - name: Checkout

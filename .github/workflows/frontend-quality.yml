@@ -1,0 +1,40 @@
+name: Frontend Quality
+
+on:
+  pull_request:
+    paths:
+      - 'hydragrow-frontend/**'
+      - '.github/workflows/frontend-quality.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'hydragrow-frontend/**'
+      - '.github/workflows/frontend-quality.yml'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hydragrow-frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: hydragrow-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint

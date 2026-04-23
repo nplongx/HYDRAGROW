@@ -25,7 +25,7 @@ function App() {
               color: '#fff',
               borderRadius: '16px',
               border: '1px solid #334155', // border-slate-700
-            }
+            },
           }}
         />
 

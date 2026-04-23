@@ -14,7 +14,13 @@ const themeClasses = {
   rose: { text: 'text-rose-400', glow: 'bg-rose-500/10' }, // Đã thêm style cho màu rose
 };
 
-export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({ title, value, unit, icon: Icon, theme }) => {
+export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
+  title,
+  value,
+  unit,
+  icon: Icon,
+  theme,
+}) => {
   const styles = themeClasses[theme];
 
   return (
@@ -28,7 +34,9 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({ title, value, 
         {unit && <span className="text-slate-400 ml-1">{unit}</span>}
       </div>
       {/* Hiệu ứng phát sáng góc dưới */}
-      <div className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-2xl ${styles.glow}`}></div>
+      <div
+        className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-2xl ${styles.glow}`}
+      ></div>
     </div>
   );
 };

@@ -11,7 +11,7 @@ export const Switch: React.FC<SwitchProps> = ({
   isOn,
   disabled = false,
   onClick,
-  colorClass = 'bg-emerald-500'
+  colorClass = 'bg-emerald-500',
 }) => {
   return (
     <div

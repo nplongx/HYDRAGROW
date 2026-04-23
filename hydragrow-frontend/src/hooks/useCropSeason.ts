@@ -11,10 +11,13 @@ export const useCropSeason = () => {
   const [history, setHistory] = useState<CropSeason[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const getHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    'X-API-Key': settings?.api_key || ''
-  }), [settings]);
+  const getHeaders = useCallback(
+    () => ({
+      'Content-Type': 'application/json',
+      'X-API-Key': settings?.api_key || '',
+    }),
+    [settings],
+  );
 
   // Hàm parse an toàn để fix lỗi Tauri Stream
   const safeJsonParse = async (res: Response) => {
@@ -23,7 +26,7 @@ export const useCropSeason = () => {
     try {
       return JSON.parse(text);
     } catch (e) {
-      console.warn("Không thể parse JSON:", text);
+      console.warn('Không thể parse JSON:', text);
       return null;
     }
   };
@@ -52,8 +55,8 @@ export const useCropSeason = () => {
         console.warn(`Lỗi API History: ${historyRes.status}`);
       }
     } catch (error) {
-      console.error("Lỗi tải dữ liệu mùa vụ:", error);
-      toast.error("Không thể tải thông tin mùa vụ");
+      console.error('Lỗi tải dữ liệu mùa vụ:', error);
+      toast.error('Không thể tải thông tin mùa vụ');
     } finally {
       setIsLoading(false);
     }
@@ -69,10 +72,10 @@ export const useCropSeason = () => {
       const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/seasons`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ name, plant_type: plantType, description })
+        body: JSON.stringify({ name, plant_type: plantType, description }),
       });
       if (res.ok) {
-        toast.success("Đã bắt đầu mùa vụ mới!");
+        toast.success('Đã bắt đầu mùa vụ mới!');
         await loadSeasons();
         return true;
       } else {
@@ -80,7 +83,7 @@ export const useCropSeason = () => {
         toast.error(`Lỗi: ${err?.message || 'Không thể tạo mùa vụ'}`);
       }
     } catch (error) {
-      toast.error("Lỗi mạng khi tạo mùa vụ");
+      toast.error('Lỗi mạng khi tạo mùa vụ');
     }
     return false;
   };
@@ -92,10 +95,10 @@ export const useCropSeason = () => {
       const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active`, {
         method: 'PUT',
         headers: getHeaders(),
-        body: JSON.stringify({ name, plant_type: plantType, description })
+        body: JSON.stringify({ name, plant_type: plantType, description }),
       });
       if (res.ok) {
-        toast.success("Đã cập nhật thông tin mùa vụ!");
+        toast.success('Đã cập nhật thông tin mùa vụ!');
         await loadSeasons(); // Tải lại dữ liệu mới
         return true;
       } else {
@@ -103,7 +106,7 @@ export const useCropSeason = () => {
         toast.error(`Lỗi: ${err?.message || 'Không thể cập nhật mùa vụ'}`);
       }
     } catch (error) {
-      toast.error("Lỗi mạng khi cập nhật mùa vụ");
+      toast.error('Lỗi mạng khi cập nhật mùa vụ');
     }
     return false;
   };
@@ -111,12 +114,15 @@ export const useCropSeason = () => {
   const endSeason = async () => {
     if (!deviceId || !settings?.backend_url) return false;
     try {
-      const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active/end`, {
-        method: 'PUT',
-        headers: getHeaders()
-      });
+      const res = await fetch(
+        `${settings.backend_url}/api/devices/${deviceId}/seasons/active/end`,
+        {
+          method: 'PUT',
+          headers: getHeaders(),
+        },
+      );
       if (res.ok) {
-        toast.success("Đã kết thúc mùa vụ hiện tại!");
+        toast.success('Đã kết thúc mùa vụ hiện tại!');
         await loadSeasons();
         return true;
       } else {
@@ -124,10 +130,18 @@ export const useCropSeason = () => {
         toast.error(`Lỗi: ${err?.message || 'Không thể kết thúc mùa vụ'}`);
       }
     } catch (error) {
-      toast.error("Lỗi mạng khi kết thúc mùa vụ");
+      toast.error('Lỗi mạng khi kết thúc mùa vụ');
     }
     return false;
   };
 
-  return { activeSeason, history, isLoading, createSeason, endSeason, refresh: loadSeasons, updateSeason };
+  return {
+    activeSeason,
+    history,
+    isLoading,
+    createSeason,
+    endSeason,
+    refresh: loadSeasons,
+    updateSeason,
+  };
 };

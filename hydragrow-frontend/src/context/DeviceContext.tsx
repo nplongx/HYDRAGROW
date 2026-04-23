@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+  useRef,
+} from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import { SensorData, StatusPayload, PumpStatus } from '../types/models';
@@ -32,7 +40,7 @@ const defaultPumpStatus: PumpStatus = {
   osaka_pump: false,
   mist_valve: false,
   water_pump_in: false,
-  water_pump_out: false
+  water_pump_out: false,
 };
 
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
@@ -48,7 +56,7 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
     MIST: 'mist_valve',
     MIST_VALVE: 'mist_valve',
     WATER_PUMP_IN: 'water_pump_in',
-    WATER_PUMP_OUT: 'water_pump_out'
+    WATER_PUMP_OUT: 'water_pump_out',
   };
 
   const normalized = { ...defaultPumpStatus };
@@ -71,7 +79,9 @@ const savePumpStatusToStore = async (pumpStatus: PumpStatus) => {
     const store = await Store.load('device-state.json');
     await store.set(PUMP_STATUS_STORE_KEY, pumpStatus);
     await store.save();
-  } catch (e) { /* bỏ qua */ }
+  } catch (e) {
+    /* bỏ qua */
+  }
 };
 
 const loadPumpStatusFromStore = async (): Promise<PumpStatus | null> => {
@@ -79,7 +89,9 @@ const loadPumpStatusFromStore = async (): Promise<PumpStatus | null> => {
     const store = await Store.load('device-state.json');
     const val = await store.get<PumpStatus>(PUMP_STATUS_STORE_KEY);
     return val ?? null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 };
 
 // 🟢 THÊM MỚI: Hàm load PWM từ ổ cứng
@@ -88,7 +100,9 @@ const loadPwmPrefsFromStore = async (): Promise<Record<string, number> | null> =
     const store = await Store.load('device-state.json');
     const val = await store.get<Record<string, number>>(PWM_PREFS_STORE_KEY);
     return val ?? null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 };
 
 export const DeviceProvider = ({ children }: { children: ReactNode }) => {
@@ -98,9 +112,12 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [controllerHealth, setControllerHealth] = useState<any>(null);
 
-  const [deviceStatus, setDeviceStatus] = useState<StatusPayload>({ is_online: false, last_seen: '' });
+  const [deviceStatus, setDeviceStatus] = useState<StatusPayload>({
+    is_online: false,
+    last_seen: '',
+  });
   const [isControllerStatusKnown, setIsControllerStatusKnown] = useState(false);
-  const [fsmState, setFsmState] = useState<string>("Offline");
+  const [fsmState, setFsmState] = useState<string>('Offline');
   const [systemEvents, setSystemEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -116,8 +133,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
     sensorTimeoutRef.current = setTimeout(() => {
       setIsSensorOnline(false);
-      setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ec: true, err_ph: true } : prev);
-      toast.error("Mất kết nối với Mạch Cảm Biến!");
+      setSensorData((prev) =>
+        prev ? { ...prev, err_water: true, err_temp: true, err_ec: true, err_ph: true } : prev,
+      );
+      toast.error('Mất kết nối với Mạch Cảm Biến!');
     }, 65000);
   }, []);
 
@@ -132,7 +151,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           setIsLoading(false);
         }
       } catch (error) {
-        console.error("Lỗi load settings:", error);
+        console.error('Lỗi load settings:', error);
         setIsLoading(false);
       }
     };
@@ -153,7 +172,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/latest`;
         const response = await fetch(url, {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': settings.api_key }
+          headers: { 'Content-Type': 'application/json', 'X-API-Key': settings.api_key },
         });
         if (response.ok) {
           const resData = await response.json();
@@ -169,25 +188,29 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             ...initialData,
             pump_status: cachedPumpStatus
               ? cachedPumpStatus
-              : normalizePumpStatus(initialData?.pump_status)
+              : normalizePumpStatus(initialData?.pump_status),
           });
         }
-      } catch (err) { /* empty */ }
+      } catch (err) {
+        /* empty */
+      }
       setIsLoading(false);
 
       try {
         const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
           method: 'GET',
-          headers: { 'X-API-Key': settings.api_key || '' }
+          headers: { 'X-API-Key': settings.api_key || '' },
         });
         if (res.ok) {
           const json = await res.json();
           if (json.data && Array.isArray(json.data)) setSystemEvents(json.data);
         }
-      } catch (err) { /* empty */ }
+      } catch (err) {
+        /* empty */
+      }
 
       const connectWs = () => {
-        const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
+        const cleanBaseUrl = settings.backend_url.replace(/\/$/, '');
         const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${settings.api_key}`;
         ws = new WebSocket(wsUrl);
 
@@ -198,8 +221,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
           fetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
-            headers: { 'X-API-Key': settings.api_key }
-          }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));
+            headers: { 'X-API-Key': settings.api_key },
+          }).catch(() => console.log('Lỗi gửi lệnh Sync ban đầu'));
 
           pingInterval = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) ws.send('ping');
@@ -213,17 +236,17 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data.type === 'device_status') {
               const isOnline: boolean = data.payload.is_online ?? false;
               setIsControllerStatusKnown(true);
-              setDeviceStatus(prev => {
+              setDeviceStatus((prev) => {
                 if (prev.is_online !== isOnline) {
-                  if (isOnline) toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
-                  else toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                  if (isOnline) toast.success('Trạm Điều Khiển đã trực tuyến trở lại!');
+                  else toast.error('Đã ngắt kết nối Trạm Điều Khiển (LWT)!');
                 }
                 return { is_online: isOnline, last_seen: new Date().toISOString() };
               });
 
               if (!isOnline) {
-                setFsmState("Offline");
-                setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
+                setFsmState('Offline');
+                setSensorData((prev) => (prev ? { ...prev, pump_status: {} as any } : prev));
               }
               return;
             }
@@ -236,11 +259,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
                 setIsControllerStatusKnown(true);
                 if (isOnline) {
-                  toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
+                  toast.success('Trạm Điều Khiển đã trực tuyến trở lại!');
                 } else {
-                  setFsmState("Offline");
-                  setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
-                  toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                  setFsmState('Offline');
+                  setSensorData((prev) => (prev ? { ...prev, pump_status: {} as any } : prev));
+                  toast.error('Đã ngắt kết nối Trạm Điều Khiển (LWT)!');
                 }
                 return;
               }
@@ -249,11 +272,15 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 const onlineStatus = alert.level === 'success';
                 setIsSensorOnline(onlineStatus);
                 if (!onlineStatus) {
-                  toast.error("Mạch Cảm Biến đã mất kết nối!");
-                  setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ph: true, err_ec: true } : prev);
+                  toast.error('Mạch Cảm Biến đã mất kết nối!');
+                  setSensorData((prev) =>
+                    prev
+                      ? { ...prev, err_water: true, err_temp: true, err_ph: true, err_ec: true }
+                      : prev,
+                  );
                   if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
                 } else {
-                  toast.success("Mạch Cảm Biến đã trực tuyến!");
+                  toast.success('Mạch Cảm Biến đã trực tuyến!');
                   resetSensorTimeout();
                 }
                 return;
@@ -264,12 +291,20 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 return;
               }
 
-              setSystemEvents(prev => [alert, ...prev].slice(0, 50));
+              setSystemEvents((prev) => [alert, ...prev].slice(0, 50));
               switch (alert.level) {
-                case 'critical': toast.error(`🚨 ${alert.title}\n${alert.message}`, { duration: 10000 }); break;
-                case 'warning': toast.error(`⚠️ ${alert.title}\n${alert.message}`, { duration: 6000 }); break;
-                case 'success': toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 }); break;
-                default: toast(`ℹ️ ${alert.title}`, { duration: 4000 }); break;
+                case 'critical':
+                  toast.error(`🚨 ${alert.title}\n${alert.message}`, { duration: 10000 });
+                  break;
+                case 'warning':
+                  toast.error(`⚠️ ${alert.title}\n${alert.message}`, { duration: 6000 });
+                  break;
+                case 'success':
+                  toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 });
+                  break;
+                default:
+                  toast(`ℹ️ ${alert.title}`, { duration: 4000 });
+                  break;
               }
               return;
             }
@@ -277,26 +312,57 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data.type === 'sensor_update') {
               const incomingPayload = data.payload.data || data.payload;
 
-              setSensorData(prev => {
+              setSensorData((prev) => {
                 if (!prev) return incomingPayload;
                 return {
                   ...prev,
-                  pump_status: incomingPayload.pump_status !== undefined
-                    ? normalizePumpStatus(incomingPayload.pump_status)
-                    : prev.pump_status,
-                  temp_value: incomingPayload.temp_value !== undefined ? incomingPayload.temp_value : prev.temp_value,
-                  ec_value: incomingPayload.ec_value !== undefined ? incomingPayload.ec_value : prev.ec_value,
-                  ph_value: incomingPayload.ph_value !== undefined ? incomingPayload.ph_value : prev.ph_value,
-                  water_level: incomingPayload.water_level !== undefined ? incomingPayload.water_level : prev.water_level,
-                  err_water: incomingPayload.err_water !== undefined ? incomingPayload.err_water : prev.err_water,
-                  err_temp: incomingPayload.err_temp !== undefined ? incomingPayload.err_temp : prev.err_temp,
-                  err_ph: incomingPayload.err_ph !== undefined ? incomingPayload.err_ph : prev.err_ph,
-                  err_ec: incomingPayload.err_ec !== undefined ? incomingPayload.err_ec : prev.err_ec,
-                  is_continuous: incomingPayload.is_continuous !== undefined ? incomingPayload.is_continuous : prev.is_continuous,
+                  pump_status:
+                    incomingPayload.pump_status !== undefined
+                      ? normalizePumpStatus(incomingPayload.pump_status)
+                      : prev.pump_status,
+                  temp_value:
+                    incomingPayload.temp_value !== undefined
+                      ? incomingPayload.temp_value
+                      : prev.temp_value,
+                  ec_value:
+                    incomingPayload.ec_value !== undefined
+                      ? incomingPayload.ec_value
+                      : prev.ec_value,
+                  ph_value:
+                    incomingPayload.ph_value !== undefined
+                      ? incomingPayload.ph_value
+                      : prev.ph_value,
+                  water_level:
+                    incomingPayload.water_level !== undefined
+                      ? incomingPayload.water_level
+                      : prev.water_level,
+                  err_water:
+                    incomingPayload.err_water !== undefined
+                      ? incomingPayload.err_water
+                      : prev.err_water,
+                  err_temp:
+                    incomingPayload.err_temp !== undefined
+                      ? incomingPayload.err_temp
+                      : prev.err_temp,
+                  err_ph:
+                    incomingPayload.err_ph !== undefined ? incomingPayload.err_ph : prev.err_ph,
+                  err_ec:
+                    incomingPayload.err_ec !== undefined ? incomingPayload.err_ec : prev.err_ec,
+                  is_continuous:
+                    incomingPayload.is_continuous !== undefined
+                      ? incomingPayload.is_continuous
+                      : prev.is_continuous,
                   rssi: incomingPayload.rssi !== undefined ? incomingPayload.rssi : prev.rssi,
-                  free_heap: incomingPayload.free_heap !== undefined ? incomingPayload.free_heap : prev.free_heap,
-                  uptime: incomingPayload.uptime !== undefined ? incomingPayload.uptime : prev.uptime,
-                  ph_voltage_mv: incomingPayload.ph_voltage_mv !== undefined ? incomingPayload.ph_voltage_mv : prev.ph_voltage_mv,
+                  free_heap:
+                    incomingPayload.free_heap !== undefined
+                      ? incomingPayload.free_heap
+                      : prev.free_heap,
+                  uptime:
+                    incomingPayload.uptime !== undefined ? incomingPayload.uptime : prev.uptime,
+                  ph_voltage_mv:
+                    incomingPayload.ph_voltage_mv !== undefined
+                      ? incomingPayload.ph_voltage_mv
+                      : prev.ph_voltage_mv,
                 };
               });
 
@@ -311,7 +377,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               setControllerHealth({
                 rssi: healthData.rssi,
                 free_heap: healthData.free_heap,
-                uptime: healthData.uptime_sec
+                uptime: healthData.uptime_sec,
               });
 
               const confirmedPumpStatus = normalizePumpStatus(healthData.pump_status);
@@ -320,25 +386,31 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               // 🟢 THÊM MỚI: Cập nhật lại PWM vào App nếu ESP32 có gửi kèm
               if (healthData.pump_status) {
                 const raw = healthData.pump_status;
-                if (raw.pump_a_pwm !== undefined && raw.pump_a_pwm > 0) savePwmPreference('PUMP_A', raw.pump_a_pwm);
-                if (raw.pump_b_pwm !== undefined && raw.pump_b_pwm > 0) savePwmPreference('PUMP_B', raw.pump_b_pwm);
-                if (raw.ph_up_pwm !== undefined && raw.ph_up_pwm > 0) savePwmPreference('PH_UP', raw.ph_up_pwm);
-                if (raw.ph_down_pwm !== undefined && raw.ph_down_pwm > 0) savePwmPreference('PH_DOWN', raw.ph_down_pwm);
-                if (raw.osaka_pwm !== undefined && raw.osaka_pwm > 0) savePwmPreference('OSAKA', raw.osaka_pwm);
+                if (raw.pump_a_pwm !== undefined && raw.pump_a_pwm > 0)
+                  savePwmPreference('PUMP_A', raw.pump_a_pwm);
+                if (raw.pump_b_pwm !== undefined && raw.pump_b_pwm > 0)
+                  savePwmPreference('PUMP_B', raw.pump_b_pwm);
+                if (raw.ph_up_pwm !== undefined && raw.ph_up_pwm > 0)
+                  savePwmPreference('PH_UP', raw.ph_up_pwm);
+                if (raw.ph_down_pwm !== undefined && raw.ph_down_pwm > 0)
+                  savePwmPreference('PH_DOWN', raw.ph_down_pwm);
+                if (raw.osaka_pwm !== undefined && raw.osaka_pwm > 0)
+                  savePwmPreference('OSAKA', raw.osaka_pwm);
               }
 
-              setSensorData(prev => {
+              setSensorData((prev) => {
                 if (!prev) return prev;
                 return { ...prev, pump_status: confirmedPumpStatus };
               });
 
-              setDeviceStatus(prev => !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev);
+              setDeviceStatus((prev) =>
+                !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev,
+              );
               setIsControllerStatusKnown(true);
               return;
             }
-
           } catch (err) {
-            console.error("Lỗi parse WS Message:", err);
+            console.error('Lỗi parse WS Message:', err);
           }
         };
 
@@ -350,7 +422,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           clearInterval(pingInterval);
           if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
 
-          reconnectTimeout = setTimeout(() => { connectWs(); }, 5000);
+          reconnectTimeout = setTimeout(() => {
+            connectWs();
+          }, 5000);
         };
 
         ws.onerror = (_err) => ws.close();
@@ -373,11 +447,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   }, [deviceId, settings, resetSensorTimeout]);
 
   const updatePumpStatusOptimistically = useCallback((stateKey: string, isNowOn: boolean) => {
-    setSensorData(prevData => {
+    setSensorData((prevData) => {
       if (!prevData) return prevData;
       const newPumpStatus = {
         ...prevData.pump_status,
-        [stateKey]: isNowOn
+        [stateKey]: isNowOn,
       };
 
       savePumpStatusToStore(newPumpStatus as PumpStatus);
@@ -388,23 +462,37 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   // 🟢 THÊM MỚI: Cài đặt logic cho hàm savePwmPreference
   const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
-    setPwmPreferences(prev => {
+    setPwmPreferences((prev) => {
       const updated = { ...prev, [pumpId]: pwm };
-      Store.load('device-state.json').then(store => {
-        store.set(PWM_PREFS_STORE_KEY, updated);
-        store.save();
-      }).catch(() => { });
+      Store.load('device-state.json')
+        .then((store) => {
+          store.set(PWM_PREFS_STORE_KEY, updated);
+          store.save();
+        })
+        .catch(() => {});
       return updated;
     });
   }, []);
 
   return (
-    <DeviceContext.Provider value={{
-      deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
-      updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline,
-      // 🟢 THÊM MỚI: Export các biến/hàm này ra để ControlPanel.tsx có thể xài được
-      pwmPreferences, savePwmPreference
-    }}>
+    <DeviceContext.Provider
+      value={{
+        deviceId,
+        sensorData,
+        deviceStatus,
+        isControllerStatusKnown,
+        controllerHealth,
+        fsmState,
+        isLoading,
+        updatePumpStatusOptimistically,
+        settings,
+        systemEvents,
+        isSensorOnline,
+        // 🟢 THÊM MỚI: Export các biến/hàm này ra để ControlPanel.tsx có thể xài được
+        pwmPreferences,
+        savePwmPreference,
+      }}
+    >
       {children}
     </DeviceContext.Provider>
   );
@@ -412,6 +500,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
 export const useDeviceContext = () => {
   const context = useContext(DeviceContext);
-  if (context === undefined) throw new Error('useDeviceContext must be used within a DeviceProvider');
+  if (context === undefined)
+    throw new Error('useDeviceContext must be used within a DeviceProvider');
   return context;
 };

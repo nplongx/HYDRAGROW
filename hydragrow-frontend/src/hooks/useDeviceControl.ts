@@ -9,53 +9,51 @@ export const useDeviceControl = (deviceId: string) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Hàm gửi command chung (Đảm bảo cấu trúc chuẩn với Backend Rust)
-  const sendCommand = useCallback(async (
-    pump: string,
-    action: string,
-    duration_sec?: number,
-    pwm?: number
-  ) => {
-    if (!deviceId || !settings?.backend_url) {
-      toast.error("Chưa cấu hình thiết bị hoặc máy chủ!");
-      return false;
-    }
-
-    setIsProcessing(true);
-    try {
-      // Body chuẩn khớp với MqttCommandPayload của ESP32
-      const payload = {
-        pump: pump,
-        action: action,
-        duration_sec: duration_sec || null,
-        pwm: pwm || null
-      };
-
-      const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/control`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': settings.api_key || ''
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pump}`);
-        return true;
-      } else {
-        const errorText = await res.text();
-        console.error(`HTTP ${res.status}:`, errorText);
-        toast.error(`Từ chối lệnh: HTTP ${res.status}`);
+  const sendCommand = useCallback(
+    async (pump: string, action: string, duration_sec?: number, pwm?: number) => {
+      if (!deviceId || !settings?.backend_url) {
+        toast.error('Chưa cấu hình thiết bị hoặc máy chủ!');
         return false;
       }
-    } catch (error: any) {
-      console.error(`Lỗi thực thi lệnh (${pump}):`, error);
-      toast.error("Lỗi mạng khi gửi lệnh!");
-      return false;
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [deviceId, settings]);
+
+      setIsProcessing(true);
+      try {
+        // Body chuẩn khớp với MqttCommandPayload của ESP32
+        const payload = {
+          pump: pump,
+          action: action,
+          duration_sec: duration_sec || null,
+          pwm: pwm || null,
+        };
+
+        const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/control`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': settings.api_key || '',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pump}`);
+          return true;
+        } else {
+          const errorText = await res.text();
+          console.error(`HTTP ${res.status}:`, errorText);
+          toast.error(`Từ chối lệnh: HTTP ${res.status}`);
+          return false;
+        }
+      } catch (error: any) {
+        console.error(`Lỗi thực thi lệnh (${pump}):`, error);
+        toast.error('Lỗi mạng khi gửi lệnh!');
+        return false;
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [deviceId, settings],
+  );
 
   // 1. Lệnh Bật/Tắt bình thường
   const togglePump = (pumpId: string, action: 'on' | 'off') => {

@@ -15,23 +15,46 @@ interface ControlCardProps {
   currentPwm?: number;
   isOnline: boolean;
   isProcessing: boolean;
-  onToggle: (id: string, action: 'on' | 'off', isLocked: boolean, pwm?: number, title?: string) => void;
+  onToggle: (
+    id: string,
+    action: 'on' | 'off',
+    isLocked: boolean,
+    pwm?: number,
+    title?: string,
+  ) => void;
   onPwmChange?: (id: string, val: number) => void;
   onPwmCommit?: (id: string, val: number, title: string) => void;
 }
 
 export const ControlCard: React.FC<ControlCardProps> = ({
-  title, icon: Icon, colorClass, borderClass, isOn, lockedMessage, pumpId,
-  supportsPwm = false, currentPwm = 100, isOnline, isProcessing,
-  onToggle, onPwmChange, onPwmCommit
+  title,
+  icon: Icon,
+  colorClass,
+  borderClass,
+  isOn,
+  lockedMessage,
+  pumpId,
+  supportsPwm = false,
+  currentPwm = 100,
+  isOnline,
+  isProcessing,
+  onToggle,
+  onPwmChange,
+  onPwmCommit,
 }) => {
   const isLocked = !!lockedMessage && !isOn;
 
   const handleClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
-    if (!isOnline) { toast.error("Thiết bị Offline!"); return; }
+    if (!isOnline) {
+      toast.error('Thiết bị Offline!');
+      return;
+    }
     if (isProcessing) return;
-    if (isLocked) { toast.error(lockedMessage); return; }
+    if (isLocked) {
+      toast.error(lockedMessage);
+      return;
+    }
 
     const pwmToPass = supportsPwm ? currentPwm : undefined;
     onToggle(pumpId, isOn ? 'off' : 'on', isLocked, pwmToPass, title);
@@ -45,19 +68,29 @@ export const ControlCard: React.FC<ControlCardProps> = ({
         ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}
       `}
     >
-      <div className={`flex items-center justify-between z-10 w-full transition-opacity ${isLocked ? 'opacity-50 grayscale' : ''}`}>
+      <div
+        className={`flex items-center justify-between z-10 w-full transition-opacity ${isLocked ? 'opacity-50 grayscale' : ''}`}
+      >
         <div className="flex items-center space-x-4 overflow-hidden">
-          <div className={`p-3 rounded-2xl shrink-0 transition-all duration-500 ${isOn ? `bg-slate-950 shadow-inner ${colorClass}` : 'bg-slate-800/50 text-slate-500'}`}>
-            <Icon size={24} className={isOn ? "animate-pulse" : ""} />
+          <div
+            className={`p-3 rounded-2xl shrink-0 transition-all duration-500 ${isOn ? `bg-slate-950 shadow-inner ${colorClass}` : 'bg-slate-800/50 text-slate-500'}`}
+          >
+            <Icon size={24} className={isOn ? 'animate-pulse' : ''} />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className={`font-bold tracking-wide truncate ${isOn ? 'text-white' : 'text-slate-300'}`}>
+            <span
+              className={`font-bold tracking-wide truncate ${isOn ? 'text-white' : 'text-slate-300'}`}
+            >
               {title}
             </span>
             {supportsPwm && isOn ? (
-              <span className={`text-xs font-semibold mt-0.5 ${colorClass}`}>PWM: {currentPwm}%</span>
+              <span className={`text-xs font-semibold mt-0.5 ${colorClass}`}>
+                PWM: {currentPwm}%
+              </span>
             ) : (
-              <span className="text-[11px] font-medium text-slate-500 mt-0.5">{isOn ? 'Đang chạy' : 'Đã tắt'}</span>
+              <span className="text-[11px] font-medium text-slate-500 mt-0.5">
+                {isOn ? 'Đang chạy' : 'Đã tắt'}
+              </span>
             )}
           </div>
         </div>
@@ -79,10 +112,15 @@ export const ControlCard: React.FC<ControlCardProps> = ({
       )}
 
       {supportsPwm && !isLocked && onPwmChange && onPwmCommit && (
-        <div className={`transition-all duration-300 ease-out overflow-hidden ${isOn ? 'max-h-20 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}>
+        <div
+          className={`transition-all duration-300 ease-out overflow-hidden ${isOn ? 'max-h-20 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}
+        >
           <div className="px-1">
             <input
-              type="range" min="10" max="100" step="5"
+              type="range"
+              min="10"
+              max="100"
+              step="5"
               value={currentPwm}
               onChange={(e) => onPwmChange(pumpId, parseInt(e.target.value))}
               onMouseUp={() => onPwmCommit(pumpId, currentPwm, title)}
@@ -91,7 +129,9 @@ export const ControlCard: React.FC<ControlCardProps> = ({
               style={{ accentColor: 'currentColor' }}
             />
             <div className="flex justify-between text-[10px] text-slate-500 font-semibold mt-1.5 px-1">
-              <span>Nhẹ</span><span>Vừa</span><span>Mạnh</span>
+              <span>Nhẹ</span>
+              <span>Vừa</span>
+              <span>Mạnh</span>
             </div>
           </div>
         </div>

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/capabilities/
+public/firebase-messaging-sw.js
+package-lock.json
+*.min.js

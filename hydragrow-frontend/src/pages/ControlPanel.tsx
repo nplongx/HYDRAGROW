@@ -1,7 +1,18 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  Settings2, FlaskConical, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw, Zap,
-  Waves, Play, Target
+  Settings2,
+  FlaskConical,
+  Droplets,
+  Wind,
+  Power,
+  AlertTriangle,
+  Timer,
+  Activity,
+  RefreshCw,
+  Zap,
+  Waves,
+  Play,
+  Target,
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -9,12 +20,48 @@ import { PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
 
 const NEON_COLORS: Record<string, any> = {
-  orange: { bg: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/50', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]', glow: 'from-orange-500/20' },
-  purple: { bg: 'bg-purple-500', text: 'text-purple-400', border: 'border-purple-500/50', shadow: 'shadow-[0_0_20px_rgba(168,85,247,0.3)]', glow: 'from-purple-500/20' },
-  blue: { bg: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500/50', shadow: 'shadow-[0_0_20px_rgba(59,130,246,0.3)]', glow: 'from-blue-500/20' },
-  cyan: { bg: 'bg-cyan-500', text: 'text-cyan-400', border: 'border-cyan-500/50', shadow: 'shadow-[0_0_20px_rgba(6,182,212,0.3)]', glow: 'from-cyan-500/20' },
-  indigo: { bg: 'bg-indigo-500', text: 'text-indigo-400', border: 'border-indigo-500/50', shadow: 'shadow-[0_0_20px_rgba(99,102,241,0.3)]', glow: 'from-indigo-500/20' },
-  sky: { bg: 'bg-sky-500', text: 'text-sky-400', border: 'border-sky-500/50', shadow: 'shadow-[0_0_20px_rgba(14,165,233,0.3)]', glow: 'from-sky-500/20' },
+  orange: {
+    bg: 'bg-orange-500',
+    text: 'text-orange-400',
+    border: 'border-orange-500/50',
+    shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]',
+    glow: 'from-orange-500/20',
+  },
+  purple: {
+    bg: 'bg-purple-500',
+    text: 'text-purple-400',
+    border: 'border-purple-500/50',
+    shadow: 'shadow-[0_0_20px_rgba(168,85,247,0.3)]',
+    glow: 'from-purple-500/20',
+  },
+  blue: {
+    bg: 'bg-blue-500',
+    text: 'text-blue-400',
+    border: 'border-blue-500/50',
+    shadow: 'shadow-[0_0_20px_rgba(59,130,246,0.3)]',
+    glow: 'from-blue-500/20',
+  },
+  cyan: {
+    bg: 'bg-cyan-500',
+    text: 'text-cyan-400',
+    border: 'border-cyan-500/50',
+    shadow: 'shadow-[0_0_20px_rgba(6,182,212,0.3)]',
+    glow: 'from-cyan-500/20',
+  },
+  indigo: {
+    bg: 'bg-indigo-500',
+    text: 'text-indigo-400',
+    border: 'border-indigo-500/50',
+    shadow: 'shadow-[0_0_20px_rgba(99,102,241,0.3)]',
+    glow: 'from-indigo-500/20',
+  },
+  sky: {
+    bg: 'bg-sky-500',
+    text: 'text-sky-400',
+    border: 'border-sky-500/50',
+    shadow: 'shadow-[0_0_20px_rgba(14,165,233,0.3)]',
+    glow: 'from-sky-500/20',
+  },
 };
 
 // --- Component: Trợ Lý Châm Bán Thủ Công (Tự tính từ Ngưỡng EC/pH) ---
@@ -22,7 +69,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
   const { forceOn } = useDeviceControl(deviceId);
   const [selectedPump, setSelectedPump] = useState('PUMP_A');
   const [targetValue, setTargetValue] = useState<number | ''>(''); // Ngưỡng mong muốn
-  const [volumeMl, setVolumeMl] = useState<number>(0);             // Cần châm (mL)
+  const [volumeMl, setVolumeMl] = useState<number>(0); // Cần châm (mL)
   const [capacityMlPerSec, setCapacityMlPerSec] = useState<number>(1.2);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -37,11 +84,16 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
   const getCalibratedCapacity = (pumpId: string) => {
     if (!dosingCalibration) return 1.2;
     switch (pumpId) {
-      case 'PUMP_A': return dosingCalibration.pump_a_capacity_ml_per_sec || 1.2;
-      case 'PUMP_B': return dosingCalibration.pump_b_capacity_ml_per_sec || 1.2;
-      case 'PH_UP': return dosingCalibration.pump_ph_up_capacity_ml_per_sec || 1.2;
-      case 'PH_DOWN': return dosingCalibration.pump_ph_down_capacity_ml_per_sec || 1.2;
-      default: return 1.2;
+      case 'PUMP_A':
+        return dosingCalibration.pump_a_capacity_ml_per_sec || 1.2;
+      case 'PUMP_B':
+        return dosingCalibration.pump_b_capacity_ml_per_sec || 1.2;
+      case 'PH_UP':
+        return dosingCalibration.pump_ph_up_capacity_ml_per_sec || 1.2;
+      case 'PH_DOWN':
+        return dosingCalibration.pump_ph_down_capacity_ml_per_sec || 1.2;
+      default:
+        return 1.2;
     }
   };
 
@@ -82,7 +134,12 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
   }, [volumeMl, capacityMlPerSec]);
 
   const handleDose = async () => {
-    if (!window.confirm(`Xác nhận châm ${volumeMl}mL (khoảng ${durationSec}s)?\nHệ thống sẽ cố gắng đạt ngưỡng ${targetValue || 'mong muốn'}.`)) return;
+    if (
+      !window.confirm(
+        `Xác nhận châm ${volumeMl}mL (khoảng ${durationSec}s)?\nHệ thống sẽ cố gắng đạt ngưỡng ${targetValue || 'mong muốn'}.`,
+      )
+    )
+      return;
 
     setIsProcessing(true);
     await forceOn(selectedPump, durationSec);
@@ -100,8 +157,12 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
               <Target size={20} />
             </div>
             <div>
-              <h3 className="font-black tracking-wide text-white uppercase text-sm">Trợ lý châm thông minh (Bán thủ công)</h3>
-              <p className="text-[10px] text-emerald-400/80 font-medium tracking-wider">Chỉ cần nhập ngưỡng đích, hệ thống tự nhẩm số mL</p>
+              <h3 className="font-black tracking-wide text-white uppercase text-sm">
+                Trợ lý châm thông minh (Bán thủ công)
+              </h3>
+              <p className="text-[10px] text-emerald-400/80 font-medium tracking-wider">
+                Chỉ cần nhập ngưỡng đích, hệ thống tự nhẩm số mL
+              </p>
             </div>
           </div>
         </div>
@@ -109,7 +170,9 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           {/* Cột 1: Chọn Dung Dịch */}
           <div className="space-y-1.5 col-span-2 lg:col-span-1">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Loại Dung Dịch</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">
+              Loại Dung Dịch
+            </label>
             <select
               value={selectedPump}
               onChange={(e) => setSelectedPump(e.target.value)}
@@ -132,7 +195,9 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
               </span>
             </label>
             <input
-              type="number" step="0.1" placeholder="Vd: 1.5"
+              type="number"
+              step="0.1"
+              placeholder="Vd: 1.5"
               value={targetValue}
               onChange={(e) => setTargetValue(e.target.value === '' ? '' : Number(e.target.value))}
               disabled={!isOnline || isProcessing}
@@ -142,9 +207,13 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
 
           {/* Cột 3: Thể Tích */}
           <div className="space-y-1.5 col-span-1 lg:col-span-1">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Tính ra (mL)</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">
+              Tính ra (mL)
+            </label>
             <input
-              type="number" min="0" step="1"
+              type="number"
+              min="0"
+              step="1"
               value={volumeMl}
               onChange={(e) => setVolumeMl(Number(e.target.value))}
               disabled={!isOnline || isProcessing}
@@ -161,14 +230,17 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
               )}
             </label>
             <input
-              type="number" min="0.1" step="0.1"
+              type="number"
+              min="0.1"
+              step="0.1"
               value={capacityMlPerSec}
               onChange={(e) => setCapacityMlPerSec(Number(e.target.value))}
               disabled={!isOnline || isProcessing}
-              className={`w-full bg-slate-800/80 border text-sm font-bold rounded-xl px-4 py-2.5 focus:ring-2 outline-none transition-colors ${capacityMlPerSec === getCalibratedCapacity(selectedPump)
-                ? 'border-emerald-500/50 text-emerald-300 focus:ring-emerald-500'
-                : 'border-amber-500/50 text-amber-300 focus:ring-amber-500'
-                }`}
+              className={`w-full bg-slate-800/80 border text-sm font-bold rounded-xl px-4 py-2.5 focus:ring-2 outline-none transition-colors ${
+                capacityMlPerSec === getCalibratedCapacity(selectedPump)
+                  ? 'border-emerald-500/50 text-emerald-300 focus:ring-emerald-500'
+                  : 'border-amber-500/50 text-amber-300 focus:ring-amber-500'
+              }`}
             />
           </div>
 
@@ -178,7 +250,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
             disabled={!isOnline || isProcessing || volumeMl <= 0 || capacityMlPerSec <= 0}
             className="w-full h-[42px] col-span-2 lg:col-span-1 flex items-center justify-center gap-2 bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all disabled:opacity-50 disabled:hover:shadow-none active:scale-95"
           >
-            <Play size={14} className={isProcessing ? "animate-pulse" : ""} />
+            <Play size={14} className={isProcessing ? 'animate-pulse' : ''} />
             Châm {durationSec} Giây
           </button>
         </div>
@@ -189,7 +261,16 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
 
 // --- Component: Khối Điều Khiển Pha Lê ---
 const AdvancedDeviceControl = ({
-  deviceId, pumpId, title, icon: Icon, colorTheme, currentStatus, allowPwm = false, updatePumpStatusOptimistically, isOnline, isEmergency
+  deviceId,
+  pumpId,
+  title,
+  icon: Icon,
+  colorTheme,
+  currentStatus,
+  allowPwm = false,
+  updatePumpStatusOptimistically,
+  isOnline,
+  isEmergency,
 }: any) => {
   const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId);
 
@@ -274,20 +355,33 @@ const AdvancedDeviceControl = ({
   };
 
   return (
-    <div className={`relative bg-slate-900/40 backdrop-blur-xl rounded-[2rem] p-5 transition-all duration-500 overflow-hidden group ${currentStatus ? `border ${theme.border} ${theme.shadow}` : 'border border-white/5'
-      }`}>
-
-      <div className={`absolute inset-0 bg-gradient-to-br ${theme.glow} to-transparent opacity-0 transition-opacity duration-500 pointer-events-none ${currentStatus ? 'opacity-100' : ''}`}></div>
+    <div
+      className={`relative bg-slate-900/40 backdrop-blur-xl rounded-[2rem] p-5 transition-all duration-500 overflow-hidden group ${
+        currentStatus ? `border ${theme.border} ${theme.shadow}` : 'border border-white/5'
+      }`}
+    >
+      <div
+        className={`absolute inset-0 bg-gradient-to-br ${theme.glow} to-transparent opacity-0 transition-opacity duration-500 pointer-events-none ${currentStatus ? 'opacity-100' : ''}`}
+      ></div>
 
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center space-x-3">
-            <div className={`p-3 rounded-2xl transition-all duration-500 ${currentStatus ? `${theme.bg} text-white shadow-lg` : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'
-              }`}>
-              <Icon size={20} className={currentStatus ? "animate-pulse" : ""} />
+            <div
+              className={`p-3 rounded-2xl transition-all duration-500 ${
+                currentStatus
+                  ? `${theme.bg} text-white shadow-lg`
+                  : 'bg-slate-800 text-slate-400 group-hover:bg-slate-700'
+              }`}
+            >
+              <Icon size={20} className={currentStatus ? 'animate-pulse' : ''} />
             </div>
             <div>
-              <h3 className={`font-black tracking-wide ${currentStatus ? 'text-white' : 'text-slate-300'}`}>{title}</h3>
+              <h3
+                className={`font-black tracking-wide ${currentStatus ? 'text-white' : 'text-slate-300'}`}
+              >
+                {title}
+              </h3>
               <p className="text-[10px] text-slate-500 font-mono tracking-widest">{pumpId}</p>
             </div>
           </div>
@@ -295,27 +389,35 @@ const AdvancedDeviceControl = ({
           <button
             disabled={!isOnline || isProcessing || (isEmergency && !currentStatus)}
             onClick={handleToggle}
-            className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 active:scale-95 disabled:opacity-50 ${currentStatus
-              ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)]'
-              : (isEmergency && !currentStatus)
-                ? 'bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700'
-              }`}
+            className={`px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all duration-300 active:scale-95 disabled:opacity-50 ${
+              currentStatus
+                ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)]'
+                : isEmergency && !currentStatus
+                  ? 'bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700'
+            }`}
           >
             {currentStatus ? 'TẮT' : 'BẬT'}
           </button>
         </div>
 
-        <div className={`space-y-4 pt-4 border-t transition-all duration-500 ${currentStatus ? `border-${colorTheme}-500/20` : 'border-slate-800/50'}`}>
+        <div
+          className={`space-y-4 pt-4 border-t transition-all duration-500 ${currentStatus ? `border-${colorTheme}-500/20` : 'border-slate-800/50'}`}
+        >
           {allowPwm && (
             <div className="space-y-2.5">
               <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                <span className="flex items-center gap-1.5"><Activity size={12} className={currentStatus ? theme.text : ''} /> Công suất (PWM)</span>
+                <span className="flex items-center gap-1.5">
+                  <Activity size={12} className={currentStatus ? theme.text : ''} /> Công suất (PWM)
+                </span>
                 <span className={currentStatus ? theme.text : 'text-white'}>{pwmValue}%</span>
               </div>
               <div className="flex items-center gap-3">
                 <input
-                  type="range" min="10" max="100" step="10"
+                  type="range"
+                  min="10"
+                  max="100"
+                  step="10"
                   value={pwmValue}
                   onChange={(e) => setPwmValue(parseInt(e.target.value))}
                   disabled={!isOnline || isProcessing || isEmergency}
@@ -324,8 +426,11 @@ const AdvancedDeviceControl = ({
                 <button
                   onClick={handleSetPwm}
                   disabled={!isOnline || isProcessing || isEmergency}
-                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:opacity-50 ${currentStatus && !isEmergency ? `${theme.bg} text-white` : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'
-                    }`}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:opacity-50 ${
+                    currentStatus && !isEmergency
+                      ? `${theme.bg} text-white`
+                      : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'
+                  }`}
                 >
                   SET
                 </button>
@@ -335,7 +440,9 @@ const AdvancedDeviceControl = ({
 
           <div className="space-y-2.5 pt-1">
             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              <span className="flex items-center gap-1.5"><Timer size={12} className="text-amber-500" /> Hẹn giờ chạy</span>
+              <span className="flex items-center gap-1.5">
+                <Timer size={12} className="text-amber-500" /> Hẹn giờ chạy
+              </span>
             </div>
             <div className="flex gap-2">
               <select
@@ -354,12 +461,11 @@ const AdvancedDeviceControl = ({
                 disabled={!isOnline || isProcessing}
                 className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-amber-500 hover:text-white hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all disabled:opacity-50"
               >
-                <Zap size={14} className={isProcessing ? "animate-pulse" : ""} /> FORCE
+                <Zap size={14} className={isProcessing ? 'animate-pulse' : ''} /> FORCE
               </button>
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -367,8 +473,17 @@ const AdvancedDeviceControl = ({
 
 // --- Bảng Điều Khiển Chính ---
 const ControlPanel = () => {
-  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, updatePumpStatusOptimistically, fsmState, settings } = useDeviceContext();
-  const { isProcessing, resetFault } = useDeviceControl(deviceId || "");
+  const {
+    deviceId,
+    sensorData,
+    deviceStatus,
+    isControllerStatusKnown,
+    isLoading,
+    updatePumpStatusOptimistically,
+    fsmState,
+    settings,
+  } = useDeviceContext();
+  const { isProcessing, resetFault } = useDeviceControl(deviceId || '');
 
   if (isLoading || !sensorData) {
     return (
@@ -380,17 +495,16 @@ const ControlPanel = () => {
 
   const isOnline = deviceStatus?.is_online || false;
   const showDisconnected = isControllerStatusKnown && !isOnline;
-  const pumps: Partial<PumpStatus> = isOnline ? (sensorData.pump_status || {}) : {};
+  const pumps: Partial<PumpStatus> = isOnline ? sensorData.pump_status || {} : {};
 
   const isEmergency = Boolean(
     fsmState?.toUpperCase().includes('EMERGENCY') ||
     fsmState?.toUpperCase().includes('FAULT') ||
-    fsmState?.toUpperCase().includes('LỖI')
+    fsmState?.toUpperCase().includes('LỖI'),
   );
 
   return (
     <div className="p-4 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32 relative min-h-screen">
-
       <div className="absolute top-0 right-0 w-[80%] h-64 bg-gradient-to-bl from-indigo-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
 
       {/* Header */}
@@ -406,11 +520,16 @@ const ControlPanel = () => {
         <button
           disabled={!isOnline || isProcessing}
           onClick={async () => {
-            if (window.confirm("CẢNH BÁO: Reset lỗi sẽ khởi động lại toàn bộ chu trình FSM. Xác nhận?")) await resetFault();
+            if (
+              window.confirm(
+                'CẢNH BÁO: Reset lỗi sẽ khởi động lại toàn bộ chu trình FSM. Xác nhận?',
+              )
+            )
+              await resetFault();
           }}
           className="flex items-center gap-2 px-4 py-2.5 bg-rose-500/10 text-rose-500 border border-rose-500/30 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white hover:shadow-[0_0_15px_rgba(244,63,94,0.5)] transition-all disabled:opacity-50 disabled:hover:bg-rose-500/10 disabled:hover:text-rose-500 disabled:hover:shadow-none"
         >
-          <RefreshCw size={14} className={isProcessing ? "animate-spin" : ""} />
+          <RefreshCw size={14} className={isProcessing ? 'animate-spin' : ''} />
           Reset Lỗi
         </button>
       </div>
@@ -429,8 +548,12 @@ const ControlPanel = () => {
         <div className="bg-amber-500/10 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.15)] relative z-10 animate-in zoom-in">
           <AlertTriangle size={24} className="animate-pulse" />
           <div>
-            <h4 className="font-bold text-sm uppercase tracking-wider">Hệ Thống Đang Lỗi / Khẩn Cấp</h4>
-            <p className="text-xs text-amber-400/80">Các lệnh bật bình thường và set PWM đã bị khóa. Hãy sử dụng lệnh <b>FORCE</b>.</p>
+            <h4 className="font-bold text-sm uppercase tracking-wider">
+              Hệ Thống Đang Lỗi / Khẩn Cấp
+            </h4>
+            <p className="text-xs text-amber-400/80">
+              Các lệnh bật bình thường và set PWM đã bị khóa. Hãy sử dụng lệnh <b>FORCE</b>.
+            </p>
           </div>
         </div>
       )}
@@ -449,10 +572,54 @@ const ControlPanel = () => {
           <FlaskConical size={14} className="text-orange-500" /> Khu Vực Châm Phân & pH
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical} colorTheme="orange" currentStatus={pumps.pump_a} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm Phân B" icon={FlaskConical} colorTheme="orange" currentStatus={pumps.pump_b} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_UP" title="Bơm Tăng pH" icon={Activity} colorTheme="purple" currentStatus={pumps.ph_up} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_DOWN" title="Bơm Giảm pH" icon={Activity} colorTheme="purple" currentStatus={pumps.ph_down} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="PUMP_A"
+            title="Bơm Phân A"
+            icon={FlaskConical}
+            colorTheme="orange"
+            currentStatus={pumps.pump_a}
+            allowPwm={true}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="PUMP_B"
+            title="Bơm Phân B"
+            icon={FlaskConical}
+            colorTheme="orange"
+            currentStatus={pumps.pump_b}
+            allowPwm={true}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="PH_UP"
+            title="Bơm Tăng pH"
+            icon={Activity}
+            colorTheme="purple"
+            currentStatus={pumps.ph_up}
+            allowPwm={true}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="PH_DOWN"
+            title="Bơm Giảm pH"
+            icon={Activity}
+            colorTheme="purple"
+            currentStatus={pumps.ph_down}
+            allowPwm={true}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
         </div>
       </div>
 
@@ -462,13 +629,56 @@ const ControlPanel = () => {
           <Waves size={14} className="text-cyan-500" /> Bơm Nước & Sục Trộn
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Cấp Nước" icon={Droplets} colorTheme="blue" currentStatus={pumps.water_pump_in} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Xả Nước" icon={Droplets} colorTheme="cyan" currentStatus={pumps.water_pump_out} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="OSAKA" title="Trộn Osaka" icon={Power} colorTheme="indigo" currentStatus={pumps.osaka_pump} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="MIST" title="Phun Sương" icon={Wind} colorTheme="sky" currentStatus={pumps.mist_valve} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="WATER_PUMP_IN"
+            title="Cấp Nước"
+            icon={Droplets}
+            colorTheme="blue"
+            currentStatus={pumps.water_pump_in}
+            allowPwm={false}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="WATER_PUMP_OUT"
+            title="Xả Nước"
+            icon={Droplets}
+            colorTheme="cyan"
+            currentStatus={pumps.water_pump_out}
+            allowPwm={false}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="OSAKA"
+            title="Trộn Osaka"
+            icon={Power}
+            colorTheme="indigo"
+            currentStatus={pumps.osaka_pump}
+            allowPwm={true}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId}
+            pumpId="MIST"
+            title="Phun Sương"
+            icon={Wind}
+            colorTheme="sky"
+            currentStatus={pumps.mist_valve}
+            allowPwm={false}
+            updatePumpStatusOptimistically={updatePumpStatusOptimistically}
+            isOnline={isOnline}
+            isEmergency={isEmergency}
+          />
         </div>
       </div>
-
     </div>
   );
 };

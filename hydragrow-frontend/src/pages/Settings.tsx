@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Save, Target, ShieldAlert, Waves,
   FlaskConical, Activity, Settings2, Power, Network, Zap, Cpu, Clock
@@ -14,6 +14,91 @@ import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
 
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
+type DosingFieldKey =
+  | 'dosing_pwm_percent'
+  | 'pump_a_capacity_ml_per_sec'
+  | 'pump_b_capacity_ml_per_sec'
+  | 'pump_ph_up_capacity_ml_per_sec'
+  | 'pump_ph_down_capacity_ml_per_sec'
+  | 'scheduled_dose_a_ml'
+  | 'scheduled_dose_b_ml';
+
+type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
+
+const DOSING_RUNTIME_LIMIT_SEC = 180;
+const MAX_REASONABLE_FLOW_ML_PER_SEC = 30;
+const MIN_EFFECTIVE_FLOW_ML_PER_SEC = 0.01;
+
+const toFiniteNumber = (value: any): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+};
+
+const backendLikeError = (field: string, detail: string) => `Giá trị không hợp lệ cho ${field}: ${detail}.`;
+
+const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
+  const errors: DosingValidationErrors = {};
+
+  const dosingPwm = toFiniteNumber(inputConfig.dosing_pwm_percent);
+  const doseA = toFiniteNumber(inputConfig.scheduled_dose_a_ml);
+  const doseB = toFiniteNumber(inputConfig.scheduled_dose_b_ml);
+  const pumpA = toFiniteNumber(inputConfig.pump_a_capacity_ml_per_sec);
+  const pumpB = toFiniteNumber(inputConfig.pump_b_capacity_ml_per_sec);
+  const pumpPhUp = toFiniteNumber(inputConfig.pump_ph_up_capacity_ml_per_sec);
+  const pumpPhDown = toFiniteNumber(inputConfig.pump_ph_down_capacity_ml_per_sec);
+
+  if (!Number.isFinite(dosingPwm) || dosingPwm < 1 || dosingPwm > 100) {
+    errors.dosing_pwm_percent = backendLikeError('dosing_pwm_percent', 'phải nằm trong khoảng 1-100');
+  }
+
+  const validateCapacity = (field: DosingFieldKey, value: number) => {
+    if (!Number.isFinite(value) || value <= 0) {
+      errors[field] = backendLikeError(field, 'phải lớn hơn 0');
+      return;
+    }
+    if (value > MAX_REASONABLE_FLOW_ML_PER_SEC) {
+      errors[field] = backendLikeError(field, `vượt ngưỡng lưu lượng hợp lý (${MAX_REASONABLE_FLOW_ML_PER_SEC} ml/giây)`);
+    }
+  };
+
+  validateCapacity('pump_a_capacity_ml_per_sec', pumpA);
+  validateCapacity('pump_b_capacity_ml_per_sec', pumpB);
+  validateCapacity('pump_ph_up_capacity_ml_per_sec', pumpPhUp);
+  validateCapacity('pump_ph_down_capacity_ml_per_sec', pumpPhDown);
+
+  if (!Number.isFinite(doseA) || doseA < 0) {
+    errors.scheduled_dose_a_ml = backendLikeError('scheduled_dose_a_ml', 'phải lớn hơn hoặc bằng 0');
+  }
+  if (!Number.isFinite(doseB) || doseB < 0) {
+    errors.scheduled_dose_b_ml = backendLikeError('scheduled_dose_b_ml', 'phải lớn hơn hoặc bằng 0');
+  }
+
+  if (!errors.dosing_pwm_percent && !errors.pump_a_capacity_ml_per_sec && !errors.scheduled_dose_a_ml) {
+    const effectiveFlowA = pumpA * (dosingPwm / 100);
+    if (effectiveFlowA < MIN_EFFECTIVE_FLOW_ML_PER_SEC) {
+      errors.pump_a_capacity_ml_per_sec = backendLikeError('pump_a_capacity_ml_per_sec', 'khi áp PWM hiện tại tạo lưu lượng quá thấp');
+    } else {
+      const runtimeA = doseA / effectiveFlowA;
+      if (runtimeA > DOSING_RUNTIME_LIMIT_SEC) {
+        errors.scheduled_dose_a_ml = backendLikeError('scheduled_dose_a_ml', `thời gian bơm dự kiến ${runtimeA.toFixed(1)}s vượt ngưỡng ${DOSING_RUNTIME_LIMIT_SEC}s`);
+      }
+    }
+  }
+
+  if (!errors.dosing_pwm_percent && !errors.pump_b_capacity_ml_per_sec && !errors.scheduled_dose_b_ml) {
+    const effectiveFlowB = pumpB * (dosingPwm / 100);
+    if (effectiveFlowB < MIN_EFFECTIVE_FLOW_ML_PER_SEC) {
+      errors.pump_b_capacity_ml_per_sec = backendLikeError('pump_b_capacity_ml_per_sec', 'khi áp PWM hiện tại tạo lưu lượng quá thấp');
+    } else {
+      const runtimeB = doseB / effectiveFlowB;
+      if (runtimeB > DOSING_RUNTIME_LIMIT_SEC) {
+        errors.scheduled_dose_b_ml = backendLikeError('scheduled_dose_b_ml', `thời gian bơm dự kiến ${runtimeB.toFixed(1)}s vượt ngưỡng ${DOSING_RUNTIME_LIMIT_SEC}s`);
+      }
+    }
+  }
+
+  return errors;
+};
 
 const Settings = () => {
   const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId, systemEvents } = useDeviceContext();
@@ -300,6 +385,9 @@ const Settings = () => {
     loadConfig();
   }, []);
 
+  const dosingValidationErrors = useMemo(() => validateDosingConfig(config), [config]);
+  const hasDosingValidationError = Object.keys(dosingValidationErrors).length > 0;
+
   // Tìm và thay toàn bộ hàm handleSave trong Settings.tsx bằng phiên bản này.
   // Vị trí: khoảng dòng 305-490 trong file gốc.
 
@@ -314,6 +402,11 @@ const Settings = () => {
 
     try {
       const savingConfig = configOverride || config;
+      const saveValidationErrors = validateDosingConfig(savingConfig);
+      if (Object.keys(saveValidationErrors).length > 0) {
+        toast.error('Không thể lưu: cấu hình dosing không hợp lệ. Vui lòng kiểm tra các trường đang báo lỗi.');
+        return;
+      }
       const devId = appSettings.device_id;
 
       // Helper đã có sẵn — đảm bảo không bao giờ trả về NaN
@@ -696,7 +789,16 @@ const Settings = () => {
         <AccordionSection id="dosing" title="Máy Pha Phân & Hóa Chất" icon={FlaskConical} color="text-fuchsia-400" isOpen={openSection === 'dosing'} onToggle={() => handleToggleSection('dosing')}>
           <SubCard title="Công Suất Bơm Vi Lượng (Chống giật tia)">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Tốc độ Bơm Phân (%)" step="1" value={config.dosing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })} desc="Giảm tốc độ để châm phân từ từ, chính xác hơn." />
+              <InputGroup
+                label="Tốc độ Bơm Phân (%)"
+                step="1"
+                min={1}
+                max={100}
+                value={config.dosing_pwm_percent}
+                onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })}
+                desc="Giảm tốc độ để châm phân từ từ, chính xác hơn."
+                errorText={dosingValidationErrors.dosing_pwm_percent}
+              />
               <InputGroup label="Tốc độ Bơm Trộn (%)" step="1" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
               <InputGroup label="Tốc độ Bơm Phun Sương (%)" step="1" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
               <InputGroup label="Độ trễ khởi động bơm (ms)" step="100" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} desc="Bảo vệ nguồn điện tử, tránh sụt áp đột ngột." />
@@ -724,8 +826,22 @@ const Settings = () => {
                   </div>
                 </div>
 
-                <InputGroup label="Lượng Bơm A (ml)" step="0.5" value={config.scheduled_dose_a_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_a_ml: e.target.value })} />
-                <InputGroup label="Lượng Bơm B (ml)" step="0.5" value={config.scheduled_dose_b_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_b_ml: e.target.value })} />
+                <InputGroup
+                  label="Lượng Bơm A (ml)"
+                  step="0.5"
+                  min={0}
+                  value={config.scheduled_dose_a_ml}
+                  onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_a_ml: e.target.value })}
+                  errorText={dosingValidationErrors.scheduled_dose_a_ml}
+                />
+                <InputGroup
+                  label="Lượng Bơm B (ml)"
+                  step="0.5"
+                  min={0}
+                  value={config.scheduled_dose_b_ml}
+                  onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_b_ml: e.target.value })}
+                  errorText={dosingValidationErrors.scheduled_dose_b_ml}
+                />
               </div>
             )}
           </SubCard>
@@ -749,10 +865,10 @@ const Settings = () => {
               <InputGroup label="Thời gian chờ giữa Bơm A và B (Giây)" step="1" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} desc="Chống kết tủa Canxi và Photpho" />
 
               <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Đo lường đầu dò bơm</span></div>
-              <InputGroup label="Lưu lượng Bơm A (ml/giây)" step="0.1" value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} />
-              <InputGroup label="Lưu lượng Bơm B (ml/giây)" step="0.1" value={config.pump_b_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_capacity_ml_per_sec: e.target.value })} />
-              <InputGroup label="Lưu lượng Bơm pH Tăng (ml/giây)" step="0.1" value={config.pump_ph_up_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_capacity_ml_per_sec: e.target.value })} />
-              <InputGroup label="Lưu lượng Bơm pH Giảm (ml/giây)" step="0.1" value={config.pump_ph_down_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_capacity_ml_per_sec: e.target.value })} />
+              <InputGroup label="Lưu lượng Bơm A (ml/giây)" step="0.1" min={0.1} value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_a_capacity_ml_per_sec} />
+              <InputGroup label="Lưu lượng Bơm B (ml/giây)" step="0.1" min={0.1} value={config.pump_b_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_b_capacity_ml_per_sec} />
+              <InputGroup label="Lưu lượng Bơm pH Tăng (ml/giây)" step="0.1" min={0.1} value={config.pump_ph_up_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_up_capacity_ml_per_sec} />
+              <InputGroup label="Lưu lượng Bơm pH Giảm (ml/giây)" step="0.1" min={0.1} value={config.pump_ph_down_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_down_capacity_ml_per_sec} />
 
               <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Độ đậm đặc của dung dịch</span></div>
               <InputGroup label="Mức tăng EC khi châm 1ml" step="0.01" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
@@ -1080,7 +1196,7 @@ const Settings = () => {
 
           <button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || hasDosingValidationError}
             className="w-full pointer-events-auto bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 py-4 rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-[0_10px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_10px_40px_rgba(16,185,129,0.6)] hover:scale-[1.01] active:scale-95 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-white/20 -translate-x-full animate-[shimmer_3s_infinite]"></div>

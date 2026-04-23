@@ -11,7 +11,6 @@ import { Toaster } from 'react-hot-toast';
 import './App.css';
 import { CropSeasons } from './pages/CropSeasons';
 import SystemLog from './pages/SystemLog';
-import SystemFlow from './pages/SystemFlow';
 
 function App() {
   return (
@@ -40,7 +39,6 @@ function App() {
             <Route path="/crop-seasons" element={<CropSeasons />} />
             <Route path="settings" element={<Settings />} />
             <Route path="/logs" element={<SystemLog />} />
-            <Route path="/system-flow" element={<SystemFlow />} />
           </Route>
         </Routes>
       </Router>

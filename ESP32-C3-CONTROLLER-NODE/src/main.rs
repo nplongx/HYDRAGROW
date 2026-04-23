@@ -17,7 +17,6 @@ mod config;
 mod controller;
 mod mqtt;
 mod pump;
-mod sensors;
 
 use crate::controller::{start_fsm_control_loop, SystemState};
 use config::create_shared_config;

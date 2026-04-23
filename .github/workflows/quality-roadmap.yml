@@ -1,0 +1,104 @@
+name: Quality Roadmap Gates
+
+on:
+  pull_request:
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-frontend/**'
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+      - 'scripts/**'
+      - 'docs/process/**'
+      - '.github/workflows/quality-roadmap.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-frontend/**'
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+      - 'scripts/**'
+      - 'docs/process/**'
+      - '.github/workflows/quality-roadmap.yml'
+
+jobs:
+  quality-warning:
+    name: Week-2 warning-only gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: hydragrow-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: hydragrow-frontend
+        run: npm ci
+
+      - name: Backend lint warnings (non-blocking)
+        id: backend_clippy
+        continue-on-error: true
+        run: |
+          cd hydragrow-backend
+          cargo clippy --all-targets --all-features
+
+      - name: Controller lint warnings (non-blocking)
+        id: controller_clippy
+        continue-on-error: true
+        run: |
+          cd ESP32-C3-CONTROLLER-NODE
+          cargo clippy --all-targets --all-features
+
+      - name: Frontend lint warnings (non-blocking)
+        id: frontend_lint
+        continue-on-error: true
+        run: |
+          cd hydragrow-frontend
+          npm run lint
+
+      - name: Alias naming check (non-blocking)
+        id: alias_check
+        continue-on-error: true
+        run: ./scripts/check_alias_naming.sh
+
+      - name: Weekly report snapshot
+        run: ./scripts/generate_quality_report.sh weekly docs/process/reports/weekly-${{ github.run_id }}.md
+
+      - name: Upload quality report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-weekly-report-${{ github.run_id }}
+          path: docs/process/reports/weekly-${{ github.run_id }}.md
+
+      - name: Quality summary
+        if: always()
+        run: |
+          {
+            echo "## Quality roadmap gate summary";
+            echo "- backend_clippy: ${{ steps.backend_clippy.outcome }}";
+            echo "- controller_clippy: ${{ steps.controller_clippy.outcome }}";
+            echo "- frontend_lint: ${{ steps.frontend_lint.outcome }}";
+            echo "- alias_check: ${{ steps.alias_check.outcome }}";
+            echo "";
+            echo "> Week 2 policy: warning-only (job remains green while surfacing violations).";
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  quality-regression-lock:
+    name: Week-3 fail-on-new-violations (toggle)
+    runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_BASELINE_LOCK == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Baseline regression check
+        run: ./scripts/check_quality_regression.sh

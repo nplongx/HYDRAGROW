@@ -111,7 +111,7 @@ fn main() -> anyhow::Result<()> {
     let fsm_nvs = nvs.clone();
 
     std::thread::Builder::new()
-        .stack_size(10240)
+        .stack_size(12288)
         .name("fsm_thread".to_string())
         .spawn(move || {
             start_fsm_control_loop(
@@ -301,4 +301,3 @@ fn main() -> anyhow::Result<()> {
         thread::sleep(Duration::from_millis(50));
     }
 }
-

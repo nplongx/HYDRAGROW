@@ -396,7 +396,6 @@ impl ControlContext {
         is_noisy
     }
 
-    fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig, now_sec: u64) {
     fn mark_pending_sample_noise_violation(&mut self) {
         if let Some(sample) = self.pending_calibration_sample.as_mut() {
             sample.invalid_by_noise = true;
@@ -409,7 +408,7 @@ impl ControlContext {
         }
     }
 
-    fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig) {
+    fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig, now_sec: u64) {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
                 let response = sensors.ec_value - last_ec;
@@ -527,7 +526,8 @@ impl ControlContext {
         let allowed_day = (0.25 - self.tuning_day_ec_delta.abs()).max(0.0);
         let allowed = allowed_hour.min(allowed_day);
         let applied_delta = requested_delta.clamp(-allowed, allowed);
-        self.adaptive_ec_step_ratio = (self.adaptive_ec_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
+        self.adaptive_ec_step_ratio =
+            (self.adaptive_ec_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
         self.tuning_hour_ec_delta += applied_delta;
         self.tuning_day_ec_delta += applied_delta;
         self.tuning_last_update_sec = now_sec;
@@ -541,7 +541,8 @@ impl ControlContext {
         let allowed_day = (0.25 - self.tuning_day_ph_delta.abs()).max(0.0);
         let allowed = allowed_hour.min(allowed_day);
         let applied_delta = requested_delta.clamp(-allowed, allowed);
-        self.adaptive_ph_step_ratio = (self.adaptive_ph_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
+        self.adaptive_ph_step_ratio =
+            (self.adaptive_ph_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
         self.tuning_hour_ph_delta += applied_delta;
         self.tuning_day_ph_delta += applied_delta;
         self.tuning_last_update_sec = now_sec;
@@ -806,307 +807,303 @@ pub fn start_fsm_control_loop(
     dosing_report_tx: Sender<String>,
     sensor_cmd_tx: Sender<String>,
 ) {
-    std::thread::spawn(move || {
-        let mut ctx = ControlContext::default();
-        let mut last_reported_state = "".to_string();
+    // std::thread::spawn(move || {
+    let mut ctx = ControlContext::default();
+    let mut last_reported_state = "".to_string();
 
-        let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
-        let current_time_on_boot = get_current_time_sec();
+    let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
+    let current_time_on_boot = get_current_time_sec();
 
-        ctx.last_water_change_time = nvs
-            .as_mut()
-            .and_then(|flash| flash.get_u64("last_w_change").unwrap_or(None))
-            .unwrap_or_else(|| {
-                if let Some(flash) = nvs.as_mut() {
-                    let _ = flash.set_u64("last_w_change", current_time_on_boot);
-                }
-                current_time_on_boot
-            });
+    ctx.last_water_change_time = nvs
+        .as_mut()
+        .and_then(|flash| flash.get_u64("last_w_change").unwrap_or(None))
+        .unwrap_or_else(|| {
+            if let Some(flash) = nvs.as_mut() {
+                let _ = flash.set_u64("last_w_change", current_time_on_boot);
+            }
+            current_time_on_boot
+        });
 
-        ctx.last_scheduled_dose_time_sec = nvs
-            .as_mut()
-            .and_then(|flash| flash.get_u64("last_sched_dose").unwrap_or(None))
-            .unwrap_or_else(|| {
-                if let Some(flash) = nvs.as_mut() {
-                    let _ = flash.set_u64("last_sched_dose", current_time_on_boot);
-                }
-                current_time_on_boot
-            });
+    ctx.last_scheduled_dose_time_sec = nvs
+        .as_mut()
+        .and_then(|flash| flash.get_u64("last_sched_dose").unwrap_or(None))
+        .unwrap_or_else(|| {
+            if let Some(flash) = nvs.as_mut() {
+                let _ = flash.set_u64("last_sched_dose", current_time_on_boot);
+            }
+            current_time_on_boot
+        });
 
-        ctx.last_mixing_start_sec = current_time_on_boot;
+    ctx.last_mixing_start_sec = current_time_on_boot;
 
-        info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
+    info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
 
-        // Ensure all systems are ready before announcing online status
-        std::thread::sleep(std::time::Duration::from_secs(1));
+    // Ensure all systems are ready before announcing online status
+    std::thread::sleep(std::time::Duration::from_secs(1));
 
-        // Publish robust online status with retry mechanism
-        for _ in 0..3 {
-            let status_msg = serde_json::json!({
-                "online": true,
-                "status": "ready",
-                "current_state": "Monitoring",
-                "boot_time": current_time_on_boot
-            })
-            .to_string();
+    // Publish robust online status with retry mechanism
+    for _ in 0..3 {
+        let status_msg = serde_json::json!({
+            "online": true,
+            "status": "ready",
+            "current_state": "Monitoring",
+            "boot_time": current_time_on_boot
+        })
+        .to_string();
 
-            if fsm_mqtt_tx.send(status_msg).is_ok() {
-                info!("✅ Published online status");
-                break;
-            } else {
-                warn!("⚠️ Failed to publish online status, retrying...");
-                std::thread::sleep(std::time::Duration::from_secs(1));
+        if fsm_mqtt_tx.send(status_msg).is_ok() {
+            info!("✅ Published online status");
+            break;
+        } else {
+            warn!("⚠️ Failed to publish online status, retrying...");
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
+
+    loop {
+        let config = shared_config.read().unwrap().clone();
+        let sensors = shared_sensors.read().unwrap().clone();
+        let current_time_ms = get_current_time_ms();
+        let current_time_sec = current_time_ms / 1000;
+        ctx.sync_adaptive_ratios_from_config(&config);
+
+        // 🟢 NHẬN LỆNH & XỬ LÝ CƯỠNG CHẾ
+        let force_sync =
+            process_mqtt_commands(&cmd_rx, &config, &mut pump_ctrl, &mut ctx, current_time_ms);
+
+        let mut expired_pumps = Vec::new();
+        for (pump, &finish_time) in &ctx.manual_timeouts {
+            if current_time_ms >= finish_time {
+                expired_pumps.push(pump.clone());
             }
         }
+        for pump in expired_pumps {
+            ctx.manual_timeouts.remove(&pump);
+            info!("⏱️ HẾT GIỜ (SAFE TIMEOUT): Tự động tắt bơm {}!", pump);
+            ctx.turn_off_pump(&pump, &mut pump_ctrl);
+        }
 
-        loop {
-            let config = shared_config.read().unwrap().clone();
-            let sensors = shared_sensors.read().unwrap().clone();
-            let current_time_ms = get_current_time_ms();
-            let current_time_sec = current_time_ms / 1000;
-            ctx.sync_adaptive_ratios_from_config(&config);
+        // 🟢 Thay vì Timeout (Vì giờ có 2 node, timeout có thể do Node Controller tự đếm), FSM kiểm tra qua Error Flags.
+        let is_safety_overridden = current_time_ms < ctx.safety_override_until;
 
-            // 🟢 NHẬN LỆNH & XỬ LÝ CƯỠNG CHẾ
-            let force_sync =
-                process_mqtt_commands(&cmd_rx, &config, &mut pump_ctrl, &mut ctx, current_time_ms);
+        if !is_safety_overridden {
+            // Kiểm tra nhiễu (Bỏ qua nhịp nếu nhiễu)
+            let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config);
+            let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
+                || (config.enable_ec_sensor && sensors.err_ec)
+                || (config.enable_ph_sensor && sensors.err_ph)
+                || (config.enable_temp_sensor && sensors.err_temp);
+            ctx.update_auto_tune_health(is_noisy_sample || has_sensor_fault);
 
-            let mut expired_pumps = Vec::new();
-            for (pump, &finish_time) in &ctx.manual_timeouts {
-                if current_time_ms >= finish_time {
-                    expired_pumps.push(pump.clone());
-                }
-            }
-            for pump in expired_pumps {
-                ctx.manual_timeouts.remove(&pump);
-                info!("⏱️ HẾT GIỜ (SAFE TIMEOUT): Tự động tắt bơm {}!", pump);
-                ctx.turn_off_pump(&pump, &mut pump_ctrl);
+            if is_noisy_sample {
+                ctx.mark_pending_sample_noise_violation();
             }
 
-            // 🟢 Thay vì Timeout (Vì giờ có 2 node, timeout có thể do Node Controller tự đếm), FSM kiểm tra qua Error Flags.
-            let is_safety_overridden = current_time_ms < ctx.safety_override_until;
+            if is_noisy_sample && config.control_mode == ControlMode::Auto {
+                // Skip logic auto nếu nhiễu
+            } else {
+                let is_water_critical = config.enable_water_level_sensor
+                    && (sensors.water_level < config.water_level_critical_min);
+                let is_ec_out_of_bounds = config.enable_ec_sensor
+                    && (sensors.ec_value < config.min_ec_limit
+                        || sensors.ec_value > config.max_ec_limit);
+                let is_ph_out_of_bounds = config.enable_ph_sensor
+                    && (sensors.ph_value < config.min_ph_limit
+                        || sensors.ph_value > config.max_ph_limit);
 
-            if !is_safety_overridden {
-                // Kiểm tra nhiễu (Bỏ qua nhịp nếu nhiễu)
-                let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config);
-                let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
-                    || (config.enable_ec_sensor && sensors.err_ec)
-                    || (config.enable_ph_sensor && sensors.err_ph)
-                    || (config.enable_temp_sensor && sensors.err_temp);
-                ctx.update_auto_tune_health(is_noisy_sample || has_sensor_fault);
-
-                if is_noisy_sample && config.control_mode == ControlMode::Auto {
-                let is_noisy_now = ctx.check_and_update_noise(&sensors, &config);
-                if is_noisy_now {
-                    ctx.mark_pending_sample_noise_violation();
+                // 🟢 MỚI: Bóc tách lý do Emergency cụ thể, BAO GỒM CỜ LỖI CẢM BIẾN (Từ Sensor Node gửi sang)
+                let mut emergency_reason = String::new();
+                if config.emergency_shutdown {
+                    emergency_reason = "MANUAL_STOP".to_string();
+                } else if config.enable_water_level_sensor && sensors.err_water {
+                    emergency_reason = "SENSOR_FAULT_WATER".to_string();
+                } else if config.enable_ec_sensor && sensors.err_ec {
+                    emergency_reason = "SENSOR_FAULT_EC".to_string();
+                } else if config.enable_ph_sensor && sensors.err_ph {
+                    emergency_reason = "SENSOR_FAULT_PH".to_string();
+                } else if config.enable_temp_sensor && sensors.err_temp {
+                    emergency_reason = "SENSOR_FAULT_TEMP".to_string();
+                } else if is_water_critical {
+                    emergency_reason = "WATER_CRITICAL".to_string();
+                } else if is_ec_out_of_bounds {
+                    emergency_reason = "EC_OUT_OF_BOUNDS".to_string();
+                } else if is_ph_out_of_bounds {
+                    emergency_reason = "PH_OUT_OF_BOUNDS".to_string();
                 }
 
-                if is_noisy_now && config.control_mode == ControlMode::Auto {
-                    // Skip
-                } else {
-                    let is_water_critical = config.enable_water_level_sensor
-                        && (sensors.water_level < config.water_level_critical_min);
-                    let is_ec_out_of_bounds = config.enable_ec_sensor
-                        && (sensors.ec_value < config.min_ec_limit
-                            || sensors.ec_value > config.max_ec_limit);
-                    let is_ph_out_of_bounds = config.enable_ph_sensor
-                        && (sensors.ph_value < config.min_ph_limit
-                            || sensors.ph_value > config.max_ph_limit);
+                let should_emergency_stop = !emergency_reason.is_empty();
 
-                    // 🟢 MỚI: Bóc tách lý do Emergency cụ thể, BAO GỒM CỜ LỖI CẢM BIẾN (Từ Sensor Node gửi sang)
-                    let mut emergency_reason = String::new();
-                    if config.emergency_shutdown {
-                        emergency_reason = "MANUAL_STOP".to_string();
-                    } else if config.enable_water_level_sensor && sensors.err_water {
-                        emergency_reason = "SENSOR_FAULT_WATER".to_string();
-                    } else if config.enable_ec_sensor && sensors.err_ec {
-                        emergency_reason = "SENSOR_FAULT_EC".to_string();
-                    } else if config.enable_ph_sensor && sensors.err_ph {
-                        emergency_reason = "SENSOR_FAULT_PH".to_string();
-                    } else if config.enable_temp_sensor && sensors.err_temp {
-                        emergency_reason = "SENSOR_FAULT_TEMP".to_string();
-                    } else if is_water_critical {
-                        emergency_reason = "WATER_CRITICAL".to_string();
-                    } else if is_ec_out_of_bounds {
-                        emergency_reason = "EC_OUT_OF_BOUNDS".to_string();
-                    } else if is_ph_out_of_bounds {
-                        emergency_reason = "PH_OUT_OF_BOUNDS".to_string();
+                // 🟢 NẾU NGUY HIỂM VÀ KHÔNG BỊ CƯỠNG CHẾ -> NGẮT
+                if should_emergency_stop {
+                    if !matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
+                        error!(
+                            "⚠️ DỪNG KHẨN CẤP Toàn bộ hệ thống! Lý do: {}",
+                            emergency_reason
+                        );
+                        ctx.stop_all_pumps(&mut pump_ctrl);
+                        ctx.current_state = SystemState::EmergencyStop(emergency_reason);
                     }
-
-                    let should_emergency_stop = !emergency_reason.is_empty();
-
-                    // 🟢 NẾU NGUY HIỂM VÀ KHÔNG BỊ CƯỠNG CHẾ -> NGẮT
-                    if should_emergency_stop {
-                        if !matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
-                            error!(
-                                "⚠️ DỪNG KHẨN CẤP Toàn bộ hệ thống! Lý do: {}",
-                                emergency_reason
-                            );
-                            ctx.stop_all_pumps(&mut pump_ctrl);
-                            ctx.current_state = SystemState::EmergencyStop(emergency_reason);
-                        }
-                    } else if !config.is_enabled {
-                        if ctx.current_state != SystemState::Monitoring {
-                            ctx.stop_all_pumps(&mut pump_ctrl);
-                            ctx.current_state = SystemState::Monitoring;
-                        }
-                    } else if matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
-                        // 🟢 NẾU MÔI TRƯỜNG ĐÃ AN TOÀN LẠI -> HỦY DỪNG KHẨN CẤP
-                        if !should_emergency_stop {
-                            info!("✅ Hệ thống an toàn trở lại (hoặc đang Cưỡng chế).");
-                            ctx.current_state = SystemState::Monitoring;
-                        }
-                    } else if config.control_mode == ControlMode::Auto {
-                        // ==== LOGIC AUTO ====
-                        let is_hot = config.enable_temp_sensor
-                            && (sensors.temp_value >= config.misting_temp_threshold);
-                        let on_duration = if is_hot {
-                            config.high_temp_misting_on_duration_ms
-                        } else {
-                            config.misting_on_duration_ms
-                        };
-                        let off_duration = if is_hot {
-                            config.high_temp_misting_off_duration_ms
-                        } else {
-                            config.misting_off_duration_ms
-                        };
-
-                        if ctx.is_misting_active {
-                            if current_time_ms >= ctx.last_mist_toggle_time + on_duration {
-                                let _ = pump_ctrl.set_mist_valve(false);
-                                ctx.is_misting_active = false;
-                                ctx.last_mist_toggle_time = current_time_ms;
-                                ctx.pump_status.mist_valve = false;
-                            }
-                        } else {
-                            if current_time_ms >= ctx.last_mist_toggle_time + off_duration {
-                                let _ = pump_ctrl.set_mist_valve(true);
-                                ctx.is_misting_active = true;
-                                ctx.last_mist_toggle_time = current_time_ms;
-                                ctx.pump_status.mist_valve = true;
-                            }
-                        }
-
-                        if config.scheduled_mixing_interval_sec > 0
-                            && config.scheduled_mixing_duration_sec > 0
-                        {
-                            if ctx.is_scheduled_mixing_active {
-                                if current_time_sec
-                                    >= ctx.last_mixing_start_sec
-                                        + config.scheduled_mixing_duration_sec
-                                {
-                                    ctx.is_scheduled_mixing_active = false;
-                                }
-                            } else {
-                                if current_time_sec
-                                    >= ctx.last_mixing_start_sec
-                                        + config.scheduled_mixing_interval_sec
-                                {
-                                    ctx.is_scheduled_mixing_active = true;
-                                    ctx.last_mixing_start_sec = current_time_sec;
-                                }
-                            }
-                        } else {
-                            ctx.is_scheduled_mixing_active = false;
-                        }
-
-                        if !matches!(ctx.current_state, SystemState::SystemFault(_)) {
-                            run_auto_fsm(
-                                current_time_ms,
-                                &config,
-                                &sensors,
-                                &mut ctx,
-                                &mut pump_ctrl,
-                                &shared_config,
-                                &mut nvs,
-                                &dosing_report_tx,
-                                &fsm_mqtt_tx,
-                            );
-                        }
-
-                        let needs_osaka = ctx.fsm_osaka_active
-                            || ctx.is_misting_active
-                            || ctx.is_scheduled_mixing_active;
-                        if needs_osaka {
-                            let target_pwm = if ctx.is_misting_active {
-                                config.osaka_misting_pwm_percent
-                            } else {
-                                config.osaka_mixing_pwm_percent
-                            };
-                            if !ctx.pump_status.osaka_pump {
-                                let _ = pump_ctrl.start_osaka_pump_soft(target_pwm);
-                                ctx.pump_status.osaka_pump = true;
-                                ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
-                                ctx.current_osaka_pwm = target_pwm;
-                            } else if ctx.current_osaka_pwm != target_pwm {
-                                let _ = pump_ctrl.set_osaka_pump_pwm(target_pwm);
-                                ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
-                                ctx.current_osaka_pwm = target_pwm;
-                            }
-                        } else {
-                            if ctx.pump_status.osaka_pump {
-                                let _ = pump_ctrl.set_osaka_pump_pwm(0);
-                                ctx.pump_status.osaka_pump = false;
-                                ctx.pump_status.osaka_pwm = Some(0); // 🟢 THÊM MỚI: Cập nhật PWM
-                                ctx.current_osaka_pwm = 0;
-                            }
-                        }
-                    } else if !matches!(
-                        ctx.current_state,
-                        SystemState::Monitoring
-                            | SystemState::SystemFault(_)
-                            | SystemState::EmergencyStop(_)
-                    ) {
-                        info!("Chuyển sang chế độ MANUAL.");
+                } else if !config.is_enabled {
+                    if ctx.current_state != SystemState::Monitoring {
                         ctx.stop_all_pumps(&mut pump_ctrl);
                         ctx.current_state = SystemState::Monitoring;
                     }
+                } else if matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
+                    // 🟢 NẾU MÔI TRƯỜNG ĐÃ AN TOÀN LẠI -> HỦY DỪNG KHẨN CẤP
+                    if !should_emergency_stop {
+                        info!("✅ Hệ thống an toàn trở lại (hoặc đang Cưỡng chế).");
+                        ctx.current_state = SystemState::Monitoring;
+                    }
+                } else if config.control_mode == ControlMode::Auto {
+                    // ==== LOGIC AUTO ====
+                    let is_hot = config.enable_temp_sensor
+                        && (sensors.temp_value >= config.misting_temp_threshold);
+                    let on_duration = if is_hot {
+                        config.high_temp_misting_on_duration_ms
+                    } else {
+                        config.misting_on_duration_ms
+                    };
+                    let off_duration = if is_hot {
+                        config.high_temp_misting_off_duration_ms
+                    } else {
+                        config.misting_off_duration_ms
+                    };
+
+                    if ctx.is_misting_active {
+                        if current_time_ms >= ctx.last_mist_toggle_time + on_duration {
+                            let _ = pump_ctrl.set_mist_valve(false);
+                            ctx.is_misting_active = false;
+                            ctx.last_mist_toggle_time = current_time_ms;
+                            ctx.pump_status.mist_valve = false;
+                        }
+                    } else {
+                        if current_time_ms >= ctx.last_mist_toggle_time + off_duration {
+                            let _ = pump_ctrl.set_mist_valve(true);
+                            ctx.is_misting_active = true;
+                            ctx.last_mist_toggle_time = current_time_ms;
+                            ctx.pump_status.mist_valve = true;
+                        }
+                    }
+
+                    if config.scheduled_mixing_interval_sec > 0
+                        && config.scheduled_mixing_duration_sec > 0
+                    {
+                        if ctx.is_scheduled_mixing_active {
+                            if current_time_sec
+                                >= ctx.last_mixing_start_sec + config.scheduled_mixing_duration_sec
+                            {
+                                ctx.is_scheduled_mixing_active = false;
+                            }
+                        } else {
+                            if current_time_sec
+                                >= ctx.last_mixing_start_sec + config.scheduled_mixing_interval_sec
+                            {
+                                ctx.is_scheduled_mixing_active = true;
+                                ctx.last_mixing_start_sec = current_time_sec;
+                            }
+                        }
+                    } else {
+                        ctx.is_scheduled_mixing_active = false;
+                    }
+
+                    if !matches!(ctx.current_state, SystemState::SystemFault(_)) {
+                        run_auto_fsm(
+                            current_time_ms,
+                            &config,
+                            &sensors,
+                            &mut ctx,
+                            &mut pump_ctrl,
+                            &shared_config,
+                            &mut nvs,
+                            &dosing_report_tx,
+                            &fsm_mqtt_tx,
+                        );
+                    }
+
+                    let needs_osaka = ctx.fsm_osaka_active
+                        || ctx.is_misting_active
+                        || ctx.is_scheduled_mixing_active;
+                    if needs_osaka {
+                        let target_pwm = if ctx.is_misting_active {
+                            config.osaka_misting_pwm_percent
+                        } else {
+                            config.osaka_mixing_pwm_percent
+                        };
+                        if !ctx.pump_status.osaka_pump {
+                            let _ = pump_ctrl.start_osaka_pump_soft(target_pwm);
+                            ctx.pump_status.osaka_pump = true;
+                            ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
+                            ctx.current_osaka_pwm = target_pwm;
+                        } else if ctx.current_osaka_pwm != target_pwm {
+                            let _ = pump_ctrl.set_osaka_pump_pwm(target_pwm);
+                            ctx.pump_status.osaka_pwm = Some(target_pwm); // 🟢 THÊM MỚI: Cập nhật PWM
+                            ctx.current_osaka_pwm = target_pwm;
+                        }
+                    } else {
+                        if ctx.pump_status.osaka_pump {
+                            let _ = pump_ctrl.set_osaka_pump_pwm(0);
+                            ctx.pump_status.osaka_pump = false;
+                            ctx.pump_status.osaka_pwm = Some(0); // 🟢 THÊM MỚI: Cập nhật PWM
+                            ctx.current_osaka_pwm = 0;
+                        }
+                    }
+                } else if !matches!(
+                    ctx.current_state,
+                    SystemState::Monitoring
+                        | SystemState::SystemFault(_)
+                        | SystemState::EmergencyStop(_)
+                ) {
+                    info!("Chuyển sang chế độ MANUAL.");
+                    ctx.stop_all_pumps(&mut pump_ctrl);
+                    ctx.current_state = SystemState::Monitoring;
                 }
             }
-
-            // 🟢 LỆNH COMMAND XUỐNG SENSOR NODE: Bật đo nước liên tục nếu đang bơm/xả
-            let needs_continuous = matches!(
-                ctx.current_state,
-                SystemState::WaterRefilling { .. } | SystemState::WaterDraining { .. }
-            );
-            if needs_continuous != ctx.last_continuous_level {
-                let payload = format!(
-                    r#"{{"command":"continuous_level", "state": {}}}"#,
-                    needs_continuous
-                );
-                let _ = sensor_cmd_tx.send(payload);
-                ctx.last_continuous_level = needs_continuous;
-            }
-
-            // First update shared sensors with latest pump status
-            if let Ok(mut sensors_lock) = shared_sensors.write() {
-                sensors_lock.pump_status = ctx.pump_status.clone();
-            }
-
-            // Report state changes and sync online status
-            let state_changed =
-                report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
-
-            if state_changed || force_sync {
-                // Always send full status when state changes or forced sync
-                let status_msg = serde_json::json!({
-                    "online": true,
-                    "current_state": ctx.current_state.to_payload_string(),
-                    "pump_status": ctx.pump_status
-                })
-                .to_string();
-
-                let _ = fsm_mqtt_tx.send(status_msg);
-
-                if force_sync {
-                    last_reported_state = "".to_string();
-                    let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
-                    info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
-                }
-            }
-
-            std::thread::sleep(Duration::from_millis(100));
         }
-    });
+
+        // 🟢 LỆNH COMMAND XUỐNG SENSOR NODE: Bật đo nước liên tục nếu đang bơm/xả
+        let needs_continuous = matches!(
+            ctx.current_state,
+            SystemState::WaterRefilling { .. } | SystemState::WaterDraining { .. }
+        );
+        if needs_continuous != ctx.last_continuous_level {
+            let payload = format!(
+                r#"{{"command":"continuous_level", "state": {}}}"#,
+                needs_continuous
+            );
+            let _ = sensor_cmd_tx.send(payload);
+            ctx.last_continuous_level = needs_continuous;
+        }
+
+        // First update shared sensors with latest pump status
+        if let Ok(mut sensors_lock) = shared_sensors.write() {
+            sensors_lock.pump_status = ctx.pump_status.clone();
+        }
+
+        // Report state changes and sync online status
+        let state_changed =
+            report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
+
+        if state_changed || force_sync {
+            // Always send full status when state changes or forced sync
+            let status_msg = serde_json::json!({
+                "online": true,
+                "current_state": ctx.current_state.to_payload_string(),
+                "pump_status": ctx.pump_status
+            })
+            .to_string();
+
+            let _ = fsm_mqtt_tx.send(status_msg);
+
+            if force_sync {
+                last_reported_state = "".to_string();
+                let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
+                info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
+            }
+        }
+
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    // }); // <--- FIX ERROR [809, 5]: Dấu chấm phẩy ở cuối hàm thread::spawn
 }
 
 fn report_state_if_changed(
@@ -1517,8 +1514,7 @@ fn run_auto_fsm(
                         } else {
                             ctx.adaptive_ec_step_ratio
                         };
-                        let dose_ml = (ec_error
-                            / config.ec_gain_per_ml
+                        let dose_ml = (ec_error / config.ec_gain_per_ml
                             * active_ec_step_ratio
                             * deadband_scale)
                             .clamp(0.0, config.max_dose_per_cycle);
@@ -1583,15 +1579,14 @@ fn run_auto_fsm(
                         };
                         let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
 
-                        let active_capacity = effective_flow_ml_per_sec(
-                            if is_ph_up {
-                                DosePumpKind::PhUp
-                            } else {
-                                DosePumpKind::PhDown
-                            },
-                            safe_pwm,
-                            config,
-                        );
+                        let pump_kind = if is_ph_up {
+                            DosePumpKind::PhUp
+                        } else {
+                            DosePumpKind::PhDown
+                        };
+
+                        let active_capacity =
+                            effective_flow_ml_per_sec(pump_kind, safe_pwm, config);
 
                         let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
                         let active_ph_step_ratio = if ctx.auto_tune_locked {
@@ -1602,8 +1597,9 @@ fn run_auto_fsm(
                         let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
                             .clamp(0.0, config.max_dose_per_cycle);
                         let ph_pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
-                        if let Some(active_capacity) = active_capacity {
-                            let duration_ms = ((dose_ml / active_capacity) * 1000.0) as u64;
+
+                        if let Some(cap) = active_capacity {
+                            let duration_ms = ((dose_ml / cap) * 1000.0) as u64;
                             if duration_ms > 0
                                 && ctx.reserve_dose_if_within_hourly_limit(
                                     ph_pump_name,
@@ -1612,9 +1608,9 @@ fn run_auto_fsm(
                                     MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
                                 )
                             {
-                                let dose_ml = (diff / ratio * config.ph_step_ratio)
+                                let final_dose_ml = (diff / ratio * config.ph_step_ratio)
                                     .clamp(0.0, config.max_dose_per_cycle);
-                                if dose_ml > 0.0 {
+                                if final_dose_ml > 0.0 {
                                     ctx.last_ph_before_dosing = Some(sensors.ph_value);
                                     ctx.last_ph_dosing_is_up = Some(is_ph_up);
 
@@ -1622,7 +1618,7 @@ fn run_auto_fsm(
                                         finish_time: current_time_ms + config.soft_start_duration,
                                         pending_action: PendingDose::PH {
                                             is_up: is_ph_up,
-                                            dose_ml,
+                                            dose_ml: final_dose_ml,
                                             target_ph: config.ph_target,
                                             pwm_percent: safe_pwm,
                                         },
@@ -1698,10 +1694,15 @@ fn run_auto_fsm(
                     } => {
                         if dose_a_ml > 0.0 {
                             let dose_pwm = pwm_percent.clamp(1, 100);
-                            let Some(active_capacity_a) =
+                            let active_capacity_a = if let Some(cap) =
                                 effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
-                            else {
-                                warn!("Skip scheduled dose pump A: invalid config/pwm (pwm={}%)", dose_pwm);
+                            {
+                                cap
+                            } else {
+                                warn!(
+                                    "Skip scheduled dose pump A: invalid config/pwm (pwm={}%)",
+                                    dose_pwm
+                                );
                                 ctx.stop_all_pumps(pump_ctrl);
                                 ctx.current_state = SystemState::Monitoring;
                                 return;
@@ -1722,7 +1723,11 @@ fn run_auto_fsm(
                             } else {
                                 1
                             };
-                            let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, dose_pwm);
+                            let _ = pump_ctrl.set_dosing_pump_pulse(
+                                PumpType::NutrientA,
+                                true,
+                                dose_pwm,
+                            );
                             ctx.pump_status.pump_a = true;
                             ctx.pump_status.pump_a_pwm = Some(dose_pwm);
                             ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
@@ -1767,10 +1772,15 @@ fn run_auto_fsm(
                         pwm_percent,
                     } => {
                         let dose_pwm = pwm_percent.clamp(1, 100);
-                        let Some(active_capacity_a) =
+                        let active_capacity_a = if let Some(cap) =
                             effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config)
-                        else {
-                            warn!("Skip EC dosing pump A: invalid config/pwm (pwm={}%)", dose_pwm);
+                        {
+                            cap
+                        } else {
+                            warn!(
+                                "Skip EC dosing pump A: invalid config/pwm (pwm={}%)",
+                                dose_pwm
+                            );
                             ctx.stop_all_pumps(pump_ctrl);
                             ctx.current_state = SystemState::Monitoring;
                             return;
@@ -1791,12 +1801,12 @@ fn run_auto_fsm(
                         } else {
                             1
                         };
-                        let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, dose_pwm);
+                        let _ =
+                            pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, dose_pwm);
                         ctx.pump_status.pump_a = true;
                         ctx.pump_status.pump_a_pwm = Some(dose_pwm);
                         ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                        let delivered_ml_est =
-                            active_capacity_a * (pulse_on_ms as f32 / 1000.0);
+                        let delivered_ml_est = active_capacity_a * (pulse_on_ms as f32 / 1000.0);
 
                         ctx.current_state = SystemState::DosingPumpA {
                             next_toggle_time: current_time_ms + pulse_on_ms,
@@ -1822,20 +1832,26 @@ fn run_auto_fsm(
                         pwm_percent,
                     } => {
                         let dose_pwm = pwm_percent.clamp(1, 100);
-                        let Some(active_capacity) = effective_flow_ml_per_sec(
-                            if is_up {
-                                DosePumpKind::PhUp
-                            } else {
-                                DosePumpKind::PhDown
-                            },
-                            dose_pwm,
-                            config,
-                        ) else {
-                            warn!("Skip PH dosing: invalid config/pwm (is_up={}, pwm={}%)", is_up, dose_pwm);
+                        let pump_kind = if is_up {
+                            DosePumpKind::PhUp
+                        } else {
+                            DosePumpKind::PhDown
+                        };
+
+                        let active_capacity = if let Some(cap) =
+                            effective_flow_ml_per_sec(pump_kind, dose_pwm, config)
+                        {
+                            cap
+                        } else {
+                            warn!(
+                                "Skip PH dosing: invalid config/pwm (is_up={}, pwm={}%)",
+                                is_up, dose_pwm
+                            );
                             ctx.stop_all_pumps(pump_ctrl);
                             ctx.current_state = SystemState::Monitoring;
                             return;
                         };
+
                         let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
                         let pulse_on_ms = if is_pulse_mode {
                             config.dosing_pulse_on_ms.max(1)
@@ -1950,8 +1966,8 @@ fn run_auto_fsm(
                     ctx.pump_status.pump_a = true;
                     ctx.pump_status.pump_a_pwm = Some(pwm_percent);
                     let next_count = pulse_count + 1;
-                    let next_delivered =
-                        delivered_ml_est + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
+                    let next_delivered = delivered_ml_est
+                        + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
                     ctx.set_pulse_status(true, next_count);
                     ctx.current_state = SystemState::DosingPumpA {
                         next_toggle_time: current_time_ms + pulse_on_ms,
@@ -1985,14 +2001,17 @@ fn run_auto_fsm(
                 if dose_b_ml > 0.0 {
                     let dose_pwm = config.dosing_pwm_percent.clamp(1, 100);
                     let is_pulse_mode = dose_b_ml < config.dosing_min_dose_ml;
-                    let Some(active_capacity_b) =
+                    let active_capacity_b = if let Some(cap) =
                         effective_flow_ml_per_sec(DosePumpKind::PumpB, dose_pwm, config)
-                    else {
+                    {
+                        cap
+                    } else {
                         warn!("Skip dose pump B: invalid config/pwm (pwm={}%)", dose_pwm);
                         ctx.stop_all_pumps(pump_ctrl);
                         ctx.current_state = SystemState::Monitoring;
                         return;
                     };
+
                     let pulse_on_ms = if is_pulse_mode {
                         config.dosing_pulse_on_ms.max(1)
                     } else {
@@ -2012,8 +2031,7 @@ fn run_auto_fsm(
                     ctx.pump_status.pump_b = true;
                     ctx.pump_status.pump_b_pwm = Some(dose_pwm);
                     ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
-                    let delivered_ml_est =
-                        active_capacity_b * (pulse_on_ms as f32 / 1000.0);
+                    let delivered_ml_est = active_capacity_b * (pulse_on_ms as f32 / 1000.0);
 
                     ctx.current_state = SystemState::DosingPumpB {
                         next_toggle_time: current_time_ms + pulse_on_ms,
@@ -2117,8 +2135,8 @@ fn run_auto_fsm(
                     ctx.pump_status.pump_b = true;
                     ctx.pump_status.pump_b_pwm = Some(pwm_percent);
                     let next_count = pulse_count + 1;
-                    let next_delivered =
-                        delivered_ml_est + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
+                    let next_delivered = delivered_ml_est
+                        + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
                     ctx.set_pulse_status(true, next_count);
                     ctx.current_state = SystemState::DosingPumpB {
                         next_toggle_time: current_time_ms + pulse_on_ms,
@@ -2157,7 +2175,11 @@ fn run_auto_fsm(
             start_ph,
         } => {
             if current_time_ms >= next_toggle_time {
-                let pump_type = if is_up { PumpType::PhUp } else { PumpType::PhDown };
+                let pump_type = if is_up {
+                    PumpType::PhUp
+                } else {
+                    PumpType::PhDown
+                };
                 if pulse_on {
                     let _ = pump_ctrl.set_dosing_pump_pulse(pump_type, false, 0);
                     if is_up {
@@ -2218,8 +2240,8 @@ fn run_auto_fsm(
                         ctx.pump_status.ph_down_pwm = Some(pwm_percent);
                     }
                     let next_count = pulse_count + 1;
-                    let next_delivered =
-                        delivered_ml_est + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
+                    let next_delivered = delivered_ml_est
+                        + active_capacity_ml_per_sec * (pulse_on_ms as f32 / 1000.0);
                     ctx.set_pulse_status(true, next_count);
                     ctx.current_state = SystemState::DosingPH {
                         next_toggle_time: current_time_ms + pulse_on_ms,

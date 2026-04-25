@@ -108,7 +108,7 @@ const Settings = () => {
 
     ph_v7: 2.5, ph_v4: 1.428, ec_factor: 880.0, ec_offset: 0.0, temp_offset: 0.0, temp_compensation_beta: 0.02,
     publish_interval: 5000, moving_average_window: 15,
-    is_ph_enabled: true, is_ec_enabled: true, is_temp_enabled: true, is_water_level_enabled: true,
+    enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
   });
 
   const [appSettings, setAppSettings] = useState({
@@ -492,10 +492,10 @@ const Settings = () => {
         temp_compensation_beta: toNumberOr(savingConfig.temp_compensation_beta, 0.02),
         publish_interval: toNumberOr(savingConfig.publish_interval, 5000),
         moving_average_window: toNumberOr(savingConfig.moving_average_window, 15),
-        is_ph_enabled: savingConfig.is_ph_enabled ?? true,
-        is_ec_enabled: savingConfig.is_ec_enabled ?? true,
-        is_temp_enabled: savingConfig.is_temp_enabled ?? true,
-        is_water_level_enabled: savingConfig.is_water_level_enabled ?? true,
+        enable_ph_sensor: savingConfig.enable_ph_sensor ?? true,
+        enable_ec_sensor: savingConfig.enable_ec_sensor ?? true,
+        enable_temp_sensor: savingConfig.enable_temp_sensor ?? true,
+        enable_water_level_sensor: savingConfig.enable_water_level_sensor ?? true,
         last_calibrated: ts,
       };
 
@@ -938,19 +938,19 @@ const Settings = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu pH</span>
-                <Switch isOn={config.is_ph_enabled} onClick={(val) => setConfig({ ...config, is_ph_enabled: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                <Switch isOn={config.enable_ph_sensor} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Dinh dưỡng (EC)</span>
-                <Switch isOn={config.is_ec_enabled} onClick={(val) => setConfig({ ...config, is_ec_enabled: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                <Switch isOn={config.enable_ec_sensor} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Nhiệt độ nước</span>
-                <Switch isOn={config.is_temp_enabled} onClick={(val) => setConfig({ ...config, is_temp_enabled: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                <Switch isOn={config.enable_temp_sensor} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Radar Mực nước</span>
-                <Switch isOn={config.is_water_level_enabled} onClick={(val) => setConfig({ ...config, is_water_level_enabled: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                <Switch isOn={config.enable_water_level_sensor} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
               </div>
             </div>
           </SubCard>

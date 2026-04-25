@@ -65,6 +65,7 @@ bool enable_water = true;
 bool enable_ec_tc = true;
 bool enable_ph_tc = true;
 float temp_compensation_beta = 0.02;
+extern unsigned long last_publish_time;
 
 int read_adc_filtered(int pin) {
   int buffer[10];
@@ -169,13 +170,29 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 
   // XỬ LÝ LỆNH COMMAND TỪ CONTROLLER
   if (topicStr == topic_cmd) {
-    DynamicJsonDocument doc(256);
+    DynamicJsonDocument doc(384);
 
     if (!deserializeJson(doc, message)) {
-      if (doc.containsKey("command") && doc["command"] == "continuous_level") {
-        continuous_level = doc["state"].as<bool>();
+      String action = "";
+      if (doc.containsKey("action")) {
+        action = doc["action"].as<String>();
+      } else if (doc.containsKey("command")) {
+        action = doc["command"].as<String>();
+      }
+
+      if (action == "set_continuous" || action == "continuous_level") {
+        bool next_state = false;
+        if (doc["params"].containsKey("state")) {
+          next_state = doc["params"]["state"].as<bool>();
+        } else if (doc.containsKey("state")) {
+          next_state = doc["state"].as<bool>();
+        }
+        continuous_level = next_state;
         Serial.print("🔄 Lệnh Controller -> Chế độ đo liên tục (Bơm): ");
         Serial.println(continuous_level ? "BẬT" : "TẮT");
+      } else if (action == "force_publish") {
+        last_publish_time = 0;
+        Serial.println("⚡ Nhận lệnh force_publish -> sẽ publish ngay.");
       }
     } else {
       Serial.println("❌ [DEBUG] Lỗi Parse JSON Command!"); // [DEBUG]

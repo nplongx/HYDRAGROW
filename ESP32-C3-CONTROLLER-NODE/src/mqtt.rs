@@ -86,7 +86,8 @@ pub struct IncomingSensorPayload {
     pub ec: Option<f32>,
     pub ph: Option<f32>,
     pub water_level: Option<f32>,
-    pub timestamp_ms: Option<u64>,
+    pub ph_voltage_mv: Option<f32>,
+    pub time: Option<String>,
 
     pub rssi: Option<i32>,
     pub free_heap: Option<u32>,
@@ -100,10 +101,16 @@ pub struct IncomingSensorPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
-    pub ec_value: f32,
-    pub ph_value: f32,
-    pub temp_value: f32,
+    pub ec: f32,
+    pub ph: f32,
+    pub temp: f32,
     pub water_level: f32,
+    pub ph_voltage_mv: Option<f32>,
+    pub is_continuous: bool,
+    pub rssi: Option<i32>,
+    pub free_heap: Option<u32>,
+    pub uptime: Option<u32>,
+    pub time: Option<String>,
     pub last_update_ms: u64,
     #[serde(default)]
     pub pump_status: PumpStatus,
@@ -121,10 +128,16 @@ pub struct SensorData {
 impl Default for SensorData {
     fn default() -> Self {
         Self {
-            ec_value: 0.0,
-            ph_value: 7.0,
-            temp_value: 25.0,
+            ec: 0.0,
+            ph: 7.0,
+            temp: 25.0,
             water_level: 20.0,
+            ph_voltage_mv: None,
+            is_continuous: false,
+            rssi: None,
+            free_heap: None,
+            uptime: None,
+            time: None,
             last_update_ms: 0,
             pump_status: PumpStatus::default(),
             err_water: false,
@@ -143,10 +156,20 @@ pub fn create_shared_sensor_data() -> SharedSensorData {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct MqttCommandPayload {
+    pub target: Option<String>,
     pub action: String,
-    pub pump: String,
+    pub params: Option<MqttCommandParams>,
+    pub pump: Option<String>,
     pub duration_sec: Option<u64>,
     pub pwm: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MqttCommandParams {
+    pub pump_id: Option<String>,
+    pub duration_sec: Option<u64>,
+    pub pwm: Option<u32>,
+    pub state: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -277,20 +300,23 @@ pub fn init_mqtt_client(
                         Ok(payload) => {
                             if let Ok(mut sensors) = shared_sensor_data.write() {
                                 if let Some(t) = payload.temp {
-                                    sensors.temp_value = t;
+                                    sensors.temp = t;
                                 }
                                 if let Some(e) = payload.ec {
-                                    sensors.ec_value = e;
+                                    sensors.ec = e;
                                 }
                                 if let Some(p) = payload.ph {
-                                    sensors.ph_value = p;
+                                    sensors.ph = p;
                                 }
                                 if let Some(w) = payload.water_level {
                                     sensors.water_level = w;
                                 }
 
-                                if let Some(w) = payload.water_level {
-                                    sensors.water_level = w;
+                                if let Some(ph_voltage_mv) = payload.ph_voltage_mv {
+                                    sensors.ph_voltage_mv = Some(ph_voltage_mv);
+                                }
+                                if let Some(is_continuous) = payload.is_continuous {
+                                    sensors.is_continuous = is_continuous;
                                 }
                                 if let Some(err) = payload.err_water {
                                     sensors.err_water = err;
@@ -304,6 +330,12 @@ pub fn init_mqtt_client(
                                 if let Some(err) = payload.err_ph {
                                     sensors.err_ph = err;
                                 }
+                                sensors.rssi = payload.rssi;
+                                sensors.free_heap = payload.free_heap;
+                                sensors.uptime = payload.uptime;
+                                if let Some(time) = payload.time {
+                                    sensors.time = Some(time);
+                                }
 
                                 sensors.last_update_ms = std::time::SystemTime::now()
                                     .duration_since(std::time::UNIX_EPOCH)
@@ -313,7 +345,7 @@ pub fn init_mqtt_client(
 
                                 info!(
                                     "🌱 CẢM BIẾN | T: {:.1}°C | EC: {:.2} | pH: {:.2} | Lv: {:.1}cm | Sóng: {:?}dBm | Lỗi nước: {:?}",
-                                    sensors.temp_value, sensors.ec_value, sensors.ph_value, sensors.water_level, payload.rssi, payload.err_water
+                                    sensors.temp, sensors.ec, sensors.ph, sensors.water_level, sensors.rssi, payload.err_water
                                 );
                             } else {
                                 error!("❌ Failed to acquire sensor write lock");

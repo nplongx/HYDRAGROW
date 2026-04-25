@@ -17,6 +17,13 @@ export interface PumpStatus {
   mist_valve: boolean; // Van điện từ phun sương
   water_pump_in: boolean; // Bơm cấp nước vào (In)
   water_pump_out: boolean; // Bơm thoát nước ra (Out)
+  pump_a_pwm?: number;
+  pump_b_pwm?: number;
+  ph_up_pwm?: number;
+  ph_down_pwm?: number;
+  osaka_pwm?: number;
+  dosing_pulse_active?: boolean;
+  dosing_pulse_count?: number;
 }
 
 /**
@@ -24,9 +31,9 @@ export interface PumpStatus {
  */
 export interface SensorData extends DeviceHealth {
   device_id: string;
-  ec_value: number;        // Giá trị EC (Độ dẫn điện)
-  ph_value: number;        // Giá trị pH
-  temp_value: number;      // Nhiệt độ nước/môi trường
+  ec: number;        // Giá trị EC (Độ dẫn điện)
+  ph: number;        // Giá trị pH
+  temp: number;      // Nhiệt độ nước/môi trường
   water_level: number;     // Mực nước (cm)
   pump_status: PumpStatus; // Trạng thái bơm đồng bộ từ FSM
   time: string;       // Thời gian ghi nhận dữ liệu
@@ -194,5 +201,4 @@ export interface DeviceHealth {
 export interface ControllerData extends DeviceHealth {
   // Có thể chứa thêm trạng thái FSM hoặc các config khác nếu cần
 }
-
 

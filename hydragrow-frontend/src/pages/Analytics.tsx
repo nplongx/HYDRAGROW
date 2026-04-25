@@ -265,15 +265,15 @@ const Analytics = () => {
           <div className="space-y-6">
             {/* Thêm style để stagger animation trượt lên tuần tự */}
             <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '0ms' }}>
-              <HologramChartCard title="Mật Độ Dinh Dưỡng (EC)" data={historyData} dataKey="ec_value" color="cyan" unit="mS" icon={Activity} />
+              <HologramChartCard title="Mật Độ Dinh Dưỡng (EC)" data={historyData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
             </div>
 
             <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '150ms' }}>
-              <HologramChartCard title="Chỉ Số Cân Bằng (pH)" data={historyData} dataKey="ph_value" color="fuchsia" unit="pH" icon={Droplets} />
+              <HologramChartCard title="Chỉ Số Cân Bằng (pH)" data={historyData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
             </div>
 
             <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '300ms' }}>
-              <HologramChartCard title="Nhiệt Độ Môi Trường" data={historyData} dataKey="temp_value" color="orange" unit="°C" icon={Thermometer} />
+              <HologramChartCard title="Nhiệt Độ Môi Trường" data={historyData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             </div>
 
             <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '300ms' }}>

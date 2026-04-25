@@ -26,8 +26,8 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
   const [capacityMlPerSec, setCapacityMlPerSec] = useState<number>(1.2);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const currentEC = sensorData?.ec_value || 0;
-  const currentPH = sensorData?.ph_value || 0;
+  const currentEC = sensorData?.ec || 0;
+  const currentPH = sensorData?.ph || 0;
 
   const isEC = selectedPump === 'PUMP_A' || selectedPump === 'PUMP_B';
   const currentValue = isEC ? currentEC : currentPH;

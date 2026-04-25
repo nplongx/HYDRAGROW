@@ -6,10 +6,7 @@ import {
   AlertTriangle, Settings, Calendar, ChevronDown, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { save } from '@tauri-apps/plugin-dialog';
-
+import { writeTextFile } from '@tauri-apps/plugin-fs'; import { save } from '@tauri-apps/plugin-dialog';
 interface BlockchainRecord {
   id: number;
   device_id: string;

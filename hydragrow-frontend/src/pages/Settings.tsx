@@ -132,11 +132,22 @@ const Settings = () => {
   const isPhError = sensorData?.err_ph === true;
   const isCalibrationBlocked = !isSensorOnline || isPhError;
 
-  const callApi = async (path: string, method: string = 'GET', body: any = null, currentSettings: any = appSettings) => {
+  const callApi = async (path: string, method: string = 'GET', body: any = null, currentSettings: any = appSettings, customTimeoutMs?: number) => {
     const url = `${currentSettings.backend_url}${path}`;
-    const options: any = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key } };
+    const options: any = {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key }
+    };
+
+    // Ghi đè timeout mặc định của Tauri HTTP plugin nếu có yêu cầu
+    if (customTimeoutMs) {
+      options.connectTimeout = customTimeoutMs;
+      options.timeout = customTimeoutMs;
+    }
+
     if (body) options.body = JSON.stringify(body);
     const res = await fetch(url, options);
+
     if (!res.ok) {
       let errDetail = `HTTP ${res.status}`;
       try {
@@ -187,7 +198,34 @@ const Settings = () => {
     }
 
     setIsCapturingPoint(true);
-    setCountdown(8);
+
+    // GỌI API START Ở BƯỚC ĐẦU TIÊN
+    if (wizardStep === 0) {
+      try {
+        await callApi(
+          `/api/devices/${currentDeviceId}/calibration/ph/start`,
+          'POST',
+          { mode: calibrationPointsCount === 3 ? '3-point' : '2-point' },
+          currentSettings
+        );
+      } catch (error: any) {
+        console.error(error);
+        toast.error(`Không thể bắt đầu phiên hiệu chuẩn: ${error.message}`);
+        setIsCapturingPoint(false);
+        return;
+      }
+    }
+
+    // --- TÍNH TOÁN THÔNG SỐ ĐỘNG DỰA VÀO CẤU HÌNH ---
+    const targetSamples = Math.max(Number(config.dynamic_sample_count) || 5, 5);
+    const intervalSec = Number(config.publish_interval || 5000) / 1000;
+
+    const dynamicWindowSec = Math.ceil((targetSamples + 2) * intervalSec) + 5;
+
+    // TÍNH TIMEOUT CHO FRONTEND: Phải dài hơn Backend ít nhất 5 giây để tránh đứt gánh giữa đường
+    const requestTimeoutMs = (dynamicWindowSec + 5) * 1000;
+
+    setCountdown(dynamicWindowSec);
     setStabilityStatus('waiting');
 
     const timer = setInterval(() => {
@@ -202,13 +240,19 @@ const Settings = () => {
     }, 1000);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 8000));
+      // TRUYỀN TIMEOUT VÀO LỜI GỌI API (Tham số thứ 5)
       const captureRes = await callApi(
         `/api/devices/${currentDeviceId}/calibration/ph/capture`,
         'POST',
-        { point_ph: activePoint },
-        currentSettings
+        {
+          point: activePoint,
+          sample_target: targetSamples,
+          window_seconds: dynamicWindowSec
+        },
+        currentSettings,
+        requestTimeoutMs // <--- THÊM BIẾN NÀY VÀO ĐÂY
       );
+
       const voltage = normalizeVoltage(captureRes);
       if (voltage === null) throw new Error('Không nhận được giá trị điện áp từ API capture');
       const confidence = normalizeConfidence(captureRes);
@@ -1114,15 +1158,26 @@ const Settings = () => {
                     {adaptivePhases.auto_apply && (
                       <button
                         onClick={async () => {
-                          const confidenceOk = calibrationSummary.reliability >= adaptivePhases.confidence_threshold;
-                          if (!confidenceOk) {
-                            toast.error(`Confidence ${calibrationSummary.reliability}% chưa đạt ngưỡng ${adaptivePhases.confidence_threshold}%`);
+                          if (adaptivePhases.confidence_threshold && calibrationSummary.reliability < adaptivePhases.confidence_threshold) {
+                            toast.error(`Độ tin cậy (${calibrationSummary.reliability}%) chưa đạt ngưỡng yêu cầu ${adaptivePhases.confidence_threshold}%`);
                             return;
                           }
                           if (hasSafetyWarningIn24h) {
                             toast.error('Trong 24h gần nhất có cảnh báo an toàn. Auto-apply bị chặn.');
                             return;
                           }
+
+                          // GỌI FINISH ĐỂ XÓA SESSION TRÊN BACKEND TRƯỚC KHI ÁP DỤNG
+                          const currentDeviceId = appSettings.device_id || ctxDeviceId;
+                          const currentSettings = runtimeSettings || appSettings;
+                          try {
+                            if (currentDeviceId && currentSettings?.backend_url) {
+                              await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', null, currentSettings);
+                            }
+                          } catch (e) {
+                            console.warn("Failed to finish calibration session", e);
+                          }
+
                           const nextConfig = applyCalibrationToConfig();
                           if (nextConfig) await handleSave(nextConfig);
                         }}

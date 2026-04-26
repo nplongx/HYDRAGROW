@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
@@ -29,6 +29,37 @@ const CHART_THEMES: Record<string, any> = {
 const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) => {
   const theme = CHART_THEMES[color];
 
+  // 🟢 Tính toán thông số Min, Max, Avg để dễ theo dõi
+  const stats = useMemo(() => {
+    if (!data || data.length === 0) return { min: '--', max: '--', avg: '--', current: '--' };
+    const values = data.map((d: any) => Number(d[dataKey])).filter((v: number) => !isNaN(v));
+    if (values.length === 0) return { min: '--', max: '--', avg: '--', current: '--' };
+
+    return {
+      min: Math.min(...values).toFixed(2),
+      max: Math.max(...values).toFixed(2),
+      avg: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2),
+      current: values[values.length - 1].toFixed(2)
+    };
+  }, [data, dataKey]);
+
+  // 🟢 Custom Tooltip hiển thị thời gian đầy đủ
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 py-3 rounded-2xl shadow-2xl">
+          <p className="text-slate-400 text-[10px] mb-1 font-bold uppercase tracking-wider">
+            {payload[0].payload.fullTime}
+          </p>
+          <p className={`text-lg font-black ${theme.text}`}>
+            {Number(payload[0].value).toFixed(2)} <span className="text-xs opacity-70">{unit}</span>
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className={`relative bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-5 transition-all duration-500 overflow-hidden group hover:border-${color}-500/30 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)]`}>
 
@@ -36,25 +67,29 @@ const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: an
       <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full blur-[80px] opacity-30 transition-opacity duration-500 group-hover:opacity-60 bg-${color}-500 pointer-events-none`}></div>
 
       {/* Header Biểu đồ */}
-      <div className="relative z-10 flex items-center justify-between mb-6">
+      <div className="relative z-10 flex items-start justify-between mb-4">
         <div className="flex items-center space-x-3">
-          <div className={`p-2.5 rounded-xl ${theme.bg} ${theme.border} border ${theme.glow}`}>
-            <Icon size={18} className={theme.text} />
+          <div className={`p-3 rounded-xl ${theme.bg} ${theme.border} border ${theme.glow}`}>
+            <Icon size={20} className={theme.text} />
           </div>
           <div>
             <h3 className={`text-sm font-black tracking-widest uppercase ${theme.text}`}>{title}</h3>
-            {/* Hiển thị giá trị hiện tại (lấy điểm data cuối cùng nếu có) */}
-            <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-              CURRENT: <span className="text-slate-200">{data.length > 0 ? Number(data[data.length - 1][dataKey]).toFixed(2) : '--'} {unit}</span>
-            </p>
+
+            {/* Thanh thông số Thống kê */}
+            <div className="flex flex-wrap gap-x-4 mt-1.5 text-[10px] font-bold tracking-wider">
+              <p className="text-slate-500">CUR: <span className="text-slate-200">{stats.current} {unit}</span></p>
+              <p className="text-slate-500">AVG: <span className="text-slate-200">{stats.avg} {unit}</span></p>
+              <p className="text-slate-500">MIN: <span className="text-slate-200">{stats.min} {unit}</span></p>
+              <p className="text-slate-500">MAX: <span className="text-slate-200">{stats.max} {unit}</span></p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Khu vực vẽ biểu đồ Recharts */}
-      <div className="h-[180px] w-full relative z-10">
+      <div className="h-[220px] w-full relative z-10 mt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={theme.fill1} stopOpacity={0.6} />
@@ -69,21 +104,26 @@ const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: an
               </filter>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-            <XAxis dataKey="time" hide />
-            <YAxis hide domain={['auto', 'auto']} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                backdropFilter: 'blur(12px)',
-                borderColor: 'rgba(255,255,255,0.1)',
-                borderRadius: '16px',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                color: '#fff',
-                fontWeight: 'bold'
-              }}
-              itemStyle={{ color: theme.stroke, fontWeight: 900 }}
-              labelStyle={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}
+
+            {/* 🟢 Hiển thị lại trục X và Y để dễ quan sát số liệu */}
+            <XAxis
+              dataKey="time"
+              stroke="rgba(255,255,255,0.1)"
+              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
+              tickLine={false}
+              minTickGap={30}
             />
+            <YAxis
+              stroke="rgba(255,255,255,0.1)"
+              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
+              tickLine={false}
+              axisLine={false}
+              domain={['auto', 'auto']}
+              width={45}
+            />
+
+            <Tooltip content={<CustomTooltip />} />
+
             <Area
               type="monotone"
               dataKey={dataKey}
@@ -118,6 +158,12 @@ const Analytics = () => {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
+  // 🟢 Dùng Ref cho allSeasons để tránh kích hoạt useEffect re-render vô tận
+  const allSeasonsRef = useRef(allSeasons);
+  useEffect(() => {
+    allSeasonsRef.current = allSeasons;
+  }, [allSeasons]);
+
   useEffect(() => {
     const loadHistory = async () => {
       if (!deviceId || !settings) return;
@@ -127,7 +173,7 @@ const Analytics = () => {
       let end = new Date().toISOString();
 
       if (selectedSeasonId !== 'realtime') {
-        const season = allSeasons.find(s => s.id.toString() === selectedSeasonId);
+        const season = allSeasonsRef.current.find(s => s.id.toString() === selectedSeasonId);
         if (season) {
           start = season.start_time;
           end = season.end_time || new Date().toISOString();
@@ -152,8 +198,10 @@ const Analytics = () => {
               const dateObj = new Date(d.time);
               return {
                 ...d,
+                // 🟢 Lưu thêm fullTime cho tooltip
+                fullTime: dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 time: selectedSeasonId === 'realtime' && timeRange === '24h'
-                  ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  ? dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                   : dateObj.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
               };
             });
@@ -169,13 +217,20 @@ const Analytics = () => {
       }
     };
 
-    loadHistory();
-  }, [selectedSeasonId, timeRange, deviceId, settings, allSeasons]);
+    // 🟢 Áp dụng Debounce 300ms để tránh gọi API nhiều lần khi trang mới load
+    const timer = setTimeout(() => {
+      loadHistory();
+    }, 300);
+
+    return () => clearTimeout(timer);
+
+    // Loại bỏ allSeasons khỏi dependency để dừng việc trigger vòng lặp
+  }, [selectedSeasonId, timeRange, deviceId, settings?.backend_url, settings?.api_key]);
 
   return (
     <div className="app-page pb-32 relative">
 
-      {/* 🟢 Hiệu ứng nền Mesh Gradient */}
+      {/* Hiệu ứng nền Mesh Gradient */}
       <div className="absolute top-0 right-0 w-[60%] h-64 bg-gradient-to-bl from-cyan-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
 
       {/* HEADER */}
@@ -257,9 +312,8 @@ const Analytics = () => {
             className="h-[40vh] flex flex-col justify-center bg-slate-900/20"
           />
         ) : (
-          // 🟢 DANH SÁCH BIỂU ĐỒ 3D
+          // DANH SÁCH BIỂU ĐỒ 3D
           <div className="space-y-6">
-            {/* Thêm style để stagger animation trượt lên tuần tự */}
             <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '0ms' }}>
               <HologramChartCard title="Mật Độ Dinh Dưỡng (EC)" data={historyData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
             </div>
@@ -272,7 +326,7 @@ const Analytics = () => {
               <HologramChartCard title="Nhiệt Độ Môi Trường" data={historyData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             </div>
 
-            <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '300ms' }}>
+            <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '450ms' }}>
               <HologramChartCard title="Mực nước" data={historyData} dataKey="water_level" color="blue" unit="cm" icon={Waves} />
             </div>
           </div>

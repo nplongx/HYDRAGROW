@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { Sprout, Calendar, Leaf, Play, StopCircle, CheckCircle2, History, Edit3, Save, X, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StateView } from '../components/ui/StateView';
 
 export const CropSeasons = () => {
   const { activeSeason, history, isLoading, createSeason, endSeason, updateSeason } = useCropSeason();
@@ -57,28 +59,21 @@ export const CropSeasons = () => {
   const filteredHistory = history.filter(season => season.id !== activeSeason?.id);
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6 pb-32 min-h-screen relative">
+    <div className="app-page max-w-3xl mx-auto pb-32 relative">
 
       {/* Hiệu ứng nền Mesh Gradient */}
       <div className="absolute top-0 right-0 w-[60%] h-64 bg-gradient-to-bl from-emerald-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
 
       {/* HEADER */}
-      <div className="relative z-10 flex flex-col space-y-1 animate-in slide-in-from-top-4 duration-500 mb-6">
-        <h1 className="text-3xl font-black flex items-center gap-3">
-          <div className="p-2.5 bg-slate-800/50 backdrop-blur-md rounded-2xl border border-slate-700 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-            <Sprout size={24} className="text-emerald-400" />
-          </div>
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-tight">
-            QUẢN LÝ MÙA VỤ
-          </span>
-        </h1>
-        <p className="text-xs text-slate-400 ml-[52px] font-medium tracking-wide uppercase">
-          Theo dõi chu kỳ sinh trưởng của cây trồng
-        </p>
-      </div>
+      <PageHeader
+        className="animate-in slide-in-from-top-4 duration-500 mb-6"
+        icon={Sprout}
+        title="QUẢN LÝ MÙA VỤ"
+        subtitle="Theo dõi chu kỳ sinh trưởng của cây trồng"
+      />
 
       {/* --- PHẦN 1: MÙA VỤ ĐANG CHẠY HOẶC FORM TẠO MỚI --- */}
-      <div className="relative z-10 bg-slate-900/60 backdrop-blur-2xl border border-white/5 rounded-[2rem] overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] animate-in fade-in duration-700">
+      <div className="relative z-10 ui-card rounded-[2rem] overflow-hidden animate-in fade-in duration-700">
         {activeSeason ? (
           <div className="p-5 md:p-6 space-y-5">
             {/* Header Thẻ Active */}
@@ -172,17 +167,17 @@ export const CropSeasons = () => {
               <Sprout size={18} className="text-emerald-500" /> Bắt đầu Kỷ nguyên mới
             </h2>
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Tên mùa vụ <span className="text-rose-500">*</span></label>
-                <input type="text" required placeholder="VD: Dưa lưới vụ Xuân 2026" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-emerald-400 font-bold placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all outline-none" />
+              <div className="ui-form-row">
+                <label className="ui-form-label text-slate-400">Tên mùa vụ <span className="text-rose-500">*</span></label>
+                <input type="text" required placeholder="VD: Dưa lưới vụ Xuân 2026" value={newName} onChange={(e) => setNewName(e.target.value)} className="ui-input bg-slate-950 border-slate-800 text-emerald-400 font-bold placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Giống cây trồng</label>
-                <input type="text" placeholder="VD: Dưa lưới, Cà chua..." value={newPlant} onChange={(e) => setNewPlant(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-50 placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all outline-none" />
+              <div className="ui-form-row">
+                <label className="ui-form-label text-slate-400">Giống cây trồng</label>
+                <input type="text" placeholder="VD: Dưa lưới, Cà chua..." value={newPlant} onChange={(e) => setNewPlant(e.target.value)} className="ui-input bg-slate-950 border-slate-800 text-slate-50 placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500" />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Ghi chú ban đầu (Tùy chọn)</label>
-                <textarea rows={2} placeholder="Nguồn gốc hạt giống, EC mục tiêu khởi điểm..." value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all outline-none resize-none"></textarea>
+              <div className="ui-form-row">
+                <label className="ui-form-label text-slate-400">Ghi chú ban đầu (Tùy chọn)</label>
+                <textarea rows={2} placeholder="Nguồn gốc hạt giống, EC mục tiêu khởi điểm..." value={newDesc} onChange={(e) => setNewDesc(e.target.value)} className="ui-input bg-slate-950 border-slate-800 text-slate-300 placeholder-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none" />
               </div>
             </div>
             <button
@@ -197,7 +192,7 @@ export const CropSeasons = () => {
       </div>
 
       {/* --- PHẦN 2: LỊCH SỬ MÙA VỤ --- */}
-      <div className="relative z-10 bg-slate-900/60 backdrop-blur-2xl border border-white/5 rounded-[2rem] overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <div className="relative z-10 ui-card rounded-[2rem] overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="p-5 border-b border-slate-800/50 bg-slate-800/20">
           <h2 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
             <History size={16} className="text-indigo-400" />
@@ -207,10 +202,7 @@ export const CropSeasons = () => {
 
         <div className="divide-y divide-white/5">
           {filteredHistory.length === 0 ? (
-            <div className="p-10 flex flex-col items-center justify-center text-slate-500 opacity-60">
-              <History size={40} className="mb-3" />
-              <p className="text-xs font-bold uppercase tracking-widest">Chưa có hồ sơ lưu trữ.</p>
-            </div>
+            <StateView icon={History} title="Chưa có hồ sơ lưu trữ." className="opacity-70" />
           ) : (
             filteredHistory.map((season) => (
               <div key={season.id} className="p-5 hover:bg-slate-800/30 transition-colors group cursor-default">

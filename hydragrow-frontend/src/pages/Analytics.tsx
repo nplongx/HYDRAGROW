@@ -7,6 +7,8 @@ import { LineChart as ChartIcon, Clock, Filter, Activity, Thermometer, Droplets,
 import { useDeviceContext } from '../context/DeviceContext';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { fetch } from '@tauri-apps/plugin-http';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StateView } from '../components/ui/StateView';
 
 const CHART_THEMES: Record<string, any> = {
   cyan: { stroke: '#22d3ee', fill1: '#06b6d4', fill2: '#164e63', text: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', glow: 'shadow-[0_0_15px_rgba(34,211,238,0.2)]' },
@@ -171,28 +173,21 @@ const Analytics = () => {
   }, [selectedSeasonId, timeRange, deviceId, settings, allSeasons]);
 
   return (
-    <div className="p-4 space-y-6 pb-32 min-h-screen relative">
+    <div className="app-page pb-32 relative">
 
       {/* 🟢 Hiệu ứng nền Mesh Gradient */}
       <div className="absolute top-0 right-0 w-[60%] h-64 bg-gradient-to-bl from-cyan-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
 
       {/* HEADER */}
-      <div className="relative z-10 flex flex-col space-y-1 animate-in slide-in-from-top-4 duration-500 mb-6">
-        <h1 className="text-3xl font-black flex items-center gap-3">
-          <div className="p-2.5 bg-slate-800/50 backdrop-blur-md rounded-2xl border border-slate-700 shadow-[0_0_20px_rgba(6,182,212,0.15)]">
-            <ChartIcon size={24} className="text-cyan-400" />
-          </div>
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 tracking-tight">
-            PHÂN TÍCH
-          </span>
-        </h1>
-        <p className="text-xs text-slate-400 ml-[52px] font-medium tracking-wide uppercase">
-          Khai thác dữ liệu chuỗi thời gian (Time-series)
-        </p>
-      </div>
+      <PageHeader
+        className="animate-in slide-in-from-top-4 duration-500 mb-6"
+        icon={ChartIcon}
+        title="PHÂN TÍCH"
+        subtitle="Khai thác dữ liệu chuỗi thời gian (Time-series)"
+      />
 
       {/* BỘ LỌC TÌM KIẾM (NEON FILTER BAR) */}
-      <div className="relative z-10 bg-slate-900/60 backdrop-blur-xl border border-white/5 rounded-3xl p-4 shadow-lg animate-in fade-in duration-700">
+      <div className="relative z-10 ui-card animate-in fade-in duration-700">
         <div className="grid grid-cols-2 gap-4">
 
           {/* Lọc Mùa Vụ */}
@@ -255,11 +250,12 @@ const Analytics = () => {
           </div>
         ) : historyData.length === 0 ? (
           // Empty State
-          <div className="h-[40vh] flex flex-col items-center justify-center border border-dashed border-slate-700/50 rounded-[2rem] bg-slate-900/20 backdrop-blur-sm">
-            <ActivitySquare className="text-slate-700 mb-4" size={56} strokeWidth={1} />
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Dữ liệu trống rỗng</p>
-            <p className="text-slate-600 text-[10px] mt-2">Chưa có bản ghi nào trong khung thời gian này.</p>
-          </div>
+          <StateView
+            icon={ActivitySquare}
+            title="Dữ liệu trống rỗng"
+            description="Chưa có bản ghi nào trong khung thời gian này."
+            className="h-[40vh] flex flex-col justify-center bg-slate-900/20"
+          />
         ) : (
           // 🟢 DANH SÁCH BIỂU ĐỒ 3D
           <div className="space-y-6">

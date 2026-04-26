@@ -1,5 +1,65 @@
 @import "tailwindcss";
 
+@layer components {
+  .app-page {
+    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen;
+  }
+
+  .page-header {
+    @apply relative z-10 flex flex-col gap-2 md:flex-row md:items-start md:justify-between;
+  }
+
+  .page-header-main {
+    @apply flex items-start gap-3;
+  }
+
+  .page-header-icon {
+    @apply p-2.5 rounded-2xl bg-slate-800/50 border border-slate-700 shadow-[0_0_20px_rgba(15,23,42,0.35)];
+  }
+
+  .page-header-title {
+    @apply text-2xl md:text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400;
+  }
+
+  .page-header-subtitle {
+    @apply text-xs md:text-sm text-slate-400 mt-1;
+  }
+
+  .ui-card {
+    @apply bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-4 md:p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)];
+  }
+
+  .ui-form-row {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .ui-form-label {
+    @apply text-[10px] font-bold uppercase tracking-wider text-slate-500 pl-1;
+  }
+
+  .ui-helper-text {
+    @apply text-[11px] text-slate-500 pl-1 leading-tight;
+  }
+
+  .ui-state {
+    @apply bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 border-dashed rounded-3xl p-4 md:p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] text-center py-10 md:py-12;
+  }
+
+  .ui-state-title {
+    @apply text-sm md:text-base font-semibold text-slate-300 mt-3;
+  }
+
+  .ui-state-desc {
+    @apply text-xs md:text-sm text-slate-400 mt-1 max-w-md mx-auto;
+  }
+
+  .ui-input {
+    @apply w-full min-h-11 bg-slate-950/50 border text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 transition-all;
+  }
+
+  .ui-btn-md {
+    @apply min-h-11 px-4 py-2.5 rounded-xl text-sm font-semibold;
+  }
 @theme {
   --color-primary: #14b8a6;
   --color-accent: #60a5fa;

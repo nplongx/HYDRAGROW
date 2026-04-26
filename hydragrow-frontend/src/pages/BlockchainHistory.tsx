@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { writeTextFile } from '@tauri-apps/plugin-fs'; import { save } from '@tauri-apps/plugin-dialog';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StateView } from '../components/ui/StateView';
 interface BlockchainRecord {
   id: number;
   device_id: string;
@@ -223,19 +225,16 @@ const BlockchainHistory = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 max-w-4xl mx-auto">
+    <div className="app-page animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 max-w-4xl mx-auto">
 
       {/* HEADER & CHỌN VỤ MÙA TÁI THIẾT KẾ */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-slate-900/50 p-5 rounded-3xl border border-indigo-500/20 shadow-[0_0_20px_rgba(99,102,241,0.05)] backdrop-blur-md gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mb-1 flex items-center">
-            <ShieldCheck className="text-indigo-400 mr-2" size={26} />
-            Nhật Ký Niêm Phong
-          </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
-            Minh bạch dữ liệu canh tác. <span className="hidden sm:inline">Lưu trữ vĩnh viễn trên mạng Solana.</span>
-          </p>
-        </div>
+      <div className="ui-card flex flex-col md:flex-row md:items-center justify-between gap-4 border-indigo-500/20">
+        <PageHeader
+          icon={ShieldCheck}
+          title="Nhật Ký Niêm Phong"
+          subtitle="Minh bạch dữ liệu canh tác. Lưu trữ vĩnh viễn trên mạng Solana."
+          className="w-full"
+        />
 
         {/* 🟢 KHU VỰC NÚT XUẤT CSV VÀ DROPDOWN CHỌN MẺ TRỒNG */}
         <div className="flex flex-row items-end gap-3 shrink-0">
@@ -244,7 +243,7 @@ const BlockchainHistory = () => {
           <button
             onClick={handleExportCSV}
             disabled={history.length === 0}
-            className="flex items-center justify-center space-x-2 px-4 py-3.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-semibold rounded-2xl transition-all border border-slate-700 active:scale-95"
+            className="ui-btn-md flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-all border border-slate-700 active:scale-95"
             title="Xuất dữ liệu ra Excel"
           >
             <Download size={18} className={history.length > 0 ? "text-emerald-400" : "text-slate-500"} />
@@ -258,7 +257,7 @@ const BlockchainHistory = () => {
               <select
                 value={selectedSeason || ''}
                 onChange={(e) => setSelectedSeason(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 hover:border-indigo-500/50 text-white text-sm font-semibold rounded-2xl pl-4 pr-10 py-3.5 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all cursor-pointer"
+                className="ui-input bg-slate-950 border-slate-800 hover:border-indigo-500/50 text-white font-semibold rounded-2xl pr-10 appearance-none focus:ring-indigo-500/30 cursor-pointer"
               >
                 {seasons.map(ss => (
                   <option key={ss.id} value={ss.id}>
@@ -293,12 +292,7 @@ const BlockchainHistory = () => {
         </div>
       )}
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-start space-x-3 text-red-400 animate-in fade-in">
-          <AlertTriangle size={20} className="shrink-0 mt-0.5" />
-          <span className="text-sm font-medium">{error}</span>
-        </div>
-      )}
+      {error && <StateView icon={AlertTriangle} variant="error" title={error} className="animate-in fade-in" />}
 
       {/* Danh sách Timeline */}
       <div className="space-y-6 relative pt-4">
@@ -310,10 +304,7 @@ const BlockchainHistory = () => {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
           </div>
         ) : history.length === 0 && !error ? (
-          <div className="text-center py-10 bg-slate-900/30 rounded-3xl border border-dashed border-slate-800">
-            <Box size={32} className="mx-auto text-slate-600 mb-3" />
-            <p className="text-slate-500 text-sm font-medium">Chưa có dữ liệu nào được niêm phong cho mẻ trồng này.</p>
-          </div>
+          <StateView icon={Box} title="Chưa có dữ liệu nào được niêm phong cho mẻ trồng này." className="bg-slate-900/30" />
         ) : (
           history.map((record, index) => (
             <div key={record.id || index} className="flex items-start space-x-4 animate-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>

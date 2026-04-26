@@ -10,7 +10,7 @@ export const useDeviceControl = (deviceId: string) => {
 
   // Hàm gửi command chung (Đảm bảo cấu trúc chuẩn với Backend Rust)
   const sendCommand = useCallback(async (
-    pump: string,
+    pumpId: string,
     action: string,
     duration_sec?: number,
     pwm?: number
@@ -24,10 +24,13 @@ export const useDeviceControl = (deviceId: string) => {
     try {
       // Body chuẩn khớp với MqttCommandPayload của ESP32
       const payload = {
-        pump: pump,
+        target: 'pump',
         action: action,
-        duration_sec: duration_sec || null,
-        pwm: pwm || null
+        params: {
+          pump_id: pumpId,
+          duration_sec: duration_sec || null,
+          pwm: pwm || null
+        }
       };
 
       const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/control`, {
@@ -40,7 +43,7 @@ export const useDeviceControl = (deviceId: string) => {
       });
 
       if (res.ok) {
-        toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pump}`);
+        toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pumpId}`);
         return true;
       } else {
         const errorText = await res.text();
@@ -49,7 +52,7 @@ export const useDeviceControl = (deviceId: string) => {
         return false;
       }
     } catch (error: any) {
-      console.error(`Lỗi thực thi lệnh (${pump}):`, error);
+      console.error(`Lỗi thực thi lệnh (${pumpId}):`, error);
       toast.error("Lỗi mạng khi gửi lệnh!");
       return false;
     } finally {

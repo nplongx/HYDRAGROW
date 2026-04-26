@@ -48,8 +48,9 @@ pub struct IncomingSensorPayload {
     pub ec: Option<f64>,
     pub ph: Option<f64>,
     pub water_level: Option<f64>,
-    #[serde(rename = "last_update_ms")]
+    #[serde(rename = "last_update_ms", alias = "timestamp_ms")]
     pub timestamp_ms: Option<u64>,
+    pub time: Option<String>,
     pub pump_status: Option<PumpStatus>,
 
     pub rssi: Option<i32>,
@@ -161,16 +162,21 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
     };
 
     let time = incoming
-        .timestamp_ms
-        .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms as i64))
-        .unwrap_or_else(|| chrono::Utc::now())
-        .to_rfc3339();
+        .time
+        .clone()
+        .or_else(|| {
+            incoming
+                .timestamp_ms
+                .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms as i64))
+                .map(|dt| dt.to_rfc3339())
+        })
+        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
 
     let sensor_data = SensorData {
         device_id: device_id.clone(),
-        temp_value: incoming.temp.unwrap_or(0.0),
-        ec_value: incoming.ec.unwrap_or(0.0),
-        ph_value: incoming.ph.unwrap_or(0.0),
+        temp: incoming.temp.unwrap_or(0.0),
+        ec: incoming.ec.unwrap_or(0.0),
+        ph: incoming.ph.unwrap_or(0.0),
         water_level: incoming.water_level.unwrap_or(0.0),
         pump_status: incoming.pump_status.unwrap_or_default(),
         time,
@@ -187,7 +193,7 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
 
     debug!(
         "Nhận dữ liệu cảm biến từ {}: ph={:.2}, ec={:.2}",
-        device_id, sensor_data.ph_value, sensor_data.ec_value
+        device_id, sensor_data.ph, sensor_data.ec
     );
 
     if let Some(ph_voltage_mv) = incoming.ph_voltage_mv {

@@ -153,8 +153,8 @@ pub struct ControlContext {
     pub last_ph_dosing_is_up: Option<bool>,
     pub last_water_before_refill: Option<f32>,
     pub last_water_before_drain: Option<f32>,
-    pub previous_ec_value: Option<f32>,
-    pub previous_ph_value: Option<f32>,
+    pub previous_ec: Option<f32>,
+    pub previous_ph: Option<f32>,
     pub last_continuous_level: bool,
     pub is_misting_active: bool,
     pub last_mist_toggle_time: u64,
@@ -268,8 +268,8 @@ impl Default for ControlContext {
             last_ph_dosing_is_up: None,
             last_water_before_refill: None,
             last_water_before_drain: None,
-            previous_ec_value: None,
-            previous_ph_value: None,
+            previous_ec: None,
+            previous_ph: None,
             last_continuous_level: false,
             is_misting_active: false,
             last_mist_toggle_time: 0,
@@ -375,22 +375,22 @@ impl ControlContext {
     fn check_and_update_noise(&mut self, sensors: &SensorData, config: &DeviceConfig) -> bool {
         let mut is_noisy = false;
         if config.enable_ec_sensor && !sensors.err_ec {
-            if let Some(prev_ec) = self.previous_ec_value {
-                if (sensors.ec_value - prev_ec).abs() > config.max_ec_delta {
+            if let Some(prev_ec) = self.previous_ec {
+                if (sensors.ec - prev_ec).abs() > config.max_ec_delta {
                     warn!("⚠️ Nhiễu EC. Bỏ qua nhịp này!");
                     is_noisy = true;
                 }
             }
-            self.previous_ec_value = Some(sensors.ec_value);
+            self.previous_ec = Some(sensors.ec);
         }
         if config.enable_ph_sensor && !sensors.err_ph {
-            if let Some(prev_ph) = self.previous_ph_value {
-                if (sensors.ph_value - prev_ph).abs() > config.max_ph_delta {
+            if let Some(prev_ph) = self.previous_ph {
+                if (sensors.ph - prev_ph).abs() > config.max_ph_delta {
                     warn!("⚠️ Nhiễu pH. Bỏ qua nhịp này!");
                     is_noisy = true;
                 }
             }
-            self.previous_ph_value = Some(sensors.ph_value);
+            self.previous_ph = Some(sensors.ph);
         }
         is_noisy
     }
@@ -410,7 +410,7 @@ impl ControlContext {
     fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig, now_sec: u64) {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
-                let response = sensors.ec_value - last_ec;
+                let response = sensors.ec - last_ec;
                 if response >= config.ec_ack_threshold {
                     self.ec_retry_count = 0;
                     if !self.auto_tune_locked {
@@ -439,9 +439,9 @@ impl ControlContext {
             if let Some(last_ph) = self.last_ph_before_dosing {
                 let is_up = self.last_ph_dosing_is_up.unwrap_or(true);
                 let response = if is_up {
-                    sensors.ph_value - last_ph
+                    sensors.ph - last_ph
                 } else {
-                    last_ph - sensors.ph_value
+                    last_ph - sensors.ph
                 };
                 let is_ack_ok = response >= config.ph_ack_threshold;
                 if is_ack_ok {
@@ -697,8 +697,8 @@ fn apply_runtime_calibration_ema(
         return;
     }
 
-    let ec_after = sensors.ec_value;
-    let ph_after = sensors.ph_value;
+    let ec_after = sensors.ec;
+    let ph_after = sensors.ph;
     let total_ec_ml = sample.pump_a_ml + sample.pump_b_ml;
 
     let observed_ec_gain_per_ml = if total_ec_ml > MIN_TOTAL_EC_DOSE_ML {
@@ -899,11 +899,11 @@ pub fn start_fsm_control_loop(
                 let is_water_critical = config.enable_water_level_sensor
                     && (sensors.water_level < config.water_level_critical_min);
                 let is_ec_out_of_bounds = config.enable_ec_sensor
-                    && (sensors.ec_value < config.min_ec_limit
-                        || sensors.ec_value > config.max_ec_limit);
+                    && (sensors.ec < config.min_ec_limit
+                        || sensors.ec > config.max_ec_limit);
                 let is_ph_out_of_bounds = config.enable_ph_sensor
-                    && (sensors.ph_value < config.min_ph_limit
-                        || sensors.ph_value > config.max_ph_limit);
+                    && (sensors.ph < config.min_ph_limit
+                        || sensors.ph > config.max_ph_limit);
 
                 let mut emergency_reason = String::new();
                 if config.emergency_shutdown {
@@ -947,7 +947,7 @@ pub fn start_fsm_control_loop(
                     }
                 } else if config.control_mode == ControlMode::Auto {
                     let is_hot = config.enable_temp_sensor
-                        && (sensors.temp_value >= config.misting_temp_threshold);
+                        && (sensors.temp >= config.misting_temp_threshold);
                     let on_duration = if is_hot {
                         config.high_temp_misting_on_duration_ms
                     } else {
@@ -1057,7 +1057,7 @@ pub fn start_fsm_control_loop(
         );
         if needs_continuous != ctx.last_continuous_level {
             let payload = format!(
-                r#"{{"command":"continuous_level", "state": {}}}"#,
+                r#"{{"target":"sensor","action":"set_continuous","params":{{"state":{}}}}}"#,
                 needs_continuous
             );
             let _ = sensor_cmd_tx.send(payload);
@@ -1086,7 +1086,9 @@ pub fn start_fsm_control_loop(
 
             if force_sync {
                 last_reported_state = "".to_string();
-                let _ = sensor_cmd_tx.send(r#"{"command":"force_publish"}"#.to_string());
+                let _ = sensor_cmd_tx.send(
+                    r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string(),
+                );
                 info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
             }
         }
@@ -1127,12 +1129,13 @@ pub fn start_fsm_control_loop(
         );
 
         while let Ok(cmd) = cmd_rx.try_recv() {
-            if cmd.action == "SYNC_STATUS" {
+            let action_lower = cmd.action.to_lowercase();
+            if action_lower == "sync_status" {
                 force_sync = true;
                 continue;
             }
 
-            if cmd.action == "reset_fault" {
+            if action_lower == "reset_fault" {
                 info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
                 ctx.stop_all_pumps(pump_ctrl);
                 ctx.reset_faults();
@@ -1145,18 +1148,45 @@ pub fn start_fsm_control_loop(
                 continue;
             }
 
-            let pump_name = cmd.pump.to_uppercase();
-            let action_lower = cmd.action.to_lowercase();
+            if let Some(target) = &cmd.target {
+                let target_lower = target.to_lowercase();
+                if target_lower != "pump" && target_lower != "all" {
+                    continue;
+                }
+            }
+
+            let pump_name = cmd
+                .params
+                .as_ref()
+                .and_then(|p| p.pump_id.as_ref())
+                .map(|p| p.to_uppercase())
+                .or_else(|| cmd.pump.as_ref().map(|p| p.to_uppercase()))
+                .unwrap_or_else(|| "ALL".to_string());
 
             let is_force_on = action_lower == "force_on";
             let is_set_pwm = action_lower == "set_pwm";
+            let pwm = cmd
+                .params
+                .as_ref()
+                .and_then(|p| p.pwm)
+                .or(cmd.pwm);
+            let duration_sec = cmd
+                .params
+                .as_ref()
+                .and_then(|p| p.duration_sec)
+                .or(cmd.duration_sec);
+            let explicit_state = cmd.params.as_ref().and_then(|p| p.state);
 
-            let is_on = is_force_on
+            let mut is_on = is_force_on
                 || action_lower == "pump_on"
                 || action_lower == "on"
                 || action_lower == "true"
                 || action_lower == "1"
-                || (is_set_pwm && cmd.pwm.unwrap_or(0) > 0);
+                || (is_set_pwm && pwm.unwrap_or(0) > 0);
+
+            if let Some(state) = explicit_state {
+                is_on = state;
+            }
 
             if is_emergency_state && is_on && !is_force_on {
                 warn!("❌ BLOCKED: Không thể điều khiển {} bình thường vì hệ thống đang Lỗi / EmergencyStop. Vui lòng dùng FORCE.", pump_name);
@@ -1165,12 +1195,12 @@ pub fn start_fsm_control_loop(
 
             if is_force_on {
                 info!("⚠️ NGƯỜI DÙNG CƯỠNG CHẾ BẬT {}!", pump_name);
-                let duration = cmd.duration_sec.unwrap_or(120);
+                let duration = duration_sec.unwrap_or(120);
                 ctx.safety_override_until = current_time_ms + (duration as u64 * 1000);
             }
 
             if is_on {
-                if let Some(duration) = cmd.duration_sec {
+                if let Some(duration) = duration_sec {
                     if duration > 0 {
                         let finish_time = current_time_ms + (duration as u64 * 1000);
                         ctx.manual_timeouts.insert(pump_name.clone(), finish_time);
@@ -1180,7 +1210,7 @@ pub fn start_fsm_control_loop(
                 ctx.manual_timeouts.remove(&pump_name);
             }
 
-            let pwm_val = if let Some(p) = cmd.pwm {
+            let pwm_val = if let Some(p) = pwm {
                 p
             } else {
                 if is_on {
@@ -1194,7 +1224,7 @@ pub fn start_fsm_control_loop(
                 "A" | "PUMP_A" => {
                     ctx.pump_status.pump_a = is_on;
                     ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                    if cmd.pwm.is_some() || is_set_pwm {
+                    if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, is_on, pwm_val)
                     } else {
                         pump_ctrl.set_pump_state(PumpType::NutrientA, is_on)
@@ -1203,7 +1233,7 @@ pub fn start_fsm_control_loop(
                 "B" | "PUMP_B" => {
                     ctx.pump_status.pump_b = is_on;
                     ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                    if cmd.pwm.is_some() || is_set_pwm {
+                    if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, is_on, pwm_val)
                     } else {
                         pump_ctrl.set_pump_state(PumpType::NutrientB, is_on)
@@ -1212,7 +1242,7 @@ pub fn start_fsm_control_loop(
                 "PH_UP" | "PUMP_PH_UP" => {
                     ctx.pump_status.ph_up = is_on;
                     ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                    if cmd.pwm.is_some() || is_set_pwm {
+                    if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, is_on, pwm_val)
                     } else {
                         pump_ctrl.set_pump_state(PumpType::PhUp, is_on)
@@ -1221,7 +1251,7 @@ pub fn start_fsm_control_loop(
                 "PH_DOWN" | "PUMP_PH_DOWN" => {
                     ctx.pump_status.ph_down = is_on;
                     ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                    if cmd.pwm.is_some() || is_set_pwm {
+                    if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, is_on, pwm_val)
                     } else {
                         pump_ctrl.set_pump_state(PumpType::PhDown, is_on)
@@ -1230,7 +1260,7 @@ pub fn start_fsm_control_loop(
                 "OSAKA_PUMP" | "OSAKA" => {
                     ctx.pump_status.osaka_pump = is_on;
                     ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
-                    if cmd.pwm.is_some() || is_set_pwm {
+                    if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_osaka_pump_pwm(pwm_val)
                     } else {
                         pump_ctrl.set_osaka_pump(is_on)
@@ -1391,7 +1421,7 @@ pub fn start_fsm_control_loop(
                 } else if config.enable_ec_sensor
                     && config.enable_water_level_sensor
                     && config.auto_dilute_enabled
-                    && sensors.ec_value > (config.ec_target + config.ec_tolerance)
+                    && sensors.ec > (config.ec_target + config.ec_tolerance)
                 {
                     let target = (sensors.water_level - config.dilute_drain_amount_cm)
                         .max(config.water_level_min);
@@ -1493,7 +1523,7 @@ pub fn start_fsm_control_loop(
                     // 🟢 BÙ EC TỰ ĐỘNG
                     if config.enable_ec_sensor
                         && !is_dosing_active
-                        && sensors.ec_value < (config.ec_target - config.ec_tolerance)
+                        && sensors.ec < (config.ec_target - config.ec_tolerance)
                     {
                         if ctx.ec_retry_count >= 3 {
                             ctx.stop_all_pumps(pump_ctrl);
@@ -1502,7 +1532,7 @@ pub fn start_fsm_control_loop(
                             is_dosing_active = true;
                         } else {
                             let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
-                            let ec_error = config.ec_target - sensors.ec_value;
+                            let ec_error = config.ec_target - sensors.ec;
                             let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
                             let active_ec_step_ratio = if ctx.auto_tune_locked {
                                 ctx.best_known_ec_step_ratio
@@ -1539,7 +1569,7 @@ pub fn start_fsm_control_loop(
                                     dose_ml,
                                     MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
                                 );
-                                ctx.last_ec_before_dosing = Some(sensors.ec_value);
+                                ctx.last_ec_before_dosing = Some(sensors.ec);
                                 ctx.current_state = SystemState::StartingOsakaPump {
                                     finish_time: current_time_ms + config.soft_start_duration,
                                     pending_action: PendingDose::EC {
@@ -1557,7 +1587,7 @@ pub fn start_fsm_control_loop(
                     // 🟢 BÙ PH TỰ ĐỘNG
                     if config.enable_ph_sensor
                         && !is_dosing_active
-                        && (sensors.ph_value - config.ph_target).abs() > config.ph_tolerance
+                        && (sensors.ph - config.ph_target).abs() > config.ph_tolerance
                     {
                         if ctx.ph_retry_count >= 3 {
                             ctx.stop_all_pumps(pump_ctrl);
@@ -1565,8 +1595,8 @@ pub fn start_fsm_control_loop(
                                 SystemState::SystemFault("PH_DOSING_FAILED".to_string());
                             is_dosing_active = true;
                         } else {
-                            let is_ph_up = sensors.ph_value < config.ph_target;
-                            let diff = (sensors.ph_value - config.ph_target).abs();
+                            let is_ph_up = sensors.ph < config.ph_target;
+                            let diff = (sensors.ph - config.ph_target).abs();
                             let ratio = if is_ph_up {
                                 config.ph_shift_up_per_ml
                             } else {
@@ -1606,7 +1636,7 @@ pub fn start_fsm_control_loop(
                                     let final_dose_ml = (diff / ratio * config.ph_step_ratio)
                                         .clamp(0.0, config.max_dose_per_cycle);
                                     if final_dose_ml > 0.0 {
-                                        ctx.last_ph_before_dosing = Some(sensors.ph_value);
+                                        ctx.last_ph_before_dosing = Some(sensors.ph);
                                         ctx.last_ph_dosing_is_up = Some(is_ph_up);
 
                                         ctx.current_state = SystemState::StartingOsakaPump {
@@ -1745,17 +1775,17 @@ pub fn start_fsm_control_loop(
                                     pulse_off_ms,
                                     pwm_percent: dose_pwm,
                                     active_capacity_ml_per_sec: active_capacity_a,
-                                    target_ec: sensors.ec_value,
-                                    start_ec: sensors.ec_value,
-                                    start_ph: sensors.ph_value,
+                                    target_ec: sensors.ec,
+                                    start_ec: sensors.ec,
+                                    start_ph: sensors.ph,
                                 };
                             } else if dose_b_ml > 0.0 {
                                 ctx.current_state = SystemState::WaitingBetweenDose {
                                     finish_time: current_time_ms,
                                     dose_b_ml,
-                                    target_ec: sensors.ec_value,
-                                    start_ec: sensors.ec_value,
-                                    start_ph: sensors.ph_value,
+                                    target_ec: sensors.ec,
+                                    start_ec: sensors.ec,
+                                    start_ph: sensors.ph,
                                     dose_a_ml_reported: 0.0,
                                 };
                             } else {
@@ -1824,8 +1854,8 @@ pub fn start_fsm_control_loop(
                                 pwm_percent: dose_pwm,
                                 active_capacity_ml_per_sec: active_capacity_a,
                                 target_ec,
-                                start_ec: sensors.ec_value,
-                                start_ph: sensors.ph_value,
+                                start_ec: sensors.ec,
+                                start_ph: sensors.ph,
                             };
                         }
                         PendingDose::PH {
@@ -1903,8 +1933,8 @@ pub fn start_fsm_control_loop(
                                 pwm_percent: dose_pwm,
                                 active_capacity_ml_per_sec: active_capacity,
                                 target_ph,
-                                start_ec: sensors.ec_value,
-                                start_ph: sensors.ph_value,
+                                start_ec: sensors.ec,
+                                start_ph: sensors.ph,
                             };
                         }
                     }

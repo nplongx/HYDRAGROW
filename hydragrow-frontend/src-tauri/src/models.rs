@@ -20,17 +20,32 @@ pub struct PumpStatus {
     pub mist_valve: bool,
     pub water_pump_in: bool,
     pub water_pump_out: bool,
+    pub pump_a_pwm: Option<u32>,
+    pub pump_b_pwm: Option<u32>,
+    pub ph_up_pwm: Option<u32>,
+    pub ph_down_pwm: Option<u32>,
+    pub osaka_pwm: Option<u32>,
+    pub dosing_pulse_active: Option<bool>,
+    pub dosing_pulse_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
     pub device_id: String,
-    pub ec_value: f64,
-    pub ph_value: f64,
-    pub temp_value: f64,
+    pub ec: f64,
+    pub ph: f64,
+    pub temp: f64,
     pub water_level: f64,
+    pub ph_voltage_mv: Option<f64>,
+    pub is_continuous: Option<bool>,
+    pub err_water: Option<bool>,
+    pub err_temp: Option<bool>,
+    pub err_ph: Option<bool>,
+    pub err_ec: Option<bool>,
+    pub rssi: Option<i32>,
+    pub free_heap: Option<u32>,
+    pub uptime: Option<u32>,
     pub pump_status: PumpStatus,
-    // 🟢 ĐÃ SỬA: Đổi `timestamp` thành `time` để khớp với JSON Backend trả về
     pub time: String,
 }
 
@@ -208,9 +223,9 @@ pub struct SensorCalibration {
     pub sampling_interval: i64,
     pub publish_interval: i64,
     pub moving_average_window: i64,
-    pub is_ph_enabled: i32,
-    pub is_ec_enabled: i32,
-    pub is_temp_enabled: i32,
-    pub is_water_level_enabled: i32,
+    pub enable_ph_sensor: bool,
+    pub enable_ec_sensor: bool,
+    pub enable_temp_sensor: bool,
+    pub enable_water_level_sensor: bool,
     pub last_calibrated: String,
 }

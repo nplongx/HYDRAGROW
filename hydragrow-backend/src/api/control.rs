@@ -10,22 +10,41 @@ use crate::models::config::{DosingCalibration, SafetyConfig};
 
 #[derive(Debug, Deserialize)]
 pub struct PumpControlReq {
-    pub pump: String, // "A", "B", "PH_UP", "PH_DOWN", "OSAKA_PUMP", "MIST_VALVE", "WATER_PUMP", "DRAIN_PUMP", "CIRCULATION_PUMP", "ALL"
-    pub action: String, // "on", "off", "reset_fault", "set_pwm"
-    pub duration_sec: Option<u64>,
-    pub pwm: Option<u32>,
+    pub target: Option<String>,
+    pub pump: Option<String>,      // legacy
+    pub action: String,            // "on", "off", "reset_fault", "set_pwm"
+    pub duration_sec: Option<u64>, // legacy
+    pub pwm: Option<u32>,          // legacy
+    pub params: Option<PumpControlParams>,
     #[serde(default, alias = "max_allowed_ml", alias = "manual_max_dose_per_cycle")]
     pub manual_max_allowed_ml: Option<f32>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PumpControlParams {
+    pub pump_id: Option<String>,
+    pub duration_sec: Option<u64>,
+    pub pwm: Option<u32>,
+    pub state: Option<bool>,
+}
+
 #[derive(Debug, Serialize)]
 struct MqttCommandPayload {
+    pub target: String,
     pub action: String,
-    pub pump: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<MqttCommandParams>,
+}
+
+#[derive(Debug, Serialize)]
+struct MqttCommandParams {
+    pub pump_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_sec: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pwm: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<bool>,
 }
 
 /// POST /api/devices/{device_id}/control
@@ -58,8 +77,30 @@ pub async fn control_pump(
         "ALL",
     ];
 
-    if !valid_pumps.contains(&req_data.pump.as_str()) {
-        warn!("Từ chối lệnh: Tên bơm/van không hợp lệ ({})", req_data.pump);
+    let pump_name = req_data
+        .params
+        .as_ref()
+        .and_then(|p| p.pump_id.clone())
+        .or_else(|| req_data.pump.clone())
+        .unwrap_or_else(|| "ALL".to_string());
+    let duration_sec = req_data
+        .params
+        .as_ref()
+        .and_then(|p| p.duration_sec)
+        .or(req_data.duration_sec);
+    let pwm = req_data
+        .params
+        .as_ref()
+        .and_then(|p| p.pwm)
+        .or(req_data.pwm);
+    let explicit_state = req_data.params.as_ref().and_then(|p| p.state);
+    let target = req_data
+        .target
+        .clone()
+        .unwrap_or_else(|| "pump".to_string());
+
+    if !valid_pumps.contains(&pump_name.as_str()) {
+        warn!("Từ chối lệnh: Tên bơm/van không hợp lệ ({})", pump_name);
         return HttpResponse::BadRequest().json(json!({"error": "Invalid pump name"}));
     }
 
@@ -70,11 +111,11 @@ pub async fn control_pump(
             .json(json!({"error": "Action must be 'on', 'off', 'reset_fault', or 'set_pwm'"}));
     }
 
-    if let (Some(pwm), Some(duration_sec)) = (req_data.pwm, req_data.duration_sec) {
+    if let (Some(pwm), Some(duration_sec)) = (pwm, duration_sec) {
         if let Err(resp) = validate_manual_dose_safety(
             &app_state.pg_pool,
             &device_id,
-            &req_data.pump,
+            &pump_name,
             pwm,
             duration_sec,
             req_data.manual_max_allowed_ml,
@@ -87,7 +128,7 @@ pub async fn control_pump(
 
     let mqtt_action = match req_data.action.as_str() {
         "on" => {
-            if req_data.pwm.is_some() {
+            if pwm.is_some() {
                 "set_pwm"
             } else {
                 "pump_on"
@@ -101,10 +142,14 @@ pub async fn control_pump(
     };
 
     let command = MqttCommandPayload {
+        target,
         action: mqtt_action.to_string(),
-        pump: req_data.pump.clone(),
-        duration_sec: req_data.duration_sec,
-        pwm: req_data.pwm,
+        params: Some(MqttCommandParams {
+            pump_id: pump_name.clone(),
+            duration_sec,
+            pwm,
+            state: explicit_state,
+        }),
     };
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {
@@ -115,7 +160,7 @@ pub async fn control_pump(
 
     info!(
         "📡 Đã xuất lệnh MQTT [{}] -> Bơm: {} | PWM: {:?}% | Timeout: {:?}s | (Thiết bị: {})",
-        mqtt_action, req_data.pump, req_data.pwm, req_data.duration_sec, device_id
+        mqtt_action, pump_name, pwm, duration_sec, device_id
     );
 
     let action_vn = match req_data.action.as_str() {
@@ -132,7 +177,7 @@ pub async fn control_pump(
         title: "Can Thiệp Thủ Công".to_string(),
         message: format!(
             "Lệnh: {} thiết bị [{}]\nBởi: Người dùng / Ứng dụng",
-            action_vn, req_data.pump
+            action_vn, pump_name
         ),
         device_id: device_id.clone(),
         reason: Some(format!("Người dùng bấm nút điều khiển qua Web/App")), // 🟢 Bổ sung reason

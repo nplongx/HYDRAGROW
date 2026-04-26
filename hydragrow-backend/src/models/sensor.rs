@@ -21,6 +21,13 @@ pub struct PumpStatus {
     pub mist_valve: bool,
     pub water_pump_in: bool,
     pub water_pump_out: bool,
+    pub pump_a_pwm: Option<u32>,
+    pub pump_b_pwm: Option<u32>,
+    pub ph_up_pwm: Option<u32>,
+    pub ph_down_pwm: Option<u32>,
+    pub osaka_pwm: Option<u32>,
+    pub dosing_pulse_active: Option<bool>,
+    pub dosing_pulse_count: Option<u32>,
 }
 
 /// Cấu trúc Sensor đẩy vào InfluxDB và trả về Client
@@ -29,13 +36,13 @@ pub struct SensorData {
     pub device_id: String,
 
     #[validate(range(min = 0.0, max = 20.0))]
-    pub ec_value: f64,
+    pub ec: f64,
 
     #[validate(range(min = 0.0, max = 14.0))]
-    pub ph_value: f64,
+    pub ph: f64,
 
     #[validate(range(min = -10.0, max = 100.0))]
-    pub temp_value: f64,
+    pub temp: f64,
 
     #[validate(range(min = 0.0))]
     pub water_level: f64,
@@ -69,9 +76,9 @@ pub struct SensorData {
 #[derive(Debug, Clone, Serialize, Deserialize, FromDataPoint, Default)]
 pub struct SensorDataRow {
     pub device_id: String,
-    pub ec_value: f64,
-    pub ph_value: f64,
-    pub temp_value: f64,
+    pub ec: f64,
+    pub ph: f64,
+    pub temp: f64,
     pub water_level: f64,
     pub pump_status: String,
 
@@ -83,9 +90,9 @@ impl From<SensorDataRow> for SensorData {
         let pump_status = serde_json::from_str(&row.pump_status).unwrap_or_default();
         Self {
             device_id: row.device_id,
-            ec_value: row.ec_value,
-            ph_value: row.ph_value,
-            temp_value: row.temp_value,
+            ec: row.ec,
+            ph: row.ph,
+            temp: row.temp,
             water_level: row.water_level,
             pump_status,
 
@@ -105,12 +112,29 @@ impl From<SensorDataRow> for SensorData {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct PumpCommandReq {
-    #[validate(length(min = 1))]
-    #[serde(rename = "pump")]
-    pub pump_id: String,
+    pub target: Option<String>,
 
     pub action: String,
 
+    #[serde(default)]
+    pub params: Option<PumpCommandParams>,
+
+    #[serde(default, alias = "pump")]
+    pub pump_id: Option<String>,
+    #[serde(default)]
     pub duration_sec: Option<u64>,
+    #[serde(default)]
     pub pwm: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct PumpCommandParams {
+    #[serde(default)]
+    pub pump_id: Option<String>,
+    #[serde(default)]
+    pub duration_sec: Option<u64>,
+    #[serde(default)]
+    pub pwm: Option<u32>,
+    #[serde(default)]
+    pub state: Option<bool>,
 }

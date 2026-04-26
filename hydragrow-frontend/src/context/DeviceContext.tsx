@@ -52,11 +52,21 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   };
 
   const normalized = { ...defaultPumpStatus };
+  const booleanKeys: Array<keyof PumpStatus> = [
+    'pump_a',
+    'pump_b',
+    'ph_up',
+    'ph_down',
+    'osaka_pump',
+    'mist_valve',
+    'water_pump_in',
+    'water_pump_out'
+  ];
 
   Object.entries(rawPumpStatus).forEach(([key, value]) => {
     const normalizedKey = mapped[key] || mapped[key.toUpperCase()] || key.toLowerCase();
-    if (normalizedKey in normalized) {
-      normalized[normalizedKey as keyof PumpStatus] = Boolean(value);
+    if (booleanKeys.includes(normalizedKey as keyof PumpStatus)) {
+      (normalized as unknown as Record<string, boolean>)[normalizedKey] = Boolean(value);
     }
   });
 
@@ -284,9 +294,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                   pump_status: incomingPayload.pump_status !== undefined
                     ? normalizePumpStatus(incomingPayload.pump_status)
                     : prev.pump_status,
-                  temp_value: incomingPayload.temp_value !== undefined ? incomingPayload.temp_value : prev.temp_value,
-                  ec_value: incomingPayload.ec_value !== undefined ? incomingPayload.ec_value : prev.ec_value,
-                  ph_value: incomingPayload.ph_value !== undefined ? incomingPayload.ph_value : prev.ph_value,
+                  temp: incomingPayload.temp !== undefined ? incomingPayload.temp : prev.temp,
+                  ec: incomingPayload.ec !== undefined ? incomingPayload.ec : prev.ec,
+                  ph: incomingPayload.ph !== undefined ? incomingPayload.ph : prev.ph,
                   water_level: incomingPayload.water_level !== undefined ? incomingPayload.water_level : prev.water_level,
                   err_water: incomingPayload.err_water !== undefined ? incomingPayload.err_water : prev.err_water,
                   err_temp: incomingPayload.err_temp !== undefined ? incomingPayload.err_temp : prev.err_temp,

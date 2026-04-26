@@ -193,7 +193,7 @@ const Dashboard = () => {
           <div className={sensorData?.err_ec === true ? "opacity-50 ring-2 ring-rose-500/50 rounded-[2rem] transition-all duration-300" : "transition-all duration-300"}>
             <SensorBentoCard
               title="Dinh dưỡng (EC)"
-              value={sensorData?.err_ec === true ? -1 : sensorData?.ec_value}
+              value={sensorData?.err_ec === true ? -1 : sensorData?.ec}
               unit="mS/cm"
               icon={Activity}
               theme={sensorData?.err_ec === true ? "rose" : "blue"}
@@ -211,7 +211,7 @@ const Dashboard = () => {
           <div className={sensorData?.err_ph === true ? "opacity-50 ring-2 ring-rose-500/50 rounded-[2rem] transition-all duration-300" : "transition-all duration-300"}>
             <SensorBentoCard
               title="Độ pH"
-              value={sensorData?.err_ph === true ? -1 : sensorData?.ph_value}
+              value={sensorData?.err_ph === true ? -1 : sensorData?.ph}
               icon={Droplets}
               theme={sensorData?.err_ph === true ? "rose" : "fuchsia"}
             />
@@ -228,7 +228,7 @@ const Dashboard = () => {
           <div className={sensorData?.err_temp === true ? "opacity-50 ring-2 ring-rose-500/50 rounded-[2rem] transition-all duration-300" : "transition-all duration-300"}>
             <SensorBentoCard
               title="Nhiệt độ"
-              value={sensorData?.err_temp === true ? -1 : sensorData?.temp_value}
+              value={sensorData?.err_temp === true ? -1 : sensorData?.temp}
               unit="°C"
               icon={Thermometer}
               theme={sensorData?.err_temp === true ? "rose" : "orange"}

@@ -238,7 +238,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         if let Ok(sensor_cmd_json) = sensor_cmd_rx.try_recv() {
-            if sensor_cmd_json.contains("\"command\":\"force_publish\"") {
+            if sensor_cmd_json.contains("\"action\":\"force_publish\"") {
                 force_publish_next = true;
             } else if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {

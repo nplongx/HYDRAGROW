@@ -30,29 +30,23 @@ PubSubClient client(espClient);
 OneWire oneWire(PIN_DS18B20);
 DallasTemperature sensors(&oneWire);
 
-#define MAX_WINDOW 50
-
-float ph_v7 = 2650.0, ph_v4 = 3555.0;
+// Cấu hình vật lý & Cảm biến
+float ph_v686 = 2650.0, ph_v4 = 3555.0;
 float ec_factor = 0.88, ec_offset = 0.0;
 float temp_offset = 0.0;
 
-int ma_window = 15;
 int publish_interval = 5000;
-
 float tank_height = 100.0;
 bool continuous_level = false;
+
 #define V_REF_MV 3300.0
 #define ADC_MAX 4095.0
 #define VOLTAGE_DIVIDER_RATIO 1.5
-
 const int SAMPLING_INTERVAL = 200;
-float temp_history[MAX_WINDOW], water_history[MAX_WINDOW];
-float ph_history[MAX_WINDOW], ec_history[MAX_WINDOW];
-int history_idx = 0;
 
 float current_avg_temp = 25.0;
 float current_avg_water = 20.0;
-float current_avg_ph = 7.0;
+float current_avg_ph = 6.86;
 float current_avg_ec = 0.0;
 float latest_ph_voltage_mv = NAN;
 float latest_raw_water = 20.0;
@@ -65,8 +59,82 @@ bool enable_water = true;
 bool enable_ec_tc = true;
 bool enable_ph_tc = true;
 float temp_compensation_beta = 0.02;
+
 extern unsigned long last_publish_time;
 
+// =====================================================================
+// CLASS: BỘ LỌC TÍN HIỆU LAI (HYBRID FILTER) - O(1) Memory Complexity
+// Lớp 1: Cửa sổ động học loại bỏ điểm dị biệt (Dynamic Outlier Rejection)
+// Lớp 2: Trung bình trượt hàm mũ (EMA)
+// =====================================================================
+class HybridFilter {
+private:
+  float X_prev;     // Giá trị thô đã xác nhận trước đó
+  float Y_prev;     // Giá trị đã qua lọc (Lớp 2) chu kỳ trước
+  int error_streak; // Biến đếm cơ chế chống đóng băng (Anti-Lock)
+  float delta_max;  // Ngưỡng biến thiên vật lý tối đa cho phép
+  float alpha;      // Hệ số học tập (Learning Rate) của EMA
+  bool initialized; // Cờ khởi tạo
+
+public:
+  HybridFilter(float _delta, float _alpha) {
+    delta_max = _delta;
+    alpha = _alpha;
+    error_streak = 0;
+    initialized = false;
+    X_prev = 0;
+    Y_prev = 0;
+  }
+
+  void setAlpha(float _alpha) { alpha = _alpha; }
+  void setDelta(float _delta) { delta_max = _delta; }
+
+  float update(float x_t) {
+    // Khởi tạo ngay mốc dữ liệu ban đầu
+    if (!initialized || isnan(x_t)) {
+      if (!isnan(x_t)) {
+        X_prev = x_t;
+        Y_prev = x_t;
+        initialized = true;
+      }
+      return Y_prev;
+    }
+
+    float X_t = x_t;
+
+    // --- LỚP 1: LOẠI BỎ DỊ BIỆT (OUTLIER REJECTION) ---
+    if (abs(x_t - X_prev) > delta_max) {
+      error_streak++;
+      if (error_streak > 5) {
+        // Cơ chế chống đóng băng: Thay đổi thực tế chứ không phải nhiễu
+        X_prev = x_t; // Tái đồng bộ mốc xác nhận
+        error_streak = 0;
+      } else {
+        // Nhiễu gai: Bỏ qua x_t, giữ nguyên giá trị xác nhận cũ đưa vào Lớp 2
+        X_t = X_prev;
+      }
+    } else {
+      // Tín hiệu hợp lệ, cập nhật mốc
+      X_prev = x_t;
+      error_streak = 0;
+    }
+
+    // --- LỚP 2: BỘ LỌC IIR BẬC 1 (EMA) KHỬ NHIỄU TRẮNG ---
+    float Y_t = (alpha * X_t) + ((1.0 - alpha) * Y_prev);
+    Y_prev = Y_t;
+
+    return Y_t;
+  }
+};
+
+// Khởi tạo các bộ lọc với Delta và Alpha (Learning Rate) phù hợp
+// Alpha = 2 / (Window + 1). Ví dụ: Window 15 -> Alpha ~ 0.125
+HybridFilter tempFilter(5.0, 0.125);   // Lệch max 5°C mỗi 200ms
+HybridFilter waterFilter(20.0, 0.125); // Lệch max 20cm mỗi 200ms
+HybridFilter phFilter(1.5, 0.125);     // Lệch max 1.5 pH mỗi 200ms
+HybridFilter ecFilter(1.0, 0.125);     // Lệch max 1.0 mS/cm mỗi 200ms
+
+// Lọc trung vị ADC phần cứng (Giữ nguyên để khử nhiễu tần số rất cao)
 int read_adc_filtered(int pin) {
   int buffer[10];
   for (int i = 0; i < 10; i++) {
@@ -88,14 +156,6 @@ int read_adc_filtered(int pin) {
   return sum / 6;
 }
 
-float calc_average(float history[], float new_val) {
-  history[history_idx] = new_val;
-  float sum = 0;
-  for (int i = 0; i < ma_window; i++)
-    sum += history[i];
-  return sum / ma_window;
-}
-
 float readWaterLevel() {
   digitalWrite(PIN_TRIG, LOW);
   delayMicroseconds(2);
@@ -105,37 +165,25 @@ float readWaterLevel() {
   long duration = pulseIn(PIN_ECHO, HIGH, 20000);
 
   if (duration == 0) {
-    Serial.println("⚠️ [DEBUG-Water] Không đọc được xung phản hồi (duration = "
-                   "0)"); // [DEBUG]
+    Serial.println("⚠️ [DEBUG-Water] Không đọc được xung phản hồi");
     return -1;
   }
-
   float distance = (duration / 2.0) * 0.0343;
   float water_level = tank_height - distance;
-  float final_level = (water_level < 0) ? 0 : water_level;
-
-  // [DEBUG] Xem chi tiết cảm biến siêu âm
-  // Serial.printf("💧 [DEBUG-Water] Duration: %ld us | Distance: %.2f cm |
-  // Level thô: %.2f cm\n", duration, distance, final_level);
-
-  return final_level;
+  return (water_level < 0) ? 0 : water_level;
 }
 
 float calculate_ph(float voltage_mv, float current_temp) {
-  float diff = ph_v4 - ph_v7;
-  float slope = (abs(diff) < 0.1) ? -0.006 : ((4.0 - 7.0) / diff);
+  float diff = ph_v4 - ph_v686; // Đã đổi tên biến ph_v7 thành ph_v686
+  float slope =
+      (abs(diff) < 0.1) ? -0.006 : ((4.0 - 6.86) / diff); // Đổi 7.0 thành 6.86
 
   if (enable_ph_tc) {
     float temp_ratio = (current_temp + 273.15) / (25.0 + 273.15);
     slope = slope / temp_ratio;
   }
-  float ph_result = constrain(7.0 + slope * (voltage_mv - ph_v7), 0.0, 14.0);
-
-  // [DEBUG]
-  Serial.printf("🧪 [DEBUG-pH] Volt: %.2f mV | Temp bù: %.2f °C | Slope: %.4f "
-                "| pH calc: %.2f\n",
-                voltage_mv, current_temp, slope, ph_result);
-
+  float ph_result = constrain(6.86 + slope * (voltage_mv - ph_v686), 0.0,
+                              14.0); // Đổi 7.0 thành 6.86
   return ph_result;
 }
 
@@ -147,13 +195,7 @@ float calculate_ec(float voltage_mv, float current_temp) {
     float coef = 1.0 + temp_compensation_beta * (current_temp - 25.0);
     ec_result = raw_ec / coef;
   }
-  ec_result = max(ec_result, 0.0f);
-
-  // [DEBUG]
-  // Serial.printf("⚡ [DEBUG-EC] Volt: %.2f mV | Raw EC: %.2f | Temp bù: %.2f
-  // °C | EC calc: %.2f\n", voltage_mv, raw_ec, current_temp, ec_result);
-
-  return ec_result;
+  return max(ec_result, 0.0f);
 }
 
 // ================= MQTT CALLBACK =================
@@ -161,82 +203,56 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String message = "";
   for (int i = 0; i < length; i++)
     message += (char)payload[i];
-
   String topicStr = String(topic);
 
-  // [DEBUG] In ra mọi gói tin nhận được
-  Serial.printf("📥 [DEBUG-MQTT] Nhận Topic: %s\nPayload: %s\n",
-                topicStr.c_str(), message.c_str());
+  Serial.printf("📥 [DEBUG-MQTT] Nhận Topic: %s\n", topicStr.c_str());
 
-  // XỬ LÝ LỆNH COMMAND TỪ CONTROLLER
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
-
     if (!deserializeJson(doc, message)) {
-      String action = "";
-      if (doc.containsKey("action")) {
-        action = doc["action"].as<String>();
-      } else if (doc.containsKey("command")) {
-        action = doc["command"].as<String>();
-      }
-
+      String action = doc.containsKey("action") ? doc["action"].as<String>()
+                                                : doc["command"].as<String>();
       if (action == "set_continuous" || action == "continuous_level") {
-        bool next_state = false;
-        if (doc["params"].containsKey("state")) {
-          next_state = doc["params"]["state"].as<bool>();
-        } else if (doc.containsKey("state")) {
-          next_state = doc["state"].as<bool>();
-        }
-        continuous_level = next_state;
-        Serial.print("🔄 Lệnh Controller -> Chế độ đo liên tục (Bơm): ");
-        Serial.println(continuous_level ? "BẬT" : "TẮT");
+        continuous_level = doc.containsKey("params")
+                               ? doc["params"]["state"].as<bool>()
+                               : doc["state"].as<bool>();
       } else if (action == "force_publish") {
         last_publish_time = 0;
-        Serial.println("⚡ Nhận lệnh force_publish -> sẽ publish ngay.");
       }
-    } else {
-      Serial.println("❌ [DEBUG] Lỗi Parse JSON Command!"); // [DEBUG]
     }
     return;
   }
 
-  // XỬ LÝ CẤU HÌNH SENSOR
   if (topicStr == topic_config) {
     DynamicJsonDocument doc(1024);
-    DeserializationError error = deserializeJson(doc, message);
-
-    if (error) {
-      Serial.print("❌ Lỗi Parse JSON Config: ");
-      Serial.println(error.c_str());
+    if (deserializeJson(doc, message))
       return;
-    }
-
-    Serial.println("⚙️ [DEBUG] Đang nạp cấu hình mới...");
 
     if (doc.containsKey("ph_v7"))
-      ph_v7 = doc["ph_v7"].as<float>();
+      ph_v686 = doc["ph_v7"].as<float>();
     if (doc.containsKey("ph_v4"))
       ph_v4 = doc["ph_v4"].as<float>();
-
     if (doc.containsKey("ec_factor"))
       ec_factor = doc["ec_factor"].as<float>();
     if (doc.containsKey("ec_offset"))
       ec_offset = doc["ec_offset"].as<float>();
     if (doc.containsKey("temp_offset"))
       temp_offset = doc["temp_offset"].as<float>();
-
     if (doc.containsKey("tank_height"))
       tank_height = doc["tank_height"].as<float>();
-    if (doc.containsKey("temp_compensation_beta"))
-      temp_compensation_beta = doc["temp_compensation_beta"].as<float>();
 
-    if (doc.containsKey("moving_average_window"))
-      ma_window =
-          constrain(doc["moving_average_window"].as<int>(), 1, MAX_WINDOW);
+    // Chuyển đổi linh hoạt từ hệ Moving Average Window sang Alpha của hệ EMA
+    if (doc.containsKey("moving_average_window")) {
+      int window = constrain(doc["moving_average_window"].as<int>(), 1, 100);
+      float new_alpha = 2.0 / (window + 1.0); // Chuyển đổi tương đương
+      tempFilter.setAlpha(new_alpha);
+      waterFilter.setAlpha(new_alpha);
+      phFilter.setAlpha(new_alpha);
+      ecFilter.setAlpha(new_alpha);
+    }
 
     if (doc.containsKey("publish_interval"))
       publish_interval = doc["publish_interval"].as<int>();
-
     if (doc.containsKey("enable_ph_sensor"))
       enable_ph = doc["enable_ph_sensor"].as<bool>();
     if (doc.containsKey("enable_ec_sensor"))
@@ -253,7 +269,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\n🚀 Bắt đầu khởi động thiết bị...");
 
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
@@ -261,15 +276,7 @@ void setup() {
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
 
-  Serial.println("🌡️ Khởi tạo cảm biến nhiệt độ...");
   sensors.begin();
-
-  for (int i = 0; i < MAX_WINDOW; i++) {
-    temp_history[i] = 25.0;
-    water_history[i] = 20.0;
-    ph_history[i] = 7.0;
-    ec_history[i] = 0.0;
-  }
 
   Serial.printf("🌐 Đang kết nối WiFi: %s...\n", ssid);
   WiFi.begin(ssid, password);
@@ -278,8 +285,6 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\n✅ Kết nối WiFi thành công!");
-  Serial.print("📡 IP Address: ");
-  Serial.println(WiFi.localIP());
 
   client.setBufferSize(1024);
   client.setServer(mqtt_server, mqtt_port);
@@ -288,27 +293,13 @@ void setup() {
 
 void reconnect() {
   while (!client.connected()) {
-    Serial.print("Đang kết nối MQTT...");
     String clientId = "SensorNode_" + String(device_id);
-
-    const char *willTopic = topic_status.c_str();
-    const char *willMessage = "{\"online\": false}";
-    int willQos = 1;
-    boolean willRetain = true; // Giữ lại bản tin cuối cùng trên Broker
-
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass, willTopic,
-                       willQos, willRetain, willMessage)) {
-      Serial.println("Thành công!");
-
-      client.publish(willTopic, "{\"online\": true}",
-                     true); // Tham số true ở cuối là để Retain bản tin
-
+    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass,
+                       topic_status.c_str(), 1, true, "{\"online\": false}")) {
+      client.publish(topic_status.c_str(), "{\"online\": true}", true);
       client.subscribe(topic_config.c_str());
       client.subscribe(topic_cmd.c_str());
     } else {
-      Serial.print("Lỗi, rc=");
-      Serial.print(client.state());
-      Serial.println(" -> Thử lại sau 5 giây");
       delay(5000);
     }
   }
@@ -319,7 +310,6 @@ unsigned long last_publish_time = 0;
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("⚠️ [DEBUG] Mất kết nối WiFi, đang thử lại...");
     WiFi.disconnect();
     WiFi.reconnect();
     delay(5000);
@@ -330,7 +320,6 @@ void loop() {
   client.loop();
 
   unsigned long current_millis = millis();
-
   static bool err_water_flag = false;
   static bool err_temp_flag = false;
   static bool err_ph_flag = false;
@@ -350,10 +339,9 @@ void loop() {
         raw_temp = t + temp_offset;
       } else {
         err_temp_flag = true;
-        Serial.printf("⚠️ [DEBUG] Lỗi hoặc đứt cảm biến nhiệt độ: %.2f\n", t);
       }
     }
-    current_avg_temp = calc_average(temp_history, raw_temp);
+    current_avg_temp = tempFilter.update(raw_temp);
 
     // 2. Mực nước
     err_water_flag = false;
@@ -361,7 +349,7 @@ void loop() {
       float w = readWaterLevel();
       if (w >= 0) {
         latest_raw_water = w;
-        current_avg_water = calc_average(water_history, w);
+        current_avg_water = waterFilter.update(w);
       } else {
         err_water_flag = true;
       }
@@ -374,12 +362,11 @@ void loop() {
       if (adc_ph <= 0 || adc_ph >= 4095) {
         err_ph_flag = true;
         latest_ph_voltage_mv = NAN;
-        Serial.println("⚠️ [DEBUG] Lỗi cảm biến pH: ADC rớt ngưỡng an toàn.");
       } else {
         float ph_mv = (adc_ph / ADC_MAX) * V_REF_MV * VOLTAGE_DIVIDER_RATIO;
         latest_ph_voltage_mv = ph_mv;
         float ph_val = calculate_ph(ph_mv, current_avg_temp);
-        current_avg_ph = calc_average(ph_history, ph_val);
+        current_avg_ph = phFilter.update(ph_val);
       }
     }
 
@@ -389,23 +376,18 @@ void loop() {
       int adc_ec = read_adc_filtered(PIN_EC_ADC);
       if (adc_ec <= 0 || adc_ec >= 4095) {
         err_ec_flag = true;
-        Serial.println("⚠️ [DEBUG] Lỗi cảm biến EC: ADC rớt ngưỡng an toàn.");
       } else {
         float ec_mv = (adc_ec / ADC_MAX) * V_REF_MV * VOLTAGE_DIVIDER_RATIO;
         float ec_val = calculate_ec(ec_mv, current_avg_temp);
-        current_avg_ec = calc_average(ec_history, ec_val);
+        current_avg_ec = ecFilter.update(ec_val);
       }
     }
-
-    history_idx = (history_idx + 1) % ma_window;
   }
 
   // LUỒNG 2: GỬI DỮ LIỆU LÊN SERVER (Publish)
   int current_pub_interval = continuous_level ? 500 : publish_interval;
-
   if (current_millis - last_publish_time >= current_pub_interval) {
     last_publish_time = current_millis;
-
     DynamicJsonDocument doc(512);
 
     doc["temp"] = current_avg_temp;
@@ -413,14 +395,12 @@ void loop() {
         continuous_level ? latest_raw_water : current_avg_water;
     doc["ph"] = current_avg_ph;
     doc["ec"] = current_avg_ec;
-    if (!isnan(latest_ph_voltage_mv)) {
+    if (!isnan(latest_ph_voltage_mv))
       doc["ph_voltage_mv"] = latest_ph_voltage_mv;
-    }
 
     doc["rssi"] = WiFi.RSSI();
     doc["free_heap"] = ESP.getFreeHeap();
     doc["uptime"] = millis() / 1000;
-
     doc["is_continuous"] = continuous_level;
 
     doc["err_water"] = err_water_flag;
@@ -431,8 +411,5 @@ void loop() {
     String payload;
     serializeJson(doc, payload);
     client.publish(topic_sensors.c_str(), payload.c_str());
-
-    Serial.println("📡 Đã gửi: " + payload);
-    Serial.println("-----------------------------------");
   }
 }

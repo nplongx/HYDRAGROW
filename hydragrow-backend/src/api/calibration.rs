@@ -198,6 +198,7 @@ pub async fn capture_ph_calibration_point(
 
     tokio::time::sleep(Duration::from_secs(window_seconds as u64)).await;
 
+    // Thay thế khối này trong fn capture_ph_calibration_point
     let sampling_now = Utc::now();
     let filtered_values = {
         let mut all_samples = app_state.ph_voltage_samples.write().await;
@@ -210,19 +211,22 @@ pub async fn capture_ph_calibration_point(
                 }));
             }
         };
+
+        // Xóa các mẫu quá cũ
         trim_samples(samples, sampling_now);
-        let mut values: Vec<f64> = samples
+
+        // Chỉ lấy giá trị, chưa sắp xếp hay cắt bớt
+        let values: Vec<f64> = samples
             .iter()
             .filter(|s| sampling_now - s.observed_at <= window_duration)
             .map(|s| s.voltage_mv)
             .collect();
-        values.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
-        if values.len() > sample_target {
-            values.truncate(sample_target);
-        }
+
+        // Chạy bộ lọc nhiễu TRÊN TOÀN BỘ dữ liệu thu thập được
         reject_outliers(values)
     };
 
+    // Vẫn giữ nguyên logic kiểm tra số lượng mẫu như cũ
     if filtered_values.len() < sample_target {
         return HttpResponse::BadRequest().json(json!({
             "error": "insufficient_samples",

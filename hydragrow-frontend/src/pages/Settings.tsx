@@ -169,10 +169,14 @@ const Settings = () => {
       payload.raw_voltage,
       payload?.data?.voltage,
       payload?.data?.ph_voltage,
+      payload?.data?.mean_voltage_mv,
       payload?.result?.voltage,
-      payload?.result?.ph_voltage
+      payload?.result?.ph_voltage,
+      payload?.result?.mean_voltage_mv
     ];
     for (const value of candidates) {
+      if (value === undefined || value === null) continue;
+
       const numberValue = Number(value);
       if (Number.isFinite(numberValue)) return numberValue;
     }

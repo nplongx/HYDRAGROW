@@ -1070,11 +1070,10 @@ pub fn start_fsm_control_loop(
         }
 
         // Report state changes and sync online status
-        let state_changed =
-            report_state_if_changed(&ctx.current_state, &mut last_reported_state, &fsm_mqtt_tx);
+
+        let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state);
 
         if state_changed || force_sync {
-            // Always send full status when state changes or forced sync
             let status_msg = serde_json::json!({
                 "online": true,
                 "current_state": ctx.current_state.to_payload_string(),
@@ -1099,14 +1098,10 @@ pub fn start_fsm_control_loop(
     fn report_state_if_changed(
         current_state: &SystemState,
         last_reported_state: &mut String,
-        fsm_mqtt_tx: &Sender<String>,
     ) -> bool {
         let current_state_str = current_state.to_payload_string();
         if current_state_str != *last_reported_state {
-            let payload = format!(r#"{{"current_state": "{}"}}"#, current_state_str);
-            if fsm_mqtt_tx.send(payload).is_ok() {
-                info!("📡 Trạng thái FSM: [{}]", current_state_str);
-            }
+            info!("📡 Trạng thái FSM: [{}]", current_state_str);
             *last_reported_state = current_state_str;
             true
         } else {

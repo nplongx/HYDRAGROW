@@ -7,6 +7,7 @@ import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
+import { LoadingState } from '../components/ui/LoadingState';
 
 const NEON_COLORS: Record<string, any> = {
   orange: { bg: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/50', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]', glow: 'from-orange-500/20' },
@@ -82,7 +83,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
   }, [volumeMl, capacityMlPerSec]);
 
   const handleDose = async () => {
-    if (!window.confirm(`Xác nhận châm ${volumeMl}mL (khoảng ${durationSec}s)?\nHệ thống sẽ cố gắng đạt ngưỡng ${targetValue || 'mong muốn'}.`)) return;
+    if (!window.confirm(`Bạn muốn châm ${volumeMl}mL trong khoảng ${durationSec} giây?\nHệ thống sẽ điều chỉnh về ngưỡng ${targetValue || 'mục tiêu'}.`)) return;
 
     setIsProcessing(true);
     await forceOn(selectedPump, durationSec);
@@ -132,7 +133,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
               </span>
             </label>
             <input
-              type="number" step="0.1" placeholder="Vd: 1.5"
+              type="number" step="0.1" placeholder="Ví dụ: 1.5"
               value={targetValue}
               onChange={(e) => setTargetValue(e.target.value === '' ? '' : Number(e.target.value))}
               disabled={!isOnline || isProcessing}
@@ -179,7 +180,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
             className="w-full h-[42px] col-span-2 lg:col-span-1 flex items-center justify-center gap-2 bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all disabled:opacity-50 disabled:hover:shadow-none active:scale-95"
           >
             <Play size={14} className={isProcessing ? "animate-pulse" : ""} />
-            Châm {durationSec} Giây
+            Chạy {durationSec} giây
           </button>
         </div>
       </div>
@@ -211,7 +212,7 @@ const AdvancedDeviceControl = ({
 
   const handleToggle = async () => {
     if (isEmergency && !currentStatus) {
-      toast.error(`🚨 FSM đang bảo vệ! Chỉ có thể dùng FORCE để bật ${title}.`);
+      toast.error(`Không thể bật ${title} ở chế độ hiện tại. Vui lòng dùng lệnh Chạy cưỡng bức hoặc thử lại sau khi hệ thống ổn định.`);
       return;
     }
 
@@ -225,18 +226,18 @@ const AdvancedDeviceControl = ({
       const success = await togglePump(pumpId, targetAction);
       if (!success) {
         updatePumpStatusOptimistically(stateKey, !isNowOn);
-        toast.error(`Lỗi khi điều khiển ${title}!`);
+        toast.error(`Không thể điều khiển ${title}. Vui lòng thử lại. Nếu vẫn lỗi, hãy kiểm tra kết nối thiết bị.`);
       }
     } catch (error) {
       updatePumpStatusOptimistically(stateKey, !isNowOn);
-      toast.error(`Lỗi mạng khi điều khiển ${title}!`);
+      toast.error(`Không thể điều khiển ${title} do lỗi mạng. Vui lòng thử lại và kiểm tra kết nối máy chủ.`);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleForceOn = async () => {
-    if (!window.confirm(`⚠️ CẢNH BÁO: Bật cưỡng chế ${title} trong ${duration}s?`)) return;
+    if (!window.confirm(`Bạn có chắc muốn chạy cưỡng bức ${title} trong ${duration} giây?`)) return;
     setIsProcessing(true);
 
     updatePumpStatusOptimistically(stateKey, true);
@@ -245,11 +246,11 @@ const AdvancedDeviceControl = ({
       const success = await forceOn(pumpId, duration);
       if (!success) {
         updatePumpStatusOptimistically(stateKey, false);
-        toast.error(`Lỗi khi cưỡng chế ${title}!`);
+        toast.error(`Không thể chạy cưỡng bức ${title}. Vui lòng thử lại. Nếu vẫn lỗi, hãy kiểm tra trạng thái thiết bị.`);
       }
     } catch (error) {
       updatePumpStatusOptimistically(stateKey, false);
-      toast.error(`Lỗi kết nối khi cưỡng chế ${title}!`);
+      toast.error(`Không thể chạy cưỡng bức ${title} do lỗi kết nối. Vui lòng thử lại và kiểm tra mạng.`);
     } finally {
       setIsProcessing(false);
     }
@@ -257,7 +258,7 @@ const AdvancedDeviceControl = ({
 
   const handleSetPwm = async () => {
     if (isEmergency) {
-      toast.error(`🚨 FSM đang bảo vệ! Lệnh PWM bình thường bị vô hiệu hóa.`);
+      toast.error(`Không thể đặt PWM ở chế độ hiện tại. Vui lòng thử lại sau hoặc dùng chế độ cưỡng bức.`);
       return;
     }
 
@@ -302,7 +303,7 @@ const AdvancedDeviceControl = ({
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700'
               }`}
           >
-            {currentStatus ? 'TẮT' : 'BẬT'}
+            {currentStatus ? 'Tắt' : 'Bật'}
           </button>
         </div>
 
@@ -327,7 +328,7 @@ const AdvancedDeviceControl = ({
                   className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:opacity-50 ${currentStatus && !isEmergency ? `${theme.bg} text-white` : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700 hover:text-white'
                     }`}
                 >
-                  SET
+                  Áp dụng
                 </button>
               </div>
             </div>
@@ -354,7 +355,7 @@ const AdvancedDeviceControl = ({
                 disabled={!isOnline || isProcessing}
                 className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-amber-500 hover:text-white hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all disabled:opacity-50"
               >
-                <Zap size={14} className={isProcessing ? "animate-pulse" : ""} /> FORCE
+                <Zap size={14} className={isProcessing ? "animate-pulse" : ""} /> Chạy cưỡng bức
               </button>
             </div>
           </div>
@@ -371,11 +372,7 @@ const ControlPanel = () => {
   const { isProcessing, resetFault } = useDeviceControl(deviceId || "");
 
   if (isLoading || !sensorData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
-      </div>
-    );
+    return <LoadingState message="Đang tải dữ liệu điều khiển..." />;
   }
 
   const isOnline = deviceStatus?.is_online || false;
@@ -397,21 +394,21 @@ const ControlPanel = () => {
       <div className="flex items-start justify-between relative z-10">
         <div className="space-y-1">
           <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-indigo-400 tracking-tight flex items-center gap-3">
-            ĐIỀU KHIỂN
+            Điều khiển
             <Settings2 size={28} className="text-indigo-400" />
           </h1>
-          <p className="text-sm text-slate-400 font-medium">Bảng can thiệp thủ công Override</p>
+          <p className="text-sm text-slate-400 font-medium">Điều khiển thủ công khi cần can thiệp nhanh.</p>
         </div>
 
         <button
           disabled={!isOnline || isProcessing}
           onClick={async () => {
-            if (window.confirm("CẢNH BÁO: Reset lỗi sẽ khởi động lại toàn bộ chu trình FSM. Xác nhận?")) await resetFault();
+            if (window.confirm("Bạn có chắc muốn đặt lại lỗi? Hệ thống sẽ khởi động lại chu trình điều khiển.")) await resetFault();
           }}
           className="flex items-center gap-2 px-4 py-2.5 bg-rose-500/10 text-rose-500 border border-rose-500/30 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white hover:shadow-[0_0_15px_rgba(244,63,94,0.5)] transition-all disabled:opacity-50 disabled:hover:bg-rose-500/10 disabled:hover:text-rose-500 disabled:hover:shadow-none"
         >
           <RefreshCw size={14} className={isProcessing ? "animate-spin" : ""} />
-          Reset Lỗi
+          Đặt lại lỗi
         </button>
       </div>
 
@@ -420,7 +417,7 @@ const ControlPanel = () => {
           <AlertTriangle size={24} className="animate-pulse" />
           <div>
             <h4 className="font-bold text-sm uppercase tracking-wider">Mất kết nối trạm</h4>
-            <p className="text-xs text-rose-400/80">Không thể gửi lệnh điều khiển lúc này.</p>
+            <p className="text-xs text-rose-400/80">Không thể gửi lệnh điều khiển. Vui lòng kiểm tra kết nối rồi thử lại.</p>
           </div>
         </div>
       )}
@@ -429,8 +426,8 @@ const ControlPanel = () => {
         <div className="bg-amber-500/10 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.15)] relative z-10 animate-in zoom-in">
           <AlertTriangle size={24} className="animate-pulse" />
           <div>
-            <h4 className="font-bold text-sm uppercase tracking-wider">Hệ Thống Đang Lỗi / Khẩn Cấp</h4>
-            <p className="text-xs text-amber-400/80">Các lệnh bật bình thường và set PWM đã bị khóa. Hãy sử dụng lệnh <b>FORCE</b>.</p>
+            <h4 className="font-bold text-sm uppercase tracking-wider">Hệ thống đang ở chế độ bảo vệ</h4>
+            <p className="text-xs text-amber-400/80">Các lệnh bật thường và đặt PWM đang tạm khóa. Bạn hãy dùng lệnh <b>Chạy cưỡng bức</b> nếu cần can thiệp ngay.</p>
           </div>
         </div>
       )}
@@ -446,7 +443,7 @@ const ControlPanel = () => {
       {/* Khu Vực Dinh Dưỡng */}
       <div className="space-y-4 relative z-10">
         <h2 className="text-[10px] uppercase tracking-widest font-black text-slate-500 pl-3 flex items-center gap-2">
-          <FlaskConical size={14} className="text-orange-500" /> Khu Vực Châm Phân & pH
+          <FlaskConical size={14} className="text-orange-500" /> Khu vực châm phân và pH
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical} colorTheme="orange" currentStatus={pumps.pump_a} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />
@@ -459,7 +456,7 @@ const ControlPanel = () => {
       {/* Khu Vực Bơm Nước & Khí Hậu */}
       <div className="space-y-4 pt-4 relative z-10">
         <h2 className="text-[10px] uppercase tracking-widest font-black text-slate-500 pl-3 flex items-center gap-2">
-          <Waves size={14} className="text-cyan-500" /> Bơm Nước & Sục Trộn
+          <Waves size={14} className="text-cyan-500" /> Bơm nước và sục trộn
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Cấp Nước" icon={Droplets} colorTheme="blue" currentStatus={pumps.water_pump_in} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} />

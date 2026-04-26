@@ -253,15 +253,15 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        // GỬI SỨC KHỎE THIẾT BỊ MỖI 10 GIÂY
-        if is_mqtt_connected && last_health_publish.elapsed().as_secs() >= 10 {
+        if is_mqtt_connected
+            && (force_publish_next || last_health_publish.elapsed().as_secs() >= 10)
+        {
             last_health_publish = std::time::Instant::now();
+            force_publish_next = false; // Xóa cờ sau khi gửi
 
             if let Some(client) = mqtt_client.as_mut() {
-                // Đọc trạng thái bơm mới nhất từ shared struct
                 let current_pump_status = shared_sensor_data.read().unwrap().pump_status.clone();
 
-                // Tạo payload sức khỏe thiết bị
                 let health_payload = crate::mqtt::ControllerHealthPayload {
                     free_heap: crate::mqtt::get_free_heap(),
                     uptime_sec: crate::mqtt::get_uptime_sec(),
@@ -273,7 +273,7 @@ fn main() -> anyhow::Result<()> {
                     let topic_health = format!("AGITECH/{}/controller/status", DEVICE_ID);
                     let _ = client.publish(
                         &topic_health,
-                        QoS::AtMostOnce,
+                        QoS::AtMostOnce, // Đổi thành AtMostOnce cho bản tin health liên tục
                         false,
                         json_string.as_bytes(),
                     );

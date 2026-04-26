@@ -4,13 +4,14 @@ import { useDeviceControl } from '../hooks/useDeviceControl';
 
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { FsmStatusBadge } from '../components/ui/FsmStatusBadge';
+import { LoadingState } from '../components/ui/LoadingState';
 
 const ActiveDeviceTag = ({ label, color, glowColor }: { label: string; color: string; glowColor: string }) => (
   <span
-    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-widest animate-in zoom-in duration-300 backdrop-blur-md ${color}`}
+    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[10px] font-extrabold uppercase tracking-widest backdrop-blur-md ${color}`}
     style={{ boxShadow: `0 0 12px ${glowColor}, inset 0 0 8px ${glowColor}` }}
   >
-    <Zap size={12} className="fill-current animate-pulse" />
+    <Zap size={12} className="fill-current" />
     {label}
   </span>
 );
@@ -33,7 +34,7 @@ const getWifiColor = (rssi?: number) => {
 };
 
 const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, icon: any, data?: any, isNodeOnline: boolean }) => (
-  <div className={`flex flex-col gap-2 bg-slate-900/60 border p-3 rounded-2xl shadow-inner transition-colors duration-500 ${isNodeOnline ? 'border-slate-700/80 shadow-[0_0_15px_rgba(16,185,129,0.05)]' : 'border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.1)]'}`}>
+  <div className={`flex flex-col gap-2 bg-slate-900/60 border p-3 rounded-2xl shadow-inner transition-colors duration-500 ${isNodeOnline ? 'border-slate-700/80 shadow-sm' : 'border-rose-500/30 shadow-sm'}`}>
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1.5 text-slate-400">
         <Icon size={14} className={isNodeOnline ? "text-indigo-400" : "text-rose-400"} />
@@ -41,7 +42,7 @@ const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, i
       </div>
       {/* Nút báo hiệu Online/Offline nhỏ xíu ở góc */}
       <span className="relative flex h-2 w-2 rounded-full">
-        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isNodeOnline ? 'animate-ping bg-emerald-400' : 'bg-rose-500'}`}></span>
+        <span className={`absolute inline-flex h-full w-full rounded-full opacity-40 ${isNodeOnline ? 'bg-emerald-400' : 'bg-rose-500'}`}></span>
         <span className={`relative inline-flex rounded-full h-2 w-2 ${isNodeOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
       </span>
     </div>
@@ -68,28 +69,21 @@ const Dashboard = () => {
   const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
 
   if (isLoading || !sensorData) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-screen bg-slate-950">
-        <div className="relative">
-          <div className="absolute inset-0 bg-emerald-500 rounded-full blur-xl opacity-50 animate-pulse"></div>
-          <Cpu size={40} className="text-emerald-400 animate-bounce relative z-10" />
-        </div>
-      </div>
-    );
+    return <LoadingState message="Đang tải tổng quan thiết bị..." />;
   }
 
   if (!deviceId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-6 p-6 text-center animate-in fade-in zoom-in duration-500">
-        <div className="relative p-6 bg-slate-900/80 backdrop-blur-xl rounded-full border border-slate-700 shadow-[0_0_30px_rgba(0,0,0,0.5)] group">
+      <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-6 p-6 text-center">
+        <div className="relative p-6 bg-slate-900/80 rounded-full border border-slate-700 shadow-md group">
           <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-2xl group-hover:bg-indigo-500/30 transition-colors"></div>
-          <Settings size={48} className="text-indigo-400 relative z-10 animate-[spin_10s_linear_infinite]" />
+          <Settings size={48} className="text-indigo-400 relative z-10" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+          <h2 className="text-2xl font-bold text-slate-100">
             CHƯA KẾT NỐI TRẠM
           </h2>
-          <p className="text-sm text-slate-400 max-w-xs mx-auto leading-relaxed">
+          <p className="text-sm text-slate-300 max-w-xs mx-auto leading-7">
             Vui lòng vào mục Cài đặt để nhập Device ID và bắt đầu đồng bộ dữ liệu.
           </p>
         </div>
@@ -108,22 +102,21 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32 relative min-h-screen">
-      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-emerald-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
-
+    <div className="p-4 space-y-6 pb-32 relative min-h-screen">
+      
       <div className="flex flex-col relative z-10">
         <div className="flex items-start justify-between mb-4">
           <div className="space-y-1">
-            <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-tight">
+            <h1 className="text-3xl font-bold text-slate-100 tracking-tight">
               TRẠM TRUNG TÂM
             </h1>
             <div className="flex items-center mt-1 space-x-2">
-              <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border backdrop-blur-md ${isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' :
-                isControllerStatusKnown ? 'bg-rose-499/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.2)]' :
-                  'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+              <div className={`flex items-center gap-2 px-2.5 py-1 rounded-full border backdrop-blur-md ${isOnline ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-sm' :
+                isControllerStatusKnown ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-sm' :
+                  'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-sm'
                 }`}>
                 <span className={`relative flex h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-400' : (isControllerStatusKnown ? 'bg-rose-500' : 'bg-amber-500')}`}>
-                  {isOnline && <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                  
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider">
                   {isOnline ? 'Đang Hoạt Động' : (isControllerStatusKnown ? 'Mất Kết Nối' : 'Đang Kết Nối...')}
@@ -143,9 +136,7 @@ const Dashboard = () => {
         )}
       </div>
 
-      <div className="relative bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-5 shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden group">
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-colors duration-500"></div>
-        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-blue-500/20 transition-colors duration-500"></div>
+      <div className="relative bg-slate-900/70 border border-slate-700 rounded-[2rem] p-5 shadow-md overflow-hidden group">
 
         <div className="relative z-10 flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -156,7 +147,7 @@ const Dashboard = () => {
         </div>
 
         <div className="relative z-10 pt-4 border-t border-slate-700/50">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
             <span className="w-1 h-1 rounded-full bg-slate-500"></span>
             Đang tiêu thụ điện:
           </p>
@@ -171,7 +162,7 @@ const Dashboard = () => {
             {pumps.water_pump_out && <ActiveDeviceTag label="Xả Nước" color="bg-cyan-500/10 text-cyan-400 border-cyan-500/50" glowColor="rgba(6,182,212,0.25)" />}
 
             {!Object.values(pumps).some(v => v === true) && (
-              <span className="text-xs text-slate-600 font-medium italic flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800">
+              <span className="text-sm text-slate-400 font-medium flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800">
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
                 Hệ thống đang nghỉ
               </span>
@@ -186,7 +177,7 @@ const Dashboard = () => {
         {/* Thẻ Dinh Dưỡng EC */}
         <div className="relative">
           {sensorData?.err_ec === true && (
-            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full animate-bounce shadow-lg shadow-rose-500/50">
+            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full shadow-md">
               <AlertTriangle size={14} />
             </div>
           )}
@@ -204,7 +195,7 @@ const Dashboard = () => {
         {/* Thẻ pH */}
         <div className="relative">
           {sensorData?.err_ph === true && (
-            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full animate-bounce shadow-lg shadow-rose-500/50">
+            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full shadow-md">
               <AlertTriangle size={14} />
             </div>
           )}
@@ -221,7 +212,7 @@ const Dashboard = () => {
         {/* Thẻ Nhiệt Độ */}
         <div className="relative">
           {sensorData?.err_temp === true && (
-            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full animate-bounce shadow-lg shadow-rose-500/50">
+            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full shadow-md">
               <AlertTriangle size={14} />
             </div>
           )}
@@ -239,7 +230,7 @@ const Dashboard = () => {
         {/* Thẻ Mực Nước */}
         <div className="relative">
           {sensorData?.err_water === true && (
-            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full animate-bounce shadow-lg shadow-rose-500/50">
+            <div className="absolute -top-2 -right-2 z-20 bg-rose-500 text-white p-1 rounded-full shadow-md">
               <AlertTriangle size={14} />
             </div>
           )}
@@ -269,7 +260,7 @@ const Dashboard = () => {
               : 'bg-slate-800/50 text-blue-400 border-blue-500/20 hover:bg-blue-500/10 hover:border-blue-500/40 shadow-inner'
               }`}
           >
-            <Waves size={18} className={pumps.water_pump_in ? "animate-pulse" : ""} />
+            <Waves size={18} className="" />
             <span>{pumps.water_pump_in ? 'NGỪNG CẤP' : 'CẤP NƯỚC'}</span>
           </button>
 
@@ -281,7 +272,7 @@ const Dashboard = () => {
               : 'bg-slate-800/50 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/10 hover:border-cyan-500/40 shadow-inner'
               }`}
           >
-            <Waves size={18} className={`rotate-180 ${pumps.water_pump_out ? "animate-pulse" : ""}`} />
+            <Waves size={18} className="rotate-180" />
             <span>{pumps.water_pump_out ? 'NGỪNG XẢ' : 'XẢ NƯỚC'}</span>
           </button>
         </div>

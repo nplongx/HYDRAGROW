@@ -4,6 +4,8 @@ import {
   Filter, Clock, Zap, Power, Waves, RefreshCw, Database
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StateView } from '../components/ui/StateView';
 
 const SystemLog = () => {
   const { systemEvents, deviceId } = useDeviceContext();
@@ -75,22 +77,15 @@ const SystemLog = () => {
   });
 
   return (
-    <div className="p-4 space-y-6 pb-24 min-h-screen">
-      <div className="flex flex-col space-y-1 animate-in slide-in-from-top-4 duration-500">
-        <h1 className="text-3xl font-extrabold flex items-center gap-3">
-          <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-            <Clock size={24} className="text-emerald-400" />
-          </div>
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500">
-            Nhật Ký Hệ Thống
-          </span>
-        </h1>
-        <p className="text-sm text-slate-400 ml-1">
-          Lịch sử vận hành trạm thủy canh {deviceId || ''}
-        </p>
-      </div>
+    <div className="app-page pb-24">
+      <PageHeader
+        className="animate-in slide-in-from-top-4 duration-500"
+        icon={Clock}
+        title="Nhật Ký Hệ Thống"
+        subtitle={`Lịch sử vận hành trạm thủy canh ${deviceId || ''}`}
+      />
 
-      <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-3xl p-4 flex flex-col space-y-3 shadow-lg animate-in fade-in duration-700">
+      <div className="ui-card flex flex-col space-y-3 animate-in fade-in duration-700">
         <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 flex items-center gap-1.5 ml-1">
           <Filter size={12} /> Bộ lọc thông minh
         </label>
@@ -108,9 +103,12 @@ const SystemLog = () => {
 
         <div className="space-y-6">
           {filteredEvents.length === 0 ? (
-            <div className="pl-12 flex flex-col items-center justify-center py-16 opacity-50 animate-in zoom-in">
-              <Zap size={48} className="text-slate-600 mb-3" />
-              <p className="text-sm text-slate-400 font-medium">Hệ thống đang chờ lệnh mới...</p>
+            <div className="pl-12">
+              <StateView
+                icon={Zap}
+                title="Hệ thống đang chờ lệnh mới..."
+                className="opacity-70 animate-in zoom-in"
+              />
             </div>
           ) : (
             filteredEvents.map((ev, idx) => {

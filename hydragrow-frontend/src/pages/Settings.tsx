@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Save, Target, ShieldAlert, Waves,
-  FlaskConical, Activity, Settings2, Power, Network, Zap, Cpu, Clock
+  FlaskConical, Activity, Settings2, Power, Network, Zap, Clock
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
@@ -12,6 +12,7 @@ import { InputGroup } from '../components/ui/InputGroup';
 import { SubCard } from '../components/ui/SubCard';
 import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
+import { LoadingState } from '../components/ui/LoadingState';
 
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type DosingFieldKey =
@@ -562,18 +563,9 @@ const Settings = () => {
     }
   };
 
-  if (isLoading) return (
-    <div className="flex h-screen items-center justify-center bg-slate-950 relative overflow-hidden">
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="w-[300px] h-[300px] border border-emerald-500/20 rounded-full animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-        <div className="w-[150px] h-[150px] border border-emerald-500/40 rounded-full absolute animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-      </div>
-      <div className="flex flex-col items-center space-y-4 relative z-10">
-        <Cpu className="text-emerald-400 animate-pulse" size={48} />
-        <span className="text-emerald-500/70 font-black tracking-widest text-xs uppercase animate-pulse">Đang tải cấu hình thiết bị... Vui lòng chờ.</span>
-      </div>
-    </div>
-  );
+  if (isLoading) {
+    return <LoadingState message="Đang tải cấu hình thiết bị..." />;
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-40 max-w-4xl mx-auto relative min-h-screen">

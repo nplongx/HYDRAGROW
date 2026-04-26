@@ -4,6 +4,7 @@ import { useDeviceControl } from '../hooks/useDeviceControl';
 
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { FsmStatusBadge } from '../components/ui/FsmStatusBadge';
+import { LoadingState } from '../components/ui/LoadingState';
 
 const ActiveDeviceTag = ({ label, color, glowColor }: { label: string; color: string; glowColor: string }) => (
   <span
@@ -68,14 +69,7 @@ const Dashboard = () => {
   const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
 
   if (isLoading || !sensorData) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-screen bg-slate-950">
-        <div className="relative">
-          <div className="absolute inset-0 bg-emerald-500 rounded-full blur-xl opacity-30"></div>
-          <Cpu size={40} className="text-emerald-400 relative z-10" />
-        </div>
-      </div>
-    );
+    return <LoadingState message="Đang tải tổng quan thiết bị..." />;
   }
 
   if (!deviceId) {

@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import {
   ShieldCheck, Clock, ExternalLink, Box, Server,
-  AlertTriangle, Settings, Calendar, ChevronDown, Download
+  AlertTriangle, Settings, Calendar, ChevronDown, Download, Leaf
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { writeTextFile } from '@tauri-apps/plugin-fs'; import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { save } from '@tauri-apps/plugin-dialog';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { LoadingState } from '../components/ui/LoadingState';
+
 interface BlockchainRecord {
   id: number;
   device_id: string;
@@ -25,6 +27,7 @@ interface CropSeason {
   status: 'active' | 'completed';
   start_time: string;
   end_time?: string;
+  plant_type?: string; // 🟢 Bổ sung trường giống cây
 }
 
 const BlockchainHistory = () => {
@@ -34,6 +37,7 @@ const BlockchainHistory = () => {
   // States cho Vụ Mùa & Lịch sử
   const [seasons, setSeasons] = useState<CropSeason[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
+  const [selectedPlant, setSelectedPlant] = useState<string>('all'); // 🟢 Thêm state lưu giống cây đang chọn
   const [history, setHistory] = useState<BlockchainRecord[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +84,30 @@ const BlockchainHistory = () => {
     }
   };
 
+  // 🟢 TRÍCH XUẤT DANH SÁCH GIỐNG CÂY (Loại bỏ trùng lặp & giá trị rỗng)
+  const plantTypes = useMemo(() => {
+    const types = seasons.map(s => s.plant_type).filter(Boolean) as string[];
+    return Array.from(new Set(types));
+  }, [seasons]);
+
+  // 🟢 LỌC DANH SÁCH VỤ MÙA THEO GIỐNG CÂY
+  const filteredSeasons = useMemo(() => {
+    if (selectedPlant === 'all') return seasons;
+    return seasons.filter(s => s.plant_type === selectedPlant);
+  }, [seasons, selectedPlant]);
+
+  // 🟢 TỰ ĐỘNG CHUYỂN VỤ MÙA KHI ĐỔI GIỐNG CÂY
+  useEffect(() => {
+    if (filteredSeasons.length > 0) {
+      // Nếu vụ mùa đang chọn không thuộc giống cây này, tự động chọn vụ mùa đầu tiên của giống mới
+      if (!filteredSeasons.find(s => s.id === selectedSeason)) {
+        setSelectedSeason(filteredSeasons[0].id);
+      }
+    } else {
+      setSelectedSeason(null);
+    }
+  }, [selectedPlant, filteredSeasons]);
+
   // 3. Lắng nghe sự thay đổi của Vụ Mùa để tải lại Lịch sử Blockchain
   useEffect(() => {
     if (appConfig && selectedSeason) {
@@ -87,14 +115,13 @@ const BlockchainHistory = () => {
     }
   }, [selectedSeason, appConfig]);
 
-  // 4. Gọi API lấy lịch sử Blockchain CÓ LỌC THEO VỤ MÙA
+  // 4. Gọi API lấy lịch sử Blockchain
   const fetchHistory = async (backendUrl: string, apiKey: string, seasonId: string) => {
     setIsLoading(true);
     setError(null);
     try {
       if (!backendUrl) throw new Error("Chưa cấu hình URL máy chủ.");
 
-      // Gắn season_id vào URL
       const url = `${backendUrl}/api/devices/${deviceId}/blockchain?season_id=${seasonId}`;
       const response = await fetch(url, {
         method: 'GET',
@@ -150,7 +177,7 @@ const BlockchainHistory = () => {
     }
   };
 
-  // 🟢 6. HÀM XUẤT FILE CSV
+  // 6. HÀM XUẤT FILE CSV
   const handleExportCSV = async () => {
     if (history.length === 0) {
       toast.error("Không có dữ liệu để xuất!");
@@ -171,16 +198,13 @@ const BlockchainHistory = () => {
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
 
-      // 📂 Cho user chọn nơi lưu
       const filePath = await save({
         defaultPath: `nhat-ky-niem-phong-${selectedSeason || 'tat-ca'}.csv`
       });
 
-      if (!filePath) return; // user cancel
+      if (!filePath) return;
 
-      // 💾 Ghi file thật xuống máy
       await writeTextFile(filePath, csvContent);
-
       toast.success("Đã lưu file thành công!");
     } catch (err: any) {
       console.error("ERROR SAVE FILE:", err);
@@ -199,10 +223,9 @@ const BlockchainHistory = () => {
     });
   };
 
-  // Lấy thông tin vụ mùa đang được chọn
   const activeSeasonData = seasons.find(s => s.id === selectedSeason);
 
-  if (isLoading && !selectedSeason) {
+  if (isLoading && !selectedSeason && seasons.length === 0) {
     return <LoadingState message="Đang đồng bộ sổ cái Solana..." />;
   }
 
@@ -223,8 +246,8 @@ const BlockchainHistory = () => {
   return (
     <div className="app-page animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 max-w-4xl mx-auto">
 
-      {/* HEADER & CHỌN VỤ MÙA TÁI THIẾT KẾ */}
-      <div className="ui-card flex flex-col md:flex-row md:items-center justify-between gap-4 border-indigo-500/20">
+      {/* HEADER & CHỌN VỤ MÙA */}
+      <div className="ui-card flex flex-col md:flex-row md:items-center justify-between gap-6 border-indigo-500/20">
         <PageHeader
           icon={ShieldCheck}
           title="Nhật Ký Niêm Phong"
@@ -232,30 +255,54 @@ const BlockchainHistory = () => {
           className="w-full"
         />
 
-        {/* 🟢 KHU VỰC NÚT XUẤT CSV VÀ DROPDOWN CHỌN MẺ TRỒNG */}
-        <div className="flex flex-row items-end gap-3 shrink-0">
+        {/* 🟢 KHU VỰC BỘ LỌC (GIỐNG CÂY & VỤ MÙA) */}
+        <div className="flex flex-col sm:flex-row items-end gap-3 shrink-0">
 
           {/* Nút Xuất CSV */}
           <button
             onClick={handleExportCSV}
             disabled={history.length === 0}
-            className="ui-btn-md flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-all border border-slate-700 active:scale-95"
+            className="ui-btn-md flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-2xl transition-all border border-slate-700 active:scale-95 h-[42px]"
             title="Xuất dữ liệu ra Excel"
           >
             <Download size={18} className={history.length > 0 ? "text-emerald-400" : "text-slate-500"} />
             <span className="hidden sm:inline">Xuất CSV</span>
           </button>
 
-          {/* Dropdown Vụ Mùa */}
-          <div className="relative min-w-[200px] flex-1 sm:flex-none">
-            <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 block ml-1">Lọc theo vụ mùa</label>
+          {/* 🟢 Lọc theo Giống Cây */}
+          <div className="relative min-w-[160px] w-full sm:w-auto">
+            <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center gap-1.5">
+              <Leaf size={12} /> Giống cây
+            </label>
+            <div className="relative">
+              <select
+                value={selectedPlant}
+                onChange={(e) => setSelectedPlant(e.target.value)}
+                className="ui-input h-[42px] bg-slate-950 border-slate-800 hover:border-emerald-500/50 text-white font-semibold rounded-2xl pr-10 appearance-none focus:ring-emerald-500/30 cursor-pointer"
+              >
+                <option value="all">🌱 Tất cả giống cây</option>
+                {plantTypes.map(pt => (
+                  <option key={pt} value={pt}>{pt}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+            </div>
+          </div>
+
+          {/* Lọc theo Vụ Mùa (Phụ thuộc vào Giống cây) */}
+          <div className="relative min-w-[220px] w-full sm:w-auto">
+            <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center gap-1.5">
+              <Calendar size={12} /> Mẻ trồng (Vụ mùa)
+            </label>
             <div className="relative">
               <select
                 value={selectedSeason || ''}
                 onChange={(e) => setSelectedSeason(e.target.value)}
-                className="ui-input bg-slate-950 border-slate-800 hover:border-indigo-500/50 text-white font-semibold rounded-2xl pr-10 appearance-none focus:ring-indigo-500/30 cursor-pointer"
+                disabled={filteredSeasons.length === 0}
+                className="ui-input h-[42px] bg-slate-950 border-slate-800 hover:border-indigo-500/50 text-white font-semibold rounded-2xl pr-10 appearance-none focus:ring-indigo-500/30 cursor-pointer disabled:opacity-50"
               >
-                {seasons.map(ss => (
+                {filteredSeasons.length === 0 && <option value="">Không có dữ liệu</option>}
+                {filteredSeasons.map(ss => (
                   <option key={ss.id} value={ss.id}>
                     {ss.status === 'active' ? '🟢' : '📦'} {ss.name}
                   </option>
@@ -264,6 +311,7 @@ const BlockchainHistory = () => {
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             </div>
           </div>
+
         </div>
       </div>
 
@@ -275,7 +323,15 @@ const BlockchainHistory = () => {
               <Calendar size={18} className="text-indigo-400" />
             </div>
             <div>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Thời gian canh tác</p>
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Thời gian canh tác</p>
+                {/* 🟢 Hiển thị giống cây của vụ mùa này */}
+                {activeSeasonData.plant_type && (
+                  <span className="px-1.5 py-[1px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] font-bold uppercase">
+                    {activeSeasonData.plant_type}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-slate-300 font-medium">
                 {formatDate(activeSeasonData.start_time)} - {activeSeasonData.end_time ? formatDate(activeSeasonData.end_time) : 'Đang sinh trưởng'}
               </p>

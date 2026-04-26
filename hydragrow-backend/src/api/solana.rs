@@ -50,7 +50,7 @@ pub async fn push_log_to_blockchain(
             if let Err(e) = insert_blockchain_tx(
                 &app_state.pg_pool,
                 &log_data.device_id,
-                &log_data.season_id, // 🟢 Đẩy season_id xuống Database
+                Some(&log_data.season_id), // 🟢 Đẩy season_id xuống Database
                 &log_data.action,
                 &tx_id,
             )

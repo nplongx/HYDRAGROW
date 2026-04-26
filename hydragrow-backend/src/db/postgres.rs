@@ -204,7 +204,7 @@ pub async fn upsert_safety_config(
 pub async fn insert_blockchain_tx(
     pool: &PgPool,
     device_id: &str,
-    season_id: &str,
+    season_id: Option<&str>, // 🟢 Sửa thành Option để hỗ trợ NULL
     action: &str,
     tx_id: &str,
 ) -> Result<(), sqlx::Error> {
@@ -215,7 +215,7 @@ pub async fn insert_blockchain_tx(
         "#,
     )
     .bind(device_id)
-    .bind(season_id)
+    .bind(season_id) // 🟢 Bind giá trị an toàn
     .bind(action)
     .bind(tx_id)
     .execute(pool)
@@ -285,13 +285,16 @@ pub async fn create_crop_season(
     req: CreateCropSeasonRequest,
 ) -> Result<Option<CropSeason>, sqlx::Error> {
     let id = uuid::Uuid::new_v4().to_string();
+
+    // 🟢 SỬA LỖI: Thêm trường description và $5 vào câu SQL
     sqlx::query(
-        "INSERT INTO crop_seasons (id, device_id, name, plant_type, status) VALUES ($1, $2, $3, $4, 'active')",
+        "INSERT INTO crop_seasons (id, device_id, name, plant_type, status, description) VALUES ($1, $2, $3, $4, 'active', $5)",
     )
     .bind(&id)
     .bind(device_id)
     .bind(&req.name)
     .bind(&req.plant_type)
+    .bind(&req.description) // 🟢 BIND thêm description từ request
     .execute(pool)
     .await?;
 

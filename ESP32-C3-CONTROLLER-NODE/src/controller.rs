@@ -37,6 +37,9 @@ pub enum PendingDose {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SystemState {
+    SystemBooting,
+    ManualMode,
+    DosingCycleComplete,
     Monitoring,
     EmergencyStop(String),
     SystemFault(String),
@@ -119,6 +122,9 @@ pub enum SystemState {
 impl SystemState {
     pub fn to_payload_string(&self) -> String {
         match self {
+            SystemState::SystemBooting => "SystemBooting".to_string(),
+            SystemState::ManualMode => "ManualMode".to_string(),
+            ystemState::DosingCycleComplete => "DosingCycleComplete".to_string(),
             SystemState::Monitoring => "Monitoring".to_string(),
             SystemState::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
             SystemState::SystemFault(reason) => format!("SystemFault:{}", reason),
@@ -251,7 +257,7 @@ fn effective_flow_ml_per_sec(
 impl Default for ControlContext {
     fn default() -> Self {
         Self {
-            current_state: SystemState::Monitoring,
+            current_state: SystemState::SystemBooting, // 🟢 KHỞI ĐỘNG VÀO STATE NÀY
             last_water_change_time: 0,
             last_scheduled_dose_time_sec: 0,
 
@@ -284,7 +290,7 @@ impl Default for ControlContext {
             adaptive_ph_step_ratio: 0.2,
             best_known_ec_step_ratio: 0.4,
             best_known_ph_step_ratio: 0.2,
-            auto_tune_locked: false,
+            auto_tune_locked: bool,
             abnormal_sample_streak: 0,
             tuning_last_update_sec: 0,
             tuning_hour_anchor_sec: 0,
@@ -806,7 +812,6 @@ pub fn start_fsm_control_loop(
     dosing_report_tx: Sender<String>,
     sensor_cmd_tx: Sender<String>,
 ) {
-    // std::thread::spawn(move || {
     let mut ctx = ControlContext::default();
     let mut last_reported_state = "".to_string();
 
@@ -837,24 +842,26 @@ pub fn start_fsm_control_loop(
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
 
-    std::thread::sleep(std::time::Duration::from_secs(1));
-
-    for _ in 0..3 {
-        let status_msg = serde_json::json!({
-            "online": true,
-            "status": "ready",
-            "current_state": "Monitoring",
-            "boot_time": current_time_on_boot
-        })
-        .to_string();
-
-        if fsm_mqtt_tx.send(status_msg).is_ok() {
-            info!("✅ Published online status");
+    // Khởi động ở trạng thái SystemBooting trong 3 giây
+    let boot_start_ms = get_current_time_ms();
+    loop {
+        if get_current_time_ms() - boot_start_ms > 3000 {
+            // Chuyển từ SystemBooting sang Monitoring sau 3 giây
+            ctx.current_state = SystemState::Monitoring;
             break;
-        } else {
-            warn!("⚠️ Failed to publish online status, retrying...");
-            std::thread::sleep(std::time::Duration::from_secs(1));
         }
+
+        let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state);
+        if state_changed {
+            let status_msg = serde_json::json!({
+                "online": true,
+                "current_state": ctx.current_state.to_payload_string(),
+                "pump_status": ctx.pump_status
+            })
+            .to_string();
+            let _ = fsm_mqtt_tx.send(status_msg);
+        }
+        std::thread::sleep(Duration::from_millis(100));
     }
 
     loop {
@@ -936,6 +943,7 @@ pub fn start_fsm_control_loop(
                         ctx.current_state = SystemState::EmergencyStop(emergency_reason);
                     }
                 } else if !config.is_enabled {
+                    // 🟢 NẾU HỆ THỐNG TẮT, ĐƯA VỀ MONITORING BÌNH THƯỜNG
                     if ctx.current_state != SystemState::Monitoring {
                         ctx.stop_all_pumps(&mut pump_ctrl);
                         ctx.current_state = SystemState::Monitoring;
@@ -1033,7 +1041,7 @@ pub fn start_fsm_control_loop(
                         if ctx.pump_status.osaka_pump {
                             let _ = pump_ctrl.set_osaka_pump_pwm(0);
                             ctx.pump_status.osaka_pump = false;
-                            ctx.pump_status.osaka_pwm = Some(0); // 🟢 THÊM MỚI: Cập nhật PWM
+                            ctx.pump_status.osaka_pwm = Some(0);
                             ctx.current_osaka_pwm = 0;
                         }
                     }
@@ -1042,15 +1050,22 @@ pub fn start_fsm_control_loop(
                     SystemState::Monitoring
                         | SystemState::SystemFault(_)
                         | SystemState::EmergencyStop(_)
+                        | SystemState::ManualMode // 🟢 KHÔNG RESET NẾU ĐANG Ở MANUAL
+                        | SystemState::DosingCycleComplete // 🟢 KHÔNG RESET NẾU ĐANG BÁO COMPLETE
                 ) {
                     info!("Chuyển sang chế độ MANUAL.");
                     ctx.stop_all_pumps(&mut pump_ctrl);
-                    ctx.current_state = SystemState::Monitoring;
+                    ctx.current_state = SystemState::ManualMode;
                 }
             }
         }
 
-        // 🟢 LỆNH COMMAND XUỐNG SENSOR NODE: Bật đo nước liên tục nếu đang bơm/xả
+        // 🟢 DosingCycleComplete: Tự động về Monitoring sau 2 giây
+        if let SystemState::DosingCycleComplete = ctx.current_state {
+            std::thread::sleep(Duration::from_secs(2));
+            ctx.current_state = SystemState::Monitoring;
+        }
+
         let needs_continuous = matches!(
             ctx.current_state,
             SystemState::WaterRefilling { .. } | SystemState::WaterDraining { .. }
@@ -1064,12 +1079,9 @@ pub fn start_fsm_control_loop(
             ctx.last_continuous_level = needs_continuous;
         }
 
-        // First update shared sensors with latest pump status
         if let Ok(mut sensors_lock) = shared_sensors.write() {
             sensors_lock.pump_status = ctx.pump_status.clone();
         }
-
-        // Report state changes and sync online status
 
         let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state);
 
@@ -1218,7 +1230,7 @@ pub fn start_fsm_control_loop(
             let _ = match pump_name.as_str() {
                 "A" | "PUMP_A" => {
                     ctx.pump_status.pump_a = is_on;
-                    ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 });
                     if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, is_on, pwm_val)
                     } else {
@@ -1227,7 +1239,7 @@ pub fn start_fsm_control_loop(
                 }
                 "B" | "PUMP_B" => {
                     ctx.pump_status.pump_b = is_on;
-                    ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 });
                     if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, is_on, pwm_val)
                     } else {
@@ -1236,7 +1248,7 @@ pub fn start_fsm_control_loop(
                 }
                 "PH_UP" | "PUMP_PH_UP" => {
                     ctx.pump_status.ph_up = is_on;
-                    ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 });
                     if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, is_on, pwm_val)
                     } else {
@@ -1245,7 +1257,7 @@ pub fn start_fsm_control_loop(
                 }
                 "PH_DOWN" | "PUMP_PH_DOWN" => {
                     ctx.pump_status.ph_down = is_on;
-                    ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 });
                     if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, is_on, pwm_val)
                     } else {
@@ -1254,7 +1266,7 @@ pub fn start_fsm_control_loop(
                 }
                 "OSAKA_PUMP" | "OSAKA" => {
                     ctx.pump_status.osaka_pump = is_on;
-                    ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 }); // 🟢 THÊM MỚI
+                    ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
                     if pwm.is_some() || is_set_pwm {
                         pump_ctrl.set_osaka_pump_pwm(pwm_val)
                     } else {
@@ -1315,6 +1327,12 @@ pub fn start_fsm_control_loop(
         const MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP: f32 = 30.0;
 
         match ctx.current_state {
+            SystemState::SystemBooting
+            | SystemState::ManualMode
+            | SystemState::DosingCycleComplete => {
+                // Các state này do luồng ngoài xử lý, auto fsm không làm gì cả
+            }
+
             SystemState::SystemFault(ref reason) => {
                 warn!("🚨 BÁO LỖI: [{}]. Chờ reset...", reason);
             }
@@ -2322,11 +2340,15 @@ pub fn start_fsm_control_loop(
                         sample.stabilizing_finish_ms = Some(current_time_ms);
                     }
                     apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
-                    ctx.current_state = SystemState::Monitoring;
+
+                    ctx.current_state = SystemState::DosingCycleComplete;
                 }
             }
 
-            SystemState::EmergencyStop(_) => {} // Không làm gì cả, chờ user FORCE hoặc Reset lỗi
+            SystemState::EmergencyStop(_) => {
+                //Không làm gì cả - tránh spam khi EmergencyStop
+            }
         }
     }
 }
+

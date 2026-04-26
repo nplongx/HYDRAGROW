@@ -635,10 +635,18 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
                 report.pump_a_ml, report.pump_b_ml
             );
 
+            let season_id_opt =
+                match crate::db::postgres::get_active_crop_season(&app_state.pg_pool, &device_id)
+                    .await
+                {
+                    Ok(Some(season)) => Some(season.id.to_string()),
+                    _ => None,
+                };
+
             if let Err(db_err) = crate::db::postgres::insert_blockchain_tx(
                 &app_state.pg_pool,
                 &device_id,
-                &season_id_str,
+                season_id_opt.as_deref(),
                 &action_str,
                 &tx_id,
             )
@@ -647,18 +655,36 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
                 error!("❌ Lỗi lưu TxID vào Database: {:?}", db_err);
             }
 
+            let alert_msg_text = format!(
+                "Đã bơm: Phân A: {:.1}ml | Phân B: {:.1}ml | pH Up: {:.1}ml | pH Down: {:.1}ml\nTxID Solana: {}",
+                report.pump_a_ml, report.pump_b_ml, report.ph_up_ml, report.ph_down_ml, tx_id
+            );
+
+            let _ = crate::db::postgres::insert_system_event(
+                &app_state.pg_pool,
+                &crate::db::postgres::NewSystemEventRecord {
+                    device_id: device_id.clone(),
+                    level: "success".to_string(),
+                    category: "dosing".to_string(),
+                    title: "Ghi Blockchain Thành Công".to_string(),
+                    message: alert_msg_text.clone(),
+                    reason: None,
+                    metadata: Some(json!({"tx_id": tx_id, "dosing_report": report})),
+                    timestamp: chrono::Utc::now().timestamp_millis(),
+                },
+            )
+            .await;
+
             let alert = AlertMessage {
                 level: "success".to_string(),
                 title: "Ghi Blockchain Thành Công".to_string(),
-                message: format!(
-                    "Đã bơm: Phân A: {:.1}ml | Phân B: {:.1}ml | pH Up: {:.1}ml | pH Down: {:.1}ml\nTxID Solana: {}",
-                    report.pump_a_ml, report.pump_b_ml, report.ph_up_ml, report.ph_down_ml, tx_id
-                ),
+                message: alert_msg_text,
                 device_id: device_id.clone(),
                 timestamp: chrono::Utc::now().timestamp_millis() as u64,
                 reason: None,
                 metadata: None,
             };
+
             let _ = app_state.alert_sender.send(alert);
         }
         Err(e) => {

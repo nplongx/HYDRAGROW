@@ -13,9 +13,9 @@ pub async fn write_sensor_data(client: &Client, bucket: &str, data: &SensorData)
 
     let mut point_builder = DataPoint::builder("sensor_data")
         .tag("device_id", &data.device_id)
-        .field("ec_value", data.ec_value as f64)
-        .field("ph_value", data.ph_value as f64)
-        .field("temp_value", data.temp_value as f64)
+        .field("ec", data.ec as f64)
+        .field("ph", data.ph as f64)
+        .field("temp", data.temp as f64)
         .field("water_level", data.water_level as f64)
         .field("pump_status", pump_status_json);
 

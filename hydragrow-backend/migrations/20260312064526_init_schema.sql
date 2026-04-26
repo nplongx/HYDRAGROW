@@ -31,10 +31,10 @@ CREATE TABLE sensor_calibration (
     sampling_interval INTEGER NOT NULL DEFAULT 1000,
     publish_interval INTEGER NOT NULL DEFAULT 5000,
     moving_average_window INTEGER NOT NULL DEFAULT 10,
-    is_ph_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    is_ec_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    is_temp_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    is_water_level_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    enable_ph_sensor BOOLEAN NOT NULL DEFAULT TRUE,
+    enable_ec_sensor BOOLEAN NOT NULL DEFAULT TRUE,
+    enable_temp_sensor BOOLEAN NOT NULL DEFAULT TRUE,
+    enable_water_level_sensor BOOLEAN NOT NULL DEFAULT TRUE,
     last_calibrated TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (device_id) REFERENCES device_config(device_id) ON DELETE CASCADE
 );

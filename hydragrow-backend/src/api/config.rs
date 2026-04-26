@@ -86,10 +86,10 @@ async fn fetch_unified_config_concurrently(
             temp_compensation_beta: 0.02,
             publish_interval: 5000,
             moving_average_window: 10,
-            is_ph_enabled: true,
-            is_ec_enabled: true,
-            is_temp_enabled: true,
-            is_water_level_enabled: true,
+            enable_ph_sensor: true,
+            enable_ec_sensor: true,
+            enable_temp_sensor: true,
+            enable_water_level_sensor: true,
             last_calibrated: Utc::now(),
         });
 
@@ -142,10 +142,10 @@ pub async fn sync_config_to_esp32(
             "moving_average_window": sensor_config.moving_average_window,
             "publish_interval": sensor_config.publish_interval,
 
-            "enable_ph_sensor": sensor_config.is_ph_enabled,
-            "enable_ec_sensor": sensor_config.is_ec_enabled,
-            "enable_temp_sensor": sensor_config.is_temp_enabled,
-            "enable_water_level_sensor": sensor_config.is_water_level_enabled,
+            "enable_ph_sensor": sensor_config.enable_ph_sensor,
+            "enable_ec_sensor": sensor_config.enable_ec_sensor,
+            "enable_temp_sensor": sensor_config.enable_temp_sensor,
+            "enable_water_level_sensor": sensor_config.enable_water_level_sensor,
             "tank_height": payload.tank_height
         });
 
@@ -242,15 +242,15 @@ async fn upsert_sensor_db(
         INSERT INTO sensor_calibration (
             device_id, ph_v7, ph_v4, ec_factor, ec_offset, temp_offset,
             temp_compensation_beta, publish_interval, moving_average_window,
-            is_ph_enabled, is_ec_enabled, is_temp_enabled, is_water_level_enabled, last_calibrated
+            enable_ph_sensor, enable_ec_sensor, enable_temp_sensor, enable_water_level_sensor, last_calibrated
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT(device_id) DO UPDATE SET
             ph_v7 = EXCLUDED.ph_v7, ph_v4 = EXCLUDED.ph_v4, ec_factor = EXCLUDED.ec_factor,
             ec_offset = EXCLUDED.ec_offset, temp_offset = EXCLUDED.temp_offset,
             temp_compensation_beta = EXCLUDED.temp_compensation_beta,
             publish_interval = EXCLUDED.publish_interval, moving_average_window = EXCLUDED.moving_average_window,
-            is_ph_enabled = EXCLUDED.is_ph_enabled, is_ec_enabled = EXCLUDED.is_ec_enabled,
-            is_temp_enabled = EXCLUDED.is_temp_enabled, is_water_level_enabled = EXCLUDED.is_water_level_enabled,
+            enable_ph_sensor = EXCLUDED.enable_ph_sensor, enable_ec_sensor = EXCLUDED.enable_ec_sensor,
+            enable_temp_sensor = EXCLUDED.enable_temp_sensor, enable_water_level_sensor = EXCLUDED.enable_water_level_sensor,
             last_calibrated = EXCLUDED.last_calibrated
         "#
     )
@@ -263,10 +263,10 @@ async fn upsert_sensor_db(
     .bind(cal.temp_compensation_beta)
     .bind(cal.publish_interval)
     .bind(cal.moving_average_window)
-    .bind(cal.is_ph_enabled)
-    .bind(cal.is_ec_enabled)
-    .bind(cal.is_temp_enabled)
-    .bind(cal.is_water_level_enabled)
+    .bind(cal.enable_ph_sensor)
+    .bind(cal.enable_ec_sensor)
+    .bind(cal.enable_temp_sensor)
+    .bind(cal.enable_water_level_sensor)
     .bind(now)
     .execute(pool).await?;
     Ok(())
@@ -283,10 +283,10 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
         temp_compensation_beta: 0.02,
         publish_interval: 5000,
         moving_average_window: 10,
-        is_ph_enabled: true,
-        is_ec_enabled: true,
-        is_temp_enabled: true,
-        is_water_level_enabled: true,
+        enable_ph_sensor: true,
+        enable_ec_sensor: true,
+        enable_temp_sensor: true,
+        enable_water_level_sensor: true,
         last_calibrated: now,
     }
 }
@@ -568,10 +568,10 @@ pub async fn get_unified_device_config(
                 temp_compensation_beta: 0.02,
                 publish_interval: 5000,
                 moving_average_window: 10,
-                is_ph_enabled: true,
-                is_ec_enabled: true,
-                is_temp_enabled: true,
-                is_water_level_enabled: true,
+                enable_ph_sensor: true,
+                enable_ec_sensor: true,
+                enable_temp_sensor: true,
+                enable_water_level_sensor: true,
                 last_calibrated: Utc::now(),
             }),
     };
@@ -743,7 +743,7 @@ pub async fn finish_sensor_calibration(
         INSERT INTO sensor_calibration (
             device_id, ph_v7, ph_v4, ec_factor, ec_offset, temp_offset,
             temp_compensation_beta, publish_interval, moving_average_window,
-            is_ph_enabled, is_ec_enabled, is_temp_enabled, is_water_level_enabled, last_calibrated
+            enable_ph_sensor, enable_ec_sensor, enable_temp_sensor, enable_water_level_sensor, last_calibrated
         ) VALUES (
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9, $10, $11, $12, $13, $14
@@ -757,10 +757,10 @@ pub async fn finish_sensor_calibration(
             temp_compensation_beta = EXCLUDED.temp_compensation_beta,
             publish_interval = EXCLUDED.publish_interval,
             moving_average_window = EXCLUDED.moving_average_window,
-            is_ph_enabled = EXCLUDED.is_ph_enabled,
-            is_ec_enabled = EXCLUDED.is_ec_enabled,
-            is_temp_enabled = EXCLUDED.is_temp_enabled,
-            is_water_level_enabled = EXCLUDED.is_water_level_enabled,
+            enable_ph_sensor = EXCLUDED.enable_ph_sensor,
+            enable_ec_sensor = EXCLUDED.enable_ec_sensor,
+            enable_temp_sensor = EXCLUDED.enable_temp_sensor,
+            enable_water_level_sensor = EXCLUDED.enable_water_level_sensor,
             last_calibrated = EXCLUDED.last_calibrated
         WHERE sensor_calibration.last_calibrated <= EXCLUDED.last_calibrated
         "#,
@@ -774,10 +774,10 @@ pub async fn finish_sensor_calibration(
     .bind(existing.temp_compensation_beta)
     .bind(existing.publish_interval)
     .bind(existing.moving_average_window)
-    .bind(existing.is_ph_enabled)
-    .bind(existing.is_ec_enabled)
-    .bind(existing.is_temp_enabled)
-    .bind(existing.is_water_level_enabled)
+    .bind(existing.enable_ph_sensor)
+    .bind(existing.enable_ec_sensor)
+    .bind(existing.enable_temp_sensor)
+    .bind(existing.enable_water_level_sensor)
     .bind(now)
     .execute(&mut *tx)
     .await

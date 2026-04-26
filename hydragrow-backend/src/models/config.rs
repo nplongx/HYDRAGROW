@@ -28,10 +28,18 @@ pub struct SensorCalibration {
     pub temp_compensation_beta: f32,
     pub publish_interval: i32,
     pub moving_average_window: i32,
-    pub is_ph_enabled: bool,
-    pub is_ec_enabled: bool,
-    pub is_temp_enabled: bool,
-    pub is_water_level_enabled: bool,
+    #[sqlx(rename = "enable_ph_sensor")]
+    #[serde(alias = "is_ph_enabled")]
+    pub enable_ph_sensor: bool,
+    #[sqlx(rename = "enable_ec_sensor")]
+    #[serde(alias = "is_ec_enabled")]
+    pub enable_ec_sensor: bool,
+    #[sqlx(rename = "enable_temp_sensor")]
+    #[serde(alias = "is_temp_enabled")]
+    pub enable_temp_sensor: bool,
+    #[sqlx(rename = "enable_water_level_sensor")]
+    #[serde(alias = "is_water_level_enabled")]
+    pub enable_water_level_sensor: bool,
     pub last_calibrated: DateTime<Utc>,
 }
 
@@ -385,10 +393,10 @@ impl MqttConfigPayload {
             temp_compensation_beta: sens.temp_compensation_beta,
             publish_interval: sens.publish_interval as u32,
             moving_average_window: sens.moving_average_window as u32,
-            enable_ec_sensor: sens.is_ec_enabled,
-            enable_ph_sensor: sens.is_ph_enabled,
-            enable_water_level_sensor: sens.is_water_level_enabled,
-            enable_temp_sensor: sens.is_temp_enabled,
+            enable_ec_sensor: sens.enable_ec_sensor,
+            enable_ph_sensor: sens.enable_ph_sensor,
+            enable_water_level_sensor: sens.enable_water_level_sensor,
+            enable_temp_sensor: sens.enable_temp_sensor,
             dosing_pwm_percent: dose.dosing_pwm_percent as u32,
             osaka_mixing_pwm_percent: dose.osaka_mixing_pwm_percent as u32,
             osaka_misting_pwm_percent: dose.osaka_misting_pwm_percent as u32,

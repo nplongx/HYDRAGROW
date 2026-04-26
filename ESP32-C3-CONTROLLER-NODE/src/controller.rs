@@ -899,9 +899,11 @@ pub fn start_fsm_control_loop(
                 let is_water_critical = config.enable_water_level_sensor
                     && (sensors.water_level < config.water_level_critical_min);
                 let is_ec_out_of_bounds = config.enable_ec_sensor
-                    && (sensors.ec < config.min_ec_limit || sensors.ec > config.max_ec_limit);
+                    && (sensors.ec < config.min_ec_limit
+                        || sensors.ec > config.max_ec_limit);
                 let is_ph_out_of_bounds = config.enable_ph_sensor
-                    && (sensors.ph < config.min_ph_limit || sensors.ph > config.max_ph_limit);
+                    && (sensors.ph < config.min_ph_limit
+                        || sensors.ph > config.max_ph_limit);
 
                 let mut emergency_reason = String::new();
                 if config.emergency_shutdown {
@@ -1158,7 +1160,11 @@ pub fn start_fsm_control_loop(
 
             let is_force_on = action_lower == "force_on";
             let is_set_pwm = action_lower == "set_pwm";
-            let pwm = cmd.params.as_ref().and_then(|p| p.pwm).or(cmd.pwm);
+            let pwm = cmd
+                .params
+                .as_ref()
+                .and_then(|p| p.pwm)
+                .or(cmd.pwm);
             let duration_sec = cmd
                 .params
                 .as_ref()

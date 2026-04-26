@@ -193,7 +193,7 @@ const Settings = () => {
     const currentSettings = runtimeSettings || appSettings;
 
     if (!currentDeviceId || !currentSettings?.backend_url) {
-      toast.error('Thiếu Device ID hoặc Backend URL để đo điểm chuẩn.');
+      toast.error('Thiếu Device ID hoặc URL máy chủ. Vui lòng kiểm tra lại rồi thử đo điểm chuẩn.');
       return;
     }
 
@@ -210,7 +210,7 @@ const Settings = () => {
         );
       } catch (error: any) {
         console.error(error);
-        toast.error(`Không thể bắt đầu phiên hiệu chuẩn: ${error.message}`);
+        toast.error(`Không thể bắt đầu phiên hiệu chuẩn. Vui lòng thử lại. Chi tiết: ${error.message}`);
         setIsCapturingPoint(false);
         return;
       }
@@ -254,7 +254,7 @@ const Settings = () => {
       );
 
       const voltage = normalizeVoltage(captureRes);
-      if (voltage === null) throw new Error('Không nhận được giá trị điện áp từ API capture');
+      if (voltage === null) throw new Error('Không nhận được giá trị điện áp từ API capture. Vui lòng thử lại.');
       const confidence = normalizeConfidence(captureRes);
 
       setCapturedPoints((prev) => ({
@@ -264,7 +264,7 @@ const Settings = () => {
       toast.success(`Đã ghi nhận điểm pH ${activePoint}.`);
     } catch (error) {
       console.error(error);
-      toast.error(`Không thể đo điểm pH ${activePoint}. Vui lòng thử lại.`);
+      toast.error(`Không thể đo điểm pH ${activePoint}. Vui lòng thử lại. Nếu vẫn lỗi, hãy kiểm tra đầu dò và kết nối máy chủ.`);
     } finally {
       clearInterval(timer);
       setIsCapturingPoint(false);
@@ -351,7 +351,7 @@ const Settings = () => {
 
   const applyCalibrationToConfig = (): any | null => {
     if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null) {
-      toast.error('Cần đủ dữ liệu pH 7 và pH 4 để áp dụng.');
+      toast.error('Chưa đủ dữ liệu pH 7 và pH 4. Vui lòng đo đủ 2 điểm rồi thử lại.');
       return null;
     }
     const nextConfig = {
@@ -360,7 +360,7 @@ const Settings = () => {
       ph_v4: calibrationSummary.ph_v4
     };
     setConfig(nextConfig);
-    toast.success('Đã áp dụng kết quả calib vào cấu hình.');
+    toast.success('Đã áp dụng kết quả hiệu chuẩn vào cấu hình.');
     return nextConfig;
   };
 
@@ -403,18 +403,18 @@ const Settings = () => {
 
   const handleSave = async (configOverride?: any) => {
     if (!appSettings.device_id || !appSettings.backend_url) {
-      toast.error('Vui lòng điền đầy đủ Device ID và URL Máy chủ!');
+      toast.error('Bạn cần nhập đầy đủ Device ID và URL máy chủ. Vui lòng kiểm tra rồi thử lại.');
       return;
     }
 
     setIsSaving(true);
-    const toastId = toast.loading("Đang đồng bộ dữ liệu với máy chủ...");
+    const toastId = toast.loading("Đang đồng bộ cấu hình với máy chủ...");
 
     try {
       const savingConfig = configOverride || config;
       const saveValidationErrors = validateDosingConfig(savingConfig);
       if (Object.keys(saveValidationErrors).length > 0) {
-        toast.error('Không thể lưu: cấu hình dosing không hợp lệ. Vui lòng kiểm tra các trường đang báo lỗi.');
+        toast.error('Không thể lưu cấu hình dosing. Vui lòng kiểm tra các trường đang báo lỗi rồi thử lại.');
         return;
       }
       const devId = appSettings.device_id;
@@ -553,10 +553,10 @@ const Settings = () => {
 
       await callApi(`/api/devices/${devId}/config/unified`, 'PUT', unifiedPayload);
 
-      toast.success('Đồng bộ cấu hình thành công!', { id: toastId });
+      toast.success('Đã đồng bộ cấu hình thành công.', { id: toastId });
     } catch (error: any) {
       console.error('Save error:', error);
-      toast.error(`Lỗi: ${error?.message || 'Không thể kết nối máy chủ'}`, { id: toastId });
+      toast.error(`Không thể đồng bộ cấu hình. Vui lòng thử lại. Chi tiết: ${error?.message || 'Không thể kết nối máy chủ'}`, { id: toastId });
     } finally {
       setIsSaving(false);
     }
@@ -570,7 +570,7 @@ const Settings = () => {
       </div>
       <div className="flex flex-col items-center space-y-4 relative z-10">
         <Cpu className="text-emerald-400 animate-pulse" size={48} />
-        <span className="text-emerald-500/70 font-black tracking-widest text-xs uppercase animate-pulse">Đang tải cấu hình thiết bị...</span>
+        <span className="text-emerald-500/70 font-black tracking-widest text-xs uppercase animate-pulse">Đang tải cấu hình thiết bị... Vui lòng chờ.</span>
       </div>
     </div>
   );
@@ -586,18 +586,18 @@ const Settings = () => {
             <Settings2 size={24} className="text-slate-300" />
           </div>
           <span className="bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-500 tracking-tight">
-            CÀI ĐẶT HỆ THỐNG
+            Cài đặt hệ thống
           </span>
         </h1>
         <p className="text-xs text-slate-400 ml-[52px] font-medium tracking-wide uppercase">
-          Tùy chỉnh thông số vận hành tủ điện
+          Bạn có thể tùy chỉnh thông số vận hành tủ điện.
         </p>
       </div>
 
       <div className="space-y-4 relative z-10">
 
         {/* 0. KẾT NỐI HỆ THỐNG */}
-        <AccordionSection id="network" title="Kết Nối Máy Chủ" icon={Network} color="text-slate-300" isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
+        <AccordionSection id="network" title="Kết nối máy chủ" icon={Network} color="text-slate-300" isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
           <div className="space-y-3 bg-slate-900/30 p-4 rounded-2xl border border-white/5 shadow-inner">
             <InputGroup label="Mã Thiết Bị (Device ID)" type="text" value={appSettings.device_id} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, device_id: e.target.value })} desc="ID định danh cấp cho tủ điện" />
             <InputGroup label="Địa chỉ Máy Chủ (Backend URL)" type="text" value={appSettings.backend_url} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, backend_url: e.target.value })} desc="Ví dụ: http://192.168.1.5:8000" />
@@ -606,7 +606,7 @@ const Settings = () => {
         </AccordionSection>
 
         {/* 1. CHẾ ĐỘ & TỔNG QUAN */}
-        <AccordionSection id="general" title="Bảng Điều Khiển Chính" icon={Power} color="text-emerald-400" isOpen={openSection === 'general'} onToggle={() => handleToggleSection('general')}>
+        <AccordionSection id="general" title="Bảng điều khiển chính" icon={Power} color="text-emerald-400" isOpen={openSection === 'general'} onToggle={() => handleToggleSection('general')}>
           <div className="space-y-4">
             <div className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-500 ${config.is_enabled ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-slate-900/50 border-slate-800'}`}>
               <div>
@@ -639,7 +639,7 @@ const Settings = () => {
                     : 'bg-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
                     }`}
                 >
-                  TỰ ĐỘNG
+                  Tự động
                 </button>
                 <button
                   onClick={() => setConfig({ ...config, control_mode: 'manual' })}
@@ -648,7 +648,7 @@ const Settings = () => {
                     : 'bg-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
                     }`}
                 >
-                  THỦ CÔNG
+                  Thủ công
                 </button>
               </div>
             </div>
@@ -1151,7 +1151,7 @@ const Settings = () => {
                         }}
                         className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-amber-400 text-slate-950"
                       >
-                        Pha 2: XÁC NHẬN THỦ CÔNG & LƯU
+                        Pha 2: XÁC NHẬN Thủ công & LƯU
                       </button>
                     )}
 
@@ -1159,11 +1159,11 @@ const Settings = () => {
                       <button
                         onClick={async () => {
                           if (adaptivePhases.confidence_threshold && calibrationSummary.reliability < adaptivePhases.confidence_threshold) {
-                            toast.error(`Độ tin cậy (${calibrationSummary.reliability}%) chưa đạt ngưỡng yêu cầu ${adaptivePhases.confidence_threshold}%`);
+                            toast.error(`Độ tin cậy (${calibrationSummary.reliability}%) chưa đạt ngưỡng ${adaptivePhases.confidence_threshold}%. Vui lòng đo lại để tăng độ ổn định rồi thử lại.`);
                             return;
                           }
                           if (hasSafetyWarningIn24h) {
-                            toast.error('Trong 24h gần nhất có cảnh báo an toàn. Auto-apply bị chặn.');
+                            toast.error('Trong 24 giờ gần nhất có cảnh báo an toàn. Vui lòng kiểm tra nhật ký hệ thống trước khi auto-apply.');
                             return;
                           }
 
@@ -1220,7 +1220,7 @@ const Settings = () => {
             ) : (
               <>
                 <Save size={18} className="relative z-10" />
-                <span className="relative z-10">LƯU CÀI ĐẶT & GỬI XUỐNG TỦ ĐIỆN</span>
+                <span className="relative z-10">Lưu cài đặt và gửi xuống tủ điện</span>
               </>
             )}
           </button>

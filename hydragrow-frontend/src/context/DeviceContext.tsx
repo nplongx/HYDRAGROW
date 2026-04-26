@@ -127,7 +127,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     sensorTimeoutRef.current = setTimeout(() => {
       setIsSensorOnline(false);
       setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ec: true, err_ph: true } : prev);
-      toast.error("Mất kết nối với Mạch Cảm Biến!");
+      toast.error("Mất kết nối mạch cảm biến. Vui lòng thử lại. Nếu vẫn lỗi, hãy kiểm tra nguồn và mạng.");
     }, 65000);
   }, []);
 
@@ -225,8 +225,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               setIsControllerStatusKnown(true);
               setDeviceStatus(prev => {
                 if (prev.is_online !== isOnline) {
-                  if (isOnline) toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
-                  else toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                  if (isOnline) toast.success("Trạm điều khiển đã trực tuyến trở lại.");
+                  else toast.error("Trạm điều khiển đã ngắt kết nối. Vui lòng kiểm tra mạng rồi thử lại.");
                 }
                 return { is_online: isOnline, last_seen: new Date().toISOString() };
               });
@@ -246,11 +246,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
                 setIsControllerStatusKnown(true);
                 if (isOnline) {
-                  toast.success("Trạm Điều Khiển đã trực tuyến trở lại!");
+                  toast.success("Trạm điều khiển đã trực tuyến trở lại.");
                 } else {
                   setFsmState("Offline");
                   setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
-                  toast.error("Đã ngắt kết nối Trạm Điều Khiển (LWT)!");
+                  toast.error("Trạm điều khiển đã ngắt kết nối. Vui lòng kiểm tra mạng rồi thử lại.");
                 }
                 return;
               }
@@ -259,11 +259,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 const onlineStatus = alert.level === 'success';
                 setIsSensorOnline(onlineStatus);
                 if (!onlineStatus) {
-                  toast.error("Mạch Cảm Biến đã mất kết nối!");
+                  toast.error("Mạch cảm biến đã mất kết nối. Vui lòng kiểm tra nguồn cảm biến và mạng.");
                   setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ph: true, err_ec: true } : prev);
                   if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
                 } else {
-                  toast.success("Mạch Cảm Biến đã trực tuyến!");
+                  toast.success("Mạch cảm biến đã trực tuyến.");
                   resetSensorTimeout();
                 }
                 return;

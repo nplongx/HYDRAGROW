@@ -7,6 +7,7 @@ import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
+import { LoadingState } from '../components/ui/LoadingState';
 
 const NEON_COLORS: Record<string, any> = {
   orange: { bg: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/50', shadow: 'shadow-[0_0_20px_rgba(249,115,22,0.3)]', glow: 'from-orange-500/20' },
@@ -371,11 +372,7 @@ const ControlPanel = () => {
   const { isProcessing, resetFault } = useDeviceControl(deviceId || "");
 
   if (isLoading || !sensorData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
-      </div>
-    );
+    return <LoadingState message="Đang tải dữ liệu điều khiển..." />;
   }
 
   const isOnline = deviceStatus?.is_online || false;

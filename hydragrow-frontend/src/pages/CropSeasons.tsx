@@ -4,6 +4,7 @@ import { Sprout, Calendar, Leaf, Play, StopCircle, CheckCircle2, History, Edit3,
 import toast from 'react-hot-toast';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
+import { LoadingState } from '../components/ui/LoadingState';
 
 export const CropSeasons = () => {
   const { activeSeason, history, isLoading, createSeason, endSeason, updateSeason } = useCropSeason();
@@ -46,14 +47,7 @@ export const CropSeasons = () => {
   };
 
   if (isLoading && !activeSeason && history.length === 0) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-slate-950">
-        <div className="relative">
-          <div className="absolute inset-0 bg-emerald-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
-          <Sprout size={40} className="text-emerald-400 animate-bounce relative z-10" />
-        </div>
-      </div>
-    );
+    return <LoadingState message="Đang tải dữ liệu mùa vụ..." />;
   }
 
   const filteredHistory = history.filter(season => season.id !== activeSeason?.id);

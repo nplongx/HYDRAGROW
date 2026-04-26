@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { writeTextFile } from '@tauri-apps/plugin-fs'; import { save } from '@tauri-apps/plugin-dialog';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
+import { LoadingState } from '../components/ui/LoadingState';
 interface BlockchainRecord {
   id: number;
   device_id: string;
@@ -202,12 +203,7 @@ const BlockchainHistory = () => {
   const activeSeasonData = seasons.find(s => s.id === selectedSeason);
 
   if (isLoading && !selectedSeason) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen space-y-4 bg-slate-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
-        <p className="text-sm text-slate-400 font-medium animate-pulse">Đang đồng bộ sổ cái Solana...</p>
-      </div>
-    );
+    return <LoadingState message="Đang đồng bộ sổ cái Solana..." />;
   }
 
   if (!deviceId) {
@@ -300,9 +296,11 @@ const BlockchainHistory = () => {
         <div className="absolute left-6 top-8 bottom-0 w-px bg-slate-800 -z-10"></div>
 
         {isLoading ? (
-          <div className="flex justify-center py-10">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
-          </div>
+          <LoadingState
+            fullscreen={false}
+            className="py-8"
+            message="Đang tải giao dịch niêm phong..."
+          />
         ) : history.length === 0 && !error ? (
           <StateView icon={Box} title="Chưa có dữ liệu nào được niêm phong cho mẻ trồng này." className="bg-slate-900/30" />
         ) : (

@@ -1,27 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #14b8a6;
-  --color-accent: #60a5fa;
+  --color-primary: #34d399;
+  --color-accent: #93c5fd;
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
-  --color-surface: #0f172a;
-  --color-surface-muted: #111827;
-  --color-border: #334155;
-  --color-text: #f8fafc;
-  --color-text-muted: #cbd5e1;
+  --color-surface: #090d14;
+  --color-surface-muted: #0f172a;
+  --color-border: #1e293b;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
 }
 
 :root {
   color: var(--color-text);
-  background-color: #020617;
+  background-color: #05070d;
 }
 
 body {
   margin: 0;
   color: var(--color-text);
-  background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.08), transparent 35%), #020617;
+  background: #05070d;
 }
 
 h1 {
@@ -58,11 +58,11 @@ p {
   }
 
   .page-header-icon {
-    @apply p-2.5 rounded-2xl bg-slate-800/50 border border-slate-700 shadow-[0_0_20px_rgba(15,23,42,0.35)];
+    @apply p-2.5 rounded-xl bg-slate-900 border border-slate-800;
   }
 
   .page-header-title {
-    @apply text-2xl md:text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400;
+    @apply text-2xl md:text-3xl font-bold tracking-tight text-slate-100;
   }
 
   .page-header-subtitle {
@@ -70,7 +70,7 @@ p {
   }
 
   .ui-card {
-    @apply bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-4 md:p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)];
+    @apply bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5;
   }
 
   .ui-form-row {
@@ -86,7 +86,7 @@ p {
   }
 
   .ui-state {
-    @apply bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 border-dashed rounded-3xl p-4 md:p-5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] text-center py-10 md:py-12;
+    @apply bg-slate-900 border border-slate-800 border-dashed rounded-2xl p-4 md:p-5 text-center py-10 md:py-12;
   }
 
   .ui-state-title {
@@ -98,11 +98,11 @@ p {
   }
 
   .ui-input {
-    @apply w-full min-h-11 bg-slate-950/50 border text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 transition-all;
+    @apply w-full min-h-11 bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-1 transition-all;
   }
 
   .ui-btn-md {
-    @apply min-h-11 px-4 py-2.5 rounded-xl text-sm font-semibold;
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold;
   }
 
   .ui-loading {
@@ -114,11 +114,11 @@ p {
   }
 
   .ui-loading-card {
-    @apply flex items-center gap-3 rounded-2xl border border-slate-700/80 bg-slate-900/70 px-4 py-3 shadow-[0_10px_30px_rgba(2,6,23,0.45)] backdrop-blur-md;
+    @apply flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3;
   }
 
   .ui-loading-spinner {
-    @apply inline-flex items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/10 p-2 text-emerald-300;
+    @apply inline-flex items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 p-2 text-emerald-300;
   }
 
   .ui-loading-message {

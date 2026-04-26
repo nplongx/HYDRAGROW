@@ -35,7 +35,7 @@ export const CropSeasons = () => {
     const success = await createSeason(newName, newPlant, newDesc);
     if (success) {
       setNewName(''); setNewPlant(''); setNewDesc('');
-      toast.success('Đã khởi tạo mùa vụ mới!');
+      toast.success('Đã tạo mùa vụ mới.');
     }
   };
 
@@ -76,10 +76,10 @@ export const CropSeasons = () => {
       <div className="relative z-10 ui-card rounded-[2rem] overflow-hidden animate-in fade-in duration-700">
         {activeSeason ? (
           <div className="p-5 md:p-6 space-y-5">
-            {/* Header Thẻ Active */}
+            {/* Header Thẻ Đang chạy */}
             <div className="flex items-center justify-between border-b border-slate-800/50 pb-4">
               <h2 className="text-sm font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                <Play size={16} className="fill-emerald-400/20" /> Mùa Vụ Hiện Tại
+                <Play size={16} className="fill-emerald-400/20" /> Mùa vụ hiện tại
               </h2>
               <div className="flex gap-2">
                 {isEditing ? (
@@ -92,7 +92,7 @@ export const CropSeasons = () => {
                   </button>
                 )}
                 <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Đang chạy
                 </span>
               </div>
             </div>
@@ -112,10 +112,10 @@ export const CropSeasons = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Ghi chú (Nhật ký sinh trưởng)</label>
-                  <textarea rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Nhập các sự kiện, thay đổi liều lượng phân bón..." className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"></textarea>
+                  <textarea rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Ví dụ: cập nhật liều phân, thay đổi EC, ghi chú sâu bệnh..." className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"></textarea>
                 </div>
                 <button onClick={handleUpdate} disabled={isLoading} className={`w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.4)] font-black text-xs uppercase tracking-widest transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.98]'}`}>
-                  <Save size={16} /> {isLoading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+                  <Save size={16} /> {isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             ) : (
@@ -142,7 +142,7 @@ export const CropSeasons = () => {
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ghi chú</p>
                   <div className="text-xs text-slate-400 bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 flex items-start gap-2">
                     <FileText size={14} className="text-slate-500 shrink-0 mt-0.5" />
-                    <p className="italic">{activeSeason.description || 'Không có ghi chú nào cho mùa vụ này.'}</p>
+                    <p className="italic">{activeSeason.description || 'Chưa có ghi chú cho mùa vụ này.'}</p>
                   </div>
                 </div>
               </div>
@@ -152,11 +152,11 @@ export const CropSeasons = () => {
             {!isEditing && (
               <div className="pt-2 border-t border-slate-800/50">
                 <button
-                  onClick={() => { if (window.confirm('CẢNH BÁO: Hành động này sẽ đóng gói dữ liệu và không thể chỉnh sửa thêm. Xác nhận kết thúc mùa vụ?')) endSeason() }}
+                  onClick={() => { if (window.confirm('Bạn có chắc muốn kết thúc mùa vụ này? Sau khi kết thúc, bạn sẽ không thể chỉnh sửa thêm.')) endSeason() }}
                   disabled={isLoading}
                   className={`w-full flex items-center justify-center gap-2 py-3 bg-rose-500/10 text-rose-500 border border-rose-500/30 rounded-xl transition-all font-black text-xs uppercase tracking-widest ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-500/20 hover:shadow-[0_0_15px_rgba(244,63,94,0.3)] active:scale-[0.98]'}`}
                 >
-                  <StopCircle size={16} /> Kết thúc Mùa vụ Hiện tại
+                  <StopCircle size={16} /> Kết thúc mùa vụ hiện tại
                 </button>
               </div>
             )}
@@ -164,7 +164,7 @@ export const CropSeasons = () => {
         ) : (
           <form onSubmit={handleCreate} className="p-5 md:p-6 space-y-6">
             <h2 className="text-sm font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800/50 pb-4">
-              <Sprout size={18} className="text-emerald-500" /> Bắt đầu Kỷ nguyên mới
+              <Sprout size={18} className="text-emerald-500" /> Tạo mùa vụ mới
             </h2>
             <div className="space-y-4">
               <div className="ui-form-row">
@@ -185,7 +185,7 @@ export const CropSeasons = () => {
               disabled={isLoading}
               className={`w-full py-3.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 rounded-xl shadow-[0_10px_20px_rgba(6,182,212,0.3)] font-black text-[13px] uppercase tracking-widest transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-[0_10px_30px_rgba(6,182,212,0.5)] hover:scale-[1.02] active:scale-95'}`}
             >
-              {isLoading ? 'Đang Khởi Tạo...' : 'Khởi Tạo Ngay'}
+              {isLoading ? 'Đang tạo...' : 'Tạo mùa vụ'}
             </button>
           </form>
         )}
@@ -196,7 +196,7 @@ export const CropSeasons = () => {
         <div className="p-5 border-b border-slate-800/50 bg-slate-800/20">
           <h2 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
             <History size={16} className="text-indigo-400" />
-            Lưu Trữ Quá Khứ
+            Lịch sử mùa vụ
           </h2>
         </div>
 
@@ -222,7 +222,7 @@ export const CropSeasons = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 text-[11px] font-medium text-slate-500">
                   <span className="flex items-center gap-1.5 bg-slate-950/50 px-2.5 py-1 rounded-md border border-slate-800">
                     <Leaf size={12} className="text-emerald-500/70" />
-                    {season.plant_type || 'Không xác định'}
+                    {season.plant_type || 'Chưa cập nhật'}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Calendar size={12} className="text-blue-400/70" />

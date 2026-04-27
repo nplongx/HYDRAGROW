@@ -80,6 +80,8 @@ async fn fetch_unified_config_concurrently(
             device_id: device_id.to_string(),
             ph_v7: 2.5,
             ph_v4: 1.428,
+            ph_v10: None,                          // 🟢 THÊM MỚI
+            ph_calibration_mode: "2-point".into(), // 🟢 THÊM MỚI
             ec_factor: 880.0,
             ec_offset: 0.0,
             temp_offset: 0.0,
@@ -135,6 +137,8 @@ pub async fn sync_config_to_esp32(
         let sensor_payload = json!({
             "ph_v7": sensor_config.ph_v7,
             "ph_v4": sensor_config.ph_v4,
+            "ph_v10": sensor_config.ph_v10, // 🟢 THÊM MỚI
+            "ph_calibration_mode": sensor_config.ph_calibration_mode, // 🟢 THÊM MỚI
             "ec_factor": sensor_config.ec_factor,
             "ec_offset": sensor_config.ec_offset,
             "temp_offset": sensor_config.temp_offset,
@@ -240,12 +244,13 @@ async fn upsert_sensor_db(
     sqlx::query(
         r#"
         INSERT INTO sensor_calibration (
-            device_id, ph_v7, ph_v4, ec_factor, ec_offset, temp_offset,
+            device_id, ph_v7, ph_v4, ph_v10, ph_calibration_mode, ec_factor, ec_offset, temp_offset,
             temp_compensation_beta, publish_interval, moving_average_window,
             enable_ph_sensor, enable_ec_sensor, enable_temp_sensor, enable_water_level_sensor, last_calibrated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         ON CONFLICT(device_id) DO UPDATE SET
-            ph_v7 = EXCLUDED.ph_v7, ph_v4 = EXCLUDED.ph_v4, ec_factor = EXCLUDED.ec_factor,
+            ph_v7 = EXCLUDED.ph_v7, ph_v4 = EXCLUDED.ph_v4, ph_v10 = EXCLUDED.ph_v10,
+            ph_calibration_mode = EXCLUDED.ph_calibration_mode, ec_factor = EXCLUDED.ec_factor,
             ec_offset = EXCLUDED.ec_offset, temp_offset = EXCLUDED.temp_offset,
             temp_compensation_beta = EXCLUDED.temp_compensation_beta,
             publish_interval = EXCLUDED.publish_interval, moving_average_window = EXCLUDED.moving_average_window,
@@ -257,6 +262,8 @@ async fn upsert_sensor_db(
     .bind(&cal.device_id)
     .bind(cal.ph_v7)
     .bind(cal.ph_v4)
+    .bind(cal.ph_v10) // 🟢 THÊM MỚI
+    .bind(&cal.ph_calibration_mode) // 🟢 THÊM MỚI
     .bind(cal.ec_factor)
     .bind(cal.ec_offset)
     .bind(cal.temp_offset)
@@ -277,6 +284,8 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
         device_id: device_id.to_string(),
         ph_v7: 2.5,
         ph_v4: 1.428,
+        ph_v10: None,                          // 🟢 THÊM MỚI
+        ph_calibration_mode: "2-point".into(), // 🟢 THÊM MỚI
         ec_factor: 880.0,
         ec_offset: 0.0,
         temp_offset: 0.0,
@@ -341,6 +350,7 @@ pub struct FinishCalibrationRequest {
     pub sample_points: Vec<f32>,
     pub ph_v7: f32,
     pub ph_v4: f32,
+    pub ph_v10: Option<f32>, // 🟢 THÊM MỚI
     pub error: f32,
     pub finished_at: Option<DateTime<Utc>>,
 }
@@ -562,6 +572,8 @@ pub async fn get_unified_device_config(
                 device_id: device_id.clone(),
                 ph_v7: 2.5,
                 ph_v4: 1.428,
+                ph_v10: None,                          // 🟢 THÊM MỚI
+                ph_calibration_mode: "2-point".into(), // 🟢 THÊM MỚI
                 ec_factor: 880.0,
                 ec_offset: 0.0,
                 temp_offset: 0.0,
@@ -741,16 +753,18 @@ pub async fn finish_sensor_calibration(
     let applied = match sqlx::query(
         r#"
         INSERT INTO sensor_calibration (
-            device_id, ph_v7, ph_v4, ec_factor, ec_offset, temp_offset,
+            device_id, ph_v7, ph_v4, ph_v10, ph_calibration_mode, ec_factor, ec_offset, temp_offset,
             temp_compensation_beta, publish_interval, moving_average_window,
             enable_ph_sensor, enable_ec_sensor, enable_temp_sensor, enable_water_level_sensor, last_calibrated
         ) VALUES (
-            $1, $2, $3, $4, $5, $6,
-            $7, $8, $9, $10, $11, $12, $13, $14
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            $9, $10, $11, $12, $13, $14, $15, $16
         )
         ON CONFLICT(device_id) DO UPDATE SET
             ph_v7 = EXCLUDED.ph_v7,
             ph_v4 = EXCLUDED.ph_v4,
+            ph_v10 = EXCLUDED.ph_v10,
+            ph_calibration_mode = EXCLUDED.ph_calibration_mode,
             ec_factor = EXCLUDED.ec_factor,
             ec_offset = EXCLUDED.ec_offset,
             temp_offset = EXCLUDED.temp_offset,
@@ -768,6 +782,8 @@ pub async fn finish_sensor_calibration(
     .bind(&device_id)
     .bind(payload.ph_v7)
     .bind(payload.ph_v4)
+    .bind(payload.ph_v10) // 🟢 THÊM MỚI
+    .bind(&payload.mode) // 🟢 THÊM MỚI (Từ body của request)
     .bind(existing.ec_factor)
     .bind(existing.ec_offset)
     .bind(existing.temp_offset)
@@ -789,22 +805,33 @@ pub async fn finish_sensor_calibration(
     };
 
     if applied {
+        // 🟢 THÊM MỚI LOGIC IN THÔNG ĐIỆP
+        let msg = if let Some(v10) = payload.ph_v10 {
+            format!(
+                "Hiệu chuẩn thành công (mode: {}). pH_V7={:.4}, pH_V4={:.4}, pH_V10={:.4}, sai số={:.4}",
+                payload.mode, payload.ph_v7, payload.ph_v4, v10, payload.error
+            )
+        } else {
+            format!(
+                "Hiệu chuẩn thành công (mode: {}). pH_V7={:.4}, pH_V4={:.4}, sai số={:.4}",
+                payload.mode, payload.ph_v7, payload.ph_v4, payload.error
+            )
+        };
+
         let event = NewSystemEventRecord {
             device_id: device_id.clone(),
             level: "success".to_string(),
             category: "calibration".to_string(),
             title: "Hoàn tất hiệu chuẩn pH".to_string(),
-            message: format!(
-                "Hiệu chuẩn thành công (mode: {}). pH_V7={:.4}, pH_V4={:.4}, sai số={:.4}",
-                payload.mode, payload.ph_v7, payload.ph_v4, payload.error
-            ),
+            message: msg,
             reason: None,
             metadata: Some(json!({
                 "mode": payload.mode,
                 "sample_points": payload.sample_points,
                 "result": {
                     "ph_v7": payload.ph_v7,
-                    "ph_v4": payload.ph_v4
+                    "ph_v4": payload.ph_v4,
+                    "ph_v10": payload.ph_v10 // 🟢 THÊM MỚI
                 },
                 "error": payload.error,
                 "finished_at": now
@@ -1064,3 +1091,4 @@ mod tests {
         assert!(result.unwrap_err().contains("scheduled_dose_a_ml"));
     }
 }
+

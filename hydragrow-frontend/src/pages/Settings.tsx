@@ -107,7 +107,10 @@ const Settings = () => {
     max_refill_cycles_per_hour: 3, max_drain_cycles_per_hour: 3, max_refill_duration_sec: 120, max_drain_duration_sec: 120,
     emergency_shutdown: false, ec_ack_threshold: 0.05, ph_ack_threshold: 0.1, water_ack_threshold: 0.5,
 
-    ph_v7: 2.5, ph_v4: 1.428, ec_factor: 880.0, ec_offset: 0.0, temp_offset: 0.0, temp_compensation_beta: 0.02,
+    // CẤU HÌNH HIỆU CHUẨN ĐẦU DÒ
+    ph_v7: 2.5, ph_v4: 1.428, ph_v10: null, ph_calibration_mode: '2-point',
+    ec_factor: 880.0, ec_offset: 0.0, temp_offset: 0.0, temp_compensation_beta: 0.02,
+
     publish_interval: 5000, moving_average_window: 15,
     enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
   });
@@ -140,7 +143,6 @@ const Settings = () => {
       headers: { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key }
     };
 
-    // Ghi đè timeout mặc định của Tauri HTTP plugin nếu có yêu cầu
     if (customTimeoutMs) {
       options.connectTimeout = customTimeoutMs;
       options.timeout = customTimeoutMs;
@@ -163,20 +165,26 @@ const Settings = () => {
 
   const normalizeVoltage = (payload: any): number | null => {
     if (!payload) return null;
-    const candidates = [
+
+    // Ưu tiên đọc mV từ Rust trả về và chia 1000 chuyển thành Volts
+    const mvVal = payload?.data?.mean_voltage_mv ?? payload?.mean_voltage_mv;
+    if (mvVal !== undefined && mvVal !== null) {
+      const num = Number(mvVal);
+      if (Number.isFinite(num)) return num / 1000.0;
+    }
+
+    // Đọc fallback nếu hệ thống cũ trả về thẳng Volts
+    const vCandidates = [
       payload.voltage,
       payload.ph_voltage,
       payload.raw_voltage,
       payload?.data?.voltage,
       payload?.data?.ph_voltage,
-      payload?.data?.mean_voltage_mv,
       payload?.result?.voltage,
-      payload?.result?.ph_voltage,
-      payload?.result?.mean_voltage_mv
+      payload?.result?.ph_voltage
     ];
-    for (const value of candidates) {
+    for (const value of vCandidates) {
       if (value === undefined || value === null) continue;
-
       const numberValue = Number(value);
       if (Number.isFinite(numberValue)) return numberValue;
     }
@@ -189,7 +197,7 @@ const Settings = () => {
       const numberValue = Number(value);
       if (Number.isFinite(numberValue)) return Math.max(0, Math.min(100, numberValue));
     }
-    return 0;
+    return 0; // Trả về 0 nếu API không tính ra confidence
   };
 
   const handleCapturePoint = async () => {
@@ -204,7 +212,6 @@ const Settings = () => {
 
     setIsCapturingPoint(true);
 
-    // GỌI API START Ở BƯỚC ĐẦU TIÊN
     if (wizardStep === 0) {
       try {
         await callApi(
@@ -221,13 +228,9 @@ const Settings = () => {
       }
     }
 
-    // --- TÍNH TOÁN THÔNG SỐ ĐỘNG DỰA VÀO CẤU HÌNH ---
     const targetSamples = Math.max(Number(config.dynamic_sample_count) || 5, 5);
     const intervalSec = Number(config.publish_interval || 5000) / 1000;
-
     const dynamicWindowSec = Math.ceil((targetSamples + 2) * intervalSec) + 5;
-
-    // TÍNH TIMEOUT CHO FRONTEND: Phải dài hơn Backend ít nhất 5 giây để tránh đứt gánh giữa đường
     const requestTimeoutMs = (dynamicWindowSec + 5) * 1000;
 
     setCountdown(dynamicWindowSec);
@@ -245,7 +248,6 @@ const Settings = () => {
     }, 1000);
 
     try {
-      // TRUYỀN TIMEOUT VÀO LỜI GỌI API (Tham số thứ 5)
       const captureRes = await callApi(
         `/api/devices/${currentDeviceId}/calibration/ph/capture`,
         'POST',
@@ -255,7 +257,7 @@ const Settings = () => {
           window_seconds: dynamicWindowSec
         },
         currentSettings,
-        requestTimeoutMs // <--- THÊM BIẾN NÀY VÀO ĐÂY
+        requestTimeoutMs
       );
 
       const voltage = normalizeVoltage(captureRes);
@@ -297,6 +299,7 @@ const Settings = () => {
     const spread = Number.isFinite(p7) && Number.isFinite(p4) ? Math.abs((p7 as number) - (p4 as number)) : 0;
     const spreadBonus = spread >= 0.2 ? 15 : spread >= 0.1 ? 8 : 0;
     const reliability = Math.max(0, Math.min(100, avgConfidence + spreadBonus));
+
     return {
       ph_v7: Number.isFinite(p7) ? Number((p7 as number).toFixed(3)) : null,
       ph_v4: Number.isFinite(p4) ? Number((p4 as number).toFixed(3)) : null,
@@ -355,14 +358,20 @@ const Settings = () => {
   };
 
   const applyCalibrationToConfig = (): any | null => {
-    if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null) {
-      toast.error('Chưa đủ dữ liệu pH 7 và pH 4. Vui lòng đo đủ 2 điểm rồi thử lại.');
+    if (
+      calibrationSummary.ph_v7 === null ||
+      calibrationSummary.ph_v4 === null ||
+      (calibrationPointsCount === 3 && calibrationSummary.ph_v10 === null)
+    ) {
+      toast.error(`Chưa đủ dữ liệu pH. Vui lòng đo đủ ${calibrationPointsCount} điểm rồi thử lại.`);
       return null;
     }
     const nextConfig = {
       ...config,
       ph_v7: calibrationSummary.ph_v7,
-      ph_v4: calibrationSummary.ph_v4
+      ph_v4: calibrationSummary.ph_v4,
+      ph_v10: calibrationSummary.ph_v10,
+      ph_calibration_mode: calibrationPointsCount === 3 ? '3-point' : '2-point'
     };
     setConfig(nextConfig);
     toast.success('Đã áp dụng kết quả hiệu chuẩn vào cấu hình.');
@@ -380,7 +389,7 @@ const Settings = () => {
         } catch (e) { console.error("Chưa load được store"); }
 
         const currentDeviceId = settings?.device_id || appSettings.device_id;
-        if (!currentDeviceId) return; // Nếu chưa setup thiết bị thì bỏ qua load API
+        if (!currentDeviceId) return;
 
         const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
 
@@ -535,6 +544,8 @@ const Settings = () => {
         device_id: devId,
         ph_v7: toNumberOr(savingConfig.ph_v7, 2.5),
         ph_v4: toNumberOr(savingConfig.ph_v4, 1.428),
+        ph_v10: savingConfig.ph_v10 !== null && savingConfig.ph_v10 !== undefined && Number.isFinite(Number(savingConfig.ph_v10)) ? Number(savingConfig.ph_v10) : null,
+        ph_calibration_mode: savingConfig.ph_calibration_mode || '2-point',
         ec_factor: toNumberOr(savingConfig.ec_factor, 880.0),
         ec_offset: toNumberOr(savingConfig.ec_offset, 0.0),
         temp_offset: toNumberOr(savingConfig.temp_offset, 0.0),
@@ -1142,6 +1153,17 @@ const Settings = () => {
                     {adaptivePhases.recommend && (
                       <button
                         onClick={async () => {
+                          const currentDeviceId = appSettings.device_id || ctxDeviceId;
+                          const currentSettings = runtimeSettings || appSettings;
+                          try {
+                            if (currentDeviceId && currentSettings?.backend_url) {
+                              // Gọi api với null body để dọn dẹp bộ nhớ trên Backend
+                              await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', null, currentSettings);
+                            }
+                          } catch (e) {
+                            console.warn("Lỗi khi đóng phiên đo trên Server", e);
+                          }
+
                           const nextConfig = applyCalibrationToConfig();
                           if (nextConfig) await handleSave(nextConfig);
                         }}
@@ -1163,15 +1185,15 @@ const Settings = () => {
                             return;
                           }
 
-                          // GỌI FINISH ĐỂ XÓA SESSION TRÊN BACKEND TRƯỚC KHI ÁP DỤNG
                           const currentDeviceId = appSettings.device_id || ctxDeviceId;
                           const currentSettings = runtimeSettings || appSettings;
                           try {
                             if (currentDeviceId && currentSettings?.backend_url) {
+                              // Gọi api với null body để dọn dẹp bộ nhớ trên Backend
                               await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', null, currentSettings);
                             }
                           } catch (e) {
-                            console.warn("Failed to finish calibration session", e);
+                            console.warn("Lỗi khi đóng phiên đo trên Server", e);
                           }
 
                           const nextConfig = applyCalibrationToConfig();

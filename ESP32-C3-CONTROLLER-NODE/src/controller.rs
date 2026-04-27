@@ -43,6 +43,10 @@ pub enum SystemState {
     Monitoring,
     EmergencyStop(String),
     SystemFault(String),
+    SensorCalibration {
+        step: String,
+        finish_time: u64,
+    },
     WaterRefilling {
         target_level: f32,
         start_time: u64,
@@ -128,6 +132,7 @@ impl SystemState {
             SystemState::Monitoring => "Monitoring".to_string(),
             SystemState::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
             SystemState::SystemFault(reason) => format!("SystemFault:{}", reason),
+            SystemState::SensorCalibration { step, .. } => format!("SensorCalibration:{}", step),
             SystemState::WaterRefilling { .. } => "WaterRefilling".to_string(),
             SystemState::WaterDraining { .. } => "WaterDraining".to_string(),
             SystemState::DosingPumpA { .. } => "DosingPumpA".to_string(),
@@ -1048,6 +1053,7 @@ pub fn start_fsm_control_loop(
                     SystemState::Monitoring
                         | SystemState::SystemFault(_)
                         | SystemState::EmergencyStop(_)
+                        | SystemState::SensorCalibration { .. } // 🟢 BỎ QUA RESET NẾU ĐANG HIỆU CHUẨN
                         | SystemState::ManualMode // 🟢 KHÔNG RESET NẾU ĐANG Ở MANUAL
                         | SystemState::DosingCycleComplete // 🟢 KHÔNG RESET NẾU ĐANG BÁO COMPLETE
                 ) {
@@ -1130,11 +1136,35 @@ pub fn start_fsm_control_loop(
 
         let is_emergency_state = matches!(
             ctx.current_state,
-            SystemState::EmergencyStop(_) | SystemState::SystemFault(_)
+            SystemState::EmergencyStop(_)
+                | SystemState::SystemFault(_)
+                | SystemState::SensorCalibration { .. }
         );
 
         while let Ok(cmd) = cmd_rx.try_recv() {
             let action_lower = cmd.action.to_lowercase();
+
+            if action_lower == "enter_calibration" {
+                info!("🛠️ Bắt đầu chế độ Hiệu chuẩn Cảm biến! Khóa chéo an toàn.");
+                ctx.stop_all_pumps(pump_ctrl);
+                let step = cmd.target.clone().unwrap_or_else(|| "IDLE".to_string());
+                ctx.current_state = SystemState::SensorCalibration {
+                    step,
+                    finish_time: current_time_ms + 3600_000, // 1 hour timeout
+                };
+                force_sync = true;
+                continue;
+            }
+
+            if action_lower == "exit_calibration" {
+                if matches!(ctx.current_state, SystemState::SensorCalibration { .. }) {
+                    info!("✅ Thoát chế độ Hiệu chuẩn, quay về Monitoring.");
+                    ctx.current_state = SystemState::Monitoring;
+                    force_sync = true;
+                }
+                continue;
+            }
+
             if action_lower == "sync_status" {
                 force_sync = true;
                 continue;
@@ -1190,7 +1220,7 @@ pub fn start_fsm_control_loop(
             }
 
             if is_emergency_state && is_on && !is_force_on {
-                warn!("❌ BLOCKED: Không thể điều khiển {} bình thường vì hệ thống đang Lỗi / EmergencyStop. Vui lòng dùng FORCE.", pump_name);
+                warn!("❌ BLOCKED: Không thể điều khiển {} bình thường vì hệ thống đang Lỗi / Hiệu chuẩn / EmergencyStop. Vui lòng dùng FORCE.", pump_name);
                 continue;
             }
 
@@ -1325,6 +1355,13 @@ pub fn start_fsm_control_loop(
             | SystemState::ManualMode
             | SystemState::DosingCycleComplete => {
                 // Các state này do luồng ngoài xử lý, auto fsm không làm gì cả
+            }
+
+            SystemState::SensorCalibration { finish_time, .. } => {
+                if current_time_ms >= finish_time {
+                    warn!("⏱️ Timeout Hiệu chuẩn. Hệ thống sẽ trở lại Monitoring.");
+                    ctx.current_state = SystemState::Monitoring;
+                }
             }
 
             SystemState::SystemFault(ref reason) => {
@@ -2345,3 +2382,4 @@ pub fn start_fsm_control_loop(
         }
     }
 }
+

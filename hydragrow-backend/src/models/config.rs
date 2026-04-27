@@ -22,6 +22,8 @@ pub struct SensorCalibration {
     pub device_id: String,
     pub ph_v7: f32,
     pub ph_v4: f32,
+    pub ph_v10: Option<f32>,         // 🟢 THÊM MỚI
+    pub ph_calibration_mode: String, // 🟢 THÊM MỚI: "2-point" hoặc "3-point"
     pub ec_factor: f32,
     pub ec_offset: f32,
     pub temp_offset: f32,

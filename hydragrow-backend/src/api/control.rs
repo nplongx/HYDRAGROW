@@ -1,4 +1,5 @@
 use actix_web::{HttpResponse, Responder, web};
+use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -28,24 +29,24 @@ pub struct PumpControlParams {
     pub state: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
-struct MqttCommandPayload {
-    pub target: String,
-    pub action: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<MqttCommandParams>,
-}
+// #[derive(Debug, Serialize)]
+// struct MqttCommandPayload {
+//     pub target: String,
+//     pub action: String,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub params: Option<MqttCommandParams>,
+// }
 
-#[derive(Debug, Serialize)]
-struct MqttCommandParams {
-    pub pump_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration_sec: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pwm: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<bool>,
-}
+// #[derive(Debug, Serialize)]
+// struct MqttCommandParams {
+//     pub pump_id: String,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub duration_sec: Option<u64>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub pwm: Option<u32>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub state: Option<bool>,
+// }
 
 /// POST /api/devices/{device_id}/control
 #[instrument(skip(app_state, req))]

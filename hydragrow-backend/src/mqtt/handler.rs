@@ -217,6 +217,7 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
         }
     }
 
+    // snapshot cảm biến
     if let Ok(json_str) = serde_json::to_string(&sensor_data) {
         let mut states = app_state.device_states.write().await;
         states.insert(device_id.clone(), json_str);

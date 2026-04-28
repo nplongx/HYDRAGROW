@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub mod helper;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DeviceState {
@@ -66,4 +68,23 @@ pub struct AlertMessage {
     pub timestamp: u64,
     pub reason: Option<String>,
     pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MqttCommandPayload {
+    pub target: String,
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<MqttCommandParams>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MqttCommandParams {
+    pub pump_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_sec: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pwm: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<bool>,
 }

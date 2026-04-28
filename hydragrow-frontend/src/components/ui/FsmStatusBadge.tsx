@@ -43,6 +43,9 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
     case 'DosingPH': return renderBadge('default', 'Đang chỉnh pH');
     case 'StartingOsakaPump': return renderBadge('default', 'Khởi động bơm');
     case 'ActiveMixing': return renderBadge('default', 'Đang sục trộn');
+    case 'enter_calibration': return renderBadge('default', 'Đang hiệu chỉnh cảm biến');
+    case 'exit_calibration': return renderBadge('default', 'Đã hiệu chỉnh cảm biến');
+
     default: return renderBadge('default', rawState);
   }
 };

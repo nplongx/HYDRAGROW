@@ -1,6 +1,10 @@
-use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::time::Duration;
+use std::{cmp::Ordering, error};
+
+use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
+use rumqttc::QoS;
+use tracing::{error, info, instrument, warn};
 
 use actix_web::{HttpResponse, Responder, web};
 use chrono::Utc;
@@ -132,6 +136,18 @@ pub async fn start_ph_calibration(
     } else {
         "3-point"
     };
+
+    let command = MqttCommandPayload {
+        target: format!("PH_{}", mode_text),
+        action: "enter_calibration".to_string(),
+        params: None,
+    };
+
+    if let Err(e) = publish_command(&app_state, &device_id, &command).await {
+        error!("Lỗi gửi lệnh qua MQTT: {:?}", e);
+        return HttpResponse::InternalServerError()
+            .json(json!({"error": "Không thể gửi lệnh xuống thiết bị"}));
+    }
 
     HttpResponse::Ok().json(json!({
         "status": "success",
@@ -334,6 +350,18 @@ pub async fn finish_ph_calibration(
     let mut captured_points: Vec<PhCapturedPoint> = session.captured_points.into_values().collect();
     captured_points.sort_by_key(|p| p.point);
 
+    let command = MqttCommandPayload {
+        target: String::new(),
+        action: "exit_calibration".to_string(),
+        params: None,
+    };
+
+    if let Err(e) = publish_command(&app_state, &device_id, &command).await {
+        error!("Lỗi gửi lệnh qua MQTT: {:?}", e);
+        return HttpResponse::InternalServerError()
+            .json(json!({"error": "Không thể gửi lệnh xuống thiết bị"}));
+    }
+
     HttpResponse::Ok().json(json!({
         "status": "success",
         "data": FinishPhCalibrationResponse {
@@ -347,6 +375,22 @@ pub async fn finish_ph_calibration(
             captured_points,
         }
     }))
+}
+
+async fn publish_command(
+    app_state: &AppState,
+    device_id: &str,
+    payload: &MqttCommandPayload,
+) -> anyhow::Result<()> {
+    let topic = format!("AGITECH/{}/controller/command", device_id);
+    let payload_bytes = serde_json::to_vec(payload)?;
+
+    app_state
+        .mqtt_client
+        .publish(topic, QoS::AtLeastOnce, false, payload_bytes)
+        .await?;
+
+    Ok(())
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {

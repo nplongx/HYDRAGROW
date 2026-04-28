@@ -1053,9 +1053,9 @@ pub fn start_fsm_control_loop(
                     SystemState::Monitoring
                         | SystemState::SystemFault(_)
                         | SystemState::EmergencyStop(_)
-                        | SystemState::SensorCalibration { .. } // 🟢 BỎ QUA RESET NẾU ĐANG HIỆU CHUẨN
-                        | SystemState::ManualMode // 🟢 KHÔNG RESET NẾU ĐANG Ở MANUAL
-                        | SystemState::DosingCycleComplete // 🟢 KHÔNG RESET NẾU ĐANG BÁO COMPLETE
+                        | SystemState::SensorCalibration { .. }
+                        | SystemState::ManualMode
+                        | SystemState::DosingCycleComplete
                 ) {
                     info!("Chuyển sang chế độ MANUAL.");
                     ctx.stop_all_pumps(&mut pump_ctrl);
@@ -1064,7 +1064,7 @@ pub fn start_fsm_control_loop(
             }
         }
 
-        // 🟢 DosingCycleComplete: Tự động về Monitoring sau 2 giây
+        // DosingCycleComplete: Tự động về Monitoring sau 2 giây
         if let SystemState::DosingCycleComplete = ctx.current_state {
             std::thread::sleep(Duration::from_secs(2));
             ctx.current_state = SystemState::Monitoring;
@@ -2382,4 +2382,3 @@ pub fn start_fsm_control_loop(
         }
     }
 }
-

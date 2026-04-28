@@ -29,7 +29,7 @@ class MainActivity : TauriActivity() {
             // 2. Gửi thẳng Token lên Backend Actix bằng Kotlin (Chạy luồng ngầm)
             thread {
                 try {
-                    val url = URL("https://hydragrow-backend.onrender.com/api/notifications/register")
+                    val url = URL("https://hydragrow.onrender.com/api/notifications/register")
                     val conn = url.openConnection() as HttpURLConnection
                     conn.requestMethod = "POST"
                     conn.setRequestProperty("Content-Type", "application/json")

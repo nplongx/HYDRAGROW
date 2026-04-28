@@ -61,3 +61,5 @@ influxdb2-structmap = "0.2.0"
 yup-oauth2 = "8.3"
 
 uuid = { version = "1.0", features = ["v4"] }
+
+hydragrow-shared = { path = "../hydragrow-shared" }

@@ -33,3 +33,5 @@ chrono = "0.4.44"
 tauri-plugin-notification = "2"
 tauri-plugin-fs = "2.5.0"
 tauri-plugin-dialog = "2.7.0"
+
+hydragrow-shared = { path = "../../hydragrow-shared" }

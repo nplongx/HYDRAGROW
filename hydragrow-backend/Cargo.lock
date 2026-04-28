@@ -2112,6 +2112,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac 0.12.1",
+ "hydragrow-shared",
  "influxdb2",
  "influxdb2-structmap",
  "num-traits",
@@ -2130,6 +2131,14 @@ dependencies = [
  "uuid",
  "validator",
  "yup-oauth2",
+]
+
+[[package]]
+name = "hydragrow-shared"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

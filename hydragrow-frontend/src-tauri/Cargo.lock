@@ -1629,6 +1629,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "futures-util",
+ "hydragrow-shared",
  "serde",
  "serde_json",
  "tauri",
@@ -1641,6 +1642,14 @@ dependencies = [
  "tauri-plugin-store",
  "tokio",
  "tokio-tungstenite",
+]
+
+[[package]]
+name = "hydragrow-shared"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

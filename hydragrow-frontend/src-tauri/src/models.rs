@@ -10,44 +10,7 @@ pub struct AppSettings {
 }
 
 // ── Sensor & Relay Data ──────────────────────────────────────────────
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct PumpStatus {
-    pub pump_a: bool,
-    pub pump_b: bool,
-    pub ph_up: bool,
-    pub ph_down: bool,
-    pub osaka_pump: bool,
-    pub mist_valve: bool,
-    pub water_pump_in: bool,
-    pub water_pump_out: bool,
-    pub pump_a_pwm: Option<u32>,
-    pub pump_b_pwm: Option<u32>,
-    pub ph_up_pwm: Option<u32>,
-    pub ph_down_pwm: Option<u32>,
-    pub osaka_pwm: Option<u32>,
-    pub dosing_pulse_active: Option<bool>,
-    pub dosing_pulse_count: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SensorData {
-    pub device_id: String,
-    pub ec: f64,
-    pub ph: f64,
-    pub temp: f64,
-    pub water_level: f64,
-    pub ph_voltage_mv: Option<f64>,
-    pub is_continuous: Option<bool>,
-    pub err_water: Option<bool>,
-    pub err_temp: Option<bool>,
-    pub err_ph: Option<bool>,
-    pub err_ec: Option<bool>,
-    pub rssi: Option<i32>,
-    pub free_heap: Option<u32>,
-    pub uptime: Option<u32>,
-    pub pump_status: PumpStatus,
-    pub time: String,
-}
+pub use hydragrow_shared::{PumpStatus, SensorData};
 
 // ── Configurations (DB Entities) ─────────────────────────────────────
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -196,14 +159,7 @@ pub struct Esp32AggregatedConfig {
 }
 
 // ── WebSocket Payloads (Gửi sang React UI) ───────────────────────────
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AlertPayload {
-    pub device_id: String,
-    pub level: String, // "info" | "warning" | "critical" | "success"
-    pub title: String,
-    pub message: String,
-    pub timestamp: u64,
-}
+pub type AlertPayload = hydragrow_shared::AlertMessage;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StatusPayload {

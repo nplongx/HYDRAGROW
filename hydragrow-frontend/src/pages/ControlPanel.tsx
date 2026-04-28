@@ -386,7 +386,7 @@ const ControlPanel = () => {
   );
 
   return (
-    <div className="p-4 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32 relative min-h-screen">
+    <div className="app-page space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-32 relative">
 
       <div className="absolute top-0 right-0 w-[80%] h-64 bg-gradient-to-bl from-indigo-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
 

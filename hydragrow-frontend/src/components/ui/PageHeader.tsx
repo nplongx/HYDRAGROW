@@ -20,7 +20,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       <div className="page-header-main">
         {Icon && (
           <div className="page-header-icon">
-            <Icon size={22} className="text-emerald-400" />
+            <Icon size={22} className="text-slate-300" />
           </div>
         )}
         <div>

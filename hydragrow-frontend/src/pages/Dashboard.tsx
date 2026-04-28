@@ -102,7 +102,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="p-4 space-y-6 pb-32 relative min-h-screen">
+    <div className="app-page space-y-6 pb-32 relative">
       
       <div className="flex flex-col relative z-10">
         <div className="flex items-start justify-between mb-4">

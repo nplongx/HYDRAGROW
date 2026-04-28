@@ -1,43 +1,48 @@
 import React from 'react';
 
 export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
-  const rawState = state || "Monitoring";
+  const rawState = state || 'Monitoring';
 
-  // Hàm render giao diện cho thẻ Tag bằng Tailwind CSS
-  const renderBadge = (bgClass: string, textClass: string, content: string) => (
-    <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${bgClass} ${textClass}`}>
-      {content}
-    </span>
-  );
+  const renderBadge = (tone: 'default' | 'warn' | 'danger', content: string) => {
+    const toneClass = tone === 'danger'
+      ? 'bg-rose-500/10 border-rose-500/40 text-rose-300'
+      : tone === 'warn'
+        ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+        : 'bg-slate-800 border-slate-700 text-slate-200';
 
-  // Xử lý báo lỗi hệ thống có kèm lý do
-  if (rawState.startsWith("SystemFault:")) {
-    const reason = rawState.replace("SystemFault:", "");
-    return renderBadge("bg-red-500/20 border border-red-500/50", "text-red-400", `🚨 Lỗi: ${reason}`);
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${toneClass}`}>
+        {content}
+      </span>
+    );
+  };
+
+  if (rawState.startsWith('SystemFault:')) {
+    const reason = rawState.replace('SystemFault:', '');
+    return renderBadge('danger', `Lỗi: ${reason}`);
   }
 
-  // 🟢 MỚI: Xử lý Dừng Khẩn Cấp có kèm lý do (Khớp với code ESP32 mới)
-  if (rawState.startsWith("EmergencyStop:")) {
-    const reason = rawState.replace("EmergencyStop:", "");
-    return renderBadge("bg-red-600 border border-red-500 animate-pulse", "text-white", `🛑 DỪNG KHẨN CẤP: ${reason}`);
+  if (rawState.startsWith('EmergencyStop:')) {
+    const reason = rawState.replace('EmergencyStop:', '');
+    return renderBadge('danger', `Dừng khẩn cấp: ${reason}`);
   }
 
   switch (rawState) {
-    case "Monitoring": return renderBadge("bg-emerald-500/20 border border-emerald-500/50", "text-emerald-400", "🟢 Đang Giám Sát");
-    case "EmergencyStop": return renderBadge("bg-red-600 border border-red-500", "text-white", "🛑 DỪNG KHẨN CẤP"); // Fallback cho code cũ
-    case "WaterRefilling": return renderBadge("bg-blue-500/20 border border-blue-500/50", "text-blue-400", "💧 Đang Cấp Nước");
-    case "WaterDraining": return renderBadge("bg-cyan-500/20 border border-cyan-500/50", "text-cyan-400", "🌊 Đang Xả Nước");
-    case "DosingPumpA": return renderBadge("bg-orange-500/20 border border-orange-500/50", "text-orange-400", "🧪 Đang Châm Phân A");
-    case "WaitingBetweenDose": return renderBadge("bg-slate-500/20 border border-slate-500/50", "text-slate-300", "⏳ Chờ Hòa Tan");
-    case "DosingPumpB": return renderBadge("bg-orange-500/20 border border-orange-500/50", "text-orange-400", "🧪 Đang Châm Phân B");
-    case "DosingPH": return renderBadge("bg-purple-500/20 border border-purple-500/50", "text-purple-400", "⚖️ Đang Chỉnh pH");
-    case "StartingOsakaPump": return renderBadge("bg-indigo-500/20 border border-indigo-500/50", "text-indigo-400", "⚙️ Khởi Động Bơm");
-    case "ActiveMixing": return renderBadge("bg-sky-500/20 border border-sky-500/50", "text-sky-400", "🌪️ Đang Sục Trộn");
-    case "Stabilizing": return renderBadge("bg-yellow-500/20 border border-yellow-500/50", "text-yellow-400", "⚖️ Chờ Ổn Định");
-    case "Disconnected": return renderBadge("bg-red-500/20 border border-red-500/50", "text-red-500", "🔴 Mất Kết Nối");
-    case "Offline": return renderBadge("bg-slate-500/20 border border-slate-500/50", "text-slate-400", "🔌 Mất Kết Nối");
-
-    // Trường hợp không có trong từ điển (Fallback)
-    default: return renderBadge("bg-slate-700 border border-slate-600", "text-slate-300", rawState);
+    case 'Monitoring': return renderBadge('default', 'Đang giám sát');
+    case 'EmergencyStop': return renderBadge('danger', 'Dừng khẩn cấp');
+    case 'Disconnected':
+    case 'Offline':
+      return renderBadge('danger', 'Mất kết nối');
+    case 'Stabilizing':
+    case 'WaitingBetweenDose':
+      return renderBadge('warn', rawState === 'Stabilizing' ? 'Chờ ổn định' : 'Chờ hòa tan');
+    case 'WaterRefilling': return renderBadge('default', 'Đang cấp nước');
+    case 'WaterDraining': return renderBadge('default', 'Đang xả nước');
+    case 'DosingPumpA': return renderBadge('default', 'Đang châm phân A');
+    case 'DosingPumpB': return renderBadge('default', 'Đang châm phân B');
+    case 'DosingPH': return renderBadge('default', 'Đang chỉnh pH');
+    case 'StartingOsakaPump': return renderBadge('default', 'Khởi động bơm');
+    case 'ActiveMixing': return renderBadge('default', 'Đang sục trộn');
+    default: return renderBadge('default', rawState);
   }
 };

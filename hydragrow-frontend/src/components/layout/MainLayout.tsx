@@ -43,15 +43,13 @@ const MainLayout = () => {
       </main>
 
       <div
-        className={`fixed inset-0 bg-slate-950/65 z-40 transition-opacity duration-300 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
+        className={`fixed inset-0 bg-slate-950/70 z-40 transition-opacity duration-300 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsMenuOpen(false)}
       />
 
       <div
         ref={menuRef}
-        className={`fixed bottom-28 left-4 right-4 z-50 transition-all duration-300 ${isMenuOpen ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'
-          }`}
+        className={`fixed bottom-28 left-4 right-4 z-50 transition-all duration-300 ${isMenuOpen ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'}`}
       >
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3">
           <div className="grid grid-cols-1 gap-2">
@@ -61,12 +59,12 @@ const MainLayout = () => {
                 to={item.path}
                 className={({ isActive }) =>
                   `flex items-center gap-4 p-3.5 rounded-xl border transition-colors ${isActive
-                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                    : 'text-slate-300 border-transparent hover:bg-slate-800/80'
+                    ? 'bg-slate-800 text-slate-100 border-slate-600'
+                    : 'text-slate-300 border-transparent hover:bg-slate-800/70'
                   }`
                 }
               >
-                <div className="p-2 rounded-lg bg-slate-800/80 text-slate-300">
+                <div className="p-2 rounded-lg bg-slate-800 text-slate-300">
                   <item.icon size={20} />
                 </div>
                 <span className="text-sm font-semibold">{item.label}</span>
@@ -83,29 +81,24 @@ const MainLayout = () => {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `relative flex flex-col items-center justify-center flex-1 h-full transition-colors z-10 ${isActive ? 'text-emerald-300' : 'text-slate-400 hover:text-slate-200'
-                }`
+                `relative flex flex-col items-center justify-center flex-1 h-full transition-colors z-10 ${isActive ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200'}`
               }
             >
-              <item.icon
-                size={22}
-                strokeWidth={location.pathname === item.path ? 2.5 : 2}
-              />
+              <item.icon size={22} strokeWidth={location.pathname === item.path ? 2.5 : 2} />
               <span className={`text-[9px] mt-1 font-semibold tracking-tight uppercase ${location.pathname === item.path ? 'opacity-100' : 'opacity-0'}`}>
                 {item.label}
               </span>
               {location.pathname === item.path && (
-                <div className="absolute -bottom-0.5 w-7 h-0.5 bg-emerald-300 rounded-full" />
+                <div className="absolute -bottom-0.5 w-7 h-0.5 bg-slate-300 rounded-full" />
               )}
             </NavLink>
           ))}
 
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors z-10 ${isActiveMore || isMenuOpen ? 'text-emerald-300' : 'text-slate-400 hover:text-slate-200'
-              }`}
+            className={`relative flex flex-col items-center justify-center flex-1 h-full transition-colors z-10 ${isActiveMore || isMenuOpen ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200'}`}
           >
-            <div className={`p-1.5 rounded-full transition-transform duration-300 ${isMenuOpen ? 'rotate-90 bg-emerald-500 text-slate-950' : ''}`}>
+            <div className={`p-1.5 rounded-full transition-transform duration-300 ${isMenuOpen ? 'rotate-90 bg-slate-200 text-slate-900' : ''}`}>
               {isMenuOpen ? <X size={20} strokeWidth={3} /> : <MoreHorizontal size={22} strokeWidth={isActiveMore ? 2.5 : 2} />}
             </div>
             <span className={`text-[9px] mt-1 font-semibold uppercase ${isActiveMore || isMenuOpen ? 'opacity-100' : 'opacity-0'}`}>

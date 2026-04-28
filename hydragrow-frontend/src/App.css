@@ -1,27 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #34d399;
-  --color-accent: #93c5fd;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-surface: #090d14;
-  --color-surface-muted: #0f172a;
-  --color-border: #1e293b;
-  --color-text: #e2e8f0;
-  --color-text-muted: #94a3b8;
+  --color-primary: #cbd5e1;
+  --color-accent: #94a3b8;
+  --color-success: #a3a3a3;
+  --color-warning: #d4d4d4;
+  --color-error: #f87171;
+  --color-surface: #0b0f14;
+  --color-surface-muted: #111827;
+  --color-border: #1f2937;
+  --color-text: #e5e7eb;
+  --color-text-muted: #9ca3af;
 }
 
 :root {
   color: var(--color-text);
-  background-color: #05070d;
+  background-color: #030712;
 }
 
 body {
   margin: 0;
   color: var(--color-text);
-  background: #05070d;
+  background: #030712;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
 h1 {
@@ -70,7 +71,7 @@ p {
   }
 
   .ui-card {
-    @apply bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5;
+    @apply bg-slate-900/90 border border-slate-800 rounded-2xl p-4 md:p-5 shadow-sm;
   }
 
   .ui-form-row {
@@ -98,7 +99,7 @@ p {
   }
 
   .ui-input {
-    @apply w-full min-h-11 bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-1 transition-all;
+    @apply w-full min-h-11 bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-slate-600 transition-all;
   }
 
   .ui-btn-md {
@@ -118,7 +119,7 @@ p {
   }
 
   .ui-loading-spinner {
-    @apply inline-flex items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/10 p-2 text-emerald-300;
+    @apply inline-flex items-center justify-center rounded-full border border-slate-600 bg-slate-800 p-2 text-slate-300;
   }
 
   .ui-loading-message {
@@ -128,7 +129,7 @@ p {
 
 .toggle-checkbox {
   @apply appearance-none w-12 h-7 rounded-full relative cursor-pointer outline-none transition-colors duration-300;
-  background-color: color-mix(in srgb, var(--color-primary) 35%, #0f172a);
+  background-color: #334155;
 }
 
 .toggle-checkbox::before {
@@ -137,7 +138,7 @@ p {
 }
 
 .toggle-checkbox:checked {
-  background-color: var(--color-primary);
+  background-color: #64748b;
 }
 
 .toggle-checkbox:checked::before {

@@ -7,28 +7,26 @@ interface SensorBentoCardProps {
 }
 
 const themeClasses = {
-  blue: { text: 'text-blue-400', glow: 'bg-blue-500/10' },
-  fuchsia: { text: 'text-fuchsia-400', glow: 'bg-fuchsia-500/10' },
-  orange: { text: 'text-orange-400', glow: 'bg-orange-500/10' },
-  cyan: { text: 'text-cyan-400', glow: 'bg-cyan-500/10' },
-  rose: { text: 'text-rose-400', glow: 'bg-rose-500/10' }, // Đã thêm style cho màu rose
+  blue: { text: 'text-slate-300', accent: 'border-slate-700' },
+  fuchsia: { text: 'text-slate-300', accent: 'border-slate-700' },
+  orange: { text: 'text-slate-300', accent: 'border-slate-700' },
+  cyan: { text: 'text-slate-300', accent: 'border-slate-700' },
+  rose: { text: 'text-rose-300', accent: 'border-rose-500/40' },
 };
 
 export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({ title, value, unit, icon: Icon, theme }) => {
   const styles = themeClasses[theme];
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-col justify-between aspect-square relative overflow-hidden">
-      <div className={`flex items-center space-x-2 relative z-10 ${styles.text}`}>
-        <Icon size={20} />
+    <div className={`bg-slate-900 border ${styles.accent} rounded-2xl p-5 flex flex-col justify-between aspect-square`}>
+      <div className={`flex items-center space-x-2 ${styles.text}`}>
+        <Icon size={18} />
         <span className="font-semibold text-sm">{title}</span>
       </div>
-      <div className="relative z-10 mt-4">
-        <span className="text-4xl font-bold text-white">{value ?? '--'}</span>
-        {unit && <span className="text-slate-400 ml-1">{unit}</span>}
+      <div className="mt-4">
+        <span className="text-3xl font-semibold text-white">{value ?? '--'}</span>
+        {unit && <span className="text-slate-400 ml-1 text-sm">{unit}</span>}
       </div>
-      {/* Hiệu ứng phát sáng góc dưới */}
-      <div className={`absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-2xl ${styles.glow}`}></div>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Save, Target, ShieldAlert, Waves,
-  FlaskConical, Activity, Settings2, Power, Network, Zap, Clock
+  FlaskConical, Activity, Settings2, Power, Network, Zap, Clock, LockKeyhole
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
@@ -76,6 +76,9 @@ const Settings = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>('general');
 
+  // 🟢 TRẠNG THÁI CHẾ ĐỘ KỸ THUẬT VIÊN
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+
   const handleToggleSection = (id: string) => setOpenSection(openSection === id ? null : id);
 
   const [config, setConfig] = useState<any>({
@@ -137,6 +140,7 @@ const Settings = () => {
   const isCalibrationBlocked = !isSensorOnline || isPhError;
 
   const callApi = async (path: string, method: string = 'GET', body: any = null, currentSettings: any = appSettings, customTimeoutMs?: number) => {
+    // ... logic nguyên bản ...
     const url = `${currentSettings.backend_url}${path}`;
     const options: any = {
       method,
@@ -165,23 +169,15 @@ const Settings = () => {
 
   const normalizeVoltage = (payload: any): number | null => {
     if (!payload) return null;
-
-    // Ưu tiên đọc mV từ Rust trả về và chia 1000 chuyển thành Volts
     const mvVal = payload?.data?.mean_voltage_mv ?? payload?.mean_voltage_mv;
     if (mvVal !== undefined && mvVal !== null) {
       const num = Number(mvVal);
       if (Number.isFinite(num)) return num / 1000.0;
     }
-
-    // Đọc fallback nếu hệ thống cũ trả về thẳng Volts
     const vCandidates = [
-      payload.voltage,
-      payload.ph_voltage,
-      payload.raw_voltage,
-      payload?.data?.voltage,
-      payload?.data?.ph_voltage,
-      payload?.result?.voltage,
-      payload?.result?.ph_voltage
+      payload.voltage, payload.ph_voltage, payload.raw_voltage,
+      payload?.data?.voltage, payload?.data?.ph_voltage,
+      payload?.result?.voltage, payload?.result?.ph_voltage
     ];
     for (const value of vCandidates) {
       if (value === undefined || value === null) continue;
@@ -197,10 +193,11 @@ const Settings = () => {
       const numberValue = Number(value);
       if (Number.isFinite(numberValue)) return Math.max(0, Math.min(100, numberValue));
     }
-    return 0; // Trả về 0 nếu API không tính ra confidence
+    return 0;
   };
 
   const handleCapturePoint = async () => {
+    // ... logic nguyên bản ...
     if (!activePoint || isCalibrationBlocked || isCapturingPoint) return;
     const currentDeviceId = appSettings.device_id || ctxDeviceId;
     const currentSettings = runtimeSettings || appSettings;
@@ -221,7 +218,6 @@ const Settings = () => {
           currentSettings
         );
       } catch (error: any) {
-        console.error(error);
         toast.error(`Không thể bắt đầu phiên hiệu chuẩn. Vui lòng thử lại. Chi tiết: ${error.message}`);
         setIsCapturingPoint(false);
         return;
@@ -251,17 +247,13 @@ const Settings = () => {
       const captureRes = await callApi(
         `/api/devices/${currentDeviceId}/calibration/ph/capture`,
         'POST',
-        {
-          point: activePoint,
-          sample_target: targetSamples,
-          window_seconds: dynamicWindowSec
-        },
+        { point: activePoint, sample_target: targetSamples, window_seconds: dynamicWindowSec },
         currentSettings,
         requestTimeoutMs
       );
 
       const voltage = normalizeVoltage(captureRes);
-      if (voltage === null) throw new Error('Không nhận được giá trị điện áp từ API capture. Vui lòng thử lại.');
+      if (voltage === null) throw new Error('Không nhận được giá trị điện áp từ API capture.');
       const confidence = normalizeConfidence(captureRes);
 
       setCapturedPoints((prev) => ({
@@ -270,8 +262,7 @@ const Settings = () => {
       }));
       toast.success(`Đã ghi nhận điểm pH ${activePoint}.`);
     } catch (error) {
-      console.error(error);
-      toast.error(`Không thể đo điểm pH ${activePoint}. Vui lòng thử lại. Nếu vẫn lỗi, hãy kiểm tra đầu dò và kết nối máy chủ.`);
+      toast.error(`Không thể đo điểm pH ${activePoint}. Vui lòng thử lại.`);
     } finally {
       clearInterval(timer);
       setIsCapturingPoint(false);
@@ -324,9 +315,7 @@ const Settings = () => {
           confidence_threshold: Number(perDevice.confidence_threshold ?? prev.confidence_threshold)
         }));
       }
-    } catch (error) {
-      console.error('Không đọc được phase config từ localStorage', error);
-    }
+    } catch (error) { }
   }, [effectiveDeviceId]);
 
   const saveAdaptivePhases = (nextValue: any) => {
@@ -337,9 +326,7 @@ const Settings = () => {
       const all = raw ? JSON.parse(raw) : {};
       all[effectiveDeviceId] = nextValue;
       localStorage.setItem(phaseConfigStorageKey, JSON.stringify(all));
-    } catch (error) {
-      console.error('Không lưu được phase config vào localStorage', error);
-    }
+    } catch (error) { }
   };
 
   const hasSafetyWarningIn24h = systemEvents.some((ev: any) => {
@@ -386,7 +373,7 @@ const Settings = () => {
         try {
           settings = await invoke('load_settings');
           if (settings) setAppSettings(settings);
-        } catch (e) { console.error("Chưa load được store"); }
+        } catch (e) { }
 
         const currentDeviceId = settings?.device_id || appSettings.device_id;
         if (!currentDeviceId) return;
@@ -404,7 +391,6 @@ const Settings = () => {
           }));
         }
       } catch (error) {
-        console.error("Lỗi khi load cấu hình:", error);
       } finally {
         setIsLoading(false);
       }
@@ -587,7 +573,7 @@ const Settings = () => {
 
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[30%] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-      <div className="relative z-10 flex flex-col space-y-1 animate-in slide-in-from-top-4 duration-500 mb-8">
+      <div className="relative z-10 flex flex-col space-y-1 animate-in slide-in-from-top-4 duration-500 mb-4">
         <h1 className="text-3xl font-black flex items-center gap-3">
           <div className="p-2.5 bg-slate-800/50 backdrop-blur-md rounded-2xl border border-slate-700 shadow-[0_0_20px_rgba(148,163,184,0.15)]">
             <Settings2 size={24} className="text-slate-300" />
@@ -599,6 +585,20 @@ const Settings = () => {
         <p className="text-xs text-slate-400 ml-[52px] font-medium tracking-wide uppercase">
           Bạn có thể tùy chỉnh thông số vận hành tủ điện.
         </p>
+      </div>
+
+      {/* 🟢 TOGGLE CHẾ ĐỘ NÂNG CAO */}
+      <div className="flex items-center justify-between bg-slate-800/30 p-3 rounded-xl border border-slate-700/50 mb-6">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg transition-colors ${isAdvancedMode ? 'bg-rose-500/20' : 'bg-slate-700/50'}`}>
+            <LockKeyhole size={16} className={isAdvancedMode ? 'text-rose-400' : 'text-slate-500'} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-200">Chế độ Kỹ thuật viên (Nâng cao)</p>
+            <p className="text-[10px] text-slate-400">Hiển thị các thông số thuật toán, an toàn, và phần cứng.</p>
+          </div>
+        </div>
+        <Switch isOn={isAdvancedMode} onClick={setIsAdvancedMode} colorClass="bg-rose-500" />
       </div>
 
       <div className="space-y-4 relative z-10">
@@ -775,10 +775,8 @@ const Settings = () => {
             </div>
             {config.scheduled_water_change_enabled && (
               <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-2 bg-slate-900/50 p-4 rounded-xl border border-white/5 shadow-inner">
-                {/* Khu vực Nhập Cron thông minh */}
                 <div className="space-y-3 border border-slate-700/50 p-3 rounded-lg bg-slate-950/50">
                   <InputGroup type="text" label="Giờ thay nước (Chuỗi Cron)" value={config.water_change_cron} onChange={(e: InputEvent) => setConfig({ ...config, water_change_cron: e.target.value })} desc="Cú pháp: Phút Giờ Ngày Tháng Thứ" />
-
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Clock size={10} /> Chọn nhanh lịch:</span>
                     <div className="flex flex-wrap gap-2">
@@ -788,7 +786,6 @@ const Settings = () => {
                     </div>
                   </div>
                 </div>
-
                 <InputGroup label="Lượng xả đi mỗi lần (cm)" value={config.scheduled_drain_amount_cm} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_drain_amount_cm: e.target.value })} />
               </div>
             )}
@@ -797,35 +794,35 @@ const Settings = () => {
 
         {/* 4. ĐỊNH LƯỢNG */}
         <AccordionSection id="dosing" title="Máy Pha Phân & Hóa Chất" icon={FlaskConical} color="text-fuchsia-400" isOpen={openSection === 'dosing'} onToggle={() => handleToggleSection('dosing')}>
-          <SubCard title="Công Suất Bơm Vi Lượng (Chống giật tia)">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup
-                label="Tốc độ Bơm Phân (%)"
-                step="1"
-                min={1}
-                max={100}
-                value={config.dosing_pwm_percent}
-                onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })}
-                desc="Giảm tốc độ để châm phân từ từ, chính xác hơn."
-                errorText={dosingValidationErrors.dosing_pwm_percent}
-              />
-              <InputGroup label="Tốc độ Bơm Trộn (%)" step="1" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
-              <InputGroup label="Tốc độ Bơm Phun Sương (%)" step="1" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
-              <InputGroup label="Độ trễ khởi động bơm (ms)" step="100" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} desc="Bảo vệ nguồn điện tử, tránh sụt áp đột ngột." />
-            </div>
-          </SubCard>
+          {isAdvancedMode && (
+            <SubCard title="Công Suất Bơm Vi Lượng (Chống giật tia)">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup
+                  label="Tốc độ Bơm Phân (%)"
+                  step="1"
+                  min={1}
+                  max={100}
+                  value={config.dosing_pwm_percent}
+                  onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })}
+                  desc="Giảm tốc độ để châm phân từ từ, chính xác hơn."
+                  errorText={dosingValidationErrors.dosing_pwm_percent}
+                />
+                <InputGroup label="Tốc độ Bơm Trộn (%)" step="1" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
+                <InputGroup label="Tốc độ Bơm Phun Sương (%)" step="1" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
+                <InputGroup label="Độ trễ khởi động bơm (ms)" step="100" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} desc="Bảo vệ nguồn điện tử, tránh sụt áp đột ngột." />
+              </div>
+            </SubCard>
+          )}
 
-          <SubCard title="Châm Phân Bổ Sung Theo Giờ" className="mt-4">
+          <SubCard title="Châm Phân Bổ Sung Theo Giờ" className={isAdvancedMode ? "mt-4" : ""}>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold text-slate-300 tracking-wide uppercase">Bật lịch châm cứng</span>
               <Switch isOn={config.scheduled_dosing_enabled} onClick={(val) => setConfig({ ...config, scheduled_dosing_enabled: val })} colorClass="bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.4)]" />
             </div>
             {config.scheduled_dosing_enabled && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 bg-slate-900/50 p-4 rounded-xl border border-white/5 shadow-inner">
-                {/* Khu vực Nhập Cron thông minh */}
                 <div className="sm:col-span-2 space-y-3 border border-slate-700/50 p-3 rounded-lg bg-slate-950/50">
                   <InputGroup type="text" label="Lịch trình bơm (Chuỗi Cron)" value={config.scheduled_dosing_cron} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dosing_cron: e.target.value })} desc="Cú pháp: Phút Giờ Ngày Tháng Thứ" />
-
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Clock size={10} /> Chọn nhanh lịch:</span>
                     <div className="flex flex-wrap gap-2">
@@ -836,22 +833,8 @@ const Settings = () => {
                   </div>
                 </div>
 
-                <InputGroup
-                  label="Lượng Bơm A (ml)"
-                  step="0.5"
-                  min={0}
-                  value={config.scheduled_dose_a_ml}
-                  onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_a_ml: e.target.value })}
-                  errorText={dosingValidationErrors.scheduled_dose_a_ml}
-                />
-                <InputGroup
-                  label="Lượng Bơm B (ml)"
-                  step="0.5"
-                  min={0}
-                  value={config.scheduled_dose_b_ml}
-                  onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_b_ml: e.target.value })}
-                  errorText={dosingValidationErrors.scheduled_dose_b_ml}
-                />
+                <InputGroup label="Lượng Bơm A (ml)" step="0.5" min={0} value={config.scheduled_dose_a_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_a_ml: e.target.value })} errorText={dosingValidationErrors.scheduled_dose_a_ml} />
+                <InputGroup label="Lượng Bơm B (ml)" step="0.5" min={0} value={config.scheduled_dose_b_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_b_ml: e.target.value })} errorText={dosingValidationErrors.scheduled_dose_b_ml} />
               </div>
             )}
           </SubCard>
@@ -869,142 +852,150 @@ const Settings = () => {
             </div>
           </SubCard>
 
-          <SubCard title="Thuật Toán Châm & Lưu Lượng Thực Tế" className="mt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Thể tích bồn chứa (Lít)" value={config.tank_volume_l} onChange={(e: InputEvent) => setConfig({ ...config, tank_volume_l: e.target.value })} />
-              <InputGroup label="Thời gian chờ giữa Bơm A và B (Giây)" step="1" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} desc="Chống kết tủa Canxi và Photpho" />
+          {isAdvancedMode && (
+            <SubCard title="Thuật Toán Châm & Lưu Lượng Thực Tế" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="Thể tích bồn chứa (Lít)" value={config.tank_volume_l} onChange={(e: InputEvent) => setConfig({ ...config, tank_volume_l: e.target.value })} />
+                <InputGroup label="Thời gian chờ giữa Bơm A và B (Giây)" step="1" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} desc="Chống kết tủa Canxi và Photpho" />
 
-              <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Đo lường đầu dò bơm</span></div>
-              <InputGroup label="Lưu lượng Bơm A (ml/giây)" step="0.1" min={0.1} value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_a_capacity_ml_per_sec} />
-              <InputGroup label="Lưu lượng Bơm B (ml/giây)" step="0.1" min={0.1} value={config.pump_b_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_b_capacity_ml_per_sec} />
-              <InputGroup label="Lưu lượng Bơm pH Tăng (ml/giây)" step="0.1" min={0.1} value={config.pump_ph_up_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_up_capacity_ml_per_sec} />
-              <InputGroup label="Lưu lượng Bơm pH Giảm (ml/giây)" step="0.1" min={0.1} value={config.pump_ph_down_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_down_capacity_ml_per_sec} />
+                <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Đo lường đầu dò bơm</span></div>
+                <InputGroup label="Lưu lượng Bơm A (ml/giây)" step="0.1" min={0.1} value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_a_capacity_ml_per_sec} />
+                <InputGroup label="Lưu lượng Bơm B (ml/giây)" step="0.1" min={0.1} value={config.pump_b_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_b_capacity_ml_per_sec} />
+                <InputGroup label="Lưu lượng Bơm pH Tăng (ml/giây)" step="0.1" min={0.1} value={config.pump_ph_up_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_up_capacity_ml_per_sec} />
+                <InputGroup label="Lưu lượng Bơm pH Giảm (ml/giây)" step="0.1" min={0.1} value={config.pump_ph_down_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_down_capacity_ml_per_sec} />
 
-              <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Độ đậm đặc của dung dịch</span></div>
-              <InputGroup label="Mức tăng EC khi châm 1ml" step="0.01" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
-              <InputGroup label="Hệ số rải phân EC (0-1)" step="0.1" value={config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_step_ratio: e.target.value })} desc="Càng nhỏ máy sẽ châm càng từ từ, không bị quá tay." />
-              <InputGroup label="Mức tăng pH khi châm 1ml" step="0.01" value={config.ph_shift_up_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_up_per_ml: e.target.value })} />
-              <InputGroup label="Mức giảm pH khi châm 1ml" step="0.01" value={config.ph_shift_down_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_down_per_ml: e.target.value })} />
-              <div className="sm:col-span-2">
-                <InputGroup label="Hệ số rải hóa chất pH (0-1)" step="0.1" value={config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_step_ratio: e.target.value })} />
+                <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Độ đậm đặc của dung dịch</span></div>
+                <InputGroup label="Mức tăng EC khi châm 1ml" step="0.01" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
+                <InputGroup label="Hệ số rải phân EC (0-1)" step="0.1" value={config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_step_ratio: e.target.value })} desc="Càng nhỏ máy sẽ châm càng từ từ, không bị quá tay." />
+                <InputGroup label="Mức tăng pH khi châm 1ml" step="0.01" value={config.ph_shift_up_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_up_per_ml: e.target.value })} />
+                <InputGroup label="Mức giảm pH khi châm 1ml" step="0.01" value={config.ph_shift_down_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_down_per_ml: e.target.value })} />
+                <div className="sm:col-span-2">
+                  <InputGroup label="Hệ số rải hóa chất pH (0-1)" step="0.1" value={config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_step_ratio: e.target.value })} />
+                </div>
               </div>
-            </div>
-          </SubCard>
+            </SubCard>
+          )}
         </AccordionSection>
 
-        {/* 5. AN TOÀN */}
-        <AccordionSection id="safety" title="Bảo Vệ Chống Chập/Hư Máy" icon={ShieldAlert} color="text-amber-400" isOpen={openSection === 'safety'} onToggle={() => handleToggleSection('safety')}>
-          <SubCard title="Giới Hạn Báo Động (Còi Hú)" className="border-rose-500/20 bg-rose-500/5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Nhiệt độ báo động Lạnh (°C)" step="0.1" value={config.min_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_temp_limit: e.target.value })} />
-              <InputGroup label="Nhiệt độ báo động Nóng (°C)" step="0.1" value={config.max_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_temp_limit: e.target.value })} />
-              <InputGroup label="EC quá loãng (Báo động)" step="0.1" value={config.min_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ec_limit: e.target.value })} />
-              <InputGroup label="EC quá đặc (Báo động)" step="0.1" value={config.max_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_limit: e.target.value })} />
-              <InputGroup label="pH quá thấp (Báo động)" step="0.1" value={config.min_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ph_limit: e.target.value })} />
-              <InputGroup label="pH quá cao (Báo động)" step="0.1" value={config.max_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_limit: e.target.value })} />
-              <div className="sm:col-span-2">
-                <InputGroup label="Báo động hụt nước bồn (cm)" value={config.water_level_critical_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_critical_min: e.target.value })} desc="Tủ sẽ tự động ngắt điện mọi rơ-le để bảo vệ chống cháy máy bơm." />
+        {/* 5. AN TOÀN - CHỈ HIỆN KHI BẬT CHẾ ĐỘ NÂNG CAO */}
+        {isAdvancedMode && (
+          <AccordionSection id="safety" title="Bảo Vệ Chống Chập/Hư Máy" icon={ShieldAlert} color="text-amber-400" isOpen={openSection === 'safety'} onToggle={() => handleToggleSection('safety')}>
+            <SubCard title="Giới Hạn Báo Động (Còi Hú)" className="border-rose-500/20 bg-rose-500/5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="Nhiệt độ báo động Lạnh (°C)" step="0.1" value={config.min_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_temp_limit: e.target.value })} />
+                <InputGroup label="Nhiệt độ báo động Nóng (°C)" step="0.1" value={config.max_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_temp_limit: e.target.value })} />
+                <InputGroup label="EC quá loãng (Báo động)" step="0.1" value={config.min_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ec_limit: e.target.value })} />
+                <InputGroup label="EC quá đặc (Báo động)" step="0.1" value={config.max_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_limit: e.target.value })} />
+                <InputGroup label="pH quá thấp (Báo động)" step="0.1" value={config.min_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ph_limit: e.target.value })} />
+                <InputGroup label="pH quá cao (Báo động)" step="0.1" value={config.max_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_limit: e.target.value })} />
+                <div className="sm:col-span-2">
+                  <InputGroup label="Báo động hụt nước bồn (cm)" value={config.water_level_critical_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_critical_min: e.target.value })} desc="Tủ sẽ tự động ngắt điện mọi rơ-le để bảo vệ chống cháy máy bơm." />
+                </div>
               </div>
-            </div>
-          </SubCard>
+            </SubCard>
 
-          <SubCard title="Ngăn Bơm Chạy Quá Sức" className="mt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Giới hạn ml bơm mỗi lần" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
-              <InputGroup label="Giới hạn ml bơm trong 1 giờ" value={config.max_dose_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_hour: e.target.value })} />
-              <div className="sm:col-span-2">
-                <InputGroup label="Thời gian nghỉ để tản nhiệt bơm (Giây)" value={config.cooldown_sec} onChange={(e: InputEvent) => setConfig({ ...config, cooldown_sec: e.target.value })} />
+            <SubCard title="Ngăn Bơm Chạy Quá Sức" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="Giới hạn ml bơm mỗi lần" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
+                <InputGroup label="Giới hạn ml bơm trong 1 giờ" value={config.max_dose_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_hour: e.target.value })} />
+                <div className="sm:col-span-2">
+                  <InputGroup label="Thời gian nghỉ để tản nhiệt bơm (Giây)" value={config.cooldown_sec} onChange={(e: InputEvent) => setConfig({ ...config, cooldown_sec: e.target.value })} />
+                </div>
+
+                <div className="sm:col-span-2 pt-4 pb-1 border-t border-slate-800"><span className="text-xs text-amber-400 font-bold uppercase tracking-widest">Bộ lọc sốc tín hiệu (Chống nhiễu)</span></div>
+                <InputGroup label="Bỏ qua nhiễu EC nếu nhảy đột ngột (Δ)" step="0.1" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
+                <InputGroup label="Bỏ qua nhiễu pH nếu nhảy đột ngột (Δ)" step="0.1" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
+                <InputGroup label="Chênh lệch EC tối thiểu để bắt đầu châm" step="0.01" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
+                <InputGroup label="Chênh lệch pH tối thiểu để bắt đầu châm" step="0.01" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
+                <div className="sm:col-span-2">
+                  <InputGroup label="Chênh lệch Nước (%) tối thiểu để kích hoạt bơm" step="0.1" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} />
+                </div>
               </div>
+            </SubCard>
 
-              <div className="sm:col-span-2 pt-4 pb-1 border-t border-slate-800"><span className="text-xs text-amber-400 font-bold uppercase tracking-widest">Bộ lọc sốc tín hiệu (Chống nhiễu)</span></div>
-              <InputGroup label="Bỏ qua nhiễu EC nếu nhảy đột ngột (Δ)" step="0.1" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
-              <InputGroup label="Bỏ qua nhiễu pH nếu nhảy đột ngột (Δ)" step="0.1" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
-              <InputGroup label="Chênh lệch EC tối thiểu để bắt đầu châm" step="0.01" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
-              <InputGroup label="Chênh lệch pH tối thiểu để bắt đầu châm" step="0.01" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
-              <div className="sm:col-span-2">
-                <InputGroup label="Chênh lệch Nước (%) tối thiểu để kích hoạt bơm" step="0.1" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} />
+            <SubCard title="Bảo Vệ Máy Bơm Nước Chống Cháy" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="Số lần bơm nước lã tối đa / Giờ" value={config.max_refill_cycles_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_cycles_per_hour: e.target.value })} />
+                <InputGroup label="Thời gian chạy bơm rốn tối đa (Giây)" value={config.max_refill_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_duration_sec: e.target.value })} desc="Ngắt máy bơm nước lên nếu quá thời gian (chống kẹt hụt nước ngầm)" />
+                <InputGroup label="Số lần xả cặn tối đa / Giờ" value={config.max_drain_cycles_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_cycles_per_hour: e.target.value })} />
+                <InputGroup label="Thời gian chạy van xả tối đa (Giây)" value={config.max_drain_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_duration_sec: e.target.value })} />
               </div>
-            </div>
-          </SubCard>
-
-          <SubCard title="Bảo Vệ Máy Bơm Nước Chống Cháy" className="mt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Số lần bơm nước lã tối đa / Giờ" value={config.max_refill_cycles_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_cycles_per_hour: e.target.value })} />
-              <InputGroup label="Thời gian chạy bơm rốn tối đa (Giây)" value={config.max_refill_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_duration_sec: e.target.value })} desc="Ngắt máy bơm nước lên nếu quá thời gian (chống kẹt hụt nước ngầm)" />
-              <InputGroup label="Số lần xả cặn tối đa / Giờ" value={config.max_drain_cycles_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_cycles_per_hour: e.target.value })} />
-              <InputGroup label="Thời gian chạy van xả tối đa (Giây)" value={config.max_drain_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_duration_sec: e.target.value })} />
-            </div>
-          </SubCard>
-        </AccordionSection>
+            </SubCard>
+          </AccordionSection>
+        )}
 
         {/* 6. HIỆU CHUẨN ĐẦU DÒ */}
         <AccordionSection id="sensor" title="Cảm Biến & Cân Chỉnh (Calib)" icon={Activity} color="text-indigo-400" isOpen={openSection === 'sensor'} onToggle={() => handleToggleSection('sensor')}>
-          <SubCard title="Truyền Thông App & Hiển Thị" className="mb-4">
-            <div className="space-y-5">
-              <div>
-                <label className="text-xs font-bold text-slate-300 tracking-wide uppercase mb-2 block">
-                  Bao lâu cập nhật số liệu lên App 1 lần?
-                </label>
-                <select
-                  className="w-full bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all hover:border-slate-600"
-                  value={config.publish_interval}
-                  onChange={(e: InputEvent) => setConfig({ ...config, publish_interval: parseInt(e.target.value) })}
-                >
-                  <option value={1000}>Tức thời (1 Giây / Lần)</option>
-                  <option value={5000}>Bình thường (5 Giây / Lần)</option>
-                  <option value={10000}>Tiết kiệm (10 Giây / Lần)</option>
-                  <option value={60000}>Ít dùng (60 Giây / Lần)</option>
-                </select>
-              </div>
+          {isAdvancedMode && (
+            <>
+              <SubCard title="Truyền Thông App & Hiển Thị" className="mb-4">
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 tracking-wide uppercase mb-2 block">
+                      Bao lâu cập nhật số liệu lên App 1 lần?
+                    </label>
+                    <select
+                      className="w-full bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none transition-all hover:border-slate-600"
+                      value={config.publish_interval}
+                      onChange={(e: InputEvent) => setConfig({ ...config, publish_interval: parseInt(e.target.value) })}
+                    >
+                      <option value={1000}>Tức thời (1 Giây / Lần)</option>
+                      <option value={5000}>Bình thường (5 Giây / Lần)</option>
+                      <option value={10000}>Tiết kiệm (10 Giây / Lần)</option>
+                      <option value={60000}>Ít dùng (60 Giây / Lần)</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-300 tracking-wide uppercase mb-2 block">
-                  Mức độ làm mượt đường đồ thị (Lọc nhiễu cảm biến)
-                </label>
-                <div className="flex space-x-2 bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/50 shadow-inner">
-                  <button
-                    onClick={() => setConfig({ ...config, moving_average_window: 5 })}
-                    className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-widest transition-all ${config.moving_average_window <= 5 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
-                  >
-                    NHANH (Dễ giật)
-                  </button>
-                  <button
-                    onClick={() => setConfig({ ...config, moving_average_window: 15 })}
-                    className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-widest transition-all ${config.moving_average_window > 5 && config.moving_average_window <= 20 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
-                  >
-                    CÂN BẰNG
-                  </button>
-                  <button
-                    onClick={() => setConfig({ ...config, moving_average_window: 50 })}
-                    className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-widest transition-all ${config.moving_average_window > 20 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
-                  >
-                    MƯỢT (Trễ số)
-                  </button>
+                  <div>
+                    <label className="text-xs font-bold text-slate-300 tracking-wide uppercase mb-2 block">
+                      Mức độ làm mượt đường đồ thị (Lọc nhiễu cảm biến)
+                    </label>
+                    <div className="flex space-x-2 bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/50 shadow-inner">
+                      <button
+                        onClick={() => setConfig({ ...config, moving_average_window: 5 })}
+                        className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-widest transition-all ${config.moving_average_window <= 5 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
+                      >
+                        NHANH (Dễ giật)
+                      </button>
+                      <button
+                        onClick={() => setConfig({ ...config, moving_average_window: 15 })}
+                        className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-widest transition-all ${config.moving_average_window > 5 && config.moving_average_window <= 20 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
+                      >
+                        CÂN BẰNG
+                      </button>
+                      <button
+                        onClick={() => setConfig({ ...config, moving_average_window: 50 })}
+                        className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-widest transition-all ${config.moving_average_window > 20 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}`}
+                      >
+                        MƯỢT (Trễ số)
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </SubCard>
+              </SubCard>
 
-          <SubCard title="Đọc Tín Hiệu Các Đầu Dò" className="mb-4 bg-indigo-900/20 border-indigo-500/20">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu pH</span>
-                <Switch isOn={config.enable_ph_sensor} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Dinh dưỡng (EC)</span>
-                <Switch isOn={config.enable_ec_sensor} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Nhiệt độ nước</span>
-                <Switch isOn={config.enable_temp_sensor} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Radar Mực nước</span>
-                <Switch isOn={config.enable_water_level_sensor} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-              </div>
-            </div>
-          </SubCard>
+              <SubCard title="Đọc Tín Hiệu Các Đầu Dò" className="mb-4 bg-indigo-900/20 border-indigo-500/20">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu pH</span>
+                    <Switch isOn={config.enable_ph_sensor} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Dinh dưỡng (EC)</span>
+                    <Switch isOn={config.enable_ec_sensor} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Nhiệt độ nước</span>
+                    <Switch isOn={config.enable_temp_sensor} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-300">Nhận tín hiệu Radar Mực nước</span>
+                    <Switch isOn={config.enable_water_level_sensor} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} colorClass="bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                  </div>
+                </div>
+              </SubCard>
+            </>
+          )}
 
           <SubCard title="Wizard cân chỉnh đầu dò pH">
             <div className="space-y-4">
@@ -1038,36 +1029,39 @@ const Settings = () => {
                 </button>
               </div>
 
-              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
-                <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Pha triển khai hệ số (theo device_id)</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-200">Pha 1 - Observe (thu mẫu + tính hệ số đề xuất)</span>
-                    <Switch isOn={adaptivePhases.observe} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, observe: val })} colorClass="bg-cyan-500" />
+              {/* 🟢 TÍNH NĂNG ADAPTIVE CALIBRATION - CHỈ HIỆN THÔNG TIN CƠ BẢN NẾU KHÔNG Ở CHẾ ĐỘ NÂNG CAO */}
+              {isAdvancedMode ? (
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+                  <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Pha triển khai hệ số (theo device_id)</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-200">Pha 1 - Observe (thu mẫu + tính hệ số đề xuất)</span>
+                      <Switch isOn={adaptivePhases.observe} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, observe: val })} colorClass="bg-cyan-500" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-200">Pha 2 - Recommend (so sánh hệ số cũ/mới + xác nhận tay)</span>
+                      <Switch isOn={adaptivePhases.recommend} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, recommend: val })} colorClass="bg-cyan-500" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-200">Pha 3 - Auto Apply (tự áp dụng nếu đủ điều kiện)</span>
+                      <Switch isOn={adaptivePhases.auto_apply} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, auto_apply: val })} colorClass="bg-cyan-500" />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-200">Pha 2 - Recommend (so sánh hệ số cũ/mới + xác nhận tay)</span>
-                    <Switch isOn={adaptivePhases.recommend} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, recommend: val })} colorClass="bg-cyan-500" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-200">Pha 3 - Auto Apply (tự áp dụng nếu đủ điều kiện)</span>
-                    <Switch isOn={adaptivePhases.auto_apply} onClick={(val) => saveAdaptivePhases({ ...adaptivePhases, auto_apply: val })} colorClass="bg-cyan-500" />
-                  </div>
+                  <InputGroup
+                    label="Ngưỡng confidence cho auto-apply (%)"
+                    type="number"
+                    step="1"
+                    value={adaptivePhases.confidence_threshold}
+                    onChange={(e: InputEvent) => saveAdaptivePhases({
+                      ...adaptivePhases,
+                      confidence_threshold: Math.max(0, Math.min(100, Number(e.target.value || 0)))
+                    })}
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Cấu hình này được lưu cục bộ theo <b>device_id = {effectiveDeviceId || '--'}</b>.
+                  </p>
                 </div>
-                <InputGroup
-                  label="Ngưỡng confidence cho auto-apply (%)"
-                  type="number"
-                  step="1"
-                  value={adaptivePhases.confidence_threshold}
-                  onChange={(e: InputEvent) => saveAdaptivePhases({
-                    ...adaptivePhases,
-                    confidence_threshold: Math.max(0, Math.min(100, Number(e.target.value || 0)))
-                  })}
-                />
-                <p className="text-[11px] text-slate-400">
-                  Cấu hình này được lưu cục bộ theo <b>device_id = {effectiveDeviceId || '--'}</b>.
-                </p>
-              </div>
+              ) : null}
 
               {isCalibrationBlocked && (
                 <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-100">
@@ -1138,10 +1132,13 @@ const Settings = () => {
                   {calibrationSummary.ph_v10 !== null && (
                     <p className="text-xs text-slate-300">Điểm mở rộng pH 10: <b>{calibrationSummary.ph_v10}V</b> (dùng để đánh giá tuyến tính).</p>
                   )}
-                  <div className="rounded-lg bg-slate-900/50 border border-white/10 p-3 text-xs text-slate-200 space-y-2">
-                    <p className="font-bold text-amber-300">Sai lệch so với hệ số cũ:</p>
-                    <p>Δ ph_v7: <b>{calibrationDeviation.ph_v7 ?? '--'} V</b> · Δ ph_v4: <b>{calibrationDeviation.ph_v4 ?? '--'} V</b></p>
-                  </div>
+
+                  {isAdvancedMode && (
+                    <div className="rounded-lg bg-slate-900/50 border border-white/10 p-3 text-xs text-slate-200 space-y-2">
+                      <p className="font-bold text-amber-300">Sai lệch so với hệ số cũ:</p>
+                      <p>Δ ph_v7: <b>{calibrationDeviation.ph_v7 ?? '--'} V</b> · Δ ph_v4: <b>{calibrationDeviation.ph_v4 ?? '--'} V</b></p>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap gap-2">
                     {adaptivePhases.observe && (
@@ -1150,14 +1147,13 @@ const Settings = () => {
                       </div>
                     )}
 
-                    {adaptivePhases.recommend && (
+                    {(adaptivePhases.recommend || !isAdvancedMode) && (
                       <button
                         onClick={async () => {
                           const currentDeviceId = appSettings.device_id || ctxDeviceId;
                           const currentSettings = runtimeSettings || appSettings;
                           try {
                             if (currentDeviceId && currentSettings?.backend_url) {
-                              // Gọi api với null body để dọn dẹp bộ nhớ trên Backend
                               await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', null, currentSettings);
                             }
                           } catch (e) {
@@ -1169,11 +1165,11 @@ const Settings = () => {
                         }}
                         className="px-4 py-2 rounded-lg text-xs font-black tracking-widest bg-amber-400 text-slate-950"
                       >
-                        Pha 2: XÁC NHẬN Thủ công & LƯU
+                        {isAdvancedMode ? 'Pha 2: XÁC NHẬN Thủ công & LƯU' : 'XÁC NHẬN & LƯU'}
                       </button>
                     )}
 
-                    {adaptivePhases.auto_apply && (
+                    {adaptivePhases.auto_apply && isAdvancedMode && (
                       <button
                         onClick={async () => {
                           if (adaptivePhases.confidence_threshold && calibrationSummary.reliability < adaptivePhases.confidence_threshold) {
@@ -1189,7 +1185,6 @@ const Settings = () => {
                           const currentSettings = runtimeSettings || appSettings;
                           try {
                             if (currentDeviceId && currentSettings?.backend_url) {
-                              // Gọi api với null body để dọn dẹp bộ nhớ trên Backend
                               await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', null, currentSettings);
                             }
                           } catch (e) {
@@ -1210,14 +1205,17 @@ const Settings = () => {
             </div>
           </SubCard>
 
-          <SubCard title="Thông Số Calib Analog (khác)">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Hệ số nhân EC (K Factor)" step="1.0" value={config.ec_factor} onChange={(e: InputEvent) => setConfig({ ...config, ec_factor: e.target.value })} />
-              <InputGroup label="Bù trừ sai số EC tĩnh (Offset)" step="0.1" value={config.ec_offset} onChange={(e: InputEvent) => setConfig({ ...config, ec_offset: e.target.value })} />
-              <InputGroup label="Bù sai số Nhiệt độ đo được (Offset)" step="0.1" value={config.temp_offset} onChange={(e: InputEvent) => setConfig({ ...config, temp_offset: e.target.value })} />
-              <InputGroup label="Hệ số bù Nhiệt cho EC (Beta)" step="0.01" value={config.temp_compensation_beta} onChange={(e: InputEvent) => setConfig({ ...config, temp_compensation_beta: e.target.value })} />
-            </div>
-          </SubCard>
+          {/* CHỈ HIỆN NẾU Ở CHẾ ĐỘ NÂNG CAO */}
+          {isAdvancedMode && (
+            <SubCard title="Thông Số Calib Analog (khác)" className="mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputGroup label="Hệ số nhân EC (K Factor)" step="1.0" value={config.ec_factor} onChange={(e: InputEvent) => setConfig({ ...config, ec_factor: e.target.value })} />
+                <InputGroup label="Bù trừ sai số EC tĩnh (Offset)" step="0.1" value={config.ec_offset} onChange={(e: InputEvent) => setConfig({ ...config, ec_offset: e.target.value })} />
+                <InputGroup label="Bù sai số Nhiệt độ đo được (Offset)" step="0.1" value={config.temp_offset} onChange={(e: InputEvent) => setConfig({ ...config, temp_offset: e.target.value })} />
+                <InputGroup label="Hệ số bù Nhiệt cho EC (Beta)" step="0.01" value={config.temp_compensation_beta} onChange={(e: InputEvent) => setConfig({ ...config, temp_compensation_beta: e.target.value })} />
+              </div>
+            </SubCard>
+          )}
         </AccordionSection>
       </div>
 

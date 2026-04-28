@@ -30,17 +30,9 @@ pub struct SensorCalibration {
     pub temp_compensation_beta: f32,
     pub publish_interval: i32,
     pub moving_average_window: i32,
-    #[sqlx(rename = "enable_ph_sensor")]
-    #[serde(alias = "is_ph_enabled")]
     pub enable_ph_sensor: bool,
-    #[sqlx(rename = "enable_ec_sensor")]
-    #[serde(alias = "is_ec_enabled")]
     pub enable_ec_sensor: bool,
-    #[sqlx(rename = "enable_temp_sensor")]
-    #[serde(alias = "is_temp_enabled")]
     pub enable_temp_sensor: bool,
-    #[sqlx(rename = "enable_water_level_sensor")]
-    #[serde(alias = "is_water_level_enabled")]
     pub enable_water_level_sensor: bool,
     pub last_calibrated: DateTime<Utc>,
 }

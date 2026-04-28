@@ -207,7 +207,7 @@ impl Default for DeviceConfig {
             high_temp_misting_off_duration_ms: 60000,
 
             scheduled_dosing_enabled: false,
-            scheduled_dosing_cron: "0 0 8 * * *".to_string(), 
+            scheduled_dosing_cron: "0 0 8 * * *".to_string(),
             scheduled_dose_a_ml: 10.0,
             scheduled_dose_b_ml: 10.0,
         }

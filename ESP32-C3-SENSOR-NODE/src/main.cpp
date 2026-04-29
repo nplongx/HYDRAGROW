@@ -30,8 +30,13 @@ PubSubClient client(espClient);
 OneWire oneWire(PIN_DS18B20);
 DallasTemperature sensors(&oneWire);
 
+// ==========================================
 // Cấu hình vật lý & Cảm biến
-float ph_v686 = 2650.0, ph_v4 = 3555.0;
+// ==========================================
+// 🟢 THÊM MỚI: Biến lưu điểm hiệu chuẩn thứ 3 và chế độ hiệu chuẩn
+float ph_v686 = 2650.0, ph_v4 = 3555.0, ph_v918 = 1750.0;
+String ph_calibration_mode = "2-point";
+
 float ec_factor = 0.88, ec_offset = 0.0;
 float temp_offset = 0.0;
 
@@ -90,7 +95,6 @@ public:
   void setDelta(float _delta) { delta_max = _delta; }
 
   float update(float x_t) {
-    // Khởi tạo ngay mốc dữ liệu ban đầu
     if (!initialized || isnan(x_t)) {
       if (!isnan(x_t)) {
         X_prev = x_t;
@@ -102,24 +106,19 @@ public:
 
     float X_t = x_t;
 
-    // --- LỚP 1: LOẠI BỎ DỊ BIỆT (OUTLIER REJECTION) ---
     if (abs(x_t - X_prev) > delta_max) {
       error_streak++;
       if (error_streak > 5) {
-        // Cơ chế chống đóng băng: Thay đổi thực tế chứ không phải nhiễu
-        X_prev = x_t; // Tái đồng bộ mốc xác nhận
+        X_prev = x_t;
         error_streak = 0;
       } else {
-        // Nhiễu gai: Bỏ qua x_t, giữ nguyên giá trị xác nhận cũ đưa vào Lớp 2
         X_t = X_prev;
       }
     } else {
-      // Tín hiệu hợp lệ, cập nhật mốc
       X_prev = x_t;
       error_streak = 0;
     }
 
-    // --- LỚP 2: BỘ LỌC IIR BẬC 1 (EMA) KHỬ NHIỄU TRẮNG ---
     float Y_t = (alpha * X_t) + ((1.0 - alpha) * Y_prev);
     Y_prev = Y_t;
 
@@ -127,14 +126,11 @@ public:
   }
 };
 
-// Khởi tạo các bộ lọc với Delta và Alpha (Learning Rate) phù hợp
-// Alpha = 2 / (Window + 1). Ví dụ: Window 15 -> Alpha ~ 0.125
-HybridFilter tempFilter(5.0, 0.125);   // Lệch max 5°C mỗi 200ms
-HybridFilter waterFilter(20.0, 0.125); // Lệch max 20cm mỗi 200ms
-HybridFilter phFilter(1.5, 0.125);     // Lệch max 1.5 pH mỗi 200ms
-HybridFilter ecFilter(1.0, 0.125);     // Lệch max 1.0 mS/cm mỗi 200ms
+HybridFilter tempFilter(5.0, 0.125);
+HybridFilter waterFilter(20.0, 0.125);
+HybridFilter phFilter(1.5, 0.125);
+HybridFilter ecFilter(1.0, 0.125);
 
-// Lọc trung vị ADC phần cứng (Giữ nguyên để khử nhiễu tần số rất cao)
 int read_adc_filtered(int pin) {
   int buffer[10];
   for (int i = 0; i < 10; i++) {
@@ -173,17 +169,45 @@ float readWaterLevel() {
   return (water_level < 0) ? 0 : water_level;
 }
 
+// 🟢 CẬP NHẬT: Tính toán pH với thuật toán 3-point (Nội suy tuyến tính từng
+// phần)
 float calculate_ph(float voltage_mv, float current_temp) {
-  float diff = ph_v4 - ph_v686; // Đã đổi tên biến ph_v7 thành ph_v686
-  float slope =
-      (abs(diff) < 0.1) ? -0.006 : ((4.0 - 6.86) / diff); // Đổi 7.0 thành 6.86
+  float slope;
+  float base_ph;
+  float base_v;
 
+  if (ph_calibration_mode == "3-point") {
+    // Điện áp cảm biến pH tỉ lệ nghịch với nồng độ pH.
+    // V > V_686 nghĩa là pH < 6.86 (Vùng Acid)
+    if (voltage_mv > ph_v686) {
+      float diff = ph_v4 - ph_v686;
+      slope = (abs(diff) < 0.1) ? -0.006 : ((4.0 - 6.86) / diff);
+      base_ph = 6.86;
+      base_v = ph_v686;
+    }
+    // V <= V_686 nghĩa là pH >= 6.86 (Vùng Bazơ)
+    else {
+      float diff = ph_v686 - ph_v918;
+      slope = (abs(diff) < 0.1) ? -0.006 : ((6.86 - 9.18) / diff);
+      base_ph = 9.18;
+      base_v = ph_v918;
+    }
+  } else {
+    // Mặc định 2-point (Giữ nguyên logic cũ dùng mốc 4.0 và 6.86)
+    float diff = ph_v4 - ph_v686;
+    slope = (abs(diff) < 0.1) ? -0.006 : ((4.0 - 6.86) / diff);
+    base_ph = 6.86;
+    base_v = ph_v686;
+  }
+
+  // Bù trừ nhiệt độ cho hệ số góc (Nernst equation compensation)
   if (enable_ph_tc) {
     float temp_ratio = (current_temp + 273.15) / (25.0 + 273.15);
     slope = slope / temp_ratio;
   }
-  float ph_result = constrain(6.86 + slope * (voltage_mv - ph_v686), 0.0,
-                              14.0); // Đổi 7.0 thành 6.86
+
+  float ph_result =
+      constrain(base_ph + slope * (voltage_mv - base_v), 0.0, 14.0);
   return ph_result;
 }
 
@@ -228,10 +252,24 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (deserializeJson(doc, message))
       return;
 
+    // 🟢 CẬP NHẬT: Parse các thông số từ server xuống (Dành cho bản 3-point)
+    if (doc.containsKey("ph_calibration_mode"))
+      ph_calibration_mode = doc["ph_calibration_mode"].as<String>();
+
+    // Ánh xạ `ph_v7` từ db backend thành ph_v686 ở vi điều khiển cho khớp chuẩn
+    // dung dịch
     if (doc.containsKey("ph_v7"))
       ph_v686 = doc["ph_v7"].as<float>();
     if (doc.containsKey("ph_v4"))
       ph_v4 = doc["ph_v4"].as<float>();
+
+    // Tương thích với key `ph_v10` từ Backend Actix-Web gửi xuống (dù dung dịch
+    // thực tế là 9.18)
+    if (doc.containsKey("ph_v10"))
+      ph_v918 = doc["ph_v10"].as<float>();
+    else if (doc.containsKey("ph_v918"))
+      ph_v918 = doc["ph_v918"].as<float>();
+
     if (doc.containsKey("ec_factor"))
       ec_factor = doc["ec_factor"].as<float>();
     if (doc.containsKey("ec_offset"))
@@ -241,10 +279,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (doc.containsKey("tank_height"))
       tank_height = doc["tank_height"].as<float>();
 
-    // Chuyển đổi linh hoạt từ hệ Moving Average Window sang Alpha của hệ EMA
     if (doc.containsKey("moving_average_window")) {
       int window = constrain(doc["moving_average_window"].as<int>(), 1, 100);
-      float new_alpha = 2.0 / (window + 1.0); // Chuyển đổi tương đương
+      float new_alpha = 2.0 / (window + 1.0);
       tempFilter.setAlpha(new_alpha);
       waterFilter.setAlpha(new_alpha);
       phFilter.setAlpha(new_alpha);

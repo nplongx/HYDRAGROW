@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
@@ -160,10 +160,11 @@ const Analytics = () => {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
-  const allSeasonsRef = useRef(allSeasons);
-  useEffect(() => {
-    allSeasonsRef.current = allSeasons;
-  }, [allSeasons]);
+  // 1. Dùng useMemo để tìm trực tiếp season được chọn thay vì dùng Ref (đảm bảo React tracking đúng deps)
+  const selectedSeason = useMemo(() => {
+    if (selectedSeasonId === 'realtime') return null;
+    return allSeasons.find(s => s.id.toString() === selectedSeasonId);
+  }, [allSeasons, selectedSeasonId]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -174,12 +175,14 @@ const Analytics = () => {
       let end = new Date().toISOString();
 
       if (selectedSeasonId !== 'realtime') {
-        const season = allSeasonsRef.current.find(s => s.id.toString() === selectedSeasonId);
-        if (season) {
-          start = season.start_time;
-          end = season.end_time || new Date().toISOString();
+        if (selectedSeason) {
+          // Chuẩn hóa thành ISOString để đảm bảo Backend Rust luôn parse thành công
+          start = new Date(selectedSeason.start_time).toISOString();
+          end = selectedSeason.end_time ? new Date(selectedSeason.end_time).toISOString() : new Date().toISOString();
         } else {
-          start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          // Chưa load kịp mùa vụ thì ngưng fetch để tránh rác dữ liệu
+          setIsFetching(false);
+          return;
         }
       } else {
         const now = Date.now();
@@ -188,7 +191,8 @@ const Analytics = () => {
       }
 
       try {
-        const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/history?start=${start}&end=${end}`;
+        // 2. BẮT BUỘC dùng encodeURIComponent để tránh lỗi các ký tự '+' hoặc khoảng trắng
+        const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         const response = await fetch(url, { method: 'GET', headers: { 'X-API-Key': settings.api_key } });
 
         if (response.ok) {
@@ -201,18 +205,24 @@ const Analytics = () => {
                 ...d,
                 timestamp: dateObj.getTime(),
                 fullTime: dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                // Hiển thị đẹp hơn ở XAxis: Kèm theo giờ/phút nếu xem theo mùa vụ (tránh trùng lặp ngày)
                 time: selectedSeasonId === 'realtime' && timeRange === '24h'
                   ? dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                  : dateObj.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+                  : dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
               };
             });
             setHistoryData(formatted);
           } else {
             setHistoryData([]);
           }
+        } else {
+          // 3. Clear data cũ nếu Server báo lỗi (tránh việc giữ lại data của realtime)
+          console.error("Lỗi từ server:", await response.text());
+          setHistoryData([]);
         }
       } catch (error) {
         console.error("Lỗi fetch lịch sử:", error);
+        setHistoryData([]);
       } finally {
         setIsFetching(false);
       }
@@ -223,7 +233,8 @@ const Analytics = () => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [selectedSeasonId, timeRange, deviceId, settings?.backend_url, settings?.api_key]);
+    // Đưa selectedSeason vào dependency để tự động chạy lại khi mùa vụ tải xong
+  }, [selectedSeasonId, timeRange, deviceId, settings?.backend_url, settings?.api_key, selectedSeason]);
 
   // Tính toán khoảng cách (giây) đang được áp dụng
   const effectiveIntervalMs = useMemo(() => {

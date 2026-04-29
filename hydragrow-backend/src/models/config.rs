@@ -66,6 +66,16 @@ pub struct DosingCalibration {
     pub pump_ph_up_capacity_ml_per_sec: f32,
     pub pump_ph_down_capacity_ml_per_sec: f32,
 
+    pub dosing_min_pwm_percent: i32,
+    pub pump_a_min_pwm_percent: Option<i32>,
+    pub pump_b_min_pwm_percent: Option<i32>,
+    pub pump_ph_up_min_pwm_percent: Option<i32>,
+    pub pump_ph_down_min_pwm_percent: Option<i32>,
+    pub dosing_pulse_on_ms: i32,
+    pub dosing_pulse_off_ms: i32,
+    pub dosing_min_dose_ml: f32,
+    pub dosing_max_pulse_count_per_cycle: i32,
+
     pub soft_start_duration: i32,
     pub last_calibrated: DateTime<Utc>,
     pub scheduled_mixing_interval_sec: i32,
@@ -79,13 +89,13 @@ pub struct DosingCalibration {
     pub scheduled_dosing_cron: String,
     pub scheduled_dose_a_ml: f32,
     pub scheduled_dose_b_ml: f32,
-    pub ec_gain_dynamic: f32,
-    pub ph_up_dynamic: f32,
-    pub ph_down_dynamic: f32,
-    pub dynamic_sample_count: i32,
-    pub dynamic_confidence: f32,
-    pub last_dynamic_update: Option<DateTime<Utc>>,
-    pub dynamic_model_version: String,
+    // pub ec_gain_dynamic: f32,
+    // pub ph_up_dynamic: f32,
+    // pub ph_down_dynamic: f32,
+    // pub dynamic_sample_count: i32,
+    // pub dynamic_confidence: f32,
+    // pub last_dynamic_update: Option<DateTime<Utc>>,
+    // pub dynamic_model_version: String,
 }
 
 impl Default for DosingCalibration {
@@ -106,6 +116,17 @@ impl Default for DosingCalibration {
             pump_ph_up_capacity_ml_per_sec: 1.2,
             pump_ph_down_capacity_ml_per_sec: 1.2,
 
+            dosing_min_pwm_percent: 20,
+            pump_a_min_pwm_percent: Some(20),
+            pump_b_min_pwm_percent: Some(20),
+            pump_ph_up_min_pwm_percent: Some(20),
+            pump_ph_down_min_pwm_percent: Some(20),
+
+            dosing_pulse_on_ms: 500,
+            dosing_pulse_off_ms: 500,
+            dosing_min_dose_ml: 1.0,
+            dosing_max_pulse_count_per_cycle: 20,
+
             soft_start_duration: 5,
             last_calibrated: Utc::now(),
             scheduled_mixing_interval_sec: 600,
@@ -119,13 +140,13 @@ impl Default for DosingCalibration {
             scheduled_dosing_cron: "0 0 8 * * *".to_string(),
             scheduled_dose_a_ml: 10.0,
             scheduled_dose_b_ml: 10.0,
-            ec_gain_dynamic: 0.01,
-            ph_up_dynamic: 0.01,
-            ph_down_dynamic: 0.01,
-            dynamic_sample_count: 0,
-            dynamic_confidence: 0.0,
-            last_dynamic_update: None,
-            dynamic_model_version: "v1".to_string(),
+            // ec_gain_dynamic: 0.01,
+            // ph_up_dynamic: 0.01,
+            // ph_down_dynamic: 0.01,
+            // dynamic_sample_count: 0,
+            // dynamic_confidence: 0.0,
+            // last_dynamic_update: None,
+            // dynamic_model_version: "v1".to_string(),
         }
     }
 }
@@ -153,6 +174,7 @@ pub struct SafetyConfig {
     pub ec_ack_threshold: f32,
     pub ph_ack_threshold: f32,
     pub water_ack_threshold: f32,
+
     pub last_updated: DateTime<Utc>,
 }
 
@@ -206,6 +228,11 @@ pub struct WaterConfig {
     pub scheduled_drain_amount_cm: f32,
     pub misting_on_duration_ms: i32,
     pub misting_off_duration_ms: i32,
+
+    pub misting_temp_threshold: f32,
+    pub high_temp_misting_on_duration_ms: i64,
+    pub high_temp_misting_off_duration_ms: i64,
+
     pub last_updated: DateTime<Utc>,
 }
 
@@ -231,6 +258,11 @@ impl Default for WaterConfig {
             scheduled_drain_amount_cm: 5.0,
             misting_on_duration_ms: 5000,
             misting_off_duration_ms: 10000,
+
+            misting_temp_threshold: 30.0,
+            high_temp_misting_off_duration_ms: 10000,
+            high_temp_misting_on_duration_ms: 180000,
+
             last_updated: Utc::now(),
         }
     }
@@ -454,10 +486,10 @@ pub fn from_db_rows(
         max_ph_delta: safe.max_ph_delta,
 
         max_dose_per_cycle: safe.max_dose_per_cycle,
-        max_dose_per_hour: 200.0,
-        cooldown_sec: 60,
-        max_refill_cycles_per_hour: 3,
-        max_drain_cycles_per_hour: 3,
+        max_dose_per_hour: safe.max_dose_per_hour,
+        cooldown_sec: safe.cooldown_sec,
+        max_refill_cycles_per_hour: safe.max_refill_cycles_per_hour,
+        max_drain_cycles_per_hour: safe.max_drain_cycles_per_hour,
 
         water_level_critical_min: safe.water_level_critical_min,
 
@@ -500,19 +532,17 @@ pub fn from_db_rows(
         scheduled_dose_a_ml: dose.scheduled_dose_a_ml,
         scheduled_dose_b_ml: dose.scheduled_dose_b_ml,
 
-        dosing_min_pwm_percent: 35,
-
-        pump_a_min_pwm_percent: None,
-        pump_b_min_pwm_percent: None,
-        pump_ph_up_min_pwm_percent: None,
-        pump_ph_down_min_pwm_percent: None,
-
-        dosing_pulse_on_ms: 250,
-        dosing_pulse_off_ms: 300,
-        dosing_min_dose_ml: 0.4,
-        dosing_max_pulse_count_per_cycle: 40,
-        misting_temp_threshold: 30.0,
-        high_temp_misting_on_duration_ms: 15000,
-        high_temp_misting_off_duration_ms: 60000,
+        dosing_min_pwm_percent: dose.dosing_min_pwm_percent,
+        pump_a_min_pwm_percent: dose.pump_a_min_pwm_percent,
+        pump_b_min_pwm_percent: dose.pump_b_min_pwm_percent,
+        pump_ph_up_min_pwm_percent: dose.pump_ph_up_min_pwm_percent,
+        pump_ph_down_min_pwm_percent: dose.pump_ph_down_min_pwm_percent,
+        dosing_pulse_on_ms: dose.dosing_pulse_on_ms,
+        dosing_pulse_off_ms: dose.dosing_pulse_off_ms,
+        dosing_min_dose_ml: dose.dosing_min_dose_ml,
+        dosing_max_pulse_count_per_cycle: dose.dosing_max_pulse_count_per_cycle,
+        misting_temp_threshold: water.misting_temp_threshold,
+        high_temp_misting_on_duration_ms: water.high_temp_misting_on_duration_ms,
+        high_temp_misting_off_duration_ms: water.high_temp_misting_off_duration_ms,
     }
 }

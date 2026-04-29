@@ -186,7 +186,7 @@ async fn upsert_water_db(
             auto_drain_overflow, auto_dilute_enabled, dilute_drain_amount_cm,
             scheduled_water_change_enabled, water_change_cron, scheduled_drain_amount_cm,
             misting_on_duration_ms, misting_off_duration_ms, last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_height = EXCLUDED.tank_height,
             water_level_min = EXCLUDED.water_level_min, 
@@ -369,9 +369,7 @@ async fn upsert_dosing_db(
             scheduled_mixing_interval_sec, scheduled_mixing_duration_sec,
             dosing_pwm_percent, osaka_mixing_pwm_percent, osaka_misting_pwm_percent,
             scheduled_dosing_enabled, scheduled_dosing_cron, scheduled_dose_a_ml, scheduled_dose_b_ml,
-            ec_gain_dynamic, ph_up_dynamic, ph_down_dynamic, dynamic_sample_count,
-            dynamic_confidence, last_dynamic_update, dynamic_model_version
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_volume_l = EXCLUDED.tank_volume_l, ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
             ph_shift_up_per_ml = EXCLUDED.ph_shift_up_per_ml, ph_shift_down_per_ml = EXCLUDED.ph_shift_down_per_ml,
@@ -388,13 +386,6 @@ async fn upsert_dosing_db(
             scheduled_dosing_cron = EXCLUDED.scheduled_dosing_cron,
             scheduled_dose_a_ml = EXCLUDED.scheduled_dose_a_ml,
             scheduled_dose_b_ml = EXCLUDED.scheduled_dose_b_ml,
-            ec_gain_dynamic = EXCLUDED.ec_gain_dynamic,
-            ph_up_dynamic = EXCLUDED.ph_up_dynamic,
-            ph_down_dynamic = EXCLUDED.ph_down_dynamic,
-            dynamic_sample_count = EXCLUDED.dynamic_sample_count,
-            dynamic_confidence = EXCLUDED.dynamic_confidence,
-            last_dynamic_update = EXCLUDED.last_dynamic_update,
-            dynamic_model_version = EXCLUDED.dynamic_model_version,
             last_calibrated = EXCLUDED.last_calibrated
         "#
     )
@@ -422,14 +413,7 @@ async fn upsert_dosing_db(
     .bind(&cal.scheduled_dosing_cron)
     .bind(cal.scheduled_dose_a_ml)
     .bind(cal.scheduled_dose_b_ml)
-    .bind(cal.ec_gain_dynamic)
-    .bind(cal.ph_up_dynamic)
-    .bind(cal.ph_down_dynamic)
-    .bind(cal.dynamic_sample_count)
-    .bind(cal.dynamic_confidence)
-    .bind(cal.last_dynamic_update)
-    .bind(&cal.dynamic_model_version)
-    .execute(pool).await?;
+        .execute(pool).await?;
     Ok(())
 }
 
@@ -510,7 +494,6 @@ pub async fn get_unified_device_config(
     let device_id = path.into_inner();
     let pool = &app_state.pg_pool;
 
-    // 🔥 TỐI ƯU CONCURRENCY: Lấy 5 bảng DB trong chớp mắt
     let (dev_res, water_res, safe_res, dose_res, sens_res) = tokio::join!(
         sqlx::query_as::<_, DeviceConfig>("SELECT * FROM device_config WHERE device_id = $1")
             .bind(&device_id)

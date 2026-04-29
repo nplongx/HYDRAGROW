@@ -17,6 +17,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type DosingFieldKey =
   | 'dosing_pwm_percent'
+  | 'dosing_min_pwm_percent'
   | 'pump_a_capacity_ml_per_sec'
   | 'pump_b_capacity_ml_per_sec'
   | 'pump_ph_up_capacity_ml_per_sec'
@@ -38,6 +39,7 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   const scheduledDosingEnabled = Boolean(inputConfig.scheduled_dosing_enabled);
 
   const dosingPwm = toFiniteNumber(inputConfig.dosing_pwm_percent);
+  const dosingMinPwm = toFiniteNumber(inputConfig.dosing_min_pwm_percent);
   const doseA = toFiniteNumber(inputConfig.scheduled_dose_a_ml);
   const doseB = toFiniteNumber(inputConfig.scheduled_dose_b_ml);
   const pumpA = toFiniteNumber(inputConfig.pump_a_capacity_ml_per_sec);
@@ -47,6 +49,9 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
 
   if (!Number.isFinite(dosingPwm) || dosingPwm < 1 || dosingPwm > 100) {
     errors.dosing_pwm_percent = backendLikeError('dosing_pwm_percent', 'phải nằm trong khoảng 1-100');
+  }
+  if (!Number.isFinite(dosingMinPwm) || dosingMinPwm < 0 || dosingMinPwm > 100) {
+    errors.dosing_min_pwm_percent = backendLikeError('dosing_min_pwm_percent', 'phải nằm trong khoảng 0-100');
   }
 
   const validateCapacity = (field: DosingFieldKey, value: number) => {
@@ -101,8 +106,17 @@ const Settings = () => {
     active_mixing_sec: 5, sensor_stabilize_sec: 5, scheduled_mixing_interval_sec: 3600, scheduled_mixing_duration_sec: 300,
     dosing_pwm_percent: 50, osaka_mixing_pwm_percent: 60, osaka_misting_pwm_percent: 100, soft_start_duration: 3000,
     scheduled_dosing_enabled: false, scheduled_dosing_cron: '0 0 8 * * *', scheduled_dose_a_ml: 10.0, scheduled_dose_b_ml: 10.0,
-    ec_gain_dynamic: 0.01, ph_up_dynamic: 0.01, ph_down_dynamic: 0.01,
-    dynamic_sample_count: 0, dynamic_confidence: 0, dynamic_model_version: 'v1',
+
+    // 🟢 THÔNG SỐ XUNG PWM MỚI ĐƯỢC THÊM VÀO
+    dosing_min_pwm_percent: 20,
+    pump_a_min_pwm_percent: 20,
+    pump_b_min_pwm_percent: 20,
+    pump_ph_up_min_pwm_percent: 20,
+    pump_ph_down_min_pwm_percent: 20,
+    dosing_pulse_on_ms: 500,
+    dosing_pulse_off_ms: 500,
+    dosing_min_dose_ml: 1.0,
+    dosing_max_pulse_count_per_cycle: 20,
 
     min_ec_limit: 0.5, max_ec_limit: 3.0, min_ph_limit: 4.0, max_ph_limit: 8.0,
     min_temp_limit: 15.0, max_temp_limit: 35.0, max_ec_delta: 0.5, max_ph_delta: 0.3,
@@ -140,7 +154,6 @@ const Settings = () => {
   const isCalibrationBlocked = !isSensorOnline || isPhError;
 
   const callApi = async (path: string, method: string = 'GET', body: any = null, currentSettings: any = appSettings, customTimeoutMs?: number) => {
-    // ... logic nguyên bản ...
     const url = `${currentSettings.backend_url}${path}`;
     const options: any = {
       method,
@@ -197,7 +210,6 @@ const Settings = () => {
   };
 
   const handleCapturePoint = async () => {
-    // ... logic nguyên bản ...
     if (!activePoint || isCalibrationBlocked || isCapturingPoint) return;
     const currentDeviceId = appSettings.device_id || ctxDeviceId;
     const currentSettings = runtimeSettings || appSettings;
@@ -224,7 +236,7 @@ const Settings = () => {
       }
     }
 
-    const targetSamples = Math.max(Number(config.dynamic_sample_count) || 5, 5);
+    const targetSamples = 5; // Fixed fallback for dynamic_sample_count removed from payload
     const intervalSec = Number(config.publish_interval || 5000) / 1000;
     const dynamicWindowSec = Math.ceil((targetSamples + 2) * intervalSec) + 5;
     const requestTimeoutMs = (dynamicWindowSec + 5) * 1000;
@@ -462,6 +474,9 @@ const Settings = () => {
         scheduled_drain_amount_cm: toNumberOr(savingConfig.scheduled_drain_amount_cm, 10.0),
         misting_on_duration_ms: toNumberOr(savingConfig.misting_on_duration_ms, 10000),
         misting_off_duration_ms: toNumberOr(savingConfig.misting_off_duration_ms, 180000),
+        misting_temp_threshold: toNumberOr(savingConfig.misting_temp_threshold, 30.0),
+        high_temp_misting_on_duration_ms: toNumberOr(savingConfig.high_temp_misting_on_duration_ms, 15000),
+        high_temp_misting_off_duration_ms: toNumberOr(savingConfig.high_temp_misting_off_duration_ms, 60000),
         last_updated: ts,
       };
 
@@ -508,22 +523,26 @@ const Settings = () => {
         last_calibrated: ts,
         scheduled_mixing_interval_sec: toNumberOr(savingConfig.scheduled_mixing_interval_sec, 3600),
         scheduled_mixing_duration_sec: toNumberOr(savingConfig.scheduled_mixing_duration_sec, 300),
+
         dosing_pwm_percent: toNumberOr(savingConfig.dosing_pwm_percent, 50),
         osaka_mixing_pwm_percent: toNumberOr(savingConfig.osaka_mixing_pwm_percent, 60),
         osaka_misting_pwm_percent: toNumberOr(savingConfig.osaka_misting_pwm_percent, 100),
+
+        // 🟢 CẬP NHẬT TRƯỜNG PWM MỚI (Từ Rust model)
+        dosing_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.dosing_min_pwm_percent, 20)),
+        pump_a_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_a_min_pwm_percent, 20)),
+        pump_b_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_b_min_pwm_percent, 20)),
+        pump_ph_up_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_ph_up_min_pwm_percent, 20)),
+        pump_ph_down_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_ph_down_min_pwm_percent, 20)),
+        dosing_pulse_on_ms: Math.trunc(toNumberOr(savingConfig.dosing_pulse_on_ms, 500)),
+        dosing_pulse_off_ms: Math.trunc(toNumberOr(savingConfig.dosing_pulse_off_ms, 500)),
+        dosing_min_dose_ml: toNumberOr(savingConfig.dosing_min_dose_ml, 1.0),
+        dosing_max_pulse_count_per_cycle: Math.trunc(toNumberOr(savingConfig.dosing_max_pulse_count_per_cycle, 20)),
+
         scheduled_dosing_enabled: savingConfig.scheduled_dosing_enabled ?? false,
         scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron || '0 0 8 * * *'),
         scheduled_dose_a_ml: toNumberOr(savingConfig.scheduled_dose_a_ml, 10.0),
         scheduled_dose_b_ml: toNumberOr(savingConfig.scheduled_dose_b_ml, 10.0),
-        ec_gain_dynamic: toNumberOr(savingConfig.ec_gain_dynamic, 0.01),
-        ph_up_dynamic: toNumberOr(savingConfig.ph_up_dynamic, 0.01),
-        ph_down_dynamic: toNumberOr(savingConfig.ph_down_dynamic, 0.01),
-        dynamic_sample_count: Math.trunc(toNumberOr(savingConfig.dynamic_sample_count, 0)),
-        dynamic_confidence: toNumberOr(savingConfig.dynamic_confidence, 0),
-        last_dynamic_update: (typeof savingConfig.last_dynamic_update === 'string' && savingConfig.last_dynamic_update)
-          ? savingConfig.last_dynamic_update
-          : null,
-        dynamic_model_version: String(savingConfig.dynamic_model_version || 'v1'),
       };
 
       const sensConf = {
@@ -795,23 +814,46 @@ const Settings = () => {
         {/* 4. ĐỊNH LƯỢNG */}
         <AccordionSection id="dosing" title="Máy Pha Phân & Hóa Chất" icon={FlaskConical} color="text-fuchsia-400" isOpen={openSection === 'dosing'} onToggle={() => handleToggleSection('dosing')}>
           {isAdvancedMode && (
-            <SubCard title="Công Suất Bơm Vi Lượng (Chống giật tia)">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputGroup
-                  label="Tốc độ Bơm Phân (%)"
-                  step="1"
-                  min={1}
-                  max={100}
-                  value={config.dosing_pwm_percent}
-                  onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })}
-                  desc="Giảm tốc độ để châm phân từ từ, chính xác hơn."
-                  errorText={dosingValidationErrors.dosing_pwm_percent}
-                />
-                <InputGroup label="Tốc độ Bơm Trộn (%)" step="1" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
-                <InputGroup label="Tốc độ Bơm Phun Sương (%)" step="1" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
-                <InputGroup label="Độ trễ khởi động bơm (ms)" step="100" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} desc="Bảo vệ nguồn điện tử, tránh sụt áp đột ngột." />
-              </div>
-            </SubCard>
+            <>
+              <SubCard title="Công Suất Bơm Vi Lượng (Chống giật tia)">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <InputGroup
+                    label="Tốc độ Bơm Phân (%)"
+                    step="1"
+                    min={1}
+                    max={100}
+                    value={config.dosing_pwm_percent}
+                    onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })}
+                    desc="Giảm tốc độ để châm phân từ từ, chính xác hơn."
+                    errorText={dosingValidationErrors.dosing_pwm_percent}
+                  />
+                  <InputGroup label="Tốc độ Bơm Trộn (%)" step="1" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
+                  <InputGroup label="Tốc độ Bơm Phun Sương (%)" step="1" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
+                  <InputGroup label="Độ trễ khởi động bơm (ms)" step="100" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} desc="Bảo vệ nguồn điện tử, tránh sụt áp đột ngột." />
+                </div>
+              </SubCard>
+
+              {/* 🟢 CARD CẤU HÌNH XUNG PWM */}
+              <SubCard title="Cấu Hình Xung & Giới Hạn Bơm (Pulse Dosing)" className="mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <InputGroup label="PWM tối thiểu (Chung) (%)" step="1" min={0} max={100} value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
+                  <InputGroup label="Mức bơm tối thiểu mỗi chu kỳ (ml)" step="0.1" value={config.dosing_min_dose_ml} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_dose_ml: e.target.value })} />
+
+                  <div className="sm:col-span-2 pt-4 pb-1 border-t border-slate-800"><span className="text-[10px] text-fuchsia-400 font-black uppercase tracking-widest bg-fuchsia-500/10 border border-fuchsia-500/20 py-1.5 px-3 rounded-lg shadow-inner">Giới hạn PWM tối thiểu riêng từng bơm</span></div>
+                  <InputGroup label="PWM tối thiểu Bơm A (%)" step="1" value={config.pump_a_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_min_pwm_percent: e.target.value })} />
+                  <InputGroup label="PWM tối thiểu Bơm B (%)" step="1" value={config.pump_b_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_min_pwm_percent: e.target.value })} />
+                  <InputGroup label="PWM tối thiểu Bơm pH Lên (%)" step="1" value={config.pump_ph_up_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_min_pwm_percent: e.target.value })} />
+                  <InputGroup label="PWM tối thiểu Bơm pH Xuống (%)" step="1" value={config.pump_ph_down_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_min_pwm_percent: e.target.value })} />
+
+                  <div className="sm:col-span-2 pt-4 pb-1 border-t border-slate-800"><span className="text-[10px] text-fuchsia-400 font-black uppercase tracking-widest bg-fuchsia-500/10 border border-fuchsia-500/20 py-1.5 px-3 rounded-lg shadow-inner">Thời gian Xung Bơm (Mở / Đóng)</span></div>
+                  <InputGroup label="Thời gian MỞ xung (ms)" step="10" value={config.dosing_pulse_on_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_on_ms: e.target.value })} />
+                  <InputGroup label="Thời gian TẮT xung (ms)" step="10" value={config.dosing_pulse_off_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_off_ms: e.target.value })} />
+                  <div className="sm:col-span-2">
+                    <InputGroup label="Số xung tối đa / Chu kỳ" step="1" value={config.dosing_max_pulse_count_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, dosing_max_pulse_count_per_cycle: e.target.value })} />
+                  </div>
+                </div>
+              </SubCard>
+            </>
           )}
 
           <SubCard title="Châm Phân Bổ Sung Theo Giờ" className={isAdvancedMode ? "mt-4" : ""}>
@@ -1029,7 +1071,6 @@ const Settings = () => {
                 </button>
               </div>
 
-              {/* 🟢 TÍNH NĂNG ADAPTIVE CALIBRATION - CHỈ HIỆN THÔNG TIN CƠ BẢN NẾU KHÔNG Ở CHẾ ĐỘ NÂNG CAO */}
               {isAdvancedMode ? (
                 <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
                   <p className="text-xs font-black uppercase tracking-widest text-cyan-300">Pha triển khai hệ số (theo device_id)</p>

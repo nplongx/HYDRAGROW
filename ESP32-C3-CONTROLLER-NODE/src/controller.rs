@@ -190,6 +190,8 @@ pub struct ControlContext {
     pub tuning_day_ec_delta: f32,
     pub tuning_day_ph_delta: f32,
     pub hourly_dose_history_ml_by_pump: HashMap<String, Vec<(u64, f32)>>,
+    pub hourly_refill_history: Vec<u64>, // 🟢 Thêm bộ đếm bảo vệ chống kẹt bơm nước ngầm
+    pub hourly_drain_history: Vec<u64>,  // 🟢 Thêm bộ đếm bảo vệ chống kẹt van xả
     pub pending_calibration_sample: Option<PendingCalibrationSample>,
     pub calibration_pending_publish_count: u32,
 }
@@ -262,7 +264,7 @@ fn effective_flow_ml_per_sec(
 impl Default for ControlContext {
     fn default() -> Self {
         Self {
-            current_state: SystemState::SystemBooting, // 🟢 KHỞI ĐỘNG VÀO STATE NÀY
+            current_state: SystemState::SystemBooting,
             last_water_change_time: 0,
             last_scheduled_dose_time_sec: 0,
 
@@ -305,6 +307,8 @@ impl Default for ControlContext {
             tuning_day_ec_delta: 0.0,
             tuning_day_ph_delta: 0.0,
             hourly_dose_history_ml_by_pump: HashMap::new(),
+            hourly_refill_history: Vec::new(),
+            hourly_drain_history: Vec::new(),
             pending_calibration_sample: None,
             calibration_pending_publish_count: 0,
         }
@@ -616,6 +620,35 @@ impl ControlContext {
         let used = self.get_hourly_total_dose_ml(pump, now_sec);
         used + dose_ml <= max_hourly_ml
     }
+
+    // 🟢 THÊM: Logic lưu vết và giới hạn số lần mở máy bơm nước / giờ
+    fn check_and_record_refill_limit(&mut self, now_sec: u64, limit: u32) -> bool {
+        self.hourly_refill_history
+            .retain(|&ts| now_sec.saturating_sub(ts) <= 3600);
+        if self.hourly_refill_history.len() >= limit as usize {
+            warn!("⚠️ Quá giới hạn bơm nước vào bồn trong 1 giờ (max: {} lần). Ngắt an toàn để chống kẹt phao!", limit);
+            false
+        } else {
+            self.hourly_refill_history.push(now_sec);
+            true
+        }
+    }
+
+    // 🟢 THÊM: Logic lưu vết và giới hạn số lần mở van xả / giờ
+    fn check_and_record_drain_limit(&mut self, now_sec: u64, limit: u32) -> bool {
+        self.hourly_drain_history
+            .retain(|&ts| now_sec.saturating_sub(ts) <= 3600);
+        if self.hourly_drain_history.len() >= limit as usize {
+            warn!(
+                "⚠️ Quá giới hạn mở van xả nước ra trong 1 giờ (max: {} lần). Ngắt an toàn!",
+                limit
+            );
+            false
+        } else {
+            self.hourly_drain_history.push(now_sec);
+            true
+        }
+    }
 }
 
 fn soft_deadband_scale(error: f32, tolerance: f32) -> f32 {
@@ -851,7 +884,6 @@ pub fn start_fsm_control_loop(
     let boot_start_ms = get_current_time_ms();
     loop {
         if get_current_time_ms() - boot_start_ms > 3000 {
-            // Chuyển từ SystemBooting sang Monitoring sau 3 giây
             ctx.current_state = SystemState::Monitoring;
             break;
         }
@@ -946,7 +978,6 @@ pub fn start_fsm_control_loop(
                         ctx.current_state = SystemState::EmergencyStop(emergency_reason);
                     }
                 } else if !config.is_enabled {
-                    // 🟢 NẾU HỆ THỐNG TẮT, ĐƯA VỀ MONITORING BÌNH THƯỜNG
                     if ctx.current_state != SystemState::Monitoring {
                         ctx.stop_all_pumps(&mut pump_ctrl);
                         ctx.current_state = SystemState::Monitoring;
@@ -1064,9 +1095,9 @@ pub fn start_fsm_control_loop(
             }
         }
 
-        // DosingCycleComplete: Tự động về Monitoring sau 2 giây
+        // 🟢 FIX HARDCODE 2: Cooldown tản nhiệt dựa trên cấu hình người dùng
         if let SystemState::DosingCycleComplete = ctx.current_state {
-            std::thread::sleep(Duration::from_secs(2));
+            std::thread::sleep(Duration::from_secs(config.cooldown_sec));
             ctx.current_state = SystemState::Monitoring;
         }
 
@@ -1150,7 +1181,7 @@ pub fn start_fsm_control_loop(
                 let step = cmd.target.clone().unwrap_or_else(|| "IDLE".to_string());
                 ctx.current_state = SystemState::SensorCalibration {
                     step,
-                    finish_time: current_time_ms + 3600_000, // 1 hour timeout
+                    finish_time: current_time_ms + 3600_000,
                 };
                 force_sync = true;
                 continue;
@@ -1348,7 +1379,9 @@ pub fn start_fsm_control_loop(
         fsm_mqtt_tx: &Sender<String>,
     ) {
         let current_time_sec = current_time_ms / 1000;
-        const MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP: f32 = 30.0;
+
+        // 🟢 FIX HARDCODE 1: Dùng biến từ struct thay vì số chết
+        let max_hourly_ml = config.max_dose_per_hour;
 
         match ctx.current_state {
             SystemState::SystemBooting
@@ -1413,6 +1446,17 @@ pub fn start_fsm_control_loop(
                                 let _ = flash.set_u64("last_w_change", current_time_sec);
                             }
 
+                            // 🟢 FIX HARDCODE 3: Check Cờ an toàn chống kẹt xả
+                            if !ctx.check_and_record_drain_limit(
+                                current_time_sec,
+                                config.max_drain_cycles_per_hour,
+                            ) {
+                                ctx.stop_all_pumps(pump_ctrl);
+                                ctx.current_state =
+                                    SystemState::EmergencyStop("TOO_MANY_DRAINS".to_string());
+                                return;
+                            }
+
                             ctx.mark_pending_sample_water_change_violation();
                             ctx.current_state = SystemState::WaterDraining {
                                 target_level: target,
@@ -1437,6 +1481,13 @@ pub fn start_fsm_control_loop(
                         ctx.stop_all_pumps(pump_ctrl);
                         ctx.current_state =
                             SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
+                    } else if !ctx.check_and_record_refill_limit(
+                        current_time_sec,
+                        config.max_refill_cycles_per_hour,
+                    ) {
+                        ctx.stop_all_pumps(pump_ctrl);
+                        ctx.current_state =
+                            SystemState::EmergencyStop("TOO_MANY_REFILLS".to_string());
                     } else {
                         ctx.last_water_before_refill = Some(sensors.water_level);
                         ctx.mark_pending_sample_water_change_violation();
@@ -1453,31 +1504,49 @@ pub fn start_fsm_control_loop(
                     && config.auto_drain_overflow
                     && sensors.water_level > config.water_level_max
                 {
-                    ctx.mark_pending_sample_water_change_violation();
-                    ctx.current_state = SystemState::WaterDraining {
-                        target_level: config.water_level_target,
-                        start_time: current_time_ms,
-                    };
-                    let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
-                    ctx.pump_status.water_pump_out = true;
-                    ctx.pump_status.water_pump_in = false;
-                    ctx.fsm_osaka_active = false;
+                    if !ctx.check_and_record_drain_limit(
+                        current_time_sec,
+                        config.max_drain_cycles_per_hour,
+                    ) {
+                        ctx.stop_all_pumps(pump_ctrl);
+                        ctx.current_state =
+                            SystemState::EmergencyStop("TOO_MANY_DRAINS".to_string());
+                    } else {
+                        ctx.mark_pending_sample_water_change_violation();
+                        ctx.current_state = SystemState::WaterDraining {
+                            target_level: config.water_level_target,
+                            start_time: current_time_ms,
+                        };
+                        let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
+                        ctx.pump_status.water_pump_out = true;
+                        ctx.pump_status.water_pump_in = false;
+                        ctx.fsm_osaka_active = false;
+                    }
                 } else if config.enable_ec_sensor
                     && config.enable_water_level_sensor
                     && config.auto_dilute_enabled
                     && sensors.ec > (config.ec_target + config.ec_tolerance)
                 {
-                    let target = (sensors.water_level - config.dilute_drain_amount_cm)
-                        .max(config.water_level_min);
-                    ctx.mark_pending_sample_water_change_violation();
-                    ctx.current_state = SystemState::WaterDraining {
-                        target_level: target,
-                        start_time: current_time_ms,
-                    };
-                    let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
-                    ctx.pump_status.water_pump_out = true;
-                    ctx.pump_status.water_pump_in = false;
-                    ctx.fsm_osaka_active = false;
+                    if !ctx.check_and_record_drain_limit(
+                        current_time_sec,
+                        config.max_drain_cycles_per_hour,
+                    ) {
+                        ctx.stop_all_pumps(pump_ctrl);
+                        ctx.current_state =
+                            SystemState::EmergencyStop("TOO_MANY_DRAINS".to_string());
+                    } else {
+                        let target = (sensors.water_level - config.dilute_drain_amount_cm)
+                            .max(config.water_level_min);
+                        ctx.mark_pending_sample_water_change_violation();
+                        ctx.current_state = SystemState::WaterDraining {
+                            target_level: target,
+                            start_time: current_time_ms,
+                        };
+                        let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
+                        ctx.pump_status.water_pump_out = true;
+                        ctx.pump_status.water_pump_in = false;
+                        ctx.fsm_osaka_active = false;
+                    }
                 } else {
                     let mut is_dosing_active = false;
 
@@ -1521,14 +1590,14 @@ pub fn start_fsm_control_loop(
                                             "NutrientA",
                                             current_time_sec,
                                             config.scheduled_dose_a_ml,
-                                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                            max_hourly_ml,
                                         );
                                     let allow_b = config.scheduled_dose_b_ml <= 0.0
                                         || ctx.can_dose_within_hourly_limit(
                                             "NutrientB",
                                             current_time_sec,
                                             config.scheduled_dose_b_ml,
-                                            MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                            max_hourly_ml,
                                         );
                                     if allow_a && allow_b {
                                         if config.scheduled_dose_a_ml > 0.0 {
@@ -1536,7 +1605,7 @@ pub fn start_fsm_control_loop(
                                                 "NutrientA",
                                                 current_time_sec,
                                                 config.scheduled_dose_a_ml,
-                                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                                max_hourly_ml,
                                             );
                                         }
                                         if config.scheduled_dose_b_ml > 0.0 {
@@ -1544,7 +1613,7 @@ pub fn start_fsm_control_loop(
                                                 "NutrientB",
                                                 current_time_sec,
                                                 config.scheduled_dose_b_ml,
-                                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                                max_hourly_ml,
                                             );
                                         }
                                         ctx.current_state = SystemState::StartingOsakaPump {
@@ -1592,26 +1661,26 @@ pub fn start_fsm_control_loop(
                                 "NutrientA",
                                 current_time_sec,
                                 dose_ml,
-                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                max_hourly_ml,
                             );
                             let can_dose_ec_b = ctx.can_dose_within_hourly_limit(
                                 "NutrientB",
                                 current_time_sec,
                                 dose_ml,
-                                MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                max_hourly_ml,
                             );
                             if dose_ml > 0.0 && can_dose_ec_a && can_dose_ec_b {
                                 let _ = ctx.reserve_dose_if_within_hourly_limit(
                                     "NutrientA",
                                     current_time_sec,
                                     dose_ml,
-                                    MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                    max_hourly_ml,
                                 );
                                 let _ = ctx.reserve_dose_if_within_hourly_limit(
                                     "NutrientB",
                                     current_time_sec,
                                     dose_ml,
-                                    MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                    max_hourly_ml,
                                 );
                                 ctx.last_ec_before_dosing = Some(sensors.ec);
                                 ctx.current_state = SystemState::StartingOsakaPump {
@@ -1674,7 +1743,7 @@ pub fn start_fsm_control_loop(
                                         ph_pump_name,
                                         current_time_sec,
                                         dose_ml,
-                                        MAX_TOTAL_DOSE_ML_PER_HOUR_BY_PUMP,
+                                        max_hourly_ml,
                                     )
                                 {
                                     let final_dose_ml = (diff / ratio * config.ph_step_ratio)
@@ -2377,7 +2446,7 @@ pub fn start_fsm_control_loop(
             }
 
             SystemState::EmergencyStop(_) => {
-                //Không làm gì cả - tránh spam khi EmergencyStop
+                // Không làm gì cả - tránh spam khi EmergencyStop
             }
         }
     }

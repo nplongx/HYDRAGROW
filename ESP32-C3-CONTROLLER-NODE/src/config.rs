@@ -26,6 +26,11 @@ pub struct DeviceConfig {
     pub water_level_target: f32,
     pub water_level_max: f32,
     pub water_level_tolerance: f32,
+
+    // 🟢 THÊM: Sục khí / Tuần hoàn
+    // pub circulation_mode: String,
+    // pub circulation_on_sec: u64,
+    // pub circulation_off_sec: u64,
     pub auto_refill_enabled: bool,
     pub auto_drain_overflow: bool,
     pub auto_dilute_enabled: bool,
@@ -45,6 +50,13 @@ pub struct DeviceConfig {
     pub max_ec_delta: f32,
     pub max_ph_delta: f32,
     pub max_dose_per_cycle: f32,
+
+    // 🟢 THÊM: Giới hạn an toàn bơm
+    pub max_dose_per_hour: f32,
+    pub cooldown_sec: u64,
+    pub max_refill_cycles_per_hour: u32,
+    pub max_drain_cycles_per_hour: u32,
+
     pub water_level_critical_min: f32,
     pub max_refill_duration_sec: u64,
     pub max_drain_duration_sec: u64,
@@ -72,22 +84,26 @@ pub struct DeviceConfig {
     pub scheduled_mixing_duration_sec: u64,
 
     // 5. CẢM BIẾN
-    pub ph_v7: f32,
-    pub ph_v4: f32,
-    pub ec_factor: f32,
-    pub ec_offset: f32,
-    pub temp_offset: f32,
-    pub temp_compensation_beta: f32,
-    pub tank_height: f32,
-    pub sampling_interval: u64,
-    pub publish_interval: u64,
-    pub moving_average_window: u32,
+    // pub ph_v7: f32,
+    // pub ph_v4: f32,
+    // pub ec_factor: f32,
+    // pub ec_offset: f32,
+    // pub temp_offset: f32,
+    // pub temp_compensation_beta: f32,
+    // pub tank_height: f32,
+
+    // 🔴 BỎ: Các trường dư thừa
+    // pub sampling_interval: u64,
+    // pub publish_interval: u64,
+    // pub moving_average_window: u32,
     pub enable_ec_sensor: bool,
     pub enable_ph_sensor: bool,
     pub enable_water_level_sensor: bool,
     pub enable_temp_sensor: bool,
-    pub enable_ec_tc: bool,
-    pub enable_ph_tc: bool,
+
+    // 🔴 BỎ: Chuyển sang check logic (temp_compensation_beta > 0)
+    // pub enable_ec_tc: bool,
+    // pub enable_ph_tc: bool,
 
     // 6. THÔNG SỐ LOCAL CỦA ESP32 (Backend không có cũng không sao)
     pub dosing_pwm_percent: u32,
@@ -128,6 +144,11 @@ impl Default for DeviceConfig {
             water_level_target: 20.0,
             water_level_max: 24.0,
             water_level_tolerance: 1.0,
+
+            // 🟢 THÊM mặc định
+            // circulation_mode: "always_on".to_string(),
+            // circulation_on_sec: 1800,
+            // circulation_off_sec: 900,
             auto_refill_enabled: true,
             auto_drain_overflow: true,
             auto_dilute_enabled: true,
@@ -146,6 +167,13 @@ impl Default for DeviceConfig {
             max_ec_delta: 1.0,
             max_ph_delta: 1.5,
             max_dose_per_cycle: 2.0,
+
+            // 🟢 THÊM mặc định
+            max_dose_per_hour: 200.0,
+            cooldown_sec: 60,
+            max_refill_cycles_per_hour: 3,
+            max_drain_cycles_per_hour: 3,
+
             water_level_critical_min: 5.0,
             max_refill_duration_sec: 120,
             max_drain_duration_sec: 120,
@@ -171,25 +199,26 @@ impl Default for DeviceConfig {
             scheduled_mixing_interval_sec: 3600,
             scheduled_mixing_duration_sec: 300,
 
-            ph_v7: 1650.0,
-            ph_v4: 1846.4,
-            ec_factor: 880.0,
-            ec_offset: 0.0,
-            temp_offset: 0.0,
-            temp_compensation_beta: 0.02,
-            tank_height: 100.0,
-            sampling_interval: 1000,
-            publish_interval: 5000,
-            moving_average_window: 10,
+            // ph_v7: 1650.0,
+            // ph_v4: 1846.4,
+            // ec_factor: 880.0,
+            // ec_offset: 0.0,
+            // temp_offset: 0.0,
+            // temp_compensation_beta: 0.02,
+            // tank_height: 100.0,
 
+            // 🔴 BỎ
+            // sampling_interval: 1000,
+            // publish_interval: 5000,
+            // moving_average_window: 10,
             enable_ec_sensor: true,
             enable_ph_sensor: true,
             enable_water_level_sensor: true,
             enable_temp_sensor: true,
 
-            enable_ec_tc: true,
-            enable_ph_tc: true,
-
+            // 🔴 BỎ
+            // enable_ec_tc: true,
+            // enable_ph_tc: true,
             dosing_pwm_percent: 50,
             dosing_min_pwm_percent: 35,
             pump_a_min_pwm_percent: None,

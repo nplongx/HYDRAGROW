@@ -37,5 +37,8 @@ esp-idf-sys = "0.37.2"
 chrono = "0.4"
 cron = "0.12"
 
+hydragrow-shared = { path = "../hydragrow-shared" }
+
+
 [build-dependencies]
 embuild = "0.33"

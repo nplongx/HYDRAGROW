@@ -1,7 +1,8 @@
-use crate::config::{DeviceConfig, SharedConfig};
+use crate::config::SharedConfig;
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
+use hydragrow_shared::ControllerConfig;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{mpsc::Sender, Arc, RwLock};
@@ -267,7 +268,7 @@ pub fn init_mqtt_client(
                 // CONFIG UPDATE
                 if topic_str == topic_config_cb {
                     debug!("⚙️ Processing CONFIG update");
-                    match serde_json::from_slice::<DeviceConfig>(data) {
+                    match serde_json::from_slice::<ControllerConfig>(data) {
                         Ok(new_config) => {
                             info!("📦 New config received: {:?}", new_config);
                             if let Ok(mut config) = shared_config.write() {

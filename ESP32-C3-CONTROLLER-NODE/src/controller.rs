@@ -1,4 +1,5 @@
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
+use hydragrow_shared::{ControlMode, ControllerConfig};
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
@@ -9,7 +10,7 @@ use chrono::{Local, TimeZone};
 use cron::Schedule;
 use std::str::FromStr;
 
-use crate::config::{ControlMode, DeviceConfig, SharedConfig};
+use crate::config::SharedConfig;
 use crate::mqtt::{MqttCommandPayload, PumpStatus, SensorData};
 use crate::pump::{PumpController, PumpType, WaterDirection};
 
@@ -223,7 +224,7 @@ enum DosePumpKind {
 fn effective_flow_ml_per_sec(
     pump: DosePumpKind,
     pwm_percent: u32,
-    config: &DeviceConfig,
+    config: &ControllerConfig,
 ) -> Option<f32> {
     let (capacity, min_pwm) = match pump {
         DosePumpKind::PumpA => (
@@ -253,7 +254,7 @@ fn effective_flow_ml_per_sec(
     };
 
     let safe_pwm = pwm_percent.clamp(1, 100);
-    let safe_min_pwm = min_pwm.clamp(1, 100);
+    let safe_min_pwm = min_pwm.clamp(1, 100) as u32;
     if capacity <= 0.0 || safe_pwm < safe_min_pwm {
         return None;
     }
@@ -387,7 +388,7 @@ impl ControlContext {
         self.set_pulse_status(false, 0);
     }
 
-    fn check_and_update_noise(&mut self, sensors: &SensorData, config: &DeviceConfig) -> bool {
+    fn check_and_update_noise(&mut self, sensors: &SensorData, config: &ControllerConfig) -> bool {
         let mut is_noisy = false;
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(prev_ec) = self.previous_ec {
@@ -422,7 +423,7 @@ impl ControlContext {
         }
     }
 
-    fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &DeviceConfig, now_sec: u64) {
+    fn verify_sensor_ack(&mut self, sensors: &SensorData, config: &ControllerConfig, now_sec: u64) {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
                 let response = sensors.ec - last_ec;
@@ -504,7 +505,7 @@ impl ControlContext {
         }
     }
 
-    fn sync_adaptive_ratios_from_config(&mut self, config: &DeviceConfig) {
+    fn sync_adaptive_ratios_from_config(&mut self, config: &ControllerConfig) {
         if self.tuning_last_update_sec == 0 {
             self.adaptive_ec_step_ratio = config.ec_step_ratio;
             self.adaptive_ph_step_ratio = config.ph_step_ratio;
@@ -532,7 +533,12 @@ impl ControlContext {
         }
     }
 
-    fn adjust_ec_step_ratio(&mut self, config: &DeviceConfig, now_sec: u64, requested_delta: f32) {
+    fn adjust_ec_step_ratio(
+        &mut self,
+        config: &ControllerConfig,
+        now_sec: u64,
+        requested_delta: f32,
+    ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ec_step_ratio * 0.4).max(0.05);
         let max_ratio = (config.ec_step_ratio * 1.8).min(2.5);
@@ -547,7 +553,12 @@ impl ControlContext {
         self.tuning_last_update_sec = now_sec;
     }
 
-    fn adjust_ph_step_ratio(&mut self, config: &DeviceConfig, now_sec: u64, requested_delta: f32) {
+    fn adjust_ph_step_ratio(
+        &mut self,
+        config: &ControllerConfig,
+        now_sec: u64,
+        requested_delta: f32,
+    ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ph_step_ratio * 0.4).max(0.05);
         let max_ratio = (config.ph_step_ratio * 1.8).min(2.5);
@@ -678,7 +689,7 @@ fn start_pending_calibration_sample(
     ph_up_ml: f32,
     ph_down_ml: f32,
     current_time_ms: u64,
-    config: &DeviceConfig,
+    config: &ControllerConfig,
 ) {
     ctx.pending_calibration_sample = Some(PendingCalibrationSample {
         start_ec,
@@ -991,14 +1002,14 @@ pub fn start_fsm_control_loop(
                     let is_hot = config.enable_temp_sensor
                         && (sensors.temp >= config.misting_temp_threshold);
                     let on_duration = if is_hot {
-                        config.high_temp_misting_on_duration_ms
+                        config.high_temp_misting_on_duration_ms as u64
                     } else {
-                        config.misting_on_duration_ms
+                        config.misting_on_duration_ms as u64
                     };
                     let off_duration = if is_hot {
-                        config.high_temp_misting_off_duration_ms
+                        config.high_temp_misting_off_duration_ms as u64
                     } else {
-                        config.misting_off_duration_ms
+                        config.misting_off_duration_ms as u64
                     };
 
                     if ctx.is_misting_active {
@@ -1022,13 +1033,15 @@ pub fn start_fsm_control_loop(
                     {
                         if ctx.is_scheduled_mixing_active {
                             if current_time_sec
-                                >= ctx.last_mixing_start_sec + config.scheduled_mixing_duration_sec
+                                >= ctx.last_mixing_start_sec
+                                    + config.scheduled_mixing_duration_sec as u64
                             {
                                 ctx.is_scheduled_mixing_active = false;
                             }
                         } else {
                             if current_time_sec
-                                >= ctx.last_mixing_start_sec + config.scheduled_mixing_interval_sec
+                                >= ctx.last_mixing_start_sec
+                                    + config.scheduled_mixing_interval_sec as u64
                             {
                                 ctx.is_scheduled_mixing_active = true;
                                 ctx.last_mixing_start_sec = current_time_sec;
@@ -1057,9 +1070,9 @@ pub fn start_fsm_control_loop(
                         || ctx.is_scheduled_mixing_active;
                     if needs_osaka {
                         let target_pwm = if ctx.is_misting_active {
-                            config.osaka_misting_pwm_percent
+                            config.osaka_misting_pwm_percent as u32
                         } else {
-                            config.osaka_mixing_pwm_percent
+                            config.osaka_mixing_pwm_percent as u32
                         };
                         if !ctx.pump_status.osaka_pump {
                             let _ = pump_ctrl.start_osaka_pump_soft(target_pwm);
@@ -1097,7 +1110,7 @@ pub fn start_fsm_control_loop(
 
         // 🟢 FIX HARDCODE 2: Cooldown tản nhiệt dựa trên cấu hình người dùng
         if let SystemState::DosingCycleComplete = ctx.current_state {
-            std::thread::sleep(Duration::from_secs(config.cooldown_sec));
+            std::thread::sleep(Duration::from_secs(config.cooldown_sec as u64));
             ctx.current_state = SystemState::Monitoring;
         }
 
@@ -1158,7 +1171,7 @@ pub fn start_fsm_control_loop(
 
     fn process_mqtt_commands(
         cmd_rx: &Receiver<MqttCommandPayload>,
-        config: &DeviceConfig,
+        config: &ControllerConfig,
         pump_ctrl: &mut PumpController,
         ctx: &mut ControlContext,
         current_time_ms: u64,
@@ -1369,7 +1382,7 @@ pub fn start_fsm_control_loop(
 
     fn run_auto_fsm(
         current_time_ms: u64,
-        config: &DeviceConfig,
+        config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut ControlContext,
         pump_ctrl: &mut PumpController,
@@ -1449,7 +1462,7 @@ pub fn start_fsm_control_loop(
                             // 🟢 FIX HARDCODE 3: Check Cờ an toàn chống kẹt xả
                             if !ctx.check_and_record_drain_limit(
                                 current_time_sec,
-                                config.max_drain_cycles_per_hour,
+                                config.max_drain_cycles_per_hour as u32,
                             ) {
                                 ctx.stop_all_pumps(pump_ctrl);
                                 ctx.current_state =
@@ -1483,7 +1496,7 @@ pub fn start_fsm_control_loop(
                             SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
                     } else if !ctx.check_and_record_refill_limit(
                         current_time_sec,
-                        config.max_refill_cycles_per_hour,
+                        config.max_refill_cycles_per_hour as u32,
                     ) {
                         ctx.stop_all_pumps(pump_ctrl);
                         ctx.current_state =
@@ -1506,7 +1519,7 @@ pub fn start_fsm_control_loop(
                 {
                     if !ctx.check_and_record_drain_limit(
                         current_time_sec,
-                        config.max_drain_cycles_per_hour,
+                        config.max_drain_cycles_per_hour as u32,
                     ) {
                         ctx.stop_all_pumps(pump_ctrl);
                         ctx.current_state =
@@ -1529,7 +1542,7 @@ pub fn start_fsm_control_loop(
                 {
                     if !ctx.check_and_record_drain_limit(
                         current_time_sec,
-                        config.max_drain_cycles_per_hour,
+                        config.max_drain_cycles_per_hour as u32,
                     ) {
                         ctx.stop_all_pumps(pump_ctrl);
                         ctx.current_state =
@@ -1581,7 +1594,7 @@ pub fn start_fsm_control_loop(
                                     let _ = flash.set_u64("last_sched_dose", current_time_sec);
                                 }
 
-                                let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                                let safe_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
                                 if config.scheduled_dose_a_ml > 0.0
                                     || config.scheduled_dose_b_ml > 0.0
                                 {
@@ -1618,7 +1631,7 @@ pub fn start_fsm_control_loop(
                                         }
                                         ctx.current_state = SystemState::StartingOsakaPump {
                                             finish_time: current_time_ms
-                                                + config.soft_start_duration,
+                                                + config.soft_start_duration as u64,
                                             pending_action: PendingDose::ScheduledDose {
                                                 dose_a_ml: config.scheduled_dose_a_ml,
                                                 dose_b_ml: config.scheduled_dose_b_ml,
@@ -1644,7 +1657,7 @@ pub fn start_fsm_control_loop(
                                 SystemState::SystemFault("EC_DOSING_FAILED".to_string());
                             is_dosing_active = true;
                         } else {
-                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
                             let ec_error = config.ec_target - sensors.ec;
                             let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
                             let active_ec_step_ratio = if ctx.auto_tune_locked {
@@ -1684,7 +1697,8 @@ pub fn start_fsm_control_loop(
                                 );
                                 ctx.last_ec_before_dosing = Some(sensors.ec);
                                 ctx.current_state = SystemState::StartingOsakaPump {
-                                    finish_time: current_time_ms + config.soft_start_duration,
+                                    finish_time: current_time_ms
+                                        + config.soft_start_duration as u64,
                                     pending_action: PendingDose::EC {
                                         dose_ml,
                                         target_ec: config.ec_target,
@@ -1715,7 +1729,7 @@ pub fn start_fsm_control_loop(
                             } else {
                                 config.ph_shift_down_per_ml
                             };
-                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                            let safe_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
 
                             let pump_kind = if is_ph_up {
                                 DosePumpKind::PhUp
@@ -1754,7 +1768,7 @@ pub fn start_fsm_control_loop(
 
                                         ctx.current_state = SystemState::StartingOsakaPump {
                                             finish_time: current_time_ms
-                                                + config.soft_start_duration,
+                                                + config.soft_start_duration as u64,
                                             pending_action: PendingDose::PH {
                                                 is_up: is_ph_up,
                                                 dose_ml: final_dose_ml,
@@ -1848,17 +1862,17 @@ pub fn start_fsm_control_loop(
                                 };
                                 let is_pulse_mode = dose_a_ml < config.dosing_min_dose_ml;
                                 let pulse_on_ms = if is_pulse_mode {
-                                    config.dosing_pulse_on_ms.max(1)
+                                    config.dosing_pulse_on_ms.max(1) as u64
                                 } else {
                                     ((dose_a_ml / active_capacity_a) * 1000.0) as u64
                                 };
                                 let pulse_off_ms = if is_pulse_mode {
-                                    config.dosing_pulse_off_ms
+                                    config.dosing_pulse_off_ms as u64
                                 } else {
                                     0
                                 };
                                 let max_pulse_count = if is_pulse_mode {
-                                    config.dosing_max_pulse_count_per_cycle.max(1)
+                                    config.dosing_max_pulse_count_per_cycle.max(1) as u32
                                 } else {
                                     1
                                 };
@@ -1929,17 +1943,17 @@ pub fn start_fsm_control_loop(
                             };
                             let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
                             let pulse_on_ms = if is_pulse_mode {
-                                config.dosing_pulse_on_ms.max(1)
+                                config.dosing_pulse_on_ms.max(1) as u64
                             } else {
                                 ((dose_ml / active_capacity_a) * 1000.0) as u64
                             };
                             let pulse_off_ms = if is_pulse_mode {
-                                config.dosing_pulse_off_ms
+                                config.dosing_pulse_off_ms as u64
                             } else {
                                 0
                             };
                             let max_pulse_count = if is_pulse_mode {
-                                config.dosing_max_pulse_count_per_cycle.max(1)
+                                config.dosing_max_pulse_count_per_cycle.max(1) as u32
                             } else {
                                 1
                             };
@@ -2000,17 +2014,17 @@ pub fn start_fsm_control_loop(
 
                             let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
                             let pulse_on_ms = if is_pulse_mode {
-                                config.dosing_pulse_on_ms.max(1)
+                                config.dosing_pulse_on_ms.max(1) as u64
                             } else {
                                 ((dose_ml / active_capacity) * 1000.0) as u64
                             };
                             let pulse_off_ms = if is_pulse_mode {
-                                config.dosing_pulse_off_ms
+                                config.dosing_pulse_off_ms as u64
                             } else {
                                 0
                             };
                             let max_pulse_count = if is_pulse_mode {
-                                config.dosing_max_pulse_count_per_cycle.max(1)
+                                config.dosing_max_pulse_count_per_cycle.max(1) as u32
                             } else {
                                 1
                             };
@@ -2146,7 +2160,7 @@ pub fn start_fsm_control_loop(
             } => {
                 if current_time_ms >= finish_time {
                     if dose_b_ml > 0.0 {
-                        let dose_pwm = config.dosing_pwm_percent.clamp(1, 100);
+                        let dose_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
                         let is_pulse_mode = dose_b_ml < config.dosing_min_dose_ml;
                         let active_capacity_b = if let Some(cap) =
                             effective_flow_ml_per_sec(DosePumpKind::PumpB, dose_pwm, config)
@@ -2160,17 +2174,17 @@ pub fn start_fsm_control_loop(
                         };
 
                         let pulse_on_ms = if is_pulse_mode {
-                            config.dosing_pulse_on_ms.max(1)
+                            config.dosing_pulse_on_ms.max(1) as u64
                         } else {
                             ((dose_b_ml / active_capacity_b) * 1000.0) as u64
                         };
                         let pulse_off_ms = if is_pulse_mode {
-                            config.dosing_pulse_off_ms
+                            config.dosing_pulse_off_ms as u64
                         } else {
                             0
                         };
                         let max_pulse_count = if is_pulse_mode {
-                            config.dosing_max_pulse_count_per_cycle.max(1)
+                            config.dosing_max_pulse_count_per_cycle.max(1) as u32
                         } else {
                             1
                         };
@@ -2451,3 +2465,4 @@ pub fn start_fsm_control_loop(
         }
     }
 }
+

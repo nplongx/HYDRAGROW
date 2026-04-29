@@ -1,5 +1,6 @@
 use actix_web::{HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
+use hydragrow_shared::ControllerConfig;
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -8,8 +9,7 @@ use tracing::{error, info, instrument};
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, SystemEventRecord, insert_system_event};
 use crate::models::config::{
-    DeviceConfig, DosingCalibration, MqttConfigPayload, SafetyConfig, SensorCalibration,
-    WaterConfig,
+    DeviceConfig, DosingCalibration, SafetyConfig, SensorCalibration, WaterConfig, from_db_rows,
 };
 
 #[derive(Debug, Serialize)]
@@ -28,7 +28,7 @@ struct DosingDynamicResponse {
 async fn fetch_unified_config_concurrently(
     pool: &sqlx::PgPool,
     device_id: &str,
-) -> Result<MqttConfigPayload, String> {
+) -> Result<ControllerConfig, String> {
     let (dev_res, water_res, safe_res, dose_res, sens_res) = tokio::join!(
         sqlx::query_as::<_, DeviceConfig>("SELECT * FROM device_config WHERE device_id = $1")
             .bind(device_id)
@@ -95,9 +95,7 @@ async fn fetch_unified_config_concurrently(
             last_calibrated: Utc::now(),
         });
 
-    Ok(MqttConfigPayload::from_db_rows(
-        &dev, &water, &safe, &dose, &sens,
-    ))
+    Ok(from_db_rows(&dev, &water, &safe, &dose, &sens))
 }
 
 pub async fn sync_config_to_esp32(

@@ -186,7 +186,7 @@ async fn upsert_water_db(
             auto_drain_overflow, auto_dilute_enabled, dilute_drain_amount_cm,
             scheduled_water_change_enabled, water_change_cron, scheduled_drain_amount_cm,
             misting_on_duration_ms, misting_off_duration_ms, last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_height = EXCLUDED.tank_height,
             water_level_min = EXCLUDED.water_level_min, 
@@ -305,6 +305,11 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
         return Err("dosing_pwm_percent must be in range [1..100]".to_string());
     }
 
+    // 🟢 THÊM KIỂM TRA CHO CÁC THÔNG SỐ PWM TỐI THIỂU MỚI
+    if !(0..=100).contains(&dose.dosing_min_pwm_percent) {
+        return Err("dosing_min_pwm_percent must be in range [0..100]".to_string());
+    }
+
     if dose.pump_a_capacity_ml_per_sec <= 0.0 {
         return Err("pump_a_capacity_ml_per_sec must be > 0".to_string());
     }
@@ -353,6 +358,7 @@ pub struct FinishCalibrationRequest {
     pub finished_at: Option<DateTime<Utc>>,
 }
 
+// 🟢 CẬP NHẬT CÂU TRUY VẤN SQL BỔ SUNG CÁC TRƯỜNG PWM MỚI
 async fn upsert_dosing_db(
     pool: &sqlx::PgPool,
     cal: &DosingCalibration,
@@ -369,7 +375,10 @@ async fn upsert_dosing_db(
             scheduled_mixing_interval_sec, scheduled_mixing_duration_sec,
             dosing_pwm_percent, osaka_mixing_pwm_percent, osaka_misting_pwm_percent,
             scheduled_dosing_enabled, scheduled_dosing_cron, scheduled_dose_a_ml, scheduled_dose_b_ml,
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+            dosing_min_pwm_percent, pump_a_min_pwm_percent, pump_b_min_pwm_percent,
+            pump_ph_up_min_pwm_percent, pump_ph_down_min_pwm_percent, dosing_pulse_on_ms,
+            dosing_pulse_off_ms, dosing_min_dose_ml, dosing_max_pulse_count_per_cycle
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_volume_l = EXCLUDED.tank_volume_l, ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
             ph_shift_up_per_ml = EXCLUDED.ph_shift_up_per_ml, ph_shift_down_per_ml = EXCLUDED.ph_shift_down_per_ml,
@@ -386,34 +395,54 @@ async fn upsert_dosing_db(
             scheduled_dosing_cron = EXCLUDED.scheduled_dosing_cron,
             scheduled_dose_a_ml = EXCLUDED.scheduled_dose_a_ml,
             scheduled_dose_b_ml = EXCLUDED.scheduled_dose_b_ml,
+            dosing_min_pwm_percent = EXCLUDED.dosing_min_pwm_percent,
+            pump_a_min_pwm_percent = EXCLUDED.pump_a_min_pwm_percent,
+            pump_b_min_pwm_percent = EXCLUDED.pump_b_min_pwm_percent,
+            pump_ph_up_min_pwm_percent = EXCLUDED.pump_ph_up_min_pwm_percent,
+            pump_ph_down_min_pwm_percent = EXCLUDED.pump_ph_down_min_pwm_percent,
+            dosing_pulse_on_ms = EXCLUDED.dosing_pulse_on_ms,
+            dosing_pulse_off_ms = EXCLUDED.dosing_pulse_off_ms,
+            dosing_min_dose_ml = EXCLUDED.dosing_min_dose_ml,
+            dosing_max_pulse_count_per_cycle = EXCLUDED.dosing_max_pulse_count_per_cycle,
             last_calibrated = EXCLUDED.last_calibrated
         "#
     )
-    .bind(&cal.device_id)
-    .bind(cal.tank_volume_l)
-    .bind(cal.ec_gain_per_ml)
-    .bind(cal.ph_shift_up_per_ml)
-    .bind(cal.ph_shift_down_per_ml)
-    .bind(cal.active_mixing_sec)
-    .bind(cal.sensor_stabilize_sec)
-    .bind(cal.ec_step_ratio)
-    .bind(cal.ph_step_ratio)
-    .bind(cal.pump_a_capacity_ml_per_sec)
-    .bind(cal.pump_b_capacity_ml_per_sec)
-    .bind(cal.pump_ph_up_capacity_ml_per_sec)
-    .bind(cal.pump_ph_down_capacity_ml_per_sec)
-    .bind(cal.soft_start_duration)
-    .bind(now)
-    .bind(cal.scheduled_mixing_interval_sec)
-    .bind(cal.scheduled_mixing_duration_sec)
-    .bind(cal.dosing_pwm_percent)
-    .bind(cal.osaka_mixing_pwm_percent)
-    .bind(cal.osaka_misting_pwm_percent)
-    .bind(cal.scheduled_dosing_enabled)
-    .bind(&cal.scheduled_dosing_cron)
-    .bind(cal.scheduled_dose_a_ml)
-    .bind(cal.scheduled_dose_b_ml)
-        .execute(pool).await?;
+    .bind(&cal.device_id) // 1
+    .bind(cal.tank_volume_l) // 2
+    .bind(cal.ec_gain_per_ml) // 3
+    .bind(cal.ph_shift_up_per_ml) // 4
+    .bind(cal.ph_shift_down_per_ml) // 5
+    .bind(cal.active_mixing_sec) // 6
+    .bind(cal.sensor_stabilize_sec) // 7
+    .bind(cal.ec_step_ratio) // 8
+    .bind(cal.ph_step_ratio) // 9
+    .bind(cal.pump_a_capacity_ml_per_sec) // 10
+    .bind(cal.pump_b_capacity_ml_per_sec) // 11
+    .bind(cal.pump_ph_up_capacity_ml_per_sec) // 12
+    .bind(cal.pump_ph_down_capacity_ml_per_sec) // 13
+    .bind(cal.soft_start_duration) // 14
+    .bind(now) // 15
+    .bind(cal.scheduled_mixing_interval_sec) // 16
+    .bind(cal.scheduled_mixing_duration_sec) // 17
+    .bind(cal.dosing_pwm_percent) // 18
+    .bind(cal.osaka_mixing_pwm_percent) // 19
+    .bind(cal.osaka_misting_pwm_percent) // 20
+    .bind(cal.scheduled_dosing_enabled) // 21
+    .bind(&cal.scheduled_dosing_cron) // 22
+    .bind(cal.scheduled_dose_a_ml) // 23
+    .bind(cal.scheduled_dose_b_ml) // 24
+    // 🟢 THÊM THAM SỐ PWM (Từ 25 đến 33)
+    .bind(cal.dosing_min_pwm_percent) // 25
+    .bind(cal.pump_a_min_pwm_percent) // 26
+    .bind(cal.pump_b_min_pwm_percent) // 27
+    .bind(cal.pump_ph_up_min_pwm_percent) // 28
+    .bind(cal.pump_ph_down_min_pwm_percent) // 29
+    .bind(cal.dosing_pulse_on_ms) // 30
+    .bind(cal.dosing_pulse_off_ms) // 31
+    .bind(cal.dosing_min_dose_ml) // 32
+    .bind(cal.dosing_max_pulse_count_per_cycle) // 33
+    .execute(pool).await?;
+
     Ok(())
 }
 
@@ -1072,3 +1101,4 @@ mod tests {
         assert!(result.unwrap_err().contains("scheduled_dose_a_ml"));
     }
 }
+

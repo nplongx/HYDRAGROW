@@ -33,7 +33,6 @@ DallasTemperature sensors(&oneWire);
 // ==========================================
 // Cấu hình vật lý & Cảm biến
 // ==========================================
-// 🟢 THÊM MỚI: Biến lưu điểm hiệu chuẩn thứ 3 và chế độ hiệu chuẩn
 float ph_v686 = 2650.0, ph_v4 = 3555.0, ph_v918 = 1750.0;
 String ph_calibration_mode = "2-point";
 
@@ -69,17 +68,15 @@ extern unsigned long last_publish_time;
 
 // =====================================================================
 // CLASS: BỘ LỌC TÍN HIỆU LAI (HYBRID FILTER) - O(1) Memory Complexity
-// Lớp 1: Cửa sổ động học loại bỏ điểm dị biệt (Dynamic Outlier Rejection)
-// Lớp 2: Trung bình trượt hàm mũ (EMA)
 // =====================================================================
 class HybridFilter {
 private:
-  float X_prev;     // Giá trị thô đã xác nhận trước đó
-  float Y_prev;     // Giá trị đã qua lọc (Lớp 2) chu kỳ trước
-  int error_streak; // Biến đếm cơ chế chống đóng băng (Anti-Lock)
-  float delta_max;  // Ngưỡng biến thiên vật lý tối đa cho phép
-  float alpha;      // Hệ số học tập (Learning Rate) của EMA
-  bool initialized; // Cờ khởi tạo
+  float X_prev;
+  float Y_prev;
+  int error_streak;
+  float delta_max;
+  float alpha;
+  bool initialized;
 
 public:
   HybridFilter(float _delta, float _alpha) {
@@ -108,9 +105,16 @@ public:
 
     if (abs(x_t - X_prev) > delta_max) {
       error_streak++;
+      // [DEBUG THÊM MỚI]: In cảnh báo khi phát hiện nhiễu đột biến
+      Serial.printf("⚠️ [DEBUG-Filter] Phát hiện dị biệt: x_t=%.2f, "
+                    "X_prev=%.2f, streak=%d\n",
+                    x_t, X_prev, error_streak);
+
       if (error_streak > 5) {
         X_prev = x_t;
         error_streak = 0;
+        Serial.println(
+            "🛑 [DEBUG-Filter] Streak > 5: Cập nhật X_prev thành giá trị mới.");
       } else {
         X_t = X_prev;
       }
@@ -166,41 +170,39 @@ float readWaterLevel() {
   }
   float distance = (duration / 2.0) * 0.0343;
   float water_level = tank_height - distance;
+
+  // [DEBUG THÊM MỚI]: In chi tiết đọc mực nước
+  // Bỏ comment dòng dưới nếu muốn thấy debug siêu chi tiết mỗi 200ms
+  // Serial.printf("💧 [DEBUG-Water] Raw_Duration: %ld, Distance: %.2f cm,
+  // Level: %.2f cm\n", duration, distance, water_level);
+
   return (water_level < 0) ? 0 : water_level;
 }
 
-// 🟢 CẬP NHẬT: Tính toán pH với thuật toán 3-point (Nội suy tuyến tính từng
-// phần)
 float calculate_ph(float voltage_mv, float current_temp) {
   float slope;
   float base_ph;
   float base_v;
 
   if (ph_calibration_mode == "3-point") {
-    // Điện áp cảm biến pH tỉ lệ nghịch với nồng độ pH.
-    // V > V_686 nghĩa là pH < 6.86 (Vùng Acid)
     if (voltage_mv > ph_v686) {
       float diff = ph_v4 - ph_v686;
       slope = (abs(diff) < 0.1) ? -0.006 : ((4.0 - 6.86) / diff);
       base_ph = 6.86;
       base_v = ph_v686;
-    }
-    // V <= V_686 nghĩa là pH >= 6.86 (Vùng Bazơ)
-    else {
+    } else {
       float diff = ph_v686 - ph_v918;
       slope = (abs(diff) < 0.1) ? -0.006 : ((6.86 - 9.18) / diff);
       base_ph = 9.18;
       base_v = ph_v918;
     }
   } else {
-    // Mặc định 2-point (Giữ nguyên logic cũ dùng mốc 4.0 và 6.86)
     float diff = ph_v4 - ph_v686;
     slope = (abs(diff) < 0.1) ? -0.006 : ((4.0 - 6.86) / diff);
     base_ph = 6.86;
     base_v = ph_v686;
   }
 
-  // Bù trừ nhiệt độ cho hệ số góc (Nernst equation compensation)
   if (enable_ph_tc) {
     float temp_ratio = (current_temp + 273.15) / (25.0 + 273.15);
     slope = slope / temp_ratio;
@@ -208,6 +210,12 @@ float calculate_ph(float voltage_mv, float current_temp) {
 
   float ph_result =
       constrain(base_ph + slope * (voltage_mv - base_v), 0.0, 14.0);
+
+  // [DEBUG THÊM MỚI]: In thông tin tính toán pH (Bỏ comment nếu muốn xem chi
+  // tiết liên tục) Serial.printf("🧪 [DEBUG-pH] V_mv: %.2f, slope: %.5f,
+  // Base_V: %.2f, Base_pH: %.2f, Result: %.2f\n", voltage_mv, slope, base_v,
+  // base_ph, ph_result);
+
   return ph_result;
 }
 
@@ -219,6 +227,12 @@ float calculate_ec(float voltage_mv, float current_temp) {
     float coef = 1.0 + temp_compensation_beta * (current_temp - 25.0);
     ec_result = raw_ec / coef;
   }
+
+  // [DEBUG THÊM MỚI]: In thông tin tính toán EC
+  // Serial.printf("⚡ [DEBUG-EC] V_mv: %.2f, Raw: %.2f, TC_Coef: %s, Result:
+  // %.2f\n", voltage_mv, raw_ec, enable_ec_tc ? "Yes" : "No", max(ec_result,
+  // 0.0f));
+
   return max(ec_result, 0.0f);
 }
 
@@ -230,45 +244,52 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String topicStr = String(topic);
 
   Serial.printf("📥 [DEBUG-MQTT] Nhận Topic: %s\n", topicStr.c_str());
+  // [DEBUG THÊM MỚI]: In nội dung payload nhận được
+  Serial.printf("📦 [DEBUG-MQTT] Payload: %s\n", message.c_str());
 
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
     if (!deserializeJson(doc, message)) {
       String action = doc.containsKey("action") ? doc["action"].as<String>()
                                                 : doc["command"].as<String>();
+      // [DEBUG THÊM MỚI]: In hành động parser
+      Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
+
       if (action == "set_continuous" || action == "continuous_level") {
         continuous_level = doc.containsKey("params")
                                ? doc["params"]["state"].as<bool>()
                                : doc["state"].as<bool>();
+        Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
+                      continuous_level);
       } else if (action == "force_publish") {
         last_publish_time = 0;
+        Serial.println("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
       }
+    } else {
+      Serial.println("❌ [DEBUG-CMD] Lỗi parse JSON command");
     }
     return;
   }
 
   if (topicStr == topic_config) {
     DynamicJsonDocument doc(1024);
-    if (deserializeJson(doc, message))
+    if (deserializeJson(doc, message)) {
+      Serial.println("❌ [DEBUG-CONFIG] Lỗi parse JSON config");
       return;
+    }
 
-    // 🟢 CẬP NHẬT: Parse các thông số từ server xuống (Dành cho bản 3-point)
     if (doc.containsKey("ph_calibration_mode"))
       ph_calibration_mode = doc["ph_calibration_mode"].as<String>();
 
-    // Ánh xạ `ph_v7` từ db backend thành ph_v686 ở vi điều khiển cho khớp chuẩn
-    // dung dịch
     if (doc.containsKey("ph_v7"))
-      ph_v686 = doc["ph_v7"].as<float>();
+      ph_v686 = doc["ph_v7"].as<float>() * 1000;
     if (doc.containsKey("ph_v4"))
-      ph_v4 = doc["ph_v4"].as<float>();
+      ph_v4 = doc["ph_v4"].as<float>() * 1000;
 
-    // Tương thích với key `ph_v10` từ Backend Actix-Web gửi xuống (dù dung dịch
-    // thực tế là 9.18)
     if (doc.containsKey("ph_v10"))
-      ph_v918 = doc["ph_v10"].as<float>();
+      ph_v918 = doc["ph_v10"].as<float>() * 1000;
     else if (doc.containsKey("ph_v918"))
-      ph_v918 = doc["ph_v918"].as<float>();
+      ph_v918 = doc["ph_v918"].as<float>() * 1000;
 
     if (doc.containsKey("ec_factor"))
       ec_factor = doc["ec_factor"].as<float>();
@@ -286,6 +307,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       waterFilter.setAlpha(new_alpha);
       phFilter.setAlpha(new_alpha);
       ecFilter.setAlpha(new_alpha);
+      Serial.printf(
+          "⚙️ [DEBUG-CONFIG] Cập nhật Filter Alpha: %.4f (Window: %d)\n",
+          new_alpha, window);
     }
 
     if (doc.containsKey("publish_interval"))
@@ -300,6 +324,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       enable_water = doc["enable_water_level_sensor"].as<bool>();
 
     Serial.println("🔄 Đã nạp cấu hình Lõi mới từ Server thành công!");
+
+    // [DEBUG THÊM MỚI]: In ra màn hình các thông số sau khi nạp để kiểm chứng
+    Serial.printf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
+                  "V918: %.1f\n",
+                  ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
+    Serial.printf("📋 [DEBUG-CONFIG-VARS] EC Fac: %.3f, EC Off: %.3f, Temp "
+                  "Off: %.2f, Tank: %.2f\n",
+                  ec_factor, ec_offset, temp_offset, tank_height);
   }
 }
 
@@ -322,6 +354,9 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\n✅ Kết nối WiFi thành công!");
+  // [DEBUG THÊM MỚI]: In IP Address
+  Serial.print("📶 [DEBUG-WIFI] IP Address: ");
+  Serial.println(WiFi.localIP());
 
   client.setBufferSize(1024);
   client.setServer(mqtt_server, mqtt_port);
@@ -331,12 +366,19 @@ void setup() {
 void reconnect() {
   while (!client.connected()) {
     String clientId = "SensorNode_" + String(device_id);
+    Serial.printf("🔄 [DEBUG-MQTT] Đang thử kết nối MQTT... ClientID: %s\n",
+                  clientId.c_str());
+
     if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass,
                        topic_status.c_str(), 1, true, "{\"online\": false}")) {
+      Serial.println("✅ [DEBUG-MQTT] Kết nối MQTT thành công!");
       client.publish(topic_status.c_str(), "{\"online\": true}", true);
       client.subscribe(topic_config.c_str());
       client.subscribe(topic_cmd.c_str());
     } else {
+      Serial.printf("❌ [DEBUG-MQTT] Kết nối thất bại, state = %d. Đợi 5 giây "
+                    "để thử lại...\n",
+                    client.state());
       delay(5000);
     }
   }
@@ -347,6 +389,7 @@ unsigned long last_publish_time = 0;
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("⚠️ [DEBUG-WIFI] Mất kết nối WiFi, đang thử kết nối lại...");
     WiFi.disconnect();
     WiFi.reconnect();
     delay(5000);
@@ -448,5 +491,16 @@ void loop() {
     String payload;
     serializeJson(doc, payload);
     client.publish(topic_sensors.c_str(), payload.c_str());
+
+    // [DEBUG THÊM MỚI]: In ra dữ liệu chuẩn bị publish
+    Serial.println("\n-----------------------------------------");
+    Serial.printf("📤 [DEBUG-PUB] Topic: %s\n", topic_sensors.c_str());
+    Serial.printf("📤 [DEBUG-PUB] Payload: %s\n", payload.c_str());
+    Serial.printf("📊 [DEBUG-DATA] Temp: %.2f °C | Water: %.2f cm | pH: %.2f | "
+                  "EC: %.2f\n",
+                  current_avg_temp,
+                  continuous_level ? latest_raw_water : current_avg_water,
+                  current_avg_ph, current_avg_ec);
+    Serial.println("-----------------------------------------");
   }
 }

@@ -376,6 +376,7 @@ const ControlPanel = () => {
   }
 
   const isOnline = deviceStatus?.is_online || false;
+
   const showDisconnected = isControllerStatusKnown && !isOnline;
   const pumps: Partial<PumpStatus> = isOnline ? (sensorData.pump_status || {}) : {};
 

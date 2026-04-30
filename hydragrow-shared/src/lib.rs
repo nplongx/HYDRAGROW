@@ -99,8 +99,7 @@ pub enum ControlMode {
 impl ControlMode {
     pub fn from_string(str: &str) -> Self {
         match str {
-            "Auto" => Self::Auto,
-            "Manual" => Self::Manual,
+            "auto" => Self::Auto,
             _ => Self::Manual,
         }
     }
@@ -311,10 +310,10 @@ impl Default for ControllerConfig {
             // sampling_interval: 1000,
             // publish_interval: 5000,
             // moving_average_window: 10,
-            enable_ec_sensor: true,
-            enable_ph_sensor: true,
-            enable_water_level_sensor: true,
-            enable_temp_sensor: true,
+            enable_ec_sensor: false,
+            enable_ph_sensor: false,
+            enable_water_level_sensor: false,
+            enable_temp_sensor: false,
 
             // để tạm thuận tiện để lấy thông số cho sensor node
             tank_height: 50,

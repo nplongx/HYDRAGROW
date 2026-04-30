@@ -15,6 +15,7 @@ use std::time::Duration;
 
 mod config;
 mod controller;
+mod fsm;
 mod mqtt;
 mod pump;
 

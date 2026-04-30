@@ -41,6 +41,9 @@ pub enum SystemState {
     SystemBooting,
     ManualMode,
     DosingCycleComplete,
+    Cooldown {
+        finish_time: u64,
+    },
     Monitoring,
     EmergencyStop(String),
     SystemFault(String),
@@ -130,6 +133,7 @@ impl SystemState {
             SystemState::SystemBooting => "SystemBooting".to_string(),
             SystemState::ManualMode => "ManualMode".to_string(),
             SystemState::DosingCycleComplete => "DosingCycleComplete".to_string(),
+            SystemState::Cooldown { finish_time } => format!("Cooldown:{}", finish_time),
             SystemState::Monitoring => "Monitoring".to_string(),
             SystemState::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
             SystemState::SystemFault(reason) => format!("SystemFault:{}", reason),
@@ -1108,12 +1112,6 @@ pub fn start_fsm_control_loop(
             }
         }
 
-        // 🟢 FIX HARDCODE 2: Cooldown tản nhiệt dựa trên cấu hình người dùng
-        if let SystemState::DosingCycleComplete = ctx.current_state {
-            std::thread::sleep(Duration::from_secs(config.cooldown_sec as u64));
-            ctx.current_state = SystemState::Monitoring;
-        }
-
         let needs_continuous = matches!(
             ctx.current_state,
             SystemState::WaterRefilling { .. } | SystemState::WaterDraining { .. }
@@ -1397,10 +1395,20 @@ pub fn start_fsm_control_loop(
         let max_hourly_ml = config.max_dose_per_hour;
 
         match ctx.current_state {
-            SystemState::SystemBooting
-            | SystemState::ManualMode
-            | SystemState::DosingCycleComplete => {
+            SystemState::SystemBooting | SystemState::ManualMode => {
                 // Các state này do luồng ngoài xử lý, auto fsm không làm gì cả
+            }
+
+            SystemState::DosingCycleComplete => {
+                ctx.current_state = SystemState::Cooldown {
+                    finish_time: current_time_ms + (config.cooldown_sec as u64 * 1000),
+                };
+            }
+
+            SystemState::Cooldown { finish_time } => {
+                if current_time_ms >= finish_time {
+                    ctx.current_state = SystemState::Monitoring;
+                }
             }
 
             SystemState::SensorCalibration { finish_time, .. } => {
@@ -2465,4 +2473,3 @@ pub fn start_fsm_control_loop(
         }
     }
 }
-

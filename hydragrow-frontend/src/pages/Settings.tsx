@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Save, Target, ShieldAlert, Waves,
-  FlaskConical, Activity, Settings2, Power, Network, Zap, Clock, LockKeyhole
+  FlaskConical, Activity, Settings2, Power, Network, Zap, Clock, LockKeyhole,
+  CalendarClock
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
@@ -75,6 +76,132 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   return errors;
 };
 
+// --- COMPONENT TRỰC QUAN HOÁ CRON ---
+const VisualCronPicker = ({
+  value,
+  onChange,
+  label,
+  desc,
+  colorClass = "cyan"
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label: string;
+  desc?: string;
+  colorClass?: "cyan" | "fuchsia"
+}) => {
+  // Parser cơ bản cho Cron 6 phần: Giây Phút Giờ Ngày Tháng Thứ
+  const parts = (value || "0 0 8 * * *").trim().split(/\s+/);
+
+  const minute = parts[1] !== '*' && parts[1] !== undefined ? parts[1].padStart(2, '0') : '00';
+  const hour = parts[2] !== '*' && parts[2] !== undefined ? parts[2].padStart(2, '0') : '08';
+  const timeStr = `${hour}:${minute}`;
+
+  const dow = parts[5] || '*';
+  const isEveryDay = dow === '*';
+  const selectedDays = isEveryDay ? [] : dow.split(',');
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+    const [h, m] = val.split(':');
+    const newCron = `${parts[0] || '0'} ${parseInt(m)} ${parseInt(h)} ${parts[3] || '*'} ${parts[4] || '*'} ${dow}`;
+    onChange(newCron);
+  };
+
+  const toggleDay = (dayVal: string) => {
+    let newDays = [...selectedDays];
+    if (newDays.includes(dayVal)) {
+      newDays = newDays.filter(d => d !== dayVal);
+    } else {
+      newDays.push(dayVal);
+    }
+    const newDow = newDays.length === 0 ? '*' : newDays.join(',');
+    const newCron = `${parts[0] || '0'} ${parseInt(minute)} ${parseInt(hour)} ${parts[3] || '*'} ${parts[4] || '*'} ${newDow}`;
+    onChange(newCron);
+  };
+
+  const setEveryDay = () => {
+    const newCron = `${parts[0] || '0'} ${parseInt(minute)} ${parseInt(hour)} ${parts[3] || '*'} ${parts[4] || '*'} *`;
+    onChange(newCron);
+  };
+
+  const daysOfWeek = [
+    { val: 'MON', label: 'T2' },
+    { val: 'TUE', label: 'T3' },
+    { val: 'WED', label: 'T4' },
+    { val: 'THU', label: 'T5' },
+    { val: 'FRI', label: 'T6' },
+    { val: 'SAT', label: 'T7' },
+    { val: 'SUN', label: 'CN' },
+  ];
+
+  const theme = colorClass === "cyan"
+    ? { text: "text-cyan-400", bgActive: "bg-cyan-500", borderActive: "border-cyan-500", shadow: "shadow-[0_0_10px_rgba(6,182,212,0.4)]" }
+    : { text: "text-fuchsia-400", bgActive: "bg-fuchsia-500", borderActive: "border-fuchsia-500", shadow: "shadow-[0_0_10px_rgba(217,70,239,0.4)]" };
+
+  return (
+    <div className="space-y-3 bg-slate-950/40 border border-slate-700/50 p-4 rounded-xl shadow-inner">
+      <div>
+        <label className="text-xs font-bold text-slate-300 tracking-wide uppercase flex items-center gap-2">
+          <CalendarClock size={14} className={theme.text} />
+          {label}
+        </label>
+        {desc && <p className="text-[10px] text-slate-500 mt-1">{desc}</p>}
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-5 pt-2">
+        <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 focus-within:border-slate-600 transition-colors">
+          <input
+            type="time"
+            value={timeStr}
+            onChange={handleTimeChange}
+            className="bg-transparent text-slate-100 text-2xl font-black outline-none w-full text-center tracking-widest cursor-pointer [color-scheme:dark]"
+          />
+        </div>
+
+        <div className="flex-1 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={setEveryDay}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${isEveryDay ? `${theme.bgActive} text-slate-950 ${theme.shadow}` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}
+            >
+              HÀNG NGÀY
+            </button>
+            <span className="text-[10px] text-slate-600 font-bold uppercase">hoặc chọn ngày:</span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {daysOfWeek.map(day => {
+              const isSelected = !isEveryDay && selectedDays.includes(day.val);
+              return (
+                <button
+                  key={day.val}
+                  onClick={() => toggleDay(day.val)}
+                  className={`w-9 h-9 rounded-full text-[11px] font-bold transition-all flex items-center justify-center border ${isSelected
+                      ? `${theme.bgActive}/20 ${theme.borderActive} ${theme.text} shadow-[0_0_10px_rgba(255,255,255,0.05)]`
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+                    }`}
+                >
+                  {day.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-2 border-t border-slate-800/50 mt-2">
+        <span className="text-[9px] text-slate-600 font-mono bg-slate-900 px-2 py-1 rounded">
+          Cron Output: {value || "0 0 8 * * *"}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
   const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId, systemEvents } = useDeviceContext();
   const [isLoading, setIsLoading] = useState(true);
@@ -107,7 +234,6 @@ const Settings = () => {
     dosing_pwm_percent: 50, osaka_mixing_pwm_percent: 60, osaka_misting_pwm_percent: 100, soft_start_duration: 3000,
     scheduled_dosing_enabled: false, scheduled_dosing_cron: '0 0 8 * * *', scheduled_dose_a_ml: 10.0, scheduled_dose_b_ml: 10.0,
 
-    // 🟢 THÔNG SỐ XUNG PWM MỚI ĐƯỢC THÊM VÀO
     dosing_min_pwm_percent: 20,
     pump_a_min_pwm_percent: 20,
     pump_b_min_pwm_percent: 20,
@@ -124,7 +250,6 @@ const Settings = () => {
     max_refill_cycles_per_hour: 3, max_drain_cycles_per_hour: 3, max_refill_duration_sec: 120, max_drain_duration_sec: 120,
     emergency_shutdown: false, ec_ack_threshold: 0.05, ph_ack_threshold: 0.1, water_ack_threshold: 0.5,
 
-    // CẤU HÌNH HIỆU CHUẨN ĐẦU DÒ
     ph_v7: 2.5, ph_v4: 1.428, ph_v10: null, ph_calibration_mode: '2-point',
     ec_factor: 880.0, ec_offset: 0.0, temp_offset: 0.0, temp_compensation_beta: 0.02,
 
@@ -236,7 +361,7 @@ const Settings = () => {
       }
     }
 
-    const targetSamples = 5; // Fixed fallback for dynamic_sample_count removed from payload
+    const targetSamples = 5;
     const intervalSec = Number(config.publish_interval || 5000) / 1000;
     const dynamicWindowSec = Math.ceil((targetSamples + 2) * intervalSec) + 5;
     const requestTimeoutMs = (dynamicWindowSec + 5) * 1000;
@@ -528,7 +653,6 @@ const Settings = () => {
         osaka_mixing_pwm_percent: toNumberOr(savingConfig.osaka_mixing_pwm_percent, 60),
         osaka_misting_pwm_percent: toNumberOr(savingConfig.osaka_misting_pwm_percent, 100),
 
-        // 🟢 CẬP NHẬT TRƯỜNG PWM MỚI (Từ Rust model)
         dosing_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.dosing_min_pwm_percent, 20)),
         pump_a_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_a_min_pwm_percent, 20)),
         pump_b_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_b_min_pwm_percent, 20)),
@@ -794,17 +918,13 @@ const Settings = () => {
             </div>
             {config.scheduled_water_change_enabled && (
               <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-top-2 bg-slate-900/50 p-4 rounded-xl border border-white/5 shadow-inner">
-                <div className="space-y-3 border border-slate-700/50 p-3 rounded-lg bg-slate-950/50">
-                  <InputGroup type="text" label="Giờ thay nước (Chuỗi Cron)" value={config.water_change_cron} onChange={(e: InputEvent) => setConfig({ ...config, water_change_cron: e.target.value })} desc="Cú pháp: Phút Giờ Ngày Tháng Thứ" />
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Clock size={10} /> Chọn nhanh lịch:</span>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => setConfig({ ...config, water_change_cron: "0 0 7 * * SUN" })} className="px-3 py-1.5 bg-slate-800 hover:bg-cyan-600 hover:text-white text-[11px] text-slate-300 rounded-md transition-colors border border-slate-700">7h Sáng Chủ Nhật</button>
-                      <button onClick={() => setConfig({ ...config, water_change_cron: "0 0 6 1,15 * *" })} className="px-3 py-1.5 bg-slate-800 hover:bg-cyan-600 hover:text-white text-[11px] text-slate-300 rounded-md transition-colors border border-slate-700">Ngày 1 và 15 (6h Sáng)</button>
-                      <button onClick={() => setConfig({ ...config, water_change_cron: "0 0 8 * * *" })} className="px-3 py-1.5 bg-slate-800 hover:bg-cyan-600 hover:text-white text-[11px] text-slate-300 rounded-md transition-colors border border-slate-700">8h Sáng mỗi ngày</button>
-                    </div>
-                  </div>
-                </div>
+                <VisualCronPicker
+                  label="Lịch thay nước định kỳ"
+                  value={config.water_change_cron}
+                  onChange={(newCron) => setConfig({ ...config, water_change_cron: newCron })}
+                  desc="Hệ thống sẽ tự động xả bớt nước cũ theo lịch này."
+                  colorClass="cyan"
+                />
                 <InputGroup label="Lượng xả đi mỗi lần (cm)" value={config.scheduled_drain_amount_cm} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_drain_amount_cm: e.target.value })} />
               </div>
             )}
@@ -863,18 +983,15 @@ const Settings = () => {
             </div>
             {config.scheduled_dosing_enabled && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 bg-slate-900/50 p-4 rounded-xl border border-white/5 shadow-inner">
-                <div className="sm:col-span-2 space-y-3 border border-slate-700/50 p-3 rounded-lg bg-slate-950/50">
-                  <InputGroup type="text" label="Lịch trình bơm (Chuỗi Cron)" value={config.scheduled_dosing_cron} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dosing_cron: e.target.value })} desc="Cú pháp: Phút Giờ Ngày Tháng Thứ" />
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 mb-2"><Clock size={10} /> Chọn nhanh lịch:</span>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => setConfig({ ...config, scheduled_dosing_cron: "0 0 6 * * *" })} className="px-3 py-1.5 bg-slate-800 hover:bg-fuchsia-600 hover:text-white text-[11px] text-slate-300 rounded-md transition-colors border border-slate-700">6h Sáng mỗi ngày</button>
-                      <button onClick={() => setConfig({ ...config, scheduled_dosing_cron: "0 0 8,16 * * *" })} className="px-3 py-1.5 bg-slate-800 hover:bg-fuchsia-600 hover:text-white text-[11px] text-slate-300 rounded-md transition-colors border border-slate-700">8h Sáng & 4h Chiều</button>
-                      <button onClick={() => setConfig({ ...config, scheduled_dosing_cron: "0 0 7 * * SUN" })} className="px-3 py-1.5 bg-slate-800 hover:bg-fuchsia-600 hover:text-white text-[11px] text-slate-300 rounded-md transition-colors border border-slate-700">7h Sáng Chủ Nhật</button>
-                    </div>
-                  </div>
+                <div className="sm:col-span-2">
+                  <VisualCronPicker
+                    label="Lịch châm phân cứng"
+                    value={config.scheduled_dosing_cron}
+                    onChange={(newCron) => setConfig({ ...config, scheduled_dosing_cron: newCron })}
+                    desc="Bơm trực tiếp lượng ml cố định vào bồn theo khung giờ này."
+                    colorClass="fuchsia"
+                  />
                 </div>
-
                 <InputGroup label="Lượng Bơm A (ml)" step="0.5" min={0} value={config.scheduled_dose_a_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_a_ml: e.target.value })} errorText={dosingValidationErrors.scheduled_dose_a_ml} />
                 <InputGroup label="Lượng Bơm B (ml)" step="0.5" min={0} value={config.scheduled_dose_b_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_b_ml: e.target.value })} errorText={dosingValidationErrors.scheduled_dose_b_ml} />
               </div>

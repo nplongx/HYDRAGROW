@@ -422,7 +422,7 @@ fn try_scheduled_water_change(
     if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32)
     {
         ctx.stop_all_pumps(pump_ctrl);
-        ctx.current_state = SystemState::EmergencyStop("TOO_MANY_DRAINS".to_string());
+        ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
         return true;
     }
 
@@ -462,7 +462,7 @@ fn try_auto_refill(
         .check_and_record_refill_limit(current_time_sec, config.max_refill_cycles_per_hour as u32)
     {
         ctx.stop_all_pumps(pump_ctrl);
-        ctx.current_state = SystemState::EmergencyStop("TOO_MANY_REFILLS".to_string());
+        ctx.current_state = SystemState::SystemFault("TOO_MANY_REFILLS".to_string());
         return true;
     }
 
@@ -499,7 +499,7 @@ fn try_auto_drain_overflow(
     if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32)
     {
         ctx.stop_all_pumps(pump_ctrl);
-        ctx.current_state = SystemState::EmergencyStop("TOO_MANY_DRAINS".to_string());
+        ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
         return true;
     }
 
@@ -533,7 +533,7 @@ fn try_auto_dilute(
     if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32)
     {
         ctx.stop_all_pumps(pump_ctrl);
-        ctx.current_state = SystemState::EmergencyStop("TOO_MANY_DRAINS".to_string());
+        ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
         return true;
     }
 

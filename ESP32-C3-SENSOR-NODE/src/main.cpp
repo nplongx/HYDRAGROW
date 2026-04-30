@@ -54,6 +54,8 @@ float current_avg_ph = 6.86;
 float current_avg_ec = 0.0;
 float latest_ph_voltage_mv = NAN;
 float latest_raw_water = 20.0;
+float latest_raw_ph =
+    6.86; // [THÊM MỚI CẬP NHẬT]: Biến lưu giá trị pH thô chưa qua lọc
 
 bool enable_ph = true;
 bool enable_ec = true;
@@ -105,7 +107,6 @@ public:
 
     if (abs(x_t - X_prev) > delta_max) {
       error_streak++;
-      // [DEBUG THÊM MỚI]: In cảnh báo khi phát hiện nhiễu đột biến
       Serial.printf("⚠️ [DEBUG-Filter] Phát hiện dị biệt: x_t=%.2f, "
                     "X_prev=%.2f, streak=%d\n",
                     x_t, X_prev, error_streak);
@@ -170,12 +171,6 @@ float readWaterLevel() {
   }
   float distance = (duration / 2.0) * 0.0343;
   float water_level = tank_height - distance;
-
-  // [DEBUG THÊM MỚI]: In chi tiết đọc mực nước
-  // Bỏ comment dòng dưới nếu muốn thấy debug siêu chi tiết mỗi 200ms
-  // Serial.printf("💧 [DEBUG-Water] Raw_Duration: %ld, Distance: %.2f cm,
-  // Level: %.2f cm\n", duration, distance, water_level);
-
   return (water_level < 0) ? 0 : water_level;
 }
 
@@ -210,12 +205,6 @@ float calculate_ph(float voltage_mv, float current_temp) {
 
   float ph_result =
       constrain(base_ph + slope * (voltage_mv - base_v), 0.0, 14.0);
-
-  // [DEBUG THÊM MỚI]: In thông tin tính toán pH (Bỏ comment nếu muốn xem chi
-  // tiết liên tục) Serial.printf("🧪 [DEBUG-pH] V_mv: %.2f, slope: %.5f,
-  // Base_V: %.2f, Base_pH: %.2f, Result: %.2f\n", voltage_mv, slope, base_v,
-  // base_ph, ph_result);
-
   return ph_result;
 }
 
@@ -227,12 +216,6 @@ float calculate_ec(float voltage_mv, float current_temp) {
     float coef = 1.0 + temp_compensation_beta * (current_temp - 25.0);
     ec_result = raw_ec / coef;
   }
-
-  // [DEBUG THÊM MỚI]: In thông tin tính toán EC
-  // Serial.printf("⚡ [DEBUG-EC] V_mv: %.2f, Raw: %.2f, TC_Coef: %s, Result:
-  // %.2f\n", voltage_mv, raw_ec, enable_ec_tc ? "Yes" : "No", max(ec_result,
-  // 0.0f));
-
   return max(ec_result, 0.0f);
 }
 
@@ -244,7 +227,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String topicStr = String(topic);
 
   Serial.printf("📥 [DEBUG-MQTT] Nhận Topic: %s\n", topicStr.c_str());
-  // [DEBUG THÊM MỚI]: In nội dung payload nhận được
   Serial.printf("📦 [DEBUG-MQTT] Payload: %s\n", message.c_str());
 
   if (topicStr == topic_cmd) {
@@ -252,7 +234,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (!deserializeJson(doc, message)) {
       String action = doc.containsKey("action") ? doc["action"].as<String>()
                                                 : doc["command"].as<String>();
-      // [DEBUG THÊM MỚI]: In hành động parser
       Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
 
       if (action == "set_continuous" || action == "continuous_level") {
@@ -324,8 +305,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       enable_water = doc["enable_water_level_sensor"].as<bool>();
 
     Serial.println("🔄 Đã nạp cấu hình Lõi mới từ Server thành công!");
-
-    // [DEBUG THÊM MỚI]: In ra màn hình các thông số sau khi nạp để kiểm chứng
     Serial.printf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
                   "V918: %.1f\n",
                   ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
@@ -354,7 +333,6 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\n✅ Kết nối WiFi thành công!");
-  // [DEBUG THÊM MỚI]: In IP Address
   Serial.print("📶 [DEBUG-WIFI] IP Address: ");
   Serial.println(WiFi.localIP());
 
@@ -446,7 +424,15 @@ void loop() {
         float ph_mv = (adc_ph / ADC_MAX) * V_REF_MV * VOLTAGE_DIVIDER_RATIO;
         latest_ph_voltage_mv = ph_mv;
         float ph_val = calculate_ph(ph_mv, current_avg_temp);
+
+        // [THÊM MỚI CẬP NHẬT]: Lưu giá trị raw và cập nhật vào bộ lọc
+        latest_raw_ph = ph_val;
         current_avg_ph = phFilter.update(ph_val);
+
+        // [THÊM MỚI CẬP NHẬT]: In log so sánh rõ ràng giữa RAW và EMA mỗi 200ms
+        Serial.printf("🧪 [DEBUG-pH-Filter] V_mv: %.2f mV | pH Raw (ko EMA): "
+                      "%.2f | pH Filtered (EMA): %.2f\n",
+                      ph_mv, latest_raw_ph, current_avg_ph);
       }
     }
 
@@ -474,6 +460,11 @@ void loop() {
     doc["water_level"] =
         continuous_level ? latest_raw_water : current_avg_water;
     doc["ph"] = current_avg_ph;
+
+    // [THÊM MỚI CẬP NHẬT]: Đẩy cả giá trị pH Raw lên MQTT để tiện so sánh trên
+    // biểu đồ Server
+    doc["ph_raw"] = latest_raw_ph;
+
     doc["ec"] = current_avg_ec;
     if (!isnan(latest_ph_voltage_mv))
       doc["ph_voltage_mv"] = latest_ph_voltage_mv;
@@ -492,15 +483,16 @@ void loop() {
     serializeJson(doc, payload);
     client.publish(topic_sensors.c_str(), payload.c_str());
 
-    // [DEBUG THÊM MỚI]: In ra dữ liệu chuẩn bị publish
     Serial.println("\n-----------------------------------------");
     Serial.printf("📤 [DEBUG-PUB] Topic: %s\n", topic_sensors.c_str());
     Serial.printf("📤 [DEBUG-PUB] Payload: %s\n", payload.c_str());
-    Serial.printf("📊 [DEBUG-DATA] Temp: %.2f °C | Water: %.2f cm | pH: %.2f | "
-                  "EC: %.2f\n",
+
+    // [THÊM MỚI CẬP NHẬT]: Bổ sung hiển thị cả pH Raw vào tóm tắt Debug Publish
+    Serial.printf("📊 [DEBUG-DATA] Temp: %.2f °C | Water: %.2f cm | pH Raw: "
+                  "%.2f | pH (EMA): %.2f | EC: %.2f\n",
                   current_avg_temp,
                   continuous_level ? latest_raw_water : current_avg_water,
-                  current_avg_ph, current_avg_ec);
+                  latest_raw_ph, current_avg_ph, current_avg_ec);
     Serial.println("-----------------------------------------");
   }
 }

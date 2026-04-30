@@ -96,11 +96,9 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handle_sensor_data(device_id, &payload_bytes, app_state).await;
         }
         "/status" => {
-            // LWT của Controller Node
             handle_device_status(device_id, "Trạm Điều Khiển", &payload_bytes, app_state).await;
         }
         "/sensor/status" => {
-            // LWT của Sensor Node
             handle_device_status(device_id, "Mạch Cảm Biến", &payload_bytes, app_state).await;
         }
         "/fsm" => {
@@ -133,11 +131,53 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
                     );
                 }
 
+                // Phát hiện misting qua pump_status
+                if let Some(pump_status) = payload_json.get("pump_status") {
+                    let mist_on = pump_status
+                        .get("mist_valve")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // Lấy trạng thái misting trước đó từ cache
+                    let prev_mist = states
+                        .get(&device_id)
+                        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+                        .and_then(|v| v.get("pump_status").cloned())
+                        .and_then(|ps| ps.get("mist_valve").cloned())
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // Chỉ gửi alert khi trạng thái thay đổi
+                    if mist_on != prev_mist {
+                        let mist_alert = if mist_on {
+                            AlertMessage {
+                                level: "FSM_UPDATE".to_string(),
+                                title: "FSM_SYNC".to_string(),
+                                message: "Misting".to_string(),
+                                device_id: device_id.clone(),
+                                timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                                reason: None,
+                                metadata: None,
+                            }
+                        } else {
+                            AlertMessage {
+                                level: "FSM_UPDATE".to_string(),
+                                title: "FSM_SYNC".to_string(),
+                                message: "Monitoring".to_string(),
+                                device_id: device_id.clone(),
+                                timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                                reason: None,
+                                metadata: None,
+                            }
+                        };
+                        let _ = app_state.alert_sender.send(mist_alert);
+                    }
+                }
+
                 if let Ok(updated_str) = serde_json::to_string(&merged) {
                     states.insert(device_id.clone(), updated_str);
                 }
 
-                // 2. Đẩy qua WebSocket (code cũ)
                 let _ = app_state.health_sender.send(payload_json);
             } else {
                 warn!("Lỗi parse JSON Health Data từ {}", device_id);
@@ -217,7 +257,6 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
         }
     }
 
-    // snapshot cảm biến
     if let Ok(json_str) = serde_json::to_string(&sensor_data) {
         let mut states = app_state.device_states.write().await;
         states.insert(device_id.clone(), json_str);
@@ -295,270 +334,223 @@ async fn handle_device_status(
     let _ = app_state.health_sender.send(status_payload);
 }
 
+/// Map trạng thái FSM sang AlertMessage phù hợp để gửi WebSocket & lưu log.
+/// Trả về None nếu trạng thái chỉ cần debug, không cần thông báo.
+fn fsm_state_to_alert(
+    state: &str,
+    device_id: &str,
+    alert_metadata: Option<serde_json::Value>,
+) -> Option<AlertMessage> {
+    let ts = chrono::Utc::now().timestamp_millis() as u64;
+
+    // Helper closure
+    let make = |level: &str, title: &str, message: &str| -> Option<AlertMessage> {
+        Some(AlertMessage {
+            level: level.to_string(),
+            title: title.to_string(),
+            message: message.to_string(),
+            device_id: device_id.to_string(),
+            timestamp: ts,
+            reason: None,
+            metadata: alert_metadata.clone(),
+        })
+    };
+
+    // --- Trạng thái có prefix động ---
+    if let Some(reason) = state.strip_prefix("EmergencyStop:") {
+        return Some(AlertMessage {
+            level: "critical".to_string(),
+            title: "Dừng Khẩn Cấp!".to_string(),
+            message: format!("Hệ thống bị ngắt khẩn cấp. Lý do: {}", reason),
+            device_id: device_id.to_string(),
+            timestamp: ts,
+            reason: Some(reason.to_string()),
+            metadata: alert_metadata.clone(),
+        });
+    }
+
+    if let Some(reason) = state.strip_prefix("SystemFault:") {
+        return Some(AlertMessage {
+            level: "critical".to_string(),
+            title: "Lỗi Hệ Thống!".to_string(),
+            message: format!("Phát hiện lỗi phần cứng: {}. Vui lòng kiểm tra!", reason),
+            device_id: device_id.to_string(),
+            timestamp: ts,
+            reason: Some(reason.to_string()),
+            metadata: alert_metadata.clone(),
+        });
+    }
+
+    if let Some(reason) = state.strip_prefix("Warning:") {
+        return Some(AlertMessage {
+            level: "warning".to_string(),
+            title: "Cảnh Báo Hệ Thống".to_string(),
+            message: format!("Phát hiện cảnh báo: {}", reason),
+            device_id: device_id.to_string(),
+            timestamp: ts,
+            reason: Some(reason.to_string()),
+            metadata: alert_metadata.clone(),
+        });
+    }
+
+    if let Some(msg) = state.strip_prefix("LogInfo:") {
+        return make("info", "Nhật Ký (Log)", msg);
+    }
+
+    if state.starts_with("SensorCalibration:") {
+        let step = state.replace("SensorCalibration:", "");
+        return make(
+            "info",
+            "Hiệu Chuẩn Cảm Biến",
+            &format!("Đang hiệu chuẩn tại bước: {}.", step),
+        );
+    }
+
+    if state.starts_with("Cooldown:") {
+        return make(
+            "info",
+            "Hạ Nhiệt Bơm (Cooldown)",
+            "Hệ thống đang chờ nguội trước khi tiếp tục châm phân.",
+        );
+    }
+
+    // --- Trạng thái cố định ---
+    match state {
+        "SystemBooting" => make(
+            "success",
+            "Khởi Động Hệ Thống",
+            "Trạm điều khiển vừa được cấp nguồn và đang hoạt động.",
+        ),
+
+        "ManualMode" => make(
+            "info",
+            "Điều Khiển Thủ Công",
+            "Đang ở chế độ Manual. Hệ thống tắt tự động hóa.",
+        ),
+
+        "DosingCycleComplete" => make(
+            "success",
+            "Hoàn Tất Chu Trình",
+            "Chu trình châm phân và điều chỉnh pH đã hoàn thành.",
+        ),
+
+        "EmergencyStop" => Some(AlertMessage {
+            level: "critical".to_string(),
+            title: "Dừng Khẩn Cấp!".to_string(),
+            message: "Hệ thống đã bị ngắt khẩn cấp do vi phạm ngưỡng an toàn.".to_string(),
+            device_id: device_id.to_string(),
+            timestamp: ts,
+            reason: None,
+            metadata: alert_metadata.clone(),
+        }),
+
+        "WaterRefilling" => make("info", "Cấp Nước", "Hệ thống đang bơm cấp nước vào bồn."),
+
+        "WaterDraining" => make("info", "Xả Nước", "Hệ thống đang xả bớt nước trong bồn."),
+
+        "DosingPumpA" => make(
+            "info",
+            "Châm Phân A",
+            "Đang tiến hành châm phân bón Dinh Dưỡng A.",
+        ),
+
+        "DosingPumpB" => make(
+            "info",
+            "Châm Phân B",
+            "Đang tiến hành châm phân bón Dinh Dưỡng B.",
+        ),
+
+        "DosingPH" => make("info", "Điều Chỉnh pH", "Đang bơm dung dịch điều chỉnh pH."),
+
+        "ActiveMixing" => make(
+            "info",
+            "Sục Trộn Dinh Dưỡng",
+            "Đang trộn đều dung dịch trong bồn (Jet Mixing).",
+        ),
+
+        "CleaningMode" => make(
+            "info",
+            "Chế Độ Súc Rửa",
+            "Đang chạy chu trình súc rửa bồn chứa.",
+        ),
+
+        // Trạng thái chỉ cần debug, không cần thông báo lên UI
+        "StartingOsakaPump" | "WaitingBetweenDose" | "Stabilizing" | "Monitoring" => {
+            debug!("[FSM] Trạng thái nội bộ: {}", state);
+            None
+        }
+
+        _ => {
+            debug!("[FSM] Trạng thái không xác định: {}", state);
+            None
+        }
+    }
+}
+
 async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let raw_payload = std::str::from_utf8(payload).unwrap_or("Lỗi UTF-8");
     info!("📥 [MQTT-FSM] {} gửi gói tin: {}", device_id, raw_payload);
 
-    match serde_json::from_slice::<serde_json::Value>(payload) {
-        Ok(json) => {
-            if let Some(state) = json["current_state"].as_str() {
-                let fsm_sync_msg = AlertMessage {
-                    level: "FSM_UPDATE".to_string(),
-                    title: "FSM_SYNC".to_string(),
-                    message: state.to_string(),
-                    device_id: device_id.clone(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                    reason: None,
-                    metadata: None,
-                };
-                let _ = app_state.alert_sender.send(fsm_sync_msg);
-
-                let mut alert: Option<AlertMessage> = None;
-
-                let current_sensors = app_state.device_states.read().await;
-                let metadata_json = if let Some(sensor_str) = current_sensors.get(&device_id) {
-                    serde_json::from_str::<serde_json::Value>(sensor_str).ok()
-                } else {
-                    None
-                };
-                let alert_metadata =
-                    build_sensor_snapshot(&device_id, state, metadata_json.clone());
-
-                match state {
-                    "SystemBooting" => {
-                        alert = Some(AlertMessage {
-                            level: "success".to_string(),
-                            title: "Khởi Động Hệ Thống".to_string(),
-                            message: "Trạm điều khiển vừa được cấp nguồn và đang hoạt động."
-                                .to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "ManualMode" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Điều Khiển Thủ Công".to_string(),
-                            message: "Đang ở chế độ Manual (Thủ công). Hệ thống tắt tự động hóa."
-                                .to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "CleaningMode" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Chế Độ Súc Rửa".to_string(),
-                            message: "Đang chạy chu trình súc rửa bồn chứa.".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "SensorCalibrating" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Hiệu Chuẩn Cảm Biến".to_string(),
-                            message: "Hệ thống đang ở chế độ hiệu chuẩn đầu dò cảm biến."
-                                .to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "DosingCycleComplete" => {
-                        alert = Some(AlertMessage {
-                            level: "success".to_string(),
-                            title: "Hoàn Tất Chu Trình".to_string(),
-                            message: "Chu trình châm phân & điều chỉnh pH đã hoàn thành."
-                                .to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    s if s.starts_with("Warning:") => {
-                        let reason_str = s.replace("Warning:", "");
-                        alert = Some(AlertMessage {
-                            level: "warning".to_string(),
-                            title: "Cảnh Báo Hệ Thống".to_string(),
-                            message: format!("Phát hiện cảnh báo: {}", reason_str),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: Some(reason_str),
-                            metadata: alert_metadata.clone(),
-                        });
-                    }
-                    s if s.starts_with("LogInfo:") => {
-                        let msg = s.replace("LogInfo:", "");
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Nhật Ký (Log)".to_string(),
-                            message: msg,
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    s if s.starts_with("EmergencyStop:") => {
-                        let reason_str = s.replace("EmergencyStop:", "");
-                        alert = Some(AlertMessage {
-                            level: "critical".to_string(),
-                            title: "Dừng Khẩn Cấp!".to_string(),
-                            message: format!("Hệ thống bị ngắt khẩn cấp. Lý do: {}", reason_str),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: Some(reason_str),
-                            metadata: alert_metadata.clone(),
-                        });
-                    }
-                    "EmergencyStop" => {
-                        alert = Some(AlertMessage {
-                            level: "critical".to_string(),
-                            title: "Dừng Khẩn Cấp!".to_string(),
-                            message: "Hệ thống đã bị ngắt khẩn cấp do vi phạm ngưỡng an toàn."
-                                .to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: alert_metadata.clone(),
-                        });
-                    }
-                    s if s.starts_with("SystemFault:") => {
-                        let reason_str = s.replace("SystemFault:", "");
-                        alert = Some(AlertMessage {
-                            level: "critical".to_string(),
-                            title: "Lỗi Hệ Thống!".to_string(),
-                            message: format!(
-                                "Phát hiện lỗi phần cứng: {}. Vui lòng kiểm tra!",
-                                reason_str
-                            ),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: Some(reason_str),
-                            metadata: alert_metadata.clone(),
-                        });
-                    }
-                    "WaterRefilling" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Cấp Nước".to_string(),
-                            message: "Hệ thống đang tiến hành bơm cấp nước vào bồn.".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "WaterDraining" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Xả Nước".to_string(),
-                            message: "Hệ thống đang xả bớt nước trong bồn.".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "DosingPumpA" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Châm Phân".to_string(),
-                            message: "Đang tiến hành châm phân bón Dinh Dưỡng A.".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "DosingPumpB" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Châm Phân".to_string(),
-                            message: "Đang tiến hành châm phân bón Dinh Dưỡng B.".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "DosingPH" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Điều Chỉnh pH".to_string(),
-                            message: "Đang tiến hành bơm dung dịch điều chỉnh pH.".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "ActiveMixing" => {
-                        alert = Some(AlertMessage {
-                            level: "info".to_string(),
-                            title: "Sục Trộn Dinh Dưỡng".to_string(),
-                            message: "Đang trộn đều dung dịch trong bồn (Jet Mixing).".to_string(),
-                            device_id: device_id.clone(),
-                            timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                            reason: None,
-                            metadata: None,
-                        });
-                    }
-                    "StartingOsakaPump" => {
-                        debug!("Bắt đầu khởi động bơm trung tâm (Osaka).");
-                    }
-                    "WaitingBetweenDose" => {
-                        debug!("Đang chờ hòa tan giữa 2 lần châm A và B.");
-                    }
-                    "Stabilizing" => {
-                        debug!("Đang chờ cảm biến đọc số liệu ổn định.");
-                    }
-                    "Monitoring" => {
-                        debug!("Hệ thống đang ở trạng thái giám sát (Monitoring).");
-                    }
-                    _ => {
-                        debug!("Trạng thái FSM khác: {}", state);
-                    }
-                }
-
-                if let Some(alert_msg) = alert {
-                    if alert_msg.level == "critical" || alert_msg.level == "warning" {
-                        info!("🚨 KÍCH HOẠT BÁO ĐỘNG: {}", alert_msg.title);
-                    } else {
-                        info!("ℹ️ THAY ĐỔI TRẠNG THÁI: {}", alert_msg.title);
-                    }
-
-                    let _ = app_state.alert_sender.send(alert_msg.clone());
-
-                    if alert_msg.level == "critical" || alert_msg.level == "warning" {
-                        let tokens = app_state.fcm_tokens.lock().unwrap().clone();
-                        if !tokens.is_empty() {
-                            tokio::spawn(async move {
-                                crate::services::fcm::send_push_notification(
-                                    &alert_msg.title,
-                                    &alert_msg.message,
-                                    tokens,
-                                )
-                                .await;
-                            });
-                        }
-                    }
-                }
-            } else {
-                error!("❌ [MQTT-FSM] JSON hợp lệ nhưng bị thiếu trường 'current_state'!");
-            }
-        }
+    let json = match serde_json::from_slice::<serde_json::Value>(payload) {
+        Ok(j) => j,
         Err(e) => {
             error!("❌ [MQTT-FSM] Cấu trúc JSON bị sai định dạng: {:?}", e);
+            return;
+        }
+    };
+
+    let state = match json["current_state"].as_str() {
+        Some(s) => s.to_string(),
+        None => {
+            error!("❌ [MQTT-FSM] JSON hợp lệ nhưng thiếu trường 'current_state'!");
+            return;
+        }
+    };
+
+    // Luôn gửi FSM_UPDATE để badge & badge realtime trên UI cập nhật ngay
+    let fsm_sync_msg = AlertMessage {
+        level: "FSM_UPDATE".to_string(),
+        title: "FSM_SYNC".to_string(),
+        message: state.clone(),
+        device_id: device_id.clone(),
+        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        reason: None,
+        metadata: None,
+    };
+    let _ = app_state.alert_sender.send(fsm_sync_msg);
+
+    // Xây dựng metadata snapshot cảm biến
+    let metadata_json = {
+        let states = app_state.device_states.read().await;
+        states
+            .get(&device_id)
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+    };
+    let alert_metadata = build_sensor_snapshot(&device_id, &state, metadata_json);
+
+    // Tạo alert (nếu trạng thái cần thông báo)
+    if let Some(alert_msg) = fsm_state_to_alert(&state, &device_id, alert_metadata) {
+        if alert_msg.level == "critical" || alert_msg.level == "warning" {
+            info!("🚨 KÍCH HOẠT BÁO ĐỘNG: {}", alert_msg.title);
+        } else {
+            info!("ℹ️ THAY ĐỔI TRẠNG THÁI: {}", alert_msg.title);
+        }
+
+        let _ = app_state.alert_sender.send(alert_msg.clone());
+
+        // Push notification với trạng thái nghiêm trọng
+        if alert_msg.level == "critical" || alert_msg.level == "warning" {
+            let tokens = app_state.fcm_tokens.lock().unwrap().clone();
+            if !tokens.is_empty() {
+                tokio::spawn(async move {
+                    crate::services::fcm::send_push_notification(
+                        &alert_msg.title,
+                        &alert_msg.message,
+                        tokens,
+                    )
+                    .await;
+                });
+            }
         }
     }
 }
@@ -584,9 +576,7 @@ fn build_sensor_snapshot(
                 "captured_at": chrono::Utc::now().to_rfc3339(),
                 "fsm_state": fsm_state,
                 "snapshot_source": "fsm_fallback",
-                "sensor_snapshot": {
-                    "device_id": device_id
-                }
+                "sensor_snapshot": { "device_id": device_id }
             }))
         }
     }
@@ -685,7 +675,6 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
                 reason: None,
                 metadata: None,
             };
-
             let _ = app_state.alert_sender.send(alert);
         }
         Err(e) => {

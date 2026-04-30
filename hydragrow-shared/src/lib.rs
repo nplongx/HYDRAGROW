@@ -25,8 +25,6 @@ pub struct PumpStatus {
     pub ph_up_pwm: Option<u32>,
     pub ph_down_pwm: Option<u32>,
     pub osaka_pwm: Option<u32>,
-    pub dosing_pulse_active: Option<bool>,
-    pub dosing_pulse_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,10 +209,6 @@ pub struct ControllerConfig {
     pub pump_b_min_pwm_percent: Option<i32>,
     pub pump_ph_up_min_pwm_percent: Option<i32>,
     pub pump_ph_down_min_pwm_percent: Option<i32>,
-    pub dosing_pulse_on_ms: i32,
-    pub dosing_pulse_off_ms: i32,
-    pub dosing_min_dose_ml: f32,
-    pub dosing_max_pulse_count_per_cycle: i32,
     pub osaka_mixing_pwm_percent: i32,
     pub osaka_misting_pwm_percent: i32,
     pub misting_temp_threshold: f32,
@@ -327,10 +321,6 @@ impl Default for ControllerConfig {
             pump_b_min_pwm_percent: None,
             pump_ph_up_min_pwm_percent: None,
             pump_ph_down_min_pwm_percent: None,
-            dosing_pulse_on_ms: 250,
-            dosing_pulse_off_ms: 300,
-            dosing_min_dose_ml: 0.4,
-            dosing_max_pulse_count_per_cycle: 40,
             osaka_mixing_pwm_percent: 60,
             osaka_misting_pwm_percent: 100,
             misting_temp_threshold: 30.0,

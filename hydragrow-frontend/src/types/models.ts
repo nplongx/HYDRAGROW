@@ -22,8 +22,6 @@ export interface PumpStatus {
   ph_up_pwm?: number;
   ph_down_pwm?: number;
   osaka_pwm?: number;
-  dosing_pulse_active?: boolean;
-  dosing_pulse_count?: number;
 }
 
 /**

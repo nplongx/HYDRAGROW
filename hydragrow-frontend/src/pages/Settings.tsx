@@ -239,10 +239,6 @@ const Settings = () => {
     pump_b_min_pwm_percent: 20,
     pump_ph_up_min_pwm_percent: 20,
     pump_ph_down_min_pwm_percent: 20,
-    dosing_pulse_on_ms: 500,
-    dosing_pulse_off_ms: 500,
-    dosing_min_dose_ml: 1.0,
-    dosing_max_pulse_count_per_cycle: 20,
 
     min_ec_limit: 0.5, max_ec_limit: 3.0, min_ph_limit: 4.0, max_ph_limit: 8.0,
     min_temp_limit: 15.0, max_temp_limit: 35.0, max_ec_delta: 0.5, max_ph_delta: 0.3,
@@ -658,10 +654,6 @@ const Settings = () => {
         pump_b_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_b_min_pwm_percent, 20)),
         pump_ph_up_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_ph_up_min_pwm_percent, 20)),
         pump_ph_down_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_ph_down_min_pwm_percent, 20)),
-        dosing_pulse_on_ms: Math.trunc(toNumberOr(savingConfig.dosing_pulse_on_ms, 500)),
-        dosing_pulse_off_ms: Math.trunc(toNumberOr(savingConfig.dosing_pulse_off_ms, 500)),
-        dosing_min_dose_ml: toNumberOr(savingConfig.dosing_min_dose_ml, 1.0),
-        dosing_max_pulse_count_per_cycle: Math.trunc(toNumberOr(savingConfig.dosing_max_pulse_count_per_cycle, 20)),
 
         scheduled_dosing_enabled: savingConfig.scheduled_dosing_enabled ?? false,
         scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron || '0 0 8 * * *'),
@@ -954,25 +946,7 @@ const Settings = () => {
               </SubCard>
 
               {/* 🟢 CARD CẤU HÌNH XUNG PWM */}
-              <SubCard title="Cấu Hình Xung & Giới Hạn Bơm (Pulse Dosing)" className="mt-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputGroup label="PWM tối thiểu (Chung) (%)" step="1" min={0} max={100} value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
-                  <InputGroup label="Mức bơm tối thiểu mỗi chu kỳ (ml)" step="0.1" value={config.dosing_min_dose_ml} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_dose_ml: e.target.value })} />
-
-                  <div className="sm:col-span-2 pt-4 pb-1 border-t border-slate-800"><span className="text-[10px] text-fuchsia-400 font-black uppercase tracking-widest bg-fuchsia-500/10 border border-fuchsia-500/20 py-1.5 px-3 rounded-lg shadow-inner">Giới hạn PWM tối thiểu riêng từng bơm</span></div>
-                  <InputGroup label="PWM tối thiểu Bơm A (%)" step="1" value={config.pump_a_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_min_pwm_percent: e.target.value })} />
-                  <InputGroup label="PWM tối thiểu Bơm B (%)" step="1" value={config.pump_b_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_min_pwm_percent: e.target.value })} />
-                  <InputGroup label="PWM tối thiểu Bơm pH Lên (%)" step="1" value={config.pump_ph_up_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_min_pwm_percent: e.target.value })} />
-                  <InputGroup label="PWM tối thiểu Bơm pH Xuống (%)" step="1" value={config.pump_ph_down_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_min_pwm_percent: e.target.value })} />
-
-                  <div className="sm:col-span-2 pt-4 pb-1 border-t border-slate-800"><span className="text-[10px] text-fuchsia-400 font-black uppercase tracking-widest bg-fuchsia-500/10 border border-fuchsia-500/20 py-1.5 px-3 rounded-lg shadow-inner">Thời gian Xung Bơm (Mở / Đóng)</span></div>
-                  <InputGroup label="Thời gian MỞ xung (ms)" step="10" value={config.dosing_pulse_on_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_on_ms: e.target.value })} />
-                  <InputGroup label="Thời gian TẮT xung (ms)" step="10" value={config.dosing_pulse_off_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_off_ms: e.target.value })} />
-                  <div className="sm:col-span-2">
-                    <InputGroup label="Số xung tối đa / Chu kỳ" step="1" value={config.dosing_max_pulse_count_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, dosing_max_pulse_count_per_cycle: e.target.value })} />
-                  </div>
-                </div>
-              </SubCard>
+              
             </>
           )}
 

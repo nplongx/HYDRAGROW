@@ -71,10 +71,6 @@ pub struct DosingCalibration {
     pub pump_b_min_pwm_percent: Option<i32>,
     pub pump_ph_up_min_pwm_percent: Option<i32>,
     pub pump_ph_down_min_pwm_percent: Option<i32>,
-    pub dosing_pulse_on_ms: i32,
-    pub dosing_pulse_off_ms: i32,
-    pub dosing_min_dose_ml: f32,
-    pub dosing_max_pulse_count_per_cycle: i32,
 
     pub soft_start_duration: i32,
     pub last_calibrated: DateTime<Utc>,
@@ -122,10 +118,6 @@ impl Default for DosingCalibration {
             pump_ph_up_min_pwm_percent: Some(20),
             pump_ph_down_min_pwm_percent: Some(20),
 
-            dosing_pulse_on_ms: 500,
-            dosing_pulse_off_ms: 500,
-            dosing_min_dose_ml: 1.0,
-            dosing_max_pulse_count_per_cycle: 20,
 
             soft_start_duration: 5,
             last_calibrated: Utc::now(),
@@ -537,10 +529,6 @@ pub fn from_db_rows(
         pump_b_min_pwm_percent: dose.pump_b_min_pwm_percent,
         pump_ph_up_min_pwm_percent: dose.pump_ph_up_min_pwm_percent,
         pump_ph_down_min_pwm_percent: dose.pump_ph_down_min_pwm_percent,
-        dosing_pulse_on_ms: dose.dosing_pulse_on_ms,
-        dosing_pulse_off_ms: dose.dosing_pulse_off_ms,
-        dosing_min_dose_ml: dose.dosing_min_dose_ml,
-        dosing_max_pulse_count_per_cycle: dose.dosing_max_pulse_count_per_cycle,
         misting_temp_threshold: water.misting_temp_threshold,
         high_temp_misting_on_duration_ms: water.high_temp_misting_on_duration_ms,
         high_temp_misting_off_duration_ms: water.high_temp_misting_off_duration_ms,

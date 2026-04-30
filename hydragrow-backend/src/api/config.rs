@@ -376,9 +376,8 @@ async fn upsert_dosing_db(
             dosing_pwm_percent, osaka_mixing_pwm_percent, osaka_misting_pwm_percent,
             scheduled_dosing_enabled, scheduled_dosing_cron, scheduled_dose_a_ml, scheduled_dose_b_ml,
             dosing_min_pwm_percent, pump_a_min_pwm_percent, pump_b_min_pwm_percent,
-            pump_ph_up_min_pwm_percent, pump_ph_down_min_pwm_percent, dosing_pulse_on_ms,
-            dosing_pulse_off_ms, dosing_min_dose_ml, dosing_max_pulse_count_per_cycle
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+            pump_ph_up_min_pwm_percent, pump_ph_down_min_pwm_percent
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, 
         ON CONFLICT(device_id) DO UPDATE SET
             tank_volume_l = EXCLUDED.tank_volume_l, ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
             ph_shift_up_per_ml = EXCLUDED.ph_shift_up_per_ml, ph_shift_down_per_ml = EXCLUDED.ph_shift_down_per_ml,
@@ -400,10 +399,6 @@ async fn upsert_dosing_db(
             pump_b_min_pwm_percent = EXCLUDED.pump_b_min_pwm_percent,
             pump_ph_up_min_pwm_percent = EXCLUDED.pump_ph_up_min_pwm_percent,
             pump_ph_down_min_pwm_percent = EXCLUDED.pump_ph_down_min_pwm_percent,
-            dosing_pulse_on_ms = EXCLUDED.dosing_pulse_on_ms,
-            dosing_pulse_off_ms = EXCLUDED.dosing_pulse_off_ms,
-            dosing_min_dose_ml = EXCLUDED.dosing_min_dose_ml,
-            dosing_max_pulse_count_per_cycle = EXCLUDED.dosing_max_pulse_count_per_cycle,
             last_calibrated = EXCLUDED.last_calibrated
         "#
     )
@@ -437,10 +432,6 @@ async fn upsert_dosing_db(
     .bind(cal.pump_b_min_pwm_percent) // 27
     .bind(cal.pump_ph_up_min_pwm_percent) // 28
     .bind(cal.pump_ph_down_min_pwm_percent) // 29
-    .bind(cal.dosing_pulse_on_ms) // 30
-    .bind(cal.dosing_pulse_off_ms) // 31
-    .bind(cal.dosing_min_dose_ml) // 32
-    .bind(cal.dosing_max_pulse_count_per_cycle) // 33
     .execute(pool).await?;
 
     Ok(())

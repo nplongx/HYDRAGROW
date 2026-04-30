@@ -980,8 +980,6 @@ fn start_dosing_pump_a(
     let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, dose_pwm);
     ctx.pump_status.pump_a = true;
     ctx.pump_status.pump_a_pwm = Some(dose_pwm);
-    let is_pulse_mode = dose_a_ml < config.dosing_min_dose_ml;
-    ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
 
     let delivered_ml_est = active_capacity_a * (pulse_on_ms as f32 / 1000.0);
     ctx.current_state = SystemState::DosingPumpA {
@@ -1049,8 +1047,6 @@ fn start_dosing_ph(
         ctx.pump_status.ph_down = true;
         ctx.pump_status.ph_down_pwm = Some(dose_pwm);
     }
-    let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
-    ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
 
     let delivered_ml_est = active_capacity * (pulse_on_ms as f32 / 1000.0);
     ctx.current_state = SystemState::DosingPH {
@@ -1104,7 +1100,6 @@ fn handle_dosing_pump_a_tick(
         ctx.pump_status.pump_a_pwm = Some(0);
 
         if s.delivered_ml_est >= s.dose_target_ml || s.pulse_count >= s.max_pulse_count {
-            ctx.set_pulse_status(false, s.pulse_count);
             ctx.current_state = SystemState::WaitingBetweenDose {
                 finish_time: current_time_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
                 dose_b_ml: s.dose_b_ml,
@@ -1114,7 +1109,6 @@ fn handle_dosing_pump_a_tick(
                 dose_a_ml_reported: s.delivered_ml_est.min(s.dose_target_ml),
             };
         } else {
-            ctx.set_pulse_status(true, s.pulse_count);
             ctx.current_state = SystemState::DosingPumpA {
                 next_toggle_time: current_time_ms + s.pulse_off_ms,
                 dose_target_ml: s.dose_target_ml,
@@ -1139,7 +1133,6 @@ fn handle_dosing_pump_a_tick(
         let next_count = s.pulse_count + 1;
         let next_delivered =
             s.delivered_ml_est + s.active_capacity_ml_per_sec * (s.pulse_on_ms as f32 / 1000.0);
-        ctx.set_pulse_status(true, next_count);
         ctx.current_state = SystemState::DosingPumpA {
             next_toggle_time: current_time_ms + s.pulse_on_ms,
             dose_target_ml: s.dose_target_ml,
@@ -1192,8 +1185,6 @@ fn handle_waiting_between_dose(
         let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, true, dose_pwm);
         ctx.pump_status.pump_b = true;
         ctx.pump_status.pump_b_pwm = Some(dose_pwm);
-        let is_pulse_mode = dose_b_ml < config.dosing_min_dose_ml;
-        ctx.set_pulse_status(is_pulse_mode, if is_pulse_mode { 1 } else { 0 });
 
         let delivered_ml_est = active_capacity_b * (pulse_on_ms as f32 / 1000.0);
         ctx.current_state = SystemState::DosingPumpB {
@@ -1265,7 +1256,6 @@ fn handle_dosing_pump_b_tick(
         ctx.pump_status.pump_b_pwm = Some(0);
 
         if s.delivered_ml_est >= s.dose_target_ml || s.pulse_count >= s.max_pulse_count {
-            ctx.set_pulse_status(false, s.pulse_count);
             let report_json = format!(
                 r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
                 s.start_ec,
@@ -1280,7 +1270,6 @@ fn handle_dosing_pump_b_tick(
                 finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
             };
         } else {
-            ctx.set_pulse_status(true, s.pulse_count);
             ctx.current_state = SystemState::DosingPumpB {
                 next_toggle_time: current_time_ms + s.pulse_off_ms,
                 dose_target_ml: s.dose_target_ml,
@@ -1305,7 +1294,6 @@ fn handle_dosing_pump_b_tick(
         let next_count = s.pulse_count + 1;
         let next_delivered =
             s.delivered_ml_est + s.active_capacity_ml_per_sec * (s.pulse_on_ms as f32 / 1000.0);
-        ctx.set_pulse_status(true, next_count);
         ctx.current_state = SystemState::DosingPumpB {
             next_toggle_time: current_time_ms + s.pulse_on_ms,
             dose_target_ml: s.dose_target_ml,
@@ -1366,7 +1354,6 @@ fn handle_dosing_ph_tick(
         }
 
         if s.delivered_ml_est >= s.dose_target_ml || s.pulse_count >= s.max_pulse_count {
-            ctx.set_pulse_status(false, s.pulse_count);
             let ph_up_ml = if s.is_up {
                 s.delivered_ml_est.min(s.dose_target_ml)
             } else {
@@ -1386,7 +1373,6 @@ fn handle_dosing_ph_tick(
                 finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
             };
         } else {
-            ctx.set_pulse_status(true, s.pulse_count);
             ctx.current_state = SystemState::DosingPH {
                 next_toggle_time: current_time_ms + s.pulse_off_ms,
                 is_up: s.is_up,
@@ -1416,7 +1402,6 @@ fn handle_dosing_ph_tick(
         let next_count = s.pulse_count + 1;
         let next_delivered =
             s.delivered_ml_est + s.active_capacity_ml_per_sec * (s.pulse_on_ms as f32 / 1000.0);
-        ctx.set_pulse_status(true, next_count);
         ctx.current_state = SystemState::DosingPH {
             next_toggle_time: current_time_ms + s.pulse_on_ms,
             is_up: s.is_up,
@@ -1440,27 +1425,12 @@ fn handle_dosing_ph_tick(
 // Helper chung
 // ===========================================================================
 
-/// Tính (pulse_on_ms, pulse_off_ms, max_pulse_count) cho chế độ thường và pulse.
+/// Continuous dosing params (pulse dosing removed)
 fn pulse_params(
     dose_ml: f32,
-    capacity_ml_per_sec: f32,
-    config: &ControllerConfig,
+    active_capacity_ml_per_sec: f32,
+    _config: &ControllerConfig,
 ) -> (u64, u64, u32) {
-    let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
-    let pulse_on_ms = if is_pulse_mode {
-        config.dosing_pulse_on_ms.max(1) as u64
-    } else {
-        ((dose_ml / capacity_ml_per_sec) * 1000.0) as u64
-    };
-    let pulse_off_ms = if is_pulse_mode {
-        config.dosing_pulse_off_ms as u64
-    } else {
-        0
-    };
-    let max_pulse_count = if is_pulse_mode {
-        config.dosing_max_pulse_count_per_cycle.max(1) as u32
-    } else {
-        1
-    };
-    (pulse_on_ms, pulse_off_ms, max_pulse_count)
+    let duration_ms = ((dose_ml / active_capacity_ml_per_sec.max(0.0001)) * 1000.0).max(1.0) as u64;
+    (duration_ms, 0, 1)
 }

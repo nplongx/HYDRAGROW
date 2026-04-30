@@ -35,6 +35,7 @@ pub struct CapturePhPointRequest {
 struct CapturePhPointResponse {
     point: i32,
     mean_voltage_mv: f64,
+    confidence: f64,
     sample_count: usize,
     captured_at: chrono::DateTime<chrono::Utc>,
     window_seconds: i64,
@@ -214,7 +215,6 @@ pub async fn capture_ph_calibration_point(
 
     tokio::time::sleep(Duration::from_secs(window_seconds as u64)).await;
 
-    // Thay thế khối này trong fn capture_ph_calibration_point
     let sampling_now = Utc::now();
     let filtered_values = {
         let mut all_samples = app_state.ph_voltage_samples.write().await;
@@ -254,6 +254,23 @@ pub async fn capture_ph_calibration_point(
     }
 
     let mean_voltage_mv = filtered_values.iter().sum::<f64>() / filtered_values.len() as f64;
+
+    // Tính phương sai (Variance) và Độ lệch chuẩn (Standard Deviation)
+    let variance = filtered_values
+        .iter()
+        .map(|value| {
+            let diff = mean_voltage_mv - *value;
+            diff * diff
+        })
+        .sum::<f64>()
+        / filtered_values.len() as f64;
+
+    let std_dev = variance.sqrt();
+
+    // Tính Confidence (Quy đổi Std Dev sang thang 0 - 100%)
+    let max_acceptable_std_dev = 15.0;
+    let confidence = (100.0 * (1.0 - (std_dev / max_acceptable_std_dev))).clamp(0.0, 100.0);
+
     let captured_at = Utc::now();
 
     let mut sessions = app_state.ph_calibration_sessions.write().await;
@@ -274,6 +291,7 @@ pub async fn capture_ph_calibration_point(
         "data": CapturePhPointResponse {
             point,
             mean_voltage_mv,
+            confidence,
             sample_count: filtered_values.len(),
             captured_at,
             window_seconds,

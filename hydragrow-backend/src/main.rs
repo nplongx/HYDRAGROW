@@ -266,15 +266,27 @@ async fn main() -> anyhow::Result<()> {
     );
 
     HttpServer::new(move || {
-        let auth_middleware = api::middleware::auth::ApiKeyAuth::new(app_state.api_key.clone());
+        let auth_middleware = api::middleware::auth::ApiKeyAuth::new();
         let rate_limit_middleware = api::middleware::rate_limit::RateLimiter::new(60, 60);
+
+        // Khai báo CORS Middleware
+        let cors = actix_cors::Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header();
 
         App::new()
             .app_data(app_state.clone())
-            .wrap(rate_limit_middleware)
-            .wrap(auth_middleware)
+            // CHÚ Ý 1: CORS bọc ngoài cùng (khai báo cuối cùng của App)
+            .wrap(cors)
+            // CHÚ Ý 2: Đưa Auth và Rate Limit vào bên TRONG scope /api
             .service(
                 web::scope("/api")
+                    // Middleware nội bộ của /api.
+                    // Chạy sau CORS, auth chạy trước rate limit.
+                    .wrap(auth_middleware)
+                    .wrap(rate_limit_middleware)
+                    // Các routes
                     .configure(api::notification::init_routes)
                     .configure(api::solana::init_routes)
                     .service(

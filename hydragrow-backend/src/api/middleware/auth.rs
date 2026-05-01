@@ -6,15 +6,17 @@ use actix_web::{
 };
 use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::rc::Rc;
-use std::sync::Arc; // Phụ thuộc vào khai báo AppState ở main.rs
+// use std::sync::Arc; // Bỏ comment nếu bạn thực sự dùng Arc ở đâu đó
 
 pub struct ApiKeyAuth {
-    api_key: String,
+    // Không cần lưu api_key ở struct Transform nữa vì chúng ta đang lấy từ AppState
+    // api_key: String,
 }
 
 impl ApiKeyAuth {
-    pub fn new(api_key: String) -> Self {
-        Self { api_key }
+    // Cập nhật hàm new cho phù hợp
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -54,13 +56,25 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        // --- 1. BYPASS OPTIONS REQUEST CHO CORS ---
+        // Trình duyệt gửi preflight OPTIONS request và nó KHÔNG CÓ header auth
+        // Chúng ta phải cho phép nó đi qua để Actix-cors xử lý phần còn lại
+        if req.method() == actix_web::http::Method::OPTIONS {
+            let srv = Rc::clone(&self.service);
+            return Box::pin(async move {
+                let res = srv.call(req).await?;
+                Ok(res.map_into_left_body())
+            });
+        }
+        // ------------------------------------------
+
         let app_state = req.app_data::<actix_web::web::Data<AppState>>().unwrap();
         let expected_api_key = &app_state.api_key;
 
-        // 1. Thử lấy từ Header trước (Dành cho API bình thường)
+        // 2. Thử lấy từ Header trước (Dành cho API bình thường)
         let header_key = req
             .headers()
-            .get("X-API-Key")
+            .get("X-API-Key") // Nếu bạn dùng Bearer Token, hãy đổi thành "Authorization"
             .and_then(|hv| hv.to_str().ok());
 
         // Cấu trúc phụ để bóc tách query string nhanh gọn
@@ -73,11 +87,13 @@ where
 
         // Kiểm tra Header trước
         if let Some(key) = header_key {
+            // Giả định bạn truyền header đúng như mong đợi.
+            // Nếu bạn dùng chuỗi "Bearer <token>" thì phải cắt chuỗi ra nhé.
             if key == expected_api_key {
                 is_authorized = true;
             }
         }
-        // 2. Nếu Header không có, thử tìm trong Query String (Dành cho WebSocket)
+        // 3. Nếu Header không có, thử tìm trong Query String (Dành cho WebSocket)
         else if let Ok(query) = actix_web::web::Query::<QueryAuth>::from_query(req.query_string())
         {
             if let Some(key) = &query.api_key {
@@ -96,7 +112,7 @@ where
             return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
         }
 
-        // Cho phép request đi tiếp tới ws_handler
+        // Cho phép request đi tiếp tới route handlers
         let srv = Rc::clone(&self.service);
         Box::pin(async move {
             let res = srv.call(req).await?;

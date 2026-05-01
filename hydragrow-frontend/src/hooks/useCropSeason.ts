@@ -1,9 +1,9 @@
 // src/hooks/useCropSeason.ts
 import { useState, useEffect, useCallback } from 'react';
-import { fetch } from '@tauri-apps/plugin-http';
 import { CropSeason } from '../types/models';
 import toast from 'react-hot-toast';
 import { useDeviceContext } from '../context/DeviceContext';
+import { httpFetch } from '../platform/http';
 
 export const useCropSeason = () => {
   const { deviceId, settings } = useDeviceContext();
@@ -35,7 +35,7 @@ export const useCropSeason = () => {
       const baseUrl = `${settings.backend_url}/api/devices/${deviceId}/seasons`;
 
       // 1. Load active season
-      const activeRes = await fetch(`${baseUrl}/active`, { method: 'GET', headers: getHeaders() });
+      const activeRes = await httpFetch(`${baseUrl}/active`, { method: 'GET', headers: getHeaders() });
       if (activeRes.ok) {
         const activeData = await safeJsonParse(activeRes);
         setActiveSeason(activeData?.data || null);
@@ -44,7 +44,7 @@ export const useCropSeason = () => {
       }
 
       // 2. Load history
-      const historyRes = await fetch(baseUrl, { method: 'GET', headers: getHeaders() });
+      const historyRes = await httpFetch(baseUrl, { method: 'GET', headers: getHeaders() });
       if (historyRes.ok) {
         const historyData = await safeJsonParse(historyRes);
         setHistory(historyData?.data || []);
@@ -66,7 +66,7 @@ export const useCropSeason = () => {
   const createSeason = async (name: string, plantType: string, description: string = '') => {
     if (!deviceId || !settings?.backend_url) return false;
     try {
-      const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/seasons`, {
+      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/seasons`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ name, plant_type: plantType, description })
@@ -89,7 +89,7 @@ export const useCropSeason = () => {
   const updateSeason = async (name: string, plantType: string, description: string) => {
     if (!deviceId || !settings?.backend_url) return false;
     try {
-      const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active`, {
+      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({ name, plant_type: plantType, description })
@@ -111,7 +111,7 @@ export const useCropSeason = () => {
   const endSeason = async () => {
     if (!deviceId || !settings?.backend_url) return false;
     try {
-      const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active/end`, {
+      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active/end`, {
         method: 'PUT',
         headers: getHeaders()
       });

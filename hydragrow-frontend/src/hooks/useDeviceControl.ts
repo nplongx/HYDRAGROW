@@ -1,8 +1,8 @@
 // src/hooks/useDeviceControl.ts
 import { useState, useCallback } from 'react';
-import { fetch } from '@tauri-apps/plugin-http';
 import { useDeviceContext } from '../context/DeviceContext';
 import toast from 'react-hot-toast';
+import { httpFetch } from '../platform/http';
 
 export const useDeviceControl = (deviceId: string) => {
   const { settings } = useDeviceContext();
@@ -33,7 +33,7 @@ export const useDeviceControl = (deviceId: string) => {
         }
       };
 
-      const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/control`, {
+      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

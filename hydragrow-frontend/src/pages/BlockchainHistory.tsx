@@ -6,8 +6,7 @@ import {
   AlertTriangle, Settings, Calendar, ChevronDown, Download, Leaf
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { save } from '@tauri-apps/plugin-dialog';
+import { saveTextFile } from '../platform/file';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { LoadingState } from '../components/ui/LoadingState';
@@ -198,13 +197,7 @@ const BlockchainHistory = () => {
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
 
-      const filePath = await save({
-        defaultPath: `nhat-ky-niem-phong-${selectedSeason || 'tat-ca'}.csv`
-      });
-
-      if (!filePath) return;
-
-      await writeTextFile(filePath, csvContent);
+      await saveTextFile(`nhat-ky-niem-phong-${selectedSeason || 'tat-ca'}.csv`, csvContent);
       toast.success("Đã lưu file thành công!");
     } catch (err: any) {
       console.error("ERROR SAVE FILE:", err);

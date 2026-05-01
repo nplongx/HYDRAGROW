@@ -4,7 +4,6 @@ import {
   FlaskConical, Activity, Settings2, Power, Network, Zap, LockKeyhole,
   CalendarClock
 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import toast from 'react-hot-toast';
 
@@ -14,6 +13,7 @@ import { SubCard } from '../components/ui/SubCard';
 import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
+import { loadAppSettings, saveAppSettings } from '../platform/settings';
 
 // ... (Giữ nguyên toàn bộ Type và Logic validate của bạn ở đây)
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -322,7 +322,7 @@ const Settings = () => {
       try {
         setIsLoading(true);
         let settings: any = null;
-        try { settings = await invoke('load_settings'); if (settings) setAppSettings(settings); } catch (e) { }
+        try { settings = await loadAppSettings(); if (settings) setAppSettings(settings); } catch (e) { }
         const currentDeviceId = settings?.device_id || appSettings.device_id;
         if (!currentDeviceId) return;
         const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
@@ -345,7 +345,7 @@ const Settings = () => {
       if (Object.keys(validateDosingConfig(savingConfig)).length > 0) { toast.error('Dữ liệu không hợp lệ.'); return; }
       const devId = appSettings.device_id;
       const toNumberOr = (value: any, fallback: number) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; };
-      try { await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId }); } catch (e) { }
+      try { await saveAppSettings({ ...appSettings, device_id: devId }); } catch (e) { }
       const ts = new Date().toISOString();
 
       const unifiedPayload = {

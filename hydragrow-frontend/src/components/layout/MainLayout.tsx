@@ -22,7 +22,7 @@ const MainLayout: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Lấy dữ liệu systemEvents từ Context thay vì tự fetch
-  const { isSensorOnline, systemEvents } = useDeviceContext();
+  const { isSensorOnline, systemEvents, isMissingConfig } = useDeviceContext();
 
   // Tự động tính số lượng thông báo chưa đọc / cảnh báo mới trong 24h
   const unreadAlertCount = useMemo(() => {
@@ -62,6 +62,20 @@ const MainLayout: React.FC = () => {
 
   const isActiveMore = moreMenuItems.some(item => location.pathname === item.path);
 
+
+  if (isMissingConfig) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full ui-card text-center space-y-3">
+          <h2 className="text-xl font-semibold">Thiếu cấu hình ứng dụng</h2>
+          <p className="text-slate-400 text-sm">
+            Ứng dụng web chưa có <b>backend URL</b> hoặc <b>API key</b>. Hãy cung cấp qua
+            <code className="mx-1">window.__APP_CONFIG__</code>, localStorage hoặc <code>/config.json</code>.
+          </p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
 

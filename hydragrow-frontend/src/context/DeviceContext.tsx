@@ -1,13 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
-import { SensorData, StatusPayload, PumpStatus } from '../types/models';
+import { SensorData, StatusPayload, PumpStatus, AppSettings } from '../types/models';
 import toast from 'react-hot-toast';
 import { Store } from '@tauri-apps/plugin-store';
+import { loadAppSettings, hasRequiredRemoteConfig, isTauriRuntime } from '../platform/settings';
 
 interface DeviceContextType {
   deviceId: string | null;
-  settings: any;
+  settings: AppSettings | null;
+  isMissingConfig: boolean;
   sensorData: SensorData | null;
   deviceStatus: StatusPayload;
   isControllerStatusKnown: boolean;
@@ -103,7 +104,8 @@ const loadPwmPrefsFromStore = async (): Promise<Record<string, number> | null> =
 
 export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [isMissingConfig, setIsMissingConfig] = useState(false);
 
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [controllerHealth, setControllerHealth] = useState<any>(null);
@@ -134,13 +136,17 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const s: any = await invoke('load_settings').catch(() => null);
-        if (s && s.device_id && s.backend_url) {
+        const s = await loadAppSettings();
+        if (s) {
           setSettings(s);
-          setDeviceId(s.device_id);
-        } else {
-          setIsLoading(false);
+          setDeviceId(s.device_id || null);
+          if (!isTauriRuntime() && !hasRequiredRemoteConfig(s)) {
+            setIsMissingConfig(true);
+          }
+        } else if (!isTauriRuntime()) {
+          setIsMissingConfig(true);
         }
+        setIsLoading(false);
       } catch (error) {
         console.error("Lỗi load settings:", error);
         setIsLoading(false);
@@ -411,7 +417,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DeviceContext.Provider value={{
       deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
-      updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline,
+      updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline, isMissingConfig,
       // 🟢 THÊM MỚI: Export các biến/hàm này ra để ControlPanel.tsx có thể xài được
       pwmPreferences, savePwmPreference
     }}>

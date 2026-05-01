@@ -1,3 +1,10 @@
+export interface AppSettings {
+  backend_url: string;
+  api_key: string;
+  device_id: string;
+  [key: string]: any;
+}
+
 // src/types/models.ts
 
 /**

@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { fetch } from '@tauri-apps/plugin-http';
 import {
   ShieldCheck, Clock, ExternalLink, Box, Server,
@@ -11,6 +10,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { LoadingState } from '../components/ui/LoadingState';
+import { loadAppSettings } from '../platform/settings';
 
 interface BlockchainRecord {
   id: number;
@@ -47,7 +47,7 @@ const BlockchainHistory = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        const settings: any = await invoke('load_settings').catch(() => null);
+        const settings = await loadAppSettings();
         if (settings && settings.device_id) {
           setAppConfig(settings);
           setDeviceId(settings.device_id);

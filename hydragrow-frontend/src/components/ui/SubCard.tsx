@@ -7,10 +7,10 @@ interface SubCardProps {
 }
 
 export const SubCard: React.FC<SubCardProps> = ({ title, children, className = "" }) => (
-  <div className={`ui-card rounded-2xl bg-slate-950/40 p-4 transition-all hover:border-slate-700/60 ${className}`}>
+  <div className={`rounded-xl border border-slate-800 bg-slate-900 p-5 ${className}`}>
     {title && (
-      <h3 className="text-xs font-bold text-slate-400 mb-4 uppercase tracking-wider flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+      <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+        <span className="w-1.5 h-4 rounded-sm bg-blue-500"></span>
         {title}
       </h3>
     )}

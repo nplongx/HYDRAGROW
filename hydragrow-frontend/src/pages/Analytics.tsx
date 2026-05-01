@@ -13,15 +13,16 @@ import { fetch } from '@tauri-apps/plugin-http';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 
+// Màu sắc Minimalist thay thế cho Neon
 const CHART_THEMES: Record<string, any> = {
-  cyan: { stroke: '#22d3ee', fill1: '#06b6d4', fill2: '#164e63', text: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', glow: 'shadow-[0_0_15px_rgba(34,211,238,0.2)]' },
-  fuchsia: { stroke: '#e879f9', fill1: '#d946ef', fill2: '#701a75', text: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', glow: 'shadow-[0_0_15px_rgba(232,121,249,0.2)]' },
-  orange: { stroke: '#fb923c', fill1: '#f97316', fill2: '#7c2d12', text: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30', glow: 'shadow-[0_0_15px_rgba(251,146,60,0.2)]' },
-  blue: { stroke: '#60a5fa', fill1: '#3b82f6', fill2: '#1e3a8a', text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30', glow: 'shadow-[0_0_15px_rgba(96,165,250,0.2)]' }
+  cyan: { stroke: '#06b6d4', fill1: '#06b6d4', fill2: '#083344', text: 'text-cyan-400', bg: 'bg-cyan-500/10' },
+  fuchsia: { stroke: '#d946ef', fill1: '#d946ef', fill2: '#4a044e', text: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10' },
+  orange: { stroke: '#f97316', fill1: '#f97316', fill2: '#431407', text: 'text-orange-400', bg: 'bg-orange-500/10' },
+  blue: { stroke: '#3b82f6', fill1: '#3b82f6', fill2: '#172554', text: 'text-blue-400', bg: 'bg-blue-500/10' }
 };
 
-// --- Component Thẻ Biểu Đồ 3D ---
-const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) => {
+// --- Component Thẻ Biểu Đồ Flat ---
+const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) => {
   const theme = CHART_THEMES[color];
 
   const stats = useMemo(() => {
@@ -40,12 +41,12 @@ const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: an
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-900/90 backdrop-blur-md border border-white/10 px-4 py-3 rounded-2xl shadow-2xl">
-          <p className="text-slate-400 text-[10px] mb-1 font-bold uppercase tracking-wider">
+        <div className="bg-slate-900 border border-slate-700 px-3 py-2 rounded-lg shadow-xl">
+          <p className="text-slate-400 text-[11px] mb-1 font-medium">
             {payload[0].payload.fullTime}
           </p>
-          <p className={`text-lg font-black ${theme.text}`}>
-            {Number(payload[0].value).toFixed(2)} <span className="text-xs opacity-70">{unit}</span>
+          <p className={`text-base font-semibold ${theme.text}`}>
+            {Number(payload[0].value).toFixed(2)} <span className="text-xs opacity-75 font-normal">{unit}</span>
           </p>
         </div>
       );
@@ -54,60 +55,53 @@ const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: an
   };
 
   return (
-    <div className={`relative bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-5 transition-all duration-500 overflow-hidden group hover:border-${color}-500/30 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)]`}>
-      <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full blur-[80px] opacity-30 transition-opacity duration-500 group-hover:opacity-60 bg-${color}-500 pointer-events-none`}></div>
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 transition-colors hover:border-slate-700">
 
-      <div className="relative z-10 flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className={`p-3 rounded-xl ${theme.bg} ${theme.border} border ${theme.glow}`}>
-            <Icon size={20} className={theme.text} />
+      {/* Header Thẻ Biểu Đồ */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${theme.bg}`}>
+            <Icon size={18} className={theme.text} strokeWidth={2.5} />
           </div>
           <div>
-            <h3 className={`text-sm font-black tracking-widest uppercase ${theme.text}`}>{title}</h3>
-            <div className="flex flex-wrap gap-x-4 mt-1.5 text-[10px] font-bold tracking-wider">
-              <p className="text-slate-500">CUR: <span className="text-slate-200">{stats.current} {unit}</span></p>
-              <p className="text-slate-500">AVG: <span className="text-slate-200">{stats.avg} {unit}</span></p>
-              <p className="text-slate-500">MIN: <span className="text-slate-200">{stats.min} {unit}</span></p>
-              <p className="text-slate-500">MAX: <span className="text-slate-200">{stats.max} {unit}</span></p>
+            <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
+            <div className="flex flex-wrap gap-x-3 mt-1 text-[11px] font-medium text-slate-500">
+              <p>Hiện tại: <span className="text-slate-200">{stats.current}</span></p>
+              <p>TB: <span className="text-slate-200">{stats.avg}</span></p>
+              <p>Min: <span className="text-slate-200">{stats.min}</span></p>
+              <p>Max: <span className="text-slate-200">{stats.max}</span></p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="h-[220px] w-full relative z-10 mt-2">
+      {/* Biểu Đồ Area */}
+      <div className="h-[200px] w-full mt-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+          <AreaChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={theme.fill1} stopOpacity={0.6} />
+                <stop offset="5%" stopColor={theme.fill1} stopOpacity={0.3} />
                 <stop offset="95%" stopColor={theme.fill2} stopOpacity={0} />
               </linearGradient>
-              <filter id={`glow-${dataKey}`} x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
 
             <XAxis
               dataKey="time"
               stroke="rgba(255,255,255,0.1)"
-              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
+              tick={{ fill: '#64748b', fontSize: 10 }}
               tickLine={false}
               minTickGap={15}
-              tickMargin={12}
-              interval="preserveStartEnd"
+              tickMargin={10}
             />
 
             <YAxis
               stroke="rgba(255,255,255,0.1)"
-              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }}
+              tick={{ fill: '#64748b', fontSize: 10 }}
               tickLine={false}
               axisLine={false}
-              width={45}
+              width={40}
               domain={[
                 (dataMin: number) => Math.max(0, Math.floor(Number(dataMin) * 0.9)),
                 (dataMax: number) => Math.ceil(Number(dataMax) * 1.1)
@@ -115,18 +109,17 @@ const HologramChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: an
               allowDecimals={false}
             />
 
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
 
             <Area
               type="monotone"
               dataKey={dataKey}
               stroke={theme.stroke}
               fill={`url(#gradient-${dataKey})`}
-              strokeWidth={3}
-              activeDot={{ r: 6, fill: theme.stroke, stroke: '#0f172a', strokeWidth: 3, filter: `url(#glow-${dataKey})` }}
-              filter={`url(#glow-${dataKey})`}
+              strokeWidth={2}
+              activeDot={{ r: 5, fill: theme.stroke, stroke: '#0f172a', strokeWidth: 2 }}
               isAnimationActive={data.length < 150}
-              animationDuration={1500}
+              animationDuration={1000}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -139,7 +132,6 @@ const Analytics = () => {
   const { deviceId, settings } = useDeviceContext();
   const { activeSeason, history } = useCropSeason();
 
-  // Lấy giá trị chu kỳ mặc định từ thiết bị (fallback là 5 giây nếu lỗi)
   const defaultInterval = settings?.publish_interval || 5;
 
   const allSeasons = useMemo(() => {
@@ -152,15 +144,11 @@ const Analytics = () => {
 
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('realtime');
   const [timeRange, setTimeRange] = useState<string>('24h');
-
-  // State quản lý việc thu gọn (downsampling)
   const [intervalMode, setIntervalMode] = useState<string>('default');
   const [customIntervalValue, setCustomIntervalValue] = useState<number>(60);
-
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [isFetching, setIsFetching] = useState(false);
 
-  // 1. Dùng useMemo để tìm trực tiếp season được chọn thay vì dùng Ref (đảm bảo React tracking đúng deps)
   const selectedSeason = useMemo(() => {
     if (selectedSeasonId === 'realtime') return null;
     return allSeasons.find(s => s.id.toString() === selectedSeasonId);
@@ -176,11 +164,9 @@ const Analytics = () => {
 
       if (selectedSeasonId !== 'realtime') {
         if (selectedSeason) {
-          // Chuẩn hóa thành ISOString để đảm bảo Backend Rust luôn parse thành công
           start = new Date(selectedSeason.start_time).toISOString();
           end = selectedSeason.end_time ? new Date(selectedSeason.end_time).toISOString() : new Date().toISOString();
         } else {
-          // Chưa load kịp mùa vụ thì ngưng fetch để tránh rác dữ liệu
           setIsFetching(false);
           return;
         }
@@ -191,7 +177,6 @@ const Analytics = () => {
       }
 
       try {
-        // 2. BẮT BUỘC dùng encodeURIComponent để tránh lỗi các ký tự '+' hoặc khoảng trắng
         const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
         const response = await fetch(url, { method: 'GET', headers: { 'X-API-Key': settings.api_key } });
 
@@ -205,7 +190,6 @@ const Analytics = () => {
                 ...d,
                 timestamp: dateObj.getTime(),
                 fullTime: dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                // Hiển thị đẹp hơn ở XAxis: Kèm theo giờ/phút nếu xem theo mùa vụ (tránh trùng lặp ngày)
                 time: selectedSeasonId === 'realtime' && timeRange === '24h'
                   ? dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                   : dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -216,27 +200,19 @@ const Analytics = () => {
             setHistoryData([]);
           }
         } else {
-          // 3. Clear data cũ nếu Server báo lỗi (tránh việc giữ lại data của realtime)
-          console.error("Lỗi từ server:", await response.text());
           setHistoryData([]);
         }
       } catch (error) {
-        console.error("Lỗi fetch lịch sử:", error);
         setHistoryData([]);
       } finally {
         setIsFetching(false);
       }
     };
 
-    const timer = setTimeout(() => {
-      loadHistory();
-    }, 300);
-
+    const timer = setTimeout(loadHistory, 300);
     return () => clearTimeout(timer);
-    // Đưa selectedSeason vào dependency để tự động chạy lại khi mùa vụ tải xong
   }, [selectedSeasonId, timeRange, deviceId, settings?.backend_url, settings?.api_key, selectedSeason]);
 
-  // Tính toán khoảng cách (giây) đang được áp dụng
   const effectiveIntervalMs = useMemo(() => {
     let seconds = 0;
     if (intervalMode === 'default') seconds = 0;
@@ -245,13 +221,10 @@ const Analytics = () => {
     return seconds * 1000;
   }, [intervalMode, customIntervalValue, defaultInterval]);
 
-  // Lọc dữ liệu dựa trên effectiveIntervalMs
   const displayData = useMemo(() => {
     if (effectiveIntervalMs === 0 || historyData.length === 0) return historyData;
-
     const filtered = [];
     let lastTime = 0;
-
     for (let i = 0; i < historyData.length; i++) {
       const currentPoint = historyData[i];
       if (i === 0 || i === historyData.length - 1 || currentPoint.timestamp - lastTime >= effectiveIntervalMs) {
@@ -263,91 +236,83 @@ const Analytics = () => {
   }, [historyData, effectiveIntervalMs]);
 
   return (
-    <div className="app-page pb-32 relative">
-      <div className="absolute top-0 right-0 w-[60%] h-64 bg-gradient-to-bl from-cyan-500/10 via-transparent to-transparent pointer-events-none blur-3xl"></div>
+    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-28">
 
       <PageHeader
-        className="animate-in slide-in-from-top-4 duration-500 mb-6"
         icon={ChartIcon}
-        title="PHÂN TÍCH"
-        subtitle="Khai thác dữ liệu chuỗi thời gian (Time-series)"
+        title="Phân Tích"
+        subtitle="Theo dõi biến động và khai thác dữ liệu chuỗi thời gian"
       />
 
-      <div className="relative z-10 ui-card animate-in fade-in duration-700">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 ml-1">
-              <Filter size={12} className="text-emerald-500" /> Nguồn Dữ Liệu
+          {/* Lọc Mùa Vụ */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
+              <Filter size={14} className="text-emerald-500" /> Nguồn dữ liệu
             </label>
-            <div className="relative">
-              <select
-                value={selectedSeasonId}
-                onChange={(e) => setSelectedSeasonId(e.target.value)}
-                className="w-full bg-slate-950/50 border border-slate-700 text-slate-200 text-xs font-bold tracking-wide rounded-xl py-3 pl-4 pr-8 focus:ring-2 focus:ring-emerald-500 outline-none appearance-none shadow-inner transition-all hover:border-slate-500 cursor-pointer"
-              >
-                <option value="realtime">⚡ THỜI GIAN THỰC</option>
-                {allSeasons.map((s) => (
-                  <option key={s.id} value={s.id.toString()}>
-                    {s.name} {s.end_time ? '(Lưu trữ)' : '(Đang chạy)'}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={selectedSeasonId}
+              onChange={(e) => setSelectedSeasonId(e.target.value)}
+              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-500"
+            >
+              <option value="realtime">Thời gian thực</option>
+              {allSeasons.map((s) => (
+                <option key={s.id} value={s.id.toString()}>
+                  {s.name} {s.end_time ? '(Đã lưu)' : '(Đang chạy)'}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 ml-1">
-              <Clock size={12} className="text-blue-500" /> Khung Thời Gian
+          {/* Khung Thời Gian */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
+              <Clock size={14} className="text-blue-500" /> Khung thời gian
             </label>
-            <div className="relative">
-              <select
-                disabled={selectedSeasonId !== 'realtime'}
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="w-full bg-slate-950/50 border border-slate-700 text-slate-200 text-xs font-bold tracking-wide rounded-xl py-3 pl-4 pr-8 focus:ring-2 focus:ring-blue-500 outline-none appearance-none shadow-inner transition-all hover:border-slate-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <option value="24h">24 GIỜ QUA</option>
-                <option value="7d">7 NGÀY QUA</option>
-                <option value="30d">30 NGÀY QUA</option>
-              </select>
-            </div>
+            <select
+              disabled={selectedSeasonId !== 'realtime'}
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="24h">24 Giờ Qua</option>
+              <option value="7d">7 Ngày Qua</option>
+              <option value="30d">30 Ngày Qua</option>
+            </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 ml-1">
-              <Timer size={12} className="text-purple-500" /> Tần suất điểm
-              <span className="text-slate-600 font-medium normal-case">(Gốc: {defaultInterval}s)</span>
+          {/* Tần Suất Lọc */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
+              <Timer size={14} className="text-purple-500" /> Tần suất điểm
+              <span className="text-slate-500">(Gốc: {defaultInterval}s)</span>
             </label>
             <div className="flex gap-2">
-              <div className="relative flex-1">
-                <select
-                  value={intervalMode}
-                  onChange={(e) => setIntervalMode(e.target.value)}
-                  className="w-full bg-slate-950/50 border border-slate-700 text-slate-200 text-xs font-bold tracking-wide rounded-xl py-3 pl-4 pr-8 focus:ring-2 focus:ring-purple-500 outline-none appearance-none shadow-inner transition-all hover:border-slate-500 cursor-pointer"
-                >
-                  <option value="default">Không Lọc (Mặc định)</option>
-                  <option value="60">1 Phút / Điểm</option>
-                  <option value="300">5 Phút / Điểm</option>
-                  <option value="900">15 Phút / Điểm</option>
-                  <option value="1800">30 Phút / Điểm</option>
-                  <option value="custom">Tùy chỉnh...</option>
-                </select>
-              </div>
+              <select
+                value={intervalMode}
+                onChange={(e) => setIntervalMode(e.target.value)}
+                className="flex-1 bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-purple-500"
+              >
+                <option value="default">Không Lọc (Mặc định)</option>
+                <option value="60">1 Phút / Điểm</option>
+                <option value="300">5 Phút / Điểm</option>
+                <option value="900">15 Phút / Điểm</option>
+                <option value="1800">30 Phút / Điểm</option>
+                <option value="custom">Tùy chỉnh...</option>
+              </select>
 
               {intervalMode === 'custom' && (
-                <div className="relative w-24 animate-in fade-in slide-in-from-right-2">
+                <div className="relative w-20">
                   <input
                     type="number"
                     min={defaultInterval}
                     value={customIntervalValue}
                     onChange={(e) => setCustomIntervalValue(Number(e.target.value))}
-                    className="w-full bg-slate-950/50 border border-purple-500/50 text-purple-200 text-xs font-bold tracking-wide rounded-xl py-3 px-3 focus:ring-2 focus:ring-purple-500 outline-none shadow-inner transition-all"
-                    placeholder="Giây"
+                    className="w-full h-full bg-slate-950 border border-purple-500/50 text-purple-300 text-sm rounded-lg px-2 text-center outline-none focus:border-purple-500"
+                    placeholder="giây"
                   />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[9px] text-purple-400/50 font-black">
-                    GIÂY
-                  </div>
                 </div>
               )}
             </div>
@@ -356,40 +321,25 @@ const Analytics = () => {
         </div>
       </div>
 
-      <div className="relative z-10 pt-2">
+      <div className="pt-2">
         {isFetching ? (
-          <div className="h-[40vh] flex flex-col items-center justify-center space-y-6">
-            <div className="relative w-24 h-24 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-t-2 border-cyan-500 animate-[spin_2s_linear_infinite] shadow-[0_0_15px_rgba(6,182,212,0.5)]"></div>
-              <div className="absolute inset-2 rounded-full border-r-2 border-blue-500 animate-[spin_3s_linear_infinite_reverse] shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
-              <Cpu size={28} className="text-cyan-400 animate-pulse" />
-            </div>
-            <p className="text-cyan-500/70 font-black tracking-widest text-[10px] uppercase animate-pulse">Đang trích xuất chuỗi thời gian...</p>
+          <div className="h-[40vh] flex flex-col items-center justify-center gap-4">
+            <Loader2 size={32} className="text-blue-500 animate-spin" />
+            <p className="text-sm font-medium text-slate-500">Đang trích xuất dữ liệu chuỗi thời gian...</p>
           </div>
         ) : displayData.length === 0 ? (
           <StateView
             icon={ActivitySquare}
-            title="Dữ liệu trống rỗng"
+            title="Dữ liệu trống"
             description="Chưa có bản ghi nào trong khung thời gian này."
-            className="h-[40vh] flex flex-col justify-center bg-slate-900/20"
+            className="h-[40vh]"
           />
         ) : (
           <div className="space-y-6">
-            <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '0ms' }}>
-              <HologramChartCard title="Mật Độ Dinh Dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
-            </div>
-
-            <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '150ms' }}>
-              <HologramChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
-            </div>
-
-            <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '300ms' }}>
-              <HologramChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
-            </div>
-
-            <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 fill-mode-both" style={{ animationDelay: '450ms' }}>
-              <HologramChartCard title="Mực nước" data={displayData} dataKey="water_level" color="blue" unit="cm" icon={Waves} />
-            </div>
+            <FlatChartCard title="Mật Độ Dinh Dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
+            <FlatChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
+            <FlatChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
+            <FlatChartCard title="Mực Nước (% Bồn)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
           </div>
         )}
       </div>
@@ -399,3 +349,6 @@ const Analytics = () => {
 };
 
 export default Analytics;
+
+// Thêm cái Loader tạm ở đây vì mình quên import ở trên (Do ko xài glow nên ko cần icon phức tạp)
+import { Loader2 } from 'lucide-react';

@@ -215,9 +215,9 @@ pub struct WaterConfig {
     pub water_level_target: f32,
     pub water_level_max: f32,
     pub water_level_drain: f32,
-    pub circulation_mode: String,
-    pub circulation_on_sec: i32,
-    pub circulation_off_sec: i32,
+    // pub circulation_mode: String,
+    // pub circulation_on_sec: i32,
+    // pub circulation_off_sec: i32,
     pub water_level_tolerance: f32,
     pub auto_refill_enabled: bool,
     pub auto_drain_overflow: bool,
@@ -245,9 +245,9 @@ impl Default for WaterConfig {
             water_level_target: 20.0,
             water_level_max: 30.0,
             water_level_drain: 5.0,
-            circulation_mode: "auto".to_string(),
-            circulation_on_sec: 60,
-            circulation_off_sec: 300,
+            // circulation_mode: "auto".to_string(),
+            // circulation_on_sec: 60,
+            // circulation_off_sec: 300,
             water_level_tolerance: 1.0,
             auto_refill_enabled: true,
             auto_drain_overflow: true,
@@ -548,4 +548,3 @@ pub fn from_db_rows(
         high_temp_misting_off_duration_ms: water.high_temp_misting_off_duration_ms,
     }
 }
-

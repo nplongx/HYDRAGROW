@@ -11,59 +11,46 @@ const SystemLog = () => {
   const { systemEvents, deviceId } = useDeviceContext();
   const [filter, setFilter] = useState<string>('all');
 
+  // Đã chuyển sang hệ màu Flat, không còn shadow hay gradient
   const getEventStyle = (level: string, title: string) => {
     if (level === 'critical' || title.includes('Lỗi') || title.includes('Khẩn Cấp')) return {
-      icon: AlertTriangle, color: 'text-rose-400',
-      nodeBg: 'bg-rose-500/20 border-rose-400', shadow: 'shadow-[0_0_15px_rgba(244,63,94,0.6)]',
-      cardBg: 'bg-gradient-to-r from-rose-500/10 to-transparent border-rose-500/20'
+      icon: AlertTriangle, color: 'text-red-500',
+      iconBorder: 'border-red-500/30', cardBg: 'bg-red-500/5 border-red-500/20'
     };
 
     if (level === 'warning' || title.includes('Cảnh Báo')) return {
-      icon: AlertTriangle, color: 'text-amber-400',
-      nodeBg: 'bg-amber-500/20 border-amber-400', shadow: 'shadow-[0_0_15px_rgba(245,158,11,0.6)]',
-      cardBg: 'bg-gradient-to-r from-amber-500/10 to-transparent border-amber-500/20'
+      icon: AlertTriangle, color: 'text-amber-500',
+      iconBorder: 'border-amber-500/30', cardBg: 'bg-amber-500/5 border-amber-500/20'
     };
 
     if (title.includes('Cấp Nước') || title.includes('Xả Nước') || title.includes('Súc Rửa')) return {
-      icon: Waves, color: 'text-blue-400',
-      nodeBg: 'bg-blue-500/20 border-blue-400', shadow: 'shadow-[0_0_15px_rgba(59,130,246,0.6)]',
-      cardBg: 'bg-gradient-to-r from-blue-500/10 to-transparent border-blue-500/20'
+      icon: Waves, color: 'text-blue-500',
+      iconBorder: 'border-blue-500/30', cardBg: 'bg-blue-500/5 border-blue-500/20'
     };
 
     if (title.includes('Châm Phân') || title.includes('Điều Chỉnh pH')) return {
-      icon: Droplets, color: 'text-cyan-400',
-      nodeBg: 'bg-cyan-500/20 border-cyan-400', shadow: 'shadow-[0_0_15px_rgba(6,182,212,0.6)]',
-      cardBg: 'bg-gradient-to-r from-cyan-500/10 to-transparent border-cyan-500/20'
+      icon: Droplets, color: 'text-fuchsia-500',
+      iconBorder: 'border-fuchsia-500/30', cardBg: 'bg-fuchsia-500/5 border-fuchsia-500/20'
     };
 
     if (title.includes('Sục Trộn')) return {
-      icon: RefreshCw, color: 'text-purple-400',
-      nodeBg: 'bg-purple-500/20 border-purple-400', shadow: 'shadow-[0_0_15px_rgba(168,85,247,0.6)]',
-      cardBg: 'bg-gradient-to-r from-purple-500/10 to-transparent border-purple-500/20'
+      icon: RefreshCw, color: 'text-purple-500',
+      iconBorder: 'border-purple-500/30', cardBg: 'bg-purple-500/5 border-purple-500/20'
     };
 
     if (title.includes('Blockchain')) return {
-      icon: Database, color: 'text-emerald-400',
-      nodeBg: 'bg-emerald-500/20 border-emerald-400', shadow: 'shadow-[0_0_15px_rgba(16,185,129,0.6)]',
-      cardBg: 'bg-gradient-to-r from-emerald-500/10 to-transparent border-emerald-500/20'
+      icon: Database, color: 'text-emerald-500',
+      iconBorder: 'border-emerald-500/30', cardBg: 'bg-emerald-500/5 border-emerald-500/20'
     };
 
-    if (title.includes('Khởi Động')) return {
-      icon: Power, color: 'text-emerald-400',
-      nodeBg: 'bg-emerald-500/20 border-emerald-400', shadow: 'shadow-[0_0_15px_rgba(16,185,129,0.6)]',
-      cardBg: 'bg-gradient-to-r from-emerald-500/10 to-transparent border-emerald-500/20'
-    };
-
-    if (level === 'success') return {
-      icon: CheckCircle, color: 'text-emerald-400',
-      nodeBg: 'bg-emerald-500/20 border-emerald-400', shadow: 'shadow-[0_0_15px_rgba(16,185,129,0.6)]',
-      cardBg: 'bg-gradient-to-r from-emerald-500/10 to-transparent border-emerald-500/20'
+    if (title.includes('Khởi Động') || level === 'success') return {
+      icon: level === 'success' ? CheckCircle : Power, color: 'text-emerald-500',
+      iconBorder: 'border-emerald-500/30', cardBg: 'bg-emerald-500/5 border-emerald-500/20'
     };
 
     return {
-      icon: Info, color: 'text-indigo-400',
-      nodeBg: 'bg-indigo-500/20 border-indigo-400', shadow: 'shadow-[0_0_15px_rgba(99,102,241,0.6)]',
-      cardBg: 'bg-gradient-to-r from-indigo-500/10 to-transparent border-indigo-500/20'
+      icon: Info, color: 'text-slate-400',
+      iconBorder: 'border-slate-700', cardBg: 'bg-slate-900 border-slate-800'
     };
   };
 
@@ -77,76 +64,88 @@ const SystemLog = () => {
   });
 
   return (
-    <div className="app-page pb-24">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto pb-28">
       <PageHeader
-        className="animate-in slide-in-from-top-4 duration-500"
         icon={Clock}
         title="Nhật Ký Hệ Thống"
         subtitle={`Lịch sử vận hành trạm thủy canh ${deviceId || ''}`}
       />
 
-      <div className="ui-card flex flex-col space-y-3 animate-in fade-in duration-700">
-        <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 flex items-center gap-1.5 ml-1">
-          <Filter size={12} /> Bộ lọc thông minh
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-5 mb-8">
+        <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3">
+          <Filter size={14} /> Bộ lọc sự kiện
         </label>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setFilter('all')} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${filter === 'all' ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-105' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>Tất cả</button>
-          <button onClick={() => setFilter('error')} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${filter === 'error' ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)] scale-105' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>Lỗi & Cảnh báo</button>
-          <button onClick={() => setFilter('dosing')} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${filter === 'dosing' ? 'bg-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-105' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>Dinh dưỡng</button>
-          <button onClick={() => setFilter('water')} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${filter === 'water' ? 'bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] scale-105' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>Nước</button>
-          <button onClick={() => setFilter('info')} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${filter === 'info' ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] scale-105' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>Log khác</button>
+          {[
+            { id: 'all', label: 'Tất cả' },
+            { id: 'error', label: 'Lỗi & Cảnh báo' },
+            { id: 'dosing', label: 'Dinh dưỡng' },
+            { id: 'water', label: 'Nước' },
+            { id: 'info', label: 'Log khác' }
+          ].map(btn => (
+            <button
+              key={btn.id}
+              onClick={() => setFilter(btn.id)}
+              className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-colors border ${filter === btn.id
+                  ? 'bg-blue-600 text-white border-blue-500'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
+                }`}
+            >
+              {btn.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="relative">
-        <div className="absolute left-[19px] top-4 bottom-0 w-0.5 bg-gradient-to-b from-slate-700 via-slate-800 to-transparent"></div>
+      <div className="relative pl-3">
+        {/* Thanh Timeline mảnh 1px */}
+        <div className="absolute left-[19px] top-2 bottom-0 w-[1px] bg-slate-800"></div>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           {filteredEvents.length === 0 ? (
-            <div className="pl-12">
+            <div className="pl-8">
               <StateView
                 icon={Zap}
-                title="Hệ thống đang chờ lệnh mới..."
-                className="opacity-70 animate-in zoom-in"
+                title="Đang chờ dữ liệu..."
+                description="Hệ thống chưa ghi nhận sự kiện nào theo bộ lọc này."
+                className="bg-slate-900/50 border-slate-800"
               />
             </div>
           ) : (
             filteredEvents.map((ev, idx) => {
-              const { icon: Icon, color, nodeBg, shadow, cardBg } = getEventStyle(ev.level, ev.title);
+              const { icon: Icon, color, iconBorder, cardBg } = getEventStyle(ev.level, ev.title);
               const date = new Date(ev.timestamp);
 
               return (
-                <div
-                  key={idx}
-                  className="relative pl-12 group animate-in slide-in-from-bottom-4 fade-in"
-                  style={{ animationFillMode: 'both', animationDuration: '600ms', animationDelay: `${idx * 50}ms` }}
-                >
-                  <div className={`absolute left-2.5 top-3 p-1.5 rounded-full border-2 ${nodeBg} bg-slate-950 ${shadow} transition-all duration-300 group-hover:scale-125 z-10`}>
-                    <Icon size={12} className={color} strokeWidth={2.5} />
+                <div key={idx} className="relative pl-10 group">
+
+                  {/* Icon Điểm Timeline */}
+                  <div className={`absolute left-0 top-3 p-1.5 rounded-full border bg-slate-950 z-10 transition-colors ${iconBorder}`}>
+                    <Icon size={14} className={color} strokeWidth={2.5} />
                   </div>
 
-                  <div className={`flex flex-col space-y-2 p-4 rounded-2xl border ${cardBg} backdrop-blur-md transition-all duration-300 group-hover:translate-x-1 hover:shadow-lg`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className={`text-sm font-extrabold tracking-wide ${color}`}>{ev.title}</h4>
-                      <span className="text-[10px] text-slate-300 font-bold bg-slate-900/80 border border-slate-700/50 px-2 py-1 rounded-lg whitespace-nowrap shadow-sm">
+                  {/* Nội dung Card */}
+                  <div className={`flex flex-col gap-2 p-4 rounded-xl border transition-colors hover:border-slate-600 ${cardBg}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className={`text-sm font-semibold leading-tight ${color}`}>{ev.title}</h4>
+                      <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap bg-slate-950/50 px-2 py-0.5 rounded border border-slate-800/50">
                         {date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
                     </div>
 
-                    <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium opacity-90 group-hover:opacity-100 transition-opacity">
+                    <div className="text-sm text-slate-300 leading-relaxed font-medium">
                       {ev.message}
                     </div>
 
-                    {/* 🟢 BỔ SUNG: Hiển thị METADATA dưới dạng Code Block */}
+                    {/* Khối Metadata (Nếu có) */}
                     {ev.metadata && Object.keys(ev.metadata).length > 0 && (
-                      <div className="mt-3 p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 shadow-inner overflow-x-auto custom-scrollbar">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 select-none">Dữ Liệu Đi Kèm (Metadata):</p>
-                        <pre className="text-[11px] font-mono text-emerald-400/90 leading-tight">
+                      <div className="mt-2 p-3 bg-slate-950 rounded-lg border border-slate-800 overflow-x-auto custom-scrollbar">
+                        <p className="text-[10px] font-semibold text-slate-500 mb-1.5">DỮ LIỆU ĐÍNH KÈM:</p>
+                        <pre className="text-[11px] font-mono text-slate-400 leading-relaxed">
                           {JSON.stringify(ev.metadata, null, 2)}
                         </pre>
                       </div>
                     )}
-
                   </div>
                 </div>
               );

@@ -16,17 +16,15 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   className = ''
 }) => {
   return (
-    <header className={`page-header ${className}`}>
-      <div className="page-header-main">
-        {Icon && (
-          <div className="page-header-icon">
-            <Icon size={22} className="text-slate-300" />
-          </div>
-        )}
-        <div>
-          <h1 className="page-header-title">{title}</h1>
-          {subtitle && <p className="page-header-subtitle">{subtitle}</p>}
+    <header className={`flex items-start justify-between mb-6 ${className}`}>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2.5 text-slate-100">
+          {Icon && <Icon size={24} className="text-slate-400" />}
+          <h1 className="text-2xl font-semibold tracking-tight leading-none">{title}</h1>
         </div>
+        {subtitle && (
+          <p className="text-sm text-slate-500 font-medium ml-[34px]">{subtitle}</p>
+        )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </header>

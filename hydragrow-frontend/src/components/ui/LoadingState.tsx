@@ -8,17 +8,19 @@ interface LoadingStateProps {
 }
 
 export const LoadingState: React.FC<LoadingStateProps> = ({
-  message = 'Đang tải dữ liệu... Vui lòng chờ trong giây lát.',
+  message = 'Đang tải dữ liệu...',
   fullscreen = true,
   className = '',
 }) => {
+  const containerClass = fullscreen
+    ? "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm"
+    : "flex flex-col items-center justify-center w-full h-full p-8";
+
   return (
-    <div className={`ui-loading ${fullscreen ? 'ui-loading-fullscreen' : ''} ${className}`.trim()}>
-      <div className="ui-loading-card">
-        <span className="ui-loading-spinner" aria-hidden="true">
-          <Loader2 size={20} className="animate-spin" />
-        </span>
-        <p className="ui-loading-message">{message}</p>
+    <div className={`${containerClass} ${className}`}>
+      <div className="flex flex-col items-center gap-3 p-6 bg-slate-900 rounded-xl border border-slate-800 shadow-xl">
+        <Loader2 size={24} className="animate-spin text-blue-500" />
+        <p className="text-sm font-medium text-slate-300">{message}</p>
       </div>
     </div>
   );

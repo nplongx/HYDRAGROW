@@ -291,9 +291,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 if (!prev) return incomingPayload;
                 return {
                   ...prev,
-                  pump_status: incomingPayload.pump_status !== undefined
-                    ? normalizePumpStatus(incomingPayload.pump_status)
-                    : prev.pump_status,
+                  pump_status: prev.pump_status,
                   temp: incomingPayload.temp !== undefined ? incomingPayload.temp : prev.temp,
                   ec: incomingPayload.ec !== undefined ? incomingPayload.ec : prev.ec,
                   ph: incomingPayload.ph !== undefined ? incomingPayload.ph : prev.ph,

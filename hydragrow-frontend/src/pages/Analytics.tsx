@@ -159,25 +159,55 @@ const Analytics = () => {
       if (!deviceId || !settings) return;
       setIsFetching(true);
 
-      let start: string;
-      let end = new Date().toISOString();
+      let startIso: string;
+      let endIso: string;
+
+      // SỬA LỖI TIMEZONE Ở ĐÂY
+      // Tạo một helper để lấy ISOString nhưng giữ nguyên Local Timezone (tránh bị lùi 7 tiếng)
+      const getLocalIsoString = (date: Date) => {
+        const tzo = -date.getTimezoneOffset(),
+          dif = tzo >= 0 ? '+' : '-',
+          pad = (num: number) => {
+            const norm = Math.floor(Math.abs(num));
+            return (norm < 10 ? '0' : '') + norm;
+          };
+        return date.getFullYear() +
+          '-' + pad(date.getMonth() + 1) +
+          '-' + pad(date.getDate()) +
+          'T' + pad(date.getHours()) +
+          ':' + pad(date.getMinutes()) +
+          ':' + pad(date.getSeconds()) +
+          dif + pad(tzo / 60) +
+          ':' + pad(tzo % 60);
+      };
 
       if (selectedSeasonId !== 'realtime') {
         if (selectedSeason) {
-          start = new Date(selectedSeason.start_time).toISOString();
-          end = selectedSeason.end_time ? new Date(selectedSeason.end_time).toISOString() : new Date().toISOString();
+          // Lấy theo thời gian mùa vụ
+          startIso = getLocalIsoString(new Date(selectedSeason.start_time));
+          endIso = selectedSeason.end_time
+            ? getLocalIsoString(new Date(selectedSeason.end_time))
+            : getLocalIsoString(new Date());
         } else {
           setIsFetching(false);
           return;
         }
       } else {
-        const now = Date.now();
-        const diff = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
-        start = new Date(now - diff * 60 * 60 * 1000).toISOString();
+        // Lấy theo thời gian thực (Realtime)
+        const now = new Date();
+        const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
+
+        const startDate = new Date(now.getTime() - diffHours * 60 * 60 * 1000);
+
+        startIso = getLocalIsoString(startDate);
+        endIso = getLocalIsoString(now);
       }
 
       try {
-        const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
+        // Log ra để bạn debug xem Frontend đang request khoảng thời gian nào
+        console.log(`Fetching history from ${startIso} to ${endIso}`);
+
+        const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
         const response = await fetch(url, { method: 'GET', headers: { 'X-API-Key': settings.api_key } });
 
         if (response.ok) {
@@ -185,6 +215,7 @@ const Analytics = () => {
           if (text && text.trim() !== '') {
             const res = JSON.parse(text);
             const formatted = (res.data || res).map((d: any) => {
+              // Phân tích thời gian trả về
               const dateObj = new Date(d.time);
               return {
                 ...d,
@@ -203,6 +234,7 @@ const Analytics = () => {
           setHistoryData([]);
         }
       } catch (error) {
+        console.error("Fetch history error:", error);
         setHistoryData([]);
       } finally {
         setIsFetching(false);

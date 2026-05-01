@@ -79,7 +79,7 @@ pub async fn get_history(
         |> filter(fn: (r) => r["_measurement"] == "sensor_data")
         |> filter(fn: (r) => r.device_id == "{}")
         |> sort(columns: ["_time"], desc: false)
-        |> limit(n: 1000)
+        |> tail(n: 1000)
         "#,
         app_state.influx_bucket, range_clause, device_id
     );

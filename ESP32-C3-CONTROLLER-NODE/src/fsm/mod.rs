@@ -304,6 +304,11 @@ fn detect_emergency(
     {
         return "PH_OUT_OF_BOUNDS".to_string();
     }
+    if config.enable_temp_sensor
+        && (sensors.temp < config.min_temp_limit || sensors.temp > config.max_temp_limit)
+    {
+        return format!("TEMP_OUT_OF_BOUNDS: {:.1}°C", sensors.temp);
+    }
     String::new()
 }
 

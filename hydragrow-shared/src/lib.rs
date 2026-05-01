@@ -147,6 +147,8 @@ pub struct ControllerConfig {
     pub max_ec_delta: f32,
     pub max_ph_delta: f32,
     pub max_dose_per_cycle: f32,
+    pub min_temp_limit: f32,
+    pub max_temp_limit: f32,
 
     // 🟢 THÊM: Giới hạn an toàn bơm
     pub max_dose_per_hour: f32,
@@ -266,6 +268,8 @@ impl Default for ControllerConfig {
             max_ec_delta: 1.0,
             max_ph_delta: 1.5,
             max_dose_per_cycle: 2.0,
+            min_temp_limit: 15.0,
+            max_temp_limit: 35.0,
 
             // 🟢 THÊM mặc định
             max_dose_per_hour: 200.0,

@@ -484,6 +484,8 @@ pub fn from_db_rows(
         max_ph_limit: safe.max_ph_limit,
         max_ec_delta: safe.max_ec_delta,
         max_ph_delta: safe.max_ph_delta,
+        min_temp_limit: safe.min_temp_limit,
+        max_temp_limit: safe.max_temp_limit,
 
         max_dose_per_cycle: safe.max_dose_per_cycle,
         max_dose_per_hour: safe.max_dose_per_hour,
@@ -546,3 +548,4 @@ pub fn from_db_rows(
         high_temp_misting_off_duration_ms: water.high_temp_misting_off_duration_ms,
     }
 }
+

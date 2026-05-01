@@ -2,7 +2,6 @@ use actix_web::{HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use hydragrow_shared::ControllerConfig;
 use rumqttc::QoS;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, instrument};
 
@@ -12,13 +11,24 @@ use crate::models::config::{
     DeviceConfig, DosingCalibration, SafetyConfig, SensorCalibration, WaterConfig, from_db_rows,
 };
 
-#[derive(Debug, Serialize)]
-struct DosingDynamicResponse {
-    dynamic_ec_gain_per_ml: f32,
-    base_ec_gain_per_ml: f32,
-    confidence: f32,
-    sample_count: u32,
-    last_updated: DateTime<Utc>,
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct UnifiedConfigRequest {
+    pub device_config: DeviceConfig,
+    pub water_config: WaterConfig,
+    pub safety_config: SafetyConfig,
+    pub sensor_calibration: SensorCalibration,
+    pub dosing_calibration: DosingCalibration,
+}
+
+#[derive(serde::Deserialize)]
+pub struct FinishCalibrationRequest {
+    pub mode: String,
+    pub sample_points: Vec<f32>,
+    pub ph_v7: f32,
+    pub ph_v4: f32,
+    pub ph_v10: Option<f32>,
+    pub error: f32,
+    pub finished_at: Option<DateTime<Utc>>,
 }
 
 // ==========================================
@@ -80,8 +90,8 @@ async fn fetch_unified_config_concurrently(
             device_id: device_id.to_string(),
             ph_v7: 2.5,
             ph_v4: 1.428,
-            ph_v10: None,                          // 🟢 THÊM MỚI
-            ph_calibration_mode: "2-point".into(), // 🟢 THÊM MỚI
+            ph_v10: None,
+            ph_calibration_mode: "2-point".into(),
             ec_factor: 880.0,
             ec_offset: 0.0,
             temp_offset: 0.0,
@@ -135,15 +145,14 @@ pub async fn sync_config_to_esp32(
         let sensor_payload = json!({
             "ph_v7": sensor_config.ph_v7,
             "ph_v4": sensor_config.ph_v4,
-            "ph_v10": sensor_config.ph_v10, // 🟢 THÊM MỚI
-            "ph_calibration_mode": sensor_config.ph_calibration_mode, // 🟢 THÊM MỚI
+            "ph_v10": sensor_config.ph_v10,
+            "ph_calibration_mode": sensor_config.ph_calibration_mode,
             "ec_factor": sensor_config.ec_factor,
             "ec_offset": sensor_config.ec_offset,
             "temp_offset": sensor_config.temp_offset,
             "temp_compensation_beta": sensor_config.temp_compensation_beta,
             "moving_average_window": sensor_config.moving_average_window,
             "publish_interval": sensor_config.publish_interval,
-
             "enable_ph_sensor": sensor_config.enable_ph_sensor,
             "enable_ec_sensor": sensor_config.enable_ec_sensor,
             "enable_temp_sensor": sensor_config.enable_temp_sensor,
@@ -181,21 +190,17 @@ async fn upsert_water_db(
         r#"
         INSERT INTO water_config (
             device_id, tank_height, water_level_min, water_level_target, water_level_max,
-            water_level_drain, circulation_mode, circulation_on_sec,
-            circulation_off_sec, water_level_tolerance, auto_refill_enabled,
+            water_level_drain, water_level_tolerance, auto_refill_enabled,
             auto_drain_overflow, auto_dilute_enabled, dilute_drain_amount_cm,
             scheduled_water_change_enabled, water_change_cron, scheduled_drain_amount_cm,
             misting_on_duration_ms, misting_off_duration_ms, last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_height = EXCLUDED.tank_height,
             water_level_min = EXCLUDED.water_level_min, 
             water_level_target = EXCLUDED.water_level_target,
             water_level_max = EXCLUDED.water_level_max, 
             water_level_drain = EXCLUDED.water_level_drain,
-            circulation_mode = EXCLUDED.circulation_mode, 
-            circulation_on_sec = EXCLUDED.circulation_on_sec,
-            circulation_off_sec = EXCLUDED.circulation_off_sec, 
             water_level_tolerance = EXCLUDED.water_level_tolerance,
             auto_refill_enabled = EXCLUDED.auto_refill_enabled, 
             auto_drain_overflow = EXCLUDED.auto_drain_overflow,
@@ -215,9 +220,6 @@ async fn upsert_water_db(
     .bind(config.water_level_target)
     .bind(config.water_level_max)
     .bind(config.water_level_drain)
-    .bind(&config.circulation_mode)
-    .bind(config.circulation_on_sec)
-    .bind(config.circulation_off_sec)
     .bind(config.water_level_tolerance)
     .bind(config.auto_refill_enabled)
     .bind(config.auto_drain_overflow)
@@ -260,8 +262,8 @@ async fn upsert_sensor_db(
     .bind(&cal.device_id)
     .bind(cal.ph_v7)
     .bind(cal.ph_v4)
-    .bind(cal.ph_v10) // 🟢 THÊM MỚI
-    .bind(&cal.ph_calibration_mode) // 🟢 THÊM MỚI
+    .bind(cal.ph_v10)
+    .bind(&cal.ph_calibration_mode)
     .bind(cal.ec_factor)
     .bind(cal.ec_offset)
     .bind(cal.temp_offset)
@@ -282,8 +284,8 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
         device_id: device_id.to_string(),
         ph_v7: 2.5,
         ph_v4: 1.428,
-        ph_v10: None,                          // 🟢 THÊM MỚI
-        ph_calibration_mode: "2-point".into(), // 🟢 THÊM MỚI
+        ph_v10: None,
+        ph_calibration_mode: "2-point".into(),
         ec_factor: 880.0,
         ec_offset: 0.0,
         temp_offset: 0.0,
@@ -305,7 +307,6 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
         return Err("dosing_pwm_percent must be in range [1..100]".to_string());
     }
 
-    // 🟢 THÊM KIỂM TRA CHO CÁC THÔNG SỐ PWM TỐI THIỂU MỚI
     if !(0..=100).contains(&dose.dosing_min_pwm_percent) {
         return Err("dosing_min_pwm_percent must be in range [0..100]".to_string());
     }
@@ -325,6 +326,7 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
 
     if dose.scheduled_dosing_enabled {
         let pwm_ratio = dose.dosing_pwm_percent as f32 / 100.0;
+        
         let effective_capacity_a = dose.pump_a_capacity_ml_per_sec * pwm_ratio;
         let expected_duration_a_sec = dose.scheduled_dose_a_ml / effective_capacity_a;
         if expected_duration_a_sec > MAX_SCHEDULED_DOSING_DURATION_SEC {
@@ -347,18 +349,6 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Deserialize)]
-pub struct FinishCalibrationRequest {
-    pub mode: String,
-    pub sample_points: Vec<f32>,
-    pub ph_v7: f32,
-    pub ph_v4: f32,
-    pub ph_v10: Option<f32>, // 🟢 THÊM MỚI
-    pub error: f32,
-    pub finished_at: Option<DateTime<Utc>>,
-}
-
-// 🟢 CẬP NHẬT CÂU TRUY VẤN SQL BỔ SUNG CÁC TRƯỜNG PWM MỚI
 async fn upsert_dosing_db(
     pool: &sqlx::PgPool,
     cal: &DosingCalibration,
@@ -367,7 +357,7 @@ async fn upsert_dosing_db(
     sqlx::query(
         r#"
         INSERT INTO dosing_calibration (
-            device_id, tank_volume_l, ec_gain_per_ml, ph_shift_up_per_ml,
+            device_id, ec_gain_per_ml, ph_shift_up_per_ml,
             ph_shift_down_per_ml, active_mixing_sec, sensor_stabilize_sec, ec_step_ratio, ph_step_ratio, 
             pump_a_capacity_ml_per_sec, pump_b_capacity_ml_per_sec,
             pump_ph_up_capacity_ml_per_sec, pump_ph_down_capacity_ml_per_sec,
@@ -378,9 +368,9 @@ async fn upsert_dosing_db(
             dosing_min_pwm_percent, pump_a_min_pwm_percent, pump_b_min_pwm_percent,
             pump_ph_up_min_pwm_percent, pump_ph_down_min_pwm_percent, dosing_pulse_on_ms,
             dosing_pulse_off_ms, dosing_min_dose_ml, dosing_max_pulse_count_per_cycle
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
         ON CONFLICT(device_id) DO UPDATE SET
-            tank_volume_l = EXCLUDED.tank_volume_l, ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
+            ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
             ph_shift_up_per_ml = EXCLUDED.ph_shift_up_per_ml, ph_shift_down_per_ml = EXCLUDED.ph_shift_down_per_ml,
             active_mixing_sec = EXCLUDED.active_mixing_sec, sensor_stabilize_sec = EXCLUDED.sensor_stabilize_sec,
             ec_step_ratio = EXCLUDED.ec_step_ratio, ph_step_ratio = EXCLUDED.ph_step_ratio, 
@@ -407,52 +397,41 @@ async fn upsert_dosing_db(
             last_calibrated = EXCLUDED.last_calibrated
         "#
     )
-    .bind(&cal.device_id) // 1
-    .bind(cal.tank_volume_l) // 2
-    .bind(cal.ec_gain_per_ml) // 3
-    .bind(cal.ph_shift_up_per_ml) // 4
-    .bind(cal.ph_shift_down_per_ml) // 5
-    .bind(cal.active_mixing_sec) // 6
-    .bind(cal.sensor_stabilize_sec) // 7
-    .bind(cal.ec_step_ratio) // 8
-    .bind(cal.ph_step_ratio) // 9
-    .bind(cal.pump_a_capacity_ml_per_sec) // 10
-    .bind(cal.pump_b_capacity_ml_per_sec) // 11
-    .bind(cal.pump_ph_up_capacity_ml_per_sec) // 12
-    .bind(cal.pump_ph_down_capacity_ml_per_sec) // 13
-    .bind(cal.soft_start_duration) // 14
-    .bind(now) // 15
-    .bind(cal.scheduled_mixing_interval_sec) // 16
-    .bind(cal.scheduled_mixing_duration_sec) // 17
-    .bind(cal.dosing_pwm_percent) // 18
-    .bind(cal.osaka_mixing_pwm_percent) // 19
-    .bind(cal.osaka_misting_pwm_percent) // 20
-    .bind(cal.scheduled_dosing_enabled) // 21
-    .bind(&cal.scheduled_dosing_cron) // 22
-    .bind(cal.scheduled_dose_a_ml) // 23
-    .bind(cal.scheduled_dose_b_ml) // 24
-    // 🟢 THÊM THAM SỐ PWM (Từ 25 đến 33)
-    .bind(cal.dosing_min_pwm_percent) // 25
-    .bind(cal.pump_a_min_pwm_percent) // 26
-    .bind(cal.pump_b_min_pwm_percent) // 27
-    .bind(cal.pump_ph_up_min_pwm_percent) // 28
-    .bind(cal.pump_ph_down_min_pwm_percent) // 29
-    .bind(cal.dosing_pulse_on_ms) // 30
-    .bind(cal.dosing_pulse_off_ms) // 31
-    .bind(cal.dosing_min_dose_ml) // 32
-    .bind(cal.dosing_max_pulse_count_per_cycle) // 33
+    .bind(&cal.device_id) 
+    .bind(cal.ec_gain_per_ml) 
+    .bind(cal.ph_shift_up_per_ml) 
+    .bind(cal.ph_shift_down_per_ml) 
+    .bind(cal.active_mixing_sec) 
+    .bind(cal.sensor_stabilize_sec) 
+    .bind(cal.ec_step_ratio) 
+    .bind(cal.ph_step_ratio) 
+    .bind(cal.pump_a_capacity_ml_per_sec) 
+    .bind(cal.pump_b_capacity_ml_per_sec) 
+    .bind(cal.pump_ph_up_capacity_ml_per_sec) 
+    .bind(cal.pump_ph_down_capacity_ml_per_sec) 
+    .bind(cal.soft_start_duration) 
+    .bind(now) 
+    .bind(cal.scheduled_mixing_interval_sec) 
+    .bind(cal.scheduled_mixing_duration_sec) 
+    .bind(cal.dosing_pwm_percent) 
+    .bind(cal.osaka_mixing_pwm_percent) 
+    .bind(cal.osaka_misting_pwm_percent) 
+    .bind(cal.scheduled_dosing_enabled) 
+    .bind(&cal.scheduled_dosing_cron) 
+    .bind(cal.scheduled_dose_a_ml) 
+    .bind(cal.scheduled_dose_b_ml) 
+    .bind(cal.dosing_min_pwm_percent) 
+    .bind(cal.pump_a_min_pwm_percent) 
+    .bind(cal.pump_b_min_pwm_percent) 
+    .bind(cal.pump_ph_up_min_pwm_percent) 
+    .bind(cal.pump_ph_down_min_pwm_percent) 
+    .bind(cal.dosing_pulse_on_ms) 
+    .bind(cal.dosing_pulse_off_ms) 
+    .bind(cal.dosing_min_dose_ml) 
+    .bind(cal.dosing_max_pulse_count_per_cycle) 
     .execute(pool).await?;
 
     Ok(())
-}
-
-#[derive(serde::Deserialize, Serialize)]
-pub struct UnifiedConfigRequest {
-    pub device_config: DeviceConfig,
-    pub water_config: WaterConfig,
-    pub safety_config: SafetyConfig,
-    pub sensor_calibration: SensorCalibration,
-    pub dosing_calibration: DosingCalibration,
 }
 
 #[instrument(skip(app_state, req))]
@@ -467,18 +446,14 @@ pub async fn update_unified_config(
 
     payload.device_config.device_id = device_id.clone();
     payload.device_config.last_updated = now;
-    if let Err(e) =
-        crate::db::postgres::upsert_device_config(&app_state.pg_pool, &payload.device_config).await
-    {
+    if let Err(e) = crate::db::postgres::upsert_device_config(&app_state.pg_pool, &payload.device_config).await {
         error!("Failed to update device config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Device"}));
     }
 
     payload.safety_config.device_id = device_id.clone();
     payload.safety_config.last_updated = now.clone();
-    if let Err(e) =
-        crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &payload.safety_config).await
-    {
+    if let Err(e) = crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &payload.safety_config).await {
         error!("Failed to update safety config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Safety"}));
     }
@@ -545,7 +520,6 @@ pub async fn get_unified_device_config(
         .fetch_optional(pool)
     );
 
-    // Gói lại & Tạo giá trị fallback nếu DB trống
     let response_payload = UnifiedConfigRequest {
         device_config: dev_res.ok().flatten().unwrap_or_else(|| DeviceConfig {
             device_id: device_id.clone(),
@@ -582,8 +556,8 @@ pub async fn get_unified_device_config(
                 device_id: device_id.clone(),
                 ph_v7: 2.5,
                 ph_v4: 1.428,
-                ph_v10: None,                          // 🟢 THÊM MỚI
-                ph_calibration_mode: "2-point".into(), // 🟢 THÊM MỚI
+                ph_v10: None,
+                ph_calibration_mode: "2-point".into(),
                 ec_factor: 880.0,
                 ec_offset: 0.0,
                 temp_offset: 0.0,
@@ -792,8 +766,8 @@ pub async fn finish_sensor_calibration(
     .bind(&device_id)
     .bind(payload.ph_v7)
     .bind(payload.ph_v4)
-    .bind(payload.ph_v10) // 🟢 THÊM MỚI
-    .bind(&payload.mode) // 🟢 THÊM MỚI (Từ body của request)
+    .bind(payload.ph_v10)
+    .bind(&payload.mode)
     .bind(existing.ec_factor)
     .bind(existing.ec_offset)
     .bind(existing.temp_offset)
@@ -815,7 +789,6 @@ pub async fn finish_sensor_calibration(
     };
 
     if applied {
-        // 🟢 THÊM MỚI LOGIC IN THÔNG ĐIỆP
         let msg = if let Some(v10) = payload.ph_v10 {
             format!(
                 "Hiệu chuẩn thành công (mode: {}). pH_V7={:.4}, pH_V4={:.4}, pH_V10={:.4}, sai số={:.4}",
@@ -841,7 +814,7 @@ pub async fn finish_sensor_calibration(
                 "result": {
                     "ph_v7": payload.ph_v7,
                     "ph_v4": payload.ph_v4,
-                    "ph_v10": payload.ph_v10 // 🟢 THÊM MỚI
+                    "ph_v10": payload.ph_v10
                 },
                 "error": payload.error,
                 "finished_at": now
@@ -933,93 +906,6 @@ pub async fn update_dosing_calibration(
     HttpResponse::Ok().json(json!({"status": "success"}))
 }
 
-#[instrument(skip(app_state))]
-pub async fn get_dosing_dynamic_calibration(
-    path: web::Path<String>,
-    app_state: web::Data<AppState>,
-) -> impl Responder {
-    let device_id = path.into_inner();
-
-    let dosing_cfg_res = sqlx::query_as::<_, DosingCalibration>(
-        "SELECT * FROM dosing_calibration WHERE device_id = $1",
-    )
-    .bind(&device_id)
-    .fetch_optional(&app_state.pg_pool)
-    .await;
-
-    let dosing_cfg = match dosing_cfg_res {
-        Ok(Some(cfg)) => cfg,
-        Ok(None) => {
-            return HttpResponse::NotFound().json(json!({"error": "Dosing calibration not found"}));
-        }
-        Err(_) => return HttpResponse::InternalServerError().json(json!({"error": "DB Error"})),
-    };
-
-    let state_map = app_state.dosing_dynamic_states.read().await;
-    if let Some(state) = state_map.get(&device_id) {
-        return HttpResponse::Ok().json(DosingDynamicResponse {
-            dynamic_ec_gain_per_ml: state.dynamic_ec_gain_per_ml,
-            base_ec_gain_per_ml: state.base_ec_gain_per_ml,
-            confidence: state.confidence,
-            sample_count: state.sample_count,
-            last_updated: state.last_updated,
-        });
-    }
-
-    HttpResponse::Ok().json(DosingDynamicResponse {
-        dynamic_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
-        base_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
-        confidence: 0.0,
-        sample_count: 0,
-        last_updated: Utc::now(),
-    })
-}
-
-#[instrument(skip(app_state))]
-pub async fn reset_dosing_dynamic_calibration(
-    path: web::Path<String>,
-    app_state: web::Data<AppState>,
-) -> impl Responder {
-    let device_id = path.into_inner();
-
-    let dosing_cfg_res = sqlx::query_as::<_, DosingCalibration>(
-        "SELECT * FROM dosing_calibration WHERE device_id = $1",
-    )
-    .bind(&device_id)
-    .fetch_optional(&app_state.pg_pool)
-    .await;
-
-    let dosing_cfg = match dosing_cfg_res {
-        Ok(Some(cfg)) => cfg,
-        Ok(None) => {
-            return HttpResponse::NotFound().json(json!({"error": "Dosing calibration not found"}));
-        }
-        Err(_) => return HttpResponse::InternalServerError().json(json!({"error": "DB Error"})),
-    };
-
-    {
-        let mut state_map = app_state.dosing_dynamic_states.write().await;
-        state_map.insert(
-            device_id.clone(),
-            crate::DosingDynamicState {
-                base_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
-                dynamic_ec_gain_per_ml: dosing_cfg.ec_gain_per_ml,
-                confidence: 0.0,
-                sample_count: 0,
-                last_updated: Utc::now(),
-                samples: std::collections::VecDeque::new(),
-            },
-        );
-    }
-
-    HttpResponse::Ok().json(json!({
-        "status": "success",
-        "dynamic_ec_gain_per_ml": dosing_cfg.ec_gain_per_ml,
-        "confidence": 0.0,
-        "sample_count": 0
-    }))
-}
-
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/config/unified", web::put().to(update_unified_config))
         .route("/config/unified", web::get().to(get_unified_device_config))
@@ -1046,14 +932,6 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route(
             "/calibration/dosing",
             web::post().to(update_dosing_calibration),
-        )
-        .route(
-            "/calibration/dosing/dynamic",
-            web::get().to(get_dosing_dynamic_calibration),
-        )
-        .route(
-            "/calibration/dosing/dynamic/reset",
-            web::post().to(reset_dosing_dynamic_calibration),
         );
 }
 
@@ -1101,4 +979,3 @@ mod tests {
         assert!(result.unwrap_err().contains("scheduled_dose_a_ml"));
     }
 }
-

@@ -14,15 +14,15 @@ use std::thread;
 use std::time::Duration;
 
 mod config;
-mod controller;
 mod fsm;
 mod mqtt;
 mod pump;
 
-use crate::controller::{start_fsm_control_loop, SystemState};
 use config::create_shared_config;
 use mqtt::{create_shared_sensor_data, ConnectionState};
 use pump::PumpController;
+
+use crate::fsm::start_fsm_control_loop;
 
 const WIFI_SSID: &str = "Huynh Hong";
 const WIFI_PASS: &str = "123443215";

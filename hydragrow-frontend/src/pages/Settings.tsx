@@ -90,9 +90,7 @@ const VisualCronPicker = ({
   desc?: string;
   colorClass?: "cyan" | "fuchsia"
 }) => {
-  // Parser cơ bản cho Cron 6 phần: Giây Phút Giờ Ngày Tháng Thứ
   const parts = (value || "0 0 8 * * *").trim().split(/\s+/);
-
   const minute = parts[1] !== '*' && parts[1] !== undefined ? parts[1].padStart(2, '0') : '00';
   const hour = parts[2] !== '*' && parts[2] !== undefined ? parts[2].padStart(2, '0') : '08';
   const timeStr = `${hour}:${minute}`;
@@ -180,8 +178,8 @@ const VisualCronPicker = ({
                   key={day.val}
                   onClick={() => toggleDay(day.val)}
                   className={`w-9 h-9 rounded-full text-[11px] font-bold transition-all flex items-center justify-center border ${isSelected
-                      ? `${theme.bgActive}/20 ${theme.borderActive} ${theme.text} shadow-[0_0_10px_rgba(255,255,255,0.05)]`
-                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+                    ? `${theme.bgActive}/20 ${theme.borderActive} ${theme.text} shadow-[0_0_10px_rgba(255,255,255,0.05)]`
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
                     }`}
                 >
                   {day.label}
@@ -221,11 +219,11 @@ const Settings = () => {
 
     tank_height: 50,
     water_level_min: 20.0, water_level_target: 80.0, water_level_max: 90.0, water_level_drain: 5.0,
-    circulation_mode: 'always_on', circulation_on_sec: 1800, circulation_off_sec: 900, water_level_tolerance: 5.0,
+    water_level_tolerance: 5.0,
     auto_refill_enabled: true, auto_drain_overflow: true, auto_dilute_enabled: false, dilute_drain_amount_cm: 5.0,
     scheduled_water_change_enabled: false, water_change_cron: '0 0 7 * * SUN', scheduled_drain_amount_cm: 10.0,
 
-    tank_volume_l: 50.0, ec_gain_per_ml: 0.1, ph_shift_up_per_ml: 0.2, ph_shift_down_per_ml: 0.2,
+    ec_gain_per_ml: 0.1, ph_shift_up_per_ml: 0.2, ph_shift_down_per_ml: 0.2,
     ec_step_ratio: 0.4, ph_step_ratio: 0.1, delay_between_a_and_b_sec: 10,
     pump_a_capacity_ml_per_sec: 1.2, pump_b_capacity_ml_per_sec: 1.2,
     pump_ph_up_capacity_ml_per_sec: 1.2, pump_ph_down_capacity_ml_per_sec: 1.2,
@@ -551,7 +549,7 @@ const Settings = () => {
       const savingConfig = configOverride || config;
       const saveValidationErrors = validateDosingConfig(savingConfig);
       if (Object.keys(saveValidationErrors).length > 0) {
-        toast.error('Không thể lưu cấu hình dosing. Vui lòng kiểm tra các trường đang báo lỗi rồi thử lại.');
+        toast.error('Không thể lưu cấu hình. Vui lòng kiểm tra các trường đang báo lỗi rồi thử lại.');
         return;
       }
       const devId = appSettings.device_id;
@@ -586,9 +584,6 @@ const Settings = () => {
         water_level_target: toNumberOr(savingConfig.water_level_target, 80.0),
         water_level_max: toNumberOr(savingConfig.water_level_max, 90.0),
         water_level_drain: toNumberOr(savingConfig.water_level_drain, 5.0),
-        circulation_mode: savingConfig.circulation_mode || 'always_on',
-        circulation_on_sec: toNumberOr(savingConfig.circulation_on_sec, 1800),
-        circulation_off_sec: toNumberOr(savingConfig.circulation_off_sec, 900),
         water_level_tolerance: toNumberOr(savingConfig.water_level_tolerance, 5.0),
         auto_refill_enabled: savingConfig.auto_refill_enabled ?? true,
         auto_drain_overflow: savingConfig.auto_drain_overflow ?? true,
@@ -632,7 +627,6 @@ const Settings = () => {
 
       const doseConf = {
         device_id: devId,
-        tank_volume_l: toNumberOr(savingConfig.tank_volume_l, 50.0),
         ec_gain_per_ml: toNumberOr(savingConfig.ec_gain_per_ml, 0.1),
         ph_shift_up_per_ml: toNumberOr(savingConfig.ph_shift_up_per_ml, 0.2),
         ph_shift_down_per_ml: toNumberOr(savingConfig.ph_shift_down_per_ml, 0.2),
@@ -858,31 +852,6 @@ const Settings = () => {
             </div>
           </SubCard>
 
-          <SubCard title="Bơm Tuần Hoàn / Sục Khí" className="mt-4">
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-300 tracking-wide uppercase mb-2 block">
-                  Chế độ chạy máy bơm sục khí
-                </label>
-                <select
-                  className="w-full bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-xl p-3 focus:ring-2 focus:ring-cyan-500 outline-none transition-all hover:border-slate-600"
-                  value={config.circulation_mode}
-                  onChange={(e: InputEvent) => setConfig({ ...config, circulation_mode: e.target.value })}
-                >
-                  <option value="always_on">Chạy liên tục 24/7</option>
-                  <option value="timer">Chạy theo chu kỳ (Bật / Tắt)</option>
-                  <option value="off">Tắt hoàn toàn</option>
-                </select>
-              </div>
-              {config.circulation_mode === 'timer' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
-                  <InputGroup label="Bật sục khí (Giây)" value={config.circulation_on_sec} onChange={(e: InputEvent) => setConfig({ ...config, circulation_on_sec: e.target.value })} />
-                  <InputGroup label="Tắt sục khí (Giây)" value={config.circulation_off_sec} onChange={(e: InputEvent) => setConfig({ ...config, circulation_off_sec: e.target.value })} />
-                </div>
-              )}
-            </div>
-          </SubCard>
-
           <SubCard title="Van Cấp / Xả Tự Động" className="mt-4 bg-slate-900/30">
             <div className="space-y-5">
               <div className="flex items-center justify-between">
@@ -1014,8 +983,9 @@ const Settings = () => {
           {isAdvancedMode && (
             <SubCard title="Thuật Toán Châm & Lưu Lượng Thực Tế" className="mt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputGroup label="Thể tích bồn chứa (Lít)" value={config.tank_volume_l} onChange={(e: InputEvent) => setConfig({ ...config, tank_volume_l: e.target.value })} />
-                <InputGroup label="Thời gian chờ giữa Bơm A và B (Giây)" step="1" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} desc="Chống kết tủa Canxi và Photpho" />
+                <div className="sm:col-span-2">
+                  <InputGroup label="Thời gian chờ giữa Bơm A và B (Giây)" step="1" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} desc="Chống kết tủa Canxi và Photpho" />
+                </div>
 
                 <div className="sm:col-span-2 pt-4 pb-1 border-b border-slate-800"><span className="text-xs text-fuchsia-400 font-bold uppercase tracking-widest">Đo lường đầu dò bơm</span></div>
                 <InputGroup label="Lưu lượng Bơm A (ml/giây)" step="0.1" min={0.1} value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_a_capacity_ml_per_sec} />

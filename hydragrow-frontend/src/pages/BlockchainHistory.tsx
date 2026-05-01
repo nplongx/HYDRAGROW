@@ -4,6 +4,7 @@ import {
   AlertTriangle, Settings, Calendar, ChevronDown, Download, Leaf
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { saveTextFile } from '../platform/file';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { LoadingState } from '../components/ui/LoadingState';

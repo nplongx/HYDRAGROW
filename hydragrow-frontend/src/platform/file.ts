@@ -1,3 +1,21 @@
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+
+const isTauriEnvironment = () => {
+  if (typeof window === 'undefined') return false;
+  return '__TAURI_INTERNALS__' in window;
+};
+
+export const saveTextFile = async (filename: string, content: string): Promise<void> => {
+  if (isTauriEnvironment()) {
+    const filePath = await save({ defaultPath: filename });
+
+    if (!filePath) {
+      return;
+    }
+
+    await writeTextFile(filePath, content);
+    return;
 import { isTauriRuntime } from './settings';
 
 export const saveTextFile = async (defaultPath: string, content: string): Promise<boolean> => {

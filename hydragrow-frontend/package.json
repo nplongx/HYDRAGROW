@@ -4,9 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "dev:web": "vite",
+    "build:web": "tsc && vite build",
+    "preview:web": "vite preview",
+    "dev:tauri": "tauri dev",
+    "build:tauri": "tauri build",
+    "dev": "npm run dev:web",
+    "build": "npm run build:web",
+    "preview": "npm run preview:web",
     "tauri": "tauri"
   },
   "dependencies": {

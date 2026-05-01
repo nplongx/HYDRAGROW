@@ -4,7 +4,6 @@ import {
   FlaskConical, Activity, Settings2, Power, Network, Zap, LockKeyhole,
   CalendarClock
 } from 'lucide-react';
-import { fetch } from '@tauri-apps/plugin-http';
 import toast from 'react-hot-toast';
 
 import { Switch } from '../components/ui/Switch';
@@ -13,7 +12,9 @@ import { SubCard } from '../components/ui/SubCard';
 import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
-import { loadAppSettings, saveAppSettings } from '../platform/settings';
+import { httpFetch } from '../platform/http';
+import { getItem, setItem } from '../platform/storage';
+import { loadSettings, isTauriRuntime } from '../platform/settings';
 
 // ... (Giữ nguyên toàn bộ Type và Logic validate của bạn ở đây)
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -219,7 +220,7 @@ const Settings = () => {
     const options: any = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key } };
     if (customTimeoutMs) { options.connectTimeout = customTimeoutMs; options.timeout = customTimeoutMs; }
     if (body) options.body = JSON.stringify(body);
-    const res = await fetch(url, options);
+    const res = await httpFetch(url, options);
     if (!res.ok) {
       let errDetail = `HTTP ${res.status}`;
       try { errDetail = `${res.status}: ${await res.text()}`; } catch (_) { }
@@ -293,19 +294,21 @@ const Settings = () => {
 
   useEffect(() => {
     if (!effectiveDeviceId) return;
-    try {
-      const raw = localStorage.getItem(phaseConfigStorageKey);
-      const perDevice = raw ? JSON.parse(raw)?.[effectiveDeviceId] : null;
-      if (perDevice && typeof perDevice === 'object') setAdaptivePhases((prev) => ({ ...prev, ...perDevice }));
-    } catch (error) { }
+    (async () => {
+      try {
+        const raw = await getItem<Record<string, any>>(phaseConfigStorageKey);
+        const perDevice = raw?.[effectiveDeviceId] ?? null;
+        if (perDevice && typeof perDevice === 'object') setAdaptivePhases((prev) => ({ ...prev, ...perDevice }));
+      } catch (error) { }
+    })();
   }, [effectiveDeviceId]);
 
-  const saveAdaptivePhases = (nextValue: any) => {
+  const saveAdaptivePhases = async (nextValue: any) => {
     setAdaptivePhases(nextValue);
     if (!effectiveDeviceId) return;
     try {
-      const all = JSON.parse(localStorage.getItem(phaseConfigStorageKey) || '{}');
-      all[effectiveDeviceId] = nextValue; localStorage.setItem(phaseConfigStorageKey, JSON.stringify(all));
+      const all = (await getItem<Record<string, any>>(phaseConfigStorageKey)) || {};
+      all[effectiveDeviceId] = nextValue; await setItem(phaseConfigStorageKey, all);
     } catch (error) { }
   };
 
@@ -322,7 +325,7 @@ const Settings = () => {
       try {
         setIsLoading(true);
         let settings: any = null;
-        try { settings = await loadAppSettings(); if (settings) setAppSettings(settings); } catch (e) { }
+        settings = await loadSettings(); if (settings) setAppSettings(settings);
         const currentDeviceId = settings?.device_id || appSettings.device_id;
         if (!currentDeviceId) return;
         const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
@@ -345,7 +348,12 @@ const Settings = () => {
       if (Object.keys(validateDosingConfig(savingConfig)).length > 0) { toast.error('Dữ liệu không hợp lệ.'); return; }
       const devId = appSettings.device_id;
       const toNumberOr = (value: any, fallback: number) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; };
-      try { await saveAppSettings({ ...appSettings, device_id: devId }); } catch (e) { }
+      if (isTauriRuntime()) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId });
+        } catch (e) { }
+      }
       const ts = new Date().toISOString();
 
       const unifiedPayload = {

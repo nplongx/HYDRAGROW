@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { fetch } from '@tauri-apps/plugin-http';
-import { SensorData, StatusPayload, PumpStatus, AppSettings } from '../types/models';
+import { SensorData, StatusPayload, PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
-import { Store } from '@tauri-apps/plugin-store';
-import { loadAppSettings, hasRequiredRemoteConfig, isTauriRuntime } from '../platform/settings';
+import { httpFetch } from '../platform/http';
+import { getItem, setItem } from '../platform/storage';
+import { loadSettings as loadRuntimeSettings } from '../platform/settings';
 
 interface DeviceContextType {
   deviceId: string | null;
@@ -79,26 +79,20 @@ const PWM_PREFS_STORE_KEY = 'pump_pwm_prefs'; // 🟢 THÊM MỚI: Key lưu PWM
 
 const savePumpStatusToStore = async (pumpStatus: PumpStatus) => {
   try {
-    const store = await Store.load('device-state.json');
-    await store.set(PUMP_STATUS_STORE_KEY, pumpStatus);
-    await store.save();
+    await setItem(PUMP_STATUS_STORE_KEY, pumpStatus);
   } catch (e) { /* bỏ qua */ }
 };
 
 const loadPumpStatusFromStore = async (): Promise<PumpStatus | null> => {
   try {
-    const store = await Store.load('device-state.json');
-    const val = await store.get<PumpStatus>(PUMP_STATUS_STORE_KEY);
-    return val ?? null;
+    return await getItem<PumpStatus>(PUMP_STATUS_STORE_KEY);
   } catch (e) { return null; }
 };
 
 // 🟢 THÊM MỚI: Hàm load PWM từ ổ cứng
 const loadPwmPrefsFromStore = async (): Promise<Record<string, number> | null> => {
   try {
-    const store = await Store.load('device-state.json');
-    const val = await store.get<Record<string, number>>(PWM_PREFS_STORE_KEY);
-    return val ?? null;
+    return await getItem<Record<string, number>>(PWM_PREFS_STORE_KEY);
   } catch (e) { return null; }
 };
 
@@ -136,8 +130,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const s = await loadAppSettings();
-        if (s) {
+        const s: any = await loadRuntimeSettings();
+        if (s && s.device_id && s.backend_url) {
           setSettings(s);
           setDeviceId(s.device_id || null);
           if (!isTauriRuntime() && !hasRequiredRemoteConfig(s)) {
@@ -167,7 +161,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/latest`;
-        const response = await fetch(url, {
+        const response = await httpFetch(url, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json', 'X-API-Key': settings.api_key }
         });
@@ -192,7 +186,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
 
       try {
-        const res = await fetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
+        const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
           method: 'GET',
           headers: { 'X-API-Key': settings.api_key || '' }
         });
@@ -212,7 +206,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           setIsControllerStatusKnown(false);
           resetSensorTimeout();
 
-          fetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
+          httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
           }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));
@@ -406,10 +400,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
     setPwmPreferences(prev => {
       const updated = { ...prev, [pumpId]: pwm };
-      Store.load('device-state.json').then(store => {
-        store.set(PWM_PREFS_STORE_KEY, updated);
-        store.save();
-      }).catch(() => { });
+      setItem(PWM_PREFS_STORE_KEY, updated).catch(() => { });
       return updated;
     });
   }, []);

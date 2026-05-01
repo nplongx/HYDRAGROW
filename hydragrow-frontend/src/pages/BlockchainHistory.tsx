@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { fetch } from '@tauri-apps/plugin-http';
 import {
   ShieldCheck, Clock, ExternalLink, Box, Server,
   AlertTriangle, Settings, Calendar, ChevronDown, Download, Leaf
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { save } from '@tauri-apps/plugin-dialog';
+import { saveTextFile } from '../platform/file';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { LoadingState } from '../components/ui/LoadingState';
-import { loadAppSettings } from '../platform/settings';
+import { httpFetch } from '../platform/http';
+import { loadSettings } from '../platform/settings';
+import { saveTextFile } from '../platform/file';
 
 interface BlockchainRecord {
   id: number;
@@ -47,7 +47,7 @@ const BlockchainHistory = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        const settings = await loadAppSettings();
+        const settings: any = await loadSettings();
         if (settings && settings.device_id) {
           setAppConfig(settings);
           setDeviceId(settings.device_id);
@@ -67,7 +67,7 @@ const BlockchainHistory = () => {
   const fetchSeasons = async (devId: string, backendUrl: string, apiKey: string) => {
     try {
       const url = `${backendUrl}/api/devices/${devId}/seasons`;
-      const response = await fetch(url, {
+      const response = await httpFetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey }
       });
@@ -123,7 +123,7 @@ const BlockchainHistory = () => {
       if (!backendUrl) throw new Error("Chưa cấu hình URL máy chủ.");
 
       const url = `${backendUrl}/api/devices/${deviceId}/blockchain?season_id=${seasonId}`;
-      const response = await fetch(url, {
+      const response = await httpFetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -153,7 +153,7 @@ const BlockchainHistory = () => {
       if (!appConfig || !appConfig.backend_url) throw new Error("Lỗi cấu hình hệ thống");
 
       const url = `${appConfig.backend_url}/api/blockchain/verify/${txId}`;
-      const response = await fetch(url, {
+      const response = await httpFetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -198,13 +198,8 @@ const BlockchainHistory = () => {
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
 
-      const filePath = await save({
-        defaultPath: `nhat-ky-niem-phong-${selectedSeason || 'tat-ca'}.csv`
-      });
-
-      if (!filePath) return;
-
-      await writeTextFile(filePath, csvContent);
+      const saved = await saveTextFile(`nhat-ky-niem-phong-${selectedSeason || 'tat-ca'}.csv`, csvContent);
+      if (!saved) return;
       toast.success("Đã lưu file thành công!");
     } catch (err: any) {
       console.error("ERROR SAVE FILE:", err);

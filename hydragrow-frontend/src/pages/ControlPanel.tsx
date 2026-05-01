@@ -23,7 +23,7 @@ const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensor
   const currentEC = sensorData?.ec || 0;
   const currentPH = sensorData?.ph || 0;
   const isEC = selectedPump === 'PUMP_A' || selectedPump === 'PUMP_B';
-  const currentValue = isEC ? currentEC : currentPH;
+  // const currentValue = isEC ? currentEC : currentPH;
   const unit = isEC ? 'mS/cm' : 'pH';
 
   const getCalibratedCapacity = (pumpId: string) => {

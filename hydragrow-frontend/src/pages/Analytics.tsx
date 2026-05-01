@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   LineChart as ChartIcon, Clock, Filter, Activity,
-  Thermometer, Droplets, Cpu, ActivitySquare, Waves, Timer
+  Thermometer, Droplets, ActivitySquare, Waves, Timer
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useCropSeason } from '../hooks/useCropSeason';
@@ -33,7 +33,7 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
     return {
       min: Math.min(...values).toFixed(2),
       max: Math.max(...values).toFixed(2),
-      avg: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2),
+      avg: (values.reduce((a: number, b: number) => a + b, 0) / values.length).toFixed(2),
       current: values[values.length - 1].toFixed(2)
     };
   }, [data, dataKey]);

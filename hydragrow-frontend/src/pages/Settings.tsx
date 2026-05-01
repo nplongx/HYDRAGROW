@@ -165,7 +165,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
 
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
-  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId, systemEvents } = useDeviceContext();
+  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId } = useDeviceContext();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>('general');
@@ -206,7 +206,7 @@ const Settings = () => {
   const [wizardStep, setWizardStep] = useState(0);
   const [isCapturingPoint, setIsCapturingPoint] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
+  const [_stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
   const [adaptivePhases, setAdaptivePhases] = useState({ observe: true, recommend: true, auto_apply: false, confidence_threshold: 85 });
 

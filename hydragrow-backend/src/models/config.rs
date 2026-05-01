@@ -52,7 +52,6 @@ pub struct PumpCalibration {
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct DosingCalibration {
     pub device_id: String,
-    pub tank_volume_l: f32,
     pub ec_gain_per_ml: f32,
     pub ph_shift_up_per_ml: f32,
     pub ph_shift_down_per_ml: f32,
@@ -102,7 +101,6 @@ impl Default for DosingCalibration {
     fn default() -> Self {
         Self {
             device_id: String::new(),
-            tank_volume_l: 100.0,
             ec_gain_per_ml: 0.01,
             ph_shift_up_per_ml: 0.01,
             ph_shift_down_per_ml: 0.01,

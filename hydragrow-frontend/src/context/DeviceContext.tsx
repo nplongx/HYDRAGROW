@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import { SensorData, StatusPayload, PumpStatus } from '../types/models';
+import { SensorData, StatusPayload, PumpStatus, AppSettings } from '../types/models';
 import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
-import { loadSettings as loadRuntimeSettings } from '../platform/settings';
+import { hasRequiredRemoteConfig, isTauriRuntime, loadAppSettings } from '../platform/settings';
 
 interface DeviceContextType {
   deviceId: string | null;
@@ -130,7 +130,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const s: any = await loadRuntimeSettings();
+        const s: any = await loadAppSettings();
         if (s && s.device_id && s.backend_url) {
           setSettings(s);
           setDeviceId(s.device_id || null);

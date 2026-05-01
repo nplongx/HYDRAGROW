@@ -4,13 +4,13 @@ import {
   AlertTriangle, Settings, Calendar, ChevronDown, Download, Leaf
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { saveTextFile } from '../platform/file';
+// import { saveTextFile } from '../platform/file';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
-import { loadSettings } from '../platform/settings';
 import { saveTextFile } from '../platform/file';
+import { loadAppSettings } from '../platform/settings';
 
 interface BlockchainRecord {
   id: number;
@@ -47,7 +47,7 @@ const BlockchainHistory = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        const settings: any = await loadSettings();
+        const settings: any = await loadAppSettings();
         if (settings && settings.device_id) {
           setAppConfig(settings);
           setDeviceId(settings.device_id);

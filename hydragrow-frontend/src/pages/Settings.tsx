@@ -14,7 +14,7 @@ import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
-import { loadSettings, isTauriRuntime } from '../platform/settings';
+import { isTauriRuntime, loadAppSettings } from '../platform/settings';
 
 // ... (Giữ nguyên toàn bộ Type và Logic validate của bạn ở đây)
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -325,7 +325,8 @@ const Settings = () => {
       try {
         setIsLoading(true);
         let settings: any = null;
-        settings = await loadSettings(); if (settings) setAppSettings(settings);
+        settings = await loadAppSettings();
+        if (settings) setAppSettings(settings);
         const currentDeviceId = settings?.device_id || appSettings.device_id;
         if (!currentDeviceId) return;
         const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);

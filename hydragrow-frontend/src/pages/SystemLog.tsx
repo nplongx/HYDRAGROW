@@ -1,15 +1,72 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertTriangle, CheckCircle, Info, Droplets,
   Filter, Clock, Zap, Power, Waves, RefreshCw, Database
 } from 'lucide-react';
-import { useDeviceContext } from '../context/DeviceContext';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
+import { httpFetch } from '../platform/http';
+import { loadAppSettings } from '../platform/settings';
 
 const SystemLog = () => {
-  const { systemEvents, deviceId } = useDeviceContext();
+  // const { systemEvents, deviceId } = useDeviceContext();
   const [filter, setFilter] = useState<string>('all');
+  const [appConfig, setAppConfig] = useState<any>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [systemEvents, setSystemEvents] = useState<any[]>([]);
+
+  // const [loading, setLoading] = useState<boolean>(false); // Thêm state loading để UX tốt hơn
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const settings: any = await loadAppSettings();
+        if (settings && settings.device_id) {
+          setAppConfig(settings);
+          setDeviceId(settings.device_id);
+          // setLoading(false);
+        } else {
+          // setLoading(false);
+        }
+      } catch (err) {
+        console.error("Lỗi khi tải cấu hình:", err);
+        // setLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+
+  // ==========================================
+  // THÊM ĐOẠN CODE CỦA BẠN VÀO ĐÂY
+  // ==========================================
+  useEffect(() => {
+    const loadEvents = async () => {
+      if (!deviceId) return;
+
+      // setLoading(true);
+      try {
+        const categoryParam = filter !== 'all' ? `&category=${filter}` : '';
+        const res = await httpFetch(
+          `${appConfig.backend_url}/api/devices/${deviceId}/events?limit=200${categoryParam}`,
+          { headers: { 'X-API-Key': appConfig.api_key || '' } }
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+
+          setSystemEvents(data.data);
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải nhật ký:", error);
+      } finally {
+        // setLoading(false);
+      }
+    };
+
+    loadEvents();
+  }, [filter, deviceId]); // API sẽ tự động gọi lại mỗi khi filter hoặc deviceId thay đổi
+  // ==========================================
 
   // Đã chuyển sang hệ màu Flat, không còn shadow hay gradient
   const getEventStyle = (level: string, title: string) => {
@@ -78,7 +135,7 @@ const SystemLog = () => {
         <div className="flex flex-wrap gap-2">
           {[
             { id: 'all', label: 'Tất cả' },
-            { id: 'error', label: 'Lỗi & Cảnh báo' },
+            { id: 'alert', label: 'Lỗi & Cảnh báo' },
             { id: 'dosing', label: 'Dinh dưỡng' },
             { id: 'water', label: 'Nước' },
             { id: 'info', label: 'Log khác' }
@@ -87,8 +144,8 @@ const SystemLog = () => {
               key={btn.id}
               onClick={() => setFilter(btn.id)}
               className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-colors border ${filter === btn.id
-                  ? 'bg-blue-600 text-white border-blue-500'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
+                ? 'bg-blue-600 text-white border-blue-500'
+                : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
                 }`}
             >
               {btn.label}

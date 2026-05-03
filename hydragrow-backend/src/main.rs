@@ -162,17 +162,27 @@ async fn main() -> anyhow::Result<()> {
 
             // Phân loại category dựa theo nội dung alert
             let category = if alert.level == "critical" || alert.level == "warning" {
-                "alert".to_string()
+                "alert"
             } else if alert.title.contains("Châm Phân")
                 || alert.title.contains("pH")
                 || alert.title.contains("Blockchain")
+                || alert.title.contains("Chu Trình")
+                || alert.title.contains("Sục Trộn")
+                || alert.title.contains("Hiệu Chuẩn")
             {
-                "dosing".to_string()
+                "dosing"
+            } else if alert.title.contains("Nước")
+                || alert.title.contains("Súc Rửa")
+                || alert.title.contains("Cấp Nước")
+                || alert.title.contains("Xả Nước")
+            {
+                "water" // ← thêm category riêng
             } else if alert.title.contains("Trạng thái") || alert.title.contains("Kết Nối") {
-                "system".to_string()
+                "system"
             } else {
-                "system".to_string()
-            };
+                "system"
+            }
+            .to_string();
 
             let record = crate::db::postgres::NewSystemEventRecord {
                 category,

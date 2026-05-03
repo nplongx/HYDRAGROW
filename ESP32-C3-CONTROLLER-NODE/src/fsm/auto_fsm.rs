@@ -1162,7 +1162,7 @@ fn handle_dosing_pump_a_tick(
                 target_ec: s.target_ec,
                 start_ec: s.start_ec,
                 start_ph: s.start_ph,
-                dose_a_ml_reported: s.delivered_ml_est.min(s.dose_target_ml),
+                dose_a_ml_reported: s.delivered_ml_est,
             };
         } else {
             ctx.set_pulse_status(true, s.pulse_count);
@@ -1334,7 +1334,7 @@ fn handle_dosing_pump_b_tick(
             info!("✅ [PUMP B DONE] Hoàn thành châm dung dịch B. Chuẩn bị chuyển pha Active Mixing.");
             ctx.set_pulse_status(false, s.pulse_count);
             
-            let pump_b_ml_reported = s.delivered_ml_est.min(s.dose_target_ml); // Lưu lại lượng thực tế
+            let pump_b_ml_reported = s.delivered_ml_est; // Lưu lại lượng thực tế
             
             let report_json = format!(
                 r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
@@ -1463,12 +1463,11 @@ fn handle_dosing_ph_tick(
             ctx.set_pulse_status(false, s.pulse_count);
             
             let ph_up_ml = if s.is_up {
-                s.delivered_ml_est.min(s.dose_target_ml)
-            } else {
+                s.delivered_ml_est            } else {
                 0.0
             };
             let ph_down_ml = if !s.is_up {
-                s.delivered_ml_est.min(s.dose_target_ml)
+                s.delivered_ml_est
             } else {
                 0.0
             };

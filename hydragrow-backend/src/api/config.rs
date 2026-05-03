@@ -193,8 +193,10 @@ async fn upsert_water_db(
             water_level_drain, water_level_tolerance, auto_refill_enabled,
             auto_drain_overflow, auto_dilute_enabled, dilute_drain_amount_cm,
             scheduled_water_change_enabled, water_change_cron, scheduled_drain_amount_cm,
-            misting_on_duration_ms, misting_off_duration_ms, last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            misting_on_duration_ms, misting_off_duration_ms, 
+            misting_temp_threshold, high_temp_misting_on_duration_ms, high_temp_misting_off_duration_ms, 
+            last_updated
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_height = EXCLUDED.tank_height,
             water_level_min = EXCLUDED.water_level_min, 
@@ -211,6 +213,9 @@ async fn upsert_water_db(
             scheduled_drain_amount_cm = EXCLUDED.scheduled_drain_amount_cm, 
             misting_on_duration_ms = EXCLUDED.misting_on_duration_ms,
             misting_off_duration_ms = EXCLUDED.misting_off_duration_ms,
+            misting_temp_threshold = EXCLUDED.misting_temp_threshold,
+            high_temp_misting_on_duration_ms = EXCLUDED.high_temp_misting_on_duration_ms,
+            high_temp_misting_off_duration_ms = EXCLUDED.high_temp_misting_off_duration_ms,
             last_updated = EXCLUDED.last_updated
         "#,
     )
@@ -230,6 +235,10 @@ async fn upsert_water_db(
     .bind(config.scheduled_drain_amount_cm)
     .bind(config.misting_on_duration_ms)
     .bind(config.misting_off_duration_ms)
+    // Thêm 3 bind cho cấu hình nóng
+    .bind(config.misting_temp_threshold)
+    .bind(config.high_temp_misting_on_duration_ms)
+    .bind(config.high_temp_misting_off_duration_ms)
     .bind(now)
     .execute(pool)
     .await?;

@@ -468,11 +468,11 @@ fn fsm_state_to_alert(
             "Đang trộn đều dung dịch trong bồn (Jet Mixing).",
         ),
 
-        "CleaningMode" => make(
-            "info",
-            "Chế Độ Súc Rửa",
-            "Đang chạy chu trình súc rửa bồn chứa.",
-        ),
+        // "cleaningmode" => make(
+        //     "info",
+        //     "Chế Độ Súc Rửa",
+        //     "Đang chạy chu trình súc rửa bồn chứa.",
+        // ),
 
         // Trạng thái chỉ cần debug, không cần thông báo lên UI
         "StartingOsakaPump" | "WaitingBetweenDose" | "Stabilizing" | "Monitoring" => {
@@ -526,7 +526,14 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
             .get(&device_id)
             .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
     };
-    let alert_metadata = build_sensor_snapshot(&device_id, &state, metadata_json);
+    // MỚI
+    let alert_metadata = {
+        let states = app_state.device_states.read().await;
+        let cache = states
+            .get(&device_id)
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+        build_relevant_metadata(&state, cache.as_ref())
+    };
 
     // Tạo alert (nếu trạng thái cần thông báo)
     if let Some(alert_msg) = fsm_state_to_alert(&state, &device_id, alert_metadata) {
@@ -555,31 +562,52 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
     }
 }
 
-fn build_sensor_snapshot(
-    device_id: &str,
-    fsm_state: &str,
-    metadata_json: Option<serde_json::Value>,
+/// Chỉ trích xuất trường cảm biến thực sự liên quan đến từng loại trạng thái FSM.
+fn build_relevant_metadata(
+    state: &str,
+    cache: Option<&serde_json::Value>,
 ) -> Option<serde_json::Value> {
-    match metadata_json {
-        Some(sensor_snapshot) => Some(json!({
-            "captured_at": chrono::Utc::now().to_rfc3339(),
-            "fsm_state": fsm_state,
-            "snapshot_source": "device_state_cache",
-            "sensor_snapshot": sensor_snapshot
-        })),
-        None => {
-            warn!(
-                "Không tìm thấy sensor cache cho device_id={} khi nhận FSM state={}",
-                device_id, fsm_state
-            );
-            Some(json!({
-                "captured_at": chrono::Utc::now().to_rfc3339(),
-                "fsm_state": fsm_state,
-                "snapshot_source": "fsm_fallback",
-                "sensor_snapshot": { "device_id": device_id }
-            }))
+    let cache = cache?;
+
+    let pick = |keys: &[&str]| -> serde_json::Value {
+        let mut m = serde_json::Map::new();
+        for k in keys {
+            if let Some(v) = cache.get(k) {
+                m.insert(k.to_string(), v.clone());
+            }
         }
+        serde_json::Value::Object(m)
+    };
+
+    if state.starts_with("EmergencyStop") || state.starts_with("SystemFault") {
+        return Some(pick(&[
+            "ec",
+            "ph",
+            "temp",
+            "water_level",
+            "err_ec",
+            "err_ph",
+            "err_temp",
+            "err_water",
+            "time",
+        ]));
     }
+    if matches!(
+        state,
+        "DosingPumpA" | "DosingPumpB" | "DosingPH" | "StartingOsakaPump"
+    ) {
+        return Some(pick(&["ec", "ph", "time"]));
+    }
+    if matches!(state, "DosingCycleComplete" | "Stabilizing") {
+        return Some(pick(&["ec", "ph", "temp", "time"]));
+    }
+    if matches!(state, "WaterRefilling" | "WaterDraining") {
+        return Some(pick(&["water_level", "ec", "time"]));
+    }
+    if state.starts_with("SensorCalibration") {
+        return Some(pick(&["ph", "ph_voltage_mv", "time"]));
+    }
+    None
 }
 
 async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {

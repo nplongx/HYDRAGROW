@@ -5,13 +5,13 @@ import {
 } from 'recharts';
 import {
   LineChart as ChartIcon, Clock, Filter, Activity,
-  Thermometer, Droplets, ActivitySquare, Waves, Timer
+  Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2
 } from 'lucide-react';
-import { useDeviceContext } from '../context/DeviceContext';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { fetch } from '@tauri-apps/plugin-http';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
+import { loadAppSettings } from '../platform/settings';
 
 // Màu sắc Minimalist thay thế cho Neon
 const CHART_THEMES: Record<string, any> = {
@@ -129,10 +129,32 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
 };
 
 const Analytics = () => {
-  const { deviceId, settings } = useDeviceContext();
   const { activeSeason, history } = useCropSeason();
 
-  const defaultInterval = settings?.publish_interval || 5;
+  const [appConfig, setAppConfig] = useState<any>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const settings: any = await loadAppSettings();
+        if (settings && settings.device_id) {
+          setAppConfig(settings);
+          setDeviceId(settings.device_id);
+          setIsLoading(false);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("Lỗi khi tải cấu hình:", err);
+        setIsLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+  const defaultInterval = appConfig?.publish_interval || 5;
 
   const allSeasons = useMemo(() => {
     const list = [...history];
@@ -156,7 +178,7 @@ const Analytics = () => {
 
   useEffect(() => {
     const loadHistory = async () => {
-      if (!deviceId || !settings) return;
+      if (!deviceId || !appConfig) return;
       setIsFetching(true);
 
       let startIso: string;
@@ -207,8 +229,8 @@ const Analytics = () => {
         // Log ra để bạn debug xem Frontend đang request khoảng thời gian nào
         console.log(`Fetching history from ${startIso} to ${endIso}`);
 
-        const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
-        const response = await fetch(url, { method: 'GET', headers: { 'X-API-Key': settings.api_key } });
+        const url = `${appConfig.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
+        const response = await fetch(url, { method: 'GET', headers: { 'X-API-Key': appConfig.api_key } });
 
         if (response.ok) {
           const text = await response.text();
@@ -243,7 +265,7 @@ const Analytics = () => {
 
     const timer = setTimeout(loadHistory, 300);
     return () => clearTimeout(timer);
-  }, [selectedSeasonId, timeRange, deviceId, settings?.backend_url, settings?.api_key, selectedSeason]);
+  }, [selectedSeasonId, timeRange, deviceId, appConfig?.backend_url, appConfig?.api_key, selectedSeason]);
 
   const effectiveIntervalMs = useMemo(() => {
     let seconds = 0;
@@ -266,6 +288,15 @@ const Analytics = () => {
     }
     return filtered;
   }, [historyData, effectiveIntervalMs]);
+
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4">
+        <Loader2 size={32} className="text-blue-500 animate-spin" />
+        <p className="text-sm font-medium text-slate-500">Đang tải cấu hình...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-28">
@@ -381,6 +412,3 @@ const Analytics = () => {
 };
 
 export default Analytics;
-
-// Thêm cái Loader tạm ở đây vì mình quên import ở trên (Do ko xài glow nên ko cần icon phức tạp)
-import { Loader2 } from 'lucide-react';

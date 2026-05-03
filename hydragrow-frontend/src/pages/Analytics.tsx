@@ -8,7 +8,6 @@ import {
   Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2
 } from 'lucide-react';
 import { useCropSeason } from '../hooks/useCropSeason';
-import { fetch } from '@tauri-apps/plugin-http';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { loadAppSettings } from '../platform/settings';

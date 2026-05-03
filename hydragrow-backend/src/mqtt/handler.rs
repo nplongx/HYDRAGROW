@@ -499,6 +499,13 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     };
 
+    if let Some(msg_type) = json.get("type").and_then(|t| t.as_str()) {
+        if msg_type == "runtime_calibration_update" {
+            handle_runtime_calibration_update(device_id, &json, app_state.clone()).await;
+            return; // Đã xử lý xong, thoát hàm để không chạy logic current_state bên dưới
+        }
+    }
+
     let state = match json["current_state"].as_str() {
         Some(s) => s.to_string(),
         None => {
@@ -856,5 +863,118 @@ async fn update_dosing_dynamic_learning(
             },
         )
         .await;
+    }
+}
+
+async fn handle_runtime_calibration_update(
+    device_id: String,
+    json: &serde_json::Value,
+    app_state: web::Data<AppState>,
+) {
+    info!(
+        "🛠️ [EMA CALIBRATION] {} gửi yêu cầu cập nhật hệ số runtime...",
+        device_id
+    );
+
+    // Kiểm tra xem controller có thực sự yêu cầu persist không
+    let persist = json
+        .get("persist")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !persist {
+        debug!("ℹ️ [EMA CALIBRATION] Bỏ qua lưu DB vì persist = false");
+        return;
+    }
+
+    let coeffs = match json.get("runtime_coefficients") {
+        Some(c) => c,
+        None => {
+            warn!("⚠️ [EMA CALIBRATION] Thiếu 'runtime_coefficients' trong payload");
+            return;
+        }
+    };
+
+    // Lấy các hệ số. Nếu giá trị là null, as_f64() sẽ tự động trả về None
+    let ec_gain = coeffs.get("ec_gain_per_ml").and_then(|v| v.as_f64());
+    let ph_up = coeffs.get("ph_shift_up_per_ml").and_then(|v| v.as_f64());
+    let ph_down = coeffs.get("ph_shift_down_per_ml").and_then(|v| v.as_f64());
+
+    if ec_gain.is_none() && ph_up.is_none() && ph_down.is_none() {
+        debug!("ℹ️ [EMA CALIBRATION] Không có hệ số nào mới để cập nhật.");
+        return;
+    }
+
+    // Câu lệnh SQL linh hoạt: Chỉ update các cột có giá trị (khác NULL).
+    // Nếu controller gửi lên NULL (vì chưa tính được) -> Giữ nguyên (COALESCE).
+    let query = r#"
+        UPDATE dosing_calibration
+        SET
+            ec_gain_per_ml = COALESCE($1, ec_gain_per_ml),
+            ph_shift_up_per_ml = COALESCE($2, ph_shift_up_per_ml),
+            ph_shift_down_per_ml = COALESCE($3, ph_shift_down_per_ml),
+            updated_at = NOW()
+        WHERE device_id = $4
+    "#;
+
+    match sqlx::query(query)
+        .bind(ec_gain)
+        .bind(ph_up)
+        .bind(ph_down)
+        .bind(&device_id)
+        .execute(&app_state.pg_pool)
+        .await
+    {
+        Ok(res) => {
+            if res.rows_affected() > 0 {
+                info!(
+                    "✅ [EMA CALIBRATION] Cập nhật thành công DB cho {}",
+                    device_id
+                );
+
+                // Tạo log SystemEvent để lưu lại lịch sử
+                let msg = format!(
+                    "Controller gửi hệ số mới (EMA). Cập nhật DB: EC Gain: {:?}, pH Up: {:?}, pH Down: {:?}",
+                    ec_gain, ph_up, ph_down
+                );
+
+                let _ = insert_system_event(
+                    &app_state.pg_pool,
+                    &NewSystemEventRecord {
+                        device_id: device_id.clone(),
+                        level: "info".to_string(),
+                        category: "calibration".to_string(),
+                        title: "Runtime Calibration Tự Động (EMA)".to_string(),
+                        message: msg,
+                        reason: None,
+                        metadata: Some(json.clone()), // Lưu nguyên JSON để sau này tiện debug
+                        timestamp: chrono::Utc::now().timestamp_millis(),
+                    },
+                )
+                .await;
+
+                // (Optional) Gửi alert để UI hiện popup
+                let alert = AlertMessage {
+                    level: "info".to_string(),
+                    title: "Cập nhật hệ số Calibration".to_string(),
+                    message: format!(
+                        "Hệ thống vừa cập nhật tự động (EMA) hệ số châm phân cho thiết bị {}.",
+                        device_id
+                    ),
+                    device_id: device_id.clone(),
+                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                    reason: None,
+                    metadata: Some(json.clone()),
+                };
+                let _ = app_state.alert_sender.send(alert);
+            } else {
+                warn!(
+                    "⚠️ [EMA CALIBRATION] Không tìm thấy bản ghi dosing_calibration nào cho {}",
+                    device_id
+                );
+            }
+        }
+        Err(e) => {
+            error!("❌ [EMA CALIBRATION] Lỗi khi cập nhật Database: {:?}", e);
+        }
     }
 }

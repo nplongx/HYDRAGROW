@@ -56,7 +56,7 @@ const MainLayout: React.FC = () => {
 
   const moreMenuItems = [
     { path: '/crop-seasons', icon: Leaf, label: 'Mùa Vụ' },
-    { path: '/history', icon: ShieldCheck, label: 'Giao Dịch' },
+    { path: '/blockchain', icon: ShieldCheck, label: 'Giao Dịch' },
     { path: '/settings', icon: Settings, label: 'Cài Đặt' }
   ];
 

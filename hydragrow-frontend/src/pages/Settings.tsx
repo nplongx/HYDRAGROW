@@ -32,6 +32,7 @@ const toFiniteNumber = (value: any): number => {
 
 const backendLikeError = (field: string, detail: string) => `Giá trị không hợp lệ cho ${field}: ${detail}.`;
 
+
 const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   const errors: DosingValidationErrors = {};
   const scheduledDosingEnabled = Boolean(inputConfig.scheduled_dosing_enabled);
@@ -318,6 +319,32 @@ const Settings = () => {
     }
     const nextConfig = { ...config, ph_v7: calibrationSummary.ph_v7, ph_v4: calibrationSummary.ph_v4, ph_v10: calibrationSummary.ph_v10, ph_calibration_mode: calibrationPointsCount === 3 ? '3-point' : '2-point' };
     setConfig(nextConfig); toast.success('Đã áp dụng kết quả.'); return nextConfig;
+  };
+
+  // Trong Settings.tsx, thêm hàm này
+  const handleFinishAndSaveCalibration = async () => {
+    const c = applyCalibrationToConfig();
+    if (!c) return;
+
+    const currentDeviceId = appSettings.device_id || ctxDeviceId;
+    const currentSettings = runtimeSettings || appSettings;
+    if (!currentDeviceId || !currentSettings?.backend_url) return;
+
+    // 1. Gọi finish để ESP32 thoát SensorCalibration
+    try {
+      await callApi(
+        `/api/devices/${currentDeviceId}/calibration/ph/finish`,
+        'POST',
+        {},
+        currentSettings
+      );
+    } catch (error: any) {
+      // Nếu session đã hết hạn thì bỏ qua, vẫn lưu config
+      console.warn('Finish calibration session error (non-fatal):', error.message);
+    }
+
+    // 2. Lưu config xuống DB + sync ESP32
+    await handleSave(c);
   };
 
   useEffect(() => {
@@ -760,7 +787,7 @@ const Settings = () => {
                   </div>
 
                   <div className="flex gap-2">
-                    <button onClick={async () => { const c = applyCalibrationToConfig(); if (c) await handleSave(c); }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg">
+                    <button onClick={handleFinishAndSaveCalibration} className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg">
                       XÁC NHẬN LƯU
                     </button>
                   </div>

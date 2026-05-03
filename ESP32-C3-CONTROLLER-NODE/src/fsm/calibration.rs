@@ -1,4 +1,4 @@
-use log::info;
+use log::{debug, info, warn};
 use std::sync::mpsc::Sender;
 
 use super::context::ControlContext;
@@ -26,6 +26,11 @@ pub fn start_pending_calibration_sample(
     current_time_ms: u64,
     config: &ControllerConfig,
 ) {
+    debug!(
+        "🧪 [CALIB START] Bắt đầu lấy mẫu EMA: EC đầu={:.2}, pH đầu={:.2} | Đã châm: A={:.2}ml, B={:.2}ml, UP={:.2}ml, DOWN={:.2}ml",
+        start_ec, start_ph, pump_a_ml, pump_b_ml, ph_up_ml, ph_down_ml
+    );
+
     ctx.pending_calibration_sample = Some(PendingCalibrationSample {
         start_ec,
         start_ph,
@@ -59,11 +64,17 @@ pub fn apply_runtime_calibration_ema(
     };
     let stabilizing_start_ms = match sample.stabilizing_start_ms {
         Some(v) => v,
-        None => return,
+        None => {
+            warn!("⚠️ [EMA] Thiếu stabilizing_start_ms. Hủy tính toán EMA.");
+            return;
+        }
     };
     let stabilizing_finish_ms = match sample.stabilizing_finish_ms {
         Some(v) => v,
-        None => return,
+        None => {
+            warn!("⚠️ [EMA] Thiếu stabilizing_finish_ms. Hủy tính toán EMA.");
+            return;
+        }
     };
 
     let active_mixing_elapsed_ms = sample
@@ -81,8 +92,8 @@ pub fn apply_runtime_calibration_ema(
         || sensors.err_ec
         || sensors.err_ph
     {
-        info!(
-            "⏭️ Bỏ qua EMA sample (noise={}, water_change={}, mixing_ok={}, stabilizing_ok={}, err_ec={}, err_ph={})",
+        warn!(
+            "⏭️ [EMA SKIP] Bỏ qua mẫu EMA (noise={}, water_change={}, mixing_ok={}, stabilizing_ok={}, err_ec={}, err_ph={})",
             sample.invalid_by_noise,
             sample.invalid_by_water_change,
             mixing_ok,
@@ -96,6 +107,11 @@ pub fn apply_runtime_calibration_ema(
     let ec_after = sensors.ec;
     let ph_after = sensors.ph;
     let total_ec_ml = sample.pump_a_ml + sample.pump_b_ml;
+
+    debug!(
+        "📊 [EMA OBSERVED] Kết quả sau ổn định: EC={:.2} -> {:.2} | pH={:.2} -> {:.2}. (Tổng EC_ml={:.2}, pH_Up={:.2}, pH_Down={:.2})",
+        sample.start_ec, ec_after, sample.start_ph, ph_after, total_ec_ml, sample.ph_up_ml, sample.ph_down_ml
+    );
 
     let observed_ec_gain_per_ml = if total_ec_ml > MIN_TOTAL_EC_DOSE_ML {
         Some((ec_after - sample.start_ec) / total_ec_ml)
@@ -119,37 +135,66 @@ pub fn apply_runtime_calibration_ema(
     let mut applied_ph_down = None;
 
     if let Ok(mut cfg) = shared_config.write() {
+        // --- EC EMA ---
         if let Some(observed) = observed_ec_gain_per_ml {
             if observed.is_finite() && observed > 0.0 {
-                cfg.ec_gain_per_ml = cfg.ec_gain_per_ml * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
+                let old_val = cfg.ec_gain_per_ml;
+                cfg.ec_gain_per_ml = old_val * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
                 applied_ec_gain = Some(cfg.ec_gain_per_ml);
                 updated = true;
+                info!("📈 [EMA UPDATE EC] Gain/ml: Cũ={:.4} | Đo đạc={:.4} | EMA Mới={:.4} (Alpha={})", old_val, observed, cfg.ec_gain_per_ml, EMA_ALPHA);
+            } else {
+                warn!(
+                    "⚠️ [EMA UPDATE EC] Bỏ qua quan trắc EC bất thường: {:.4}",
+                    observed
+                );
             }
         }
+
+        // --- PH UP EMA ---
         if let Some(observed) = observed_ph_up_per_ml {
             if observed.is_finite() && observed > 0.0 {
-                cfg.ph_shift_up_per_ml =
-                    cfg.ph_shift_up_per_ml * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
+                let old_val = cfg.ph_shift_up_per_ml;
+                cfg.ph_shift_up_per_ml = old_val * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
                 applied_ph_up = Some(cfg.ph_shift_up_per_ml);
                 updated = true;
+                info!("📈 [EMA UPDATE PH UP] Shift/ml: Cũ={:.4} | Đo đạc={:.4} | EMA Mới={:.4} (Alpha={})", old_val, observed, cfg.ph_shift_up_per_ml, EMA_ALPHA);
+            } else {
+                warn!(
+                    "⚠️ [EMA UPDATE PH UP] Bỏ qua quan trắc pH UP bất thường: {:.4}",
+                    observed
+                );
             }
         }
+
+        // --- PH DOWN EMA ---
         if let Some(observed) = observed_ph_down_per_ml {
             if observed.is_finite() && observed > 0.0 {
-                cfg.ph_shift_down_per_ml =
-                    cfg.ph_shift_down_per_ml * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
+                let old_val = cfg.ph_shift_down_per_ml;
+                cfg.ph_shift_down_per_ml = old_val * (1.0 - EMA_ALPHA) + observed * EMA_ALPHA;
                 applied_ph_down = Some(cfg.ph_shift_down_per_ml);
                 updated = true;
+                info!("📈 [EMA UPDATE PH DOWN] Shift/ml: Cũ={:.4} | Đo đạc={:.4} | EMA Mới={:.4} (Alpha={})", old_val, observed, cfg.ph_shift_down_per_ml, EMA_ALPHA);
+            } else {
+                warn!(
+                    "⚠️ [EMA UPDATE PH DOWN] Bỏ qua quan trắc pH DOWN bất thường: {:.4}",
+                    observed
+                );
             }
         }
     }
 
     if !updated {
+        debug!("ℹ️ [EMA] Không có thông số nào được cập nhật trong chu kỳ này.");
         return;
     }
 
     ctx.calibration_pending_publish_count += 1;
     if ctx.calibration_pending_publish_count >= CALIBRATION_PERSIST_BATCH_SIZE {
+        info!(
+            "📤 [EMA PUBLISH] Đạt ngưỡng Batch ({}). Tiến hành gửi MQTT cập nhật Backend...",
+            CALIBRATION_PERSIST_BATCH_SIZE
+        );
         ctx.calibration_pending_publish_count = 0;
         let payload = serde_json::json!({
             "type": "runtime_calibration_update",
@@ -174,5 +219,11 @@ pub fn apply_runtime_calibration_ema(
             }
         });
         let _ = fsm_mqtt_tx.send(payload.to_string());
+    } else {
+        debug!(
+            "📥 [EMA BATCH] Đã lưu vào bộ đệm gửi MQTT: {}/{}",
+            ctx.calibration_pending_publish_count, CALIBRATION_PERSIST_BATCH_SIZE
+        );
     }
 }
+

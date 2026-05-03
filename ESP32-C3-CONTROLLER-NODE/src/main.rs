@@ -4,10 +4,12 @@ use esp_idf_hal::ledc::{LedcDriver, LedcTimerDriver};
 use esp_idf_hal::peripherals::Peripherals;
 use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::log::EspLogger;
 use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
-use log::{error, info, warn};
+use log::{error, info, warn, LevelFilter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -31,7 +33,39 @@ const DEVICE_ID: &str = "device_001";
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
-    esp_idf_svc::log::EspLogger::initialize_default();
+    let mut logger = EspLogger::initialize_default(); // Có thể cần lấy instance nếu thư viện hỗ trợ,
+                                                      // nhưng cách chuẩn của ESP-IDF v5+ với Rust là gọi C API:
+
+    // Gọi trực tiếp API C của ESP-IDF để set log level cho tag cụ thể
+    unsafe {
+        // Thay thế chuỗi này bằng đúng tên tag hoặc tên file/module bạn muốn hiển thị debug.
+        // Dấu sao "*" áp dụng cho mọi thứ, nhưng ta chỉ muốn cấp Debug cho phần code của ta.
+        // Bạn có thể phải thử nghiệm tag name, thường Rust wrapper dùng đường dẫn module làm tag.
+
+        // Ví dụ: Set tất cả hệ thống về INFO
+        esp_idf_svc::sys::esp_log_level_set(
+            b"*\0".as_ptr() as *const _,
+            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_INFO,
+        );
+
+        // Bật DEBUG cho tất cả các file liên quan đến ứng dụng của bạn (ví dụ dùng tag "esp32_c3_mist_weaver_os")
+        esp_idf_svc::sys::esp_log_level_set(
+            b"esp32_c3_mist_weaver_os\0".as_ptr() as *const _,
+            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
+        );
+        esp_idf_svc::sys::esp_log_level_set(
+            b"esp32_c3_mist_weaver_os::fsm::auto_fsm\0".as_ptr() as *const _,
+            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
+        );
+        esp_idf_svc::sys::esp_log_level_set(
+            b"esp32_c3_mist_weaver_os::pump\0".as_ptr() as *const _,
+            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
+        );
+        esp_idf_svc::sys::esp_log_level_set(
+            b"esp32_c3_mist_weaver_os::mqtt\0".as_ptr() as *const _,
+            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
+        );
+    }
     info!("🚀 Khởi động hệ thống FSM Thủy canh Agitech (Phiên bản ESP32-C3)...");
 
     let peripherals = Peripherals::take().unwrap();
@@ -97,28 +131,8 @@ fn main() -> anyhow::Result<()> {
         osaka_rpwm,
     )?;
 
-    // 3. KHỞI CHẠY BỘ ĐIỀU KHIỂN FSM
-    let fsm_config = shared_config.clone();
-    let fsm_sensor_data = shared_sensor_data.clone();
-    let fsm_nvs = nvs.clone();
-
-    std::thread::Builder::new()
-        .stack_size(12288)
-        .name("fsm_thread".to_string())
-        .spawn(move || {
-            start_fsm_control_loop(
-                fsm_config,
-                fsm_sensor_data,
-                pump_controller,
-                fsm_nvs,
-                cmd_rx,
-                fsm_tx,
-                dosing_report_tx,
-                sensor_cmd_tx,
-            );
-        })?;
-
-    // 4. KẾT NỐI WIFI
+    // 2. KẾT NỐI WIFI
+    info!("📡 Đang cấu hình kết nối WiFi...");
     let mut wifi = EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs.clone()))?;
     wifi.set_configuration(&Configuration::Client(ClientConfiguration {
         ssid: WIFI_SSID.try_into().unwrap(),
@@ -156,6 +170,48 @@ fn main() -> anyhow::Result<()> {
         }
     });
 
+    // 3. ĐỒNG BỘ THỜI GIAN NTP (Chờ đến khi có thời gian thực)
+    info!("🕒 Khởi tạo SNTP và cấu hình múi giờ (UTC+7)...");
+    let _sntp = EspSntp::new(&SntpConf::default())?;
+    unsafe {
+        // Cấu hình múi giờ Việt Nam (UTC+7)
+        esp_idf_svc::sys::setenv(
+            b"TZ\0".as_ptr() as *const _,
+            b"ICT-7\0".as_ptr() as *const _,
+            1,
+        );
+        esp_idf_svc::sys::tzset();
+    }
+
+    info!("⏳ Đang chờ đồng bộ thời gian từ Internet...");
+    while _sntp.get_sync_status() != SyncStatus::Completed {
+        thread::sleep(Duration::from_millis(500));
+    }
+    info!("✅ Đồng bộ thời gian NTP thành công!");
+
+    // 4. KHỞI CHẠY BỘ ĐIỀU KHIỂN FSM
+    // Dời việc khởi tạo FSM xuống sau khi NTP đã đồng bộ để tránh lỗi Cron 1970
+    info!("⚙️ Khởi chạy luồng FSM...");
+    let fsm_config = shared_config.clone();
+    let fsm_sensor_data = shared_sensor_data.clone();
+    let fsm_nvs = nvs.clone();
+
+    std::thread::Builder::new()
+        .stack_size(12288)
+        .name("fsm_thread".to_string())
+        .spawn(move || {
+            start_fsm_control_loop(
+                fsm_config,
+                fsm_sensor_data,
+                pump_controller,
+                fsm_nvs,
+                cmd_rx,
+                fsm_tx,
+                dosing_report_tx,
+                sensor_cmd_tx,
+            );
+        })?;
+
     // 5. MAIN EVENT LOOP (MQTT & STATUS)
     let mut mqtt_client: Option<EspMqttClient> = None;
     let mut is_mqtt_connected = false;
@@ -163,8 +219,6 @@ fn main() -> anyhow::Result<()> {
     info!("🔄 Đang chạy Main Event Loop...");
 
     let mut force_publish_next = false;
-    let mut last_config_hash = String::new();
-
     let mut last_health_publish = std::time::Instant::now();
 
     loop {

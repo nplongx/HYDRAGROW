@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Settings2, FlaskConical, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw,
-  Play, Target, Lock, ChevronDown
+  Settings2, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw,
+  Lock, ChevronDown
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -9,111 +9,6 @@ import { PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
 import { LoadingState } from '../components/ui/LoadingState';
 import { Switch } from '../components/ui/Switch';
-import { InputGroup } from '../components/ui/InputGroup';
-
-// --- Component: Trợ Lý Châm Bán Thủ Công ---
-const SemiAutoDosingAssistant = ({ deviceId, isOnline, dosingCalibration, sensorData, isAutoMode }: any) => {
-  const { forceOn } = useDeviceControl(deviceId);
-  const [selectedPump, setSelectedPump] = useState('PUMP_A');
-  const [targetValue, setTargetValue] = useState<number | ''>('');
-  const [volumeMl, setVolumeMl] = useState<number>(0);
-  const [capacityMlPerSec, setCapacityMlPerSec] = useState<number>(1.2);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const currentEC = sensorData?.ec || 0;
-  const currentPH = sensorData?.ph || 0;
-  const isEC = selectedPump === 'PUMP_A' || selectedPump === 'PUMP_B';
-  // const currentValue = isEC ? currentEC : currentPH;
-  const unit = isEC ? 'mS/cm' : 'pH';
-
-  const getCalibratedCapacity = (pumpId: string) => {
-    if (!dosingCalibration) return 1.2;
-    switch (pumpId) {
-      case 'PUMP_A': return dosingCalibration.pump_a_capacity_ml_per_sec || 1.2;
-      case 'PUMP_B': return dosingCalibration.pump_b_capacity_ml_per_sec || 1.2;
-      case 'PH_UP': return dosingCalibration.pump_ph_up_capacity_ml_per_sec || 1.2;
-      case 'PH_DOWN': return dosingCalibration.pump_ph_down_capacity_ml_per_sec || 1.2;
-      default: return 1.2;
-    }
-  };
-
-  useEffect(() => {
-    setCapacityMlPerSec(getCalibratedCapacity(selectedPump));
-    setTargetValue('');
-    setVolumeMl(0);
-  }, [selectedPump, dosingCalibration]);
-
-  useEffect(() => {
-    if (targetValue === '' || typeof targetValue !== 'number') return;
-    let calcMl = 0;
-    if (isEC) {
-      const diff = targetValue - currentEC;
-      const gain = dosingCalibration?.ec_gain_per_ml || 0.01;
-      calcMl = diff > 0 ? diff / gain : 0;
-    } else if (selectedPump === 'PH_UP') {
-      const diff = targetValue - currentPH;
-      const gain = dosingCalibration?.ph_shift_up_per_ml || 0.01;
-      calcMl = diff > 0 ? diff / gain : 0;
-    } else if (selectedPump === 'PH_DOWN') {
-      const diff = currentPH - targetValue;
-      const gain = dosingCalibration?.ph_shift_down_per_ml || 0.01;
-      calcMl = diff > 0 ? diff / gain : 0;
-    }
-    setVolumeMl(Math.round(calcMl * 10) / 10);
-  }, [targetValue, selectedPump, currentEC, currentPH, dosingCalibration]);
-
-  const durationSec = useMemo(() => {
-    if (capacityMlPerSec <= 0) return 0;
-    return Math.max(1, Math.round(volumeMl / capacityMlPerSec));
-  }, [volumeMl, capacityMlPerSec]);
-
-  const handleDose = async () => {
-    if (!window.confirm(`Châm ${volumeMl}mL trong ${durationSec} giây để đạt ${targetValue} ${unit}?`)) return;
-    setIsProcessing(true);
-    await forceOn(selectedPump, durationSec);
-    setIsProcessing(false);
-  };
-
-  return (
-    <div className={`bg-slate-900 border border-slate-800 rounded-xl p-5 transition-opacity ${isAutoMode ? 'opacity-50 pointer-events-none' : ''}`}>
-      <div className="flex items-center gap-3 mb-5 border-b border-slate-800 pb-4">
-        <div className="p-2 rounded-lg bg-blue-600 text-white"><Target size={18} /></div>
-        <div>
-          <h3 className="font-semibold text-slate-100 text-sm">Trợ lý châm thông minh</h3>
-          <p className="text-xs text-slate-500 font-medium">Tự động tính toán số mL cần bơm dựa trên ngưỡng đích</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
-        <div className="col-span-2 md:col-span-1">
-          <label className="text-xs font-medium text-slate-400 mb-1 block">Dung dịch</label>
-          <select
-            value={selectedPump} onChange={(e) => setSelectedPump(e.target.value)} disabled={!isOnline || isProcessing}
-            className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:border-blue-500"
-          >
-            <option value="PUMP_A">Phân A</option>
-            <option value="PUMP_B">Phân B</option>
-            <option value="PH_UP">Tăng pH</option>
-            <option value="PH_DOWN">Giảm pH</option>
-          </select>
-        </div>
-
-        <InputGroup label={`Đích đến (${unit})`} step="0.1" value={targetValue} onChange={(e: any) => setTargetValue(e.target.value === '' ? '' : Number(e.target.value))} />
-        <InputGroup label="Thể tích (mL)" step="1" value={volumeMl} onChange={(e: any) => setVolumeMl(Number(e.target.value))} />
-        <InputGroup label="Lưu lượng (mL/s)" step="0.1" value={capacityMlPerSec} onChange={(e: any) => setCapacityMlPerSec(Number(e.target.value))} />
-
-        <button
-          onClick={handleDose}
-          disabled={!isOnline || isProcessing || volumeMl <= 0 || capacityMlPerSec <= 0}
-          className="w-full h-[38px] col-span-2 md:col-span-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-medium text-xs rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50"
-        >
-          <Play size={14} className={isProcessing ? "animate-pulse" : ""} />
-          Bơm {durationSec}s
-        </button>
-      </div>
-    </div>
-  );
-};
 
 // --- Component: Khối Điều Khiển Từng Thiết Bị ---
 const AdvancedDeviceControl = ({
@@ -334,19 +229,6 @@ const ControlPanel = () => {
       )}
 
       {/* KHỐI CHÂM BÁN THỦ CÔNG */}
-      <SemiAutoDosingAssistant deviceId={deviceId} isOnline={isOnline} dosingCalibration={settings?.dosing_calibration} sensorData={sensorData} isAutoMode={isAutoMode} />
-
-      {/* Máy Pha Phân */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Máy pha dinh dưỡng</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical} currentStatus={pumps.pump_a} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm Phân B" icon={FlaskConical} currentStatus={pumps.pump_b} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_UP" title="Bơm Tăng pH" icon={Activity} currentStatus={pumps.ph_up} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_DOWN" title="Bơm Giảm pH" icon={Activity} currentStatus={pumps.ph_down} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-        </div>
-      </div>
-
       {/* Nước và Khí Hậu */}
       <div className="space-y-3 pt-4 border-t border-slate-800/50">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Bơm nước & Khí hậu</h2>

@@ -4,7 +4,7 @@ use std::sync::mpsc::Sender;
 use chrono::{Local, TimeZone};
 use cron::Schedule;
 use hydragrow_shared::ControllerConfig;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use crate::config::SharedConfig;
 use crate::mqtt::SensorData;
@@ -335,17 +335,38 @@ fn handle_monitoring(
     }
 
     // 2. Bổ sung nước tự động
-    if try_auto_refill(current_time_sec, config, sensors, ctx, pump_ctrl) {
+    if try_auto_refill(
+        current_time_ms,
+        current_time_sec,
+        config,
+        sensors,
+        ctx,
+        pump_ctrl,
+    ) {
         return;
     }
 
     // 3. Xả tràn
-    if try_auto_drain_overflow(current_time_sec, config, sensors, ctx, pump_ctrl) {
+    if try_auto_drain_overflow(
+        current_time_ms,
+        current_time_sec,
+        config,
+        sensors,
+        ctx,
+        pump_ctrl,
+    ) {
         return;
     }
 
     // 4. Pha loãng EC cao
-    if try_auto_dilute(current_time_sec, config, sensors, ctx, pump_ctrl) {
+    if try_auto_dilute(
+        current_time_ms,
+        current_time_sec,
+        config,
+        sensors,
+        ctx,
+        pump_ctrl,
+    ) {
         return;
     }
 
@@ -439,6 +460,7 @@ fn try_scheduled_water_change(
 }
 
 fn try_auto_refill(
+    current_time_ms: u64,
     current_time_sec: u64,
     config: &ControllerConfig,
     sensors: &SensorData,
@@ -471,10 +493,9 @@ fn try_auto_refill(
     ctx.mark_pending_sample_water_change_violation();
     ctx.current_state = SystemState::WaterRefilling {
         target_level: config.water_level_target,
-        start_time: 0, // sẽ được gán bằng current_time_ms ở caller – giữ API đơn giản
+        start_time: current_time_ms,
     };
-    // Caller cần gán start_time; tạm workaround: re-assign ngay sau
-    // NOTE: pattern hiện tại ok vì start_time chỉ dùng để timeout sau ~max_refill_duration_sec
+
     let _ = pump_ctrl.set_water_pump(WaterDirection::In);
     ctx.pump_status.water_pump_in = true;
     ctx.pump_status.water_pump_out = false;
@@ -483,6 +504,7 @@ fn try_auto_refill(
 }
 
 fn try_auto_drain_overflow(
+    current_time_ms: u64,
     current_time_sec: u64,
     config: &ControllerConfig,
     sensors: &SensorData,
@@ -506,7 +528,7 @@ fn try_auto_drain_overflow(
     ctx.mark_pending_sample_water_change_violation();
     ctx.current_state = SystemState::WaterDraining {
         target_level: config.water_level_target,
-        start_time: 0,
+        start_time: current_time_ms,
     };
     let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
     ctx.pump_status.water_pump_out = true;
@@ -516,6 +538,7 @@ fn try_auto_drain_overflow(
 }
 
 fn try_auto_dilute(
+    current_time_ms: u64,
     current_time_sec: u64,
     config: &ControllerConfig,
     sensors: &SensorData,
@@ -541,7 +564,7 @@ fn try_auto_dilute(
     ctx.mark_pending_sample_water_change_violation();
     ctx.current_state = SystemState::WaterDraining {
         target_level: target,
-        start_time: 0,
+        start_time: current_time_ms,
     };
     let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
     ctx.pump_status.water_pump_out = true;
@@ -725,6 +748,7 @@ fn try_ec_dosing(
     }
 
     if ctx.ec_retry_count >= 3 {
+        warn!("🚨 Hủy bù EC: Đã vượt quá số lần thử (retry_count >= 3).");
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("EC_DOSING_FAILED".to_string());
         return true;
@@ -742,16 +766,21 @@ fn try_ec_dosing(
         .clamp(0.0, config.max_dose_per_cycle);
 
     if dose_ml <= 0.0 {
+        debug!("🧪 [EC] Bỏ qua bù EC do liều lượng tính toán <= 0.0ml (Error: {:.2})", ec_error);
         return false;
     }
 
-    let can_a =
-        ctx.can_dose_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
-    let can_b =
-        ctx.can_dose_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
+    let can_a = ctx.can_dose_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
+    let can_b = ctx.can_dose_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
     if !(can_a && can_b) {
+        warn!("⚠️ [EC] Vượt quá giới hạn châm dinh dưỡng trong giờ (A hoặc B). Max: {}ml/h", max_hourly_ml);
         return false;
     }
+
+    info!(
+        "🧪 [EC DOSING] Bắt đầu bù EC. Cần tăng: {:.2} (Hiện: {:.2}, Mục tiêu: {:.2}). Liều lượng tính toán: {:.2}ml (Deadband Scale: {:.2})", 
+        ec_error, sensors.ec, config.ec_target, dose_ml, deadband_scale
+    );
 
     let _ = ctx.reserve_dose_if_within_hourly_limit(
         "NutrientA",
@@ -792,6 +821,7 @@ fn try_ph_dosing(
     }
 
     if ctx.ph_retry_count >= 3 {
+        warn!("🚨 Hủy bù pH: Đã vượt quá số lần thử (retry_count >= 3).");
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("PH_DOSING_FAILED".to_string());
         return true;
@@ -815,10 +845,7 @@ fn try_ph_dosing(
         Some(c) => c,
         None => {
             let pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
-            warn!(
-                "Skip PH dosing: invalid pump config or PWM below min (pump={}, pwm={}%)",
-                pump_name, safe_pwm
-            );
+            error!("❌ [PH DOSING] Cấu hình bơm {} không hợp lệ hoặc PWM ({}%) quá thấp. Hủy tác vụ.", pump_name, safe_pwm);
             ctx.stop_all_pumps(pump_ctrl);
             ctx.current_state = SystemState::Monitoring;
             return false;
@@ -846,6 +873,7 @@ fn try_ph_dosing(
         dose_ml,
         max_hourly_ml,
     ) {
+        warn!("⚠️ [{}] Vượt quá giới hạn châm trong giờ. Max: {}ml/h", ph_pump_name, max_hourly_ml);
         return false;
     }
 
@@ -853,6 +881,11 @@ fn try_ph_dosing(
     if final_dose_ml <= 0.0 {
         return false;
     }
+
+    info!(
+        "🧪 [PH DOSING] Bắt đầu bù pH ({}). Lệch: {:.2} (Hiện: {:.2}, Mục tiêu: {:.2}). Liều lượng: {:.2}ml", 
+        if is_ph_up { "UP ⬆️" } else { "DOWN ⬇️" }, diff, sensors.ph, config.ph_target, final_dose_ml
+    );
 
     ctx.last_ph_before_dosing = Some(sensors.ph);
     ctx.last_ph_dosing_is_up = Some(is_ph_up);
@@ -967,7 +1000,7 @@ fn start_dosing_pump_a(
     let active_capacity_a = match effective_flow_ml_per_sec(DosePumpKind::PumpA, dose_pwm, config) {
         Some(c) => c,
         None => {
-            warn!("Skip dose pump A: invalid config/pwm (pwm={}%)", dose_pwm);
+            error!("❌ [PUMP A SETUP] Bỏ qua bơm A: Cấu hình lưu lượng hoặc PWM ({}%) không hợp lệ.", dose_pwm);
             ctx.stop_all_pumps(pump_ctrl);
             ctx.current_state = SystemState::Monitoring;
             return;
@@ -976,6 +1009,13 @@ fn start_dosing_pump_a(
 
     let (pulse_on_ms, pulse_off_ms, max_pulse_count) =
         pulse_params(dose_a_ml, active_capacity_a, config);
+
+    debug!(
+        "⚙️ [PUMP A SETUP] Target: {:.2}ml. Tốc độ: {:.2}ml/s (PWM: {}%). Chế độ: {}. Pulse [ON: {}ms, OFF: {}ms, Max: {}]",
+        dose_a_ml, active_capacity_a, dose_pwm, 
+        if dose_a_ml < config.dosing_min_dose_ml { "PULSE" } else { "LIÊN TỤC" },
+        pulse_on_ms, pulse_off_ms, max_pulse_count
+    );
 
     let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientA, true, dose_pwm);
     ctx.pump_status.pump_a = true;
@@ -1023,10 +1063,8 @@ fn start_dosing_ph(
     let active_capacity = match effective_flow_ml_per_sec(pump_kind, dose_pwm, config) {
         Some(c) => c,
         None => {
-            warn!(
-                "Skip PH dosing: invalid config/pwm (is_up={}, pwm={}%)",
-                is_up, dose_pwm
-            );
+            let pump_name = if is_up { "PhUp" } else { "PhDown" };
+            error!("❌ [PUMP PH SETUP] Bỏ qua bơm {}: Cấu hình lưu lượng hoặc PWM ({}%) không hợp lệ.", pump_name, dose_pwm);
             ctx.stop_all_pumps(pump_ctrl);
             ctx.current_state = SystemState::Monitoring;
             return;
@@ -1035,6 +1073,13 @@ fn start_dosing_ph(
 
     let (pulse_on_ms, pulse_off_ms, max_pulse_count) =
         pulse_params(dose_ml, active_capacity, config);
+
+    debug!(
+        "⚙️ [PUMP PH SETUP] Target: {:.2}ml. Tốc độ: {:.2}ml/s (PWM: {}%). Chế độ: {}. Pulse [ON: {}ms, OFF: {}ms, Max: {}]",
+        dose_ml, active_capacity, dose_pwm, 
+        if dose_ml < config.dosing_min_dose_ml { "PULSE" } else { "LIÊN TỤC" },
+        pulse_on_ms, pulse_off_ms, max_pulse_count
+    );
 
     let pump_type = if is_up {
         PumpType::PhUp
@@ -1103,7 +1148,13 @@ fn handle_dosing_pump_a_tick(
         ctx.pump_status.pump_a = false;
         ctx.pump_status.pump_a_pwm = Some(0);
 
+        debug!(
+            "💧 [PUMP A TICK] Ngắt bơm (Pulse: {}/{}). Đã bơm ước tính: {:.2}/{:.2} ml", 
+            s.pulse_count, s.max_pulse_count, s.delivered_ml_est, s.dose_target_ml
+        );
+
         if s.delivered_ml_est >= s.dose_target_ml || s.pulse_count >= s.max_pulse_count {
+            info!("✅ [PUMP A DONE] Hoàn thành châm dung dịch A. Chuẩn bị chuyển pha.");
             ctx.set_pulse_status(false, s.pulse_count);
             ctx.current_state = SystemState::WaitingBetweenDose {
                 finish_time: current_time_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
@@ -1139,6 +1190,9 @@ fn handle_dosing_pump_a_tick(
         let next_count = s.pulse_count + 1;
         let next_delivered =
             s.delivered_ml_est + s.active_capacity_ml_per_sec * (s.pulse_on_ms as f32 / 1000.0);
+            
+        debug!("💧 [PUMP A TICK] Bật lại bơm (Bắt đầu Pulse {}).", next_count);
+
         ctx.set_pulse_status(true, next_count);
         ctx.current_state = SystemState::DosingPumpA {
             next_toggle_time: current_time_ms + s.pulse_on_ms,
@@ -1179,7 +1233,7 @@ fn handle_waiting_between_dose(
             match effective_flow_ml_per_sec(DosePumpKind::PumpB, dose_pwm, config) {
                 Some(c) => c,
                 None => {
-                    warn!("Skip dose pump B: invalid config/pwm (pwm={}%)", dose_pwm);
+                    error!("❌ [PUMP B SETUP] Bỏ qua bơm B: Cấu hình lưu lượng hoặc PWM ({}%) không hợp lệ.", dose_pwm);
                     ctx.stop_all_pumps(pump_ctrl);
                     ctx.current_state = SystemState::Monitoring;
                     return;
@@ -1188,6 +1242,13 @@ fn handle_waiting_between_dose(
 
         let (pulse_on_ms, pulse_off_ms, max_pulse_count) =
             pulse_params(dose_b_ml, active_capacity_b, config);
+
+        debug!(
+            "⚙️ [PUMP B SETUP] Target: {:.2}ml. Tốc độ: {:.2}ml/s (PWM: {}%). Chế độ: {}. Pulse [ON: {}ms, OFF: {}ms, Max: {}]",
+            dose_b_ml, active_capacity_b, dose_pwm, 
+            if dose_b_ml < config.dosing_min_dose_ml { "PULSE" } else { "LIÊN TỤC" },
+            pulse_on_ms, pulse_off_ms, max_pulse_count
+        );
 
         let _ = pump_ctrl.set_dosing_pump_pulse(PumpType::NutrientB, true, dose_pwm);
         ctx.pump_status.pump_b = true;
@@ -1264,18 +1325,41 @@ fn handle_dosing_pump_b_tick(
         ctx.pump_status.pump_b = false;
         ctx.pump_status.pump_b_pwm = Some(0);
 
+        debug!(
+            "💧 [PUMP B TICK] Ngắt bơm (Pulse: {}/{}). Đã bơm ước tính: {:.2}/{:.2} ml", 
+            s.pulse_count, s.max_pulse_count, s.delivered_ml_est, s.dose_target_ml
+        );
+
         if s.delivered_ml_est >= s.dose_target_ml || s.pulse_count >= s.max_pulse_count {
+            info!("✅ [PUMP B DONE] Hoàn thành châm dung dịch B. Chuẩn bị chuyển pha Active Mixing.");
             ctx.set_pulse_status(false, s.pulse_count);
+            
+            let pump_b_ml_reported = s.delivered_ml_est.min(s.dose_target_ml); // Lưu lại lượng thực tế
+            
             let report_json = format!(
                 r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
                 s.start_ec,
                 s.start_ph,
                 s.dose_a_ml_reported,
-                s.delivered_ml_est.min(s.dose_target_ml),
+                pump_b_ml_reported, // Dùng biến đã lưu
                 s.target_ec,
                 config.ph_target
             );
             let _ = dosing_report_tx.send(report_json);
+
+            // THÊM ĐOẠN NÀY ĐỂ BẮT ĐẦU TÍNH EMA CHO EC
+            start_pending_calibration_sample(
+                ctx,
+                s.start_ec,
+                s.start_ph,
+                s.dose_a_ml_reported,
+                pump_b_ml_reported,
+                0.0, // ph_up_ml
+                0.0, // ph_down_ml
+                current_time_ms,
+                config,
+            );
+
             ctx.current_state = SystemState::ActiveMixing {
                 finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
             };
@@ -1305,6 +1389,9 @@ fn handle_dosing_pump_b_tick(
         let next_count = s.pulse_count + 1;
         let next_delivered =
             s.delivered_ml_est + s.active_capacity_ml_per_sec * (s.pulse_on_ms as f32 / 1000.0);
+            
+        debug!("💧 [PUMP B TICK] Bật lại bơm (Bắt đầu Pulse {}).", next_count);
+
         ctx.set_pulse_status(true, next_count);
         ctx.current_state = SystemState::DosingPumpB {
             next_toggle_time: current_time_ms + s.pulse_on_ms,
@@ -1365,8 +1452,16 @@ fn handle_dosing_ph_tick(
             ctx.pump_status.ph_down_pwm = Some(0);
         }
 
+        let pump_name = if s.is_up { "PH UP" } else { "PH DOWN" };
+        debug!(
+            "💧 [PUMP {} TICK] Ngắt bơm (Pulse: {}/{}). Đã bơm ước tính: {:.2}/{:.2} ml", 
+            pump_name, s.pulse_count, s.max_pulse_count, s.delivered_ml_est, s.dose_target_ml
+        );
+
         if s.delivered_ml_est >= s.dose_target_ml || s.pulse_count >= s.max_pulse_count {
+            info!("✅ [PUMP {} DONE] Hoàn thành châm pH. Chuẩn bị chuyển pha Active Mixing.", pump_name);
             ctx.set_pulse_status(false, s.pulse_count);
+            
             let ph_up_ml = if s.is_up {
                 s.delivered_ml_est.min(s.dose_target_ml)
             } else {
@@ -1377,11 +1472,26 @@ fn handle_dosing_ph_tick(
             } else {
                 0.0
             };
+            
             let report_json = format!(
                 r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":0.0,"pump_b_ml":0.0,"ph_up_ml":{:.2},"ph_down_ml":{:.2},"target_ec":{:.2},"target_ph":{:.2}}}"#,
                 s.start_ec, s.start_ph, ph_up_ml, ph_down_ml, config.ec_target, s.target_ph
             );
             let _ = dosing_report_tx.send(report_json);
+
+            // THÊM ĐOẠN NÀY ĐỂ BẮT ĐẦU TÍNH EMA CHO PH
+            start_pending_calibration_sample(
+                ctx,
+                s.start_ec,
+                s.start_ph,
+                0.0, // pump_a_ml
+                0.0, // pump_b_ml
+                ph_up_ml,
+                ph_down_ml,
+                current_time_ms,
+                config,
+            );
+
             ctx.current_state = SystemState::ActiveMixing {
                 finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
             };
@@ -1416,6 +1526,10 @@ fn handle_dosing_ph_tick(
         let next_count = s.pulse_count + 1;
         let next_delivered =
             s.delivered_ml_est + s.active_capacity_ml_per_sec * (s.pulse_on_ms as f32 / 1000.0);
+
+        let pump_name = if s.is_up { "PH UP" } else { "PH DOWN" };
+        debug!("💧 [PUMP {} TICK] Bật lại bơm (Bắt đầu Pulse {}).", pump_name, next_count);
+
         ctx.set_pulse_status(true, next_count);
         ctx.current_state = SystemState::DosingPH {
             next_toggle_time: current_time_ms + s.pulse_on_ms,

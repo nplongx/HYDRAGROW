@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Settings2, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw,
-  Lock, ChevronDown
+  Lock, ChevronDown,
+  FlaskConical
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -11,6 +12,8 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { Switch } from '../components/ui/Switch';
 
 // --- Component: Khối Điều Khiển Từng Thiết Bị ---
+// Thay thế component AdvancedDeviceControl hiện tại bằng đoạn code này
+
 const AdvancedDeviceControl = ({
   deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, updatePumpStatusOptimistically, isOnline, isEmergency, isAutoMode
 }: any) => {
@@ -29,10 +32,12 @@ const AdvancedDeviceControl = ({
     if (pwmPreferences[pumpId] !== undefined) setPwmValue(pwmPreferences[pumpId]);
   }, [pwmPreferences, pumpId]);
 
+  // Nút Switch Bật/Tắt bình thường
   const handleToggle = async () => {
     if (isAutoMode) return;
     if (isEmergency && !currentStatus) {
-      toast.error(`Không thể bật thường khi hệ thống đang lỗi. Hãy dùng chức năng Chạy Cưỡng Bức.`);
+      toast.error(`Hệ thống đang báo lỗi. Vui lòng mở rộng và dùng "Chạy Cưỡng Bức".`);
+      setShowAdvanced(true); // Tự động mở phần nâng cao để user thấy nút Cưỡng bức
       return;
     }
     setIsProcessing(true);
@@ -48,10 +53,34 @@ const AdvancedDeviceControl = ({
     }
   };
 
-  const handleForceOn = async () => {
+  // Xử lý Hẹn giờ + Công suất kết hợp
+  const handleAdvancedRun = async () => {
+    if (isAutoMode || isEmergency) return;
+    setIsProcessing(true);
     const time = Number(duration);
-    if (!time || time <= 0) { toast.error("Vui lòng nhập số giây hợp lệ."); return; }
-    if (!window.confirm(`Bạn chắc chắn muốn chạy ${title} trong ${time} giây?`)) return;
+
+    if (!currentStatus) updatePumpStatusOptimistically(stateKey, true);
+
+    // Nếu có PWM thì dùng setPwm, nếu không có PWM mà có timer thì dùng toggle nhưng báo backend tự tắt (hoặc forceOn nếu logic backend của bạn cấu hình thế)
+    // Ở đây ta dùng set_pwm (kèm thời gian) nếu allowPwm, và force_on nếu chỉ muốn hẹn giờ thuần.
+    if (allowPwm) {
+      await setPwm(pumpId, pwmValue, time > 0 ? time : undefined);
+      savePwmPreference(pumpId, pwmValue);
+    } else {
+      if (time > 0) {
+        await forceOn(pumpId, time); // Hoặc bạn có thể tạo 1 lệnh set_timer riêng
+      }
+    }
+
+    setIsProcessing(false);
+    if (time > 0) setDuration(''); // Xóa timer sau khi gửi
+  };
+
+  // Xử lý Cưỡng bức khẩn cấp
+  const handleEmergencyForceOn = async () => {
+    const time = Number(duration);
+    if (!time || time <= 0) { toast.error("Vui lòng nhập số giây (Bắt buộc khi cưỡng bức)."); return; }
+    if (!window.confirm(`NGUY HIỂM: Bỏ qua cảm biến để chạy ${title} trong ${time} giây?`)) return;
 
     setIsProcessing(true);
     updatePumpStatusOptimistically(stateKey, true);
@@ -62,23 +91,15 @@ const AdvancedDeviceControl = ({
       updatePumpStatusOptimistically(stateKey, false);
     } finally {
       setIsProcessing(false);
+      setDuration('');
     }
-  };
-
-  const handleSetPwm = async () => {
-    if (isAutoMode || isEmergency) return;
-    setIsProcessing(true);
-    if (!currentStatus) updatePumpStatusOptimistically(stateKey, true);
-    await setPwm(pumpId, pwmValue);
-    savePwmPreference(pumpId, pwmValue);
-    setIsProcessing(false);
   };
 
   return (
     <div className={`bg-slate-900 border rounded-xl overflow-hidden transition-colors duration-300 ${currentStatus ? 'border-blue-500/50 bg-slate-800/40' : 'border-slate-800'}`}>
       <div className="p-4 flex flex-col gap-4">
 
-        {/* Header */}
+        {/* Header - Giữ nguyên */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg transition-colors ${currentStatus ? 'bg-blue-500 text-white' : 'bg-slate-950 text-slate-500 border border-slate-800'}`}>
@@ -86,7 +107,7 @@ const AdvancedDeviceControl = ({
             </div>
             <div>
               <h3 className={`text-sm font-semibold ${currentStatus ? 'text-slate-100' : 'text-slate-300'}`}>{title}</h3>
-              <p className="text-[10px] text-slate-500 font-medium">{currentStatus ? 'Đang chạy' : 'Đã tắt'}</p>
+              <p className="text-[10px] text-slate-500 font-medium">{currentStatus ? 'Đang hoạt động' : 'Đang tắt'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -95,57 +116,80 @@ const AdvancedDeviceControl = ({
           </div>
         </div>
 
-        {/* Cấu hình nâng cao (Mở rộng) */}
-        {(allowPwm || !isAutoMode) && (
+        {/* Cấu hình nâng cao - UX MỚI */}
+        {(!isAutoMode) && (
           <div className="border-t border-slate-800 pt-3">
             <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
-              <ChevronDown size={14} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} /> Tùy chọn thời gian & công suất
+              <ChevronDown size={14} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+              {isEmergency ? 'Mở khóa điều khiển khẩn cấp' : 'Tùy chỉnh thông số'}
             </button>
 
             {showAdvanced && (
-              <div className="mt-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+              <div className="mt-4 animate-in slide-in-from-top-2 duration-200 bg-slate-950/50 p-3 rounded-lg border border-slate-800/80">
 
-                {/* PWM Slider */}
-                {allowPwm && (
-                  <div className={`space-y-2 ${isAutoMode || isEmergency ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <div className="flex justify-between text-xs text-slate-400">
-                      <span>Công suất (PWM)</span>
-                      <span className="text-slate-200 font-medium">{pwmValue}%</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range" min="10" max="100" step="1"
-                        value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
-                        className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                      <button onClick={handleSetPwm} disabled={isProcessing} className="px-2.5 py-1 bg-slate-800 text-slate-200 text-xs font-medium rounded border border-slate-700 hover:bg-slate-700 transition-colors">
-                        Lưu
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hẹn giờ / Cưỡng bức */}
-                {!isAutoMode && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-slate-400">
-                      <span className="flex items-center gap-1.5"><Timer size={12} /> {isEmergency ? 'Chạy Cưỡng Bức' : 'Bật Theo Hẹn Giờ'}</span>
+                {/* TRƯỜNG HỢP 1: ĐANG CẤP CỨU / LỖI */}
+                {isEmergency ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-amber-500 text-xs font-medium">
+                      <AlertTriangle size={14} />
+                      <span>Chạy Cưỡng Bức (Bỏ qua an toàn)</span>
                     </div>
                     <div className="flex gap-2">
                       <input
-                        type="number" placeholder="Nhập số giây..." value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="flex-1 bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-1.5 outline-none focus:border-amber-500"
+                        type="number" placeholder="Bắt buộc nhập số giây..."
+                        value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="flex-1 bg-slate-900 border border-red-900/50 text-slate-200 text-xs rounded-lg px-3 py-2 outline-none focus:border-red-500 placeholder:text-slate-600"
                       />
                       <button
-                        onClick={handleForceOn} disabled={isProcessing || !duration}
-                        className="px-3 py-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 text-xs font-semibold rounded-lg hover:bg-amber-500 hover:text-white transition-colors disabled:opacity-50"
+                        onClick={handleEmergencyForceOn} disabled={isProcessing || !duration}
+                        className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 text-xs font-semibold rounded-lg hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 whitespace-nowrap"
                       >
-                        Bật ngay
+                        Ép chạy
                       </button>
                     </div>
                   </div>
-                )}
+                ) :
+                  (
+                    <div className="space-y-4">
+                      {/* Thanh Slider PWM (Nếu thiết bị hỗ trợ) */}
+                      {allowPwm && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                            <span>Công suất bơm (PWM)</span>
+                            <span className="text-blue-400">{pwmValue}%</span>
+                          </div>
+                          <input
+                            type="range" min="10" max="100" step="1"
+                            value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
+                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                          />
+                        </div>
+                      )}
 
+                      {/* Ô nhập thời gian & Nút hành động */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                          <span>Thời gian chạy (Tùy chọn)</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type="number" placeholder="Để trống để chạy liên tục..."
+                              value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                              className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-500 placeholder:text-slate-600"
+                            />
+                            <Timer size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                          </div>
+                          <button
+                            onClick={handleAdvancedRun} disabled={isProcessing}
+                            className="px-4 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 shadow-lg shadow-blue-500/20 whitespace-nowrap"
+                          >
+                            Lưu & Chạy
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
               </div>
             )}
           </div>
@@ -154,7 +198,6 @@ const AdvancedDeviceControl = ({
     </div>
   );
 };
-
 // --- Bảng Điều Khiển Chính ---
 const ControlPanel = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, updatePumpStatusOptimistically, fsmState, settings } = useDeviceContext();
@@ -228,7 +271,16 @@ const ControlPanel = () => {
         </div>
       )}
 
-      {/* Nước và Khí Hậu */}
+      <div className="space-y-3">
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Máy pha dinh dưỡng</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical} currentStatus={pumps.pump_a} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm Phân B" icon={FlaskConical} currentStatus={pumps.pump_b} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_UP" title="Bơm Tăng pH" icon={Activity} currentStatus={pumps.ph_up} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_DOWN" title="Bơm Giảm pH" icon={Activity} currentStatus={pumps.ph_down} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+        </div>
+      </div>
+
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Bơm nước & Khí hậu</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -71,8 +71,8 @@ export const useDeviceControl = (deviceId: string) => {
   };
 
   // 3. Lệnh Cài đặt Công suất (PWM)
-  const setPwm = (pumpId: string, pwmValue: number) => {
-    return sendCommand(pumpId, 'set_pwm', undefined, pwmValue);
+  const setPwm = (pumpId: string, pwmValue: number, durationSec?: number) => {
+    return sendCommand(pumpId, 'set_pwm', durationSec, pwmValue);
   };
 
   const resetFault = () => {

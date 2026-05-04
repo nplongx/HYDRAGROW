@@ -309,7 +309,6 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
     }
 }
 
-const MAX_SCHEDULED_DOSING_DURATION_SEC: f32 = 120.0;
 
 fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
     if !(1..=100).contains(&dose.dosing_pwm_percent) {
@@ -351,11 +350,10 @@ async fn upsert_dosing_db(
             soft_start_duration, last_calibrated, 
             scheduled_mixing_interval_sec, scheduled_mixing_duration_sec,
             dosing_pwm_percent, osaka_mixing_pwm_percent, osaka_misting_pwm_percent,
-            scheduled_dosing_enabled, scheduled_dosing_cron, scheduled_dose_a_ml, scheduled_dose_b_ml,
             dosing_min_pwm_percent, pump_a_min_pwm_percent, pump_b_min_pwm_percent,
             pump_ph_up_min_pwm_percent, pump_ph_down_min_pwm_percent, dosing_pulse_on_ms,
             dosing_pulse_off_ms, dosing_min_dose_ml, dosing_max_pulse_count_per_cycle
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
         ON CONFLICT(device_id) DO UPDATE SET
             ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
             ph_shift_up_per_ml = EXCLUDED.ph_shift_up_per_ml, ph_shift_down_per_ml = EXCLUDED.ph_shift_down_per_ml,
@@ -368,10 +366,6 @@ async fn upsert_dosing_db(
             soft_start_duration = EXCLUDED.soft_start_duration, scheduled_mixing_interval_sec = EXCLUDED.scheduled_mixing_interval_sec,
             scheduled_mixing_duration_sec = EXCLUDED.scheduled_mixing_duration_sec, dosing_pwm_percent = EXCLUDED.dosing_pwm_percent,
             osaka_mixing_pwm_percent = EXCLUDED.osaka_mixing_pwm_percent, osaka_misting_pwm_percent = EXCLUDED.osaka_misting_pwm_percent,
-            scheduled_dosing_enabled = EXCLUDED.scheduled_dosing_enabled,
-            scheduled_dosing_cron = EXCLUDED.scheduled_dosing_cron,
-            scheduled_dose_a_ml = EXCLUDED.scheduled_dose_a_ml,
-            scheduled_dose_b_ml = EXCLUDED.scheduled_dose_b_ml,
             dosing_min_pwm_percent = EXCLUDED.dosing_min_pwm_percent,
             pump_a_min_pwm_percent = EXCLUDED.pump_a_min_pwm_percent,
             pump_b_min_pwm_percent = EXCLUDED.pump_b_min_pwm_percent,

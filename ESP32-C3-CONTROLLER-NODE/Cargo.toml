@@ -35,7 +35,6 @@ one-wire-bus = "0.1.1"
 esp-idf-sys = "0.37.2"
 
 chrono = "0.4"
-cron = "0.12"
 
 hydragrow-shared = { path = "../hydragrow-shared" }
 uuid = { version = "1.20.0", features = ["v4"] }

@@ -61,16 +61,6 @@ pub fn start_fsm_control_loop(
             current_time_on_boot
         });
 
-    ctx.last_scheduled_dose_time_sec = nvs
-        .as_mut()
-        .and_then(|f| f.get_u64("last_sched_dose").unwrap_or(None))
-        .unwrap_or_else(|| {
-            if let Some(f) = nvs.as_mut() {
-                let _ = f.set_u64("last_sched_dose", current_time_on_boot);
-            }
-            current_time_on_boot
-        });
-
     ctx.last_mixing_start_sec = current_time_on_boot;
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");

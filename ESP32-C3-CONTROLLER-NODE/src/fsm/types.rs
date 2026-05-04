@@ -19,11 +19,6 @@ pub enum PendingDose {
         target_ph: f32,
         pwm_percent: u32,
     },
-    ScheduledDose {
-        dose_a_ml: f32,
-        dose_b_ml: f32,
-        pwm_percent: u32,
-    },
 }
 
 // ---------------------------------------------------------------------------

@@ -165,7 +165,7 @@ const AlertMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
-const MetadataRenderer = ({ category, level, _title, metadata }: { category: string; level: string; title: string; metadata?: Record<string, any> }) => {
+const MetadataRenderer = ({ category, level, metadata }: { category: string; level: string; title: string; metadata?: Record<string, any> }) => {
   if (!metadata) return null;
 
   if (category === 'dosing') return <DosingMetadata meta={metadata} />;

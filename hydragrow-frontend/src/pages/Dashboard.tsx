@@ -151,71 +151,89 @@ const Dashboard = () => {
       </div>
 
       {/* LƯỚI CẢM BIẾN */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="relative">
-          {sensorData?.err_ec === true && (
-            <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
-              <AlertTriangle size={14} />
+      <div className="space-y-3">
+        {/* THÊM MỚI: Thanh thông báo trạng thái cảm biến */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-300">Thông số môi trường</h3>
+          {!isSensorOnline && sensorData && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/80 border border-slate-700 rounded-md">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              <span className="text-[11px] font-medium text-slate-300">
+                Sensor Offline (Dữ liệu cũ)
+              </span>
             </div>
           )}
-          <div className={sensorData?.err_ec === true ? "opacity-60" : ""}>
-            <SensorBentoCard
-              title="EC"
-              value={sensorData?.err_ec === true ? -1 : sensorData?.ec}
-              unit="mS/cm"
-              icon={Activity}
-              theme={sensorData?.err_ec === true ? "rose" : "blue"}
-            />
-          </div>
         </div>
 
-        <div className="relative">
-          {sensorData?.err_ph === true && (
-            <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
-              <AlertTriangle size={14} />
-            </div>
-          )}
-          <div className={sensorData?.err_ph === true ? "opacity-60" : ""}>
-            <SensorBentoCard
-              title="pH"
-              value={sensorData?.err_ph === true ? -1 : sensorData?.ph}
-              icon={Droplets}
-              theme={sensorData?.err_ph === true ? "rose" : "fuchsia"}
-            />
-          </div>
-        </div>
+        {/* BAO BỌC GRID: Thêm logic làm mờ toàn bộ lưới nếu sensor offline */}
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 transition-all duration-700 ${!isSensorOnline ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
 
-        <div className="relative">
-          {sensorData?.err_temp === true && (
-            <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
-              <AlertTriangle size={14} />
+          {/* Giữ nguyên các phần tử bên trong của bạn */}
+          <div className="relative">
+            {sensorData?.err_ec === true && (
+              <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
+                <AlertTriangle size={14} />
+              </div>
+            )}
+            <div className={sensorData?.err_ec === true ? "opacity-60" : ""}>
+              <SensorBentoCard
+                title="EC"
+                value={sensorData?.err_ec === true ? -1 : sensorData?.ec}
+                unit="mS/cm"
+                icon={Activity}
+                theme={sensorData?.err_ec === true ? "rose" : "blue"}
+              />
             </div>
-          )}
-          <div className={sensorData?.err_temp === true ? "opacity-60" : ""}>
-            <SensorBentoCard
-              title="Nhiệt độ"
-              value={sensorData?.err_temp === true ? -1 : sensorData?.temp}
-              unit="°C"
-              icon={Thermometer}
-              theme={sensorData?.err_temp === true ? "rose" : "orange"}
-            />
           </div>
-        </div>
 
-        <div className="relative">
-          {sensorData?.err_water === true && (
-            <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
-              <AlertTriangle size={14} />
+          <div className="relative">
+            {sensorData?.err_ph === true && (
+              <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
+                <AlertTriangle size={14} />
+              </div>
+            )}
+            <div className={sensorData?.err_ph === true ? "opacity-60" : ""}>
+              <SensorBentoCard
+                title="pH"
+                value={sensorData?.err_ph === true ? -1 : sensorData?.ph}
+                icon={Droplets}
+                theme={sensorData?.err_ph === true ? "rose" : "fuchsia"}
+              />
             </div>
-          )}
-          <div className={sensorData?.err_water === true ? "opacity-60" : ""}>
-            <SensorBentoCard
-              title="Mực nước"
-              value={sensorData?.err_water === true ? -1 : sensorData?.water_level}
-              unit="%"
-              icon={Waves}
-              theme={sensorData?.err_water === true ? "rose" : "cyan"}
-            />
+          </div>
+
+          <div className="relative">
+            {sensorData?.err_temp === true && (
+              <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
+                <AlertTriangle size={14} />
+              </div>
+            )}
+            <div className={sensorData?.err_temp === true ? "opacity-60" : ""}>
+              <SensorBentoCard
+                title="Nhiệt độ"
+                value={sensorData?.err_temp === true ? -1 : sensorData?.temp}
+                unit="°C"
+                icon={Thermometer}
+                theme={sensorData?.err_temp === true ? "rose" : "orange"}
+              />
+            </div>
+          </div>
+
+          <div className="relative">
+            {sensorData?.err_water === true && (
+              <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
+                <AlertTriangle size={14} />
+              </div>
+            )}
+            <div className={sensorData?.err_water === true ? "opacity-60" : ""}>
+              <SensorBentoCard
+                title="Mực nước"
+                value={sensorData?.err_water === true ? -1 : sensorData?.water_level}
+                unit="%"
+                icon={Waves}
+                theme={sensorData?.err_water === true ? "rose" : "cyan"}
+              />
+            </div>
           </div>
         </div>
       </div>

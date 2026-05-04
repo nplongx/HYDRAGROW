@@ -209,6 +209,17 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           setIsControllerStatusKnown(false);
           resetSensorTimeout();
 
+          setTimeout(() => {
+            setIsControllerStatusKnown(prev => {
+              if (!prev) {
+                setDeviceStatus({ is_online: false, last_seen: '' });
+                setFsmState("Offline");
+                return true; // Xác nhận trạng thái là đã offline
+              }
+              return prev;
+            });
+          }, 3000);
+
           httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }

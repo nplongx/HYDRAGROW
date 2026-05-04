@@ -78,17 +78,30 @@ pub fn run_auto_fsm(
         }
 
         SystemState::WaterRefilling {
+            ref trigger,
             target_level,
             start_time,
+            start_level,
+            start_ec,
         } => {
-            if sensors.water_level >= target_level
-                || current_time_ms.saturating_sub(start_time)
-                    > (config.max_refill_duration_sec as u64 * 1000)
-            {
+            let duration_sec = current_time_ms.saturating_sub(start_time) / 1000;
+            let target_reached = sensors.water_level >= target_level;
+            let timeout = duration_sec > config.max_refill_duration_sec as u64;
+
+            if target_reached || timeout {
                 let _ = pump_ctrl.set_water_pump(WaterDirection::Stop);
                 ctx.pump_status.water_pump_in = false;
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = true;
+
+                // --- BẮT ĐẦU: GHI LOG PUMP WATER EVENT (P1 - B) ---
+                let report_json = format!(
+                    r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
+                    trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
+                );
+                let _ = fsm_mqtt_tx.send(report_json);
+                // --- KẾT THÚC LOG ---
+
                 ctx.current_state = SystemState::ActiveMixing {
                     finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
                 };
@@ -96,17 +109,30 @@ pub fn run_auto_fsm(
         }
 
         SystemState::WaterDraining {
+            ref trigger,
             target_level,
             start_time,
+            start_level,
+            start_ec,
         } => {
-            if sensors.water_level <= target_level
-                || current_time_ms.saturating_sub(start_time)
-                    > (config.max_drain_duration_sec as u64 * 1000)
-            {
+            let duration_sec = current_time_ms.saturating_sub(start_time) / 1000;
+            let target_reached = sensors.water_level <= target_level;
+            let timeout = duration_sec > config.max_drain_duration_sec as u64;
+
+            if target_reached || timeout {
                 let _ = pump_ctrl.set_water_pump(WaterDirection::Stop);
                 ctx.pump_status.water_pump_in = false;
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = false;
+
+                // --- BẮT ĐẦU: GHI LOG PUMP WATER EVENT (P1 - B) ---
+                let report_json = format!(
+                    r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
+                    trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
+                );
+                let _ = fsm_mqtt_tx.send(report_json);
+                // --- KẾT THÚC LOG ---
+
                 ctx.current_state = SystemState::Stabilizing {
                     finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
                 };
@@ -179,7 +205,6 @@ pub fn run_auto_fsm(
                     sensors,
                     ctx,
                     pump_ctrl,
-                    dosing_report_tx,
                     dose_b_ml,
                     target_ec,
                     start_ec,
@@ -211,7 +236,6 @@ pub fn run_auto_fsm(
                     config,
                     ctx,
                     pump_ctrl,
-                    dosing_report_tx,
                     DosingPumpBState {
                         dose_target_ml,
                         delivered_ml_est,
@@ -253,7 +277,6 @@ pub fn run_auto_fsm(
                     config,
                     ctx,
                     pump_ctrl,
-                    dosing_report_tx,
                     DosingPhState {
                         is_up,
                         dose_target_ml,
@@ -281,6 +304,10 @@ pub fn run_auto_fsm(
                     sample.stabilizing_start_ms = Some(current_time_ms);
                     sample.stabilizing_finish_ms =
                         Some(current_time_ms + (config.sensor_stabilize_sec as u64 * 1000));
+                    
+                    // Lấy dữ liệu post_mixing
+                    sample.post_mixing_ec = sensors.ec;
+                    sample.post_mixing_ph = sensors.ph;
                 }
                 ctx.current_state = SystemState::Stabilizing {
                     finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
@@ -292,7 +319,50 @@ pub fn run_auto_fsm(
             if current_time_ms >= finish_time {
                 if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
                     sample.stabilizing_finish_ms = Some(current_time_ms);
+                    
+                    // --- BẮT ĐẦU: GỘP VÀ GỬI DOSING REPORT ---
+                    let duration_ms = current_time_ms.saturating_sub(sample.start_ms);
+                    let delta_ec = sensors.ec - sample.start_ec;
+                    let delta_ph = sensors.ph - sample.start_ph;
+                    let error_ec = sample.target_ec - sensors.ec;
+                    let error_ph = sample.target_ph - sensors.ph;
+
+                    let ema_ph_shift_used = if sample.dose_ph_up_ml > 0.0 {
+                        config.ph_shift_up_per_ml
+                    } else {
+                        config.ph_shift_down_per_ml
+                    };
+
+                    let report_json = format!(
+                        r#"[DOSING CYCLE] {{ "cycle_id": "{}", "trigger": "{}", "pre": {{ "ec": {:.2}, "ph": {:.2}, "water_level": {:.1} }}, "dose": {{ "pump_a_ml": {:.2}, "pump_b_ml": {:.2}, "ph_up_ml": {:.2}, "ph_down_ml": {:.2} }}, "post_mixing": {{ "ec": {:.2}, "ph": {:.2} }}, "post_stable": {{ "ec": {:.2}, "ph": {:.2} }}, "delta_ec": {:.2}, "delta_ph": {:.2}, "target_ec": {:.2}, "target_ph": {:.2}, "error_ec": {:.2}, "error_ph": {:.2}, "duration_ms": {}, "ema_ec_gain_used": {:.4}, "ema_ph_shift_used": {:.4} }}"#,
+                        sample.cycle_id,
+                        sample.trigger,
+                        sample.start_ec, 
+                        sample.start_ph, 
+                        sample.start_water_level,
+                        sample.dose_a_ml, 
+                        sample.dose_b_ml, 
+                        sample.dose_ph_up_ml, 
+                        sample.dose_ph_down_ml,
+                        sample.post_mixing_ec,
+                        sample.post_mixing_ph,
+                        sensors.ec,
+                        sensors.ph,
+                        delta_ec, 
+                        delta_ph,
+                        sample.target_ec, 
+                        sample.target_ph,
+                        error_ec, 
+                        error_ph,
+                        duration_ms,
+                        config.ec_gain_per_ml,
+                        ema_ph_shift_used
+                    );
+
+                    let _ = dosing_report_tx.send(report_json);
+                    // --- KẾT THÚC REPORT ---
                 }
+
                 apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
                 ctx.current_state = SystemState::DosingCycleComplete;
             }
@@ -449,8 +519,11 @@ fn try_scheduled_water_change(
 
     ctx.mark_pending_sample_water_change_violation();
     ctx.current_state = SystemState::WaterDraining {
+        trigger: "scheduled_change".to_string(),
         target_level: target,
         start_time: current_time_ms,
+        start_level: sensors.water_level,
+        start_ec: sensors.ec,
     };
     let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
     ctx.pump_status.water_pump_out = true;
@@ -488,12 +561,16 @@ fn try_auto_refill(
         return true;
     }
 
-    // Ghi mực nước trước khi bơm để kiểm tra ACK sau
+    // Cập nhật ACK logic: ghi nhận mực nước vào context
     ctx.last_water_before_refill = Some(sensors.water_level);
     ctx.mark_pending_sample_water_change_violation();
+    
     ctx.current_state = SystemState::WaterRefilling {
+        trigger: "auto_refill".to_string(),
         target_level: config.water_level_target,
         start_time: current_time_ms,
+        start_level: sensors.water_level,
+        start_ec: sensors.ec,
     };
 
     let _ = pump_ctrl.set_water_pump(WaterDirection::In);
@@ -527,8 +604,11 @@ fn try_auto_drain_overflow(
 
     ctx.mark_pending_sample_water_change_violation();
     ctx.current_state = SystemState::WaterDraining {
+        trigger: "auto_drain".to_string(),
         target_level: config.water_level_target,
         start_time: current_time_ms,
+        start_level: sensors.water_level,
+        start_ec: sensors.ec,
     };
     let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
     ctx.pump_status.water_pump_out = true;
@@ -563,8 +643,11 @@ fn try_auto_dilute(
     let target = (sensors.water_level - config.dilute_drain_amount_cm).max(config.water_level_min);
     ctx.mark_pending_sample_water_change_violation();
     ctx.current_state = SystemState::WaterDraining {
+        trigger: "dilute".to_string(),
         target_level: target,
         start_time: current_time_ms,
+        start_level: sensors.water_level,
+        start_ec: sensors.ec,
     };
     let _ = pump_ctrl.set_water_pump(WaterDirection::Out);
     ctx.pump_status.water_pump_out = true;
@@ -1220,7 +1303,6 @@ fn handle_waiting_between_dose(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
-    dosing_report_tx: &Sender<String>,
     dose_b_ml: f32,
     target_ec: f32,
     start_ec: f32,
@@ -1274,11 +1356,6 @@ fn handle_waiting_between_dose(
             dose_a_ml_reported,
         };
     } else {
-        let report_json = format!(
-            r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":0.0,"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
-            start_ec, start_ph, dose_a_ml_reported, target_ec, config.ph_target
-        );
-        let _ = dosing_report_tx.send(report_json);
         start_pending_calibration_sample(
             ctx,
             start_ec,
@@ -1317,7 +1394,6 @@ fn handle_dosing_pump_b_tick(
     config: &ControllerConfig,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
-    dosing_report_tx: &Sender<String>,
     s: DosingPumpBState,
 ) {
     if s.pulse_on {
@@ -1335,17 +1411,6 @@ fn handle_dosing_pump_b_tick(
             ctx.set_pulse_status(false, s.pulse_count);
             
             let pump_b_ml_reported = s.delivered_ml_est; // Lưu lại lượng thực tế
-            
-            let report_json = format!(
-                r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":{:.2},"pump_b_ml":{:.2},"ph_up_ml":0.0,"ph_down_ml":0.0,"target_ec":{:.2},"target_ph":{:.2}}}"#,
-                s.start_ec,
-                s.start_ph,
-                s.dose_a_ml_reported,
-                pump_b_ml_reported, // Dùng biến đã lưu
-                s.target_ec,
-                config.ph_target
-            );
-            let _ = dosing_report_tx.send(report_json);
 
             // THÊM ĐOẠN NÀY ĐỂ BẮT ĐẦU TÍNH EMA CHO EC
             start_pending_calibration_sample(
@@ -1433,7 +1498,6 @@ fn handle_dosing_ph_tick(
     config: &ControllerConfig,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
-    dosing_report_tx: &Sender<String>,
     s: DosingPhState,
 ) {
     let pump_type = if s.is_up {
@@ -1471,12 +1535,6 @@ fn handle_dosing_ph_tick(
             } else {
                 0.0
             };
-            
-            let report_json = format!(
-                r#"{{"start_ec":{:.2},"start_ph":{:.2},"pump_a_ml":0.0,"pump_b_ml":0.0,"ph_up_ml":{:.2},"ph_down_ml":{:.2},"target_ec":{:.2},"target_ph":{:.2}}}"#,
-                s.start_ec, s.start_ph, ph_up_ml, ph_down_ml, config.ec_target, s.target_ph
-            );
-            let _ = dosing_report_tx.send(report_json);
 
             // THÊM ĐOẠN NÀY ĐỂ BẮT ĐẦU TÍNH EMA CHO PH
             start_pending_calibration_sample(

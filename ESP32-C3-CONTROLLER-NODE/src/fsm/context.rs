@@ -1,5 +1,5 @@
 use hydragrow_shared::ControllerConfig;
-use log::warn;
+use log::{info, warn};
 use std::collections::HashMap;
 
 use super::types::{PendingCalibrationSample, SystemState};
@@ -63,6 +63,9 @@ pub struct ControlContext {
     // --- Calibration ---
     pub pending_calibration_sample: Option<PendingCalibrationSample>,
     pub calibration_pending_publish_count: u32,
+    pub calibration_sample_count_ec: u32,
+    pub calibration_sample_count_ph_up: u32,
+    pub calibration_sample_count_ph_down: u32,
 }
 
 impl Default for ControlContext {
@@ -113,6 +116,9 @@ impl Default for ControlContext {
             hourly_drain_history: Vec::new(),
             pending_calibration_sample: None,
             calibration_pending_publish_count: 0,
+            calibration_sample_count_ec: 0,
+            calibration_sample_count_ph_up: 0,
+            calibration_sample_count_ph_down: 0,
         }
     }
 }
@@ -203,24 +209,37 @@ impl ControlContext {
         config: &ControllerConfig,
     ) -> bool {
         let mut is_noisy = false;
+
+        // --- BẮT ĐẦU P1-C: Log Sensor Noise ---
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(prev_ec) = self.previous_ec {
-                if (sensors.ec - prev_ec).abs() > config.max_ec_delta {
-                    warn!("⚠️ Nhiễu EC. Bỏ qua nhịp này!");
+                let delta = (sensors.ec - prev_ec).abs();
+                if delta > config.max_ec_delta {
+                    warn!(
+                        r#"[SENSOR NOISE] {{ "sensor": "ec", "raw_value": {:.2}, "prev_value": {:.2}, "delta": {:.2}, "max_allowed": {:.2}, "action": "rejected" }}"#,
+                        sensors.ec, prev_ec, delta, config.max_ec_delta
+                    );
                     is_noisy = true;
                 }
             }
             self.previous_ec = Some(sensors.ec);
         }
+
         if config.enable_ph_sensor && !sensors.err_ph {
             if let Some(prev_ph) = self.previous_ph {
-                if (sensors.ph - prev_ph).abs() > config.max_ph_delta {
-                    warn!("⚠️ Nhiễu pH. Bỏ qua nhịp này!");
+                let delta = (sensors.ph - prev_ph).abs();
+                if delta > config.max_ph_delta {
+                    warn!(
+                        r#"[SENSOR NOISE] {{ "sensor": "ph", "raw_value": {:.2}, "prev_value": {:.2}, "delta": {:.2}, "max_allowed": {:.2}, "action": "rejected" }}"#,
+                        sensors.ph, prev_ph, delta, config.max_ph_delta
+                    );
                     is_noisy = true;
                 }
             }
             self.previous_ph = Some(sensors.ph);
         }
+        // --- KẾT THÚC P1-C ---
+
         is_noisy
     }
 
@@ -256,14 +275,19 @@ impl ControlContext {
                         } else {
                             0.0
                         };
-                        self.adjust_ec_step_ratio(config, now_sec, tune_delta);
+                        self.adjust_ec_step_ratio(config, now_sec, tune_delta, "ec_ack_ok");
                         self.best_known_ec_step_ratio = self.adaptive_ec_step_ratio;
                     }
                 } else {
                     self.ec_retry_count += 1;
                     warn!("⚠️ EC không tăng! Lần thử: {}/3", self.ec_retry_count);
                     if !self.auto_tune_locked {
-                        self.adjust_ec_step_ratio(config, now_sec, 0.03);
+                        self.adjust_ec_step_ratio(
+                            config,
+                            now_sec,
+                            0.03,
+                            "ec_retry_count_increased",
+                        );
                     }
                 }
                 self.last_ec_before_dosing = None;
@@ -289,14 +313,19 @@ impl ControlContext {
                         } else {
                             0.0
                         };
-                        self.adjust_ph_step_ratio(config, now_sec, tune_delta);
+                        self.adjust_ph_step_ratio(config, now_sec, tune_delta, "ph_ack_ok");
                         self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
                     }
                 } else {
                     self.ph_retry_count += 1;
                     warn!("⚠️ pH không đổi hướng! Lần thử: {}/3", self.ph_retry_count);
                     if !self.auto_tune_locked {
-                        self.adjust_ph_step_ratio(config, now_sec, 0.03);
+                        self.adjust_ph_step_ratio(
+                            config,
+                            now_sec,
+                            0.03,
+                            "ph_retry_count_increased",
+                        );
                     }
                 }
                 self.last_ph_before_dosing = None;
@@ -361,20 +390,42 @@ impl ControlContext {
         config: &ControllerConfig,
         now_sec: u64,
         requested_delta: f32,
+        reason: &str, // Thêm reason để truyền vào log
     ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ec_step_ratio * 0.4).max(0.05);
         let max_ratio = (config.ec_step_ratio * 1.8).min(2.5);
         let allowed_hour = (0.08 - self.tuning_hour_ec_delta.abs()).max(0.0);
         let allowed_day = (0.25 - self.tuning_day_ec_delta.abs()).max(0.0);
+
         let applied_delta = requested_delta.clamp(
             -allowed_hour.min(allowed_day),
             allowed_hour.min(allowed_day),
         );
-        self.adaptive_ec_step_ratio =
-            (self.adaptive_ec_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
-        self.tuning_hour_ec_delta += applied_delta;
-        self.tuning_day_ec_delta += applied_delta;
+
+        if applied_delta != 0.0 {
+            let old_ratio = self.adaptive_ec_step_ratio;
+            self.adaptive_ec_step_ratio = (old_ratio + applied_delta).clamp(min_ratio, max_ratio);
+
+            // Tính lại delta thực tế sau khi clamp (phòng trường hợp chạm min/max)
+            let actual_delta = self.adaptive_ec_step_ratio - old_ratio;
+
+            self.tuning_hour_ec_delta += actual_delta;
+            self.tuning_day_ec_delta += actual_delta;
+
+            // --- BẮT ĐẦU P2-F: Log Auto Tune Ratio ---
+            info!(
+                r#"[AUTO TUNE] {{ "param": "ec_step_ratio", "old": {:.2}, "new": {:.2}, "delta": {:.2}, "reason": "{}", "hour_budget_used": {:.2}, "day_budget_used": {:.2} }}"#,
+                old_ratio,
+                self.adaptive_ec_step_ratio,
+                actual_delta,
+                reason,
+                self.tuning_hour_ec_delta,
+                self.tuning_day_ec_delta
+            );
+            // --- KẾT THÚC P2-F ---
+        }
+
         self.tuning_last_update_sec = now_sec;
     }
 
@@ -383,20 +434,42 @@ impl ControlContext {
         config: &ControllerConfig,
         now_sec: u64,
         requested_delta: f32,
+        reason: &str, // Thêm reason để truyền vào log
     ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ph_step_ratio * 0.4).max(0.05);
         let max_ratio = (config.ph_step_ratio * 1.8).min(2.5);
         let allowed_hour = (0.08 - self.tuning_hour_ph_delta.abs()).max(0.0);
         let allowed_day = (0.25 - self.tuning_day_ph_delta.abs()).max(0.0);
+
         let applied_delta = requested_delta.clamp(
             -allowed_hour.min(allowed_day),
             allowed_hour.min(allowed_day),
         );
-        self.adaptive_ph_step_ratio =
-            (self.adaptive_ph_step_ratio + applied_delta).clamp(min_ratio, max_ratio);
-        self.tuning_hour_ph_delta += applied_delta;
-        self.tuning_day_ph_delta += applied_delta;
+
+        if applied_delta != 0.0 {
+            let old_ratio = self.adaptive_ph_step_ratio;
+            self.adaptive_ph_step_ratio = (old_ratio + applied_delta).clamp(min_ratio, max_ratio);
+
+            // Tính lại delta thực tế sau khi clamp
+            let actual_delta = self.adaptive_ph_step_ratio - old_ratio;
+
+            self.tuning_hour_ph_delta += actual_delta;
+            self.tuning_day_ph_delta += actual_delta;
+
+            // --- BẮT ĐẦU P2-F: Log Auto Tune Ratio ---
+            info!(
+                r#"[AUTO TUNE] {{ "param": "ph_step_ratio", "old": {:.2}, "new": {:.2}, "delta": {:.2}, "reason": "{}", "hour_budget_used": {:.2}, "day_budget_used": {:.2} }}"#,
+                old_ratio,
+                self.adaptive_ph_step_ratio,
+                actual_delta,
+                reason,
+                self.tuning_hour_ph_delta,
+                self.tuning_day_ph_delta
+            );
+            // --- KẾT THÚC P2-F ---
+        }
+
         self.tuning_last_update_sec = now_sec;
     }
 
@@ -495,3 +568,4 @@ impl ControlContext {
         }
     }
 }
+

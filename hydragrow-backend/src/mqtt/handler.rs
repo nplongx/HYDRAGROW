@@ -627,110 +627,73 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
     };
 
     info!(
-        "🌿 [{}] Báo cáo châm phân: A: {:.2}ml, B: {:.2}ml. Đang ghi lên Blockchain...",
+        "🌿 [{}] Báo cáo châm phân: A: {:.2}ml, B: {:.2}ml. Đang lưu vào Database...",
         device_id, report.pump_a_ml, report.pump_b_ml
     );
 
     update_dosing_dynamic_learning(&device_id, &report, &app_state).await;
 
-    let season_id_str =
+    let season_id_opt =
         match crate::db::postgres::get_active_crop_season(&app_state.pg_pool, &device_id).await {
-            Ok(Some(season)) => season.id.to_string(),
-            _ => "".to_string(),
+            Ok(Some(season)) => Some(season.id.to_string()),
+            _ => None,
         };
 
-    let blockchain_payload = json!({
+    let report_payload = json!({
         "device_id": device_id,
-        "season_id": season_id_str,
+        "season_id": season_id_opt,
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "dosing_data": report
     });
 
-    let payload_str = blockchain_payload.to_string();
-
-    match app_state
-        .solana_traceability
-        .record_dosing_history(&payload_str)
-        .await
+    if let Err(db_err) = crate::db::postgres::insert_dosing_report(
+        &app_state.pg_pool,
+        &device_id,
+        season_id_opt.as_deref(),
+        report.pump_a_ml,
+        report.pump_b_ml,
+        report.ph_up_ml,
+        report.ph_down_ml,
+        &report_payload,
+    )
+    .await
     {
-        Ok(tx_id) => {
-            info!("✅ Đã ghi lên Solana thành công! TxID: {}", tx_id);
-
-            let action_str = format!(
-                "Châm phân tự động: A({:.1}ml), B({:.1}ml)",
-                report.pump_a_ml, report.pump_b_ml
-            );
-
-            let season_id_opt =
-                match crate::db::postgres::get_active_crop_season(&app_state.pg_pool, &device_id)
-                    .await
-                {
-                    Ok(Some(season)) => Some(season.id.to_string()),
-                    _ => None,
-                };
-
-            if let Err(db_err) = crate::db::postgres::insert_blockchain_tx(
-                &app_state.pg_pool,
-                &device_id,
-                season_id_opt.as_deref(),
-                &action_str,
-                &tx_id,
-            )
-            .await
-            {
-                error!("❌ Lỗi lưu TxID vào Database: {:?}", db_err);
-            }
-
-            let alert_msg_text = format!(
-                "Đã bơm: Phân A: {:.1}ml | Phân B: {:.1}ml | pH Up: {:.1}ml | pH Down: {:.1}ml\nTxID Solana: {}",
-                report.pump_a_ml, report.pump_b_ml, report.ph_up_ml, report.ph_down_ml, tx_id
-            );
-
-            let _ = crate::db::postgres::insert_system_event(
-                &app_state.pg_pool,
-                &crate::db::postgres::NewSystemEventRecord {
-                    device_id: device_id.clone(),
-                    level: "success".to_string(),
-                    category: "dosing".to_string(),
-                    title: "Ghi Blockchain Thành Công".to_string(),
-                    message: alert_msg_text.clone(),
-                    reason: None,
-                    metadata: Some(json!({"tx_id": tx_id, "dosing_report": report})),
-                    timestamp: chrono::Utc::now().timestamp_millis(),
-                },
-            )
-            .await;
-
-            let alert = AlertMessage {
-                level: "success".to_string(),
-                title: "Ghi Blockchain Thành Công".to_string(),
-                message: alert_msg_text,
-                device_id: device_id.clone(),
-                timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                reason: None,
-                metadata: None,
-            };
-            let _ = app_state.alert_sender.send(alert);
-        }
-        Err(e) => {
-            error!("❌ Lỗi ghi Blockchain cho {}: {:?}", device_id, e);
-
-            let alert = AlertMessage {
-                level: "warning".to_string(),
-                title: "Lỗi Ghi Blockchain".to_string(),
-                message: format!(
-                    "Mẻ phân bón hoàn tất nhưng không thể đồng bộ Solana. Lỗi: {:?}",
-                    e
-                ),
-                device_id: device_id.clone(),
-                timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                reason: Some(e.to_string()),
-                metadata: None,
-            };
-            let _ = app_state.alert_sender.send(alert);
-        }
+        error!("❌ Lỗi lưu báo cáo châm phân vào Database: {:?}", db_err);
+        return;
     }
+
+    let alert_msg_text = format!(
+        "Đã lưu báo cáo châm phân: A: {:.1}ml | B: {:.1}ml | pH Up: {:.1}ml | pH Down: {:.1}ml",
+        report.pump_a_ml, report.pump_b_ml, report.ph_up_ml, report.ph_down_ml
+    );
+
+    let _ = crate::db::postgres::insert_system_event(
+        &app_state.pg_pool,
+        &crate::db::postgres::NewSystemEventRecord {
+            device_id: device_id.clone(),
+            level: "success".to_string(),
+            category: "dosing".to_string(),
+            title: "Lưu Báo Cáo Châm Phân Thành Công".to_string(),
+            message: alert_msg_text.clone(),
+            reason: None,
+            metadata: Some(json!({"dosing_report": report})),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        },
+    )
+    .await;
+
+    let alert = AlertMessage {
+        level: "success".to_string(),
+        title: "Lưu Báo Cáo Châm Phân Thành Công".to_string(),
+        message: alert_msg_text,
+        device_id: device_id.clone(),
+        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        reason: None,
+        metadata: None,
+    };
+    let _ = app_state.alert_sender.send(alert);
 }
+
 
 async fn update_dosing_dynamic_learning(
     device_id: &str,

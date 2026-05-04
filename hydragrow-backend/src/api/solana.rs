@@ -5,7 +5,8 @@ use tracing::{error, info, instrument};
 
 use crate::AppState;
 use crate::db::postgres::{
-    get_device_blockchain_history as fetch_history_from_db, insert_blockchain_tx,
+    get_device_dosing_reports as fetch_dosing_reports_from_db,
+    insert_blockchain_tx,
 };
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -82,7 +83,7 @@ pub async fn push_log_to_blockchain(
    GET /api/blockchain/devices/{device_id}?season_id=...
 ============================================================== */
 #[instrument(skip(app_state))]
-pub async fn get_device_blockchain_history(
+pub async fn get_device_dosing_reports(
     path: web::Path<String>,
     query: web::Query<HistoryQuery>, // 🟢 BẮT QUERY TỪ URL
     app_state: web::Data<AppState>,
@@ -91,18 +92,18 @@ pub async fn get_device_blockchain_history(
     let season_filter = query.into_inner().season_id;
 
     info!(
-        "Đang lấy lịch sử blockchain cho thiết bị: {} (Mùa vụ: {:?})",
+        "Đang lấy lịch sử báo cáo châm phân cho thiết bị: {} (Mùa vụ: {:?})",
         device_id, season_filter
     );
 
     // KÉO DỮ LIỆU THẬT TỪ SQLITE (Truyền thêm bộ lọc season)
-    match fetch_history_from_db(&app_state.pg_pool, &device_id, season_filter).await {
+    match fetch_dosing_reports_from_db(&app_state.pg_pool, &device_id, season_filter).await {
         Ok(history) => HttpResponse::Ok().json(json!({
             "status": "success",
             "data": history
         })),
         Err(e) => {
-            error!("❌ Lỗi truy vấn lịch sử blockchain từ DB: {:?}", e);
+            error!("❌ Lỗi truy vấn lịch sử báo cáo châm phân từ DB: {:?}", e);
             HttpResponse::InternalServerError().json(json!({
                 "status": "error",
                 "message": "Không thể truy xuất dữ liệu từ cơ sở dữ liệu"
@@ -138,8 +139,8 @@ pub async fn verify_transaction_onchain(
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/blockchain/log", web::post().to(push_log_to_blockchain))
         .route(
-            "/devices/{device_id}/blockchain",
-            web::get().to(get_device_blockchain_history),
+            "/devices/{device_id}/dosing-reports",
+            web::get().to(get_device_dosing_reports),
         )
         .route(
             "/blockchain/verify/{tx_id}",

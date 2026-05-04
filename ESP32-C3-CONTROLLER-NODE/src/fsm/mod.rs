@@ -15,7 +15,7 @@ pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData, SystemS
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
+use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
 use hydragrow_shared::ControlMode;
 use log::info;
 
@@ -192,7 +192,7 @@ fn tick_safety_and_control(
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
     shared_config: &SharedConfig,
-    nvs: &mut Option<EspNvs<esp_idf_svc::nvs::NvsDefault>>,
+    nvs: &mut Option<EspDefaultNvs>,
     dosing_report_tx: &Sender<String>,
     fsm_mqtt_tx: &Sender<String>,
 ) {

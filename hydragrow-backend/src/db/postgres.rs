@@ -18,6 +18,19 @@ pub struct BlockchainRecord {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct DosingReportRecord {
+    pub id: i32,
+    pub device_id: String,
+    pub season_id: Option<String>,
+    pub pump_a_ml: f32,
+    pub pump_b_ml: f32,
+    pub ph_up_ml: f32,
+    pub ph_down_ml: f32,
+    pub payload: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
 // System Events
 
 /// Struct dùng để GHI vào DB (không có id – SERIAL tự sinh).
@@ -223,6 +236,62 @@ pub async fn insert_blockchain_tx(
     Ok(())
 }
 
+
+
+pub async fn insert_dosing_report(
+    pool: &PgPool,
+    device_id: &str,
+    season_id: Option<&str>,
+    pump_a_ml: f32,
+    pump_b_ml: f32,
+    ph_up_ml: f32,
+    ph_down_ml: f32,
+    payload: &serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO dosing_reports (
+            device_id, season_id, pump_a_ml, pump_b_ml, ph_up_ml, ph_down_ml, payload
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "#,
+    )
+    .bind(device_id)
+    .bind(season_id)
+    .bind(pump_a_ml)
+    .bind(pump_b_ml)
+    .bind(ph_up_ml)
+    .bind(ph_down_ml)
+    .bind(payload)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_device_dosing_reports(
+    pool: &PgPool,
+    device_id: &str,
+    season_id: Option<String>,
+) -> Result<Vec<DosingReportRecord>, sqlx::Error> {
+    match season_id {
+        Some(s_id) => {
+            sqlx::query_as::<_, DosingReportRecord>(
+                r#"SELECT * FROM dosing_reports WHERE device_id = $1 AND season_id = $2 ORDER BY created_at DESC"#,
+            )
+            .bind(device_id)
+            .bind(s_id)
+            .fetch_all(pool)
+            .await
+        }
+        None => {
+            sqlx::query_as::<_, DosingReportRecord>(
+                r#"SELECT * FROM dosing_reports WHERE device_id = $1 ORDER BY created_at DESC LIMIT 100"#,
+            )
+            .bind(device_id)
+            .fetch_all(pool)
+            .await
+        }
+    }
+}
 pub async fn get_device_blockchain_history(
     pool: &PgPool,
     device_id: &str,

@@ -12,7 +12,7 @@ import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 import { loadAppSettings } from '../platform/settings';
 
-interface BlockchainRecord {
+interface DosingReportRecord {
   id: number;
   device_id: string;
   season_id?: string;
@@ -30,7 +30,7 @@ interface CropSeason {
   plant_type?: string; // 🟢 Bổ sung trường giống cây
 }
 
-const BlockchainHistory = () => {
+const DosingHistory = () => {
   const [appConfig, setAppConfig] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
@@ -38,7 +38,7 @@ const BlockchainHistory = () => {
   const [seasons, setSeasons] = useState<CropSeason[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [selectedPlant, setSelectedPlant] = useState<string>('all'); // 🟢 Thêm state lưu giống cây đang chọn
-  const [history, setHistory] = useState<BlockchainRecord[]>([]);
+  const [history, setHistory] = useState<DosingReportRecord[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +122,7 @@ const BlockchainHistory = () => {
     try {
       if (!backendUrl) throw new Error("Chưa cấu hình URL máy chủ.");
 
-      const url = `${backendUrl}/api/devices/${deviceId}/blockchain?season_id=${seasonId}`;
+      const url = `${backendUrl}/api/devices/${deviceId}/dosing-reports?season_id=${seasonId}`;
       const response = await httpFetch(url, {
         method: 'GET',
         headers: {
@@ -409,4 +409,4 @@ const BlockchainHistory = () => {
   );
 };
 
-export default BlockchainHistory;
+export default DosingHistory;

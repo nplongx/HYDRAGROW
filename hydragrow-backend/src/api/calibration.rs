@@ -3,7 +3,6 @@ use std::time::Duration;
 use std::{cmp::Ordering, error};
 
 use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
-use rumqttc::QoS;
 use tracing::{error, info, instrument, warn};
 
 use actix_web::{HttpResponse, Responder, web};
@@ -11,6 +10,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::api::mqtt_utils::publish_command;
 use crate::{AppState, PhCalibrationMode, PhCalibrationSession, PhCapturedPoint, PhVoltageSample};
 
 const DEFAULT_SAMPLE_TARGET: usize = 20;
@@ -393,22 +393,6 @@ pub async fn finish_ph_calibration(
             captured_points,
         }
     }))
-}
-
-async fn publish_command(
-    app_state: &AppState,
-    device_id: &str,
-    payload: &MqttCommandPayload,
-) -> anyhow::Result<()> {
-    let topic = format!("AGITECH/{}/controller/command", device_id);
-    let payload_bytes = serde_json::to_vec(payload)?;
-
-    app_state
-        .mqtt_client
-        .publish(topic, QoS::AtLeastOnce, false, payload_bytes)
-        .await?;
-
-    Ok(())
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {

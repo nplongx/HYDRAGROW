@@ -487,6 +487,10 @@ impl ControlContext {
             }
         } else {
             self.abnormal_sample_streak = 0;
+            if self.auto_tune_locked {
+                info!("🔓 Mở khóa auto-tune, cảm biến đã ổn định trở lại.");
+                self.auto_tune_locked = false;
+            }
         }
     }
 
@@ -568,4 +572,3 @@ impl ControlContext {
         }
     }
 }
-

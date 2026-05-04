@@ -874,7 +874,7 @@ async fn handle_runtime_calibration_update(
             ec_gain_per_ml = COALESCE($1, ec_gain_per_ml),
             ph_shift_up_per_ml = COALESCE($2, ph_shift_up_per_ml),
             ph_shift_down_per_ml = COALESCE($3, ph_shift_down_per_ml),
-            updated_at = NOW()
+            last_calibrated = NOW()
         WHERE device_id = $4
     "#;
 

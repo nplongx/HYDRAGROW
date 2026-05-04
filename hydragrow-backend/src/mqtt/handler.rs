@@ -11,7 +11,7 @@ use crate::models::alert::AlertMessage;
 use crate::models::config::DosingCalibration;
 use crate::models::sensor::{PumpStatus, SensorData};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DosingReportPayload {
     pub start_ec: f32,
     pub start_ph: f32,
@@ -21,28 +21,28 @@ pub struct DosingReportPayload {
     pub ph_down_ml: f32,
     pub target_ec: f32,
     pub target_ph: f32,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before_ec: Option<f32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after_ec: Option<f32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilized_ec: Option<f32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before_ph: Option<f32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after_ph: Option<f32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilized_ph: Option<f32>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilized_window_sec: Option<u32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct DeviceStatusPayload {
     pub online: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IncomingSensorPayload {
     pub temp: Option<f64>,
     pub ec: Option<f64>,
@@ -66,6 +66,7 @@ pub struct IncomingSensorPayload {
     pub ph_voltage_mv: Option<f64>,
 }
 
+#[inline]
 fn parse_agitech_topic(topic: &str) -> Option<(String, String)> {
     let prefix = "AGITECH/";
     if !topic.starts_with(prefix) {
@@ -78,7 +79,7 @@ fn parse_agitech_topic(topic: &str) -> Option<(String, String)> {
     Some((device_id, suffix))
 }
 
-#[instrument(skip(app_state, publish))]
+#[instrument(skip(app_state, publish), fields(topic = %publish.topic))]
 pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
     let topic = publish.topic.clone();
     let payload_bytes = publish.payload;
@@ -138,7 +139,6 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
-                    // Lấy trạng thái misting trước đó từ cache
                     let prev_mist = states
                         .get(&device_id)
                         .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
@@ -147,7 +147,6 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
-                    // Chỉ gửi alert khi trạng thái thay đổi
                     if mist_on != prev_mist {
                         let mist_alert = if mist_on {
                             AlertMessage {
@@ -189,14 +188,12 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
     }
 }
 
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let incoming: IncomingSensorPayload = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
-            error!(
-                "Lỗi parse JSON SensorData từ thiết bị {}: {:?}",
-                device_id, e
-            );
+            error!(error = ?e, "Lỗi parse JSON SensorData");
             return;
         }
     };
@@ -232,8 +229,8 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
     };
 
     debug!(
-        "Nhận dữ liệu cảm biến từ {}: ph={:.2}, ec={:.2}",
-        device_id, sensor_data.ph, sensor_data.ec
+        "Nhận dữ liệu cảm biến: ph={:.2}, ec={:.2}",
+        sensor_data.ph, sensor_data.ec
     );
 
     if let Some(ph_voltage_mv) = incoming.ph_voltage_mv {
@@ -269,12 +266,13 @@ async fn handle_sensor_data(device_id: String, payload: &[u8], app_state: web::D
     )
     .await
     {
-        error!("Lỗi lưu SensorData vào InfluxDB ({}): {:?}", device_id, e);
+        error!(error = ?e, "Lỗi lưu SensorData vào InfluxDB");
     }
 
     let _ = app_state.sensor_sender.send(sensor_data);
 }
 
+#[instrument(skip(app_state, payload), fields(device_id = %device_id, node_type = %node_type))]
 async fn handle_device_status(
     device_id: String,
     node_type: &str,
@@ -284,10 +282,7 @@ async fn handle_device_status(
     let status: DeviceStatusPayload = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
-            error!(
-                "Lỗi parse DeviceStatus từ {} ({}): {:?}",
-                device_id, node_type, e
-            );
+            error!(error = ?e, "Lỗi parse DeviceStatus");
             return;
         }
     };
@@ -296,9 +291,7 @@ async fn handle_device_status(
     let now_iso = chrono::Utc::now().to_rfc3339();
 
     info!(
-        "[{}] {} trạng thái: {}",
-        device_id,
-        node_type,
+        "Trạng thái: {}",
         if is_online { "ONLINE" } else { "OFFLINE (LWT)" }
     );
 
@@ -334,16 +327,96 @@ async fn handle_device_status(
     let _ = app_state.health_sender.send(status_payload);
 }
 
-/// Map trạng thái FSM sang AlertMessage phù hợp để gửi WebSocket & lưu log.
-/// Trả về None nếu trạng thái chỉ cần debug, không cần thông báo.
+/// Xây dựng metadata kết hợp dữ liệu tĩnh (từ cache cảm biến) và dữ liệu động (từ payload FSM)
+#[inline]
+fn build_relevant_metadata(
+    state: &str,
+    cache: Option<&serde_json::Value>,
+    fsm_payload: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let mut m = serde_json::Map::new();
+
+    // 1. Lấy trạng thái cảm biến hiện tại từ cache
+    if let Some(c) = cache {
+        let keys = match state {
+            s if s.starts_with("EmergencyStop") || s.starts_with("SystemFault") => {
+                vec![
+                    "ec",
+                    "ph",
+                    "temp",
+                    "water_level",
+                    "err_ec",
+                    "err_ph",
+                    "err_temp",
+                    "err_water",
+                    "time",
+                ]
+            }
+            "DosingPumpA" | "DosingPumpB" | "DosingPH" | "StartingOsakaPump" => {
+                vec!["ec", "ph", "time"]
+            }
+            "DosingCycleComplete" | "Stabilizing" => vec!["ec", "ph", "temp", "time"],
+            "WaterRefilling" | "WaterDraining" => vec!["water_level", "ec", "time"],
+            s if s.starts_with("SensorCalibration") => vec!["ph", "ph_voltage_mv", "time"],
+            _ => vec![],
+        };
+        for k in keys {
+            if let Some(v) = c.get(k) {
+                m.insert(k.to_string(), v.clone());
+            }
+        }
+    }
+
+    // 2. Lấy thêm thông tin hành động bơm thực tế từ MQTT FSM payload
+    // Map sao cho Frontend nhận diện đúng: pump_a_ml, pump_b_ml, ph_up_ml, ph_down_ml
+    let dose_ml = fsm_payload
+        .get("dose_target_ml")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let is_up = fsm_payload
+        .get("is_up")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    match state {
+        "DosingPumpA" => {
+            m.insert("pump_a_ml".to_string(), json!(dose_ml));
+        }
+        "DosingPumpB" => {
+            m.insert("pump_b_ml".to_string(), json!(dose_ml));
+        }
+        "DosingPH" => {
+            if is_up {
+                m.insert("ph_up_ml".to_string(), json!(dose_ml));
+            } else {
+                m.insert("ph_down_ml".to_string(), json!(dose_ml));
+            }
+        }
+        "WaterRefilling" | "WaterDraining" => {
+            // Lấy lượng nước mục tiêu nếu FSM có gửi
+            if let Some(target) = fsm_payload.get("target_level") {
+                m.insert("target_level".to_string(), target.clone());
+            }
+        }
+        _ => {}
+    }
+
+    if m.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(m))
+    }
+}
+
+/// Map trạng thái FSM sang AlertMessage (sử dụng FSM payload để lấy log chính xác)
 fn fsm_state_to_alert(
     state: &str,
     device_id: &str,
     alert_metadata: Option<serde_json::Value>,
+    fsm_payload: &serde_json::Value,
 ) -> Option<AlertMessage> {
     let ts = chrono::Utc::now().timestamp_millis() as u64;
 
-    // Helper closure
     let make = |level: &str, title: &str, message: &str| -> Option<AlertMessage> {
         Some(AlertMessage {
             level: level.to_string(),
@@ -356,7 +429,6 @@ fn fsm_state_to_alert(
         })
     };
 
-    // --- Trạng thái có prefix động ---
     if let Some(reason) = state.strip_prefix("EmergencyStop:") {
         return Some(AlertMessage {
             level: "critical".to_string(),
@@ -414,26 +486,22 @@ fn fsm_state_to_alert(
         );
     }
 
-    // --- Trạng thái cố định ---
     match state {
         "SystemBooting" => make(
             "success",
             "Khởi Động Hệ Thống",
             "Trạm điều khiển vừa được cấp nguồn và đang hoạt động.",
         ),
-
         "ManualMode" => make(
             "info",
             "Điều Khiển Thủ Công",
             "Đang ở chế độ Manual. Hệ thống tắt tự động hóa.",
         ),
-
         "DosingCycleComplete" => make(
             "success",
             "Hoàn Tất Chu Trình",
             "Chu trình châm phân và điều chỉnh pH đã hoàn thành.",
         ),
-
         "EmergencyStop" => Some(AlertMessage {
             level: "critical".to_string(),
             title: "Dừng Khẩn Cấp!".to_string(),
@@ -443,43 +511,61 @@ fn fsm_state_to_alert(
             reason: None,
             metadata: alert_metadata.clone(),
         }),
-
         "WaterRefilling" => make("info", "Cấp Nước", "Hệ thống đang bơm cấp nước vào bồn."),
-
         "WaterDraining" => make("info", "Xả Nước", "Hệ thống đang xả bớt nước trong bồn."),
-
-        "DosingPumpA" => make(
-            "info",
-            "Châm Phân A",
-            "Đang tiến hành châm phân bón Dinh Dưỡng A.",
-        ),
-
-        "DosingPumpB" => make(
-            "info",
-            "Châm Phân B",
-            "Đang tiến hành châm phân bón Dinh Dưỡng B.",
-        ),
-
-        "DosingPH" => make("info", "Điều Chỉnh pH", "Đang bơm dung dịch điều chỉnh pH."),
-
+        "DosingPumpA" => {
+            let dose_ml = fsm_payload
+                .get("dose_target_ml")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            make(
+                "info",
+                "Châm Phân A",
+                &format!(
+                    "Đang tiến hành châm {:.1}ml phân bón Dinh Dưỡng A.",
+                    dose_ml
+                ),
+            )
+        }
+        "DosingPumpB" => {
+            let dose_ml = fsm_payload
+                .get("dose_target_ml")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            make(
+                "info",
+                "Châm Phân B",
+                &format!(
+                    "Đang tiến hành châm {:.1}ml phân bón Dinh Dưỡng B.",
+                    dose_ml
+                ),
+            )
+        }
+        "DosingPH" => {
+            let is_up = fsm_payload
+                .get("is_up")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let dose_ml = fsm_payload
+                .get("dose_target_ml")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let direction = if is_up { "Tăng (Up)" } else { "Giảm (Down)" };
+            make(
+                "info",
+                "Điều Chỉnh pH",
+                &format!("Đang bơm {:.1}ml dung dịch pH {}.", dose_ml, direction),
+            )
+        }
         "ActiveMixing" => make(
             "info",
             "Sục Trộn Dinh Dưỡng",
             "Đang trộn đều dung dịch trong bồn (Jet Mixing).",
         ),
-
-        // "cleaningmode" => make(
-        //     "info",
-        //     "Chế Độ Súc Rửa",
-        //     "Đang chạy chu trình súc rửa bồn chứa.",
-        // ),
-
-        // Trạng thái chỉ cần debug, không cần thông báo lên UI
         "StartingOsakaPump" | "WaitingBetweenDose" | "Stabilizing" | "Monitoring" => {
             debug!("[FSM] Trạng thái nội bộ: {}", state);
             None
         }
-
         _ => {
             debug!("[FSM] Trạng thái không xác định: {}", state);
             None
@@ -487,9 +573,10 @@ fn fsm_state_to_alert(
     }
 }
 
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let raw_payload = std::str::from_utf8(payload).unwrap_or("Lỗi UTF-8");
-    info!("📥 [MQTT-FSM] {} gửi gói tin: {}", device_id, raw_payload);
+    info!("📥 [MQTT-FSM] nhận gói tin: {}", raw_payload);
 
     let json = match serde_json::from_slice::<serde_json::Value>(payload) {
         Ok(j) => j,
@@ -502,11 +589,11 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
     if let Some(msg_type) = json.get("type").and_then(|t| t.as_str()) {
         if msg_type == "runtime_calibration_update" {
             handle_runtime_calibration_update(device_id, &json, app_state.clone()).await;
-            return; // Đã xử lý xong, thoát hàm để không chạy logic current_state bên dưới
+            return;
         }
     }
 
-    let state = match json["current_state"].as_str() {
+    let state = match json.get("current_state").and_then(|s| s.as_str()) {
         Some(s) => s.to_string(),
         None => {
             error!("❌ [MQTT-FSM] JSON hợp lệ nhưng thiếu trường 'current_state'!");
@@ -526,24 +613,17 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
     };
     let _ = app_state.alert_sender.send(fsm_sync_msg);
 
-    // Xây dựng metadata snapshot cảm biến
-    let metadata_json = {
-        let states = app_state.device_states.read().await;
-        states
-            .get(&device_id)
-            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-    };
-    // MỚI
+    // MỚI: Build metadata kết hợp (Sensors cache + FSM json payload)
     let alert_metadata = {
         let states = app_state.device_states.read().await;
         let cache = states
             .get(&device_id)
             .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
-        build_relevant_metadata(&state, cache.as_ref())
+        build_relevant_metadata(&state, cache.as_ref(), &json)
     };
 
-    // Tạo alert (nếu trạng thái cần thông báo)
-    if let Some(alert_msg) = fsm_state_to_alert(&state, &device_id, alert_metadata) {
+    // Truyền FSM payload vào để bóc tách text động
+    if let Some(alert_msg) = fsm_state_to_alert(&state, &device_id, alert_metadata, &json) {
         if alert_msg.level == "critical" || alert_msg.level == "warning" {
             info!("🚨 KÍCH HOẠT BÁO ĐỘNG: {}", alert_msg.title);
         } else {
@@ -569,66 +649,19 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
     }
 }
 
-/// Chỉ trích xuất trường cảm biến thực sự liên quan đến từng loại trạng thái FSM.
-fn build_relevant_metadata(
-    state: &str,
-    cache: Option<&serde_json::Value>,
-) -> Option<serde_json::Value> {
-    let cache = cache?;
-
-    let pick = |keys: &[&str]| -> serde_json::Value {
-        let mut m = serde_json::Map::new();
-        for k in keys {
-            if let Some(v) = cache.get(k) {
-                m.insert(k.to_string(), v.clone());
-            }
-        }
-        serde_json::Value::Object(m)
-    };
-
-    if state.starts_with("EmergencyStop") || state.starts_with("SystemFault") {
-        return Some(pick(&[
-            "ec",
-            "ph",
-            "temp",
-            "water_level",
-            "err_ec",
-            "err_ph",
-            "err_temp",
-            "err_water",
-            "time",
-        ]));
-    }
-    if matches!(
-        state,
-        "DosingPumpA" | "DosingPumpB" | "DosingPH" | "StartingOsakaPump"
-    ) {
-        return Some(pick(&["ec", "ph", "time"]));
-    }
-    if matches!(state, "DosingCycleComplete" | "Stabilizing") {
-        return Some(pick(&["ec", "ph", "temp", "time"]));
-    }
-    if matches!(state, "WaterRefilling" | "WaterDraining") {
-        return Some(pick(&["water_level", "ec", "time"]));
-    }
-    if state.starts_with("SensorCalibration") {
-        return Some(pick(&["ph", "ph_voltage_mv", "time"]));
-    }
-    None
-}
-
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let report: DosingReportPayload = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
-            error!("Lỗi parse DosingReport từ {}: {:?}", device_id, e);
+            error!(error = ?e, "Lỗi parse DosingReport");
             return;
         }
     };
 
     info!(
-        "🌿 [{}] Báo cáo châm phân: A: {:.2}ml, B: {:.2}ml. Đang lưu vào Database...",
-        device_id, report.pump_a_ml, report.pump_b_ml
+        "🌿 Báo cáo châm phân: A: {:.2}ml, B: {:.2}ml. Đang lưu vào Database...",
+        report.pump_a_ml, report.pump_b_ml
     );
 
     update_dosing_dynamic_learning(&device_id, &report, &app_state).await;
@@ -694,6 +727,7 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
     let _ = app_state.alert_sender.send(alert);
 }
 
+// Giữ nguyên các hàm `update_dosing_dynamic_learning` và `handle_runtime_calibration_update` như cũ
 async fn update_dosing_dynamic_learning(
     device_id: &str,
     report: &DosingReportPayload,
@@ -949,3 +983,4 @@ async fn handle_runtime_calibration_update(
         }
     }
 }
+

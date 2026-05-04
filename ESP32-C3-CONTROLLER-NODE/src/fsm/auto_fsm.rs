@@ -18,9 +18,6 @@ use super::utils::{effective_flow_ml_per_sec, soft_deadband_scale, DosePumpKind}
 
 // ---------------------------------------------------------------------------
 // run_auto_fsm
-//
-// Thực thi một tick của máy trạng thái tự động.
-// Được gọi mỗi 100ms từ vòng lặp chính, chỉ khi ControlMode::Auto.
 // ---------------------------------------------------------------------------
 #[allow(clippy::too_many_arguments)]
 pub fn run_auto_fsm(
@@ -38,7 +35,6 @@ pub fn run_auto_fsm(
     let max_hourly_ml = config.max_dose_per_hour;
 
     match ctx.current_state {
-        // Các state này do luồng ngoài xử lý, auto fsm không làm gì
         SystemState::SystemBooting | SystemState::ManualMode => {}
 
         SystemState::DosingCycleComplete => {
@@ -74,16 +70,11 @@ pub fn run_auto_fsm(
                 ctx,
                 pump_ctrl,
                 nvs,
+                fsm_mqtt_tx, // <--- TRUYỀN fsm_mqtt_tx XUỐNG DƯỚI
             );
         }
 
-        SystemState::WaterRefilling {
-            ref trigger,
-            target_level,
-            start_time,
-            start_level,
-            start_ec,
-        } => {
+        SystemState::WaterRefilling { ref trigger, target_level, start_time, start_level, start_ec } => {
             let duration_sec = current_time_ms.saturating_sub(start_time) / 1000;
             let target_reached = sensors.water_level >= target_level;
             let timeout = duration_sec > config.max_refill_duration_sec as u64;
@@ -94,13 +85,11 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = true;
 
-                // --- BẮT ĐẦU: GHI LOG PUMP WATER EVENT (P1 - B) ---
                 let report_json = format!(
                     r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
                     trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
                 );
                 let _ = fsm_mqtt_tx.send(report_json);
-                // --- KẾT THÚC LOG ---
 
                 ctx.current_state = SystemState::ActiveMixing {
                     finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
@@ -108,13 +97,7 @@ pub fn run_auto_fsm(
             }
         }
 
-        SystemState::WaterDraining {
-            ref trigger,
-            target_level,
-            start_time,
-            start_level,
-            start_ec,
-        } => {
+        SystemState::WaterDraining { ref trigger, target_level, start_time, start_level, start_ec } => {
             let duration_sec = current_time_ms.saturating_sub(start_time) / 1000;
             let target_reached = sensors.water_level <= target_level;
             let timeout = duration_sec > config.max_drain_duration_sec as u64;
@@ -125,13 +108,11 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = false;
 
-                // --- BẮT ĐẦU: GHI LOG PUMP WATER EVENT (P1 - B) ---
                 let report_json = format!(
                     r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
                     trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
                 );
                 let _ = fsm_mqtt_tx.send(report_json);
-                // --- KẾT THÚC LOG ---
 
                 ctx.current_state = SystemState::Stabilizing {
                     finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
@@ -139,159 +120,44 @@ pub fn run_auto_fsm(
             }
         }
 
-        SystemState::StartingOsakaPump {
-            finish_time,
-            ref pending_action,
-        } => {
+        SystemState::StartingOsakaPump { finish_time, ref pending_action } => {
             if current_time_ms >= finish_time {
                 let action = pending_action.clone();
                 handle_osaka_ready(current_time_ms, config, sensors, ctx, pump_ctrl, action);
             }
         }
 
-        SystemState::DosingPumpA {
-            next_toggle_time,
-            dose_target_ml,
-            delivered_ml_est,
-            dose_b_ml,
-            pulse_on,
-            pulse_count,
-            max_pulse_count,
-            pulse_on_ms,
-            pulse_off_ms,
-            pwm_percent,
-            active_capacity_ml_per_sec,
-            target_ec,
-            start_ec,
-            start_ph,
-        } => {
+        SystemState::DosingPumpA { next_toggle_time, dose_target_ml, delivered_ml_est, dose_b_ml, pulse_on, pulse_count, max_pulse_count, pulse_on_ms, pulse_off_ms, pwm_percent, active_capacity_ml_per_sec, target_ec, start_ec, start_ph } => {
             if current_time_ms >= next_toggle_time {
                 handle_dosing_pump_a_tick(
-                    current_time_ms,
-                    config,
-                    ctx,
-                    pump_ctrl,
-                    DosingPumpAState {
-                        dose_target_ml,
-                        delivered_ml_est,
-                        dose_b_ml,
-                        pulse_on,
-                        pulse_count,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent,
-                        active_capacity_ml_per_sec,
-                        target_ec,
-                        start_ec,
-                        start_ph,
-                    },
+                    current_time_ms, config, ctx, pump_ctrl,
+                    DosingPumpAState { dose_target_ml, delivered_ml_est, dose_b_ml, pulse_on, pulse_count, max_pulse_count, pulse_on_ms, pulse_off_ms, pwm_percent, active_capacity_ml_per_sec, target_ec, start_ec, start_ph },
                 );
             }
         }
 
-        SystemState::WaitingBetweenDose {
-            finish_time,
-            dose_b_ml,
-            target_ec,
-            start_ec,
-            start_ph,
-            dose_a_ml_reported,
-        } => {
+        SystemState::WaitingBetweenDose { finish_time, dose_b_ml, target_ec, start_ec, start_ph, dose_a_ml_reported } => {
             if current_time_ms >= finish_time {
                 handle_waiting_between_dose(
-                    current_time_ms,
-                    config,
-                    sensors,
-                    ctx,
-                    pump_ctrl,
-                    dose_b_ml,
-                    target_ec,
-                    start_ec,
-                    start_ph,
-                    dose_a_ml_reported,
+                    current_time_ms, config, sensors, ctx, pump_ctrl, dose_b_ml, target_ec, start_ec, start_ph, dose_a_ml_reported,
                 );
             }
         }
 
-        SystemState::DosingPumpB {
-            next_toggle_time,
-            dose_target_ml,
-            delivered_ml_est,
-            pulse_on,
-            pulse_count,
-            max_pulse_count,
-            pulse_on_ms,
-            pulse_off_ms,
-            pwm_percent,
-            active_capacity_ml_per_sec,
-            target_ec,
-            start_ec,
-            start_ph,
-            dose_a_ml_reported,
-        } => {
+        SystemState::DosingPumpB { next_toggle_time, dose_target_ml, delivered_ml_est, pulse_on, pulse_count, max_pulse_count, pulse_on_ms, pulse_off_ms, pwm_percent, active_capacity_ml_per_sec, target_ec, start_ec, start_ph, dose_a_ml_reported } => {
             if current_time_ms >= next_toggle_time {
                 handle_dosing_pump_b_tick(
-                    current_time_ms,
-                    config,
-                    ctx,
-                    pump_ctrl,
-                    DosingPumpBState {
-                        dose_target_ml,
-                        delivered_ml_est,
-                        pulse_on,
-                        pulse_count,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent,
-                        active_capacity_ml_per_sec,
-                        target_ec,
-                        start_ec,
-                        start_ph,
-                        dose_a_ml_reported,
-                    },
+                    current_time_ms, config, ctx, pump_ctrl,
+                    DosingPumpBState { dose_target_ml, delivered_ml_est, pulse_on, pulse_count, max_pulse_count, pulse_on_ms, pulse_off_ms, pwm_percent, active_capacity_ml_per_sec, target_ec, start_ec, start_ph, dose_a_ml_reported },
                 );
             }
         }
 
-        SystemState::DosingPH {
-            next_toggle_time,
-            is_up,
-            dose_target_ml,
-            delivered_ml_est,
-            pulse_on,
-            pulse_count,
-            max_pulse_count,
-            pulse_on_ms,
-            pulse_off_ms,
-            pwm_percent,
-            active_capacity_ml_per_sec,
-            target_ph,
-            start_ec,
-            start_ph,
-        } => {
+        SystemState::DosingPH { next_toggle_time, is_up, dose_target_ml, delivered_ml_est, pulse_on, pulse_count, max_pulse_count, pulse_on_ms, pulse_off_ms, pwm_percent, active_capacity_ml_per_sec, target_ph, start_ec, start_ph } => {
             if current_time_ms >= next_toggle_time {
                 handle_dosing_ph_tick(
-                    current_time_ms,
-                    config,
-                    ctx,
-                    pump_ctrl,
-                    DosingPhState {
-                        is_up,
-                        dose_target_ml,
-                        delivered_ml_est,
-                        pulse_on,
-                        pulse_count,
-                        max_pulse_count,
-                        pulse_on_ms,
-                        pulse_off_ms,
-                        pwm_percent,
-                        active_capacity_ml_per_sec,
-                        target_ph,
-                        start_ec,
-                        start_ph,
-                    },
+                    current_time_ms, config, ctx, pump_ctrl,
+                    DosingPhState { is_up, dose_target_ml, delivered_ml_est, pulse_on, pulse_count, max_pulse_count, pulse_on_ms, pulse_off_ms, pwm_percent, active_capacity_ml_per_sec, target_ph, start_ec, start_ph },
                 );
             }
         }
@@ -304,8 +170,6 @@ pub fn run_auto_fsm(
                     sample.stabilizing_start_ms = Some(current_time_ms);
                     sample.stabilizing_finish_ms =
                         Some(current_time_ms + (config.sensor_stabilize_sec as u64 * 1000));
-                    
-                    // Lấy dữ liệu post_mixing
                     sample.post_mixing_ec = sensors.ec;
                     sample.post_mixing_ph = sensors.ph;
                 }
@@ -320,7 +184,6 @@ pub fn run_auto_fsm(
                 if let Some(sample) = ctx.pending_calibration_sample.as_mut() {
                     sample.stabilizing_finish_ms = Some(current_time_ms);
                     
-                    // --- BẮT ĐẦU: GỘP VÀ GỬI DOSING REPORT ---
                     let duration_ms = current_time_ms.saturating_sub(sample.start_ms);
                     let delta_ec = sensors.ec - sample.start_ec;
                     let delta_ph = sensors.ph - sample.start_ph;
@@ -335,42 +198,20 @@ pub fn run_auto_fsm(
 
                     let report_json = format!(
                         r#"[DOSING CYCLE] {{ "cycle_id": "{}", "trigger": "{}", "pre": {{ "ec": {:.2}, "ph": {:.2}, "water_level": {:.1} }}, "dose": {{ "pump_a_ml": {:.2}, "pump_b_ml": {:.2}, "ph_up_ml": {:.2}, "ph_down_ml": {:.2} }}, "post_mixing": {{ "ec": {:.2}, "ph": {:.2} }}, "post_stable": {{ "ec": {:.2}, "ph": {:.2} }}, "delta_ec": {:.2}, "delta_ph": {:.2}, "target_ec": {:.2}, "target_ph": {:.2}, "error_ec": {:.2}, "error_ph": {:.2}, "duration_ms": {}, "ema_ec_gain_used": {:.4}, "ema_ph_shift_used": {:.4} }}"#,
-                        sample.cycle_id,
-                        sample.trigger,
-                        sample.start_ec, 
-                        sample.start_ph, 
-                        sample.start_water_level,
-                        sample.dose_a_ml, 
-                        sample.dose_b_ml, 
-                        sample.dose_ph_up_ml, 
-                        sample.dose_ph_down_ml,
-                        sample.post_mixing_ec,
-                        sample.post_mixing_ph,
-                        sensors.ec,
-                        sensors.ph,
-                        delta_ec, 
-                        delta_ph,
-                        sample.target_ec, 
-                        sample.target_ph,
-                        error_ec, 
-                        error_ph,
-                        duration_ms,
-                        config.ec_gain_per_ml,
-                        ema_ph_shift_used
+                        sample.cycle_id, sample.trigger, sample.start_ec, sample.start_ph, sample.start_water_level,
+                        sample.dose_a_ml, sample.dose_b_ml, sample.dose_ph_up_ml, sample.dose_ph_down_ml,
+                        sample.post_mixing_ec, sample.post_mixing_ph, sensors.ec, sensors.ph,
+                        delta_ec, delta_ph, sample.target_ec, sample.target_ph, error_ec, error_ph, duration_ms,
+                        config.ec_gain_per_ml, ema_ph_shift_used
                     );
-
                     let _ = dosing_report_tx.send(report_json);
-                    // --- KẾT THÚC REPORT ---
                 }
-
                 apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
                 ctx.current_state = SystemState::DosingCycleComplete;
             }
         }
 
-        SystemState::EmergencyStop(_) => {
-            // Không làm gì – tránh spam log khi EmergencyStop
-        }
+        SystemState::EmergencyStop(_) => {}
     }
 }
 
@@ -388,59 +229,23 @@ fn handle_monitoring(
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
     nvs: &mut Option<EspDefaultNvs>,
+    fsm_mqtt_tx: &Sender<String>,
 ) {
     ctx.verify_sensor_ack(sensors, config, current_time_sec);
 
-    // 1. Thay nước định kỳ theo cron
-    if try_scheduled_water_change(
-        current_time_ms,
-        current_time_sec,
-        config,
-        sensors,
-        ctx,
-        pump_ctrl,
-        nvs,
-    ) {
+    if try_scheduled_water_change(current_time_ms, current_time_sec, config, sensors, ctx, pump_ctrl, nvs, fsm_mqtt_tx) {
         return;
     }
-
-    // 2. Bổ sung nước tự động
-    if try_auto_refill(
-        current_time_ms,
-        current_time_sec,
-        config,
-        sensors,
-        ctx,
-        pump_ctrl,
-    ) {
+    if try_auto_refill(current_time_ms, current_time_sec, config, sensors, ctx, pump_ctrl, fsm_mqtt_tx) {
         return;
     }
-
-    // 3. Xả tràn
-    if try_auto_drain_overflow(
-        current_time_ms,
-        current_time_sec,
-        config,
-        sensors,
-        ctx,
-        pump_ctrl,
-    ) {
+    if try_auto_drain_overflow(current_time_ms, current_time_sec, config, sensors, ctx, pump_ctrl, fsm_mqtt_tx) {
         return;
     }
-
-    // 4. Pha loãng EC cao
-    if try_auto_dilute(
-        current_time_ms,
-        current_time_sec,
-        config,
-        sensors,
-        ctx,
-        pump_ctrl,
-    ) {
+    if try_auto_dilute(current_time_ms, current_time_sec, config, sensors, ctx, pump_ctrl, fsm_mqtt_tx) {
         return;
     }
-
-    // 5. Bơm dinh dưỡng / EC / pH
+    
     handle_dosing_decisions(
         current_time_ms,
         current_time_sec,
@@ -450,6 +255,7 @@ fn handle_monitoring(
         ctx,
         pump_ctrl,
         nvs,
+        fsm_mqtt_tx,
     );
 }
 
@@ -461,11 +267,9 @@ fn try_scheduled_water_change(
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
     nvs: &mut Option<EspDefaultNvs>,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
-    if !(config.enable_water_level_sensor
-        && config.scheduled_water_change_enabled
-        && !config.water_change_cron.is_empty())
-    {
+    if !(config.enable_water_level_sensor && config.scheduled_water_change_enabled && !config.water_change_cron.is_empty()) {
         return false;
     }
 
@@ -503,15 +307,17 @@ fn try_scheduled_water_change(
         }
     }
 
-    let target =
-        (sensors.water_level - config.scheduled_drain_amount_cm).max(config.water_level_min);
+    let target = (sensors.water_level - config.scheduled_drain_amount_cm).max(config.water_level_min);
     ctx.last_water_change_time = current_time_sec;
     if let Some(flash) = nvs.as_mut() {
         let _ = flash.set_u64("last_w_change", current_time_sec);
     }
 
-    if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32)
-    {
+    if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32) {
+        let msg = format!("Quá giới hạn mở van xả nước trong 1 giờ (max: {} lần).", config.max_drain_cycles_per_hour);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "drain", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
         return true;
@@ -539,29 +345,33 @@ fn try_auto_refill(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
-    if !(config.enable_water_level_sensor
-        && config.auto_refill_enabled
-        && sensors.water_level < (config.water_level_target - config.water_level_tolerance))
-    {
+    if !(config.enable_water_level_sensor && config.auto_refill_enabled && sensors.water_level < (config.water_level_target - config.water_level_tolerance)) {
         return false;
     }
 
     if ctx.water_refill_retry_count >= 3 {
+        let msg = "Hủy cấp nước: Đã thử 3 lần nhưng mực nước không tăng (kẹt phao hoặc hết nước nguồn).";
+        warn!("🚨 {}", msg);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "fault", "source": "refill", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
         return true;
     }
 
-    if !ctx
-        .check_and_record_refill_limit(current_time_sec, config.max_refill_cycles_per_hour as u32)
-    {
+    if !ctx.check_and_record_refill_limit(current_time_sec, config.max_refill_cycles_per_hour as u32) {
+        let msg = format!("Quá giới hạn bơm nước vào bồn trong 1 giờ (max: {} lần).", config.max_refill_cycles_per_hour);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "refill", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_REFILLS".to_string());
         return true;
     }
 
-    // Cập nhật ACK logic: ghi nhận mực nước vào context
     ctx.last_water_before_refill = Some(sensors.water_level);
     ctx.mark_pending_sample_water_change_violation();
     
@@ -587,16 +397,17 @@ fn try_auto_drain_overflow(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
-    if !(config.enable_water_level_sensor
-        && config.auto_drain_overflow
-        && sensors.water_level > config.water_level_max)
-    {
+    if !(config.enable_water_level_sensor && config.auto_drain_overflow && sensors.water_level > config.water_level_max) {
         return false;
     }
 
-    if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32)
-    {
+    if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32) {
+        let msg = format!("Quá giới hạn xả nước tràn trong 1 giờ (max: {} lần).", config.max_drain_cycles_per_hour);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "drain_overflow", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
         return true;
@@ -624,17 +435,17 @@ fn try_auto_dilute(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
-    if !(config.enable_ec_sensor
-        && config.enable_water_level_sensor
-        && config.auto_dilute_enabled
-        && sensors.ec > (config.ec_target + config.ec_tolerance))
-    {
+    if !(config.enable_ec_sensor && config.enable_water_level_sensor && config.auto_dilute_enabled && sensors.ec > (config.ec_target + config.ec_tolerance)) {
         return false;
     }
 
-    if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32)
-    {
+    if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32) {
+        let msg = format!("Quá giới hạn xả nước pha loãng trong 1 giờ (max: {} lần).", config.max_drain_cycles_per_hour);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "dilute", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
         return true;
@@ -666,45 +477,25 @@ fn handle_dosing_decisions(
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
     nvs: &mut Option<EspDefaultNvs>,
+    fsm_mqtt_tx: &Sender<String>,
 ) {
     let mut is_dosing_active = false;
 
-    // --- Bơm dinh dưỡng định kỳ theo cron ---
     if !is_dosing_active {
         is_dosing_active = try_scheduled_dosing(
-            current_time_ms,
-            current_time_sec,
-            max_hourly_ml,
-            config,
-            sensors,
-            ctx,
-            nvs,
+            current_time_ms, current_time_sec, max_hourly_ml, config, sensors, ctx, pump_ctrl, nvs, fsm_mqtt_tx,
         );
     }
 
-    // --- Bù EC tự động ---
     if !is_dosing_active {
         is_dosing_active = try_ec_dosing(
-            current_time_ms,
-            current_time_sec,
-            max_hourly_ml,
-            config,
-            sensors,
-            ctx,
-            pump_ctrl,
+            current_time_ms, current_time_sec, max_hourly_ml, config, sensors, ctx, pump_ctrl, fsm_mqtt_tx,
         );
     }
 
-    // --- Bù pH tự động ---
     if !is_dosing_active {
         is_dosing_active = try_ph_dosing(
-            current_time_ms,
-            current_time_sec,
-            max_hourly_ml,
-            config,
-            sensors,
-            ctx,
-            pump_ctrl,
+            current_time_ms, current_time_sec, max_hourly_ml, config, sensors, ctx, pump_ctrl, fsm_mqtt_tx,
         );
     }
 
@@ -713,6 +504,7 @@ fn handle_dosing_decisions(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn try_scheduled_dosing(
     current_time_ms: u64,
     current_time_sec: u64,
@@ -720,7 +512,9 @@ fn try_scheduled_dosing(
     config: &ControllerConfig,
     sensors: &SensorData,
     ctx: &mut ControlContext,
+    pump_ctrl: &mut PumpController,
     nvs: &mut Option<EspDefaultNvs>,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
     if !(config.scheduled_dosing_enabled && !config.scheduled_dosing_cron.is_empty()) {
         return false;
@@ -771,38 +565,29 @@ fn try_scheduled_dosing(
 
     let allow_a = config.scheduled_dose_a_ml <= 0.0
         || ctx.can_dose_within_hourly_limit(
-            "NutrientA",
-            current_time_sec,
-            config.scheduled_dose_a_ml,
-            max_hourly_ml,
+            "NutrientA", current_time_sec, config.scheduled_dose_a_ml, max_hourly_ml,
         );
     let allow_b = config.scheduled_dose_b_ml <= 0.0
         || ctx.can_dose_within_hourly_limit(
-            "NutrientB",
-            current_time_sec,
-            config.scheduled_dose_b_ml,
-            max_hourly_ml,
+            "NutrientB", current_time_sec, config.scheduled_dose_b_ml, max_hourly_ml,
         );
 
     if !(allow_a && allow_b) {
-        return false;
+        let msg = format!("⚠️ [SCHEDULED] Yêu cầu lượng châm làm vượt quá giới hạn an toàn (Max: {}ml/h). Đã hủy lịch!", max_hourly_ml);
+        warn!("{}", msg);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "scheduled_dosing", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
+        ctx.stop_all_pumps(pump_ctrl);
+        ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_SCHED".to_string());
+        return true;
     }
 
     if config.scheduled_dose_a_ml > 0.0 {
-        let _ = ctx.reserve_dose_if_within_hourly_limit(
-            "NutrientA",
-            current_time_sec,
-            config.scheduled_dose_a_ml,
-            max_hourly_ml,
-        );
+        let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, config.scheduled_dose_a_ml, max_hourly_ml);
     }
     if config.scheduled_dose_b_ml > 0.0 {
-        let _ = ctx.reserve_dose_if_within_hourly_limit(
-            "NutrientB",
-            current_time_sec,
-            config.scheduled_dose_b_ml,
-            max_hourly_ml,
-        );
+        let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientB", current_time_sec, config.scheduled_dose_b_ml, max_hourly_ml);
     }
 
     ctx.current_state = SystemState::StartingOsakaPump {
@@ -817,6 +602,7 @@ fn try_scheduled_dosing(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 fn try_ec_dosing(
     current_time_ms: u64,
     current_time_sec: u64,
@@ -825,13 +611,18 @@ fn try_ec_dosing(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
     if !(config.enable_ec_sensor && sensors.ec < (config.ec_target - config.ec_tolerance)) {
         return false;
     }
 
     if ctx.ec_retry_count >= 3 {
-        warn!("🚨 Hủy bù EC: Đã vượt quá số lần thử (retry_count >= 3).");
+        let msg = "🚨 Hủy bù EC: Đã bơm thử 3 lần nhưng cảm biến EC không tăng.";
+        warn!("{}", msg);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "fault", "source": "ec_dosing", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("EC_DOSING_FAILED".to_string());
         return true;
@@ -849,15 +640,22 @@ fn try_ec_dosing(
         .clamp(0.0, config.max_dose_per_cycle);
 
     if dose_ml <= 0.0 {
-        debug!("🧪 [EC] Bỏ qua bù EC do liều lượng tính toán <= 0.0ml (Error: {:.2})", ec_error);
         return false;
     }
 
     let can_a = ctx.can_dose_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
     let can_b = ctx.can_dose_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
+    
     if !(can_a && can_b) {
-        warn!("⚠️ [EC] Vượt quá giới hạn châm dinh dưỡng trong giờ (A hoặc B). Max: {}ml/h", max_hourly_ml);
-        return false;
+        let msg = format!("⚠️ [EC] Bơm bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
+        warn!("{}", msg);
+        
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ec_dosing", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+
+        ctx.stop_all_pumps(pump_ctrl);
+        ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_EC".to_string());
+        return true;
     }
 
     info!(
@@ -865,18 +663,9 @@ fn try_ec_dosing(
         ec_error, sensors.ec, config.ec_target, dose_ml, deadband_scale
     );
 
-    let _ = ctx.reserve_dose_if_within_hourly_limit(
-        "NutrientA",
-        current_time_sec,
-        dose_ml,
-        max_hourly_ml,
-    );
-    let _ = ctx.reserve_dose_if_within_hourly_limit(
-        "NutrientB",
-        current_time_sec,
-        dose_ml,
-        max_hourly_ml,
-    );
+    let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
+    let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
+    
     ctx.last_ec_before_dosing = Some(sensors.ec);
     ctx.current_state = SystemState::StartingOsakaPump {
         finish_time: current_time_ms + config.soft_start_duration as u64,
@@ -890,6 +679,7 @@ fn try_ec_dosing(
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 fn try_ph_dosing(
     current_time_ms: u64,
     current_time_sec: u64,
@@ -898,13 +688,18 @@ fn try_ph_dosing(
     sensors: &SensorData,
     ctx: &mut ControlContext,
     pump_ctrl: &mut PumpController,
+    fsm_mqtt_tx: &Sender<String>,
 ) -> bool {
     if !(config.enable_ph_sensor && (sensors.ph - config.ph_target).abs() > config.ph_tolerance) {
         return false;
     }
 
     if ctx.ph_retry_count >= 3 {
-        warn!("🚨 Hủy bù pH: Đã vượt quá số lần thử (retry_count >= 3).");
+        let msg = "🚨 Hủy bù pH: Đã bơm thử 3 lần nhưng cảm biến pH không đổi hướng.";
+        warn!("{}", msg);
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "fault", "source": "ph_dosing", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+        
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("PH_DOSING_FAILED".to_string());
         return true;
@@ -950,14 +745,17 @@ fn try_ph_dosing(
     if duration_ms == 0 {
         return false;
     }
-    if !ctx.reserve_dose_if_within_hourly_limit(
-        ph_pump_name,
-        current_time_sec,
-        dose_ml,
-        max_hourly_ml,
-    ) {
-        warn!("⚠️ [{}] Vượt quá giới hạn châm trong giờ. Max: {}ml/h", ph_pump_name, max_hourly_ml);
-        return false;
+    
+    if !ctx.reserve_dose_if_within_hourly_limit(ph_pump_name, current_time_sec, dose_ml, max_hourly_ml) {
+        let msg = format!("⚠️ [{}] Bơm bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", ph_pump_name, dose_ml, max_hourly_ml);
+        warn!("{}", msg);
+        
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ph_dosing", "pump": "{}", "message": "{}" }}"#, ph_pump_name, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+
+        ctx.stop_all_pumps(pump_ctrl);
+        ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_PH".to_string());
+        return true;
     }
 
     let final_dose_ml = (diff / ratio * config.ph_step_ratio).clamp(0.0, config.max_dose_per_cycle);
@@ -1005,15 +803,7 @@ fn handle_osaka_ready(
         } => {
             if dose_a_ml > 0.0 {
                 start_dosing_pump_a(
-                    current_time_ms,
-                    config,
-                    sensors,
-                    ctx,
-                    pump_ctrl,
-                    dose_a_ml,
-                    dose_b_ml,
-                    pwm_percent,
-                    sensors.ec,
+                    current_time_ms, config, sensors, ctx, pump_ctrl, dose_a_ml, dose_b_ml, pwm_percent, sensors.ec,
                 );
             } else if dose_b_ml > 0.0 {
                 ctx.current_state = SystemState::WaitingBetweenDose {
@@ -1030,39 +820,14 @@ fn handle_osaka_ready(
                 };
             }
         }
-        PendingDose::EC {
-            dose_ml,
-            target_ec,
-            pwm_percent,
-        } => {
+        PendingDose::EC { dose_ml, target_ec, pwm_percent } => {
             start_dosing_pump_a(
-                current_time_ms,
-                config,
-                sensors,
-                ctx,
-                pump_ctrl,
-                dose_ml,
-                dose_ml,
-                pwm_percent,
-                target_ec,
+                current_time_ms, config, sensors, ctx, pump_ctrl, dose_ml, dose_ml, pwm_percent, target_ec,
             );
         }
-        PendingDose::PH {
-            is_up,
-            dose_ml,
-            target_ph,
-            pwm_percent,
-        } => {
+        PendingDose::PH { is_up, dose_ml, target_ph, pwm_percent } => {
             start_dosing_ph(
-                current_time_ms,
-                config,
-                sensors,
-                ctx,
-                pump_ctrl,
-                is_up,
-                dose_ml,
-                target_ph,
-                pwm_percent,
+                current_time_ms, config, sensors, ctx, pump_ctrl, is_up, dose_ml, target_ph, pwm_percent,
             );
         }
     }
@@ -1412,7 +1177,6 @@ fn handle_dosing_pump_b_tick(
             
             let pump_b_ml_reported = s.delivered_ml_est; // Lưu lại lượng thực tế
 
-            // THÊM ĐOẠN NÀY ĐỂ BẮT ĐẦU TÍNH EMA CHO EC
             start_pending_calibration_sample(
                 ctx,
                 s.start_ec,
@@ -1536,7 +1300,6 @@ fn handle_dosing_ph_tick(
                 0.0
             };
 
-            // THÊM ĐOẠN NÀY ĐỂ BẮT ĐẦU TÍNH EMA CHO PH
             start_pending_calibration_sample(
                 ctx,
                 s.start_ec,

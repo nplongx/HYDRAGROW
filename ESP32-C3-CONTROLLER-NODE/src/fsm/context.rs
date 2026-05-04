@@ -144,14 +144,22 @@ impl ControlContext {
     }
 
     pub fn reset_faults(&mut self) {
+        info!("🔄 [RESET] Đang thực hiện RESET FAULT. Khôi phục bộ đếm lỗi...");
         self.ec_retry_count = 0;
         self.ph_retry_count = 0;
         self.water_refill_retry_count = 0;
         self.last_ec_before_dosing = None;
         self.last_ph_before_dosing = None;
         self.last_water_before_refill = None;
+
+        info!("🧹 [RESET] Đã xóa lịch sử hoạt động trong 1 giờ qua. Hệ thống có thể chạy lại lập tức!");
+        self.hourly_dose_history_ml_by_pump.clear();
+        self.hourly_refill_history.clear();
+        self.hourly_drain_history.clear();
+
         self.fsm_osaka_active = false;
         self.current_state = SystemState::Monitoring;
+        info!("✅ [RESET] Hoàn tất! FSM trở về Monitoring.");
     }
 
     pub fn turn_off_pump(&mut self, pump_name: &str, pump_ctrl: &mut PumpController) {
@@ -210,7 +218,6 @@ impl ControlContext {
     ) -> bool {
         let mut is_noisy = false;
 
-        // --- BẮT ĐẦU P1-C: Log Sensor Noise ---
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(prev_ec) = self.previous_ec {
                 let delta = (sensors.ec - prev_ec).abs();
@@ -238,8 +245,6 @@ impl ControlContext {
             }
             self.previous_ph = Some(sensors.ph);
         }
-        // --- KẾT THÚC P1-C ---
-
         is_noisy
     }
 
@@ -390,7 +395,7 @@ impl ControlContext {
         config: &ControllerConfig,
         now_sec: u64,
         requested_delta: f32,
-        reason: &str, // Thêm reason để truyền vào log
+        reason: &str,
     ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ec_step_ratio * 0.4).max(0.05);
@@ -407,13 +412,11 @@ impl ControlContext {
             let old_ratio = self.adaptive_ec_step_ratio;
             self.adaptive_ec_step_ratio = (old_ratio + applied_delta).clamp(min_ratio, max_ratio);
 
-            // Tính lại delta thực tế sau khi clamp (phòng trường hợp chạm min/max)
             let actual_delta = self.adaptive_ec_step_ratio - old_ratio;
 
             self.tuning_hour_ec_delta += actual_delta;
             self.tuning_day_ec_delta += actual_delta;
 
-            // --- BẮT ĐẦU P2-F: Log Auto Tune Ratio ---
             info!(
                 r#"[AUTO TUNE] {{ "param": "ec_step_ratio", "old": {:.2}, "new": {:.2}, "delta": {:.2}, "reason": "{}", "hour_budget_used": {:.2}, "day_budget_used": {:.2} }}"#,
                 old_ratio,
@@ -423,7 +426,6 @@ impl ControlContext {
                 self.tuning_hour_ec_delta,
                 self.tuning_day_ec_delta
             );
-            // --- KẾT THÚC P2-F ---
         }
 
         self.tuning_last_update_sec = now_sec;
@@ -434,7 +436,7 @@ impl ControlContext {
         config: &ControllerConfig,
         now_sec: u64,
         requested_delta: f32,
-        reason: &str, // Thêm reason để truyền vào log
+        reason: &str,
     ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ph_step_ratio * 0.4).max(0.05);
@@ -451,13 +453,11 @@ impl ControlContext {
             let old_ratio = self.adaptive_ph_step_ratio;
             self.adaptive_ph_step_ratio = (old_ratio + applied_delta).clamp(min_ratio, max_ratio);
 
-            // Tính lại delta thực tế sau khi clamp
             let actual_delta = self.adaptive_ph_step_ratio - old_ratio;
 
             self.tuning_hour_ph_delta += actual_delta;
             self.tuning_day_ph_delta += actual_delta;
 
-            // --- BẮT ĐẦU P2-F: Log Auto Tune Ratio ---
             info!(
                 r#"[AUTO TUNE] {{ "param": "ph_step_ratio", "old": {:.2}, "new": {:.2}, "delta": {:.2}, "reason": "{}", "hour_budget_used": {:.2}, "day_budget_used": {:.2} }}"#,
                 old_ratio,
@@ -467,7 +467,6 @@ impl ControlContext {
                 self.tuning_hour_ph_delta,
                 self.tuning_day_ph_delta
             );
-            // --- KẾT THÚC P2-F ---
         }
 
         self.tuning_last_update_sec = now_sec;
@@ -517,8 +516,8 @@ impl ControlContext {
         let used = self.get_hourly_total_dose_ml(pump, now_sec);
         if used + dose_ml > max_hourly_ml {
             warn!(
-                "⚠️ Giới hạn giờ cho {}: đã dùng {:.2}ml, yêu cầu thêm {:.2}ml (max {:.2}ml/h)",
-                pump, used, dose_ml, max_hourly_ml
+                "🛑 [CHẶN BƠM AN TOÀN] Bơm {} bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Đã dùng: {:.2}ml / Max: {:.2}ml). Hãy bấm Reset Fault nếu muốn ép chạy!",
+                pump, dose_ml, used, max_hourly_ml
             );
             return false;
         }
@@ -540,13 +539,12 @@ impl ControlContext {
         used + dose_ml <= max_hourly_ml
     }
 
-    /// Ghi nhận và kiểm tra giới hạn số lần bơm nước vào / giờ.
     pub fn check_and_record_refill_limit(&mut self, now_sec: u64, limit: u32) -> bool {
         self.hourly_refill_history
             .retain(|&ts| now_sec.saturating_sub(ts) <= 3600);
         if self.hourly_refill_history.len() >= limit as usize {
             warn!(
-                "⚠️ Quá giới hạn bơm nước vào bồn trong 1 giờ (max: {} lần). Ngắt an toàn để chống kẹt phao!",
+                "🛑 [CHẶN CẤP NƯỚC] Quá giới hạn bơm nước vào bồn trong 1 giờ (Max: {} lần). Ngắt an toàn để chống kẹt phao! Bấm Reset Fault để mở khóa.",
                 limit
             );
             false
@@ -556,13 +554,12 @@ impl ControlContext {
         }
     }
 
-    /// Ghi nhận và kiểm tra giới hạn số lần mở van xả / giờ.
     pub fn check_and_record_drain_limit(&mut self, now_sec: u64, limit: u32) -> bool {
         self.hourly_drain_history
             .retain(|&ts| now_sec.saturating_sub(ts) <= 3600);
         if self.hourly_drain_history.len() >= limit as usize {
             warn!(
-                "⚠️ Quá giới hạn mở van xả nước ra trong 1 giờ (max: {} lần). Ngắt an toàn!",
+                "🛑 [CHẶN XẢ NƯỚC] Quá giới hạn mở van xả nước ra trong 1 giờ (Max: {} lần). Ngắt an toàn! Bấm Reset Fault để mở khóa.",
                 limit
             );
             false
@@ -572,3 +569,4 @@ impl ControlContext {
         }
     }
 }
+

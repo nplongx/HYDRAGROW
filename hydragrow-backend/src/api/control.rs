@@ -6,6 +6,7 @@ use serde_json::json;
 use sqlx::PgPool;
 use tracing::{error, info, instrument, warn};
 
+use crate::api::mqtt_utils::publish_command;
 use crate::AppState;
 use crate::models::config::{DosingCalibration, SafetyConfig};
 
@@ -295,22 +296,6 @@ fn capacity_ml_per_sec(dosing_cfg: &DosingCalibration, normalized_pump: &str) ->
         "PH_DOWN" => dosing_cfg.pump_ph_down_capacity_ml_per_sec,
         _ => 0.0,
     }
-}
-
-async fn publish_command(
-    app_state: &AppState,
-    device_id: &str,
-    payload: &MqttCommandPayload,
-) -> anyhow::Result<()> {
-    let topic = format!("AGITECH/{}/controller/command", device_id);
-    let payload_bytes = serde_json::to_vec(payload)?;
-
-    app_state
-        .mqtt_client
-        .publish(topic, QoS::AtLeastOnce, false, payload_bytes)
-        .await?;
-
-    Ok(())
 }
 
 pub async fn request_device_sync(

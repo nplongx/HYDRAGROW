@@ -4,6 +4,7 @@ pub mod config;
 pub mod control;
 pub mod crop_season;
 pub mod middleware;
+pub mod mqtt_utils;
 pub mod notification;
 pub mod sensor;
 pub mod solana;

@@ -4,7 +4,7 @@ import Dashboard from './pages/Dashboard';
 import ControlPanel from './pages/ControlPanel';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
-import BlockchainHistory from './pages/BlockchainHistory';
+import DosingHistory from './pages/DosingHistory';
 import { DeviceProvider } from './context/DeviceContext';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -33,7 +33,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="control" element={<ControlPanel />} />
             <Route path="analytics" element={<Analytics />} />
-            <Route path="blockchain" element={<BlockchainHistory />} />
+            <Route path="blockchain" element={<DosingHistory />} />
             <Route path="/crop-seasons" element={<CropSeasons />} />
             <Route path="settings" element={<Settings />} />
             <Route path="/logs" element={<SystemLog />} />

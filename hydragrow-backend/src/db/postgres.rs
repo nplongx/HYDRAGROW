@@ -66,7 +66,7 @@ pub async fn get_device_config(pool: &PgPool, device_id: &str) -> Result<DeviceC
     let config = sqlx::query_as::<_, DeviceConfig>(
         r#"SELECT
             device_id, ec_target, ec_tolerance, ph_target, ph_tolerance,
-            temp_target, temp_tolerance, control_mode, is_enabled,
+            control_mode, is_enabled,
             delay_between_a_and_b_sec, last_updated
         FROM device_config WHERE device_id = $1"#,
     )
@@ -87,7 +87,7 @@ pub async fn upsert_device_config(
         r#"
         INSERT INTO device_config (
             device_id, ec_target, ec_tolerance, ph_target, ph_tolerance,
-            temp_target, temp_tolerance, control_mode, is_enabled,
+            control_mode, is_enabled,
             delay_between_a_and_b_sec, last_updated
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT(device_id) DO UPDATE SET

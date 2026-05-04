@@ -89,14 +89,12 @@ pub async fn upsert_device_config(
             device_id, ec_target, ec_tolerance, ph_target, ph_tolerance,
             temp_target, temp_tolerance, control_mode, is_enabled,
             delay_between_a_and_b_sec, last_updated
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT(device_id) DO UPDATE SET
             ec_target = EXCLUDED.ec_target,
             ec_tolerance = EXCLUDED.ec_tolerance,
             ph_target = EXCLUDED.ph_target,
             ph_tolerance = EXCLUDED.ph_tolerance,
-            temp_target = EXCLUDED.temp_target,
-            temp_tolerance = EXCLUDED.temp_tolerance,
             control_mode = EXCLUDED.control_mode,
             is_enabled = EXCLUDED.is_enabled,
             delay_between_a_and_b_sec = EXCLUDED.delay_between_a_and_b_sec,
@@ -108,8 +106,6 @@ pub async fn upsert_device_config(
     .bind(config.ec_tolerance)
     .bind(config.ph_target)
     .bind(config.ph_tolerance)
-    .bind(config.temp_target)
-    .bind(config.temp_tolerance)
     .bind(&config.control_mode)
     .bind(config.is_enabled)
     .bind(config.delay_between_a_and_b_sec)
@@ -235,8 +231,6 @@ pub async fn insert_blockchain_tx(
     .await?;
     Ok(())
 }
-
-
 
 pub async fn insert_dosing_report(
     pool: &PgPool,

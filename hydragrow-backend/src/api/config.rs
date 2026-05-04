@@ -333,28 +333,6 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
         return Err("pump_ph_down_capacity_ml_per_sec must be > 0".to_string());
     }
 
-    if dose.scheduled_dosing_enabled {
-        let pwm_ratio = dose.dosing_pwm_percent as f32 / 100.0;
-        
-        let effective_capacity_a = dose.pump_a_capacity_ml_per_sec * pwm_ratio;
-        let expected_duration_a_sec = dose.scheduled_dose_a_ml / effective_capacity_a;
-        if expected_duration_a_sec > MAX_SCHEDULED_DOSING_DURATION_SEC {
-            return Err(format!(
-                "scheduled_dose_a_ml causes expected_duration_sec={:.2}s > {:.0}s safety limit",
-                expected_duration_a_sec, MAX_SCHEDULED_DOSING_DURATION_SEC
-            ));
-        }
-
-        let effective_capacity_b = dose.pump_b_capacity_ml_per_sec * pwm_ratio;
-        let expected_duration_b_sec = dose.scheduled_dose_b_ml / effective_capacity_b;
-        if expected_duration_b_sec > MAX_SCHEDULED_DOSING_DURATION_SEC {
-            return Err(format!(
-                "scheduled_dose_b_ml causes expected_duration_sec={:.2}s > {:.0}s safety limit",
-                expected_duration_b_sec, MAX_SCHEDULED_DOSING_DURATION_SEC
-            ));
-        }
-    }
-
     Ok(())
 }
 
@@ -425,10 +403,6 @@ async fn upsert_dosing_db(
     .bind(cal.dosing_pwm_percent) 
     .bind(cal.osaka_mixing_pwm_percent) 
     .bind(cal.osaka_misting_pwm_percent) 
-    .bind(cal.scheduled_dosing_enabled) 
-    .bind(&cal.scheduled_dosing_cron) 
-    .bind(cal.scheduled_dose_a_ml) 
-    .bind(cal.scheduled_dose_b_ml) 
     .bind(cal.dosing_min_pwm_percent) 
     .bind(cal.pump_a_min_pwm_percent) 
     .bind(cal.pump_b_min_pwm_percent) 
@@ -536,8 +510,6 @@ pub async fn get_unified_device_config(
             ec_tolerance: 0.1,
             ph_target: 6.0,
             ph_tolerance: 0.5,
-            temp_target: 25.0,
-            temp_tolerance: 2.0,
             control_mode: "auto".to_string(),
             is_enabled: false,
             delay_between_a_and_b_sec: 10,
@@ -979,10 +951,8 @@ mod tests {
     #[test]
     fn validate_dosing_constraints_rejects_too_long_scheduled_duration() {
         let mut dose = DosingCalibration::default();
-        dose.scheduled_dosing_enabled = true;
         dose.dosing_pwm_percent = 50;
         dose.pump_a_capacity_ml_per_sec = 1.0;
-        dose.scheduled_dose_a_ml = 121.0;
         let result = validate_dosing_constraints(&dose);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("scheduled_dose_a_ml"));

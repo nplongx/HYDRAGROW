@@ -33,10 +33,10 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="control" element={<ControlPanel />} />
             <Route path="analytics" element={<Analytics />} />
-            <Route path="blockchain" element={<DosingHistory />} />
-            <Route path="/crop-seasons" element={<CropSeasons />} />
+            <Route path="dosing-history" element={<DosingHistory />} />
+            <Route path="crop-seasons" element={<CropSeasons />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="/logs" element={<SystemLog />} />
+            <Route path="logs" element={<SystemLog />} />
           </Route>
         </Routes>
       </Router>

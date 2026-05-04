@@ -5,13 +5,13 @@ import {
   SlidersHorizontal,
   LineChart,
   Settings,
-  ShieldCheck,
   Sprout,
   AlignLeft,
   MoreHorizontal,
   X,
   Activity,
-  Leaf
+  Leaf,
+  Box
 } from 'lucide-react';
 import { useDeviceContext } from '../../context/DeviceContext';
 
@@ -56,7 +56,7 @@ const MainLayout: React.FC = () => {
 
   const moreMenuItems = [
     { path: '/crop-seasons', icon: Leaf, label: 'Mùa Vụ' },
-    { path: '/blockchain', icon: ShieldCheck, label: 'Giao Dịch' },
+    { path: '/dosing-history', icon: Box, label: 'Lịch Sử Châm' },
     { path: '/settings', icon: Settings, label: 'Cài Đặt' }
   ];
 

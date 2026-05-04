@@ -118,8 +118,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
     sensorTimeoutRef.current = setTimeout(() => {
       setIsSensorOnline(false);
-      setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ec: true, err_ph: true } : prev);
-      toast.error("Mất kết nối mạch cảm biến. Vui lòng thử lại. Nếu vẫn lỗi, hãy kiểm tra nguồn và mạng.");
+      // setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ec: true, err_ph: true } : prev);
+      toast.error("Mất kết nối mạch cảm biến. Đang hiển thị dữ liệu lưu lần cuối.");
     }, 65000);
   }, []);
 

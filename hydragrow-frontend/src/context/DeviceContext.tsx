@@ -18,7 +18,6 @@ interface DeviceContextType {
   updatePumpStatusOptimistically: (stateKey: string, isNowOn: boolean) => void;
   systemEvents: any[];
   isSensorOnline: boolean;
-  // 🟢 THÊM MỚI: Quản lý PWM Preferences
   pwmPreferences: Record<string, number>;
   savePwmPreference: (pumpId: string, pwm: number) => void;
 }
@@ -75,7 +74,7 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
 };
 
 const PUMP_STATUS_STORE_KEY = 'last_pump_status';
-const PWM_PREFS_STORE_KEY = 'pump_pwm_prefs'; // 🟢 THÊM MỚI: Key lưu PWM
+const PWM_PREFS_STORE_KEY = 'pump_pwm_prefs';
 
 const savePumpStatusToStore = async (pumpStatus: PumpStatus) => {
   try {
@@ -89,7 +88,6 @@ const loadPumpStatusFromStore = async (): Promise<PumpStatus | null> => {
   } catch (e) { return null; }
 };
 
-// 🟢 THÊM MỚI: Hàm load PWM từ ổ cứng
 const loadPwmPrefsFromStore = async (): Promise<Record<string, number> | null> => {
   try {
     return await getItem<Record<string, number>>(PWM_PREFS_STORE_KEY);
@@ -111,8 +109,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [isSensorOnline, setIsSensorOnline] = useState<boolean>(false);
-
-  // 🟢 THÊM MỚI: State chứa danh sách PWM của các bơm
   const [pwmPreferences, setPwmPreferences] = useState<Record<string, number>>({});
 
   const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,6 +155,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     const setupConnection = async () => {
       setIsLoading(true);
 
+      // Lấy dữ liệu REST ban đầu
       try {
         const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/latest`;
         const response = await httpFetch(url, {
@@ -170,11 +167,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           const initialData = resData.data || resData;
 
           const cachedPumpStatus = await loadPumpStatusFromStore();
-
-          // 🟢 THÊM MỚI: Đọc PWM từ App Storage khi vừa khởi động
           const cachedPwmPrefs = await loadPwmPrefsFromStore();
           if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
 
+          // 🟢 FIX 1: Lấy FSM State từ REST API để UI khỏi bị kẹt chữ Offline
           if (initialData?.fsm_state) {
             setFsmState(initialData.fsm_state);
           }
@@ -187,8 +183,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           });
         }
       } catch (err) { /* empty */ }
+
       setIsLoading(false);
 
+      // Lấy lịch sử sự kiện (Event Logs)
       try {
         const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
           method: 'GET',
@@ -200,6 +198,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) { /* empty */ }
 
+      // Thiết lập WebSocket
       const connectWs = () => {
         const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
         const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${settings.api_key}`;
@@ -223,6 +222,15 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+
+            // 🟢 FIX 2: Bắt gói tin FSM Status riêng biệt để khỏi dính spam với Alert
+            if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
+              const payload = data.payload || data;
+              if (payload.fsm_state) {
+                setFsmState(payload.fsm_state);
+              }
+              return;
+            }
 
             if (data.type === 'device_status') {
               const isOnline: boolean = data.payload.is_online ?? false;
@@ -273,16 +281,12 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 return;
               }
 
-              if (alert.level === 'FSM_UPDATE') {
-                setFsmState(alert.message);
-                return;
-              }
-
               setSystemEvents(prev => [alert, ...prev].slice(0, 50));
               switch (alert.level) {
                 case 'critical': toast.error(`🚨 ${alert.title}\n${alert.message}`, { duration: 10000 }); break;
                 case 'warning': toast.error(`⚠️ ${alert.title}\n${alert.message}`, { duration: 6000 }); break;
                 case 'success': toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 }); break;
+                case 'info': toast(`ℹ️ ${alert.title}`, { duration: 4000 }); break; // Không còn bị nhảy spam popup đỏ
                 default: toast(`ℹ️ ${alert.title}`, { duration: 4000 }); break;
               }
               return;
@@ -326,6 +330,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 uptime: healthData.uptime_sec
               });
 
+              // 🟢 FIX 3: Luôn đồng bộ FSM state từ gói health (nếu có) để phòng trường hợp bị rớt nhịp
               if (healthData.fsm_state) {
                 setFsmState(healthData.fsm_state);
               }
@@ -333,7 +338,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               const confirmedPumpStatus = normalizePumpStatus(healthData.pump_status);
               savePumpStatusToStore(confirmedPumpStatus);
 
-              // 🟢 THÊM MỚI: Cập nhật lại PWM vào App nếu ESP32 có gửi kèm
               if (healthData.pump_status) {
                 const raw = healthData.pump_status;
                 if (raw.pump_a_pwm !== undefined && raw.pump_a_pwm > 0) savePwmPreference('PUMP_A', raw.pump_a_pwm);
@@ -402,7 +406,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
-  // 🟢 THÊM MỚI: Cài đặt logic cho hàm savePwmPreference
   const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
     setPwmPreferences(prev => {
       const updated = { ...prev, [pumpId]: pwm };
@@ -415,7 +418,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     <DeviceContext.Provider value={{
       deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
       updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline, isMissingConfig,
-      // 🟢 THÊM MỚI: Export các biến/hàm này ra để ControlPanel.tsx có thể xài được
       pwmPreferences, savePwmPreference
     }}>
       {children}

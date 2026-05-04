@@ -779,17 +779,14 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     };
 
-    // Luôn gửi FSM_UPDATE để badge & badge realtime trên UI cập nhật ngay
-    let fsm_sync_msg = AlertMessage {
-        level: "FSM_UPDATE".to_string(),
-        title: "FSM_SYNC".to_string(),
-        message: state.clone(),
-        device_id: device_id.clone(),
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        reason: None,
-        metadata: None,
-    };
-    let _ = app_state.alert_sender.send(fsm_sync_msg);
+    // 🟢 THAY ĐỔI 1: Gửi trạng thái FSM qua kênh Health thay vì kênh Alert để tránh spam Toast
+    // Backend sẽ kết hợp vào một cấu trúc JSON thống nhất
+    let fsm_status_payload = serde_json::json!({
+        "_msg_type": "fsm_status", // Loại tin nhắn riêng biệt
+        "device_id": device_id.clone(),
+        "fsm_state": state.clone(),
+    });
+    let _ = app_state.health_sender.send(fsm_status_payload);
 
     // MỚI: Build metadata kết hợp (Sensors cache + FSM json payload)
     let alert_metadata = {
@@ -802,13 +799,32 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
 
     // Truyền FSM payload vào để bóc tách text động
     if let Some(alert_msg) = fsm_state_to_alert(&state, &device_id, alert_metadata, &json) {
+        // 🟢 THAY ĐỔI 2: CHỈ GỬI ALERT VỚI CÁC TRẠNG THÁI QUAN TRỌNG ĐỂ TRÁNH SPAM
+        // Các trạng thái Info như "Châm phân A", "Châm phân B" liên tục tick sẽ làm spam UI.
+        // Ta dùng cơ chế "debounce" đơn giản: Chỉ tạo Event Log (nếu cần) hoặc lọc bớt.
+        // Tạm thời, nếu là "info" thì ta không bắn qua AlertChannel (nơi tạo Toast trên UI)
+        // mà chỉ lưu vào DB SystemEvent (nếu bạn muốn). Hoặc nếu vẫn muốn bắn, ta cần kiểm soát tần suất.
+
+        let should_send_to_ui = match alert_msg.level.as_str() {
+            "critical" | "warning" | "success" => true,
+            "info" => {
+                // Ví dụ: Lọc bớt các trạng thái Dosing vì ESP32 gửi lên RẤT NHIỀU.
+                !state.starts_with("DosingPump")
+                    && !state.starts_with("DosingPH")
+                    && !state.starts_with("ActiveMixing")
+            }
+            _ => false,
+        };
+
         if alert_msg.level == "critical" || alert_msg.level == "warning" {
             info!("🚨 KÍCH HOẠT BÁO ĐỘNG: {}", alert_msg.title);
-        } else {
+        } else if should_send_to_ui {
             info!("ℹ️ THAY ĐỔI TRẠNG THÁI: {}", alert_msg.title);
         }
 
-        let _ = app_state.alert_sender.send(alert_msg.clone());
+        if should_send_to_ui {
+            let _ = app_state.alert_sender.send(alert_msg.clone());
+        }
 
         // Push notification với trạng thái nghiêm trọng
         if alert_msg.level == "critical" || alert_msg.level == "warning" {
@@ -824,6 +840,21 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
                 });
             }
         }
+    }
+
+    // Cập nhật fsm_state vào cache tĩnh (để trả về cho hàm REST get_latest)
+    let mut states = app_state.device_states.write().await;
+    if let Some(existing_str) = states.get(&device_id) {
+        if let Ok(mut cached_json) = serde_json::from_str::<serde_json::Value>(existing_str) {
+            if let Some(obj) = cached_json.as_object_mut() {
+                obj.insert("fsm_state".to_string(), json!(state.clone()));
+                if let Ok(new_str) = serde_json::to_string(&obj) {
+                    states.insert(device_id.clone(), new_str);
+                }
+            }
+        }
+    } else {
+        states.insert(device_id.clone(), json!({"fsm_state": state}).to_string());
     }
 }
 

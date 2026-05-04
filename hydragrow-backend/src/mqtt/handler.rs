@@ -1189,6 +1189,32 @@ async fn handle_runtime_calibration_update(
                     metadata: Some(json.clone()),
                 };
                 let _ = app_state.alert_sender.send(alert);
+
+                let auto_tune_locked = json
+                    .get("auto_tune_locked")
+                    .and_then(|v| v.as_bool())
+                    .or_else(|| {
+                        json.get("runtime_coefficients")
+                            .and_then(|r| r.get("auto_tune_locked"))
+                            .and_then(|v| v.as_bool())
+                    })
+                    .unwrap_or(false);
+
+                if auto_tune_locked {
+                    let lock_alert = AlertMessage {
+                        level: "warning".to_string(),
+                        title: "Auto-tune EMA đã bị khóa".to_string(),
+                        message: format!(
+                            "Thiết bị {} báo auto_tune_locked=true. Hệ số EMA sẽ không tự điều chỉnh thêm.",
+                            device_id
+                        ),
+                        device_id: device_id.clone(),
+                        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                        reason: Some("auto_tune_locked".to_string()),
+                        metadata: Some(json.clone()),
+                    };
+                    let _ = app_state.alert_sender.send(lock_alert);
+                }
             } else {
                 warn!(
                     "⚠️ [EMA CALIBRATION] Không tìm thấy bản ghi dosing_calibration nào cho {}",

@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu, Wifi, HardDrive, Clock, AlertTriangle, Server, RadioReceiver } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -5,6 +6,10 @@ import { useDeviceControl } from '../hooks/useDeviceControl';
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { FsmStatusBadge } from '../components/ui/FsmStatusBadge';
 import { LoadingState } from '../components/ui/LoadingState';
+import { extractFaultCode } from '../components/ui/FsmStatusBadge';
+import { getFaultGuide } from '../components/ui/FaultExplanation';
+import { httpFetch } from '../platform/http';
+import { loadAppSettings } from '../platform/settings';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${color}`}>
@@ -57,8 +62,25 @@ const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, i
   </div>
 );
 
+
+interface SystemEvent { title: string; category: string; timestamp: number; }
 const Dashboard = () => {
-  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, updatePumpStatusOptimistically, isSensorOnline } = useDeviceContext();
+  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, updatePumpStatusOptimistically, isSensorOnline, settings } = useDeviceContext();
+  const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!deviceId) return;
+      const app = await loadAppSettings();
+      const cfg: any = settings || app;
+      if (!cfg?.backend_url || !cfg?.api_key) return;
+      const res = await httpFetch(`${cfg.backend_url}/api/devices/${deviceId}/events?limit=200`, { headers: { 'X-API-Key': cfg.api_key } });
+      if (!res.ok) return;
+      const data = await res.json();
+      setRecentEvents(Array.isArray(data) ? data : data.events || []);
+    };
+    run();
+  }, [deviceId, settings]);
   const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
 
   if (isLoading || !sensorData) {
@@ -82,6 +104,13 @@ const Dashboard = () => {
   }
 
   const isOnline = deviceStatus?.is_online;
+  const faultCode = extractFaultCode(fsmState || undefined);
+  const faultGuide = getFaultGuide(faultCode || undefined);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
+  const ecDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ec/i.test(e.title || '')).length;
+  const phDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ph/i.test(e.title || '')).length;
+  const waterOpsCount = oneHourEvents.filter(e => e.category === 'water').length;
   const pumps: any = isOnline && sensorData?.pump_status ? sensorData.pump_status : {};
 
   const handleToggle = async (pumpId: string, currentStatus: boolean | undefined) => {
@@ -118,6 +147,30 @@ const Dashboard = () => {
           <HealthBar title="Sensor Node" icon={RadioReceiver} data={sensorData} isNodeOnline={isSensorOnline} />
         </div>
       )}
+
+      {faultCode && faultGuide && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-red-400">{faultGuide.short}</h4>
+          <p className="text-xs text-slate-300 mt-1">{faultGuide.action}</p>
+        </div>
+      )}
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-slate-300 mb-4">Ngân sách chạy 1 giờ</h3>
+        <div className="space-y-3 text-xs">
+          {[
+            { label: 'Châm EC', value: ecDoseCount, max: Number((settings as any)?.max_refill_cycles_per_hour || 3) },
+            { label: 'Châm pH', value: phDoseCount, max: Number((settings as any)?.max_refill_cycles_per_hour || 3) },
+            { label: 'Bơm/xả nước', value: waterOpsCount, max: Number((settings as any)?.max_drain_cycles_per_hour || 3) }
+          ].map((row) => {
+            const pct = Math.min(100, Math.round((row.value / Math.max(1, row.max)) * 100));
+            return <div key={row.label}>
+              <div className="flex justify-between text-slate-400 mb-1"><span>{row.label}</span><span>{row.value}/{row.max}</span></div>
+              <div className="h-2 rounded bg-slate-800"><div className="h-2 rounded bg-blue-500" style={{ width: `${pct}%` }} /></div>
+            </div>;
+          })}
+        </div>
+      </div>
 
       {/* TIẾN TRÌNH FSM & HOẠT ĐỘNG BƠM */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">

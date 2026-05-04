@@ -12,27 +12,39 @@ use crate::models::config::DosingCalibration;
 use crate::models::sensor::{PumpStatus, SensorData};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DosingReportPayload {
-    pub start_ec: f32,
-    pub start_ph: f32,
+pub struct PhaseData {
+    pub ec: f32,
+    pub ph: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_level: Option<f32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DoseData {
     pub pump_a_ml: f32,
     pub pump_b_ml: f32,
     pub ph_up_ml: f32,
     pub ph_down_ml: f32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DosingReportPayload {
+    pub cycle_id: String,
+    pub trigger: String,
+    pub pre: PhaseData,
+    pub dose: DoseData,
+    pub post_mixing: PhaseData,
+    pub post_stable: PhaseData,
+    pub delta_ec: f32,
+    pub delta_ph: f32,
     pub target_ec: f32,
     pub target_ph: f32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before_ec: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after_ec: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stabilized_ec: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before_ph: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after_ph: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stabilized_ph: Option<f32>,
+    pub error_ec: f32,
+    pub error_ph: f32,
+    pub duration_ms: u64,
+    pub ema_ec_gain_used: f32,
+    pub ema_ph_shift_used: f32,
+    // Giữ lại trường này nếu bạn cần tính toán cửa sổ ổn định ở hàm dynamic_learning
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilized_window_sec: Option<u32>,
 }
@@ -817,19 +829,31 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    let report: DosingReportPayload = match serde_json::from_slice(payload) {
+    // 1. Convert bytes to string
+    let raw_payload = std::str::from_utf8(payload).unwrap_or("{}");
+
+    // 2. Cắt bỏ prefix "[DOSING CYCLE] " nếu Firmware vô tình gửi dính kèm vào topic này
+    let clean_payload = if let Some(stripped) = raw_payload.strip_prefix("[DOSING CYCLE] ") {
+        stripped.trim()
+    } else {
+        raw_payload.trim()
+    };
+
+    // 3. Parse JSON
+    let report: DosingReportPayload = match serde_json::from_str(clean_payload) {
         Ok(data) => data,
         Err(e) => {
-            error!(error = ?e, "Lỗi parse DosingReport");
+            error!(error = ?e, payload = %clean_payload, "Lỗi parse DosingReport (Cấu trúc không khớp)");
             return;
         }
     };
 
     info!(
         "🌿 Báo cáo châm phân: A: {:.2}ml, B: {:.2}ml. Đang lưu vào Database...",
-        report.pump_a_ml, report.pump_b_ml
+        report.dose.pump_a_ml, report.dose.pump_b_ml
     );
 
+    // Cập nhật AI Learning (sửa lại params bên trong hàm này ở bước 3)
     update_dosing_dynamic_learning(&device_id, &report, &app_state).await;
 
     let season_id_opt =
@@ -849,10 +873,10 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
         &app_state.pg_pool,
         &device_id,
         season_id_opt.as_deref(),
-        report.pump_a_ml,
-        report.pump_b_ml,
-        report.ph_up_ml,
-        report.ph_down_ml,
+        report.dose.pump_a_ml,
+        report.dose.pump_b_ml,
+        report.dose.ph_up_ml,
+        report.dose.ph_down_ml,
         &report_payload,
     )
     .await
@@ -863,7 +887,7 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
 
     let alert_msg_text = format!(
         "Đã lưu báo cáo châm phân: A: {:.1}ml | B: {:.1}ml | pH Up: {:.1}ml | pH Down: {:.1}ml",
-        report.pump_a_ml, report.pump_b_ml, report.ph_up_ml, report.ph_down_ml
+        report.dose.pump_a_ml, report.dose.pump_b_ml, report.dose.ph_up_ml, report.dose.ph_down_ml
     );
 
     let _ = crate::db::postgres::insert_system_event(
@@ -893,7 +917,6 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
     let _ = app_state.alert_sender.send(alert);
 }
 
-// Giữ nguyên các hàm `update_dosing_dynamic_learning` và `handle_runtime_calibration_update` như cũ
 async fn update_dosing_dynamic_learning(
     device_id: &str,
     report: &DosingReportPayload,
@@ -921,22 +944,19 @@ async fn update_dosing_dynamic_learning(
         }
     };
 
-    let total_dosed_ml = report.pump_a_ml + report.pump_b_ml;
+    // Lấy data từ struct mới
+    let total_dosed_ml = report.dose.pump_a_ml + report.dose.pump_b_ml;
     if total_dosed_ml <= 0.0 || dosing_cfg.ec_gain_per_ml <= 0.0 {
         return;
     }
 
-    let before_ec = report.before_ec.unwrap_or(report.start_ec);
-    let after_ec = report.after_ec;
-    let stabilized_ec = report.stabilized_ec.or(report.after_ec);
+    let before_ec = report.pre.ec;
+    let after_ec = report.post_mixing.ec;
+    let stabilized_ec_value = report.post_stable.ec; // Dùng post_stable làm chuẩn
 
-    let before_ph = report.before_ph.unwrap_or(report.start_ph);
-    let after_ph = report.after_ph;
-    let stabilized_ph = report.stabilized_ph.or(report.after_ph);
-
-    let Some(stabilized_ec_value) = stabilized_ec else {
-        return;
-    };
+    let before_ph = report.pre.ph;
+    let after_ph = report.post_mixing.ph;
+    let stabilized_ph = report.post_stable.ph;
 
     let observed_gain = (stabilized_ec_value - before_ec) / total_dosed_ml;
     if !observed_gain.is_finite() || observed_gain <= 0.0 {
@@ -952,15 +972,16 @@ async fn update_dosing_dynamic_learning(
 
     let sample = crate::DosingLearningSample {
         before_ec: Some(before_ec),
-        after_ec,
+        after_ec: Some(after_ec),
         stabilized_ec: Some(stabilized_ec_value),
         before_ph: Some(before_ph),
-        after_ph,
-        stabilized_ph,
+        after_ph: Some(after_ph),
+        stabilized_ph: Some(stabilized_ph),
         stabilized_window_sec: report.stabilized_window_sec,
         reported_at: chrono::Utc::now(),
     };
 
+    // ... (Toàn bộ phần thuật toán EMA bên dưới giữ nguyên không đổi) ...
     let mut states = app_state.dosing_dynamic_states.write().await;
     let state = states
         .entry(device_id.to_string())

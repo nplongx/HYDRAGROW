@@ -175,6 +175,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           const cachedPwmPrefs = await loadPwmPrefsFromStore();
           if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
 
+          if (initialData?.fsm_state) {
+            setFsmState(initialData.fsm_state);
+          }
+
           setSensorData({
             ...initialData,
             pump_status: cachedPumpStatus
@@ -321,6 +325,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 free_heap: healthData.free_heap,
                 uptime: healthData.uptime_sec
               });
+
+              if (healthData.fsm_state) {
+                setFsmState(healthData.fsm_state);
+              }
 
               const confirmedPumpStatus = normalizePumpStatus(healthData.pump_status);
               savePumpStatusToStore(confirmedPumpStatus);

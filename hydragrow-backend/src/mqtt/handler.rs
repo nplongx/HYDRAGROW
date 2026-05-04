@@ -694,7 +694,6 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
     let _ = app_state.alert_sender.send(alert);
 }
 
-
 async fn update_dosing_dynamic_learning(
     device_id: &str,
     report: &DosingReportPayload,

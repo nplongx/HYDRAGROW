@@ -21,7 +21,7 @@ type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type DosingFieldKey =
   | 'dosing_pwm_percent' | 'dosing_min_pwm_percent' | 'pump_a_capacity_ml_per_sec'
   | 'pump_b_capacity_ml_per_sec' | 'pump_ph_up_capacity_ml_per_sec' | 'pump_ph_down_capacity_ml_per_sec'
-  | 'scheduled_dose_a_ml' | 'scheduled_dose_b_ml';
+  ;
 
 type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 
@@ -35,12 +35,9 @@ const backendLikeError = (field: string, detail: string) => `Giá trị không h
 
 const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   const errors: DosingValidationErrors = {};
-  const scheduledDosingEnabled = Boolean(inputConfig.scheduled_dosing_enabled);
 
   const dosingPwm = toFiniteNumber(inputConfig.dosing_pwm_percent);
   const dosingMinPwm = toFiniteNumber(inputConfig.dosing_min_pwm_percent);
-  const doseA = toFiniteNumber(inputConfig.scheduled_dose_a_ml);
-  const doseB = toFiniteNumber(inputConfig.scheduled_dose_b_ml);
   const pumpA = toFiniteNumber(inputConfig.pump_a_capacity_ml_per_sec);
   const pumpB = toFiniteNumber(inputConfig.pump_b_capacity_ml_per_sec);
   const pumpPhUp = toFiniteNumber(inputConfig.pump_ph_up_capacity_ml_per_sec);
@@ -63,13 +60,6 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
   validateCapacity('pump_b_capacity_ml_per_sec', pumpB);
   validateCapacity('pump_ph_up_capacity_ml_per_sec', pumpPhUp);
   validateCapacity('pump_ph_down_capacity_ml_per_sec', pumpPhDown);
-
-  if (scheduledDosingEnabled && (!Number.isFinite(doseA) || doseA < 0)) {
-    errors.scheduled_dose_a_ml = backendLikeError('scheduled_dose_a_ml', 'phải lớn hơn hoặc bằng 0');
-  }
-  if (scheduledDosingEnabled && (!Number.isFinite(doseB) || doseB < 0)) {
-    errors.scheduled_dose_b_ml = backendLikeError('scheduled_dose_b_ml', 'phải lớn hơn hoặc bằng 0');
-  }
 
   return errors;
 };
@@ -177,7 +167,7 @@ const Settings = () => {
   // ... (Toàn bộ logic khởi tạo config, API call, handleSave được GIỮ NGUYÊN 100%)
   const [config, setConfig] = useState<any>({
     control_mode: 'auto', is_enabled: true,
-    ec_target: 1.5, ec_tolerance: 0.05, ph_target: 6.0, ph_tolerance: 0.5, temp_target: 24.0, temp_tolerance: 2.0,
+    ec_target: 1.5, ec_tolerance: 0.05, ph_target: 6.0, ph_tolerance: 0.5,
     misting_on_duration_ms: 10000, misting_off_duration_ms: 180000,
     misting_temp_threshold: 30.0, high_temp_misting_on_duration_ms: 15000, high_temp_misting_off_duration_ms: 60000,
     tank_height: 50, water_level_min: 20.0, water_level_target: 80.0, water_level_max: 90.0, water_level_drain: 5.0,
@@ -188,7 +178,6 @@ const Settings = () => {
     pump_a_capacity_ml_per_sec: 1.2, pump_b_capacity_ml_per_sec: 1.2, pump_ph_up_capacity_ml_per_sec: 1.2, pump_ph_down_capacity_ml_per_sec: 1.2,
     active_mixing_sec: 5, sensor_stabilize_sec: 5, scheduled_mixing_interval_sec: 3600, scheduled_mixing_duration_sec: 300,
     dosing_pwm_percent: 50, osaka_mixing_pwm_percent: 60, osaka_misting_pwm_percent: 100, soft_start_duration: 3000,
-    scheduled_dosing_enabled: false, scheduled_dosing_cron: '0 0 8 * * *', scheduled_dose_a_ml: 10.0, scheduled_dose_b_ml: 10.0,
     dosing_min_pwm_percent: 20, pump_a_min_pwm_percent: 20, pump_b_min_pwm_percent: 20, pump_ph_up_min_pwm_percent: 20, pump_ph_down_min_pwm_percent: 20,
     dosing_pulse_on_ms: 500, dosing_pulse_off_ms: 500, dosing_min_dose_ml: 1.0, dosing_max_pulse_count_per_cycle: 20,
     min_ec_limit: 0.5, max_ec_limit: 3.0, min_ph_limit: 4.0, max_ph_limit: 8.0,
@@ -389,7 +378,6 @@ const Settings = () => {
           device_id: devId, control_mode: savingConfig.control_mode || 'manual', is_enabled: savingConfig.is_enabled ?? true,
           ec_target: toNumberOr(savingConfig.ec_target, 1.5), ec_tolerance: toNumberOr(savingConfig.ec_tolerance, 0.05),
           ph_target: toNumberOr(savingConfig.ph_target, 6.0), ph_tolerance: toNumberOr(savingConfig.ph_tolerance, 0.5),
-          temp_target: toNumberOr(savingConfig.temp_target, 24.0), temp_tolerance: toNumberOr(savingConfig.temp_tolerance, 2.0),
           last_updated: ts, delay_between_a_and_b_sec: toNumberOr(savingConfig.delay_between_a_and_b_sec, 10),
         },
         water_config: {
@@ -430,8 +418,7 @@ const Settings = () => {
           pump_b_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_b_min_pwm_percent, 20)), pump_ph_up_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_ph_up_min_pwm_percent, 20)),
           pump_ph_down_min_pwm_percent: Math.trunc(toNumberOr(savingConfig.pump_ph_down_min_pwm_percent, 20)), dosing_pulse_on_ms: Math.trunc(toNumberOr(savingConfig.dosing_pulse_on_ms, 500)),
           dosing_pulse_off_ms: Math.trunc(toNumberOr(savingConfig.dosing_pulse_off_ms, 500)), dosing_min_dose_ml: toNumberOr(savingConfig.dosing_min_dose_ml, 1.0),
-          dosing_max_pulse_count_per_cycle: Math.trunc(toNumberOr(savingConfig.dosing_max_pulse_count_per_cycle, 20)), scheduled_dosing_enabled: savingConfig.scheduled_dosing_enabled ?? false,
-          scheduled_dosing_cron: String(savingConfig.scheduled_dosing_cron || '0 0 8 * * *'), scheduled_dose_a_ml: toNumberOr(savingConfig.scheduled_dose_a_ml, 10.0), scheduled_dose_b_ml: toNumberOr(savingConfig.scheduled_dose_b_ml, 10.0),
+          dosing_max_pulse_count_per_cycle: Math.trunc(toNumberOr(savingConfig.dosing_max_pulse_count_per_cycle, 20)),
         },
         sensor_calibration: {
           device_id: devId, ph_v7: toNumberOr(savingConfig.ph_v7, 2.5), ph_v4: toNumberOr(savingConfig.ph_v4, 1.428),
@@ -537,8 +524,6 @@ const Settings = () => {
 
           <SubCard title="Nhiệt Độ & Làm Mát" className="mt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputGroup label="Nhiệt độ tối ưu (°C)" step="0.5" value={config.temp_target} onChange={(e: InputEvent) => setConfig({ ...config, temp_target: e.target.value })} />
-              <InputGroup label="Dung sai nhiệt độ (°C)" step="0.5" value={config.temp_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, temp_tolerance: e.target.value })} />
               <div className="sm:col-span-2 mt-2">
                 <InputGroup label="Kích hoạt làm mát nhanh khi > (°C)" step="0.5" value={config.misting_temp_threshold} onChange={(e: InputEvent) => setConfig({ ...config, misting_temp_threshold: e.target.value })} />
               </div>
@@ -619,19 +604,6 @@ const Settings = () => {
               </SubCard>
             </div>
           )}
-
-          <SubCard title="Châm Cứng Theo Lịch">
-            <div className="flex items-center justify-between mb-4"><span className="text-sm text-slate-300">Bật lịch châm cứng</span><Switch isOn={config.scheduled_dosing_enabled} onClick={(val) => setConfig({ ...config, scheduled_dosing_enabled: val })} /></div>
-            {config.scheduled_dosing_enabled && (
-              <div className="space-y-4">
-                <VisualCronPicker label="Lịch" value={config.scheduled_dosing_cron} onChange={(val) => setConfig({ ...config, scheduled_dosing_cron: val })} />
-                <div className="grid grid-cols-2 gap-4">
-                  <InputGroup label="A (ml)" value={config.scheduled_dose_a_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_a_ml: e.target.value })} errorText={dosingValidationErrors.scheduled_dose_a_ml} />
-                  <InputGroup label="B (ml)" value={config.scheduled_dose_b_ml} onChange={(e: InputEvent) => setConfig({ ...config, scheduled_dose_b_ml: e.target.value })} errorText={dosingValidationErrors.scheduled_dose_b_ml} />
-                </div>
-              </div>
-            )}
-          </SubCard>
 
           <SubCard title="Khuấy Nước" className="mt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

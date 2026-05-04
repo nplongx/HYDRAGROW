@@ -12,10 +12,6 @@ use crate::pump::{PumpController, PumpType, WaterDirection};
 pub struct ControlContext {
     pub current_state: SystemState,
     pub last_water_change_time: u64,
-    pub last_scheduled_dose_time_sec: u64,
-
-    pub next_cron_trigger_sec: Option<u64>,
-    pub current_cron_expr: String,
     pub next_water_change_trigger_sec: Option<u64>,
     pub current_water_change_cron_expr: String,
 
@@ -73,9 +69,6 @@ impl Default for ControlContext {
         Self {
             current_state: SystemState::SystemBooting,
             last_water_change_time: 0,
-            last_scheduled_dose_time_sec: 0,
-            next_cron_trigger_sec: None,
-            current_cron_expr: String::new(),
             next_water_change_trigger_sec: None,
             current_water_change_cron_expr: String::new(),
             ec_retry_count: 0,

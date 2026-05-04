@@ -183,14 +183,6 @@ pub struct ControllerConfig {
     pub scheduled_mixing_duration_sec: i32,
 
     // 5. CẢM BIẾN
-    // pub ph_v7: f32,
-    // pub ph_v4: f32,
-    // pub ec_factor: f32,
-    // pub ec_offset: f32,
-    // pub temp_offset: f32,
-    // pub temp_compensation_beta: f32,
-    // pub tank_height: f32,
-
     // 🔴 BỎ: Các trường dư thừa
     // pub sampling_interval: u64,
     // pub publish_interval: u64,
@@ -223,10 +215,6 @@ pub struct ControllerConfig {
     pub high_temp_misting_on_duration_ms: i64,
     pub high_temp_misting_off_duration_ms: i64,
 
-    pub scheduled_dosing_enabled: bool,
-    pub scheduled_dosing_cron: String, // Sử dụng Cron (VD: "0 0 8 * * *")
-    pub scheduled_dose_a_ml: f32,
-    pub scheduled_dose_b_ml: f32,
 }
 
 impl Default for ControllerConfig {
@@ -302,14 +290,6 @@ impl Default for ControllerConfig {
             scheduled_mixing_interval_sec: 3600,
             scheduled_mixing_duration_sec: 300,
 
-            // ph_v7: 1650.0,
-            // ph_v4: 1846.4,
-            // ec_factor: 880.0,
-            // ec_offset: 0.0,
-            // temp_offset: 0.0,
-            // temp_compensation_beta: 0.02,
-            // tank_height: 100.0,
-
             // 🔴 BỎ
             // sampling_interval: 1000,
             // publish_interval: 5000,
@@ -341,10 +321,6 @@ impl Default for ControllerConfig {
             high_temp_misting_on_duration_ms: 15000,
             high_temp_misting_off_duration_ms: 60000,
 
-            scheduled_dosing_enabled: false,
-            scheduled_dosing_cron: "0 0 8 * * *".to_string(),
-            scheduled_dose_a_ml: 10.0,
-            scheduled_dose_b_ml: 10.0,
         }
     }
 }

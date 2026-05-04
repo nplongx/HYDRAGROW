@@ -30,11 +30,7 @@ pub fn start_pending_calibration_sample(
 ) {
     // Xác định trigger dựa trên liều lượng bơm
     let trigger = if dose_a_ml > 0.0 && dose_b_ml > 0.0 {
-        if ctx.current_cron_expr == config.scheduled_dosing_cron {
-            "scheduled".to_string()
-        } else {
-            "auto_ec".to_string()
-        }
+        "auto_ec".to_string()
     } else if dose_ph_up_ml > 0.0 || dose_ph_down_ml > 0.0 {
         "auto_ph".to_string()
     } else {

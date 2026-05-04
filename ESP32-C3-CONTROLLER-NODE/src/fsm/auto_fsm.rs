@@ -482,12 +482,6 @@ fn handle_dosing_decisions(
     let mut is_dosing_active = false;
 
     if !is_dosing_active {
-        is_dosing_active = try_scheduled_dosing(
-            current_time_ms, current_time_sec, max_hourly_ml, config, sensors, ctx, pump_ctrl, nvs, fsm_mqtt_tx,
-        );
-    }
-
-    if !is_dosing_active {
         is_dosing_active = try_ec_dosing(
             current_time_ms, current_time_sec, max_hourly_ml, config, sensors, ctx, pump_ctrl, fsm_mqtt_tx,
         );
@@ -505,103 +499,6 @@ fn handle_dosing_decisions(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn try_scheduled_dosing(
-    current_time_ms: u64,
-    current_time_sec: u64,
-    max_hourly_ml: f32,
-    config: &ControllerConfig,
-    sensors: &SensorData,
-    ctx: &mut ControlContext,
-    pump_ctrl: &mut PumpController,
-    nvs: &mut Option<EspDefaultNvs>,
-    fsm_mqtt_tx: &Sender<String>,
-) -> bool {
-    if !(config.scheduled_dosing_enabled && !config.scheduled_dosing_cron.is_empty()) {
-        return false;
-    }
-
-    if ctx.current_cron_expr != config.scheduled_dosing_cron {
-        ctx.current_cron_expr = config.scheduled_dosing_cron.clone();
-        match Schedule::from_str(&ctx.current_cron_expr) {
-            Ok(schedule) => {
-                if let Some(next) = schedule.upcoming(Local).next() {
-                    ctx.next_cron_trigger_sec = Some(next.timestamp() as u64);
-                    info!("⏰ Cập nhật lịch Dosing Cron: {}", next);
-                }
-            }
-            Err(_) => {
-                warn!("⚠️ Biểu thức Cron Dosing không hợp lệ!");
-                ctx.next_cron_trigger_sec = None;
-            }
-        }
-    }
-
-    let next_trigger = match ctx.next_cron_trigger_sec {
-        Some(t) => t,
-        None => return false,
-    };
-    if current_time_sec < next_trigger {
-        return false;
-    }
-
-    info!("⏰ Đã đến giờ BƠM DINH DƯỠNG theo lịch CRON!");
-
-    if let Ok(schedule) = Schedule::from_str(&ctx.current_cron_expr) {
-        let future = Local::now() + chrono::Duration::seconds(1);
-        if let Some(next) = schedule.after(&future).next() {
-            ctx.next_cron_trigger_sec = Some(next.timestamp() as u64);
-        }
-    }
-
-    ctx.last_scheduled_dose_time_sec = current_time_sec;
-    if let Some(flash) = nvs.as_mut() {
-        let _ = flash.set_u64("last_sched_dose", current_time_sec);
-    }
-
-    let safe_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
-    if config.scheduled_dose_a_ml <= 0.0 && config.scheduled_dose_b_ml <= 0.0 {
-        return false;
-    }
-
-    let allow_a = config.scheduled_dose_a_ml <= 0.0
-        || ctx.can_dose_within_hourly_limit(
-            "NutrientA", current_time_sec, config.scheduled_dose_a_ml, max_hourly_ml,
-        );
-    let allow_b = config.scheduled_dose_b_ml <= 0.0
-        || ctx.can_dose_within_hourly_limit(
-            "NutrientB", current_time_sec, config.scheduled_dose_b_ml, max_hourly_ml,
-        );
-
-    if !(allow_a && allow_b) {
-        let msg = format!("⚠️ [SCHEDULED] Yêu cầu lượng châm làm vượt quá giới hạn an toàn (Max: {}ml/h). Đã hủy lịch!", max_hourly_ml);
-        warn!("{}", msg);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "scheduled_dosing", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
-        
-        ctx.stop_all_pumps(pump_ctrl);
-        ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_SCHED".to_string());
-        return true;
-    }
-
-    if config.scheduled_dose_a_ml > 0.0 {
-        let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, config.scheduled_dose_a_ml, max_hourly_ml);
-    }
-    if config.scheduled_dose_b_ml > 0.0 {
-        let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientB", current_time_sec, config.scheduled_dose_b_ml, max_hourly_ml);
-    }
-
-    ctx.current_state = SystemState::StartingOsakaPump {
-        finish_time: current_time_ms + config.soft_start_duration as u64,
-        pending_action: PendingDose::ScheduledDose {
-            dose_a_ml: config.scheduled_dose_a_ml,
-            dose_b_ml: config.scheduled_dose_b_ml,
-            pwm_percent: safe_pwm,
-        },
-    };
-    ctx.fsm_osaka_active = true;
-    true
-}
-
 #[allow(clippy::too_many_arguments)]
 fn try_ec_dosing(
     current_time_ms: u64,
@@ -796,30 +693,6 @@ fn handle_osaka_ready(
     action: PendingDose,
 ) {
     match action {
-        PendingDose::ScheduledDose {
-            dose_a_ml,
-            dose_b_ml,
-            pwm_percent,
-        } => {
-            if dose_a_ml > 0.0 {
-                start_dosing_pump_a(
-                    current_time_ms, config, sensors, ctx, pump_ctrl, dose_a_ml, dose_b_ml, pwm_percent, sensors.ec,
-                );
-            } else if dose_b_ml > 0.0 {
-                ctx.current_state = SystemState::WaitingBetweenDose {
-                    finish_time: current_time_ms,
-                    dose_b_ml,
-                    target_ec: sensors.ec,
-                    start_ec: sensors.ec,
-                    start_ph: sensors.ph,
-                    dose_a_ml_reported: 0.0,
-                };
-            } else {
-                ctx.current_state = SystemState::ActiveMixing {
-                    finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
-                };
-            }
-        }
         PendingDose::EC { dose_ml, target_ec, pwm_percent } => {
             start_dosing_pump_a(
                 current_time_ms, config, sensors, ctx, pump_ctrl, dose_ml, dose_ml, pwm_percent, target_ec,

@@ -208,4 +208,3 @@ export interface DeviceHealth {
 export interface ControllerData extends DeviceHealth {
   // Có thể chứa thêm trạng thái FSM hoặc các config khác nếu cần
 }
-

@@ -21,7 +21,7 @@ type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type DosingFieldKey =
   | 'dosing_pwm_percent' | 'dosing_min_pwm_percent' | 'pump_a_capacity_ml_per_sec'
   | 'pump_b_capacity_ml_per_sec' | 'pump_ph_up_capacity_ml_per_sec' | 'pump_ph_down_capacity_ml_per_sec'
-  | 'scheduled_dose_a_ml' | 'scheduled_dose_b_ml';
+  ;
 
 type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 

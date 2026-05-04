@@ -5,7 +5,8 @@ import {
   FlaskConical, Activity,
   AlertCircle, Power, Radio, Cpu,
   Beaker,
-  Wifi
+  Wifi,
+  Settings2
 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
@@ -138,6 +139,56 @@ const CalibrationMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
+const SensorNoiseMetadata = ({ meta }: { meta: any }) => {
+  if (!meta) return null;
+  const rows: { label: string; value: string; accent?: string }[] = [];
+
+  if (meta.sensor) rows.push({ label: 'Cảm biến', value: String(meta.sensor), accent: 'text-amber-300' });
+  if (meta.raw_value != null) rows.push({ label: 'Raw', value: Number(meta.raw_value).toFixed(3), accent: 'text-orange-300' });
+  if (meta.prev_value != null) rows.push({ label: 'Prev', value: Number(meta.prev_value).toFixed(3), accent: 'text-slate-300' });
+  if (meta.delta != null) rows.push({ label: 'Δ', value: Number(meta.delta).toFixed(3), accent: 'text-amber-400' });
+  if (meta.threshold != null) rows.push({ label: 'Ngưỡng', value: Number(meta.threshold).toFixed(3) });
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-amber-950/20 border border-amber-900/40 rounded-lg px-3 py-2.5">
+      {rows.map(r => (
+        <div key={r.label} className="flex items-baseline gap-1.5">
+          <span className="text-slate-500 shrink-0">{r.label}</span>
+          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const DosingCycleMetadata = ({ meta }: { meta: any }) => {
+  if (!meta) return null;
+  const pre = meta.pre ?? {};
+  const post = meta.post_stable ?? meta.post ?? {};
+  const rows: { label: string; value: string; accent?: string }[] = [];
+
+  if (meta.cycle_id) rows.push({ label: 'Cycle ID', value: String(meta.cycle_id), accent: 'text-slate-200' });
+  if (meta.trigger) rows.push({ label: 'Trigger', value: String(meta.trigger) });
+  if (pre.ec != null && post.ec != null) rows.push({ label: 'EC', value: `${Number(pre.ec).toFixed(2)} → ${Number(post.ec).toFixed(2)}`, accent: 'text-cyan-400' });
+  if (pre.ph != null && post.ph != null) rows.push({ label: 'pH', value: `${Number(pre.ph).toFixed(2)} → ${Number(post.ph).toFixed(2)}`, accent: 'text-fuchsia-400' });
+  if (meta.delta_ec != null) rows.push({ label: 'Δ EC', value: Number(meta.delta_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (meta.delta_ph != null) rows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
+  if (meta.duration_sec != null) rows.push({ label: 'Thời gian', value: `${meta.duration_sec}s` });
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2.5">
+      {rows.map(r => (
+        <div key={r.label} className="flex items-baseline gap-1.5">
+          <span className="text-slate-500 shrink-0">{r.label}</span>
+          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const AlertMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
   const rows: { label: string; value: string; accent?: string }[] = [];
@@ -168,9 +219,13 @@ const AlertMetadata = ({ meta }: { meta: any }) => {
 const MetadataRenderer = ({ category, level, metadata }: { category: string; level: string; title: string; metadata?: Record<string, any> }) => {
   if (!metadata) return null;
 
-  if (category === 'dosing') return <DosingMetadata meta={metadata} />;
+  if (category === 'dosing') {
+    if (metadata.cycle_id || metadata.pre || metadata.post_stable || metadata.post) return <DosingCycleMetadata meta={metadata} />;
+    return <DosingMetadata meta={metadata} />;
+  }
   if (category === 'water') return <WaterMetadata meta={metadata} />;
   if (category === 'calibration') return <CalibrationMetadata meta={metadata} />;
+  if (category === 'sensor') return <SensorNoiseMetadata meta={metadata} />;
   if (category === 'alert' || level === 'critical' || level === 'warning') return <AlertMetadata meta={metadata} />;
 
   return null;
@@ -198,6 +253,9 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
 
   switch (category) {
     case 'dosing':
+      if (title.includes('Chu trình châm phân') || title.includes('Dosing Cycle')) {
+        return { icon: FlaskConical, iconColor: 'text-orange-400', borderColor: 'border-orange-500/20', bgColor: 'bg-orange-500/5', dot: 'bg-orange-400' };
+      }
       if (title.includes('pH') || title.includes('Điều Chỉnh')) {
         return { icon: Beaker, iconColor: 'text-fuchsia-500', borderColor: 'border-fuchsia-500/20', bgColor: 'bg-fuchsia-500/5', dot: 'bg-fuchsia-500' };
       }
@@ -210,7 +268,13 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
       return { icon: Waves, iconColor: 'text-blue-400', borderColor: 'border-blue-500/20', bgColor: 'bg-blue-500/5', dot: 'bg-blue-400' };
 
     case 'calibration':
+      if (title.includes('Tự điều chỉnh bước châm') || title.includes('AUTO TUNE')) {
+        return { icon: Settings2, iconColor: 'text-purple-400', borderColor: 'border-purple-500/20', bgColor: 'bg-purple-500/5', dot: 'bg-purple-400' };
+      }
       return { icon: Activity, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
+
+    case 'sensor':
+      return { icon: Radio, iconColor: 'text-amber-400', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5', dot: 'bg-amber-400' };
 
     case 'system':
       if (title.includes('Offline') || title.includes('Mất') || title.includes('ngắt')) {
@@ -238,6 +302,7 @@ const FILTERS = [
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
   { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
+  { id: 'sensor', label: 'Cảm biến', icon: Radio },
   { id: 'system', label: 'Hệ thống', icon: Power },
 ];
 

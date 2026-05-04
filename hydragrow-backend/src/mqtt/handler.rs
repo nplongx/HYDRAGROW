@@ -573,10 +573,176 @@ fn fsm_state_to_alert(
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum PrefixedFsmEventType {
+    WaterEvent,
+    SystemAlert,
+    DosingCycle,
+    EmaUpdate,
+    AutoTune,
+    SensorNoise,
+}
+
+#[inline]
+fn parse_prefixed_fsm_message(
+    raw_payload: &str,
+) -> Option<(PrefixedFsmEventType, serde_json::Value)> {
+    const PREFIXES: [(&str, PrefixedFsmEventType); 6] = [
+        ("[WATER EVENT]", PrefixedFsmEventType::WaterEvent),
+        ("[SYSTEM ALERT]", PrefixedFsmEventType::SystemAlert),
+        ("[DOSING CYCLE]", PrefixedFsmEventType::DosingCycle),
+        ("[EMA UPDATE]", PrefixedFsmEventType::EmaUpdate),
+        ("[AUTO TUNE]", PrefixedFsmEventType::AutoTune),
+        ("[SENSOR NOISE]", PrefixedFsmEventType::SensorNoise),
+    ];
+
+    for (prefix, event_type) in PREFIXES {
+        if let Some(rest) = raw_payload.strip_prefix(prefix) {
+            let parsed = serde_json::from_str::<serde_json::Value>(rest.trim()).ok()?;
+            return Some((event_type, parsed));
+        }
+    }
+
+    None
+}
+
+fn prefixed_event_to_system_record(
+    device_id: String,
+    event_type: PrefixedFsmEventType,
+    payload: serde_json::Value,
+) -> NewSystemEventRecord {
+    let now = chrono::Utc::now().timestamp_millis();
+    match event_type {
+        PrefixedFsmEventType::WaterEvent => {
+            let trigger = payload
+                .get("trigger")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let success = payload
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let is_draining = trigger.contains("drain")
+                || payload
+                    .get("action")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|a| a.contains("drain"));
+            NewSystemEventRecord {
+                device_id,
+                level: if success { "info" } else { "warning" }.to_string(),
+                category: "water".to_string(),
+                title: if is_draining {
+                    "Xả nước".to_string()
+                } else {
+                    "Cấp nước".to_string()
+                },
+                message: format!("Sự kiện nước: trigger={} | success={}", trigger, success),
+                reason: None,
+                metadata: Some(payload),
+                timestamp: now,
+            }
+        }
+        PrefixedFsmEventType::SystemAlert => {
+            let alert_type = payload
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let source = payload
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let message = payload
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Không có mô tả");
+            let (level, title) = match alert_type {
+                "rate_limit" => ("warning", "Vượt giới hạn an toàn"),
+                "fault" => ("critical", "Lỗi thiết bị"),
+                _ => ("warning", "Cảnh báo hệ thống"),
+            };
+            NewSystemEventRecord {
+                device_id,
+                level: level.to_string(),
+                category: "alert".to_string(),
+                title: title.to_string(),
+                message: format!("[{}] {}", source, message),
+                reason: Some(alert_type.to_string()),
+                metadata: Some(payload),
+                timestamp: now,
+            }
+        }
+        PrefixedFsmEventType::DosingCycle => {
+            let cycle_id = payload
+                .get("cycle_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let trigger = payload
+                .get("trigger")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            NewSystemEventRecord {
+                device_id,
+                level: "success".to_string(),
+                category: "dosing".to_string(),
+                title: "Chu trình châm phân".to_string(),
+                message: format!("Hoàn tất chu trình {} (trigger={})", cycle_id, trigger),
+                reason: None,
+                metadata: Some(payload),
+                timestamp: now,
+            }
+        }
+        PrefixedFsmEventType::EmaUpdate => NewSystemEventRecord {
+            device_id,
+            level: "info".to_string(),
+            category: "calibration".to_string(),
+            title: "Cập nhật hệ số EMA".to_string(),
+            message: "Hệ số EMA runtime đã được cập nhật".to_string(),
+            reason: None,
+            metadata: Some(payload),
+            timestamp: now,
+        },
+        PrefixedFsmEventType::AutoTune => NewSystemEventRecord {
+            device_id,
+            level: "info".to_string(),
+            category: "calibration".to_string(),
+            title: "Tự điều chỉnh bước châm".to_string(),
+            message: "Auto-tune đã điều chỉnh thông số dosing".to_string(),
+            reason: None,
+            metadata: Some(payload),
+            timestamp: now,
+        },
+        PrefixedFsmEventType::SensorNoise => {
+            let sensor = payload
+                .get("sensor")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            NewSystemEventRecord {
+                device_id,
+                level: "warning".to_string(),
+                category: "sensor".to_string(),
+                title: "Nhiễu cảm biến".to_string(),
+                message: format!("Phát hiện mẫu nhiễu từ cảm biến {}", sensor),
+                reason: None,
+                metadata: Some(payload),
+                timestamp: now,
+            }
+        }
+    }
+}
+
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let raw_payload = std::str::from_utf8(payload).unwrap_or("Lỗi UTF-8");
     info!("📥 [MQTT-FSM] nhận gói tin: {}", raw_payload);
+
+    if let Some((event_type, parsed_payload)) = parse_prefixed_fsm_message(raw_payload) {
+        let event = prefixed_event_to_system_record(device_id, event_type, parsed_payload);
+
+        if let Err(e) = insert_system_event(&app_state.pg_pool, &event).await {
+            error!(error = ?e, "❌ [MQTT-FSM] Lỗi lưu prefixed event vào DB");
+        }
+        return;
+    }
 
     let json = match serde_json::from_slice::<serde_json::Value>(payload) {
         Ok(j) => j,
@@ -983,4 +1149,3 @@ async fn handle_runtime_calibration_update(
         }
     }
 }
-

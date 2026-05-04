@@ -857,9 +857,18 @@ async fn handle_runtime_calibration_update(
     };
 
     // Lấy các hệ số. Nếu giá trị là null, as_f64() sẽ tự động trả về None
-    let ec_gain = coeffs.get("ec_gain_per_ml").and_then(|v| v.as_f64());
-    let ph_up = coeffs.get("ph_shift_up_per_ml").and_then(|v| v.as_f64());
-    let ph_down = coeffs.get("ph_shift_down_per_ml").and_then(|v| v.as_f64());
+    let ec_gain = coeffs
+        .get("ec_gain_per_ml")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
+    let ph_up = coeffs
+        .get("ph_shift_up_per_ml")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
+    let ph_down = coeffs
+        .get("ph_shift_down_per_ml")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
 
     if ec_gain.is_none() && ph_up.is_none() && ph_down.is_none() {
         debug!("ℹ️ [EMA CALIBRATION] Không có hệ số nào mới để cập nhật.");
@@ -871,9 +880,9 @@ async fn handle_runtime_calibration_update(
     let query = r#"
         UPDATE dosing_calibration
         SET
-            ec_gain_per_ml = COALESCE($1, ec_gain_per_ml),
-            ph_shift_up_per_ml = COALESCE($2, ph_shift_up_per_ml),
-            ph_shift_down_per_ml = COALESCE($3, ph_shift_down_per_ml),
+            ec_gain_per_ml = COALESCE($1::real, ec_gain_per_ml),
+            ph_shift_up_per_ml = COALESCE($2::real, ph_shift_up_per_ml),
+            ph_shift_down_per_ml = COALESCE($3::real, ph_shift_down_per_ml),
             last_calibrated = NOW()
         WHERE device_id = $4
     "#;

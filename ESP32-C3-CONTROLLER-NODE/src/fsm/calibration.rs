@@ -286,4 +286,3 @@ pub fn apply_runtime_calibration_ema(
         );
     }
 }
-

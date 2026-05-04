@@ -12,27 +12,39 @@ use crate::models::config::DosingCalibration;
 use crate::models::sensor::{PumpStatus, SensorData};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DosingReportPayload {
-    pub start_ec: f32,
-    pub start_ph: f32,
+pub struct PhaseData {
+    pub ec: f32,
+    pub ph: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_level: Option<f32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DoseData {
     pub pump_a_ml: f32,
     pub pump_b_ml: f32,
     pub ph_up_ml: f32,
     pub ph_down_ml: f32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DosingReportPayload {
+    pub cycle_id: String,
+    pub trigger: String,
+    pub pre: PhaseData,
+    pub dose: DoseData,
+    pub post_mixing: PhaseData,
+    pub post_stable: PhaseData,
+    pub delta_ec: f32,
+    pub delta_ph: f32,
     pub target_ec: f32,
     pub target_ph: f32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before_ec: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after_ec: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stabilized_ec: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before_ph: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after_ph: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stabilized_ph: Option<f32>,
+    pub error_ec: f32,
+    pub error_ph: f32,
+    pub duration_ms: u64,
+    pub ema_ec_gain_used: f32,
+    pub ema_ph_shift_used: f32,
+    // Giữ lại trường này nếu bạn cần tính toán cửa sổ ổn định ở hàm dynamic_learning
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilized_window_sec: Option<u32>,
 }
@@ -767,17 +779,14 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     };
 
-    // Luôn gửi FSM_UPDATE để badge & badge realtime trên UI cập nhật ngay
-    let fsm_sync_msg = AlertMessage {
-        level: "FSM_UPDATE".to_string(),
-        title: "FSM_SYNC".to_string(),
-        message: state.clone(),
-        device_id: device_id.clone(),
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        reason: None,
-        metadata: None,
-    };
-    let _ = app_state.alert_sender.send(fsm_sync_msg);
+    // 🟢 THAY ĐỔI 1: Gửi trạng thái FSM qua kênh Health thay vì kênh Alert để tránh spam Toast
+    // Backend sẽ kết hợp vào một cấu trúc JSON thống nhất
+    let fsm_status_payload = serde_json::json!({
+        "_msg_type": "fsm_status", // Loại tin nhắn riêng biệt
+        "device_id": device_id.clone(),
+        "fsm_state": state.clone(),
+    });
+    let _ = app_state.health_sender.send(fsm_status_payload);
 
     // MỚI: Build metadata kết hợp (Sensors cache + FSM json payload)
     let alert_metadata = {
@@ -790,13 +799,32 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
 
     // Truyền FSM payload vào để bóc tách text động
     if let Some(alert_msg) = fsm_state_to_alert(&state, &device_id, alert_metadata, &json) {
+        // 🟢 THAY ĐỔI 2: CHỈ GỬI ALERT VỚI CÁC TRẠNG THÁI QUAN TRỌNG ĐỂ TRÁNH SPAM
+        // Các trạng thái Info như "Châm phân A", "Châm phân B" liên tục tick sẽ làm spam UI.
+        // Ta dùng cơ chế "debounce" đơn giản: Chỉ tạo Event Log (nếu cần) hoặc lọc bớt.
+        // Tạm thời, nếu là "info" thì ta không bắn qua AlertChannel (nơi tạo Toast trên UI)
+        // mà chỉ lưu vào DB SystemEvent (nếu bạn muốn). Hoặc nếu vẫn muốn bắn, ta cần kiểm soát tần suất.
+
+        let should_send_to_ui = match alert_msg.level.as_str() {
+            "critical" | "warning" | "success" => true,
+            "info" => {
+                // Ví dụ: Lọc bớt các trạng thái Dosing vì ESP32 gửi lên RẤT NHIỀU.
+                !state.starts_with("DosingPump")
+                    && !state.starts_with("DosingPH")
+                    && !state.starts_with("ActiveMixing")
+            }
+            _ => false,
+        };
+
         if alert_msg.level == "critical" || alert_msg.level == "warning" {
             info!("🚨 KÍCH HOẠT BÁO ĐỘNG: {}", alert_msg.title);
-        } else {
+        } else if should_send_to_ui {
             info!("ℹ️ THAY ĐỔI TRẠNG THÁI: {}", alert_msg.title);
         }
 
-        let _ = app_state.alert_sender.send(alert_msg.clone());
+        if should_send_to_ui {
+            let _ = app_state.alert_sender.send(alert_msg.clone());
+        }
 
         // Push notification với trạng thái nghiêm trọng
         if alert_msg.level == "critical" || alert_msg.level == "warning" {
@@ -813,23 +841,50 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
             }
         }
     }
+
+    // Cập nhật fsm_state vào cache tĩnh (để trả về cho hàm REST get_latest)
+    let mut states = app_state.device_states.write().await;
+    if let Some(existing_str) = states.get(&device_id) {
+        if let Ok(mut cached_json) = serde_json::from_str::<serde_json::Value>(existing_str) {
+            if let Some(obj) = cached_json.as_object_mut() {
+                obj.insert("fsm_state".to_string(), json!(state.clone()));
+                if let Ok(new_str) = serde_json::to_string(&obj) {
+                    states.insert(device_id.clone(), new_str);
+                }
+            }
+        }
+    } else {
+        states.insert(device_id.clone(), json!({"fsm_state": state}).to_string());
+    }
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    let report: DosingReportPayload = match serde_json::from_slice(payload) {
+    // 1. Convert bytes to string
+    let raw_payload = std::str::from_utf8(payload).unwrap_or("{}");
+
+    // 2. Cắt bỏ prefix "[DOSING CYCLE] " nếu Firmware vô tình gửi dính kèm vào topic này
+    let clean_payload = if let Some(stripped) = raw_payload.strip_prefix("[DOSING CYCLE] ") {
+        stripped.trim()
+    } else {
+        raw_payload.trim()
+    };
+
+    // 3. Parse JSON
+    let report: DosingReportPayload = match serde_json::from_str(clean_payload) {
         Ok(data) => data,
         Err(e) => {
-            error!(error = ?e, "Lỗi parse DosingReport");
+            error!(error = ?e, payload = %clean_payload, "Lỗi parse DosingReport (Cấu trúc không khớp)");
             return;
         }
     };
 
     info!(
         "🌿 Báo cáo châm phân: A: {:.2}ml, B: {:.2}ml. Đang lưu vào Database...",
-        report.pump_a_ml, report.pump_b_ml
+        report.dose.pump_a_ml, report.dose.pump_b_ml
     );
 
+    // Cập nhật AI Learning (sửa lại params bên trong hàm này ở bước 3)
     update_dosing_dynamic_learning(&device_id, &report, &app_state).await;
 
     let season_id_opt =
@@ -849,10 +904,10 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
         &app_state.pg_pool,
         &device_id,
         season_id_opt.as_deref(),
-        report.pump_a_ml,
-        report.pump_b_ml,
-        report.ph_up_ml,
-        report.ph_down_ml,
+        report.dose.pump_a_ml,
+        report.dose.pump_b_ml,
+        report.dose.ph_up_ml,
+        report.dose.ph_down_ml,
         &report_payload,
     )
     .await
@@ -863,7 +918,7 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
 
     let alert_msg_text = format!(
         "Đã lưu báo cáo châm phân: A: {:.1}ml | B: {:.1}ml | pH Up: {:.1}ml | pH Down: {:.1}ml",
-        report.pump_a_ml, report.pump_b_ml, report.ph_up_ml, report.ph_down_ml
+        report.dose.pump_a_ml, report.dose.pump_b_ml, report.dose.ph_up_ml, report.dose.ph_down_ml
     );
 
     let _ = crate::db::postgres::insert_system_event(
@@ -893,7 +948,6 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
     let _ = app_state.alert_sender.send(alert);
 }
 
-// Giữ nguyên các hàm `update_dosing_dynamic_learning` và `handle_runtime_calibration_update` như cũ
 async fn update_dosing_dynamic_learning(
     device_id: &str,
     report: &DosingReportPayload,
@@ -921,22 +975,19 @@ async fn update_dosing_dynamic_learning(
         }
     };
 
-    let total_dosed_ml = report.pump_a_ml + report.pump_b_ml;
+    // Lấy data từ struct mới
+    let total_dosed_ml = report.dose.pump_a_ml + report.dose.pump_b_ml;
     if total_dosed_ml <= 0.0 || dosing_cfg.ec_gain_per_ml <= 0.0 {
         return;
     }
 
-    let before_ec = report.before_ec.unwrap_or(report.start_ec);
-    let after_ec = report.after_ec;
-    let stabilized_ec = report.stabilized_ec.or(report.after_ec);
+    let before_ec = report.pre.ec;
+    let after_ec = report.post_mixing.ec;
+    let stabilized_ec_value = report.post_stable.ec; // Dùng post_stable làm chuẩn
 
-    let before_ph = report.before_ph.unwrap_or(report.start_ph);
-    let after_ph = report.after_ph;
-    let stabilized_ph = report.stabilized_ph.or(report.after_ph);
-
-    let Some(stabilized_ec_value) = stabilized_ec else {
-        return;
-    };
+    let before_ph = report.pre.ph;
+    let after_ph = report.post_mixing.ph;
+    let stabilized_ph = report.post_stable.ph;
 
     let observed_gain = (stabilized_ec_value - before_ec) / total_dosed_ml;
     if !observed_gain.is_finite() || observed_gain <= 0.0 {
@@ -952,15 +1003,16 @@ async fn update_dosing_dynamic_learning(
 
     let sample = crate::DosingLearningSample {
         before_ec: Some(before_ec),
-        after_ec,
+        after_ec: Some(after_ec),
         stabilized_ec: Some(stabilized_ec_value),
         before_ph: Some(before_ph),
-        after_ph,
-        stabilized_ph,
+        after_ph: Some(after_ph),
+        stabilized_ph: Some(stabilized_ph),
         stabilized_window_sec: report.stabilized_window_sec,
         reported_at: chrono::Utc::now(),
     };
 
+    // ... (Toàn bộ phần thuật toán EMA bên dưới giữ nguyên không đổi) ...
     let mut states = app_state.dosing_dynamic_states.write().await;
     let state = states
         .entry(device_id.to_string())

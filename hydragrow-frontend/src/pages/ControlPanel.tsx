@@ -10,6 +10,8 @@ import { PumpStatus } from '../types/models';
 import toast from 'react-hot-toast';
 import { LoadingState } from '../components/ui/LoadingState';
 import { Switch } from '../components/ui/Switch';
+import { extractFaultCode } from '../components/ui/FsmStatusBadge';
+import { getFaultGuide } from '../components/ui/FaultExplanation';
 
 // --- Component: Khối Điều Khiển Từng Thiết Bị ---
 // Thay thế component AdvancedDeviceControl hiện tại bằng đoạn code này
@@ -216,6 +218,8 @@ const ControlPanel = () => {
   );
 
   const isAutoMode = settings?.control_mode === 'auto';
+  const faultCode = extractFaultCode(fsmState || undefined);
+  const faultGuide = getFaultGuide(faultCode || undefined);
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-28">
@@ -266,7 +270,8 @@ const ControlPanel = () => {
           <AlertTriangle size={20} className="shrink-0" />
           <div>
             <h4 className="font-semibold text-sm">Bảo vệ khẩn cấp</h4>
-            <p className="text-xs opacity-80 mt-0.5">Hệ thống đang lỗi. Phím bật thường bị khóa. Hãy dùng "Chạy Cưỡng Bức" (có tính giờ) nếu cần thiết.</p>
+            <p className="text-xs opacity-80 mt-0.5">{faultGuide?.short || 'Hệ thống đang lỗi. Phím bật thường bị khóa. Hãy dùng "Chạy Cưỡng Bức" nếu cần thiết.'}</p>
+            {faultGuide && <p className="text-xs opacity-70 mt-1">Hành động: {faultGuide.action}</p>}
           </div>
         </div>
       )}

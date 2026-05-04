@@ -231,7 +231,7 @@ fn handle_monitoring(
     nvs: &mut Option<EspDefaultNvs>,
     fsm_mqtt_tx: &Sender<String>,
 ) {
-    ctx.verify_sensor_ack(sensors, config, current_time_sec);
+    ctx.verify_sensor_ack(sensors, config, current_time_sec, fsm_mqtt_tx);
 
     if try_scheduled_water_change(current_time_ms, current_time_sec, config, sensors, ctx, pump_ctrl, nvs, fsm_mqtt_tx) {
         return;

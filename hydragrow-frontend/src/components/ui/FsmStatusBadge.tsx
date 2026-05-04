@@ -1,12 +1,18 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import { FaultExplanation, getFaultGuide } from './FaultExplanation';
+
+export const extractFaultCode = (state?: string): string | null => {
+  if (!state?.startsWith('SystemFault:')) return null;
+  return state.replace('SystemFault:', '').trim();
+};
 
 export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
+  const [showFaultSheet, setShowFaultSheet] = useState(false);
   const rawState = state || 'Monitoring';
+  const faultCode = extractFaultCode(rawState);
+  const faultGuide = useMemo(() => getFaultGuide(faultCode || undefined), [faultCode]);
 
-  const renderBadge = (
-    tone: 'default' | 'warn' | 'danger' | 'success' | 'info' | 'mist',
-    content: string
-  ) => {
+  const renderBadge = (tone: 'default' | 'warn' | 'danger' | 'success' | 'info' | 'mist', content: string) => {
     const toneClass =
       tone === 'danger' ? 'bg-red-500/10 border-red-500/30 text-red-400'
         : tone === 'warn' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
@@ -15,14 +21,14 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
               : tone === 'mist' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
                 : 'bg-slate-800 border-slate-700 text-slate-300';
 
-    return (
-      <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium border ${toneClass}`}>
-        {content}
-      </span>
-    );
+    const baseClass = `px-2.5 py-0.5 rounded-md text-xs font-medium border ${toneClass}`;
+    if (faultCode) {
+      return <button className={`${baseClass} hover:opacity-90`} onClick={() => setShowFaultSheet(true)}>{content}</button>;
+    }
+    return <span className={baseClass}>{content}</span>;
   };
 
-  if (rawState.startsWith('SystemFault:')) return renderBadge('danger', `Lỗi: ${rawState.replace('SystemFault:', '')}`);
+  if (faultCode) return <>{renderBadge('danger', `Lỗi: ${faultCode}`)}{showFaultSheet && faultGuide && <FaultExplanation code={faultCode} onClose={() => setShowFaultSheet(false)} />}</>;
   if (rawState.startsWith('EmergencyStop:')) return renderBadge('danger', `Ngắt khẩn cấp: ${rawState.replace('EmergencyStop:', '')}`);
   if (rawState.startsWith('Cooldown:')) return renderBadge('warn', 'Đang làm mát');
   if (rawState.startsWith('SensorCalibration:')) return renderBadge('info', `Calib: ${rawState.replace('SensorCalibration:', '')}`);

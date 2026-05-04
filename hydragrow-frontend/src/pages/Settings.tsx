@@ -199,6 +199,15 @@ const Settings = () => {
   const [_stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
   const [adaptivePhases, setAdaptivePhases] = useState({ observe: true, recommend: true, auto_apply: false, confidence_threshold: 85 });
+  const defaultEma = { ec_gain_per_ml: 0.1, ph_shift_up_per_ml: 0.2, ph_shift_down_per_ml: 0.2 };
+  const emaStatus = useMemo(() => {
+    const entries = [
+      { key: 'ec_gain_per_ml', label: 'EC gain/ml', value: Number(config.ec_gain_per_ml), base: defaultEma.ec_gain_per_ml },
+      { key: 'ph_shift_up_per_ml', label: 'pH shift up/ml', value: Number(config.ph_shift_up_per_ml), base: defaultEma.ph_shift_up_per_ml },
+      { key: 'ph_shift_down_per_ml', label: 'pH shift down/ml', value: Number(config.ph_shift_down_per_ml), base: defaultEma.ph_shift_down_per_ml }
+    ];
+    return entries.map((e) => ({ ...e, drift: Math.abs(e.value - e.base) / e.base }));
+  }, [config.ec_gain_per_ml, config.ph_shift_up_per_ml, config.ph_shift_down_per_ml]);
 
   const calibrationPoints = calibrationPointsCount === 3 ? [7, 4, 10] : [7, 4];
   const activePoint = calibrationPoints[wizardStep];
@@ -604,6 +613,20 @@ const Settings = () => {
               </SubCard>
             </div>
           )}
+
+          <SubCard title="Hiệu chỉnh tự động (EMA)" className="mt-4">
+            <div className="space-y-2">
+              {emaStatus.map((item) => (
+                <div key={item.key} className="flex items-center justify-between text-xs border border-slate-800 rounded-lg px-3 py-2">
+                  <span className="text-slate-300">{item.label}</span>
+                  <div className="text-right">
+                    <div className="text-slate-200">{Number.isFinite(item.value) ? item.value.toFixed(4) : '--'} <span className="text-slate-500">(mặc định {item.base.toFixed(4)})</span></div>
+                    {item.drift > 0.2 && <span className="text-[10px] text-amber-400">Đã được tự điều chỉnh (&gt;20%)</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SubCard>
 
           <SubCard title="Khuấy Nước" className="mt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

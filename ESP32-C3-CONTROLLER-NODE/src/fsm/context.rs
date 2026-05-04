@@ -258,6 +258,7 @@ impl ControlContext {
         sensors: &SensorData,
         config: &ControllerConfig,
         now_sec: u64,
+        fsm_mqtt_tx: &Sender<String>,
     ) {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
@@ -279,6 +280,14 @@ impl ControlContext {
                 } else {
                     self.ec_retry_count += 1;
                     warn!("⚠️ EC không tăng! Lần thử: {}/3", self.ec_retry_count);
+                    if self.ec_retry_count <= 2 {
+                        let msg = match self.ec_retry_count {
+                            1 => "EC không tăng sau lần bơm đầu",
+                            _ => "EC vẫn không tăng sau 2 lần bơm",
+                        };
+                        let payload = format!(r#"[SYSTEM ALERT] {{ "type": "warning", "source": "ec_dosing", "retry_count": {}, "message": "{}" }}"#, self.ec_retry_count, msg);
+                        let _ = fsm_mqtt_tx.send(payload);
+                    }
                     if !self.auto_tune_locked {
                         self.adjust_ec_step_ratio(
                             config,
@@ -317,6 +326,14 @@ impl ControlContext {
                 } else {
                     self.ph_retry_count += 1;
                     warn!("⚠️ pH không đổi hướng! Lần thử: {}/3", self.ph_retry_count);
+                    if self.ph_retry_count <= 2 {
+                        let msg = match self.ph_retry_count {
+                            1 => "pH chưa đổi sau lần bơm đầu",
+                            _ => "pH vẫn chưa đổi sau 2 lần bơm",
+                        };
+                        let payload = format!(r#"[SYSTEM ALERT] {{ "type": "warning", "source": "ph_dosing", "retry_count": {}, "message": "{}" }}"#, self.ph_retry_count, msg);
+                        let _ = fsm_mqtt_tx.send(payload);
+                    }
                     if !self.auto_tune_locked {
                         self.adjust_ph_step_ratio(
                             config,
@@ -337,6 +354,11 @@ impl ControlContext {
                     self.water_refill_retry_count = 0;
                 } else {
                     self.water_refill_retry_count += 1;
+                    if self.water_refill_retry_count <= 2 {
+                        let msg = if self.water_refill_retry_count == 1 { "Mực nước chưa tăng sau lần bơm vào đầu" } else { "Mực nước vẫn chưa tăng sau 2 lần bơm vào" };
+                        let payload = format!(r#"[SYSTEM ALERT] {{ "type": "warning", "source": "water_refill", "retry_count": {}, "message": "{}" }}"#, self.water_refill_retry_count, msg);
+                        let _ = fsm_mqtt_tx.send(payload);
+                    }
                 }
                 self.last_water_before_refill = None;
             }
@@ -345,6 +367,11 @@ impl ControlContext {
                     self.water_refill_retry_count = 0;
                 } else {
                     self.water_refill_retry_count += 1;
+                    if self.water_refill_retry_count <= 2 {
+                        let msg = if self.water_refill_retry_count == 1 { "Mực nước chưa giảm sau lần xả đầu" } else { "Mực nước vẫn chưa giảm sau 2 lần xả" };
+                        let payload = format!(r#"[SYSTEM ALERT] {{ "type": "warning", "source": "water_drain", "retry_count": {}, "message": "{}" }}"#, self.water_refill_retry_count, msg);
+                        let _ = fsm_mqtt_tx.send(payload);
+                    }
                 }
                 self.last_water_before_drain = None;
             }

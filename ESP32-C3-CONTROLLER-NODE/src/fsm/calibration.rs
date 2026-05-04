@@ -275,8 +275,10 @@ pub fn apply_runtime_calibration_ema(
             "runtime_coefficients": {
                 "ec_gain_per_ml": applied_ec_gain,
                 "ph_shift_up_per_ml": applied_ph_up,
-                "ph_shift_down_per_ml": applied_ph_down
-            }
+                "ph_shift_down_per_ml": applied_ph_down,
+                "auto_tune_locked": ctx.auto_tune_locked
+            },
+            "auto_tune_locked": ctx.auto_tune_locked
         });
         let _ = fsm_mqtt_tx.send(payload.to_string());
     } else {

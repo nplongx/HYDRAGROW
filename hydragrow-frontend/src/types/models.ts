@@ -106,7 +106,7 @@ export interface UnifiedDeviceConfig {
   auto_dilute_enabled: boolean;
   dilute_drain_amount_cm: number;
   scheduled_water_change_enabled: boolean;
-  water_change_interval_sec: number;
+  water_change_cron: number;
   scheduled_drain_amount_cm: number;
   misting_on_duration_ms: number;
   misting_off_duration_ms: number;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Settings2, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw,
   Lock, ChevronDown,
@@ -13,8 +13,9 @@ import { Switch } from '../components/ui/Switch';
 import { extractFaultCode } from '../components/ui/FsmStatusBadge';
 import { getFaultGuide } from '../components/ui/FaultExplanation';
 
+// --- Component: Khối Điều Khiển Từng Thiết Bị (ĐÃ SỬA LỖI FLICKER) ---
 const AdvancedDeviceControl = ({
-  deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, updatePumpStatusOptimistically, isOnline, isEmergency, isAutoMode
+  deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, isOnline, isEmergency, isAutoMode
 }: any) => {
   const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId);
   const { pwmPreferences, savePwmPreference } = useDeviceContext();
@@ -24,102 +25,79 @@ const AdvancedDeviceControl = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // 👇 THÊM: State cục bộ và Ref để làm "Khóa chống giật"
-  const [localStatus, setLocalStatus] = useState(currentStatus);
-  const pendingLockRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // State để disable nút toggle khi đang chờ phản hồi từ backend
+  const [isToggling, setIsToggling] = useState(false);
 
-  const stateKey = pumpId.toLowerCase();
-  const isLocked = isAutoMode || (isEmergency && !localStatus);
+  // const stateKey = pumpId.toLowerCase();
+  const isLocked = isAutoMode || (isEmergency && !currentStatus);
 
   useEffect(() => {
     if (pwmPreferences[pumpId] !== undefined) setPwmValue(pwmPreferences[pumpId]);
   }, [pwmPreferences, pumpId]);
 
-  // 👇 THÊM: Logic đồng bộ localStatus với currentStatus từ Server
-  useEffect(() => {
-    // Nếu KHÔNG có khóa pending -> Cập nhật UI theo server
-    if (!pendingLockRef.current) {
-      setLocalStatus(currentStatus);
-    }
-    // Nếu CÓ khóa pending, nhưng server đã trả về đúng trạng thái mong đợi -> Mở khóa sớm
-    else if (currentStatus === localStatus) {
-      clearTimeout(pendingLockRef.current);
-      pendingLockRef.current = null;
-    }
-  }, [currentStatus, localStatus]);
-
-  // Xóa timeout khi component unmount
-  useEffect(() => {
-    return () => {
-      if (pendingLockRef.current) clearTimeout(pendingLockRef.current);
-    };
-  }, []);
-
-  // Hàm tiện ích để khóa UI tạm thời
-  const applyPendingLock = (targetBool: boolean) => {
-    setLocalStatus(targetBool);
-    updatePumpStatusOptimistically(stateKey, targetBool); // Vẫn gọi context để update chung
-
-    if (pendingLockRef.current) clearTimeout(pendingLockRef.current);
-    pendingLockRef.current = setTimeout(() => {
-      // Hết 8 giây mà server chưa cập nhật -> Nhả khóa, giật về trạng thái thực tế
-      pendingLockRef.current = null;
-      setLocalStatus(currentStatus);
-    }, 8000);
-  };
-
-  // Nút Switch Bật/Tắt bình thường
+  // Nút Switch Bật/Tắt - KHÔNG dùng optimistic update nữa
   const handleToggle = async () => {
-    if (isAutoMode) return;
-    if (isEmergency && !localStatus) {
+    if (isAutoMode) {
+      toast.error("Hệ thống đang ở chế độ Tự động, không thể điều khiển thủ công");
+      return;
+    }
+    if (isEmergency && !currentStatus) {
       toast.error(`Hệ thống đang báo lỗi. Vui lòng mở rộng và dùng "Chạy Cưỡng Bức".`);
       setShowAdvanced(true);
       return;
     }
+    if (isToggling) return; // Đang xử lý, không cho bấm tiếp
 
-    setIsProcessing(true);
-    const targetAction = localStatus ? 'off' : 'on';
-    const targetBool = targetAction === 'on';
+    setIsToggling(true);
+    // Reset duration mỗi khi bấm toggle để tránh gửi kèm timer không mong muốn
+    setDuration('');
 
-    // Khóa chống giật
-    applyPendingLock(targetBool);
-
+    const targetAction = currentStatus ? 'off' : 'on';
     try {
       const success = await togglePump(pumpId, targetAction);
       if (!success) {
-        // Lệnh bị từ chối từ API -> Hủy khóa ngay
-        if (pendingLockRef.current) clearTimeout(pendingLockRef.current);
-        pendingLockRef.current = null;
-        setLocalStatus(currentStatus);
-        updatePumpStatusOptimistically(stateKey, currentStatus);
+        toast.error(`Không thể ${targetAction === 'on' ? 'bật' : 'tắt'} ${title}`);
       }
+      // Không cập nhật UI ở đây - context sẽ cập nhật từ MQTT
     } catch (error) {
-      if (pendingLockRef.current) clearTimeout(pendingLockRef.current);
-      pendingLockRef.current = null;
-      setLocalStatus(currentStatus);
-      updatePumpStatusOptimistically(stateKey, currentStatus);
+      console.error(error);
+      toast.error(`Lỗi điều khiển ${title}`);
     } finally {
-      setIsProcessing(false);
+      setIsToggling(false);
     }
   };
 
   // Xử lý Hẹn giờ + Công suất kết hợp
   const handleAdvancedRun = async () => {
-    if (isAutoMode || isEmergency) return;
+    if (isAutoMode) {
+      toast.error("Hệ thống đang ở chế độ Tự động");
+      return;
+    }
+    if (isEmergency) {
+      toast.error("Không thể chạy nâng cao khi đang có lỗi, hãy dùng 'Chạy Cưỡng Bức'");
+      return;
+    }
     setIsProcessing(true);
     const time = Number(duration);
 
-    if (!localStatus) applyPendingLock(true);
-
+    // Gửi lệnh - không optimistic update
     try {
       if (allowPwm) {
         await setPwm(pumpId, pwmValue, time > 0 ? time : undefined);
         savePwmPreference(pumpId, pwmValue);
+        toast.success(`Đã gửi lệnh chạy ${title} với công suất ${pwmValue}%${time > 0 ? ` trong ${time}s` : ''}`);
       } else {
         if (time > 0) {
           await forceOn(pumpId, time);
+          toast.success(`Đã gửi lệnh cưỡng bức ${title} trong ${time}s`);
+        } else {
+          // Nếu không có timer và không PWM, thì toggle bình thường
+          await togglePump(pumpId, 'on');
+          toast.success(`Đã bật ${title}`);
         }
       }
+    } catch (error) {
+      toast.error(`Lỗi khi chạy ${title}`);
     } finally {
       setIsProcessing(false);
       if (time > 0) setDuration('');
@@ -129,53 +107,51 @@ const AdvancedDeviceControl = ({
   // Xử lý Cưỡng bức khẩn cấp
   const handleEmergencyForceOn = async () => {
     const time = Number(duration);
-    if (!time || time <= 0) { toast.error("Vui lòng nhập số giây (Bắt buộc khi cưỡng bức)."); return; }
+    if (!time || time <= 0) {
+      toast.error("Vui lòng nhập số giây (Bắt buộc khi cưỡng bức).");
+      return;
+    }
     if (!window.confirm(`NGUY HIỂM: Bỏ qua cảm biến để chạy ${title} trong ${time} giây?`)) return;
 
     setIsProcessing(true);
-    applyPendingLock(true);
-
     try {
-      const success = await forceOn(pumpId, time);
-      if (!success) {
-        if (pendingLockRef.current) clearTimeout(pendingLockRef.current);
-        pendingLockRef.current = null;
-        setLocalStatus(currentStatus);
-        updatePumpStatusOptimistically(stateKey, currentStatus);
-      }
+      await forceOn(pumpId, time);
+      toast.success(`Đã kích hoạt cưỡng bức ${title} trong ${time}s`);
     } catch (error) {
-      if (pendingLockRef.current) clearTimeout(pendingLockRef.current);
-      pendingLockRef.current = null;
-      setLocalStatus(currentStatus);
-      updatePumpStatusOptimistically(stateKey, currentStatus);
+      toast.error(`Lỗi cưỡng bức ${title}`);
     } finally {
       setIsProcessing(false);
       setDuration('');
     }
   };
 
-  // 👇 CHÚ Ý: Thay toàn bộ currentStatus bằng localStatus trong phần render
   return (
-    <div className={`bg-slate-900 border rounded-xl overflow-hidden transition-colors duration-300 ${localStatus ? 'border-blue-500/50 bg-slate-800/40' : 'border-slate-800'}`}>
+    <div className={`bg-slate-900 border rounded-xl overflow-hidden transition-colors duration-300 ${currentStatus ? 'border-blue-500/50 bg-slate-800/40' : 'border-slate-800'}`}>
       <div className="p-4 flex flex-col gap-4">
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg transition-colors ${localStatus ? 'bg-blue-500 text-white' : 'bg-slate-950 text-slate-500 border border-slate-800'}`}>
+            <div className={`p-2 rounded-lg transition-colors ${currentStatus ? 'bg-blue-500 text-white' : 'bg-slate-950 text-slate-500 border border-slate-800'}`}>
               <Icon size={18} />
             </div>
             <div>
-              <h3 className={`text-sm font-semibold ${localStatus ? 'text-slate-100' : 'text-slate-300'}`}>{title}</h3>
-              <p className="text-[10px] text-slate-500 font-medium">{localStatus ? 'Đang hoạt động' : 'Đang tắt'}</p>
+              <h3 className={`text-sm font-semibold ${currentStatus ? 'text-slate-100' : 'text-slate-300'}`}>{title}</h3>
+              <p className="text-[10px] text-slate-500 font-medium">{currentStatus ? 'Đang hoạt động' : 'Đang tắt'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isLocked && !localStatus && <Lock size={14} className="text-slate-500" />}
-            <Switch isOn={localStatus} disabled={!isOnline || isProcessing || isLocked} onClick={handleToggle} colorClass="bg-blue-500" />
+            {isLocked && !currentStatus && <Lock size={14} className="text-slate-500" />}
+            <Switch
+              isOn={currentStatus}
+              disabled={!isOnline || isToggling || isProcessing || isLocked}
+              onClick={handleToggle}
+              colorClass="bg-blue-500"
+            />
           </div>
         </div>
 
-        {/* Cấu hình nâng cao - UX MỚI */}
+        {/* Cấu hình nâng cao */}
         {(!isAutoMode) && (
           <div className="border-t border-slate-800 pt-3">
             <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
@@ -185,6 +161,7 @@ const AdvancedDeviceControl = ({
 
             {showAdvanced && (
               <div className="mt-4 animate-in slide-in-from-top-2 duration-200 bg-slate-950/50 p-3 rounded-lg border border-slate-800/80">
+
                 {/* TRƯỜNG HỢP 1: ĐANG CẤP CỨU / LỖI */}
                 {isEmergency ? (
                   <div className="space-y-3">
@@ -206,48 +183,47 @@ const AdvancedDeviceControl = ({
                       </button>
                     </div>
                   </div>
-                ) :
-                  (
-                    <div className="space-y-4">
-                      {/* Thanh Slider PWM */}
-                      {allowPwm && (
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                            <span>Công suất bơm (PWM)</span>
-                            <span className="text-blue-400">{pwmValue}%</span>
-                          </div>
-                          <input
-                            type="range" min="10" max="100" step="1"
-                            value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
-                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                          />
-                        </div>
-                      )}
-
-                      {/* Ô nhập thời gian & Nút hành động */}
+                ) : (
+                  <div className="space-y-4">
+                    {/* Thanh Slider PWM */}
+                    {allowPwm && (
                       <div className="space-y-2">
                         <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                          <span>Thời gian chạy (Tùy chọn)</span>
+                          <span>Công suất bơm (PWM)</span>
+                          <span className="text-blue-400">{pwmValue}%</span>
                         </div>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <input
-                              type="number" placeholder="Để trống chạy liên tục..."
-                              value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                              className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-500 placeholder:text-slate-600"
-                            />
-                            <Timer size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                          </div>
-                          <button
-                            onClick={handleAdvancedRun} disabled={isProcessing}
-                            className="px-4 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 shadow-lg shadow-blue-500/20 whitespace-nowrap"
-                          >
-                            Lưu & Chạy
-                          </button>
+                        <input
+                          type="range" min="10" max="100" step="1"
+                          value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                      </div>
+                    )}
+
+                    {/* Ô nhập thời gian & Nút hành động */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
+                        <span>Thời gian chạy (Tùy chọn)</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="number" placeholder="Để trống để chạy liên tục..."
+                            value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-500 placeholder:text-slate-600"
+                          />
+                          <Timer size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
                         </div>
+                        <button
+                          onClick={handleAdvancedRun} disabled={isProcessing}
+                          className="px-4 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 shadow-lg shadow-blue-500/20 whitespace-nowrap"
+                        >
+                          Lưu & Chạy
+                        </button>
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -259,7 +235,7 @@ const AdvancedDeviceControl = ({
 
 // --- Bảng Điều Khiển Chính ---
 const ControlPanel = () => {
-  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, updatePumpStatusOptimistically, fsmState, settings } = useDeviceContext();
+  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, fsmState, settings } = useDeviceContext();
   const { isProcessing, resetFault } = useDeviceControl(deviceId || "");
 
   if (isLoading || !sensorData) return <LoadingState message="Đang tải dữ liệu..." />;
@@ -336,20 +312,52 @@ const ControlPanel = () => {
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Máy pha dinh dưỡng</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical} currentStatus={pumps.pump_a} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm Phân B" icon={FlaskConical} currentStatus={pumps.pump_b} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_UP" title="Bơm Tăng pH" icon={Activity} currentStatus={pumps.ph_up} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_DOWN" title="Bơm Giảm pH" icon={Activity} currentStatus={pumps.ph_down} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical}
+            currentStatus={pumps.pump_a} allowPwm={true}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="PUMP_B" title="Bơm Phân B" icon={FlaskConical}
+            currentStatus={pumps.pump_b} allowPwm={true}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="PH_UP" title="Bơm Tăng pH" icon={Activity}
+            currentStatus={pumps.ph_up} allowPwm={true}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="PH_DOWN" title="Bơm Giảm pH" icon={Activity}
+            currentStatus={pumps.ph_down} allowPwm={true}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
         </div>
       </div>
 
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Bơm nước & Khí hậu</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Cấp Nước" icon={Droplets} currentStatus={pumps.water_pump_in} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Xả Nước" icon={Droplets} currentStatus={pumps.water_pump_out} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="OSAKA" title="Trộn Osaka" icon={Power} currentStatus={pumps.osaka_pump} allowPwm={true} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-          <AdvancedDeviceControl deviceId={deviceId} pumpId="MIST" title="Phun Sương" icon={Wind} currentStatus={pumps.mist_valve} allowPwm={false} updatePumpStatusOptimistically={updatePumpStatusOptimistically} isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Cấp Nước" icon={Droplets}
+            currentStatus={pumps.water_pump_in} allowPwm={false}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Xả Nước" icon={Droplets}
+            currentStatus={pumps.water_pump_out} allowPwm={false}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="OSAKA" title="Trộn Osaka" icon={Power}
+            currentStatus={pumps.osaka_pump} allowPwm={true}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
+          <AdvancedDeviceControl
+            deviceId={deviceId} pumpId="MIST" title="Phun Sương" icon={Wind}
+            currentStatus={pumps.mist_valve} allowPwm={false}
+            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+          />
         </div>
       </div>
 

@@ -122,13 +122,20 @@ pub fn process_mqtt_commands(
 
         // Ghi timeout thủ công
         if is_on {
-            if let Some(duration) = duration_sec {
-                if duration > 0 {
+            match duration_sec {
+                Some(duration) if duration > 0 => {
+                    // Có hẹn giờ -> Lưu thời điểm kết thúc mới
                     let finish_time = current_time_ms + (duration as u64 * 1000);
                     ctx.manual_timeouts.insert(pump_name.clone(), finish_time);
                 }
+                _ => {
+                    // Bật bình thường (hoặc duration = 0) -> PHẢI XÓA timeout cũ
+                    // Nếu không xóa, FSM sẽ tưởng timer cũ vẫn còn hiệu lực và ngắt bơm ngay lập tức.
+                    ctx.manual_timeouts.remove(&pump_name);
+                }
             }
         } else {
+            // Nhận lệnh TẮT -> Xóa timeout
             ctx.manual_timeouts.remove(&pump_name);
         }
 

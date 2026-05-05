@@ -92,67 +92,6 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
-const DosingCycleMetadata = ({ meta }: { meta: any }) => {
-  if (!meta) return null;
-  const pre = meta.pre ?? {};
-  const post = meta.post_stable ?? meta.post ?? {};
-  const rows: { label: string; value: string; accent?: string }[] = [];
-
-  if (meta.cycle_id) rows.push({ label: 'Cycle ID', value: String(meta.cycle_id), accent: 'text-slate-200' });
-  if (meta.trigger) rows.push({ label: 'Trigger', value: String(meta.trigger) });
-
-  // EC
-  const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
-  const ecAfter = getMetaNumber(post, ['ec', 'EC']);
-  if (ecBefore != null && ecAfter != null) {
-    const delta = (ecAfter - ecBefore).toFixed(2);
-    const sign = ecAfter >= ecBefore ? '+' : '';
-    rows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-cyan-400' });
-  } else if (ecBefore != null) {
-    rows.push({ label: 'EC trước', value: ecBefore.toFixed(2), accent: 'text-cyan-400' });
-  } else if (ecAfter != null) {
-    rows.push({ label: 'EC sau', value: ecAfter.toFixed(2), accent: 'text-cyan-400' });
-  }
-
-  // pH
-  const phBefore = getMetaNumber(pre, ['ph', 'pH']);
-  const phAfter = getMetaNumber(post, ['ph', 'pH']);
-  if (phBefore != null && phAfter != null) {
-    const delta = (phAfter - phBefore).toFixed(2);
-    const sign = phAfter >= phBefore ? '+' : '';
-    rows.push({ label: 'pH', value: `${phBefore.toFixed(2)} → ${phAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-fuchsia-400' });
-  } else if (phBefore != null) {
-    rows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
-  } else if (phAfter != null) {
-    rows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
-  }
-
-  // Delta tổng thể (nếu có)
-  if (meta.delta_ec != null) rows.push({ label: 'Δ EC', value: Number(meta.delta_ec).toFixed(2), accent: 'text-cyan-300' });
-  if (meta.delta_ph != null) rows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
-
-  // Mục tiêu
-  if (meta.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
-  if (meta.target_ph != null) rows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
-
-  if (meta.duration_sec != null || meta.duration_ms != null) {
-    const s = meta.duration_sec ?? (meta.duration_ms / 1000);
-    rows.push({ label: 'Thời gian', value: `${Number(s).toFixed(1)}s` });
-  }
-
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2.5">
-      {rows.map(r => (
-        <div key={r.label} className="flex items-baseline gap-1.5">
-          <span className="text-slate-500 shrink-0">{r.label}</span>
-          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const WaterMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
@@ -206,41 +145,6 @@ const WaterMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
-const CalibrationMetadata = ({ meta }: { meta: any }) => {
-  if (!meta) return null;
-  const rows: { label: string; value: string; accent?: string }[] = [];
-
-  if (meta.runtime_coefficients) {
-    const rc = meta.runtime_coefficients;
-    if (rc.ec_gain_per_ml != null) rows.push({ label: 'EC gain/ml', value: Number(rc.ec_gain_per_ml).toFixed(5), accent: 'text-cyan-400' });
-    if (rc.ph_shift_up_per_ml != null) rows.push({ label: 'pH↑/ml', value: Number(rc.ph_shift_up_per_ml).toFixed(5), accent: 'text-emerald-400' });
-    if (rc.ph_shift_down_per_ml != null) rows.push({ label: 'pH↓/ml', value: Number(rc.ph_shift_down_per_ml).toFixed(5), accent: 'text-rose-400' });
-  }
-  if (meta.alpha != null) rows.push({ label: 'Alpha (EMA)', value: Number(meta.alpha).toFixed(2) });
-  if (meta.observed_ec_gain_per_ml != null) rows.push({ label: 'Quan sát EC', value: Number(meta.observed_ec_gain_per_ml).toFixed(5), accent: 'text-yellow-400' });
-
-  if (meta.result) {
-    const r = meta.result;
-    if (r.ph_v7 != null) rows.push({ label: 'V tại pH 7', value: `${Number(r.ph_v7).toFixed(4)} V` });
-    if (r.ph_v4 != null) rows.push({ label: 'V tại pH 4', value: `${Number(r.ph_v4).toFixed(4)} V` });
-    if (r.ph_v10 != null) rows.push({ label: 'V tại pH 10', value: `${Number(r.ph_v10).toFixed(4)} V` });
-  }
-  if (meta.mode) rows.push({ label: 'Chế độ', value: meta.mode });
-  if (meta.error != null) rows.push({ label: 'Sai số', value: `${Number(meta.error).toFixed(4)} mV`, accent: Number(meta.error) < 10 ? 'text-emerald-400' : 'text-amber-400' });
-
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2.5">
-      {rows.map(r => (
-        <div key={r.label} className="flex items-baseline gap-1.5">
-          <span className="text-slate-500 shrink-0">{r.label}</span>
-          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const SensorNoiseMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
@@ -265,10 +169,177 @@ const SensorNoiseMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
+// ─── DosingCycleMetadata (cải tiến) ────────────────────────────────────────
+const DosingCycleMetadata = ({ meta }: { meta: any }) => {
+  if (!meta) return null;
+  const pre = meta.pre ?? {};
+  const post = meta.post_stable ?? meta.post ?? {};
+  const rows: { label: string; value: string; accent?: string }[] = [];
+
+  // Cycle info
+  if (meta.cycle_id) rows.push({ label: 'Cycle ID', value: String(meta.cycle_id).slice(0, 8), accent: 'text-slate-200' });
+  if (meta.trigger) rows.push({ label: 'Trigger', value: String(meta.trigger) });
+
+  // EC
+  const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
+  const ecAfter = getMetaNumber(post, ['ec', 'EC']);
+  if (ecBefore != null && ecAfter != null) {
+    const delta = (ecAfter - ecBefore).toFixed(2);
+    const sign = ecAfter >= ecBefore ? '+' : '';
+    rows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-cyan-400' });
+  } else if (ecBefore != null) {
+    rows.push({ label: 'EC trước', value: ecBefore.toFixed(2), accent: 'text-cyan-400' });
+  } else if (ecAfter != null) {
+    rows.push({ label: 'EC sau', value: ecAfter.toFixed(2), accent: 'text-cyan-400' });
+  }
+
+  // pH
+  const phBefore = getMetaNumber(pre, ['ph', 'pH']);
+  const phAfter = getMetaNumber(post, ['ph', 'pH']);
+  if (phBefore != null && phAfter != null) {
+    const delta = (phAfter - phBefore).toFixed(2);
+    const sign = phAfter >= phBefore ? '+' : '';
+    rows.push({ label: 'pH', value: `${phBefore.toFixed(2)} → ${phAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-fuchsia-400' });
+  } else if (phBefore != null) {
+    rows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
+  } else if (phAfter != null) {
+    rows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
+  }
+
+  // Delta / Error
+  if (meta.delta_ec != null) rows.push({ label: 'Δ EC', value: Number(meta.delta_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (meta.delta_ph != null) rows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
+  if (meta.error_ec != null) rows.push({ label: 'Sai số EC', value: Number(meta.error_ec).toFixed(2), accent: 'text-amber-400' });
+  if (meta.error_ph != null) rows.push({ label: 'Sai số pH', value: Number(meta.error_ph).toFixed(2), accent: 'text-amber-400' });
+
+  // Target
+  if (meta.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (meta.target_ph != null) rows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
+
+  // Duration
+  if (meta.duration_ms != null) rows.push({ label: 'Thời gian', value: `${(Number(meta.duration_ms) / 1000).toFixed(1)}s` });
+
+  // Step ratios & EMA coefficients (if provided)
+  if (meta.step_ratio_ec != null) rows.push({ label: 'Bước EC', value: Number(meta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
+  if (meta.step_ratio_ph != null) rows.push({ label: 'Bước pH', value: Number(meta.step_ratio_ph).toFixed(2), accent: 'text-yellow-400' });
+  if (meta.ema_ec_gain_used != null) rows.push({ label: 'EMA EC gain', value: Number(meta.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
+  if (meta.ema_ph_shift_used != null) rows.push({ label: 'EMA pH shift', value: Number(meta.ema_ph_shift_used).toFixed(5), accent: 'text-fuchsia-500' });
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2.5">
+      {rows.map(r => (
+        <div key={r.label} className="flex items-baseline gap-1.5">
+          <span className="text-slate-500 shrink-0">{r.label}</span>
+          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── CalibrationMetadata (mở rộng: EMA update & Auto-tune) ───────────────
+const CalibrationMetadata = ({ meta }: { meta: any }) => {
+  if (!meta) return null;
+
+  // --- EMA update event ---
+  if (meta.parameter != null) {
+    const rows: { label: string; value: string; accent?: string }[] = [];
+    rows.push({ label: 'Tham số', value: String(meta.parameter), accent: 'text-slate-200' });
+    if (meta.old_value != null) rows.push({ label: 'Cũ', value: Number(meta.old_value).toFixed(5), accent: 'text-slate-400' });
+    if (meta.observed != null) rows.push({ label: 'Quan sát', value: Number(meta.observed).toFixed(5), accent: 'text-yellow-400' });
+    if (meta.new_ema != null) rows.push({ label: 'EMA mới', value: Number(meta.new_ema).toFixed(5), accent: 'text-emerald-400' });
+    if (meta.alpha != null) rows.push({ label: 'Alpha', value: Number(meta.alpha).toFixed(2), accent: 'text-blue-400' });
+    if (meta.sample_count != null) rows.push({ label: 'Số mẫu', value: String(meta.sample_count) });
+    if (meta.skip_reason != null) rows.push({ label: 'Lý do bỏ qua', value: String(meta.skip_reason), accent: 'text-red-400' });
+    return (
+      <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-purple-950/20 border border-purple-900/40 rounded-lg px-3 py-2.5">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-baseline gap-1.5">
+            <span className="text-slate-500 shrink-0">{r.label}</span>
+            <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // --- Auto‑tune event ---
+  if (meta.param != null) {
+    const rows: { label: string; value: string; accent?: string }[] = [];
+    rows.push({ label: 'Tham số', value: String(meta.param), accent: 'text-slate-200' });
+    if (meta.old != null) rows.push({ label: 'Cũ', value: Number(meta.old).toFixed(3), accent: 'text-slate-400' });
+    if (meta.new != null) rows.push({ label: 'Mới', value: Number(meta.new).toFixed(3), accent: 'text-emerald-400' });
+    if (meta.delta != null) rows.push({ label: 'Δ', value: Number(meta.delta).toFixed(3), accent: 'text-yellow-400' });
+    if (meta.reason) rows.push({ label: 'Lý do', value: String(meta.reason), accent: 'text-slate-300' });
+    if (meta.hour_budget_used != null) rows.push({ label: 'Ngân sách giờ', value: Number(meta.hour_budget_used).toFixed(3) });
+    if (meta.day_budget_used != null) rows.push({ label: 'Ngân sách ngày', value: Number(meta.day_budget_used).toFixed(3) });
+    return (
+      <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-purple-950/20 border border-purple-900/40 rounded-lg px-3 py-2.5">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-baseline gap-1.5">
+            <span className="text-slate-500 shrink-0">{r.label}</span>
+            <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // --- Original sections: runtime coefficients, sensor calibration results, etc. ---
+  const rows: { label: string; value: string; accent?: string }[] = [];
+
+  if (meta.runtime_coefficients) {
+    const rc = meta.runtime_coefficients;
+    if (rc.ec_gain_per_ml != null) rows.push({ label: 'EC gain/ml', value: Number(rc.ec_gain_per_ml).toFixed(5), accent: 'text-cyan-400' });
+    if (rc.ph_shift_up_per_ml != null) rows.push({ label: 'pH↑/ml', value: Number(rc.ph_shift_up_per_ml).toFixed(5), accent: 'text-emerald-400' });
+    if (rc.ph_shift_down_per_ml != null) rows.push({ label: 'pH↓/ml', value: Number(rc.ph_shift_down_per_ml).toFixed(5), accent: 'text-rose-400' });
+    if (rc.step_ratio_ec != null) rows.push({ label: 'Bước EC', value: Number(rc.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
+    if (rc.step_ratio_ph != null) rows.push({ label: 'Bước pH', value: Number(rc.step_ratio_ph).toFixed(2), accent: 'text-yellow-400' });
+    if (rc.auto_tune_locked != null) rows.push({ label: 'Khóa tự động', value: rc.auto_tune_locked ? 'Có' : 'Không' });
+  }
+  if (meta.alpha != null) rows.push({ label: 'Alpha (EMA)', value: Number(meta.alpha).toFixed(2) });
+  if (meta.observed_ec_gain_per_ml != null) rows.push({ label: 'Quan sát EC', value: Number(meta.observed_ec_gain_per_ml).toFixed(5), accent: 'text-yellow-400' });
+  if (meta.observed_ph_up_per_ml != null) rows.push({ label: 'Quan sát pH↑', value: Number(meta.observed_ph_up_per_ml).toFixed(5), accent: 'text-yellow-400' });
+  if (meta.observed_ph_down_per_ml != null) rows.push({ label: 'Quan sát pH↓', value: Number(meta.observed_ph_down_per_ml).toFixed(5), accent: 'text-yellow-400' });
+
+  if (meta.result) {
+    const r = meta.result;
+    if (r.ph_v7 != null) rows.push({ label: 'V tại pH 7', value: `${Number(r.ph_v7).toFixed(4)} V` });
+    if (r.ph_v4 != null) rows.push({ label: 'V tại pH 4', value: `${Number(r.ph_v4).toFixed(4)} V` });
+    if (r.ph_v10 != null) rows.push({ label: 'V tại pH 10', value: `${Number(r.ph_v10).toFixed(4)} V` });
+  }
+  if (meta.mode) rows.push({ label: 'Chế độ', value: String(meta.mode) });
+  if (meta.error != null) rows.push({ label: 'Sai số', value: `${Number(meta.error).toFixed(4)} mV`, accent: Number(meta.error) < 10 ? 'text-emerald-400' : 'text-amber-400' });
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2.5">
+      {rows.map(r => (
+        <div key={r.label} className="flex items-baseline gap-1.5">
+          <span className="text-slate-500 shrink-0">{r.label}</span>
+          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── AlertMetadata (mở rộng: type, source, message, retry) ────────────────
 const AlertMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
   const rows: { label: string; value: string; accent?: string }[] = [];
 
+  // Thông tin alert từ SYSTEM ALERT event
+  if (meta.type) rows.push({ label: 'Loại', value: String(meta.type), accent: 'text-red-300' });
+  if (meta.source) rows.push({ label: 'Nguồn', value: String(meta.source), accent: 'text-orange-300' });
+  if (meta.message) rows.push({ label: 'Nội dung', value: String(meta.message), accent: 'text-slate-200' });
+  if (meta.retry_count != null) rows.push({ label: 'Thử lại', value: String(meta.retry_count), accent: 'text-amber-400' });
+  if (meta.pump) rows.push({ label: 'Bơm', value: String(meta.pump) });
+
+  // Các giá trị cảm biến khẩn cấp
   if (meta.ec != null) rows.push({ label: 'EC', value: Number(meta.ec).toFixed(2), accent: 'text-cyan-400' });
   if (meta.ph != null) rows.push({ label: 'pH', value: Number(meta.ph).toFixed(2), accent: 'text-fuchsia-400' });
   if (meta.temp != null) rows.push({ label: 'Nhiệt độ', value: `${Number(meta.temp).toFixed(1)}°C`, accent: 'text-orange-400' });

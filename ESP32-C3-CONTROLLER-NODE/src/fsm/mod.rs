@@ -73,7 +73,7 @@ pub fn start_fsm_control_loop(
             break;
         }
         if report_state_if_changed(&ctx.current_state, &mut last_reported_state) {
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx));
+            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -155,7 +155,8 @@ pub fn start_fsm_control_loop(
         // --- Publish trạng thái nếu thay đổi ---
         let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state);
         if state_changed || force_sync {
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx));
+            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
+
             if force_sync {
                 last_reported_state.clear();
                 let _ = sensor_cmd_tx.send(
@@ -407,11 +408,43 @@ fn report_state_if_changed(current_state: &SystemState, last_reported_state: &mu
     }
 }
 
-fn build_status_msg(ctx: &ControlContext) -> String {
+// Nhớ truyền thêm tham số now_sec vào hàm này
+fn build_status_msg(ctx: &ControlContext, now_sec: u64) -> String {
+    // Hàm closure tính tổng số ml đã bơm trong 1 giờ qua
+    let sum_ml = |pump_name: &str| -> f32 {
+        ctx.hourly_dose_history_ml_by_pump
+            .get(pump_name)
+            .map(|hist| {
+                hist.iter()
+                    .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                    .map(|(_, ml)| ml)
+                    .sum()
+            })
+            .unwrap_or(0.0)
+    };
+
+    // Đếm số lần bơm nước/xả nước trong 1 giờ
+    let refill_count = ctx
+        .hourly_refill_history
+        .iter()
+        .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+        .count();
+    let drain_count = ctx
+        .hourly_drain_history
+        .iter()
+        .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+        .count();
+
     serde_json::json!({
         "online": true,
         "current_state": ctx.current_state.to_payload_string(),
-        "pump_status": ctx.pump_status
+        "pump_status": ctx.pump_status,
+        "budgets": {
+            "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
+            "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
+            "refill_count": refill_count,
+            "drain_count": drain_count
+        }
     })
     .to_string()
 }

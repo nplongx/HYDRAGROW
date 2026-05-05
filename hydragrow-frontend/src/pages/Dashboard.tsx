@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
 import { Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu, Wifi, HardDrive, Clock, AlertTriangle, Server, RadioReceiver } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -63,10 +63,10 @@ const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, i
 );
 
 
-interface SystemEvent { title: string; category: string; timestamp: number; }
+// interface SystemEvent { title: string; category: string; timestamp: number; }
 const Dashboard = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, updatePumpStatusOptimistically, isSensorOnline, settings } = useDeviceContext();
-  const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
+  // const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
 
   useEffect(() => {
     const run = async () => {
@@ -76,15 +76,15 @@ const Dashboard = () => {
       if (!cfg?.backend_url || !cfg?.api_key) return;
       const res = await httpFetch(`${cfg.backend_url}/api/devices/${deviceId}/events?limit=200`, { headers: { 'X-API-Key': cfg.api_key } });
       if (!res.ok) return;
-      const data = await res.json();
-      setRecentEvents(Array.isArray(data) ? data : data.events || []);
+      // const data = await res.json();
+      // setRecentEvents(Array.isArray(data) ? data : data.events || []);
     };
     run();
   }, [deviceId, settings]);
   const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
 
-  const nowSec = Math.floor(Date.now() / 1000);
-  const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
+  // const nowSec = Math.floor(Date.now() / 1000);
+  // const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
 
   if (isLoading || !sensorData) {
     return <LoadingState message="Đang tải tổng quan thiết bị..." />;
@@ -109,9 +109,9 @@ const Dashboard = () => {
   const isOnline = deviceStatus?.is_online;
   const faultCode = extractFaultCode(fsmState || undefined);
   const faultGuide = getFaultGuide(faultCode || undefined);
-  const ecDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ec/i.test(e.title || '')).length;
-  const phDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ph/i.test(e.title || '')).length;
-  const waterOpsCount = oneHourEvents.filter(e => e.category === 'water').length;
+  // const ecDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ec/i.test(e.title || '')).length;
+  // const phDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ph/i.test(e.title || '')).length;
+  // const waterOpsCount = oneHourEvents.filter(e => e.category === 'water').length;
   const pumps: any = isOnline && sensorData?.pump_status ? sensorData.pump_status : {};
 
   const handleToggle = async (pumpId: string, currentStatus: boolean | undefined) => {
@@ -156,23 +156,48 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* Trong component Dashboard, lấy ngân sách trực tiếp từ deviceStatus */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-slate-300 mb-4">Ngân sách chạy 1 giờ</h3>
         <div className="space-y-3 text-xs">
-          {[
-            { label: 'Châm EC', value: ecDoseCount, max: Number((settings as any)?.max_refill_cycles_per_hour || 3) },
-            { label: 'Châm pH', value: phDoseCount, max: Number((settings as any)?.max_refill_cycles_per_hour || 3) },
-            { label: 'Bơm/xả nước', value: waterOpsCount, max: Number((settings as any)?.max_drain_cycles_per_hour || 3) }
-          ].map((row) => {
-            const pct = Math.min(100, Math.round((row.value / Math.max(1, row.max)) * 100));
-            return <div key={row.label}>
-              <div className="flex justify-between text-slate-400 mb-1"><span>{row.label}</span><span>{row.value}/{row.max}</span></div>
-              <div className="h-2 rounded bg-slate-800"><div className="h-2 rounded bg-blue-500" style={{ width: `${pct}%` }} /></div>
-            </div>;
-          })}
+          {(() => {
+            // Lấy thông số thực tế từ Backend (nếu chưa có thì mặc định là 0)
+            const budgets = (deviceStatus as any)?.budgets || {};
+            const ecUsedMl = Math.round(budgets.ec_ml || 0);
+            const phUsedMl = Math.round(budgets.ph_ml || 0);
+            const refillCount = budgets.refill_count || 0;
+            const drainCount = budgets.drain_count || 0;
+
+            // Lấy giới hạn từ cấu hình cài đặt (Settings)
+            const maxDoseMl = Number((settings as any)?.max_dose_per_hour || 50);
+            const maxRefill = Number((settings as any)?.max_refill_cycles_per_hour || 3);
+            const maxDrain = Number((settings as any)?.max_drain_cycles_per_hour || 3);
+
+            return [
+              { label: 'Châm EC (ml)', value: ecUsedMl, max: maxDoseMl },
+              { label: 'Châm pH (ml)', value: phUsedMl, max: maxDoseMl },
+              { label: 'Cấp nước (lần)', value: refillCount, max: maxRefill },
+              { label: 'Xả nước (lần)', value: drainCount, max: maxDrain }
+            ].map((row) => {
+              const pct = Math.min(100, Math.round((row.value / Math.max(1, row.max)) * 100));
+              return (
+                <div key={row.label}>
+                  <div className="flex justify-between text-slate-400 mb-1">
+                    <span>{row.label}</span>
+                    <span>{row.value}/{row.max}</span>
+                  </div>
+                  <div className="h-2 rounded bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-2 rounded transition-all duration-500 ${pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
-
       {/* TIẾN TRÌNH FSM & HOẠT ĐỘNG BƠM */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-5">

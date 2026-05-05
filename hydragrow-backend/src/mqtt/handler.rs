@@ -792,6 +792,7 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         "_msg_type": "fsm_status", // Loại tin nhắn riêng biệt
         "device_id": device_id.clone(),
         "fsm_state": state.clone(),
+        "budgets": json.get("budgets").cloned().unwrap_or(serde_json::json!({})),
     });
     let _ = app_state.health_sender.send(fsm_status_payload);
 

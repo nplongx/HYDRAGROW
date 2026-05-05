@@ -362,6 +362,10 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 setFsmState(healthData.fsm_state);
               }
 
+              if (healthData.budgets && Object.keys(healthData.budgets).length > 0) {
+                setDeviceStatus(prev => ({ ...prev, budgets: healthData.budgets }));
+              }
+
               const confirmedPumpStatus = normalizePumpStatus(healthData.pump_status);
               savePumpStatusToStore(confirmedPumpStatus);
 

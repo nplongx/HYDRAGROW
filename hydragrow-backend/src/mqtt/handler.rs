@@ -1130,6 +1130,40 @@ async fn handle_runtime_calibration_update(
         .and_then(|v| v.as_f64())
         .map(|v| v as f32);
 
+    // 👇 THÊM: Lấy thêm Step Ratio từ JSON
+    let step_ratio_ec = coeffs
+        .get("step_ratio_ec")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
+    let step_ratio_ph = coeffs
+        .get("step_ratio_ph")
+        .and_then(|v| v.as_f64())
+        .map(|v| v as f32);
+
+    if ec_gain.is_none()
+        && ph_up.is_none()
+        && ph_down.is_none()
+        && step_ratio_ec.is_none()
+        && step_ratio_ph.is_none()
+    {
+        debug!("ℹ️ [EMA CALIBRATION] Không có hệ số nào mới để cập nhật.");
+        return;
+    }
+
+    // 👇 SỬA LẠI: Thêm các cột step_ratio vào câu lệnh SQL
+    // (Đảm bảo database của bạn đã có cột step_ratio_ec và step_ratio_ph trong bảng dosing_calibration)
+    let query = r#"
+        UPDATE dosing_calibration
+        SET
+            ec_gain_per_ml = COALESCE($1::real, ec_gain_per_ml),
+            ph_shift_up_per_ml = COALESCE($2::real, ph_shift_up_per_ml),
+            ph_shift_down_per_ml = COALESCE($3::real, ph_shift_down_per_ml),
+            step_ratio_ec = COALESCE($4::real, step_ratio_ec),
+            step_ratio_ph = COALESCE($5::real, step_ratio_ph),
+            last_calibrated = NOW()
+        WHERE device_id = $6
+    "#;
+
     if ec_gain.is_none() && ph_up.is_none() && ph_down.is_none() {
         debug!("ℹ️ [EMA CALIBRATION] Không có hệ số nào mới để cập nhật.");
         return;

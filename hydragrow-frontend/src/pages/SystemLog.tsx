@@ -628,7 +628,6 @@ const SystemLog = () => {
                     </div>
 
                     {/* Nội dung message */}
-                    // Trong phần render của sự kiện, thay thế:
                     {ev.message && ev.message !== ev.title && !ev.message.startsWith('Monitoring') && ev.level !== 'FSM_UPDATE' && (
                       <p className="text-xs text-slate-400 leading-relaxed mt-1">
                         {ev.message}

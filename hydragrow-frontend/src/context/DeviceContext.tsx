@@ -234,8 +234,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           try {
             const data = JSON.parse(event.data);
 
-            // 🟢 FIX 2: Bắt gói tin FSM Status riêng biệt để khỏi dính spam với Alert
-            // 🟢 FIX: Xử lý FSM Status (Bao gồm lấy budgets)
+            console.log("📥 RAW WS MESSAGE:", data.type || data._msg_type, data);
+
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
 

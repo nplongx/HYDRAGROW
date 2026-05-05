@@ -235,23 +235,39 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             const data = JSON.parse(event.data);
 
             // 🟢 FIX 2: Bắt gói tin FSM Status riêng biệt để khỏi dính spam với Alert
+            // 🟢 FIX: Xử lý FSM Status (Bao gồm lấy budgets)
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
-              if (payload.fsm_state) {
-                setFsmState(payload.fsm_state);
+
+              // Payload từ Rust gửi lên key là "current_state", backup "fsm_state" nếu nodejs wrap
+              if (payload.fsm_state) setFsmState(payload.fsm_state);
+              else if (payload.current_state) setFsmState(payload.current_state);
+
+              // 👉 THÊM ĐOẠN NÀY ĐỂ BẮT BUDGETS TỪ RUST:
+              if (payload.budgets) {
+                setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
               }
               return;
             }
 
             if (data.type === 'device_status') {
-              const isOnline: boolean = data.payload.is_online ?? false;
+              const payload = data.payload || {};
+              const isOnline: boolean = payload.is_online ?? payload.online ?? false;
+
               setIsControllerStatusKnown(true);
               setDeviceStatus(prev => {
                 if (prev.is_online !== isOnline) {
                   if (isOnline) toast.success("Trạm điều khiển đã trực tuyến trở lại.");
                   else toast.error("Trạm điều khiển đã ngắt kết nối. Vui lòng kiểm tra mạng rồi thử lại.");
                 }
-                return { is_online: isOnline, last_seen: new Date().toISOString() };
+
+                // 👉 SỬ DỤNG SPREAD OPERATOR (...payload) ĐỂ KHÔNG BỊ MẤT DỮ LIỆU
+                return {
+                  ...prev,
+                  ...payload,
+                  is_online: isOnline,
+                  last_seen: new Date().toISOString()
+                };
               });
 
               if (!isOnline) {

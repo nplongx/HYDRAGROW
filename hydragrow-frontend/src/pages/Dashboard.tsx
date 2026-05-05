@@ -66,6 +66,7 @@ const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, i
 // interface SystemEvent { title: string; category: string; timestamp: number; }
 const Dashboard = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, updatePumpStatusOptimistically, isSensorOnline, settings } = useDeviceContext();
+  console.log("Dữ liệu deviceStatus:", deviceStatus);
   // const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
 
   useEffect(() => {

@@ -83,6 +83,9 @@ const Dashboard = () => {
   }, [deviceId, settings]);
   const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
 
+  const nowSec = Math.floor(Date.now() / 1000);
+  const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
+
   if (isLoading || !sensorData) {
     return <LoadingState message="Đang tải tổng quan thiết bị..." />;
   }
@@ -106,8 +109,6 @@ const Dashboard = () => {
   const isOnline = deviceStatus?.is_online;
   const faultCode = extractFaultCode(fsmState || undefined);
   const faultGuide = getFaultGuide(faultCode || undefined);
-  const nowSec = Math.floor(Date.now() / 1000);
-  const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
   const ecDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ec/i.test(e.title || '')).length;
   const phDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ph/i.test(e.title || '')).length;
   const waterOpsCount = oneHourEvents.filter(e => e.category === 'water').length;

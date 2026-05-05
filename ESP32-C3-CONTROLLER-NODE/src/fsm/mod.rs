@@ -43,6 +43,7 @@ pub fn start_fsm_control_loop(
     fsm_mqtt_tx: Sender<String>,
     dosing_report_tx: Sender<String>,
     sensor_cmd_tx: Sender<String>,
+    current_time_sec: u64,
 ) {
     let mut ctx = ControlContext::default();
     let mut last_reported_state = String::new();

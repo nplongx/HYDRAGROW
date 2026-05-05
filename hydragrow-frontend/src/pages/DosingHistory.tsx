@@ -15,7 +15,10 @@ interface DosingReportRecord {
   id: number;
   device_id: string;
   season_id?: string;
-  action: string;
+  payload?: {      // Bổ sung payload dựa theo data thực tế
+    trigger?: string;
+    [key: string]: any;
+  };
   created_at: string;
 }
 
@@ -121,7 +124,7 @@ const DosingHistory = () => {
     }
   };
 
-  // 5. HÀM XUẤT FILE CSV
+  // 5. HÀM XUẤT FILE CSV ĐÃ SỬA LỖI
   const handleExportCSV = async () => {
     if (history.length === 0) {
       toast.error("Không có dữ liệu để xuất!");
@@ -131,13 +134,18 @@ const DosingHistory = () => {
     try {
       const headers = ["ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Hành Động", "Thời Gian"];
 
-      const csvRows = history.map(row => [
-        row.id,
-        row.device_id,
-        row.season_id || "",
-        row.action.replace(/_/g, ' '),
-        new Date(row.created_at).toLocaleString('vi-VN')
-      ].map(val => `"${val}"`).join(","));
+      const csvRows = history.map(row => {
+        // Lấy action từ row.action hoặc fallback sang row.payload.trigger
+        // const actionText = row.action || row.payload?.trigger || "Khong_ro";
+
+        return [
+          row.id,
+          row.device_id,
+          row.season_id || "",
+          // actionText.replace(/_/g, ' '),
+          new Date(row.created_at).toLocaleString('vi-VN')
+        ].map(val => `"${val}"`).join(",")
+      });
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
 
@@ -284,8 +292,9 @@ const DosingHistory = () => {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 
                   <div>
+                    {/* ĐÃ SỬA LỖI HIỂN THỊ TRÊN UI */}
                     <h4 className="text-white font-bold text-sm capitalize tracking-wide">
-                      {record.action.replace(/_/g, ' ')}
+                      {/* {(record.action || record.payload?.trigger || 'Không rõ').replace(/_/g, ' ')} */}
                     </h4>
                     <div className="flex items-center space-x-3 mt-1.5 text-xs text-slate-400 font-medium">
                       <span className="flex items-center">

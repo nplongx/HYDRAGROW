@@ -1169,22 +1169,12 @@ async fn handle_runtime_calibration_update(
         return;
     }
 
-    // Câu lệnh SQL linh hoạt: Chỉ update các cột có giá trị (khác NULL).
-    // Nếu controller gửi lên NULL (vì chưa tính được) -> Giữ nguyên (COALESCE).
-    let query = r#"
-        UPDATE dosing_calibration
-        SET
-            ec_gain_per_ml = COALESCE($1::real, ec_gain_per_ml),
-            ph_shift_up_per_ml = COALESCE($2::real, ph_shift_up_per_ml),
-            ph_shift_down_per_ml = COALESCE($3::real, ph_shift_down_per_ml),
-            last_calibrated = NOW()
-        WHERE device_id = $4
-    "#;
-
     match sqlx::query(query)
         .bind(ec_gain)
         .bind(ph_up)
         .bind(ph_down)
+        .bind(step_ratio_ec) // $4 - Đã thêm
+        .bind(step_ratio_ph) // $5 - Đã thêm
         .bind(&device_id)
         .execute(&app_state.pg_pool)
         .await

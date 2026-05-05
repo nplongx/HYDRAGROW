@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   ShieldCheck, Clock, Box,
-  AlertTriangle, Settings, Calendar, ChevronDown, Download
+  AlertTriangle, Settings, Calendar, ChevronDown, Download, Droplet, Activity
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -11,12 +11,23 @@ import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 import { loadAppSettings } from '../platform/settings';
 
+// Đã cập nhật Interface dựa trên data thực tế
 interface DosingReportRecord {
   id: number;
   device_id: string;
   season_id?: string;
-  payload?: {      // Bổ sung payload dựa theo data thực tế
+  pump_a_ml: number;
+  pump_b_ml: number;
+  ph_up_ml: number;
+  ph_down_ml: number;
+  payload?: {
     trigger?: string;
+    dosing_data?: {
+      pre?: { ec: number; ph: number; water_level: number };
+      post_stable?: { ec: number; ph: number };
+      target_ec?: number;
+      target_ph?: number;
+    };
     [key: string]: any;
   };
   created_at: string;
@@ -124,7 +135,7 @@ const DosingHistory = () => {
     }
   };
 
-  // 5. HÀM XUẤT FILE CSV ĐÃ SỬA LỖI
+  // 5. HÀM XUẤT FILE CSV ĐÃ SỬA LỖI & BỔ SUNG DATA
   const handleExportCSV = async () => {
     if (history.length === 0) {
       toast.error("Không có dữ liệu để xuất!");
@@ -132,24 +143,37 @@ const DosingHistory = () => {
     }
 
     try {
-      const headers = ["ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Hành Động", "Thời Gian"];
+      // Cập nhật headers để báo cáo đầy đủ thông tin hơn
+      const headers = [
+        "ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Lý Do Bơm (Trigger)",
+        "Bơm A (ml)", "Bơm B (ml)", "pH Tăng (ml)", "pH Giảm (ml)",
+        "pH Trước", "pH Sau", "Thời Gian"
+      ];
 
       const csvRows = history.map(row => {
-        // Lấy action từ row.action hoặc fallback sang row.payload.trigger
-        // const actionText = row.action || row.payload?.trigger || "Khong_ro";
+        // Lấy trigger từ payload
+        const triggerText = row.payload?.trigger || "Không rõ";
+        const prePh = row.payload?.dosing_data?.pre?.ph?.toFixed(2) || "";
+        const postPh = row.payload?.dosing_data?.post_stable?.ph?.toFixed(2) || "";
 
         return [
           row.id,
           row.device_id,
           row.season_id || "",
-          // actionText.replace(/_/g, ' '),
+          triggerText.replace(/_/g, ' '),
+          row.pump_a_ml || 0,
+          row.pump_b_ml || 0,
+          row.ph_up_ml || 0,
+          row.ph_down_ml || 0,
+          prePh,
+          postPh,
           new Date(row.created_at).toLocaleString('vi-VN')
         ].map(val => `"${val}"`).join(",")
       });
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
 
-      const saved = await saveTextFile(`nhat-ky-niem-phong-${selectedSeason || 'tat-ca'}.csv`, csvContent);
+      const saved = await saveTextFile(`nhat-ky-bom-${selectedSeason || 'tat-ca'}.csv`, csvContent);
       if (!saved) return;
       toast.success("Đã lưu file thành công!");
     } catch (err: any) {
@@ -191,7 +215,7 @@ const DosingHistory = () => {
       <div className="ui-card flex flex-col md:flex-row md:items-center justify-between gap-6 border-indigo-500/20">
         <PageHeader
           icon={ShieldCheck}
-          title="Nhật Ký Niêm Phong"
+          title="Nhật Ký Châm Phân & pH"
           subtitle="Minh bạch và lưu trữ dữ liệu các hoạt động canh tác."
           className="w-full"
         />
@@ -246,7 +270,6 @@ const DosingHistory = () => {
             <div>
               <div className="flex items-center gap-2 mb-0.5">
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Thời gian canh tác</p>
-                {/* Hiển thị giống cây của vụ mùa này */}
                 {activeSeasonData.plant_type && (
                   <span className="px-1.5 py-[1px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] font-bold uppercase">
                     {activeSeasonData.plant_type}
@@ -272,46 +295,96 @@ const DosingHistory = () => {
           <LoadingState
             fullscreen={false}
             className="py-8"
-            message="Đang tải dữ liệu niêm phong..."
+            message="Đang tải dữ liệu..."
           />
         ) : history.length === 0 && !error ? (
-          <StateView icon={Box} title="Chưa có dữ liệu nào được niêm phong cho mẻ trồng này." className="bg-slate-900/30" />
+          <StateView icon={Box} title="Chưa có dữ liệu nào được ghi nhận cho mẻ trồng này." className="bg-slate-900/30" />
         ) : (
-          history.map((record, index) => (
-            <div key={record.id || index} className="flex items-start space-x-4 animate-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
+          history.map((record, index) => {
+            const triggerName = (record.payload?.trigger || 'Không rõ').replace(/_/g, ' ');
+            const preData = record.payload?.dosing_data?.pre;
+            const postData = record.payload?.dosing_data?.post_stable;
 
-              {/* Icon / Node trên timeline */}
-              <div className="shrink-0">
-                <div className="h-12 w-12 rounded-full bg-slate-900 border-4 border-slate-950 flex items-center justify-center shadow-lg relative z-10">
-                  <Box size={18} className="text-indigo-400" />
-                </div>
-              </div>
+            return (
+              <div key={record.id || index} className="flex items-start space-x-4 animate-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
 
-              {/* Card nội dung */}
-              <div className="flex-1 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-2xl p-4 hover:border-indigo-500/40 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.1)] group">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-
-                  <div>
-                    {/* ĐÃ SỬA LỖI HIỂN THỊ TRÊN UI */}
-                    <h4 className="text-white font-bold text-sm capitalize tracking-wide">
-                      {/* {(record.action || record.payload?.trigger || 'Không rõ').replace(/_/g, ' ')} */}
-                    </h4>
-                    <div className="flex items-center space-x-3 mt-1.5 text-xs text-slate-400 font-medium">
-                      <span className="flex items-center">
-                        <Clock size={12} className="mr-1.5" />
-                        {new Date(record.created_at).toLocaleString('vi-VN', {
-                          hour: '2-digit', minute: '2-digit', second: '2-digit',
-                          day: '2-digit', month: '2-digit', year: 'numeric'
-                        })}
-                      </span>
-                    </div>
+                {/* Icon / Node trên timeline */}
+                <div className="shrink-0">
+                  <div className="h-12 w-12 rounded-full bg-slate-900 border-4 border-slate-950 flex items-center justify-center shadow-lg relative z-10">
+                    <Droplet size={18} className="text-indigo-400" />
                   </div>
-
                 </div>
-              </div>
 
-            </div>
-          ))
+                {/* Card nội dung */}
+                <div className="flex-1 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-2xl p-4 hover:border-indigo-500/40 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.1)] group">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+
+                    <div className="flex-1">
+                      {/* ĐÃ SỬA LỖI HIỂN THỊ TRÊN UI */}
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-white font-bold text-sm capitalize tracking-wide">
+                          Hành động: {triggerName}
+                        </h4>
+                      </div>
+
+                      <div className="flex items-center space-x-3 mt-1.5 text-xs text-slate-400 font-medium">
+                        <span className="flex items-center">
+                          <Clock size={12} className="mr-1.5" />
+                          {new Date(record.created_at).toLocaleString('vi-VN', {
+                            hour: '2-digit', minute: '2-digit', second: '2-digit',
+                            day: '2-digit', month: '2-digit', year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+
+                      {/* Hiển thị lượng dung dịch đã bơm */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {record.ph_up_ml > 0 && (
+                          <span className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded text-xs font-semibold">
+                            pH Tăng: {record.ph_up_ml.toFixed(2)} ml
+                          </span>
+                        )}
+                        {record.ph_down_ml > 0 && (
+                          <span className="px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-xs font-semibold">
+                            pH Giảm: {record.ph_down_ml.toFixed(2)} ml
+                          </span>
+                        )}
+                        {record.pump_a_ml > 0 && (
+                          <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-semibold">
+                            Bơm A: {record.pump_a_ml.toFixed(2)} ml
+                          </span>
+                        )}
+                        {record.pump_b_ml > 0 && (
+                          <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-semibold">
+                            Bơm B: {record.pump_b_ml.toFixed(2)} ml
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hiển thị sự thay đổi pH/EC nếu có */}
+                    {preData && postData && (
+                      <div className="shrink-0 bg-slate-950/50 rounded-xl p-3 border border-slate-800/50 min-w-[140px]">
+                        <div className="flex items-center gap-1.5 mb-2 text-slate-400 text-xs font-semibold uppercase">
+                          <Activity size={12} />
+                          <span>Chỉ số</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                          <span className="text-slate-500">pH Trước:</span>
+                          <span className="text-white font-medium text-right">{preData.ph.toFixed(2)}</span>
+
+                          <span className="text-slate-500">pH Sau:</span>
+                          <span className="text-white font-medium text-right">{postData.ph.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                </div>
+
+              </div>
+            );
+          })
         )}
       </div>
     </div>

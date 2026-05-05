@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   ShieldCheck, Clock, Box,
-  AlertTriangle, Settings, Calendar, ChevronDown, Download, Droplet, Activity
+  AlertTriangle, Settings, Calendar, ChevronDown, Download, Droplet, Activity,
+  Zap, FlaskConical, TrendingUp, Target
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -11,6 +12,7 @@ import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 import { loadAppSettings } from '../platform/settings';
 
+// ─── Kiểu dữ liệu mở rộng ──────────────────────────────────────────────────
 interface DosingReportRecord {
   id: number;
   device_id: string;
@@ -21,11 +23,24 @@ interface DosingReportRecord {
   ph_down_ml: number;
   payload?: {
     dosing_data?: {
-      trigger?: string; // Đã sửa: đưa trigger vào đúng vị trí theo data thực tế
+      trigger?: string;
+      cycle_id?: string;          // UUID chu kỳ
       pre?: { ec: number; ph: number; water_level: number };
       post_stable?: { ec: number; ph: number };
+      post_mixing?: { ec: number; ph: number };
       target_ec?: number;
       target_ph?: number;
+      delta_ec?: number;
+      delta_ph?: number;
+      error_ec?: number;
+      error_ph?: number;
+      duration_ms?: number;
+      ema_ec_gain_used?: number;
+      ema_ph_shift_used?: number;
+      step_ratio_ec?: number;
+      step_ratio_ph?: number;
+      // Có thể có thêm trường khác
+      [key: string]: any;
     };
     [key: string]: any;
   };
@@ -41,6 +56,82 @@ interface CropSeason {
   plant_type?: string;
 }
 
+// ─── Helper lấy số từ object meta ──────────────────────────────────────────
+const getMetaNumber = (meta: any, keys: string[]): number | undefined => {
+  for (const key of keys) {
+    const val = meta?.[key];
+    if (val != null && !isNaN(Number(val))) return Number(val);
+  }
+  return undefined;
+};
+
+// ─── Component con hiển thị chi tiết một chu kỳ châm ────────────────────────
+const DosingReportDetail = ({ record }: { record: DosingReportRecord }) => {
+  const dosing = record.payload?.dosing_data;
+  if (!dosing) return null;
+
+  const pre = dosing.pre ?? {};
+  const post = dosing.post_stable ?? dosing.post_mixing ?? {};
+  const rows: { label: string; value: string; accent?: string }[] = [];
+
+  // --- Thông tin chu kỳ ---
+  if (dosing.cycle_id) rows.push({ label: 'Cycle ID', value: String(dosing.cycle_id).slice(0, 8), accent: 'text-slate-200' });
+  if (dosing.trigger) rows.push({ label: 'Trigger', value: dosing.trigger.replace(/_/g, ' '), accent: 'text-indigo-300' });
+  if (dosing.duration_ms != null) rows.push({ label: 'Thời gian', value: `${(Number(dosing.duration_ms) / 1000).toFixed(1)}s` });
+
+  // --- Liều lượng bơm (đã có sẵn từ record top-level, nhưng hiển thị lại để đầy đủ) ---
+  // Sẽ hiển thị bên ngoài badge, không cần trong bảng chi tiết này.
+
+  // --- Chỉ số trước/sau ---
+  const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
+  const ecAfter = getMetaNumber(post, ['ec', 'EC']);
+  const phBefore = getMetaNumber(pre, ['ph', 'pH']);
+  const phAfter = getMetaNumber(post, ['ph', 'pH']);
+  const waterBefore = getMetaNumber(pre, ['water_level', 'waterLevel']);
+
+  if (ecBefore != null) rows.push({ label: 'EC trước', value: ecBefore.toFixed(2), accent: 'text-cyan-400' });
+  if (ecAfter != null) rows.push({ label: 'EC sau', value: ecAfter.toFixed(2), accent: 'text-cyan-400' });
+  if (phBefore != null) rows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
+  if (phAfter != null) rows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
+  if (waterBefore != null) rows.push({ label: 'Mực nước', value: `${waterBefore.toFixed(1)} cm`, accent: 'text-blue-400' });
+
+  // --- Mục tiêu và sai số ---
+  if (dosing.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(dosing.target_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (dosing.target_ph != null) rows.push({ label: 'Mục tiêu pH', value: Number(dosing.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
+  if (dosing.error_ec != null) rows.push({ label: 'Sai số EC', value: Number(dosing.error_ec).toFixed(2), accent: 'text-amber-400' });
+  if (dosing.error_ph != null) rows.push({ label: 'Sai số pH', value: Number(dosing.error_ph).toFixed(2), accent: 'text-amber-400' });
+
+  // --- Biến động ---
+  if (dosing.delta_ec != null) rows.push({ label: 'Δ EC', value: Number(dosing.delta_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (dosing.delta_ph != null) rows.push({ label: 'Δ pH', value: Number(dosing.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
+
+  // --- Hệ số kỹ thuật ---
+  if (dosing.ema_ec_gain_used != null) rows.push({ label: 'EMA EC gain', value: Number(dosing.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
+  if (dosing.ema_ph_shift_used != null) rows.push({ label: 'EMA pH shift', value: Number(dosing.ema_ph_shift_used).toFixed(5), accent: 'text-fuchsia-500' });
+  if (dosing.step_ratio_ec != null) rows.push({ label: 'Bước EC', value: Number(dosing.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
+  if (dosing.step_ratio_ph != null) rows.push({ label: 'Bước pH', value: Number(dosing.step_ratio_ph).toFixed(2), accent: 'text-yellow-400' });
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 p-3 bg-slate-950/50 border border-slate-800 rounded-xl">
+      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+        <Activity size={12} className="text-indigo-400" />
+        Phân tích chu kỳ
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-baseline gap-1.5">
+            <span className="text-slate-500 shrink-0">{r.label}</span>
+            <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ─── Component chính ────────────────────────────────────────────────────────
 const DosingHistory = () => {
   const [appConfig, setAppConfig] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
@@ -128,6 +219,7 @@ const DosingHistory = () => {
     }
   };
 
+  // ── Xuất CSV mở rộng ──────────────────────────────────────────────────────
   const handleExportCSV = async () => {
     if (history.length === 0) {
       toast.error("Không có dữ liệu để xuất!");
@@ -136,34 +228,47 @@ const DosingHistory = () => {
 
     try {
       const headers = [
-        "ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Lý Do Bơm (Trigger)",
+        "ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Trigger",
         "Bơm A (ml)", "Bơm B (ml)", "pH Tăng (ml)", "pH Giảm (ml)",
-        "pH Trước", "pH Sau", "Thời Gian"
+        "pH Trước", "pH Sau", "EC Trước", "EC Sau",
+        "Mục tiêu EC", "Mục tiêu pH", "Sai số EC", "Sai số pH",
+        "Δ EC", "Δ pH", "Thời gian (ms)",
+        "EMA EC gain", "EMA pH shift", "Bước EC", "Bước pH",
+        "Thời Gian"
       ];
 
       const csvRows = history.map(row => {
-        // Đã sửa: Trỏ đúng vào dosing_data.trigger
-        const triggerText = row.payload?.dosing_data?.trigger || "Không rõ";
-        const prePh = row.payload?.dosing_data?.pre?.ph?.toFixed(2) || "";
-        const postPh = row.payload?.dosing_data?.post_stable?.ph?.toFixed(2) || "";
+        const d = row.payload?.dosing_data ?? {};
+        const trigger = (d.trigger || 'Không rõ').replace(/_/g, ' ');
+        const prePh = d.pre?.ph?.toFixed(2) ?? '';
+        const postPh = d.post_stable?.ph?.toFixed(2) ?? '';
+        const preEc = d.pre?.ec?.toFixed(2) ?? '';
+        const postEc = d.post_stable?.ec?.toFixed(2) ?? '';
+        const targetEc = d.target_ec?.toFixed(2) ?? '';
+        const targetPh = d.target_ph?.toFixed(2) ?? '';
+        const errorEc = d.error_ec?.toFixed(2) ?? '';
+        const errorPh = d.error_ph?.toFixed(2) ?? '';
+        const deltaEc = d.delta_ec?.toFixed(2) ?? '';
+        const deltaPh = d.delta_ph?.toFixed(2) ?? '';
+        const duration = d.duration_ms ?? '';
+        const emaEc = d.ema_ec_gain_used?.toFixed(5) ?? '';
+        const emaPh = d.ema_ph_shift_used?.toFixed(5) ?? '';
+        const stepEc = d.step_ratio_ec?.toFixed(2) ?? '';
+        const stepPh = d.step_ratio_ph?.toFixed(2) ?? '';
 
         return [
-          row.id,
-          row.device_id,
-          row.season_id || "",
-          triggerText.replace(/_/g, ' '),
-          row.pump_a_ml || 0,
-          row.pump_b_ml || 0,
-          row.ph_up_ml || 0,
-          row.ph_down_ml || 0,
-          prePh,
-          postPh,
+          row.id, row.device_id, row.season_id || '', trigger,
+          row.pump_a_ml || 0, row.pump_b_ml || 0,
+          row.ph_up_ml || 0, row.ph_down_ml || 0,
+          prePh, postPh, preEc, postEc,
+          targetEc, targetPh, errorEc, errorPh,
+          deltaEc, deltaPh, duration,
+          emaEc, emaPh, stepEc, stepPh,
           new Date(row.created_at).toLocaleString('vi-VN')
-        ].map(val => `"${val}"`).join(",")
+        ].map(val => `"${val}"`).join(",");
       });
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
-
       const saved = await saveTextFile(`nhat-ky-bom-${selectedSeason || 'tat-ca'}.csv`, csvContent);
       if (!saved) return;
       toast.success("Đã lưu file thành công!");
@@ -246,7 +351,7 @@ const DosingHistory = () => {
       </div>
 
       {activeSeasonData && (
-        <div className="flex items-center justify-between px-4 py-3 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
+        <div className="flex items-center justify-between px-4 py-3 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl mb-6">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-indigo-500/10 rounded-lg">
               <Calendar size={18} className="text-indigo-400" />
@@ -268,98 +373,135 @@ const DosingHistory = () => {
         </div>
       )}
 
-      {error && <StateView icon={AlertTriangle} variant="error" title={error} className="animate-in fade-in" />}
+      {error && <StateView icon={AlertTriangle} variant="error" title={error} className="animate-in fade-in mb-6" />}
 
       <div className="space-y-6 relative pt-4">
         <div className="absolute left-6 top-8 bottom-0 w-px bg-slate-800 -z-10"></div>
 
         {isLoading ? (
-          <LoadingState
-            fullscreen={false}
-            className="py-8"
-            message="Đang tải dữ liệu..."
-          />
+          <LoadingState fullscreen={false} className="py-8" message="Đang tải dữ liệu..." />
         ) : history.length === 0 && !error ? (
           <StateView icon={Box} title="Chưa có dữ liệu nào được ghi nhận cho mẻ trồng này." className="bg-slate-900/30" />
         ) : (
           history.map((record, index) => {
-            // Đã sửa: Trỏ đúng vào dosing_data.trigger
             const triggerName = (record.payload?.dosing_data?.trigger || 'Không rõ').replace(/_/g, ' ');
-            const preData = record.payload?.dosing_data?.pre;
-            const postData = record.payload?.dosing_data?.post_stable;
+            const dosing = record.payload?.dosing_data;
 
             return (
               <div key={record.id || index} className="flex items-start space-x-4 animate-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
-
+                {/* Timeline dot */}
                 <div className="shrink-0">
                   <div className="h-12 w-12 rounded-full bg-slate-900 border-4 border-slate-950 flex items-center justify-center shadow-lg relative z-10">
                     <Droplet size={18} className="text-indigo-400" />
                   </div>
                 </div>
 
+                {/* Card nội dung */}
                 <div className="flex-1 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-2xl p-4 hover:border-indigo-500/40 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.1)] group">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-1">
                         <h4 className="text-white font-bold text-sm capitalize tracking-wide">
-                          Hành động: {triggerName}
+                          {triggerName}
                         </h4>
+                        {dosing?.cycle_id && (
+                          <span className="text-[10px] text-slate-500 font-mono bg-slate-800 px-1.5 py-0.5 rounded">
+                            {String(dosing.cycle_id).slice(0, 8)}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="flex items-center space-x-3 mt-1.5 text-xs text-slate-400 font-medium">
-                        <span className="flex items-center">
-                          <Clock size={12} className="mr-1.5" />
-                          {new Date(record.created_at).toLocaleString('vi-VN', {
-                            hour: '2-digit', minute: '2-digit', second: '2-digit',
-                            day: '2-digit', month: '2-digit', year: 'numeric'
-                          })}
-                        </span>
+                      <div className="flex items-center space-x-3 text-xs text-slate-400 font-medium">
+                        <Clock size={12} className="mr-1.5" />
+                        {new Date(record.created_at).toLocaleString('vi-VN', {
+                          hour: '2-digit', minute: '2-digit', second: '2-digit',
+                          day: '2-digit', month: '2-digit', year: 'numeric'
+                        })}
+                        {dosing?.duration_ms != null && (
+                          <span className="text-slate-500 flex items-center gap-1">
+                            <Zap size={12} className="text-yellow-500" />
+                            {(Number(dosing.duration_ms) / 1000).toFixed(1)}s
+                          </span>
+                        )}
                       </div>
 
+                      {/* Liều lượng bơm */}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {record.ph_up_ml > 0 && (
-                          <span className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded text-xs font-semibold">
-                            pH Tăng: {record.ph_up_ml.toFixed(2)} ml
-                          </span>
-                        )}
-                        {record.ph_down_ml > 0 && (
-                          <span className="px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-xs font-semibold">
-                            pH Giảm: {record.ph_down_ml.toFixed(2)} ml
-                          </span>
-                        )}
                         {record.pump_a_ml > 0 && (
-                          <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-semibold">
-                            Bơm A: {record.pump_a_ml.toFixed(2)} ml
+                          <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-semibold flex items-center gap-1">
+                            <FlaskConical size={12} /> A: {record.pump_a_ml.toFixed(2)} ml
                           </span>
                         )}
                         {record.pump_b_ml > 0 && (
-                          <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-semibold">
-                            Bơm B: {record.pump_b_ml.toFixed(2)} ml
+                          <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-semibold flex items-center gap-1">
+                            <FlaskConical size={12} /> B: {record.pump_b_ml.toFixed(2)} ml
+                          </span>
+                        )}
+                        {record.ph_up_ml > 0 && (
+                          <span className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded text-xs font-semibold flex items-center gap-1">
+                            <TrendingUp size={12} /> pH↑: {record.ph_up_ml.toFixed(2)} ml
+                          </span>
+                        )}
+                        {record.ph_down_ml > 0 && (
+                          <span className="px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-xs font-semibold flex items-center gap-1">
+                            <TrendingUp size={12} className="rotate-180" /> pH↓: {record.ph_down_ml.toFixed(2)} ml
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {preData && postData && (
-                      <div className="shrink-0 bg-slate-950/50 rounded-xl p-3 border border-slate-800/50 min-w-[140px]">
+                    {/* Tóm tắt chỉ số nhanh */}
+                    {(dosing?.pre || dosing?.post_stable || dosing?.target_ec) && (
+                      <div className="shrink-0 bg-slate-950/50 rounded-xl p-3 border border-slate-800/50 min-w-[180px]">
                         <div className="flex items-center gap-1.5 mb-2 text-slate-400 text-xs font-semibold uppercase">
-                          <Activity size={12} />
+                          <Target size={12} className="text-indigo-400" />
                           <span>Chỉ số</span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                          <span className="text-slate-500">pH Trước:</span>
-                          <span className="text-white font-medium text-right">{preData.ph.toFixed(2)}</span>
-
-                          <span className="text-slate-500">pH Sau:</span>
-                          <span className="text-white font-medium text-right">{postData.ph.toFixed(2)}</span>
+                          {dosing.pre?.ec != null && (
+                            <>
+                              <span className="text-slate-500">EC trước:</span>
+                              <span className="text-white font-medium text-right">{dosing.pre.ec.toFixed(2)}</span>
+                            </>
+                          )}
+                          {dosing.post_stable?.ec != null && (
+                            <>
+                              <span className="text-slate-500">EC sau:</span>
+                              <span className="text-white font-medium text-right">{dosing.post_stable.ec.toFixed(2)}</span>
+                            </>
+                          )}
+                          {dosing.pre?.ph != null && (
+                            <>
+                              <span className="text-slate-500">pH trước:</span>
+                              <span className="text-white font-medium text-right">{dosing.pre.ph.toFixed(2)}</span>
+                            </>
+                          )}
+                          {dosing.post_stable?.ph != null && (
+                            <>
+                              <span className="text-slate-500">pH sau:</span>
+                              <span className="text-white font-medium text-right">{dosing.post_stable.ph.toFixed(2)}</span>
+                            </>
+                          )}
+                          {dosing.target_ec != null && (
+                            <>
+                              <span className="text-slate-500">Mục tiêu EC:</span>
+                              <span className="text-cyan-400 font-medium text-right">{Number(dosing.target_ec).toFixed(2)}</span>
+                            </>
+                          )}
+                          {dosing.target_ph != null && (
+                            <>
+                              <span className="text-slate-500">Mục tiêu pH:</span>
+                              <span className="text-fuchsia-400 font-medium text-right">{Number(dosing.target_ph).toFixed(2)}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
-
                   </div>
-                </div>
 
+                  {/* Phân tích chi tiết (ẩn/hiện nếu cần) – ở đây hiển thị luôn để tránh bỏ sót */}
+                  <DosingReportDetail record={record} />
+                </div>
               </div>
             );
           })

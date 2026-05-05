@@ -6,8 +6,8 @@ use serde_json::json;
 use sqlx::PgPool;
 use tracing::{error, info, instrument, warn};
 
-use crate::api::mqtt_utils::publish_command;
 use crate::AppState;
+use crate::api::mqtt_utils::publish_command;
 use crate::models::config::{DosingCalibration, SafetyConfig};
 
 #[derive(Debug, Deserialize)]

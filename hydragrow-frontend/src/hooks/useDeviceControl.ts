@@ -44,6 +44,17 @@ export const useDeviceControl = (deviceId: string) => {
 
       if (res.ok) {
         toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pumpId}`);
+
+        // --- BỔ SUNG GỌI API SYNC Ở ĐÂY ---
+        // Gọi chạy ngầm, không cần await để tránh làm chậm UI
+        httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
+          method: 'POST',
+          headers: {
+            'X-API-Key': settings.api_key || ''
+          }
+        }).catch(err => console.error("Lỗi khi yêu cầu sync trạng thái:", err));
+        // ----------------------------------
+
         return true;
       } else {
         const errorText = await res.text();

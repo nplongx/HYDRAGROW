@@ -44,6 +44,13 @@ pub struct DosingReportPayload {
     pub duration_ms: u64,
     pub ema_ec_gain_used: f32,
     pub ema_ph_shift_used: f32,
+
+    // 👇 BỔ SUNG: Dữ liệu Step Ratio từ thuật toán Auto-Tune
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_ratio_ec: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_ratio_ph: Option<f32>,
+
     // Giữ lại trường này nếu bạn cần tính toán cửa sổ ổn định ở hàm dynamic_learning
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilized_window_sec: Option<u32>,

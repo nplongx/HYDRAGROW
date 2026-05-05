@@ -87,7 +87,7 @@ const MainLayout: React.FC = () => {
           </div>
           <div>
             <h1 className="text-sm font-semibold tracking-tight leading-none">HydraGrow</h1>
-            <p className="text-[10px] text-slate-400 font-medium">Tủ điện thông minh</p>
+            {/* <p className="text-[10px] text-slate-400 font-medium">Tủ điện thông minh</p> */}
           </div>
         </div>
 

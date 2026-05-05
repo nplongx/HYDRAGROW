@@ -199,15 +199,6 @@ const Settings = () => {
   const [_stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
   const [adaptivePhases, setAdaptivePhases] = useState({ observe: true, recommend: true, auto_apply: false, confidence_threshold: 85 });
-  const defaultEma = { ec_gain_per_ml: 0.1, ph_shift_up_per_ml: 0.2, ph_shift_down_per_ml: 0.2 };
-  const emaStatus = useMemo(() => {
-    const entries = [
-      { key: 'ec_gain_per_ml', label: 'EC gain/ml', value: Number(config.ec_gain_per_ml), base: defaultEma.ec_gain_per_ml },
-      { key: 'ph_shift_up_per_ml', label: 'pH shift up/ml', value: Number(config.ph_shift_up_per_ml), base: defaultEma.ph_shift_up_per_ml },
-      { key: 'ph_shift_down_per_ml', label: 'pH shift down/ml', value: Number(config.ph_shift_down_per_ml), base: defaultEma.ph_shift_down_per_ml }
-    ];
-    return entries.map((e) => ({ ...e, drift: Math.abs(e.value - e.base) / e.base }));
-  }, [config.ec_gain_per_ml, config.ph_shift_up_per_ml, config.ph_shift_down_per_ml]);
 
   const calibrationPoints = calibrationPointsCount === 3 ? [7, 4, 10] : [7, 4];
   const activePoint = calibrationPoints[wizardStep];
@@ -480,10 +471,10 @@ const Settings = () => {
       <div className="space-y-4">
 
         {/* NETWORK */}
-        <AccordionSection id="network" title="Máy chủ" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
+        <AccordionSection id="network" title="Thiết bị" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
           <div className="space-y-4 p-1">
             <InputGroup label="Device ID" type="text" value={appSettings.device_id} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, device_id: e.target.value })} />
-            <InputGroup label="Backend URL" type="text" value={appSettings.backend_url} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, backend_url: e.target.value })} />
+            {/* <InputGroup label="Backend URL" type="text" value={appSettings.backend_url} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, backend_url: e.target.value })} /> */}
             <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
           </div>
         </AccordionSection>
@@ -494,7 +485,7 @@ const Settings = () => {
             <div className={`flex items-center justify-between p-4 rounded-xl border ${config.is_enabled ? 'bg-blue-500/10 border-blue-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
               <div>
                 <p className={`text-sm font-medium ${config.is_enabled ? 'text-blue-400' : 'text-slate-300'}`}>Kích hoạt tự động</p>
-                <p className="text-xs text-slate-500 mt-0.5">Cho phép máy bơm chạy theo kịch bản</p>
+                {/* <p className="text-xs text-slate-500 mt-0.5">Cho phép máy bơm chạy theo kịch bản</p> */}
               </div>
               <Switch isOn={config.is_enabled} onClick={(val) => setConfig({ ...config, is_enabled: val })} colorClass="bg-blue-500" />
             </div>
@@ -504,7 +495,7 @@ const Settings = () => {
                 <ShieldAlert className={config.emergency_shutdown ? 'text-red-400' : 'text-slate-500'} size={20} />
                 <div>
                   <p className={`text-sm font-medium ${config.emergency_shutdown ? 'text-red-400' : 'text-slate-300'}`}>Dừng khẩn cấp</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Ngắt điện toàn bộ rơ-le</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Tắt toàn bộ các bơm</p>
                 </div>
               </div>
               <Switch isOn={config.emergency_shutdown} onClick={(val) => setConfig({ ...config, emergency_shutdown: val })} colorClass="bg-red-500" />
@@ -551,15 +542,15 @@ const Settings = () => {
           <SubCard title="Mực Nước (Cảm biến siêu âm)">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2"><InputGroup label="Khoảng cách đến đáy (cm)" value={config.tank_height} onChange={(e: InputEvent) => setConfig({ ...config, tank_height: e.target.value })} /></div>
-              <InputGroup label="Mức giữ (%)" value={config.water_level_target} onChange={(e: InputEvent) => setConfig({ ...config, water_level_target: e.target.value })} />
-              <InputGroup label="Dung sai bù (%)" value={config.water_level_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, water_level_tolerance: e.target.value })} />
-              <InputGroup label="Báo cạn (%)" value={config.water_level_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_min: e.target.value })} />
-              <InputGroup label="Báo tràn (%)" value={config.water_level_max} onChange={(e: InputEvent) => setConfig({ ...config, water_level_max: e.target.value })} />
-              <div className="sm:col-span-2"><InputGroup label="Xả đáy còn (%)" value={config.water_level_drain} onChange={(e: InputEvent) => setConfig({ ...config, water_level_drain: e.target.value })} /></div>
+              <InputGroup label="Mức giữ (cm)" value={config.water_level_target} onChange={(e: InputEvent) => setConfig({ ...config, water_level_target: e.target.value })} />
+              <InputGroup label="Sai số (cm)" value={config.water_level_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, water_level_tolerance: e.target.value })} />
+              <InputGroup label="Báo cạn (cm)" value={config.water_level_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_min: e.target.value })} />
+              <InputGroup label="Báo tràn (cm)" value={config.water_level_max} onChange={(e: InputEvent) => setConfig({ ...config, water_level_max: e.target.value })} />
+              {/* <div className="sm:col-span-2"><InputGroup label="Xả đáy còn (%)" value={config.water_level_drain} onChange={(e: InputEvent) => setConfig({ ...config, water_level_drain: e.target.value })} /></div> */}
             </div>
           </SubCard>
 
-          <SubCard title="Van Cấp / Xả Tự Động" className="mt-4">
+          <SubCard title="Bơm cấp/xả nước" className="mt-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between"><span className="text-sm text-slate-300">Tự động bù nước</span><Switch isOn={config.auto_refill_enabled} onClick={(val) => setConfig({ ...config, auto_refill_enabled: val })} /></div>
               <div className="flex items-center justify-between"><span className="text-sm text-slate-300">Tự động xả tràn</span><Switch isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} /></div>
@@ -596,15 +587,8 @@ const Settings = () => {
 
               <SubCard title="Nhịp Bơm Nhỏ Giọt (Pulse)">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputGroup label="PWM tối thiểu (Chung) (%)" value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
+                  <InputGroup label="PWM tối thiểu (%)" value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
                   <InputGroup label="Mức kích hoạt nhịp (ml)" value={config.dosing_min_dose_ml} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_dose_ml: e.target.value })} />
-
-                  <div className="sm:col-span-2 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-500 uppercase">PWM tối thiểu lẻ</span></div>
-                  <InputGroup label="Bơm A" value={config.pump_a_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_min_pwm_percent: e.target.value })} />
-                  <InputGroup label="Bơm B" value={config.pump_b_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_min_pwm_percent: e.target.value })} />
-                  <InputGroup label="Bơm pH Lên" value={config.pump_ph_up_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_min_pwm_percent: e.target.value })} />
-                  <InputGroup label="Bơm pH Xuống" value={config.pump_ph_down_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_min_pwm_percent: e.target.value })} />
-
                   <div className="sm:col-span-2 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-500 uppercase">Thời gian nhịp</span></div>
                   <InputGroup label="MỞ (ms)" value={config.dosing_pulse_on_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_on_ms: e.target.value })} />
                   <InputGroup label="TẮT (ms)" value={config.dosing_pulse_off_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_off_ms: e.target.value })} />
@@ -613,20 +597,6 @@ const Settings = () => {
               </SubCard>
             </div>
           )}
-
-          <SubCard title="Hiệu chỉnh tự động (EMA)" className="mt-4">
-            <div className="space-y-2">
-              {emaStatus.map((item) => (
-                <div key={item.key} className="flex items-center justify-between text-xs border border-slate-800 rounded-lg px-3 py-2">
-                  <span className="text-slate-300">{item.label}</span>
-                  <div className="text-right">
-                    <div className="text-slate-200">{Number.isFinite(item.value) ? item.value.toFixed(4) : '--'} <span className="text-slate-500">(mặc định {item.base.toFixed(4)})</span></div>
-                    {item.drift > 0.2 && <span className="text-[10px] text-amber-400">Đã được tự điều chỉnh (&gt;20%)</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </SubCard>
 
           <SubCard title="Khuấy Nước" className="mt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -683,8 +653,8 @@ const Settings = () => {
                 <div className="sm:col-span-2 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-500 uppercase">Mạch lọc chống nhiễu</span></div>
                 <InputGroup label="Bỏ qua nhảy EC (Δ)" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
                 <InputGroup label="Bỏ qua nhảy pH (Δ)" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
-                <InputGroup label="Bắt đầu châm nếu lệch EC >" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
-                <InputGroup label="Bắt đầu châm nếu lệch pH >" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
+                <InputGroup label="Mức thay đổi tối thiểu sau khi châm EC >" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
+                <InputGroup label="Mức thay đổi tối thiểu sau khi châm pH >" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
                 <div className="sm:col-span-2"><InputGroup label="Bật máy bơm nước nếu lệch (%) >" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} /></div>
               </div>
             </SubCard>

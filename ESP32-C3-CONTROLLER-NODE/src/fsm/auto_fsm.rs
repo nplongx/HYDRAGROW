@@ -197,13 +197,15 @@ pub fn run_auto_fsm(
                     };
 
                     let report_json = format!(
-                        r#"[DOSING CYCLE] {{ "cycle_id": "{}", "trigger": "{}", "pre": {{ "ec": {:.2}, "ph": {:.2}, "water_level": {:.1} }}, "dose": {{ "pump_a_ml": {:.2}, "pump_b_ml": {:.2}, "ph_up_ml": {:.2}, "ph_down_ml": {:.2} }}, "post_mixing": {{ "ec": {:.2}, "ph": {:.2} }}, "post_stable": {{ "ec": {:.2}, "ph": {:.2} }}, "delta_ec": {:.2}, "delta_ph": {:.2}, "target_ec": {:.2}, "target_ph": {:.2}, "error_ec": {:.2}, "error_ph": {:.2}, "duration_ms": {}, "ema_ec_gain_used": {:.4}, "ema_ph_shift_used": {:.4} }}"#,
+                        r#"[DOSING CYCLE] {{ "cycle_id": "{}", "trigger": "{}", "pre": {{ "ec": {:.2}, "ph": {:.2}, "water_level": {:.1} }}, "dose": {{ "pump_a_ml": {:.2}, "pump_b_ml": {:.2}, "ph_up_ml": {:.2}, "ph_down_ml": {:.2} }}, "post_mixing": {{ "ec": {:.2}, "ph": {:.2} }}, "post_stable": {{ "ec": {:.2}, "ph": {:.2} }}, "delta_ec": {:.2}, "delta_ph": {:.2}, "target_ec": {:.2}, "target_ph": {:.2}, "error_ec": {:.2}, "error_ph": {:.2}, "duration_ms": {}, "ema_ec_gain_used": {:.4}, "ema_ph_shift_used": {:.4}, "step_ratio_ec": {:.2}, "step_ratio_ph": {:.2} }}"#,
                         sample.cycle_id, sample.trigger, sample.start_ec, sample.start_ph, sample.start_water_level,
                         sample.dose_a_ml, sample.dose_b_ml, sample.dose_ph_up_ml, sample.dose_ph_down_ml,
                         sample.post_mixing_ec, sample.post_mixing_ph, sensors.ec, sensors.ph,
                         delta_ec, delta_ph, sample.target_ec, sample.target_ph, error_ec, error_ph, duration_ms,
-                        config.ec_gain_per_ml, ema_ph_shift_used
+                        config.ec_gain_per_ml, ema_ph_shift_used,
+                        ctx.adaptive_ec_step_ratio, ctx.adaptive_ph_step_ratio // <-- Truyền từ ControlContext
                     );
+
                     let _ = dosing_report_tx.send(report_json);
                 }
                 apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);

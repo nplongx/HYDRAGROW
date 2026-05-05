@@ -456,19 +456,29 @@ void loop() {
     last_publish_time = current_millis;
     DynamicJsonDocument doc(512);
 
-    doc["temp"] = current_avg_temp;
-    doc["water_level"] =
-        continuous_level ? latest_raw_water : current_avg_water;
-    doc["ph"] = current_avg_ph;
+    // [ĐÃ SỬA]: Chỉ đưa vào JSON nếu cảm biến tương ứng đang được BẬT
+    if (enable_temp) {
+      doc["temp"] = current_avg_temp;
+    }
 
-    // [THÊM MỚI CẬP NHẬT]: Đẩy cả giá trị pH Raw lên MQTT để tiện so sánh trên
-    // biểu đồ Server
-    doc["ph_raw"] = latest_raw_ph;
+    if (enable_water) {
+      doc["water_level"] =
+          continuous_level ? latest_raw_water : current_avg_water;
+    }
 
-    doc["ec"] = current_avg_ec;
-    if (!isnan(latest_ph_voltage_mv))
-      doc["ph_voltage_mv"] = latest_ph_voltage_mv;
+    if (enable_ph) {
+      doc["ph"] = current_avg_ph;
+      doc["ph_raw"] = latest_raw_ph;
+      if (!isnan(latest_ph_voltage_mv)) {
+        doc["ph_voltage_mv"] = latest_ph_voltage_mv;
+      }
+    }
 
+    if (enable_ec) {
+      doc["ec"] = current_avg_ec;
+    }
+
+    // Các thông số hệ thống và trạng thái lỗi (Luôn gửi)
     doc["rssi"] = WiFi.RSSI();
     doc["free_heap"] = ESP.getFreeHeap();
     doc["uptime"] = millis() / 1000;
@@ -487,12 +497,19 @@ void loop() {
     Serial.printf("📤 [DEBUG-PUB] Topic: %s\n", topic_sensors.c_str());
     Serial.printf("📤 [DEBUG-PUB] Payload: %s\n", payload.c_str());
 
-    // [THÊM MỚI CẬP NHẬT]: Bổ sung hiển thị cả pH Raw vào tóm tắt Debug Publish
-    Serial.printf("📊 [DEBUG-DATA] Temp: %.2f °C | Water: %.2f cm | pH Raw: "
-                  "%.2f | pH (EMA): %.2f | EC: %.2f\n",
-                  current_avg_temp,
-                  continuous_level ? latest_raw_water : current_avg_water,
-                  latest_raw_ph, current_avg_ph, current_avg_ec);
+    // [ĐÃ SỬA]: Cập nhật log Serial để hiển thị "OFF" thay vì in giá trị cũ khi
+    // cảm biến tắt
+    Serial.printf(
+        "📊 [DEBUG-DATA] Temp: %s | Water: %s | pH Raw: %s | pH (EMA): %s | "
+        "EC: %s\n",
+        enable_temp ? String(current_avg_temp, 2).c_str() : "OFF",
+        enable_water
+            ? String(continuous_level ? latest_raw_water : current_avg_water, 2)
+                  .c_str()
+            : "OFF",
+        enable_ph ? String(latest_raw_ph, 2).c_str() : "OFF",
+        enable_ph ? String(current_avg_ph, 2).c_str() : "OFF",
+        enable_ec ? String(current_avg_ec, 2).c_str() : "OFF");
     Serial.println("-----------------------------------------");
   }
 }

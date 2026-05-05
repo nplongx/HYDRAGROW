@@ -11,7 +11,6 @@ import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 import { loadAppSettings } from '../platform/settings';
 
-// Đã cập nhật Interface dựa trên data thực tế
 interface DosingReportRecord {
   id: number;
   device_id: string;
@@ -21,8 +20,8 @@ interface DosingReportRecord {
   ph_up_ml: number;
   ph_down_ml: number;
   payload?: {
-    trigger?: string;
     dosing_data?: {
+      trigger?: string; // Đã sửa: đưa trigger vào đúng vị trí theo data thực tế
       pre?: { ec: number; ph: number; water_level: number };
       post_stable?: { ec: number; ph: number };
       target_ec?: number;
@@ -46,7 +45,6 @@ const DosingHistory = () => {
   const [appConfig, setAppConfig] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
-  // States cho Vụ Mùa & Lịch sử
   const [seasons, setSeasons] = useState<CropSeason[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [history, setHistory] = useState<DosingReportRecord[]>([]);
@@ -54,7 +52,6 @@ const DosingHistory = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Tải cấu hình và lấy danh sách Vụ Mùa
   useEffect(() => {
     const init = async () => {
       try {
@@ -74,7 +71,6 @@ const DosingHistory = () => {
     init();
   }, []);
 
-  // 2. Fetch danh sách vụ mùa
   const fetchSeasons = async (devId: string, backendUrl: string, apiKey: string) => {
     try {
       const url = `${backendUrl}/api/devices/${devId}/seasons`;
@@ -89,7 +85,6 @@ const DosingHistory = () => {
       const actualData = resData.data ? resData.data : resData;
       setSeasons(actualData);
 
-      // Tự động chọn vụ mùa đầu tiên nếu có dữ liệu
       if (actualData.length > 0) setSelectedSeason(actualData[0].id);
 
     } catch (err) {
@@ -97,14 +92,12 @@ const DosingHistory = () => {
     }
   };
 
-  // 3. Lắng nghe sự thay đổi của Vụ Mùa để tải lại Lịch sử
   useEffect(() => {
     if (appConfig && selectedSeason) {
       fetchHistory(appConfig.backend_url, appConfig.api_key, selectedSeason);
     }
   }, [selectedSeason, appConfig]);
 
-  // 4. Gọi API lấy lịch sử
   const fetchHistory = async (backendUrl: string, apiKey: string, seasonId: string) => {
     setIsLoading(true);
     setError(null);
@@ -135,7 +128,6 @@ const DosingHistory = () => {
     }
   };
 
-  // 5. HÀM XUẤT FILE CSV ĐÃ SỬA LỖI & BỔ SUNG DATA
   const handleExportCSV = async () => {
     if (history.length === 0) {
       toast.error("Không có dữ liệu để xuất!");
@@ -143,7 +135,6 @@ const DosingHistory = () => {
     }
 
     try {
-      // Cập nhật headers để báo cáo đầy đủ thông tin hơn
       const headers = [
         "ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Lý Do Bơm (Trigger)",
         "Bơm A (ml)", "Bơm B (ml)", "pH Tăng (ml)", "pH Giảm (ml)",
@@ -151,8 +142,8 @@ const DosingHistory = () => {
       ];
 
       const csvRows = history.map(row => {
-        // Lấy trigger từ payload
-        const triggerText = row.payload?.trigger || "Không rõ";
+        // Đã sửa: Trỏ đúng vào dosing_data.trigger
+        const triggerText = row.payload?.dosing_data?.trigger || "Không rõ";
         const prePh = row.payload?.dosing_data?.pre?.ph?.toFixed(2) || "";
         const postPh = row.payload?.dosing_data?.post_stable?.ph?.toFixed(2) || "";
 
@@ -211,7 +202,6 @@ const DosingHistory = () => {
   return (
     <div className="app-page animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 max-w-4xl mx-auto">
 
-      {/* HEADER & CHỌN VỤ MÙA */}
       <div className="ui-card flex flex-col md:flex-row md:items-center justify-between gap-6 border-indigo-500/20">
         <PageHeader
           icon={ShieldCheck}
@@ -220,10 +210,7 @@ const DosingHistory = () => {
           className="w-full"
         />
 
-        {/* KHU VỰC BỘ LỌC */}
         <div className="flex flex-col sm:flex-row items-end gap-3 shrink-0">
-
-          {/* Nút Xuất CSV */}
           <button
             onClick={handleExportCSV}
             disabled={history.length === 0}
@@ -234,7 +221,6 @@ const DosingHistory = () => {
             <span className="hidden sm:inline">Xuất CSV</span>
           </button>
 
-          {/* Lọc theo Vụ Mùa */}
           <div className="relative min-w-[220px] w-full sm:w-auto">
             <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center gap-1.5">
               <Calendar size={12} /> Mẻ trồng (Vụ mùa)
@@ -256,11 +242,9 @@ const DosingHistory = () => {
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* HIỂN THỊ THÔNG TIN VỤ MÙA ĐANG CHỌN */}
       {activeSeasonData && (
         <div className="flex items-center justify-between px-4 py-3 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
           <div className="flex items-center space-x-3">
@@ -286,9 +270,7 @@ const DosingHistory = () => {
 
       {error && <StateView icon={AlertTriangle} variant="error" title={error} className="animate-in fade-in" />}
 
-      {/* Danh sách Timeline */}
       <div className="space-y-6 relative pt-4">
-        {/* Đường line dọc */}
         <div className="absolute left-6 top-8 bottom-0 w-px bg-slate-800 -z-10"></div>
 
         {isLoading ? (
@@ -301,26 +283,24 @@ const DosingHistory = () => {
           <StateView icon={Box} title="Chưa có dữ liệu nào được ghi nhận cho mẻ trồng này." className="bg-slate-900/30" />
         ) : (
           history.map((record, index) => {
-            const triggerName = (record.payload?.trigger || 'Không rõ').replace(/_/g, ' ');
+            // Đã sửa: Trỏ đúng vào dosing_data.trigger
+            const triggerName = (record.payload?.dosing_data?.trigger || 'Không rõ').replace(/_/g, ' ');
             const preData = record.payload?.dosing_data?.pre;
             const postData = record.payload?.dosing_data?.post_stable;
 
             return (
               <div key={record.id || index} className="flex items-start space-x-4 animate-in slide-in-from-right-4 duration-500" style={{ animationDelay: `${index * 50}ms` }}>
 
-                {/* Icon / Node trên timeline */}
                 <div className="shrink-0">
                   <div className="h-12 w-12 rounded-full bg-slate-900 border-4 border-slate-950 flex items-center justify-center shadow-lg relative z-10">
                     <Droplet size={18} className="text-indigo-400" />
                   </div>
                 </div>
 
-                {/* Card nội dung */}
                 <div className="flex-1 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-2xl p-4 hover:border-indigo-500/40 transition-all hover:shadow-[0_0_20px_rgba(99,102,241,0.1)] group">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
 
                     <div className="flex-1">
-                      {/* ĐÃ SỬA LỖI HIỂN THỊ TRÊN UI */}
                       <div className="flex items-center gap-2">
                         <h4 className="text-white font-bold text-sm capitalize tracking-wide">
                           Hành động: {triggerName}
@@ -337,7 +317,6 @@ const DosingHistory = () => {
                         </span>
                       </div>
 
-                      {/* Hiển thị lượng dung dịch đã bơm */}
                       <div className="mt-3 flex flex-wrap gap-2">
                         {record.ph_up_ml > 0 && (
                           <span className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded text-xs font-semibold">
@@ -362,7 +341,6 @@ const DosingHistory = () => {
                       </div>
                     </div>
 
-                    {/* Hiển thị sự thay đổi pH/EC nếu có */}
                     {preData && postData && (
                       <div className="shrink-0 bg-slate-950/50 rounded-xl p-3 border border-slate-800/50 min-w-[140px]">
                         <div className="flex items-center gap-1.5 mb-2 text-slate-400 text-xs font-semibold uppercase">

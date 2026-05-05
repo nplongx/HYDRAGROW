@@ -276,6 +276,9 @@ pub fn apply_runtime_calibration_ema(
                 "ec_gain_per_ml": applied_ec_gain,
                 "ph_shift_up_per_ml": applied_ph_up,
                 "ph_shift_down_per_ml": applied_ph_down,
+                "auto_tune_locked": ctx.auto_tune_locked,
+                "step_ratio_ec": ctx.adaptive_ec_step_ratio, // Lấy từ biến tính toán thực tế của bạn
+                "step_ratio_ph": ctx.adaptive_ph_step_ratio, // Lấy từ biến tính toán thực tế của bạn
                 "auto_tune_locked": ctx.auto_tune_locked
             },
             "auto_tune_locked": ctx.auto_tune_locked

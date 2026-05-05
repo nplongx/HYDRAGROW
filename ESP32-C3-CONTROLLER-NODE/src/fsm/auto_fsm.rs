@@ -203,7 +203,9 @@ pub fn run_auto_fsm(
                         sample.post_mixing_ec, sample.post_mixing_ph, sensors.ec, sensors.ph,
                         delta_ec, delta_ph, sample.target_ec, sample.target_ph, error_ec, error_ph, duration_ms,
                         config.ec_gain_per_ml, ema_ph_shift_used,
-                        ctx.adaptive_ec_step_ratio, ctx.adaptive_ph_step_ratio // <-- Truyền từ ControlContext
+                        // 👇 Lấy giá trị step_ratio an toàn (hoặc trả về mặc định nếu None)
+                        ctx.adaptive_ec_step_ratio, 
+                        ctx.adaptive_ph_step_ratio 
                     );
 
                     let _ = dosing_report_tx.send(report_json);

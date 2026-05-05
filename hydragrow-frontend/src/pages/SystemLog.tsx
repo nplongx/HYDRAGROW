@@ -26,36 +26,57 @@ interface SystemEvent {
   timestamp: number;
 }
 
-// ─── Renderer metadata theo từng category ────────────────────────────────────
+// ─── Các hàm tiện ích lấy giá trị linh hoạt ─────────────────────────────────
+const getMetaNumber = (meta: any, keys: string[]): number | undefined => {
+  for (const key of keys) {
+    const val = meta[key];
+    if (val != null && !isNaN(Number(val))) return Number(val);
+  }
+  return undefined;
+};
+
+// ─── Renderer metadata theo từng category (được cải tiến) ────────────────────
 
 const DosingMetadata = ({ meta }: { meta: any }) => {
-  const d = meta?.dosing_data ?? meta?.dosing_report ?? meta;
-  if (!d) return null;
+  if (!meta) return null;
 
   const rows: { label: string; value: string; accent?: string }[] = [];
 
-  if (d.pump_a_ml != null || d.pump_b_ml != null) {
-    if (d.pump_a_ml != null && d.pump_a_ml > 0) rows.push({ label: 'Phân A', value: `${Number(d.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
-    if (d.pump_b_ml != null && d.pump_b_ml > 0) rows.push({ label: 'Phân B', value: `${Number(d.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
-    if (d.ph_up_ml != null && d.ph_up_ml > 0) rows.push({ label: 'pH Tăng', value: `${Number(d.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
-    if (d.ph_down_ml != null && d.ph_down_ml > 0) rows.push({ label: 'pH Giảm', value: `${Number(d.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
-  }
+  // Hiển thị lượng bơm
+  if (meta.pump_a_ml != null && meta.pump_a_ml > 0) rows.push({ label: 'Phân A', value: `${Number(meta.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
+  if (meta.pump_b_ml != null && meta.pump_b_ml > 0) rows.push({ label: 'Phân B', value: `${Number(meta.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
+  if (meta.ph_up_ml != null && meta.ph_up_ml > 0) rows.push({ label: 'pH Tăng', value: `${Number(meta.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
+  if (meta.ph_down_ml != null && meta.ph_down_ml > 0) rows.push({ label: 'pH Giảm', value: `${Number(meta.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
 
-  const startEc = d.start_ec ?? d.before_ec;
-  const afterEc = d.after_ec ?? d.stabilized_ec;
+  // EC trước/sau
+  const startEc = getMetaNumber(meta, ['start_ec', 'before_ec', 'ec_before', 'pre_ec']);
+  const afterEc = getMetaNumber(meta, ['after_ec', 'stabilized_ec', 'ec_after', 'post_ec']);
   if (startEc != null && afterEc != null) {
     const delta = (afterEc - startEc).toFixed(2);
     const sign = afterEc >= startEc ? '+' : '';
-    rows.push({ label: 'EC thay đổi', value: `${Number(startEc).toFixed(2)} → ${Number(afterEc).toFixed(2)} (${sign}${delta})`, accent: 'text-cyan-400' });
+    rows.push({ label: 'EC thay đổi', value: `${startEc.toFixed(2)} → ${afterEc.toFixed(2)} (${sign}${delta})`, accent: 'text-cyan-400' });
+  } else if (startEc != null) {
+    rows.push({ label: 'EC trước', value: startEc.toFixed(2), accent: 'text-cyan-400' });
+  } else if (afterEc != null) {
+    rows.push({ label: 'EC sau', value: afterEc.toFixed(2), accent: 'text-cyan-400' });
   }
-  const startPh = d.start_ph ?? d.before_ph;
-  const afterPh = d.after_ph ?? d.stabilized_ph;
+
+  // pH trước/sau
+  const startPh = getMetaNumber(meta, ['start_ph', 'before_ph', 'ph_before', 'pre_ph']);
+  const afterPh = getMetaNumber(meta, ['after_ph', 'stabilized_ph', 'ph_after', 'post_ph']);
   if (startPh != null && afterPh != null) {
     const delta = (afterPh - startPh).toFixed(2);
     const sign = afterPh >= startPh ? '+' : '';
-    rows.push({ label: 'pH thay đổi', value: `${Number(startPh).toFixed(2)} → ${Number(afterPh).toFixed(2)} (${sign}${delta})`, accent: 'text-fuchsia-400' });
+    rows.push({ label: 'pH thay đổi', value: `${startPh.toFixed(2)} → ${afterPh.toFixed(2)} (${sign}${delta})`, accent: 'text-fuchsia-400' });
+  } else if (startPh != null) {
+    rows.push({ label: 'pH trước', value: startPh.toFixed(2), accent: 'text-fuchsia-400' });
+  } else if (afterPh != null) {
+    rows.push({ label: 'pH sau', value: afterPh.toFixed(2), accent: 'text-fuchsia-400' });
   }
-  if (d.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(d.target_ec).toFixed(2) });
+
+  // Mục tiêu
+  if (meta.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (meta.target_ph != null) rows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
 
   if (rows.length === 0) return null;
 
@@ -71,19 +92,103 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
+const DosingCycleMetadata = ({ meta }: { meta: any }) => {
+  if (!meta) return null;
+  const pre = meta.pre ?? {};
+  const post = meta.post_stable ?? meta.post ?? {};
+  const rows: { label: string; value: string; accent?: string }[] = [];
+
+  if (meta.cycle_id) rows.push({ label: 'Cycle ID', value: String(meta.cycle_id), accent: 'text-slate-200' });
+  if (meta.trigger) rows.push({ label: 'Trigger', value: String(meta.trigger) });
+
+  // EC
+  const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
+  const ecAfter = getMetaNumber(post, ['ec', 'EC']);
+  if (ecBefore != null && ecAfter != null) {
+    const delta = (ecAfter - ecBefore).toFixed(2);
+    const sign = ecAfter >= ecBefore ? '+' : '';
+    rows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-cyan-400' });
+  } else if (ecBefore != null) {
+    rows.push({ label: 'EC trước', value: ecBefore.toFixed(2), accent: 'text-cyan-400' });
+  } else if (ecAfter != null) {
+    rows.push({ label: 'EC sau', value: ecAfter.toFixed(2), accent: 'text-cyan-400' });
+  }
+
+  // pH
+  const phBefore = getMetaNumber(pre, ['ph', 'pH']);
+  const phAfter = getMetaNumber(post, ['ph', 'pH']);
+  if (phBefore != null && phAfter != null) {
+    const delta = (phAfter - phBefore).toFixed(2);
+    const sign = phAfter >= phBefore ? '+' : '';
+    rows.push({ label: 'pH', value: `${phBefore.toFixed(2)} → ${phAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-fuchsia-400' });
+  } else if (phBefore != null) {
+    rows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
+  } else if (phAfter != null) {
+    rows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
+  }
+
+  // Delta tổng thể (nếu có)
+  if (meta.delta_ec != null) rows.push({ label: 'Δ EC', value: Number(meta.delta_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (meta.delta_ph != null) rows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
+
+  // Mục tiêu
+  if (meta.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
+  if (meta.target_ph != null) rows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
+
+  if (meta.duration_sec != null || meta.duration_ms != null) {
+    const s = meta.duration_sec ?? (meta.duration_ms / 1000);
+    rows.push({ label: 'Thời gian', value: `${Number(s).toFixed(1)}s` });
+  }
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2.5">
+      {rows.map(r => (
+        <div key={r.label} className="flex items-baseline gap-1.5">
+          <span className="text-slate-500 shrink-0">{r.label}</span>
+          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const WaterMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
   const rows: { label: string; value: string; accent?: string }[] = [];
 
-  if (meta.level_before != null && meta.level_after != null) {
-    const delta = (meta.level_after - meta.level_before).toFixed(1);
-    const sign = meta.level_after >= meta.level_before ? '+' : '';
-    rows.push({ label: 'Mực nước', value: `${Number(meta.level_before).toFixed(1)} → ${Number(meta.level_after).toFixed(1)} cm (${sign}${delta})`, accent: 'text-blue-400' });
+  // Mực nước
+  const levelBefore = getMetaNumber(meta, ['level_before', 'water_before']);
+  const levelAfter = getMetaNumber(meta, ['level_after', 'water_after']);
+  if (levelBefore != null && levelAfter != null) {
+    const delta = (levelAfter - levelBefore).toFixed(1);
+    const sign = levelAfter >= levelBefore ? '+' : '';
+    rows.push({ label: 'Mực nước', value: `${levelBefore.toFixed(1)} → ${levelAfter.toFixed(1)} cm (${sign}${delta})`, accent: 'text-blue-400' });
   }
+
   if (meta.duration_sec != null) rows.push({ label: 'Thời gian', value: `${meta.duration_sec}s` });
-  if (meta.ec_before != null && meta.ec_after != null) {
-    rows.push({ label: 'EC', value: `${Number(meta.ec_before).toFixed(2)} → ${Number(meta.ec_after).toFixed(2)}`, accent: 'text-cyan-400' });
+
+  // EC
+  const ecBefore = getMetaNumber(meta, ['ec_before', 'before_ec']);
+  const ecAfter = getMetaNumber(meta, ['ec_after', 'after_ec']);
+  if (ecBefore != null && ecAfter != null) {
+    const delta = (ecAfter - ecBefore).toFixed(2);
+    rows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${delta})`, accent: 'text-cyan-400' });
   }
+
+  // pH (bổ sung)
+  const phBefore = getMetaNumber(meta, ['ph_before', 'before_ph']);
+  const phAfter = getMetaNumber(meta, ['ph_after', 'after_ph']);
+  if (phBefore != null && phAfter != null) {
+    const delta = (phAfter - phBefore).toFixed(2);
+    rows.push({ label: 'pH', value: `${phBefore.toFixed(2)} → ${phAfter.toFixed(2)} (${delta})`, accent: 'text-fuchsia-400' });
+  } else if (phBefore != null) {
+    rows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
+  } else if (phAfter != null) {
+    rows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
+  }
+
   if (meta.trigger) rows.push({ label: 'Nguyên nhân', value: meta.trigger });
   if (meta.success != null) rows.push({ label: 'Kết quả', value: meta.success ? 'Thành công' : 'Timeout', accent: meta.success ? 'text-emerald-400' : 'text-amber-400' });
 
@@ -105,7 +210,6 @@ const CalibrationMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
   const rows: { label: string; value: string; accent?: string }[] = [];
 
-  // EMA runtime calibration
   if (meta.runtime_coefficients) {
     const rc = meta.runtime_coefficients;
     if (rc.ec_gain_per_ml != null) rows.push({ label: 'EC gain/ml', value: Number(rc.ec_gain_per_ml).toFixed(5), accent: 'text-cyan-400' });
@@ -115,7 +219,6 @@ const CalibrationMetadata = ({ meta }: { meta: any }) => {
   if (meta.alpha != null) rows.push({ label: 'Alpha (EMA)', value: Number(meta.alpha).toFixed(2) });
   if (meta.observed_ec_gain_per_ml != null) rows.push({ label: 'Quan sát EC', value: Number(meta.observed_ec_gain_per_ml).toFixed(5), accent: 'text-yellow-400' });
 
-  // pH calibration
   if (meta.result) {
     const r = meta.result;
     if (r.ph_v7 != null) rows.push({ label: 'V tại pH 7', value: `${Number(r.ph_v7).toFixed(4)} V` });
@@ -162,33 +265,6 @@ const SensorNoiseMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
-const DosingCycleMetadata = ({ meta }: { meta: any }) => {
-  if (!meta) return null;
-  const pre = meta.pre ?? {};
-  const post = meta.post_stable ?? meta.post ?? {};
-  const rows: { label: string; value: string; accent?: string }[] = [];
-
-  if (meta.cycle_id) rows.push({ label: 'Cycle ID', value: String(meta.cycle_id), accent: 'text-slate-200' });
-  if (meta.trigger) rows.push({ label: 'Trigger', value: String(meta.trigger) });
-  if (pre.ec != null && post.ec != null) rows.push({ label: 'EC', value: `${Number(pre.ec).toFixed(2)} → ${Number(post.ec).toFixed(2)}`, accent: 'text-cyan-400' });
-  if (pre.ph != null && post.ph != null) rows.push({ label: 'pH', value: `${Number(pre.ph).toFixed(2)} → ${Number(post.ph).toFixed(2)}`, accent: 'text-fuchsia-400' });
-  if (meta.delta_ec != null) rows.push({ label: 'Δ EC', value: Number(meta.delta_ec).toFixed(2), accent: 'text-cyan-300' });
-  if (meta.delta_ph != null) rows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
-  if (meta.duration_sec != null) rows.push({ label: 'Thời gian', value: `${meta.duration_sec}s` });
-
-  if (rows.length === 0) return null;
-  return (
-    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-medium bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2.5">
-      {rows.map(r => (
-        <div key={r.label} className="flex items-baseline gap-1.5">
-          <span className="text-slate-500 shrink-0">{r.label}</span>
-          <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 const AlertMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
   const rows: { label: string; value: string; accent?: string }[] = [];
@@ -219,20 +295,25 @@ const AlertMetadata = ({ meta }: { meta: any }) => {
 const MetadataRenderer = ({ category, level, metadata }: { category: string; level: string; title: string; metadata?: Record<string, any> }) => {
   if (!metadata) return null;
 
+  // dosing: ưu tiên dạng dosing cycle nếu có pre/post
   if (category === 'dosing') {
-    if (metadata.cycle_id || metadata.pre || metadata.post_stable || metadata.post) return <DosingCycleMetadata meta={metadata} />;
+    if (metadata.pre || metadata.post || metadata.post_stable) return <DosingCycleMetadata meta={metadata} />;
     return <DosingMetadata meta={metadata} />;
   }
   if (category === 'water') return <WaterMetadata meta={metadata} />;
   if (category === 'calibration') return <CalibrationMetadata meta={metadata} />;
-  if (category === 'sensor') return <SensorNoiseMetadata meta={metadata} />;
+  if (category === 'sensor_noise' || category === 'sensor') return <SensorNoiseMetadata meta={metadata} />;
   if (category === 'alert' || level === 'critical' || level === 'warning') return <AlertMetadata meta={metadata} />;
+
+  // fallback: thử parse như dosing nếu có dữ liệu EC/pH
+  if (metadata.pump_a_ml != null || metadata.start_ec != null || metadata.before_ph != null) {
+    return <DosingMetadata meta={metadata} />;
+  }
 
   return null;
 };
 
 // ─── Kiểu hiển thị theo category + level ────────────────────────────────────
-
 type EventStyle = {
   icon: React.ElementType;
   iconColor: string;
@@ -273,6 +354,7 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
       }
       return { icon: Activity, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
 
+    case 'sensor_noise':
     case 'sensor':
       return { icon: Radio, iconColor: 'text-amber-400', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5', dot: 'bg-amber-400' };
 
@@ -295,19 +377,17 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
 };
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
-
 const FILTERS = [
   { id: 'all', label: 'Tất cả', icon: Filter },
   { id: 'alert', label: 'Cảnh báo', icon: AlertTriangle },
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
   { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
-  { id: 'sensor', label: 'Cảm biến', icon: Radio },
+  { id: 'sensor', label: 'Cảm biến', icon: Radio }, // giờ sẽ gửi thêm sensor_noise
   { id: 'system', label: 'Hệ thống', icon: Power },
 ];
 
 // ─── Tiêu đề thân thiện hơn ──────────────────────────────────────────────────
-
 const friendlyTitle = (title: string): string => {
   const map: Record<string, string> = {
     'Dừng Khẩn Cấp!': 'Dừng khẩn cấp',
@@ -324,8 +404,7 @@ const friendlyTitle = (title: string): string => {
   return map[title] ?? title;
 };
 
-// ─── FSM State badge ──────────────────────────────────────────────────────────
-
+// ─── FSM State badge (bổ sung các state mới) ─────────────────────────────────
 const FsmBadge = ({ message }: { message: string }) => {
   const stateMap: Record<string, { label: string; color: string }> = {
     'WaterRefilling': { label: 'Cấp nước', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
@@ -335,7 +414,10 @@ const FsmBadge = ({ message }: { message: string }) => {
     'DosingPH': { label: 'Chỉnh pH', color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20' },
     'ActiveMixing': { label: 'Sục trộn', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
     'Stabilizing': { label: 'Chờ ổn định', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+    'DosingStabilizing': { label: 'Chờ ổn định', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
     'Monitoring': { label: 'Giám sát', color: 'text-slate-400 bg-slate-800 border-slate-700' },
+    'Idle': { label: 'Nghỉ', color: 'text-slate-400 bg-slate-800 border-slate-700' },
+    'EmergencyStop': { label: 'Dừng khẩn', color: 'text-red-400 bg-red-500/10 border-red-500/20' },
   };
   const matched = stateMap[message];
   if (!matched) return null;
@@ -346,8 +428,7 @@ const FsmBadge = ({ message }: { message: string }) => {
   );
 };
 
-// ─── Component chính ─────────────────────────────────────────────────────────
-
+// ─── Component chính (cải thiện fetch URL để lọc sensor kép) ─────────────────
 const SystemLog = () => {
   const [filter, setFilter] = useState<string>('all');
   const [appConfig, setAppConfig] = useState<any>(null);
@@ -371,11 +452,18 @@ const SystemLog = () => {
     const loadEvents = async () => {
       setIsLoading(true);
       try {
-        const catParam = filter !== 'all' ? `&category=${filter}` : '';
-        const res = await httpFetch(
-          `${appConfig.backend_url}/api/devices/${deviceId}/events?limit=200${catParam}`,
-          { headers: { 'X-API-Key': appConfig.api_key || '' } }
-        );
+        let url = `${appConfig.backend_url}/api/devices/${deviceId}/events?limit=200`;
+        // Xử lý filter: nếu là 'sensor' thì gửi cả sensor và sensor_noise
+        if (filter !== 'all') {
+          if (filter === 'sensor') {
+            url += '&category=sensor&category=sensor_noise';
+          } else {
+            url += `&category=${filter}`;
+          }
+        }
+        const res = await httpFetch(url, {
+          headers: { 'X-API-Key': appConfig.api_key || '' }
+        });
         if (res.ok) {
           const data = await res.json();
           setSystemEvents(data.data ?? []);
@@ -391,7 +479,6 @@ const SystemLog = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto pb-28">
-
       <PageHeader
         icon={Clock}
         title="Nhật Ký Hệ Thống"
@@ -450,7 +537,6 @@ const SystemLog = () => {
 
               return (
                 <div key={ev.id ?? idx} className="relative flex gap-4">
-
                   {/* Dot */}
                   <div className="relative z-10 shrink-0 mt-3.5">
                     <div className={`w-6 h-6 rounded-full border-2 border-slate-950 flex items-center justify-center ${style.dot}`}>
@@ -460,7 +546,6 @@ const SystemLog = () => {
 
                   {/* Card */}
                   <div className={`flex-1 min-w-0 border rounded-xl p-4 transition-colors hover:brightness-110 ${style.bgColor} ${style.borderColor}`}>
-
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <h4 className={`text-sm font-semibold leading-tight ${style.iconColor}`}>
@@ -476,21 +561,19 @@ const SystemLog = () => {
                       </time>
                     </div>
 
-                    {/* Nội dung message — ẩn nếu trùng title hoặc là FSM state thuần */}
+                    {/* Nội dung message */}
                     {ev.message && ev.message !== ev.title && !ev.message.startsWith('Monitoring') && ev.level !== 'FSM_UPDATE' && (
                       <p className="text-xs text-slate-400 leading-relaxed mt-1">
                         {ev.message}
                       </p>
                     )}
 
-                    {/* Reason badge */}
                     {ev.reason && (
                       <span className="inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-slate-700 text-slate-400">
                         {ev.reason}
                       </span>
                     )}
 
-                    {/* Metadata có cấu trúc */}
                     <MetadataRenderer
                       category={ev.category}
                       level={ev.level}

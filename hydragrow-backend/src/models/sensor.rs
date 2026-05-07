@@ -12,21 +12,19 @@ pub struct SensorDataRow {
     pub ph: f64,
     pub temp: f64,
     pub water_level: f64,
-    pub pump_status: String,
 
     pub time: DateTime<FixedOffset>,
 }
 
 impl From<SensorDataRow> for SensorData {
     fn from(row: SensorDataRow) -> Self {
-        let pump_status = serde_json::from_str(&row.pump_status).unwrap_or_default();
         Self {
             device_id: row.device_id,
             ec: row.ec,
             ph: row.ph,
             temp: row.temp,
             water_level: row.water_level,
-            pump_status,
+            pump_status: PumpStatus::default(),
 
             time: row.time.to_rfc3339(),
             rssi: None,

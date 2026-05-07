@@ -8,16 +8,12 @@ use crate::models::sensor::{SensorData, SensorDataRow};
 
 #[instrument(skip(client, data))]
 pub async fn write_sensor_data(client: &Client, bucket: &str, data: &SensorData) -> Result<()> {
-    let pump_status_json = serde_json::to_string(&data.pump_status)
-        .context("Failed to serialize pump_status to JSON")?;
-
     let mut point_builder = DataPoint::builder("sensor_data")
         .tag("device_id", &data.device_id)
         .field("ec", data.ec as f64)
         .field("ph", data.ph as f64)
         .field("temp", data.temp as f64)
-        .field("water_level", data.water_level as f64)
-        .field("pump_status", pump_status_json);
+        .field("water_level", data.water_level as f64);
 
     if let Some(ph_voltage_mv) = data.ph_voltage_mv {
         point_builder = point_builder.field("ph_voltage_mv", ph_voltage_mv);

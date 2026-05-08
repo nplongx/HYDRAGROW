@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import {
-  LineChart as ChartIcon, Clock, Filter, Activity,
+  LineChart as ChartIcon, Clock, Filter,
   Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2
 } from 'lucide-react';
 import { useCropSeason } from '../hooks/useCropSeason';

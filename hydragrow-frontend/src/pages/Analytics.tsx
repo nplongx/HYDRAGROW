@@ -349,7 +349,7 @@ const Analytics = () => {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
               <Timer size={14} className="text-purple-500" /> Tần suất điểm
-              <span className="text-slate-500">(Gốc: {defaultInterval}s)</span>
+              {/* <span className="text-slate-500">(Gốc: {defaultInterval}s)</span> */}
             </label>
             <div className="flex gap-2">
               <select

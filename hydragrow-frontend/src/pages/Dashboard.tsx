@@ -249,19 +249,35 @@ const Dashboard = () => {
         <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 transition-all duration-700 ${!isSensorOnline ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
 
           {/* Giữ nguyên các phần tử bên trong của bạn */}
+          {/* <div className="relative"> */}
+          {/*   {sensorData?.err_ec === true && ( */}
+          {/*     <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm"> */}
+          {/*       <AlertTriangle size={14} /> */}
+          {/*     </div> */}
+          {/*   )} */}
+          {/*   <div className={sensorData?.err_ec === true ? "opacity-60" : ""}> */}
+          {/*     <SensorBentoCard */}
+          {/*       title="EC" */}
+          {/*       value={sensorData?.err_ec === true ? -1 : sensorData?.ec} */}
+          {/*       unit="mS/cm" */}
+          {/*       icon={Activity} */}
+          {/*       theme={sensorData?.err_ec === true ? "rose" : "blue"} */}
+          {/*     /> */}
+          {/*   </div> */}
+          {/* </div> */}
+
           <div className="relative">
-            {sensorData?.err_ec === true && (
-              <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
-                <AlertTriangle size={14} />
-              </div>
-            )}
-            <div className={sensorData?.err_ec === true ? "opacity-60" : ""}>
+            {/* Ép hiển thị icon lỗi luôn */}
+            <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
+              <AlertTriangle size={14} />
+            </div>
+            <div className="opacity-60"> {/* Làm mờ card */}
               <SensorBentoCard
                 title="EC"
-                value={sensorData?.err_ec === true ? -1 : sensorData?.ec}
+                value={-1} // Gán giá trị -1 để hiện "--" hoặc "Lỗi" tùy component con
                 unit="mS/cm"
                 icon={Activity}
-                theme={sensorData?.err_ec === true ? "rose" : "blue"}
+                theme="rose" // Chuyển sang tông màu đỏ báo lỗi
               />
             </div>
           </div>

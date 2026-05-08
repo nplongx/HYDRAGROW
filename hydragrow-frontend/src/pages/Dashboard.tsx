@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu, Wifi, HardDrive, Clock, AlertTriangle, Server, RadioReceiver } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
-import { useDeviceControl } from '../hooks/useDeviceControl';
 
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { FsmStatusBadge } from '../components/ui/FsmStatusBadge';
@@ -65,7 +64,7 @@ const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, i
 
 // interface SystemEvent { title: string; category: string; timestamp: number; }
 const Dashboard = () => {
-  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, updatePumpStatusOptimistically, isSensorOnline, settings } = useDeviceContext();
+  const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, isSensorOnline, settings } = useDeviceContext();
   console.log("Dữ liệu deviceStatus:", deviceStatus);
   // const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
 
@@ -82,7 +81,7 @@ const Dashboard = () => {
     };
     run();
   }, [deviceId, settings]);
-  const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
+  // const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
 
   // const nowSec = Math.floor(Date.now() / 1000);
   // const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
@@ -115,12 +114,12 @@ const Dashboard = () => {
   // const waterOpsCount = oneHourEvents.filter(e => e.category === 'water').length;
   const pumps: any = isOnline && sensorData?.pump_status ? sensorData.pump_status : {};
 
-  const handleToggle = async (pumpId: string, currentStatus: boolean | undefined) => {
-    const targetAction = currentStatus ? 'off' : 'on';
-    updatePumpStatusOptimistically(pumpId, targetAction === 'on');
-    const success = await togglePump(pumpId, targetAction);
-    if (!success) updatePumpStatusOptimistically(pumpId, !!currentStatus);
-  };
+  // const handleToggle = async (pumpId: string, currentStatus: boolean | undefined) => {
+  //   const targetAction = currentStatus ? 'off' : 'on';
+  //   updatePumpStatusOptimistically(pumpId, targetAction === 'on');
+  //   const success = await togglePump(pumpId, targetAction);
+  //   if (!success) updatePumpStatusOptimistically(pumpId, !!currentStatus);
+  // };
 
   return (
     <div className="p-4 md:p-8 space-y-6 pb-28 max-w-5xl mx-auto">
@@ -335,36 +334,36 @@ const Dashboard = () => {
       </div>
 
       {/* ĐIỀU KHIỂN NHANH (NƯỚC) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-        <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-          <Zap size={16} className="text-slate-500" /> Cưỡng chế bơm nước
-        </h3>
-        <div className="flex gap-3">
-          <button
-            disabled={isProcessing || !isOnline}
-            onClick={() => handleToggle("WATER_PUMP_IN", pumps.water_pump_in)}
-            className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors border flex items-center justify-center gap-2 disabled:opacity-50 ${pumps.water_pump_in
-              ? 'bg-red-500/10 text-red-500 border-red-500/30'
-              : 'bg-slate-950 text-blue-400 border-slate-800 hover:border-blue-500/30 hover:bg-slate-800'
-              }`}
-          >
-            <Waves size={16} />
-            {pumps.water_pump_in ? 'Ngừng Cấp' : 'Cấp Nước'}
-          </button>
-
-          <button
-            disabled={isProcessing || !isOnline}
-            onClick={() => handleToggle("WATER_PUMP_OUT", pumps.water_pump_out)}
-            className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors border flex items-center justify-center gap-2 disabled:opacity-50 ${pumps.water_pump_out
-              ? 'bg-red-500/10 text-red-500 border-red-500/30'
-              : 'bg-slate-950 text-cyan-400 border-slate-800 hover:border-cyan-500/30 hover:bg-slate-800'
-              }`}
-          >
-            <Waves size={16} className="rotate-180" />
-            {pumps.water_pump_out ? 'Ngừng Xả' : 'Xả Nước'}
-          </button>
-        </div>
-      </div>
+      {/* <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5"> */}
+      {/*   <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2"> */}
+      {/*     <Zap size={16} className="text-slate-500" /> Cưỡng chế bơm nước */}
+      {/*   </h3> */}
+      {/*   <div className="flex gap-3"> */}
+      {/*     <button */}
+      {/*       disabled={isProcessing || !isOnline} */}
+      {/*       onClick={() => handleToggle("WATER_PUMP_IN", pumps.water_pump_in)} */}
+      {/*       className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors border flex items-center justify-center gap-2 disabled:opacity-50 ${pumps.water_pump_in */}
+      {/*         ? 'bg-red-500/10 text-red-500 border-red-500/30' */}
+      {/*         : 'bg-slate-950 text-blue-400 border-slate-800 hover:border-blue-500/30 hover:bg-slate-800' */}
+      {/*         }`} */}
+      {/*     > */}
+      {/*       <Waves size={16} /> */}
+      {/*       {pumps.water_pump_in ? 'Ngừng Cấp' : 'Cấp Nước'} */}
+      {/*     </button> */}
+      {/**/}
+      {/*     <button */}
+      {/*       disabled={isProcessing || !isOnline} */}
+      {/*       onClick={() => handleToggle("WATER_PUMP_OUT", pumps.water_pump_out)} */}
+      {/*       className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors border flex items-center justify-center gap-2 disabled:opacity-50 ${pumps.water_pump_out */}
+      {/*         ? 'bg-red-500/10 text-red-500 border-red-500/30' */}
+      {/*         : 'bg-slate-950 text-cyan-400 border-slate-800 hover:border-cyan-500/30 hover:bg-slate-800' */}
+      {/*         }`} */}
+      {/*     > */}
+      {/*       <Waves size={16} className="rotate-180" /> */}
+      {/*       {pumps.water_pump_out ? 'Ngừng Xả' : 'Xả Nước'} */}
+      {/*     </button> */}
+      {/*   </div> */}
+      {/* </div> */}
 
     </div>
   );

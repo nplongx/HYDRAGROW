@@ -376,7 +376,10 @@ const MetadataRenderer = ({ category, level, metadata }: { category: string; lev
 
   // dosing: ưu tiên dạng dosing cycle nếu có pre/post
   if (category === 'dosing') {
-    if (metadata.pre || metadata.post || metadata.post_stable) return <DosingCycleMetadata meta={metadata} />;
+    const dosingData = metadata.dosing_report ?? metadata;
+    if (dosingData.pre || dosingData.post || dosingData.post_stable) {
+      return <DosingCycleMetadata meta={dosingData} />;
+    }
     return <DosingMetadata meta={metadata} />;
   }
   if (category === 'water') return <WaterMetadata meta={metadata} />;

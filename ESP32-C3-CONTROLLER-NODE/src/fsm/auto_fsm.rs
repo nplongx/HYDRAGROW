@@ -85,10 +85,7 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = true;
 
-                let report_json = format!(
-                    r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
-                    trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
-                );
+                let report_json = serde_json::json!({"type":"water_event","trigger":trigger,"level_before":start_level,"level_after":sensors.water_level,"duration_sec":duration_sec,"ec_before":start_ec,"ec_after":sensors.ec,"success":target_reached}).to_string();
                 let _ = fsm_mqtt_tx.send(report_json);
 
                 ctx.current_state = SystemState::ActiveMixing {
@@ -108,10 +105,7 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = false;
 
-                let report_json = format!(
-                    r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
-                    trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
-                );
+                let report_json = serde_json::json!({"type":"water_event","trigger":trigger,"level_before":start_level,"level_after":sensors.water_level,"duration_sec":duration_sec,"ec_before":start_ec,"ec_after":sensors.ec,"success":target_reached}).to_string();
                 let _ = fsm_mqtt_tx.send(report_json);
 
                 ctx.current_state = SystemState::Stabilizing {
@@ -544,13 +538,28 @@ fn try_ec_dosing(
         return false;
     }
 
-    let can_a = ctx.can_dose_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
-    let can_b = ctx.can_dose_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
-    
-    if !(can_a && can_b) {
-        let msg = format!("⚠️ [EC] Bơm bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
+    let reserved_a =
+        ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
+    if !reserved_a {
+        let msg = format!("⚠️ [EC] Bơm A bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
         warn!("{}", msg);
-        
+
+        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ec_dosing", "message": "{}" }}"#, msg);
+        let _ = fsm_mqtt_tx.send(alert_json);
+
+        ctx.stop_all_pumps(pump_ctrl);
+        ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_EC".to_string());
+        return true;
+    }
+
+    let reserved_b =
+        ctx.reserve_dose_if_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
+    if !reserved_b {
+        let _ = ctx.rollback_last_reservation("NutrientA");
+
+        let msg = format!("⚠️ [EC] Bơm B bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
+        warn!("{}", msg);
+
         let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ec_dosing", "message": "{}" }}"#, msg);
         let _ = fsm_mqtt_tx.send(alert_json);
 
@@ -564,9 +573,6 @@ fn try_ec_dosing(
         ec_error, sensors.ec, config.ec_target, dose_ml, deadband_scale
     );
 
-    let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
-    let _ = ctx.reserve_dose_if_within_hourly_limit("NutrientB", current_time_sec, dose_ml, max_hourly_ml);
-    
     ctx.last_ec_before_dosing = Some(sensors.ec);
     ctx.current_state = SystemState::StartingOsakaPump {
         finish_time: current_time_ms + config.soft_start_duration as u64,

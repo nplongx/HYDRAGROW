@@ -569,15 +569,12 @@ impl ControlContext {
         true
     }
 
-    pub fn can_dose_within_hourly_limit(
-        &mut self,
-        pump: &str,
-        now_sec: u64,
-        dose_ml: f32,
-        max_hourly_ml: f32,
-    ) -> bool {
-        let used = self.get_hourly_total_dose_ml(pump, now_sec);
-        used + dose_ml <= max_hourly_ml
+
+    pub fn rollback_last_reservation(&mut self, pump: &str) -> bool {
+        if let Some(history) = self.hourly_dose_history_ml_by_pump.get_mut(pump) {
+            return history.pop().is_some();
+        }
+        false
     }
 
     pub fn check_and_record_refill_limit(&mut self, now_sec: u64, limit: u32) -> bool {

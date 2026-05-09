@@ -128,8 +128,14 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
         "/sensor/status" => {
             handle_device_status(device_id, "Mạch Cảm Biến", &payload_bytes, app_state).await;
         }
-        "/fsm" => {
+        "/fsm/state" => {
             handle_fsm_state(device_id, &payload_bytes, app_state).await;
+        }
+        "/fsm/events" => {
+            handle_fsm_event(device_id, &payload_bytes, app_state).await;
+        }
+        "/calibration" => {
+            handle_calibration_event(device_id, &payload_bytes, app_state).await;
         }
         "/dosing_report" => {
             handle_dosing_report(device_id, &payload_bytes, app_state).await;
@@ -757,18 +763,64 @@ fn prefixed_event_to_system_record(
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
+async fn handle_fsm_event(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
+    let json = match serde_json::from_slice::<serde_json::Value>(payload) {
+        Ok(j) => j,
+        Err(e) => {
+            error!("❌ [MQTT-FSM-EVENT] JSON lỗi: {:?}", e);
+            return;
+        }
+    };
+    let event_type = match json.get("type").and_then(|v| v.as_str()) {
+        Some("water_event") => PrefixedFsmEventType::WaterEvent,
+        Some("system_alert") => PrefixedFsmEventType::SystemAlert,
+        Some("dosing_cycle") => PrefixedFsmEventType::DosingCycle,
+        _ => {
+            warn!("⚠️ [MQTT-FSM-EVENT] type không hỗ trợ");
+            return;
+        }
+    };
+    let event = prefixed_event_to_system_record(device_id, event_type, json);
+    if let Err(e) = insert_system_event(&app_state.pg_pool, &event).await {
+        error!(error=?e, "❌ [MQTT-FSM-EVENT] Lỗi lưu DB");
+    }
+}
+
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
+async fn handle_calibration_event(
+    device_id: String,
+    payload: &[u8],
+    app_state: web::Data<AppState>,
+) {
+    let json = match serde_json::from_slice::<serde_json::Value>(payload) {
+        Ok(j) => j,
+        Err(e) => {
+            error!("❌ [MQTT-CALIB] JSON lỗi: {:?}", e);
+            return;
+        }
+    };
+    if json.get("type").and_then(|t| t.as_str()) == Some("runtime_calibration_update") {
+        handle_runtime_calibration_update(device_id, &json, app_state.clone()).await;
+        return;
+    }
+    let event_type = match json.get("type").and_then(|v| v.as_str()) {
+        Some("ema_update") => PrefixedFsmEventType::EmaUpdate,
+        Some("auto_tune") => PrefixedFsmEventType::AutoTune,
+        Some("sensor_noise") => PrefixedFsmEventType::SensorNoise,
+        _ => {
+            warn!("⚠️ [MQTT-CALIB] type không hỗ trợ");
+            return;
+        }
+    };
+    let event = prefixed_event_to_system_record(device_id, event_type, json);
+    if let Err(e) = insert_system_event(&app_state.pg_pool, &event).await {
+        error!(error=?e, "❌ [MQTT-CALIB] Lỗi lưu DB");
+    }
+}
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let raw_payload = std::str::from_utf8(payload).unwrap_or("Lỗi UTF-8");
     info!("📥 [MQTT-FSM] nhận gói tin: {}", raw_payload);
-
-    if let Some((event_type, parsed_payload)) = parse_prefixed_fsm_message(raw_payload) {
-        let event = prefixed_event_to_system_record(device_id, event_type, parsed_payload);
-
-        if let Err(e) = insert_system_event(&app_state.pg_pool, &event).await {
-            error!(error = ?e, "❌ [MQTT-FSM] Lỗi lưu prefixed event vào DB");
-        }
-        return;
-    }
 
     let json = match serde_json::from_slice::<serde_json::Value>(payload) {
         Ok(j) => j,
@@ -777,13 +829,6 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
             return;
         }
     };
-
-    if let Some(msg_type) = json.get("type").and_then(|t| t.as_str()) {
-        if msg_type == "runtime_calibration_update" {
-            handle_runtime_calibration_update(device_id, &json, app_state.clone()).await;
-            return;
-        }
-    }
 
     let state = match json.get("current_state").and_then(|s| s.as_str()) {
         Some(s) => s.to_string(),
@@ -1221,6 +1266,44 @@ async fn handle_runtime_calibration_update(
         return;
     }
 
+    let dosing_cfg = match sqlx::query_as::<_, DosingCalibration>(
+        "SELECT * FROM dosing_calibration WHERE device_id = $1",
+    )
+    .bind(&device_id)
+    .fetch_optional(&app_state.pg_pool)
+    .await
+    {
+        Ok(Some(cfg)) => cfg,
+        Ok(None) => {
+            warn!("⚠️ [EMA CALIBRATION] Không tìm thấy dosing_calibration cho {}", device_id);
+            return;
+        }
+        Err(e) => {
+            error!("❌ [EMA CALIBRATION] Lỗi tải dosing_calibration cho {}: {:?}", device_id, e);
+            return;
+        }
+    };
+
+    let max_drift = 0.3_f32;
+    let clamped_ec_gain = ec_gain.map(|v| {
+        v.clamp(
+            dosing_cfg.ec_gain_per_ml * (1.0 - max_drift),
+            dosing_cfg.ec_gain_per_ml * (1.0 + max_drift),
+        )
+    });
+    let clamped_ph_up = ph_up.map(|v| {
+        v.clamp(
+            dosing_cfg.ph_shift_up_per_ml * (1.0 - max_drift),
+            dosing_cfg.ph_shift_up_per_ml * (1.0 + max_drift),
+        )
+    });
+    let clamped_ph_down = ph_down.map(|v| {
+        v.clamp(
+            dosing_cfg.ph_shift_down_per_ml * (1.0 - max_drift),
+            dosing_cfg.ph_shift_down_per_ml * (1.0 + max_drift),
+        )
+    });
+
     // 👇 SỬA LẠI: Thêm các cột step_ratio vào câu lệnh SQL
     // (Đảm bảo database của bạn đã có cột step_ratio_ec và step_ratio_ph trong bảng dosing_calibration)
     let query = r#"
@@ -1235,15 +1318,10 @@ async fn handle_runtime_calibration_update(
         WHERE device_id = $6
     "#;
 
-    if ec_gain.is_none() && ph_up.is_none() && ph_down.is_none() {
-        debug!("ℹ️ [EMA CALIBRATION] Không có hệ số nào mới để cập nhật.");
-        return;
-    }
-
     match sqlx::query(query)
-        .bind(ec_gain)
-        .bind(ph_up)
-        .bind(ph_down)
+        .bind(clamped_ec_gain)
+        .bind(clamped_ph_up)
+        .bind(clamped_ph_down)
         .bind(step_ratio_ec) // $4 - Đã thêm
         .bind(step_ratio_ph) // $5 - Đã thêm
         .bind(&device_id)
@@ -1259,8 +1337,8 @@ async fn handle_runtime_calibration_update(
 
                 // Tạo log SystemEvent để lưu lại lịch sử
                 let msg = format!(
-                    "Controller gửi hệ số mới (EMA). Cập nhật DB: EC Gain: {:?}, pH Up: {:?}, pH Down: {:?}",
-                    ec_gain, ph_up, ph_down
+                    "Controller gửi hệ số mới (EMA). Cập nhật DB: EC Gain: {:?} -> {:?}, pH Up: {:?} -> {:?}, pH Down: {:?} -> {:?}",
+                    ec_gain, clamped_ec_gain, ph_up, clamped_ph_up, ph_down, clamped_ph_down
                 );
 
                 let _ = insert_system_event(

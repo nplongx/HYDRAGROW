@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Settings2, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw,
   Lock, ChevronDown,
@@ -27,6 +27,7 @@ const AdvancedDeviceControl = ({
 
   // State để disable nút toggle khi đang chờ phản hồi từ backend
   const [isToggling, setIsToggling] = useState(false);
+  const pendingTargetRef = useRef<boolean | null>(null);
 
   // const stateKey = pumpId.toLowerCase();
   const isLocked = isAutoMode || (isEmergency && !currentStatus);
@@ -35,6 +36,14 @@ const AdvancedDeviceControl = ({
     if (pwmPreferences[pumpId] !== undefined) setPwmValue(pwmPreferences[pumpId]);
   }, [pwmPreferences, pumpId]);
 
+
+  useEffect(() => {
+    if (pendingTargetRef.current === null) return;
+    if (currentStatus === pendingTargetRef.current) {
+      setIsToggling(false);
+      pendingTargetRef.current = null;
+    }
+  }, [currentStatus]);
   // Nút Switch Bật/Tắt - KHÔNG dùng optimistic update nữa
   const handleToggle = async () => {
     if (isAutoMode) {
@@ -54,16 +63,19 @@ const AdvancedDeviceControl = ({
 
     const targetAction = currentStatus ? 'off' : 'on';
     try {
+      pendingTargetRef.current = targetAction === 'on';
       const success = await togglePump(pumpId, targetAction);
       if (!success) {
+        pendingTargetRef.current = null;
+        setIsToggling(false);
         toast.error(`Không thể ${targetAction === 'on' ? 'bật' : 'tắt'} ${title}`);
       }
-      // Không cập nhật UI ở đây - context sẽ cập nhật từ MQTT
+      // Không cập nhật UI ở đây - context sẽ cập nhật từ MQTT/device_health
     } catch (error) {
+      pendingTargetRef.current = null;
+      setIsToggling(false);
       console.error(error);
       toast.error(`Lỗi điều khiển ${title}`);
-    } finally {
-      setIsToggling(false);
     }
   };
 

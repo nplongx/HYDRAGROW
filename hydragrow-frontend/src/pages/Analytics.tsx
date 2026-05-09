@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import {
   LineChart as ChartIcon, Clock, Filter,
-  Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2
+  Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2, AlertTriangle
 } from 'lucide-react';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -20,7 +20,7 @@ const CHART_THEMES: Record<string, any> = {
   blue: { stroke: '#3b82f6', fill1: '#3b82f6', fill2: '#172554', text: 'text-blue-400', bg: 'bg-blue-500/10' }
 };
 
-// --- Component Thẻ Biểu Đồ Flat ---
+// --- Component Thẻ Biểu Đồ Flat (không thay đổi) ---
 const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) => {
   const theme = CHART_THEMES[color];
 
@@ -127,6 +127,37 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
   );
 };
 
+// ---------- HÀM TIỆN ÍCH ----------
+// Xác định độ phân giải phù hợp dựa vào khoảng thời gian (đơn vị phút)
+const getResolutionForTimeRange = (range: string): string | undefined => {
+  switch (range) {
+    case '24h': return undefined;   // backend sẽ dùng limit 2000 điểm gần nhất
+    case '7d': return '5m';
+    case '30d': return '30m';
+    default: return undefined;
+  }
+};
+
+// Hàm tạo ISO string giữ nguyên local timezone (giữ nguyên từ code của bạn)
+const getLocalIsoString = (date: Date): string => {
+  const pad = (num: number) => (num < 10 ? '0' : '') + num;
+  const tzo = -date.getTimezoneOffset();
+  const dif = tzo >= 0 ? '+' : '-';
+  const hours = Math.floor(Math.abs(tzo) / 60);
+  const minutes = Math.abs(tzo) % 60;
+  return (
+    date.getFullYear() +
+    '-' + pad(date.getMonth() + 1) +
+    '-' + pad(date.getDate()) +
+    'T' + pad(date.getHours()) +
+    ':' + pad(date.getMinutes()) +
+    ':' + pad(date.getSeconds()) +
+    dif + pad(hours) +
+    ':' + pad(minutes)
+  );
+};
+
+// ---------- COMPONENT CHÍNH ----------
 const Analytics = () => {
   const { activeSeason, history } = useCropSeason();
 
@@ -169,102 +200,147 @@ const Analytics = () => {
   const [customIntervalValue, setCustomIntervalValue] = useState<number>(60);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const selectedSeason = useMemo(() => {
     if (selectedSeasonId === 'realtime') return null;
     return allSeasons.find(s => s.id.toString() === selectedSeasonId);
   }, [allSeasons, selectedSeasonId]);
 
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!deviceId || !appConfig) return;
-      setIsFetching(true);
+  // Dùng useRef để lưu AbortController nhằm hủy request cũ khi thay đổi tham số
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-      let startIso: string;
-      let endIso: string;
+  const loadHistory = useCallback(async () => {
+    if (!deviceId || !appConfig) return;
 
-      // SỬA LỖI TIMEZONE Ở ĐÂY
-      // Tạo một helper để lấy ISOString nhưng giữ nguyên Local Timezone (tránh bị lùi 7 tiếng)
-      const getLocalIsoString = (date: Date) => {
-        const tzo = -date.getTimezoneOffset(),
-          dif = tzo >= 0 ? '+' : '-',
-          pad = (num: number) => {
-            const norm = Math.floor(Math.abs(num));
-            return (norm < 10 ? '0' : '') + norm;
-          };
-        return date.getFullYear() +
-          '-' + pad(date.getMonth() + 1) +
-          '-' + pad(date.getDate()) +
-          'T' + pad(date.getHours()) +
-          ':' + pad(date.getMinutes()) +
-          ':' + pad(date.getSeconds()) +
-          dif + pad(tzo / 60) +
-          ':' + pad(tzo % 60);
-      };
+    // Hủy request cũ nếu có
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-      if (selectedSeasonId !== 'realtime') {
-        if (selectedSeason) {
-          // Lấy theo thời gian mùa vụ
-          startIso = getLocalIsoString(new Date(selectedSeason.start_time));
-          endIso = selectedSeason.end_time
-            ? getLocalIsoString(new Date(selectedSeason.end_time))
-            : getLocalIsoString(new Date());
-        } else {
-          setIsFetching(false);
-          return;
-        }
+    setIsFetching(true);
+    setFetchError(null);
+
+    let startIso: string;
+    let endIso: string;
+
+    if (selectedSeasonId !== 'realtime') {
+      if (selectedSeason) {
+        startIso = getLocalIsoString(new Date(selectedSeason.start_time));
+        endIso = selectedSeason.end_time
+          ? getLocalIsoString(new Date(selectedSeason.end_time))
+          : getLocalIsoString(new Date());
       } else {
-        // Lấy theo thời gian thực (Realtime)
-        const now = new Date();
-        const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
-
-        const startDate = new Date(now.getTime() - diffHours * 60 * 60 * 1000);
-
-        startIso = getLocalIsoString(startDate);
-        endIso = getLocalIsoString(now);
+        setIsFetching(false);
+        return;
       }
+    } else {
+      const now = new Date();
+      const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
+      const startDate = new Date(now.getTime() - diffHours * 60 * 60 * 1000);
+      startIso = getLocalIsoString(startDate);
+      endIso = getLocalIsoString(now);
+    }
 
+    // Xác định resolution dựa vào khoảng thời gian
+    let resolution: string | undefined;
+    if (selectedSeasonId === 'realtime') {
+      resolution = getResolutionForTimeRange(timeRange);
+    } else {
+      // Với mùa vụ, tính số ngày để chọn resolution
+      if (selectedSeason) {
+        const seasonDays = Math.ceil(
+          (new Date(endIso).getTime() - new Date(startIso).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (seasonDays > 30) resolution = '1h';
+        else if (seasonDays > 7) resolution = '30m';
+        else resolution = '5m';
+      }
+    }
+
+    // Hàm fetch với retry khi gặp lỗi 502/503
+    const fetchWithRetry = async (attempt = 1): Promise<any> => {
       try {
-        // Log ra để bạn debug xem Frontend đang request khoảng thời gian nào
-        console.log(`Fetching history from ${startIso} to ${endIso}`);
+        const params = new URLSearchParams();
+        params.append('start', startIso);
+        params.append('end', endIso);
+        if (resolution) params.append('resolution', resolution);
 
-        const url = `${appConfig.backend_url}/api/devices/${deviceId}/sensors/history?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
-        const response = await fetch(url, { method: 'GET', headers: { 'X-API-Key': appConfig.api_key } });
+        const url = `${appConfig.backend_url}/api/devices/${deviceId}/sensors/history?${params.toString()}`;
+        console.log(`Fetching history with resolution=${resolution}, attempt=${attempt}`);
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { 'X-API-Key': appConfig.api_key },
+          signal: controller.signal
+        });
 
         if (response.ok) {
           const text = await response.text();
           if (text && text.trim() !== '') {
             const res = JSON.parse(text);
-            const formatted = (res.data || res).map((d: any) => {
-              // Phân tích thời gian trả về
-              const dateObj = new Date(d.time);
-              return {
-                ...d,
-                timestamp: dateObj.getTime(),
-                fullTime: dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                time: selectedSeasonId === 'realtime' && timeRange === '24h'
-                  ? dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                  : dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-              };
-            });
-            setHistoryData(formatted);
-          } else {
-            setHistoryData([]);
+            return res.data || res;
           }
+          return [];
+        } else if ((response.status === 502 || response.status === 503) && attempt < 3) {
+          // Thử lại sau 2 giây
+          console.warn(`Lỗi ${response.status}, thử lại lần ${attempt + 1}...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return fetchWithRetry(attempt + 1);
         } else {
-          setHistoryData([]);
+          throw new Error(`HTTP ${response.status}`);
         }
       } catch (error) {
-        console.error("Fetch history error:", error);
-        setHistoryData([]);
-      } finally {
-        setIsFetching(false);
+        if ((error as Error).name === 'AbortError') {
+          // Request bị hủy có chủ đích, không xử lý lỗi
+          throw error;
+        }
+        // Lỗi mạng hoặc lỗi khác
+        throw error;
       }
     };
 
+    try {
+      const data = await fetchWithRetry();
+
+      // Định dạng lại dữ liệu cho biểu đồ
+      const formatted = (data || []).map((d: any) => {
+        const dateObj = new Date(d.time);
+        return {
+          ...d,
+          timestamp: dateObj.getTime(),
+          fullTime: dateObj.toLocaleString('vi-VN', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          }),
+          time: selectedSeasonId === 'realtime' && timeRange === '24h'
+            ? dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        };
+      });
+      setHistoryData(formatted);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        // Bỏ qua
+      } else {
+        console.error("Fetch history error:", error);
+        setHistoryData([]);
+        setFetchError(error.message || 'Lỗi không xác định');
+      }
+    } finally {
+      // Chỉ kết thúc isFetching nếu request này là request mới nhất (tránh set state khi component unmounted)
+      if (abortControllerRef.current === controller) {
+        setIsFetching(false);
+      }
+    }
+  }, [deviceId, appConfig, selectedSeasonId, timeRange, selectedSeason]);
+
+  useEffect(() => {
     const timer = setTimeout(loadHistory, 300);
     return () => clearTimeout(timer);
-  }, [selectedSeasonId, timeRange, deviceId, appConfig?.backend_url, appConfig?.api_key, selectedSeason]);
+  }, [loadHistory]);
 
   const effectiveIntervalMs = useMemo(() => {
     let seconds = 0;
@@ -349,7 +425,6 @@ const Analytics = () => {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
               <Timer size={14} className="text-purple-500" /> Tần suất điểm
-              {/* <span className="text-slate-500">(Gốc: {defaultInterval}s)</span> */}
             </label>
             <div className="flex gap-2">
               <select
@@ -389,6 +464,18 @@ const Analytics = () => {
             <Loader2 size={32} className="text-blue-500 animate-spin" />
             <p className="text-sm font-medium text-slate-500">Đang trích xuất dữ liệu chuỗi thời gian...</p>
           </div>
+        ) : fetchError ? (
+          <div className="h-[40vh] flex flex-col items-center justify-center gap-4 text-center">
+            <AlertTriangle size={32} className="text-amber-500" />
+            <p className="text-sm font-medium text-slate-300">Lỗi tải dữ liệu</p>
+            <p className="text-xs text-slate-500 max-w-md">{fetchError}</p>
+            <button
+              onClick={() => loadHistory()}
+              className="mt-2 px-4 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600"
+            >
+              Thử lại
+            </button>
+          </div>
         ) : displayData.length === 0 ? (
           <StateView
             icon={ActivitySquare}
@@ -398,7 +485,6 @@ const Analytics = () => {
           />
         ) : (
           <div className="space-y-6">
-            {/* <FlatChartCard title="Mật Độ Dinh Dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} /> */}
             <FlatChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
             <FlatChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             <FlatChartCard title="Mực Nước (% Bồn)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />

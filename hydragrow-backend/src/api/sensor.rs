@@ -12,6 +12,7 @@ pub struct HistoryQuery {
     pub range: Option<String>,
     pub start: Option<String>,
     pub end: Option<String>,
+    pub resolution: Option<String>, // Ví dụ: "5m", "30m", "1h"
 }
 
 #[instrument(skip(app_state))]
@@ -66,6 +67,7 @@ pub async fn get_history(
 ) -> impl Responder {
     let device_id = path.into_inner();
 
+    // Xây dựng range clause
     let range_clause = if let (Some(start), Some(end)) = (&query.start, &query.end) {
         format!("start: time(v: \"{}\"), stop: time(v: \"{}\")", start, end)
     } else if let Some(start) = &query.start {
@@ -75,17 +77,34 @@ pub async fn get_history(
         format!("start: -{}", range_val)
     };
 
-    let flux_query = format!(
-        r#"
-        from(bucket: "{}")
-        |> range({}) 
-        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-        |> filter(fn: (r) => r.device_id == "{}")
-        |> sort(columns: ["_time"], desc: false)
-        |> tail(n: 1000)
-        "#,
-        app_state.influx_bucket, range_clause, device_id
-    );
+    // Lựa chọn chiến lược truy vấn
+    let flux_query = if let Some(resolution) = &query.resolution {
+        // ✅ Dùng aggregateWindow để giảm số điểm dữ liệu
+        format!(
+            r#"
+            from(bucket: "{}")
+            |> range({}) 
+            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+            |> filter(fn: (r) => r.device_id == "{}")
+            |> aggregateWindow(every: {}, fn: mean, createEmpty: false)
+            |> sort(columns: ["_time"], desc: false)
+            "#,
+            app_state.influx_bucket, range_clause, device_id, resolution
+        )
+    } else {
+        // ✅ Không có resolution: chỉ lấy 2000 điểm mới nhất (tránh quét toàn bộ)
+        format!(
+            r#"
+            from(bucket: "{}")
+            |> range({}) 
+            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+            |> filter(fn: (r) => r.device_id == "{}")
+            |> sort(columns: ["_time"], desc: true)
+            |> limit(n: 2000)
+            "#,
+            app_state.influx_bucket, range_clause, device_id
+        )
+    };
 
     tracing::info!("Câu lệnh Flux Query:\n{}", flux_query);
     let query_obj = influxdb2::models::Query::new(flux_query.clone());
@@ -97,6 +116,8 @@ pub async fn get_history(
     {
         Ok(tables) => {
             tracing::info!("Query thành công! Trả về {} bản ghi.", tables.len());
+            // Nếu dùng sort desc, ta có thể đảo ngược lại để frontend nhận theo thứ tự thời gian tăng dần
+            // Nhưng SensorDataRow có thể không có thứ tự, tạm thời trả về như cũ.
             HttpResponse::Ok().json(json!({ "status": "success", "data": tables }))
         }
         Err(e) => {

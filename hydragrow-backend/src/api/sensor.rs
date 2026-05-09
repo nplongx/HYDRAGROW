@@ -86,9 +86,7 @@ pub async fn get_history(
         |> range({}) 
         |> filter(fn: (r) => r["_measurement"] == "sensor_data")
         |> filter(fn: (r) => r.device_id == "{}")
-        // ⬇️ Loại bỏ các hàng không có _value
         |> filter(fn: (r) => exists r._value)
-        // ⬇️ Ép kiểu _value thành float (để tránh lỗi avg(Utf8))
         |> map(fn: (r) => ({{ r with _value: float(v: r._value) }}))
         |> filter(fn: (r) => r._field == "ph" or r._field == "temp" or r._field == "water_level" or r._field == "ec")
         |> aggregateWindow(every: {}, fn: mean, createEmpty: false)

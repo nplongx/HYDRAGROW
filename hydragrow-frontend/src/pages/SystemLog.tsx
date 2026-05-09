@@ -238,12 +238,13 @@ const WaterMetadata = ({ meta }: { meta: any }) => {
   );
 };
 // ========== Cập nhật DosingCycleMetadata (rõ ràng hơn) ==========
+// Chỉ hiển thị phần sửa đổi của DosingCycleMetadata và bổ sung nếu cần
 const DosingCycleMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
   const pre = meta.pre ?? {};
   const post = meta.post_stable ?? meta.post ?? {};
+  const correction = meta.correction_progress ?? {};
 
-  // Gom nhóm dữ liệu
   const sections: { title?: string; rows: { label: string; value: string; accent?: string }[] }[] = [];
 
   // 1. Thông tin chu kỳ
@@ -255,14 +256,14 @@ const DosingCycleMetadata = ({ meta }: { meta: any }) => {
 
   // 2. Liều lượng bơm
   const doseRows: { label: string; value: string; accent?: string }[] = [];
-  const dose = meta.dose ?? meta;
+  const dose = meta.dose ?? {};
   if (dose.pump_a_ml != null && dose.pump_a_ml > 0) doseRows.push({ label: 'Phân A', value: `${Number(dose.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
   if (dose.pump_b_ml != null && dose.pump_b_ml > 0) doseRows.push({ label: 'Phân B', value: `${Number(dose.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
   if (dose.ph_up_ml != null && dose.ph_up_ml > 0) doseRows.push({ label: 'pH Tăng', value: `${Number(dose.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
   if (dose.ph_down_ml != null && dose.ph_down_ml > 0) doseRows.push({ label: 'pH Giảm', value: `${Number(dose.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
   if (doseRows.length) sections.push({ title: 'Bơm', rows: doseRows });
 
-  // 3. Biến động EC/pH
+  // 3. Biến động EC/pH (trước → sau ổn định)
   const deltaRows: { label: string; value: string; accent?: string }[] = [];
   const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
   const ecAfter = getMetaNumber(post, ['ec', 'EC']);
@@ -287,15 +288,26 @@ const DosingCycleMetadata = ({ meta }: { meta: any }) => {
   if (meta.delta_ph != null) deltaRows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
   if (deltaRows.length) sections.push({ title: 'Biến động', rows: deltaRows });
 
-  // 4. Mục tiêu & Sai số
+  // 4. Mục tiêu, sai số & tiến độ hiệu chỉnh còn lại
   const targetRows: { label: string; value: string; accent?: string }[] = [];
   if (meta.target_ec != null) targetRows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
   if (meta.target_ph != null) targetRows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
   if (meta.error_ec != null) targetRows.push({ label: 'Sai số EC', value: Number(meta.error_ec).toFixed(2), accent: 'text-amber-400' });
   if (meta.error_ph != null) targetRows.push({ label: 'Sai số pH', value: Number(meta.error_ph).toFixed(2), accent: 'text-amber-400' });
+
+  // Hiển thị tiến độ còn thiếu sau khi châm (nếu có)
+  if (correction.ec_remaining != null) {
+    const val = Number(correction.ec_remaining);
+    targetRows.push({ label: 'EC còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-cyan-200' : 'text-red-400' });
+  }
+  if (correction.ph_remaining != null) {
+    const val = Number(correction.ph_remaining);
+    targetRows.push({ label: 'pH còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-fuchsia-200' : 'text-red-400' });
+  }
+
   if (targetRows.length) sections.push({ title: 'Đánh giá', rows: targetRows });
 
-  // 5. Hệ số sử dụng
+  // 5. Hệ số sử dụng trong lần châm này
   const coefRows: { label: string; value: string; accent?: string }[] = [];
   if (meta.step_ratio_ec != null) coefRows.push({ label: 'Bước EC', value: Number(meta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
   if (meta.step_ratio_ph != null) coefRows.push({ label: 'Bước pH', value: Number(meta.step_ratio_ph).toFixed(2), accent: 'text-yellow-400' });
@@ -313,7 +325,7 @@ const DosingCycleMetadata = ({ meta }: { meta: any }) => {
           <div className="grid grid-cols-2 gap-x-4 gap-y-1">
             {sec.rows.map(r => (
               <div key={r.label} className="flex items-baseline gap-1.5">
-                <span className="text-slate-500">{r.label}</span>
+                <span className="text-slate-500 shrink-0">{r.label}</span>
                 <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
               </div>
             ))}
@@ -323,6 +335,7 @@ const DosingCycleMetadata = ({ meta }: { meta: any }) => {
     </div>
   );
 };
+
 // ========== Cập nhật AlertMetadata (lỗi rõ ràng) ==========
 const AlertMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;

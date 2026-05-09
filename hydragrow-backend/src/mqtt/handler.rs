@@ -952,6 +952,54 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
         report.dose.pump_a_ml, report.dose.pump_b_ml, report.dose.ph_up_ml, report.dose.ph_down_ml
     );
 
+    // Sau khi đã có report: DosingReportPayload
+    let metadata = json!({
+        "pre": {
+            "ec": report.pre.ec,
+            "ph": report.pre.ph,
+            "water_level": report.pre.water_level
+        },
+        "post_mixing": {
+            "ec": report.post_mixing.ec,
+            "ph": report.post_mixing.ph,
+            "water_level": report.post_mixing.water_level
+        },
+        "post_stable": {
+            "ec": report.post_stable.ec,
+            "ph": report.post_stable.ph,
+            "water_level": report.post_stable.water_level
+        },
+        "dose": {
+            "pump_a_ml": report.dose.pump_a_ml,
+            "pump_b_ml": report.dose.pump_b_ml,
+            "ph_up_ml": report.dose.ph_up_ml,
+            "ph_down_ml": report.dose.ph_down_ml
+        },
+        "target": {
+            "ec": report.target_ec,
+            "ph": report.target_ph
+        },
+        "error": {
+            "ec": report.error_ec,
+            "ph": report.error_ph
+        },
+        "delta": {
+            "ec": report.delta_ec,
+            "ph": report.delta_ph
+        },
+        "duration_ms": report.duration_ms,
+        "ema_ec_gain_used": report.ema_ec_gain_used,
+        "ema_ph_shift_used": report.ema_ph_shift_used,
+        "step_ratio_ec": report.step_ratio_ec,
+        "step_ratio_ph": report.step_ratio_ph,
+        "cycle_id": report.cycle_id,
+        "trigger": report.trigger,
+        "correction_progress": {
+            "ec_remaining": report.target_ec - report.post_stable.ec,
+            "ph_remaining": report.target_ph - report.post_stable.ph
+        }
+    });
+
     let _ = crate::db::postgres::insert_system_event(
         &app_state.pg_pool,
         &crate::db::postgres::NewSystemEventRecord {
@@ -961,7 +1009,7 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
             title: "Lưu Báo Cáo Châm Phân Thành Công".to_string(),
             message: alert_msg_text.clone(),
             reason: None,
-            metadata: Some(json!({"dosing_report": report})),
+            metadata: Some(metadata),
             timestamp: chrono::Utc::now().timestamp_millis(),
         },
     )

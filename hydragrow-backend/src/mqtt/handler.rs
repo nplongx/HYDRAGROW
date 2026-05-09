@@ -1266,6 +1266,44 @@ async fn handle_runtime_calibration_update(
         return;
     }
 
+    let dosing_cfg = match sqlx::query_as::<_, DosingCalibration>(
+        "SELECT * FROM dosing_calibration WHERE device_id = $1",
+    )
+    .bind(&device_id)
+    .fetch_optional(&app_state.pg_pool)
+    .await
+    {
+        Ok(Some(cfg)) => cfg,
+        Ok(None) => {
+            warn!("⚠️ [EMA CALIBRATION] Không tìm thấy dosing_calibration cho {}", device_id);
+            return;
+        }
+        Err(e) => {
+            error!("❌ [EMA CALIBRATION] Lỗi tải dosing_calibration cho {}: {:?}", device_id, e);
+            return;
+        }
+    };
+
+    let max_drift = 0.3_f32;
+    let clamped_ec_gain = ec_gain.map(|v| {
+        v.clamp(
+            dosing_cfg.ec_gain_per_ml * (1.0 - max_drift),
+            dosing_cfg.ec_gain_per_ml * (1.0 + max_drift),
+        )
+    });
+    let clamped_ph_up = ph_up.map(|v| {
+        v.clamp(
+            dosing_cfg.ph_shift_up_per_ml * (1.0 - max_drift),
+            dosing_cfg.ph_shift_up_per_ml * (1.0 + max_drift),
+        )
+    });
+    let clamped_ph_down = ph_down.map(|v| {
+        v.clamp(
+            dosing_cfg.ph_shift_down_per_ml * (1.0 - max_drift),
+            dosing_cfg.ph_shift_down_per_ml * (1.0 + max_drift),
+        )
+    });
+
     // 👇 SỬA LẠI: Thêm các cột step_ratio vào câu lệnh SQL
     // (Đảm bảo database của bạn đã có cột step_ratio_ec và step_ratio_ph trong bảng dosing_calibration)
     let query = r#"
@@ -1280,15 +1318,10 @@ async fn handle_runtime_calibration_update(
         WHERE device_id = $6
     "#;
 
-    if ec_gain.is_none() && ph_up.is_none() && ph_down.is_none() {
-        debug!("ℹ️ [EMA CALIBRATION] Không có hệ số nào mới để cập nhật.");
-        return;
-    }
-
     match sqlx::query(query)
-        .bind(ec_gain)
-        .bind(ph_up)
-        .bind(ph_down)
+        .bind(clamped_ec_gain)
+        .bind(clamped_ph_up)
+        .bind(clamped_ph_down)
         .bind(step_ratio_ec) // $4 - Đã thêm
         .bind(step_ratio_ph) // $5 - Đã thêm
         .bind(&device_id)
@@ -1304,8 +1337,8 @@ async fn handle_runtime_calibration_update(
 
                 // Tạo log SystemEvent để lưu lại lịch sử
                 let msg = format!(
-                    "Controller gửi hệ số mới (EMA). Cập nhật DB: EC Gain: {:?}, pH Up: {:?}, pH Down: {:?}",
-                    ec_gain, ph_up, ph_down
+                    "Controller gửi hệ số mới (EMA). Cập nhật DB: EC Gain: {:?} -> {:?}, pH Up: {:?} -> {:?}, pH Down: {:?} -> {:?}",
+                    ec_gain, clamped_ec_gain, ph_up, clamped_ph_up, ph_down, clamped_ph_down
                 );
 
                 let _ = insert_system_event(

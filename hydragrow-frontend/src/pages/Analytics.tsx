@@ -11,8 +11,9 @@ import { useCropSeason } from '../hooks/useCropSeason';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { loadAppSettings } from '../platform/settings';
+import { UnifiedDeviceConfig } from '../types/models';
 
-// Màu sắc Minimalist thay thế cho Neon
+// Màu sắc Minimalist
 const CHART_THEMES: Record<string, any> = {
   cyan: { stroke: '#06b6d4', fill1: '#06b6d4', fill2: '#083344', text: 'text-cyan-400', bg: 'bg-cyan-500/10' },
   fuchsia: { stroke: '#d946ef', fill1: '#d946ef', fill2: '#4a044e', text: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10' },
@@ -20,7 +21,7 @@ const CHART_THEMES: Record<string, any> = {
   blue: { stroke: '#3b82f6', fill1: '#3b82f6', fill2: '#172554', text: 'text-blue-400', bg: 'bg-blue-500/10' }
 };
 
-// --- Component Thẻ Biểu Đồ Flat (không thay đổi) ---
+// --- FlatChartCard (không đổi) ---
 const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) => {
   const theme = CHART_THEMES[color];
 
@@ -55,8 +56,6 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 transition-colors hover:border-slate-700">
-
-      {/* Header Thẻ Biểu Đồ */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${theme.bg}`}>
@@ -73,8 +72,6 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
           </div>
         </div>
       </div>
-
-      {/* Biểu Đồ Area */}
       <div className="h-[200px] w-full mt-2">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
@@ -85,40 +82,18 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-
-            <XAxis
-              dataKey="time"
-              stroke="rgba(255,255,255,0.1)"
-              tick={{ fill: '#64748b', fontSize: 10 }}
-              tickLine={false}
-              minTickGap={15}
-              tickMargin={10}
-            />
-
-            <YAxis
-              stroke="rgba(255,255,255,0.1)"
-              tick={{ fill: '#64748b', fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              width={40}
+            <XAxis dataKey="time" stroke="rgba(255,255,255,0.1)" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} minTickGap={15} tickMargin={10} />
+            <YAxis stroke="rgba(255,255,255,0.1)" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} width={40}
               domain={[
                 (dataMin: number) => Math.max(0, Math.floor(Number(dataMin) * 0.9)),
                 (dataMax: number) => Math.ceil(Number(dataMax) * 1.1)
               ]}
               allowDecimals={false}
             />
-
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
-
-            <Area
-              type="monotone"
-              dataKey={dataKey}
-              stroke={theme.stroke}
-              fill={`url(#gradient-${dataKey})`}
-              strokeWidth={2}
-              activeDot={{ r: 5, fill: theme.stroke, stroke: '#0f172a', strokeWidth: 2 }}
-              isAnimationActive={data.length < 150}
-              animationDuration={1000}
+            <Area type="monotone" dataKey={dataKey} stroke={theme.stroke} fill={`url(#gradient-${dataKey})`}
+              strokeWidth={2} activeDot={{ r: 5, fill: theme.stroke, stroke: '#0f172a', strokeWidth: 2 }}
+              isAnimationActive={data.length < 150} animationDuration={1000}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -127,25 +102,35 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
   );
 };
 
-// ---------- HÀM TIỆN ÍCH ----------
-// Xác định độ phân giải phù hợp dựa vào khoảng thời gian (đơn vị phút)
+// Component hiển thị khi cảm biến bị vô hiệu
+const SensorDisabledCard = ({ title, icon: Icon }: { title: string; icon: any }) => (
+  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center justify-center h-[280px]">
+    <Icon size={32} className="text-slate-600 mb-3" />
+    <h3 className="text-sm font-semibold text-slate-400">{title}</h3>
+    <p className="text-xs text-slate-500 mt-1">Cảm biến chưa được kích hoạt</p>
+  </div>
+);
+
+// Hàm xác định độ phân giải
 const getResolutionForTimeRange = (range: string): string | undefined => {
   switch (range) {
-    case '24h': return undefined;   // backend sẽ dùng limit 2000 điểm gần nhất
+    case '24h': return undefined;   // backend limit 2000 điểm
     case '7d': return '5m';
     case '30d': return '1h';
     default: return undefined;
   }
 };
 
-// Thay thế hàm getLocalIsoString
+// Hàm tạo UTC ISO string
 const getUtcIsoString = (date: Date) => date.toISOString();
-// ---------- COMPONENT CHÍNH ----------
+
+// --- Component chính Analytics ---
 const Analytics = () => {
   const { activeSeason, history } = useCropSeason();
 
   const [appConfig, setAppConfig] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceConfig, setDeviceConfig] = useState<UnifiedDeviceConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -155,7 +140,7 @@ const Analytics = () => {
         if (settings && settings.device_id) {
           setAppConfig(settings);
           setDeviceId(settings.device_id);
-          setIsLoading(false);
+          await fetchDeviceConfig(settings.device_id, settings);
         } else {
           setIsLoading(false);
         }
@@ -166,6 +151,22 @@ const Analytics = () => {
     };
     init();
   }, []);
+
+  const fetchDeviceConfig = async (id: string, settings: any) => {
+    try {
+      const res = await fetch(`${settings.backend_url}/api/devices/${id}/config`, {
+        headers: { 'X-API-Key': settings.api_key }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDeviceConfig(data.data || data);
+      }
+    } catch (e) {
+      console.error("Lỗi tải cấu hình thiết bị:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const defaultInterval = appConfig?.publish_interval || 5;
 
@@ -190,13 +191,11 @@ const Analytics = () => {
     return allSeasons.find(s => s.id.toString() === selectedSeasonId);
   }, [allSeasons, selectedSeasonId]);
 
-  // Dùng useRef để lưu AbortController nhằm hủy request cũ khi thay đổi tham số
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadHistory = useCallback(async () => {
     if (!deviceId || !appConfig) return;
 
-    // Hủy request cũ nếu có
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -206,8 +205,8 @@ const Analytics = () => {
     setIsFetching(true);
     setFetchError(null);
 
-    let startIso = "";
-    let endIso = "";
+    let startIso = '';
+    let endIso = '';
 
     if (selectedSeasonId !== 'realtime') {
       if (selectedSeason) {
@@ -224,12 +223,10 @@ const Analytics = () => {
       endIso = getUtcIsoString(now);
     }
 
-    // Xác định resolution dựa vào khoảng thời gian
     let resolution: string | undefined;
     if (selectedSeasonId === 'realtime') {
       resolution = getResolutionForTimeRange(timeRange);
     } else {
-      // Với mùa vụ, tính số ngày để chọn resolution
       if (selectedSeason) {
         const seasonDays = Math.ceil(
           (new Date(endIso).getTime() - new Date(startIso).getTime()) / (1000 * 60 * 60 * 24)
@@ -240,7 +237,6 @@ const Analytics = () => {
       }
     }
 
-    // Hàm fetch với retry khi gặp lỗi 502/503
     const fetchWithRetry = async (attempt = 1): Promise<any> => {
       try {
         const params = new URLSearchParams();
@@ -265,7 +261,6 @@ const Analytics = () => {
           }
           return [];
         } else if ((response.status === 502 || response.status === 503) && attempt < 3) {
-          // Thử lại sau 2 giây
           console.warn(`Lỗi ${response.status}, thử lại lần ${attempt + 1}...`);
           await new Promise(resolve => setTimeout(resolve, 2000));
           return fetchWithRetry(attempt + 1);
@@ -273,19 +268,13 @@ const Analytics = () => {
           throw new Error(`HTTP ${response.status}`);
         }
       } catch (error) {
-        if ((error as Error).name === 'AbortError') {
-          // Request bị hủy có chủ đích, không xử lý lỗi
-          throw error;
-        }
-        // Lỗi mạng hoặc lỗi khác
+        if ((error as Error).name === 'AbortError') throw error;
         throw error;
       }
     };
 
     try {
       const data = await fetchWithRetry();
-
-      // Định dạng lại dữ liệu cho biểu đồ
       const formatted = (data || []).map((d: any) => {
         const dateObj = new Date(d.time);
         return {
@@ -302,15 +291,12 @@ const Analytics = () => {
       });
       setHistoryData(formatted);
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        // Bỏ qua
-      } else {
+      if (error.name === 'AbortError') { /* bỏ qua */ } else {
         console.error("Fetch history error:", error);
         setHistoryData([]);
         setFetchError(error.message || 'Lỗi không xác định');
       }
     } finally {
-      // Chỉ kết thúc isFetching nếu request này là request mới nhất (tránh set state khi component unmounted)
       if (abortControllerRef.current === controller) {
         setIsFetching(false);
       }
@@ -355,7 +341,6 @@ const Analytics = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-28">
-
       <PageHeader
         icon={ChartIcon}
         title="Phân Tích"
@@ -364,7 +349,6 @@ const Analytics = () => {
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
           {/* Lọc Mùa Vụ */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
@@ -397,7 +381,7 @@ const Analytics = () => {
             >
               <option value="24h">24 Giờ Qua</option>
               <option value="7d">7 Ngày Qua</option>
-              <option value="30d">30 Ngày Qua</option>
+              {/* <option value="30d">30 Ngày Qua</option> */}
             </select>
           </div>
 
@@ -419,7 +403,6 @@ const Analytics = () => {
                 <option value="1800">30 Phút / Điểm</option>
                 <option value="custom">Tùy chỉnh...</option>
               </select>
-
               {intervalMode === 'custom' && (
                 <div className="relative w-20">
                   <input
@@ -434,7 +417,6 @@ const Analytics = () => {
               )}
             </div>
           </div>
-
         </div>
       </div>
 
@@ -465,14 +447,29 @@ const Analytics = () => {
           />
         ) : (
           <div className="space-y-6">
-            {/* <FlatChartCard title="Mật Độ Dinh Dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} /> */}
-            <FlatChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
-            <FlatChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
-            <FlatChartCard title="Mực Nước (% Bồn)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
+            {/* pH Chart */}
+            {deviceConfig?.enable_ph_sensor !== false ? (
+              <FlatChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
+            ) : (
+              <SensorDisabledCard title="Chỉ Số Cân Bằng (pH)" icon={Droplets} />
+            )}
+
+            {/* Nhiệt độ */}
+            {deviceConfig?.enable_temp_sensor !== false ? (
+              <FlatChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
+            ) : (
+              <SensorDisabledCard title="Nhiệt Độ Môi Trường" icon={Thermometer} />
+            )}
+
+            {/* Mực nước */}
+            {deviceConfig?.enable_water_level_sensor !== false ? (
+              <FlatChartCard title="Mực Nước (% Bồn)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
+            ) : (
+              <SensorDisabledCard title="Mực Nước (% Bồn)" icon={Waves} />
+            )}
           </div>
         )}
       </div>
-
     </div>
   );
 };

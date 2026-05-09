@@ -77,38 +77,37 @@ pub async fn get_history(
         format!("start: -{}", range_val)
     };
 
-    // Lựa chọn chiến lược truy vấn
     let flux_query = if let Some(resolution) = &query.resolution {
-        // Có resolution: aggregateWindow trên các cột số
+        // Tối ưu: aggregate trước, pivot sau, limit cuối
         format!(
             r#"
-            from(bucket: "{bucket}")
-            |> range({range})
-            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-            |> filter(fn: (r) => r.device_id == "{device}")
-            |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
-            |> map(fn: (r) => ({{ r with _value: float(v: r._value) }}))
-            |> aggregateWindow(every: {res}, fn: mean, createEmpty: false)
-            |> sort(columns: ["_time"], desc: false)
-            |> limit(n: 2000)
-            "#,
+        from(bucket: "{bucket}")
+        |> range({range})
+        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+        |> filter(fn: (r) => r.device_id == "{device}")
+        |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
+        |> aggregateWindow(every: {res}, fn: mean, createEmpty: false)
+        |> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn:"_value")
+        |> sort(columns:["_time"], desc: false)
+        |> limit(n: 2000)
+        "#,
             bucket = app_state.influx_bucket,
             range = range_clause,
             device = device_id,
             res = resolution
         )
     } else {
-        // Không có resolution: lấy dữ liệu gốc, giới hạn 2000 điểm
+        // Giữ nguyên cho trường hợp không resolution
         format!(
             r#"
-            from(bucket: "{bucket}")
-            |> range({range})
-            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-            |> filter(fn: (r) => r.device_id == "{device}")
-            |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
-            |> sort(columns: ["_time"], desc: false)
-            |> limit(n: 2000)
-            "#,
+        from(bucket: "{bucket}")
+        |> range({range})
+        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+        |> filter(fn: (r) => r.device_id == "{device}")
+        |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
+        |> sort(columns: ["_time"], desc: false)
+        |> limit(n: 2000)
+        "#,
             bucket = app_state.influx_bucket,
             range = range_clause,
             device = device_id

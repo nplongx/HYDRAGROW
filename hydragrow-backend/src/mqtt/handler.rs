@@ -793,6 +793,7 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         "device_id": device_id.clone(),
         "fsm_state": state.clone(),
         "budgets": json.get("budgets").cloned().unwrap_or(serde_json::json!({})),
+        "pump_status": json.get("pump_status").cloned().unwrap_or(serde_json::json!({})),
     });
     let _ = app_state.health_sender.send(fsm_status_payload);
 

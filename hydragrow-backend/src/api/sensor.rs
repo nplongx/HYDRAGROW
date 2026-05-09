@@ -79,29 +79,35 @@ pub async fn get_history(
 
     // Lựa chọn chiến lược truy vấn
     let flux_query = if let Some(resolution) = &query.resolution {
-        // ✅ Dùng aggregateWindow để giảm số điểm dữ liệu
+        // ✅ Dùng aggregateWindow – cần ép kiểu _value về float
         format!(
             r#"
-            from(bucket: "{}")
-            |> range({}) 
-            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-            |> filter(fn: (r) => r.device_id == "{}")
-            |> aggregateWindow(every: {}, fn: mean, createEmpty: false)
-            |> sort(columns: ["_time"], desc: false)
-            "#,
+        from(bucket: "{}")
+        |> range({}) 
+        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+        |> filter(fn: (r) => r.device_id == "{}")
+        // ⬇️ Loại bỏ các hàng không có _value
+        |> filter(fn: (r) => exists r._value)
+        // ⬇️ Ép kiểu _value thành float (để tránh lỗi avg(Utf8))
+        |> map(fn: (r) => ({{ r with _value: float(v: r._value) }}))
+        |> filter(fn: (r) => r._field == "ph" or r._field == "temp" or r._field == "water_level" or r._field == "ec")
+        |> aggregateWindow(every: {}, fn: mean, createEmpty: false)
+        |> sort(columns: ["_time"], desc: false)
+        "#,
             app_state.influx_bucket, range_clause, device_id, resolution
         )
     } else {
-        // ✅ Không có resolution: chỉ lấy 2000 điểm mới nhất (tránh quét toàn bộ)
+        // ✅ Không có resolution: chỉ lấy 2000 điểm mới nhất
+        // Có thể giữ nguyên hoặc cũng thêm map để an toàn nếu cần sort/filter khác
         format!(
             r#"
-            from(bucket: "{}")
-            |> range({}) 
-            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-            |> filter(fn: (r) => r.device_id == "{}")
-            |> sort(columns: ["_time"], desc: true)
-            |> limit(n: 2000)
-            "#,
+        from(bucket: "{}")
+        |> range({}) 
+        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+        |> filter(fn: (r) => r.device_id == "{}")
+        |> sort(columns: ["_time"], desc: true)
+        |> limit(n: 2000)
+        "#,
             app_state.influx_bucket, range_clause, device_id
         )
     };

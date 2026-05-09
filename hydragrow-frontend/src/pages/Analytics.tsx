@@ -485,6 +485,7 @@ const Analytics = () => {
           />
         ) : (
           <div className="space-y-6">
+            {/* <FlatChartCard title="Mật Độ Dinh Dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} /> */}
             <FlatChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
             <FlatChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             <FlatChartCard title="Mực Nước (% Bồn)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />

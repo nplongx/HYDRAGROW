@@ -15,7 +15,6 @@ interface DeviceContextType {
   controllerHealth: any;
   fsmState: string;
   isLoading: boolean;
-  updatePumpStatusOptimistically: (stateKey: string, isNowOn: boolean) => void;
   systemEvents: any[];
   isSensorOnline: boolean;
   pwmPreferences: Record<string, number>;
@@ -231,10 +230,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               if (payload.fsm_state) setFsmState(payload.fsm_state);
               else if (payload.current_state) setFsmState(payload.current_state);
 
-              if (payload.pump_status) {
-                applyPumpStatus(payload.pump_status);
-              }
-
               if (payload.budgets) {
                 setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
               }
@@ -352,17 +347,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 setDeviceStatus(prev => ({ ...prev, budgets: healthData.budgets }));
               }
 
-              const confirmedPumpStatus = normalizePumpStatus(healthData.pump_status);
-              savePumpStatusToStore(confirmedPumpStatus);
-
               if (healthData.pump_status) {
-                applyPumpStatus(healthData.pump_status)
+                applyPumpStatus(healthData.pump_status);
               }
-
-              setSensorData(prev => {
-                if (!prev) return prev;
-                return { ...prev, pump_status: confirmedPumpStatus };
-              });
 
               setDeviceStatus(prev => !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev);
               setIsControllerStatusKnown(true);
@@ -404,20 +391,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [deviceId, settings, resetSensorTimeout]);
 
-  const updatePumpStatusOptimistically = useCallback((stateKey: string, isNowOn: boolean) => {
-    setSensorData(prevData => {
-      if (!prevData) return prevData;
-      const newPumpStatus = {
-        ...prevData.pump_status,
-        [stateKey]: isNowOn
-      };
-
-      savePumpStatusToStore(newPumpStatus as PumpStatus);
-
-      return { ...prevData, pump_status: newPumpStatus };
-    });
-  }, []);
-
   const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
     setPwmPreferences(prev => {
       const updated = { ...prev, [pumpId]: pwm };
@@ -439,7 +412,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DeviceContext.Provider value={{
       deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
-      updatePumpStatusOptimistically, settings, systemEvents, isSensorOnline, isMissingConfig,
+      settings, systemEvents, isSensorOnline, isMissingConfig,
       pwmPreferences, savePwmPreference
     }}>
       {children}

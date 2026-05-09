@@ -133,7 +133,7 @@ const getResolutionForTimeRange = (range: string): string | undefined => {
   switch (range) {
     case '24h': return undefined;   // backend sẽ dùng limit 2000 điểm gần nhất
     case '7d': return '5m';
-    case '30d': return '30m';
+    case '30d': return '1h';
     default: return undefined;
   }
 };

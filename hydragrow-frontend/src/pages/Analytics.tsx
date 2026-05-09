@@ -138,7 +138,6 @@ const getResolutionForTimeRange = (range: string): string | undefined => {
   }
 };
 
-// Hàm tạo ISO string giữ nguyên local timezone (giữ nguyên từ code của bạn)
 // Thay thế hàm getLocalIsoString
 const getUtcIsoString = (date: Date) => date.toISOString();
 // ---------- COMPONENT CHÍNH ----------

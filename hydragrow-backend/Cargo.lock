@@ -2131,6 +2131,7 @@ dependencies = [
  "hydragrow-shared",
  "influxdb2",
  "influxdb2-structmap",
+ "lazy_static",
  "num-traits",
  "reqwest 0.11.27",
  "rumqttc",

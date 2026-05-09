@@ -232,9 +232,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               else if (payload.current_state) setFsmState(payload.current_state);
 
               if (payload.pump_status) {
-                const confirmedPumpStatus = normalizePumpStatus(payload.pump_status);
-                savePumpStatusToStore(confirmedPumpStatus);
-                setSensorData(prev => prev ? { ...prev, pump_status: confirmedPumpStatus } : prev);
+                const pumpStatus = payload.pump_status as PumpStatus;
+                savePumpStatusToStore(pumpStatus);
+                setSensorData(prev => prev ? { ...prev, pump_status: pumpStatus } : prev);
               }
 
               if (payload.budgets) {
@@ -254,7 +254,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                   else toast.error("Trạm điều khiển đã ngắt kết nối. Vui lòng kiểm tra mạng rồi thử lại.");
                 }
 
-                // 👉 SỬ DỤNG SPREAD OPERATOR (...payload) ĐỂ KHÔNG BỊ MẤT DỮ LIỆU
                 return {
                   ...prev,
                   ...payload,
@@ -302,14 +301,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               }
 
               setSystemEvents(prev => [alert, ...prev].slice(0, 50));
-              switch (alert.level) {
-                case 'critical': toast.error(`🚨 ${alert.title}\n${alert.message}`, { duration: 10000 }); break;
-                case 'warning': toast.error(`⚠️ ${alert.title}\n${alert.message}`, { duration: 6000 }); break;
-                case 'success': toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 }); break;
-                case 'info': toast(`ℹ️ ${alert.title}`, { duration: 4000 }); break; // Không còn bị nhảy spam popup đỏ
-                default: toast(`ℹ️ ${alert.title}`, { duration: 4000 }); break;
-              }
-              return;
+              if (alert.level === 'critical' || alert.level === 'warning') {
+                toast.error(`⚠️ ${alert.title}\n${alert.message}`, { id: alert.title, duration: 6000 });
+              } else if (alert.level === 'success') {
+                toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 });
+              } return;
             }
 
             if (data.type === 'sensor_update') {

@@ -1,8 +1,15 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use actix_web::web;
+use lazy_static::lazy_static;
 use rumqttc::Publish;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, error, info, instrument, warn};
+lazy_static::lazy_static! {
+    static ref LAST_ALERT: Mutex<HashMap<String, (String, i64)>> = Mutex::new(HashMap::new());
+}
 
 use crate::AppState;
 use crate::db::influx::write_sensor_data;
@@ -815,12 +822,17 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         // mà chỉ lưu vào DB SystemEvent (nếu bạn muốn). Hoặc nếu vẫn muốn bắn, ta cần kiểm soát tần suất.
 
         let should_send_to_ui = match alert_msg.level.as_str() {
-            "critical" | "warning" | "success" => true,
-            "info" => {
-                // Ví dụ: Lọc bớt các trạng thái Dosing vì ESP32 gửi lên RẤT NHIỀU.
-                !state.starts_with("DosingPump")
-                    && !state.starts_with("DosingPH")
-                    && !state.starts_with("ActiveMixing")
+            "critical" | "warning" => true,
+            "success" | "info" => {
+                // chỉ gửi khi là sự kiện quan trọng
+                matches!(
+                    state.as_str(),
+                    "SystemBooting"
+                        | "DosingCycleComplete"
+                        | "ManualMode"
+                        | "EmergencyStop"
+                        | "SystemFault" // thêm nếu cần
+                )
             }
             _ => false,
         };
@@ -832,6 +844,16 @@ async fn handle_fsm_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
 
         if should_send_to_ui {
+            let mut last = LAST_ALERT.lock().unwrap();
+            let key = format!("{}:{}", device_id, alert_msg.title);
+            let now = chrono::Utc::now().timestamp_millis();
+            if let Some((prev_title, prev_ts)) = last.get(&key) {
+                if prev_title == &alert_msg.title && (now - prev_ts) < 60_000 {
+                    // đã gửi alert này trong 1 phút qua, bỏ qua
+                    return;
+                }
+            }
+            last.insert(key, (alert_msg.title.clone(), now));
             let _ = app_state.alert_sender.send(alert_msg.clone());
         }
 

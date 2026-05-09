@@ -78,17 +78,44 @@ pub async fn get_history(
     };
 
     // Lựa chọn chiến lược truy vấn
-    let flux_query = format!(
-        r#"
-        from(bucket: "{}")
-        |> range({}) 
-        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-        |> filter(fn: (r) => r.device_id == "{}")
-        |> sort(columns: ["_time"], desc: false)
-        |> tail(n: 1000)
-        "#,
-        app_state.influx_bucket, range_clause, device_id
-    );
+    let flux_query = if let Some(resolution) = &query.resolution {
+        // Có resolution: aggregateWindow trên các cột số
+        format!(
+            r#"
+            from(bucket: "{bucket}")
+            |> range({range})
+            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+            |> filter(fn: (r) => r.device_id == "{device}")
+            |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
+            |> map(fn: (r) => ({{ r with _value: float(v: r._value) }}))
+            |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+            |> aggregateWindow(every: {res}, fn: mean, createEmpty: false)
+            |> sort(columns: ["_time"], desc: false)
+            |> limit(n: 2000)
+            "#,
+            bucket = app_state.influx_bucket,
+            range = range_clause,
+            device = device_id,
+            res = resolution
+        )
+    } else {
+        // Không có resolution: lấy dữ liệu gốc, giới hạn 2000 điểm
+        format!(
+            r#"
+            from(bucket: "{bucket}")
+            |> range({range})
+            |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+            |> filter(fn: (r) => r.device_id == "{device}")
+            |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
+            |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+            |> sort(columns: ["_time"], desc: false)
+            |> limit(n: 2000)
+            "#,
+            bucket = app_state.influx_bucket,
+            range = range_clause,
+            device = device_id
+        )
+    };
 
     tracing::info!("Câu lệnh Flux Query:\n{}", flux_query);
     let query_obj = influxdb2::models::Query::new(flux_query.clone());

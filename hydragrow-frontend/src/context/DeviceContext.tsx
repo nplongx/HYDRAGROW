@@ -232,9 +232,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               else if (payload.current_state) setFsmState(payload.current_state);
 
               if (payload.pump_status) {
-                const pumpStatus = payload.pump_status as PumpStatus;
-                savePumpStatusToStore(pumpStatus);
-                setSensorData(prev => prev ? { ...prev, pump_status: pumpStatus } : prev);
+                applyPumpStatus(payload.pump_status);
               }
 
               if (payload.budgets) {
@@ -264,7 +262,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
               if (!isOnline) {
                 setFsmState("Offline");
-                setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
               }
               return;
             }
@@ -359,12 +356,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               savePumpStatusToStore(confirmedPumpStatus);
 
               if (healthData.pump_status) {
-                const raw = healthData.pump_status;
-                if (raw.pump_a_pwm !== undefined && raw.pump_a_pwm > 0) savePwmPreference('PUMP_A', raw.pump_a_pwm);
-                if (raw.pump_b_pwm !== undefined && raw.pump_b_pwm > 0) savePwmPreference('PUMP_B', raw.pump_b_pwm);
-                if (raw.ph_up_pwm !== undefined && raw.ph_up_pwm > 0) savePwmPreference('PH_UP', raw.ph_up_pwm);
-                if (raw.ph_down_pwm !== undefined && raw.ph_down_pwm > 0) savePwmPreference('PH_DOWN', raw.ph_down_pwm);
-                if (raw.osaka_pwm !== undefined && raw.osaka_pwm > 0) savePwmPreference('OSAKA', raw.osaka_pwm);
+                applyPumpStatus(healthData.pump_status)
               }
 
               setSensorData(prev => {
@@ -395,7 +387,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
         ws.onerror = (_err) => ws.close();
       };
-
+      setSensorData
       connectWs();
     };
 
@@ -433,6 +425,16 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
       return updated;
     });
   }, []);
+
+  function applyPumpStatus(pumpStatus: PumpStatus) {
+    savePumpStatusToStore(pumpStatus);
+    setSensorData(prev => prev ? { ...prev, pump_status: pumpStatus } : prev);
+    if (pumpStatus.pump_a_pwm) savePwmPreference('PUMP_A', pumpStatus.pump_a_pwm);
+    if (pumpStatus.pump_b_pwm) savePwmPreference('PUMP_B', pumpStatus.pump_b_pwm);
+    if (pumpStatus.osaka_pwm) savePwmPreference('OSAKA', pumpStatus.osaka_pwm);
+    if (pumpStatus.ph_down_pwm) savePwmPreference('PH_DOWN', pumpStatus.ph_down_pwm);
+    if (pumpStatus.ph_up_pwm) savePwmPreference('PH_UP', pumpStatus.ph_up_pwm);
+  }
 
   return (
     <DeviceContext.Provider value={{

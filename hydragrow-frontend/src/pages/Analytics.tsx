@@ -168,7 +168,10 @@ const Analytics = () => {
     }
   };
 
-  const defaultInterval = appConfig?.publish_interval || 5;
+  const defaultIntervalSec = useMemo(
+    () => (appConfig?.publish_interval ? appConfig.publish_interval / 1000 : 5),
+    [appConfig]
+  );
 
   const allSeasons = useMemo(() => {
     const list = [...history];
@@ -311,10 +314,10 @@ const Analytics = () => {
   const effectiveIntervalMs = useMemo(() => {
     let seconds = 0;
     if (intervalMode === 'default') seconds = 0;
-    else if (intervalMode === 'custom') seconds = Math.max(customIntervalValue, defaultInterval);
+    else if (intervalMode === 'custom') seconds = Math.max(customIntervalValue, defaultIntervalSec);
     else seconds = Number(intervalMode);
     return seconds * 1000;
-  }, [intervalMode, customIntervalValue, defaultInterval]);
+  }, [intervalMode, customIntervalValue, defaultIntervalSec]);
 
   const displayData = useMemo(() => {
     if (effectiveIntervalMs === 0 || historyData.length === 0) return historyData;
@@ -407,7 +410,7 @@ const Analytics = () => {
                 <div className="relative w-20">
                   <input
                     type="number"
-                    min={defaultInterval}
+                    min={defaultIntervalSec}
                     value={customIntervalValue}
                     onChange={(e) => setCustomIntervalValue(Number(e.target.value))}
                     className="w-full h-full bg-slate-950 border border-purple-500/50 text-purple-300 text-sm rounded-lg px-2 text-center outline-none focus:border-purple-500"
@@ -451,7 +454,7 @@ const Analytics = () => {
             {deviceConfig?.enable_ec_sensor !== false ? (
               <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
             ) : (
-              <SensorDisabledCard title="Chỉ Số dinh dưỡng (EC)" icon={Droplets} />
+              <SensorDisabledCard title="Chỉ Số dinh dưỡng (EC)" icon={Activity} />
             )}
 
             {/* pH Chart */}

@@ -209,7 +209,7 @@ const Dashboard = () => {
         </div>
 
         <div className="pt-4 border-t border-slate-800">
-          <p className="text-xs font-medium text-slate-500 mb-3">Đang tiêu thụ điện:</p>
+          <p className="text-xs font-medium text-slate-500 mb-3">Đang chạy:</p>
           <div className="flex flex-wrap gap-2">
             {pumps.pump_a && <ActiveDeviceTag label="Bơm Phân A" color="bg-orange-500/10 text-orange-500 border-orange-500/20" />}
             {pumps.pump_b && <ActiveDeviceTag label="Bơm Phân B" color="bg-orange-500/10 text-orange-500 border-orange-500/20" />}

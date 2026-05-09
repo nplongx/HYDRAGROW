@@ -91,7 +91,7 @@ pub fn start_fsm_control_loop(
         let force_sync =
             process_mqtt_commands(&cmd_rx, &config, &mut pump_ctrl, &mut ctx, current_time_ms);
 
-        // --- Xử lý timeout bơm thủ công ---
+        // --- Xử lý timeout bơm thủ công (có thể tắt bơm) ---
         let expired: Vec<String> = ctx
             .manual_timeouts
             .iter()
@@ -104,8 +104,24 @@ pub fn start_fsm_control_loop(
             ctx.turn_off_pump(&pump, &mut pump_ctrl);
         }
 
-        let is_safety_overridden = current_time_ms < ctx.safety_override_until;
+        // ✅ Cập nhật shared_sensors NGAY LẬP TỨC sau khi xử lý lệnh + timeout
+        if let Ok(mut s) = shared_sensors.write() {
+            s.pump_status = ctx.pump_status.clone();
+        }
 
+        // ✅ Nếu có force_sync, publish trạng thái ngay lập tức
+        if force_sync {
+            // Gửi lệnh ép sensor task publish dữ liệu (bao gồm pump_status)
+            let _ = sensor_cmd_tx
+                .send(r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string());
+            // Đồng thời publish trạng thái FSM để backend nhận ngay
+            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
+            last_reported_state.clear();
+            info!("⚡ Đã ép publish trạng thái bơm mới nhất lên App!");
+        }
+
+        // --- Phần còn lại giữ nguyên (kiểm tra safety, auto FSM...) ---
+        let is_safety_overridden = current_time_ms < ctx.safety_override_until;
         if !is_safety_overridden {
             let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config);
             let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
@@ -148,23 +164,15 @@ pub fn start_fsm_control_loop(
             ctx.last_continuous_level = needs_continuous;
         }
 
-        // --- Đồng bộ pump_status ra shared sensor ---
+        // --- Đồng bộ pump_status ra shared_sensor (lần cuối sau khi FSM chạy) ---
         if let Ok(mut s) = shared_sensors.write() {
             s.pump_status = ctx.pump_status.clone();
         }
 
-        // --- Publish trạng thái nếu thay đổi ---
+        // --- Publish trạng thái nếu state FSM thay đổi ---
         let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state);
-        if state_changed || force_sync {
+        if state_changed {
             let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
-
-            if force_sync {
-                last_reported_state.clear();
-                let _ = sensor_cmd_tx.send(
-                    r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string(),
-                );
-                info!("⚡ Đã ép luồng chính Publish trạng thái bơm mới nhất lên App!");
-            }
         }
 
         std::thread::sleep(Duration::from_millis(100));

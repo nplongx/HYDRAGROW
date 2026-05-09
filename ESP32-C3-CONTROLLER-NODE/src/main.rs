@@ -25,6 +25,7 @@ use mqtt::{create_shared_sensor_data, ConnectionState};
 use pump::PumpController;
 
 use crate::fsm::start_fsm_control_loop;
+use crate::fsm::utils::{get_current_time_ms, get_current_time_sec};
 
 const WIFI_SSID: &str = "Huynh Hong";
 const WIFI_PASS: &str = "123443215";
@@ -209,6 +210,7 @@ fn main() -> anyhow::Result<()> {
                 fsm_tx,
                 dosing_report_tx,
                 sensor_cmd_tx,
+                get_current_time_sec(),
             );
         })?;
 

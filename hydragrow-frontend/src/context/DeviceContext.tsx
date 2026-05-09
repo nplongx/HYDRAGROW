@@ -228,11 +228,15 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
 
-              // Payload từ Rust gửi lên key là "current_state", backup "fsm_state" nếu nodejs wrap
               if (payload.fsm_state) setFsmState(payload.fsm_state);
               else if (payload.current_state) setFsmState(payload.current_state);
 
-              // 👉 THÊM ĐOẠN NÀY ĐỂ BẮT BUDGETS TỪ RUST:
+              if (payload.pump_status) {
+                const confirmedPumpStatus = normalizePumpStatus(payload.pump_status);
+                savePumpStatusToStore(confirmedPumpStatus);
+                setSensorData(prev => prev ? { ...prev, pump_status: confirmedPumpStatus } : prev);
+              }
+
               if (payload.budgets) {
                 setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
               }

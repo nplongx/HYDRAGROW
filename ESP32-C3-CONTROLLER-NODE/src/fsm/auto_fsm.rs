@@ -85,10 +85,7 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = true;
 
-                let report_json = format!(
-                    r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
-                    trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
-                );
+                let report_json = serde_json::json!({"type":"water_event","trigger":trigger,"level_before":start_level,"level_after":sensors.water_level,"duration_sec":duration_sec,"ec_before":start_ec,"ec_after":sensors.ec,"success":target_reached}).to_string();
                 let _ = fsm_mqtt_tx.send(report_json);
 
                 ctx.current_state = SystemState::ActiveMixing {
@@ -108,10 +105,7 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = false;
 
-                let report_json = format!(
-                    r#"[WATER EVENT] {{ "trigger": "{}", "level_before": {:.1}, "level_after": {:.1}, "duration_sec": {}, "ec_before": {:.2}, "ec_after": {:.2}, "success": {} }}"#,
-                    trigger, start_level, sensors.water_level, duration_sec, start_ec, sensors.ec, target_reached
-                );
+                let report_json = serde_json::json!({"type":"water_event","trigger":trigger,"level_before":start_level,"level_after":sensors.water_level,"duration_sec":duration_sec,"ec_before":start_ec,"ec_after":sensors.ec,"success":target_reached}).to_string();
                 let _ = fsm_mqtt_tx.send(report_json);
 
                 ctx.current_state = SystemState::Stabilizing {

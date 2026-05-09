@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Activity } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
@@ -352,14 +352,14 @@ const Analytics = () => {
           {/* Lọc Mùa Vụ */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
-              <Filter size={14} className="text-emerald-500" /> Nguồn dữ liệu
+              <Filter size={14} className="text-emerald-500" /> Mùa vụ
             </label>
             <select
               value={selectedSeasonId}
               onChange={(e) => setSelectedSeasonId(e.target.value)}
               className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-500"
             >
-              <option value="realtime">Thời gian thực</option>
+              <option value="realtime">Mùa hiện tại</option>
               {allSeasons.map((s) => (
                 <option key={s.id} value={s.id.toString()}>
                   {s.name} {s.end_time ? '(Đã lưu)' : '(Đang chạy)'}
@@ -371,7 +371,7 @@ const Analytics = () => {
           {/* Khung Thời Gian */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
-              <Clock size={14} className="text-blue-500" /> Khung thời gian
+              <Clock size={14} className="text-blue-500" /> Thời gian
             </label>
             <select
               disabled={selectedSeasonId !== 'realtime'}
@@ -447,25 +447,32 @@ const Analytics = () => {
           />
         ) : (
           <div className="space-y-6">
+            {/* EC Chart */}
+            {deviceConfig?.enable_ec_sensor !== false ? (
+              <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
+            ) : (
+              <SensorDisabledCard title="Chỉ Số dinh dưỡng (EC)" icon={Droplets} />
+            )}
+
             {/* pH Chart */}
             {deviceConfig?.enable_ph_sensor !== false ? (
-              <FlatChartCard title="Chỉ Số Cân Bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
+              <FlatChartCard title="Chỉ Số cân bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
             ) : (
-              <SensorDisabledCard title="Chỉ Số Cân Bằng (pH)" icon={Droplets} />
+              <SensorDisabledCard title="Chỉ Số cân bằng (pH)" icon={Droplets} />
             )}
 
             {/* Nhiệt độ */}
             {deviceConfig?.enable_temp_sensor !== false ? (
-              <FlatChartCard title="Nhiệt Độ Môi Trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
+              <FlatChartCard title="Nhiệt Độ môi trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             ) : (
-              <SensorDisabledCard title="Nhiệt Độ Môi Trường" icon={Thermometer} />
+              <SensorDisabledCard title="Nhiệt độ môi trường" icon={Thermometer} />
             )}
 
             {/* Mực nước */}
             {deviceConfig?.enable_water_level_sensor !== false ? (
-              <FlatChartCard title="Mực Nước (% Bồn)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
+              <FlatChartCard title="Mực nước (%)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
             ) : (
-              <SensorDisabledCard title="Mực Nước (% Bồn)" icon={Waves} />
+              <SensorDisabledCard title="Mực mước (%)" icon={Waves} />
             )}
           </div>
         )}

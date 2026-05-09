@@ -139,24 +139,8 @@ const getResolutionForTimeRange = (range: string): string | undefined => {
 };
 
 // Hàm tạo ISO string giữ nguyên local timezone (giữ nguyên từ code của bạn)
-const getLocalIsoString = (date: Date): string => {
-  const pad = (num: number) => (num < 10 ? '0' : '') + num;
-  const tzo = -date.getTimezoneOffset();
-  const dif = tzo >= 0 ? '+' : '-';
-  const hours = Math.floor(Math.abs(tzo) / 60);
-  const minutes = Math.abs(tzo) % 60;
-  return (
-    date.getFullYear() +
-    '-' + pad(date.getMonth() + 1) +
-    '-' + pad(date.getDate()) +
-    'T' + pad(date.getHours()) +
-    ':' + pad(date.getMinutes()) +
-    ':' + pad(date.getSeconds()) +
-    dif + pad(hours) +
-    ':' + pad(minutes)
-  );
-};
-
+// Thay thế hàm getLocalIsoString
+const getUtcIsoString = (date: Date) => date.toISOString();
 // ---------- COMPONENT CHÍNH ----------
 const Analytics = () => {
   const { activeSeason, history } = useCropSeason();
@@ -223,25 +207,22 @@ const Analytics = () => {
     setIsFetching(true);
     setFetchError(null);
 
-    let startIso: string;
-    let endIso: string;
+    let startIso = "";
+    let endIso = "";
 
     if (selectedSeasonId !== 'realtime') {
       if (selectedSeason) {
-        startIso = getLocalIsoString(new Date(selectedSeason.start_time));
+        startIso = getUtcIsoString(new Date(selectedSeason.start_time));
         endIso = selectedSeason.end_time
-          ? getLocalIsoString(new Date(selectedSeason.end_time))
-          : getLocalIsoString(new Date());
-      } else {
-        setIsFetching(false);
-        return;
+          ? getUtcIsoString(new Date(selectedSeason.end_time))
+          : getUtcIsoString(new Date());
       }
     } else {
       const now = new Date();
       const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
       const startDate = new Date(now.getTime() - diffHours * 60 * 60 * 1000);
-      startIso = getLocalIsoString(startDate);
-      endIso = getLocalIsoString(now);
+      startIso = getUtcIsoString(startDate);
+      endIso = getUtcIsoString(now);
     }
 
     // Xác định resolution dựa vào khoảng thời gian

@@ -78,37 +78,17 @@ pub async fn get_history(
     };
 
     // Lựa chọn chiến lược truy vấn
-    let flux_query = if let Some(resolution) = &query.resolution {
-        // ✅ Dùng aggregateWindow – cần ép kiểu _value về float
-        format!(
-            r#"
+    let flux_query = format!(
+        r#"
         from(bucket: "{}")
         |> range({}) 
         |> filter(fn: (r) => r["_measurement"] == "sensor_data")
         |> filter(fn: (r) => r.device_id == "{}")
-        |> filter(fn: (r) => exists r._value)
-        |> map(fn: (r) => ({{ r with _value: float(v: r._value) }}))
-        |> filter(fn: (r) => r._field == "ph" or r._field == "temp" or r._field == "water_level" or r._field == "ec")
-        |> aggregateWindow(every: {}, fn: mean, createEmpty: false)
         |> sort(columns: ["_time"], desc: false)
+        |> tail(n: 1000)
         "#,
-            app_state.influx_bucket, range_clause, device_id, resolution
-        )
-    } else {
-        // ✅ Không có resolution: chỉ lấy 2000 điểm mới nhất
-        // Có thể giữ nguyên hoặc cũng thêm map để an toàn nếu cần sort/filter khác
-        format!(
-            r#"
-        from(bucket: "{}")
-        |> range({}) 
-        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
-        |> filter(fn: (r) => r.device_id == "{}")
-        |> sort(columns: ["_time"], desc: true)
-        |> limit(n: 2000)
-        "#,
-            app_state.influx_bucket, range_clause, device_id
-        )
-    };
+        app_state.influx_bucket, range_clause, device_id
+    );
 
     tracing::info!("Câu lệnh Flux Query:\n{}", flux_query);
     let query_obj = influxdb2::models::Query::new(flux_query.clone());

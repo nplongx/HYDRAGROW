@@ -279,8 +279,14 @@ fn main() -> anyhow::Result<()> {
         if let Ok(payload) = fsm_rx.try_recv() {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    let topic = format!("AGITECH/{}/fsm", DEVICE_ID);
-                    let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
+                    if let Ok(v)=serde_json::from_str::<serde_json::Value>(&payload){
+                        let topic = match v.get("type").and_then(|t| t.as_str()) {
+                            Some("water_event")|Some("system_alert")|Some("dosing_cycle")=>format!("AGITECH/{}/fsm/events", DEVICE_ID),
+                            Some("ema_update")|Some("auto_tune")=>format!("AGITECH/{}/calibration", DEVICE_ID),
+                            _=>format!("AGITECH/{}/fsm/state", DEVICE_ID),
+                        };
+                        let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ pub mod auto_fsm;
 pub mod calibration;
 pub mod commands;
 pub mod context;
+pub mod systemlog;
 pub mod types;
 pub mod utils;
 
@@ -16,7 +17,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
-use hydragrow_shared::ControlMode;
+use hydragrow_shared::{ControlMode, LogCategory, LogLevel, SystemLogEvent};
 use log::info;
 
 use crate::config::SharedConfig;
@@ -88,8 +89,14 @@ pub fn start_fsm_control_loop(
 
         ctx.sync_adaptive_ratios_from_config(&config);
 
-        let force_sync =
-            process_mqtt_commands(&cmd_rx, &config, &mut pump_ctrl, &mut ctx, current_time_ms);
+        let force_sync = process_mqtt_commands(
+            &cmd_rx,
+            &config,
+            &mut pump_ctrl,
+            &mut ctx,
+            current_time_ms,
+            &fsm_mqtt_tx,
+        );
 
         // --- Xử lý timeout bơm thủ công (có thể tắt bơm) ---
         let expired: Vec<String> = ctx
@@ -101,6 +108,19 @@ pub fn start_fsm_control_loop(
         for pump in expired {
             ctx.manual_timeouts.remove(&pump);
             info!("⏱️ HẾT GIỜ (SAFE TIMEOUT): Tự động tắt bơm {}!", pump);
+            utils::send_system_log(
+                &fsm_mqtt_tx,
+                &config.device_id, // Đảm bảo config có chứa device_id
+                LogLevel::Warning,
+                LogCategory::UserAction,
+                "Tự động tắt bơm (Safety Timeout)",
+                SystemLogEvent::BasicSystemLog {
+                    message: format!(
+                        "Bơm {} đã tự động tắt do hết thời gian an toàn của chế độ thủ công.",
+                        pump
+                    ),
+                },
+            );
             ctx.turn_off_pump(&pump, &mut pump_ctrl);
         }
 
@@ -129,7 +149,11 @@ pub fn start_fsm_control_loop(
                 || (config.enable_ph_sensor && sensors.err_ph)
                 || (config.enable_temp_sensor && sensors.err_temp);
 
-            ctx.update_auto_tune_health(is_noisy_sample || has_sensor_fault);
+            ctx.update_auto_tune_health(
+                is_noisy_sample || has_sensor_fault,
+                &config.device_id,
+                &fsm_mqtt_tx,
+            );
 
             if is_noisy_sample {
                 ctx.mark_pending_sample_noise_violation();

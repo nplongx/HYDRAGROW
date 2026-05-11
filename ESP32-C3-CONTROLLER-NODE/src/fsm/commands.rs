@@ -1,6 +1,6 @@
 use hydragrow_shared::{ControlMode, ControllerConfig};
 use log::{info, warn};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 
 use super::context::ControlContext;
 use super::types::SystemState;
@@ -19,6 +19,7 @@ pub fn process_mqtt_commands(
     pump_ctrl: &mut PumpController,
     ctx: &mut ControlContext,
     current_time_ms: u64,
+    fsm_mqtt_tx: &Sender<String>, // 👇 BỔ SUNG THAM SỐ NÀY
 ) -> bool {
     let mut force_sync = false;
 
@@ -62,7 +63,10 @@ pub fn process_mqtt_commands(
         if action_lower == "reset_fault" {
             info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
             ctx.stop_all_pumps(pump_ctrl);
-            ctx.reset_faults();
+
+            // 👇 SỬA Ở ĐÂY: Bổ sung 2 tham số bị thiếu
+            ctx.reset_faults(&config.device_id, fsm_mqtt_tx);
+
             force_sync = true;
             continue;
         }
@@ -124,18 +128,14 @@ pub fn process_mqtt_commands(
         if is_on {
             match duration_sec {
                 Some(duration) if duration > 0 => {
-                    // Có hẹn giờ -> Lưu thời điểm kết thúc mới
                     let finish_time = current_time_ms + (duration as u64 * 1000);
                     ctx.manual_timeouts.insert(pump_name.clone(), finish_time);
                 }
                 _ => {
-                    // Bật bình thường (hoặc duration = 0) -> PHẢI XÓA timeout cũ
-                    // Nếu không xóa, FSM sẽ tưởng timer cũ vẫn còn hiệu lực và ngắt bơm ngay lập tức.
                     ctx.manual_timeouts.remove(&pump_name);
                 }
             }
         } else {
-            // Nhận lệnh TẮT -> Xóa timeout
             ctx.manual_timeouts.remove(&pump_name);
         }
 
@@ -156,7 +156,6 @@ pub fn process_mqtt_commands(
 
     force_sync
 }
-
 // ---------------------------------------------------------------------------
 // apply_pump_command – áp dụng lệnh bơm cụ thể lên phần cứng + trạng thái
 // ---------------------------------------------------------------------------

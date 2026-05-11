@@ -1,5 +1,8 @@
-use hydragrow_shared::ControllerConfig;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use hydragrow_shared::{ControllerConfig, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
+use std::{
+    sync::mpsc::Sender,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -97,4 +100,32 @@ pub fn get_current_time_sec() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::from_secs(0))
         .as_secs()
+}
+
+/// Hàm tiện ích để đóng gói và gửi log hệ thống
+pub fn send_system_log(
+    tx: &Sender<String>,
+    device_id: &str, // Có thể lấy từ config
+    level: LogLevel,
+    category: LogCategory,
+    title: &str,
+    event: SystemLogEvent,
+) {
+    let log = UnifiedSystemLog {
+        device_id: device_id.to_string(),
+        level,
+        category,
+        title: title.to_string(),
+        event,
+        timestamp_ms: get_current_time_ms(),
+    };
+
+    // Đóng gói thành JSON và gửi vào channel MQTT
+    if let Ok(json_str) = serde_json::to_string(&log) {
+        // Lưu ý: Task MQTT pub của bạn cần được cấu hình để
+        // publish các message từ channel này vào topic `.../system_log`
+        let _ = tx.send(json_str);
+    } else {
+        log::error!("Lỗi Serialize SystemLogEvent!");
+    }
 }

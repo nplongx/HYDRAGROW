@@ -1,9 +1,10 @@
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
 use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 
 use super::types::{PendingCalibrationSample, SystemState};
+use crate::fsm::utils::send_system_log;
 use crate::mqtt::{PumpStatus, SensorData};
 use crate::pump::{PumpController, PumpType, WaterDirection};
 
@@ -137,7 +138,7 @@ impl ControlContext {
         self.pump_status.dosing_pulse_count = pulse_count;
     }
 
-    pub fn reset_faults(&mut self) {
+    pub fn reset_faults(&mut self, device_id: &str, fsm_mqtt_tx: &Sender<String>) {
         info!("🔄 [RESET] Đang thực hiện RESET FAULT. Khôi phục bộ đếm lỗi...");
         self.ec_retry_count = 0;
         self.ph_retry_count = 0;
@@ -153,6 +154,18 @@ impl ControlContext {
 
         self.fsm_osaka_active = false;
         self.current_state = SystemState::Monitoring;
+
+        send_system_log(
+            fsm_mqtt_tx,
+            device_id,
+            LogLevel::Success,
+            LogCategory::UserAction,
+            "Reset Lỗi Thành Công",
+            SystemLogEvent::BasicSystemLog {
+                message: "Hệ thống đã được xóa lỗi (Clear Faults) và xóa giới hạn bơm trong giờ. Trở lại trạng thái Giám Sát (Monitoring).".to_string(),
+            },
+        );
+
         info!("✅ [RESET] Hoàn tất! FSM trở về Monitoring.");
     }
 
@@ -547,16 +560,28 @@ impl ControlContext {
         self.tuning_last_update_sec = now_sec;
     }
 
-    pub fn update_auto_tune_health(&mut self, abnormal_sample: bool) {
+    pub fn update_auto_tune_health(
+        &mut self,
+        abnormal_sample: bool,
+        device_id: &str,
+        fsm_mqtt_tx: &std::sync::mpsc::Sender<String>,
+    ) {
         if abnormal_sample {
             self.abnormal_sample_streak = self.abnormal_sample_streak.saturating_add(1);
             if self.abnormal_sample_streak >= 3 && !self.auto_tune_locked {
                 self.auto_tune_locked = true;
                 self.adaptive_ec_step_ratio = self.best_known_ec_step_ratio;
                 self.adaptive_ph_step_ratio = self.best_known_ph_step_ratio;
-                warn!(
-                    "🔒 Khóa auto-tune do 3 mẫu liên tiếp bất thường. Fallback hệ số EC={:.3}, pH={:.3}",
-                    self.adaptive_ec_step_ratio, self.adaptive_ph_step_ratio
+                let msg = format!("Khóa auto-tune do 3 mẫu liên tiếp bất thường. Fallback hệ số EC={:.3}, pH={:.3}", self.adaptive_ec_step_ratio, self.adaptive_ph_step_ratio);
+                warn!("🔒 {}", msg);
+
+                send_system_log(
+                    fsm_mqtt_tx,
+                    device_id,
+                    LogLevel::Warning,
+                    LogCategory::Calibration,
+                    "Khóa Auto-tune tự động",
+                    SystemLogEvent::BasicSystemLog { message: msg },
                 );
             }
         } else {
@@ -564,6 +589,17 @@ impl ControlContext {
             if self.auto_tune_locked {
                 info!("🔓 Mở khóa auto-tune, cảm biến đã ổn định trở lại.");
                 self.auto_tune_locked = false;
+
+                send_system_log(
+                    fsm_mqtt_tx,
+                    device_id,
+                    LogLevel::Success,
+                    LogCategory::Calibration,
+                    "Mở khóa Auto-tune",
+                    SystemLogEvent::BasicSystemLog { 
+                        message: "Cảm biến đã đo lường ổn định trở lại. Mở khóa học máy tự động (Auto-tune).".to_string() 
+                    },
+                );
             }
         }
     }
@@ -640,4 +676,3 @@ impl ControlContext {
         }
     }
 }
-

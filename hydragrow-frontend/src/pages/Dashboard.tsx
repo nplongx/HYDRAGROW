@@ -265,7 +265,7 @@ const Dashboard = () => {
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/80 border border-slate-700 rounded-md">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
               <span className="text-[11px] font-medium text-slate-300">
-                Sensor Offline (Dữ liệu cũ)
+                Nút cảm biến Offline
               </span>
             </div>
           )}

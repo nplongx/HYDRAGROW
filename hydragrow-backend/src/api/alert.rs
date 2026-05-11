@@ -1,4 +1,8 @@
-use crate::{AppState, db::postgres::get_system_events};
+// 1. 👇 SỬA IMPORT: Thêm get_events_by_cycle_id
+use crate::{
+    AppState,
+    db::postgres::{get_events_by_cycle_id, get_system_events},
+};
 use actix_web::{HttpResponse, Responder, web};
 use serde_json::json;
 
@@ -114,8 +118,41 @@ pub async fn fetch_events(
     }
 }
 
+// 2. 👇 THÊM STRUCT & HÀM NÀY: Để xử lý endpoint /events/cycle/{cycle_id}
+#[derive(serde::Deserialize)]
+pub struct CyclePathParams {
+    pub device_id: String,
+    pub cycle_id: String,
+}
+
+pub async fn get_cycle_timeline(
+    path: web::Path<CyclePathParams>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = &path.device_id;
+    let cycle_id = &path.cycle_id;
+
+    match get_events_by_cycle_id(&app_state.pg_pool, device_id, cycle_id).await {
+        Ok(events) => HttpResponse::Ok().json(json!({
+            "status": "success",
+            "data": events
+        })),
+        Err(e) => {
+            tracing::error!("Lỗi lấy timeline cho cycle_id {}: {:?}", cycle_id, e);
+            HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
+        }
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     // Expose API cho Frontend
     cfg.route("/events", web::get().to(fetch_events));
     cfg.route("/health-summary", web::get().to(health_summary));
+
+    // 3. 👇 ĐĂNG KÝ ROUTE MỚI
+    cfg.route(
+        "/events/cycle/{cycle_id}",
+        web::get().to(get_cycle_timeline),
+    );
 }
+

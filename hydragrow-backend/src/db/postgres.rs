@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Error, Executor, FromRow, PgPool, Row};
+use sqlx::types::JsonRawValue;
+use sqlx::{Error, Executor, FromRow, PgPool, Row, Value};
 use tracing::instrument;
 
 use crate::models::alert::AlertMessage;
@@ -34,14 +35,15 @@ pub struct DosingReportRecord {
 // System Events
 
 /// Struct dùng để GHI vào DB (không có id – SERIAL tự sinh).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewSystemEventRecord {
     pub device_id: String,
-    pub level: String,
-    pub category: String,
+    pub level: String,    // "info", "success", "warning", "critical"
+    pub category: String, // "system", "dosing", "water", "calibration", "alert", ...
     pub title: String,
     pub message: String,
     pub reason: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>, // Sử dụng JsonValue của sqlx
     pub timestamp: i64,
 }
 
@@ -426,25 +428,27 @@ pub async fn update_active_crop_season(
 // System Events
 
 pub async fn insert_system_event(
-    executor: impl Executor<'_, Database = sqlx::Postgres>,
-    log: &NewSystemEventRecord,
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>, // 👈 Thay vì &sqlx::PgPool
+    record: &NewSystemEventRecord,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO system_events (device_id, level, category, title, message, reason, metadata, timestamp)
+    let query = r#"
+        INSERT INTO system_event (
+            device_id, level, category, title, message, reason, metadata, timestamp
+        ) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        "#,
-    )
-    .bind(&log.device_id)
-    .bind(&log.level)
-    .bind(&log.category)
-    .bind(&log.title)
-    .bind(&log.message)
-    .bind(&log.reason)
-    .bind(&log.metadata)
-    .bind(log.timestamp)
-    .execute(executor)
-    .await?;
+    "#;
+
+    sqlx::query(query)
+        .bind(&record.device_id)
+        .bind(&record.level)
+        .bind(&record.category)
+        .bind(&record.title)
+        .bind(&record.message)
+        .bind(&record.reason)
+        .bind(&record.metadata)
+        .bind(record.timestamp)
+        .execute(executor)
+        .await?;
 
     Ok(())
 }
@@ -471,3 +475,25 @@ pub async fn get_system_events(
     .fetch_all(pool)
     .await
 }
+/// Tìm toàn bộ log liên quan đến một quy trình (cycle_id) cụ thể
+pub async fn get_events_by_cycle_id(
+    pool: &sqlx::PgPool,
+    device_id: &str,
+    cycle_id: &str,
+) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
+    let query = r#"
+        SELECT * FROM system_event 
+        WHERE device_id = $1 
+          AND metadata ->> 'cycle_id' = $2
+        ORDER BY timestamp ASC
+    "#;
+
+    let records = sqlx::query_as::<_, SystemEventRecord>(query)
+        .bind(device_id)
+        .bind(cycle_id)
+        .fetch_all(pool)
+        .await?;
+
+    Ok(records)
+}
+

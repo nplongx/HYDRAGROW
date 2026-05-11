@@ -9,8 +9,11 @@ use super::utils::{
     MIN_STABILIZING_SEC_FOR_CALIB, MIN_TOTAL_EC_DOSE_ML,
 };
 use crate::config::SharedConfig;
+use crate::fsm::utils::send_system_log;
 use crate::mqtt::SensorData;
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{
+    CalibrationMetadata, ControllerConfig, LogCategory, LogLevel, SystemLogEvent,
+};
 
 // ---------------------------------------------------------------------------
 // start_pending_calibration_sample
@@ -124,9 +127,19 @@ pub fn apply_runtime_calibration_ema(
     }
 
     if let Some(reason) = skip_reason {
-        warn!(
-            r#"[EMA UPDATE] {{ "parameter": "skipped", "skip_reason": "{}" }}"#,
-            reason
+        send_system_log(
+            fsm_mqtt_tx,
+            "device_001",
+            LogLevel::Warning,
+            LogCategory::Calibration,
+            "Bỏ qua cập nhật EMA",
+            SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+                parameter: "skipped".to_string(),
+                old_value: None,
+                new_value: None,
+                skip_reason: Some(reason.to_string()),
+                cycle_id: Some(sample.cycle_id.clone()),
+            }),
         );
         return;
     }
@@ -180,6 +193,21 @@ pub fn apply_runtime_calibration_ema(
                     ctx.calibration_sample_count_ec + 1
                 );
                 ctx.calibration_sample_count_ec += 1;
+
+                send_system_log(
+                    fsm_mqtt_tx,
+                    "device_001",
+                    LogLevel::Info,
+                    LogCategory::Calibration,
+                    "Cập nhật hệ số EC EMA",
+                    SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+                        parameter: "ec_gain_per_ml".to_string(),
+                        old_value: Some(old_val),
+                        new_value: Some(cfg.ec_gain_per_ml),
+                        skip_reason: None,
+                        cycle_id: Some(sample.cycle_id.clone()),
+                    }),
+                );
                 // --- KẾT THÚC LOG EMA EC ---
             } else {
                 warn!(
@@ -207,6 +235,22 @@ pub fn apply_runtime_calibration_ema(
                     ctx.calibration_sample_count_ph_up + 1
                 );
                 ctx.calibration_sample_count_ph_up += 1;
+
+                send_system_log(
+                    fsm_mqtt_tx,
+                    "device_001",
+                    LogLevel::Info,
+                    LogCategory::Calibration,
+                    "Cập nhật hệ số EC EMA",
+                    SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+                        parameter: "ph_shift_up_per_ml".to_string(),
+                        old_value: Some(old_val),
+                        new_value: Some(cfg.ec_gain_per_ml),
+                        skip_reason: None,
+                        cycle_id: Some(sample.cycle_id.clone()),
+                    }),
+                );
+
                 // --- KẾT THÚC LOG EMA PH UP ---
             } else {
                 warn!(
@@ -234,6 +278,21 @@ pub fn apply_runtime_calibration_ema(
                     ctx.calibration_sample_count_ph_down + 1
                 );
                 ctx.calibration_sample_count_ph_down += 1;
+
+                send_system_log(
+                    fsm_mqtt_tx,
+                    "device_001",
+                    LogLevel::Info,
+                    LogCategory::Calibration,
+                    "Cập nhật hệ số EC EMA",
+                    SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+                        parameter: "ph_shift_down_per_ml".to_string(),
+                        old_value: Some(old_val),
+                        new_value: Some(cfg.ec_gain_per_ml),
+                        skip_reason: None,
+                        cycle_id: Some(sample.cycle_id.clone()),
+                    }),
+                );
                 // --- KẾT THÚC LOG EMA PH DOWN ---
             } else {
                 warn!(

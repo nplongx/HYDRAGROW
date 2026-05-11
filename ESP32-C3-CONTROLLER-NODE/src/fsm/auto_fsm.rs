@@ -3,10 +3,11 @@ use std::sync::mpsc::Sender;
 
 use chrono::{Local, TimeZone};
 use cron::Schedule;
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{AlertMetadata, ControllerConfig, LogCategory, LogLevel, SystemLogEvent, WaterMetadata};
 use log::{debug, error, info, warn};
 
 use crate::config::SharedConfig;
+use crate::fsm::utils::send_system_log;
 use crate::mqtt::SensorData;
 use crate::pump::{PumpController, PumpType, WaterDirection};
 use esp_idf_svc::nvs::EspDefaultNvs;
@@ -85,8 +86,22 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = true;
 
-                let report_json = serde_json::json!({"type":"water_event","trigger":trigger,"level_before":start_level,"level_after":sensors.water_level,"duration_sec":duration_sec,"ec_before":start_ec,"ec_after":sensors.ec,"success":target_reached}).to_string();
-                let _ = fsm_mqtt_tx.send(report_json);
+                send_system_log(
+                    fsm_mqtt_tx,
+                    &config.device_id,
+                    if target_reached { LogLevel::Success } else { LogLevel::Warning },
+                    LogCategory::Water,
+                    if trigger.contains("drain") { "Hoàn tất Xả nước" } else { "Hoàn tất Cấp nước" },
+                    SystemLogEvent::WaterEvent(WaterMetadata {
+                        trigger: trigger.clone(),
+                        level_before: start_level,
+                        level_after: sensors.water_level,
+                        target_level: target_level, // Lấy từ state params
+                        duration_sec,
+                        success: target_reached,
+                        cycle_id: None, // Nếu có truyền cycle_id từ lúc bắt đầu thì gắn vào đây
+                    }),
+                );
 
                 ctx.current_state = SystemState::ActiveMixing {
                     finish_time: current_time_ms + (config.active_mixing_sec as u64 * 1000),
@@ -361,10 +376,22 @@ fn try_auto_refill(
     }
 
     if !ctx.check_and_record_refill_limit(current_time_sec, config.max_refill_cycles_per_hour as u32) {
-        let msg = format!("Quá giới hạn bơm nước vào bồn trong 1 giờ (max: {} lần).", config.max_refill_cycles_per_hour);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "refill", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
-        
+         let msg = format!("Quá giới hạn bơm nước vào bồn trong 1 giờ (max: {} lần).", config.max_refill_cycles_per_hour);
+
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id, // Giả sử config chứa device_id
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn cấp nước an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "refill".to_string(),
+                retry_count: 0,
+                limit_value: Some(config.max_refill_cycles_per_hour as f32),
+            }),
+        );
+
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_REFILLS".to_string());
         return true;

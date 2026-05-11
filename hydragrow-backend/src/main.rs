@@ -20,6 +20,7 @@ use tracing_subscriber::FmtSubscriber;
 
 use crate::{
     models::{alert::AlertMessage, sensor::SensorData},
+    mqtt::process_message,
     services::solana::SolanaTraceability,
 };
 
@@ -238,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
         loop {
             match eventloop.poll().await {
                 Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(publish))) => {
-                    mqtt::handler::process_message(publish, app_state_for_mqtt.clone()).await;
+                    process_message(publish, app_state_for_mqtt.clone()).await;
                 }
                 Ok(_) => {}
                 Err(e) => {

@@ -17,12 +17,24 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
+    let level_str = serde_json::to_value(&log_data.level)
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let category_str = serde_json::to_value(&log_data.category)
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+
     // 2. Chuyển đổi thành Record để lưu Database
     // Vì log_data.event là Enum, serde_json::to_value sẽ tự động map ra JSONB tuyệt đẹp
     let db_record = NewSystemEventRecord {
         device_id: log_data.device_id.clone(),
-        level: format!("{:?}", log_data.level).to_lowercase(),
-        category: format!("{:?}", log_data.category).to_lowercase(),
+        level: level_str,
+        category: category_str,
         title: log_data.title.clone(),
         message: "Log từ thiết bị".to_string(), // Tùy bạn custom (hoặc thêm field msg vào struct)
         reason: None, // Nếu bạn muốn bóc tách skip_reason ra cột riêng thì lấy ở đây

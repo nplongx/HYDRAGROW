@@ -4,11 +4,8 @@ import {
   Filter, Clock, Zap, Waves, RefreshCw,
   FlaskConical, Activity,
   AlertCircle, Power, Cpu,
-  Beaker,
-  Settings2,
-  Hash,
-  Radio,
-  Download
+  Beaker, Settings2, Hash, Radio,
+  Wifi, Download, UserCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -227,9 +224,9 @@ const MetadataRenderer = ({ category, level, metadata }: { category: string; lev
   if (eventType === 'SystemAlert') return <AlertMetadata meta={metadata} />;
   if (eventType === 'CalibrationUpdate' || eventType === 'ema_update' || eventType === 'auto_tune') return <CalibrationMetadata meta={metadata} />;
   if (eventType === 'DosingCycleComplete' || eventType === 'dosing_cycle') return <DosingMetadata meta={metadata} />;
-  if (eventType === 'BasicSystemLog') return null; // Message đã có trong text
+  if (eventType === 'BasicSystemLog') return null; // Message đã có trong text nên không cần render bảng metadata
 
-  // 2. Fallback: Dựa vào category của hệ thống cũ
+  // 2. Fallback: Dựa vào category của hệ thống cũ (nếu bản ghi cũ không có event_type)
   if (category === 'dosing') return <DosingMetadata meta={metadata} />;
   if (category === 'water') return <WaterMetadata meta={metadata} />;
   if (category === 'calibration') return <CalibrationMetadata meta={metadata} />;
@@ -279,13 +276,18 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
       }
       return { icon: Activity, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
 
+    case 'sensor':
+      return { icon: Radio, iconColor: 'text-amber-400', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5', dot: 'bg-amber-400' };
+
     case 'user_action':
+      return { icon: UserCheck, iconColor: 'text-indigo-400', borderColor: 'border-indigo-500/20', bgColor: 'bg-indigo-500/5', dot: 'bg-indigo-400' };
+
     case 'system':
       if (title.includes('Offline') || title.includes('Mất') || title.includes('tắt bơm')) {
         return { icon: Power, iconColor: 'text-slate-400', borderColor: 'border-slate-500/20', bgColor: 'bg-slate-500/5', dot: 'bg-slate-400' };
       }
       if (title.includes('Trực tuyến') || title.includes('Online') || title.includes('kết nối')) {
-        return { icon: Radio, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
+        return { icon: Wifi, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
       }
       return { icon: Cpu, iconColor: 'text-slate-300', borderColor: 'border-slate-700', bgColor: 'bg-slate-900', dot: 'bg-slate-500' };
 
@@ -304,7 +306,9 @@ const FILTERS = [
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
   { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
-  { id: 'system', label: 'Hệ thống', icon: Power },
+  { id: 'sensor', label: 'Cảm biến', icon: Radio },
+  { id: 'user_action', label: 'Người dùng', icon: UserCheck },
+  { id: 'system', label: 'Hệ thống', icon: Cpu },
 ];
 
 // ─── Tiêu đề thân thiện hơn ──────────────────────────────────────────────────

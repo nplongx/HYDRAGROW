@@ -432,7 +432,7 @@ pub async fn insert_system_event(
     record: &NewSystemEventRecord,
 ) -> Result<(), sqlx::Error> {
     let query = r#"
-        INSERT INTO system_event (
+        INSERT INTO system_events (
             device_id, level, category, title, message, reason, metadata, timestamp
         ) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -482,7 +482,7 @@ pub async fn get_events_by_cycle_id(
     cycle_id: &str,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     let query = r#"
-        SELECT * FROM system_event 
+        SELECT * FROM system_events 
         WHERE device_id = $1 
           AND metadata ->> 'cycle_id' = $2
         ORDER BY timestamp ASC
@@ -496,4 +496,3 @@ pub async fn get_events_by_cycle_id(
 
     Ok(records)
 }
-

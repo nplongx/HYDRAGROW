@@ -5,6 +5,9 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 
+// ==========================================
+// THÔNG TIN MẠNG & MQTT
+// ==========================================
 const char *ssid = "Huynh Hong";
 const char *password = "123443215";
 const char *mqtt_server = "interchange.proxy.rlwy.net";
@@ -21,6 +24,9 @@ String topic_status = String("AGITECH/") + device_id + "/sensor/status";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+// ==========================================
+// CẤU HÌNH CHÂN KẾT NỐI (PIN)
+// ==========================================
 #define PIN_DS18B20 2
 #define PIN_TRIG 3
 #define PIN_ECHO 5
@@ -31,7 +37,7 @@ OneWire oneWire(PIN_DS18B20);
 DallasTemperature sensors(&oneWire);
 
 // ==========================================
-// Cấu hình vật lý & Cảm biến
+// CẤU HÌNH VẬT LÝ & CẢM BIẾN
 // ==========================================
 float ph_v686 = 2650.0, ph_v4 = 3555.0, ph_v918 = 1750.0;
 String ph_calibration_mode = "2-point";
@@ -131,17 +137,23 @@ public:
   }
 };
 
+// Khởi tạo các bộ lọc
 HybridFilter tempFilter(5.0, 0.125);
 HybridFilter waterFilter(20.0, 0.125);
 HybridFilter phFilter(1.5, 0.125);
 HybridFilter ecFilter(1.0, 0.125);
 
+// ==========================================
+// HÀM XỬ LÝ CẢM BIẾN
+// ==========================================
 int read_adc_filtered(int pin) {
   int buffer[10];
   for (int i = 0; i < 10; i++) {
     buffer[i] = analogRead(pin);
     delay(5);
   }
+
+  // Sắp xếp nổi bọt (Bubble Sort)
   for (int i = 0; i < 9; i++) {
     for (int j = i + 1; j < 10; j++) {
       if (buffer[i] > buffer[j]) {
@@ -151,9 +163,12 @@ int read_adc_filtered(int pin) {
       }
     }
   }
+
+  // Bỏ 2 giá trị đầu và 2 giá trị cuối, lấy trung bình 6 giá trị giữa
   long sum = 0;
-  for (int i = 2; i < 8; i++)
+  for (int i = 2; i < 8; i++) {
     sum += buffer[i];
+  }
   return sum / 6;
 }
 
@@ -163,6 +178,7 @@ float readWaterLevel() {
   digitalWrite(PIN_TRIG, HIGH);
   delayMicroseconds(20);
   digitalWrite(PIN_TRIG, LOW);
+
   long duration = pulseIn(PIN_ECHO, HIGH, 20000);
 
   if (duration == 0) {
@@ -219,16 +235,20 @@ float calculate_ec(float voltage_mv, float current_temp) {
   return max(ec_result, 0.0f);
 }
 
-// ================= MQTT CALLBACK =================
+// ==========================================
+// MQTT CALLBACK
+// ==========================================
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String message = "";
-  for (int i = 0; i < length; i++)
+  for (int i = 0; i < length; i++) {
     message += (char)payload[i];
+  }
   String topicStr = String(topic);
 
   Serial.printf("📥 [DEBUG-MQTT] Nhận Topic: %s\n", topicStr.c_str());
   Serial.printf("📦 [DEBUG-MQTT] Payload: %s\n", message.c_str());
 
+  // Xử lý Command
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
     if (!deserializeJson(doc, message)) {
@@ -252,6 +272,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     return;
   }
 
+  // Xử lý Config
   if (topicStr == topic_config) {
     DynamicJsonDocument doc(1024);
     if (deserializeJson(doc, message)) {
@@ -314,6 +335,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
 }
 
+// ==========================================
+// THIẾT LẬP (SETUP)
+// ==========================================
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -362,6 +386,9 @@ void reconnect() {
   }
 }
 
+// ==========================================
+// VÒNG LẶP CHÍNH (LOOP)
+// ==========================================
 unsigned long last_sample_time = 0;
 unsigned long last_publish_time = 0;
 
@@ -373,8 +400,9 @@ void loop() {
     delay(5000);
     return;
   }
-  if (!client.connected())
+  if (!client.connected()) {
     reconnect();
+  }
   client.loop();
 
   unsigned long current_millis = millis();
@@ -383,7 +411,9 @@ void loop() {
   static bool err_ph_flag = false;
   static bool err_ec_flag = false;
 
+  // --------------------------------------------------------
   // LUỒNG 1: LẤY MẪU VÀ LỌC NHIỄU (Mỗi 200ms)
+  // --------------------------------------------------------
   if (current_millis - last_sample_time >= SAMPLING_INTERVAL) {
     last_sample_time = current_millis;
 
@@ -450,7 +480,9 @@ void loop() {
     }
   }
 
+  // --------------------------------------------------------
   // LUỒNG 2: GỬI DỮ LIỆU LÊN SERVER (Publish)
+  // --------------------------------------------------------
   int current_pub_interval = continuous_level ? 500 : publish_interval;
   if (current_millis - last_publish_time >= current_pub_interval) {
     last_publish_time = current_millis;

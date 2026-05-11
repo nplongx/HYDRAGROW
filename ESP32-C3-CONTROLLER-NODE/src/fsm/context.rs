@@ -265,12 +265,14 @@ impl ControlContext {
             if let Some(last_ec) = self.last_ec_before_dosing {
                 let response = sensors.ec - last_ec;
                 let reached_target = (sensors.ec - config.ec_target).abs() <= config.ec_tolerance;
+
                 if response >= config.ec_ack_threshold || reached_target {
                     self.ec_retry_count = 0;
-                    if !self.auto_tune_locked {
+
+                    // ✅ CHỈ nội suy đạo hàm nếu tín hiệu thay đổi đủ rõ ràng (>= ack_threshold)
+                    if response >= config.ec_ack_threshold && !self.auto_tune_locked {
                         // 1. Phân tích đạo hàm: Tỷ lệ giữa thực tế đạt được và kỳ vọng
-                        // (response là Delta pH thực tế)
-                        let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
+                        let gain_vs_expected = response / config.ec_ack_threshold.max(0.001);
 
                         // 2. Nếu tỷ lệ này lệch quá 20% (tức là < 0.8 hoặc > 1.2), tiến hành nội suy bù trừ
                         if gain_vs_expected < 0.8 || gain_vs_expected > 1.2 {
@@ -280,10 +282,11 @@ impl ControlContext {
                             // 4. Tính ra giá trị step_ratio mới cần đạt tới
                             let target_ratio = self.adaptive_ec_step_ratio * interpolation_factor;
 
-                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust_ph_step_ratio (có sẵn budget an toàn)
+                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust (có sẵn budget an toàn)
                             let tune_delta = target_ratio - self.adaptive_ec_step_ratio;
 
-                            self.adjust_ph_step_ratio(
+                            self.adjust_ec_step_ratio(
+                                // ✅ ĐÃ SỬA: Gọi đúng hàm của EC
                                 config,
                                 now_sec,
                                 tune_delta,
@@ -332,9 +335,10 @@ impl ControlContext {
 
                 if response >= config.ph_ack_threshold || reached_target {
                     self.ph_retry_count = 0;
-                    if !self.auto_tune_locked {
+
+                    // ✅ CHỈ nội suy đạo hàm nếu tín hiệu thay đổi đủ rõ ràng (>= ack_threshold)
+                    if response >= config.ph_ack_threshold && !self.auto_tune_locked {
                         // 1. Phân tích đạo hàm: Tỷ lệ giữa thực tế đạt được và kỳ vọng
-                        // (response là Delta pH thực tế)
                         let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
 
                         // 2. Nếu tỷ lệ này lệch quá 20% (tức là < 0.8 hoặc > 1.2), tiến hành nội suy bù trừ
@@ -345,7 +349,7 @@ impl ControlContext {
                             // 4. Tính ra giá trị step_ratio mới cần đạt tới
                             let target_ratio = self.adaptive_ph_step_ratio * interpolation_factor;
 
-                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust_ph_step_ratio (có sẵn budget an toàn)
+                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust (có sẵn budget an toàn)
                             let tune_delta = target_ratio - self.adaptive_ph_step_ratio;
 
                             self.adjust_ph_step_ratio(
@@ -636,3 +640,4 @@ impl ControlContext {
         }
     }
 }
+

@@ -784,6 +784,7 @@ pub async fn finish_sensor_calibration(
             message: msg,
             reason: None,
             metadata: Some(json!({
+                "event_type": "ph_calibration",
                 "mode": payload.mode,
                 "sample_points": payload.sample_points,
                 "result": {

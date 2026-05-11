@@ -4,13 +4,30 @@ use serde_json::json;
 
 #[derive(serde::Deserialize)]
 pub struct EventsQuery {
-    pub category: Option<String>,
+    #[serde(default)]
+    pub category: Vec<String>,
     #[serde(default = "default_limit")]
     pub limit: i64,
 }
 
 fn default_limit() -> i64 {
     200
+}
+
+fn normalize_categories(raw_categories: &[String]) -> Vec<String> {
+    let mut categories = Vec::new();
+
+    for raw in raw_categories {
+        for category in raw.split(',') {
+            let category = category.trim();
+            if category.is_empty() || categories.iter().any(|c| c == category) {
+                continue;
+            }
+            categories.push(category.to_string());
+        }
+    }
+
+    categories
 }
 
 #[derive(serde::Serialize)]
@@ -32,7 +49,7 @@ pub async fn health_summary(
     let now = chrono::Utc::now().timestamp_millis();
     let window_ms = 3_600_000i64;
 
-    match get_system_events(&app_state.pg_pool, &device_id, None, 500).await {
+    match get_system_events(&app_state.pg_pool, &device_id, &[], 500).await {
         Ok(events) => {
             let recent: Vec<_> = events
                 .into_iter()
@@ -86,14 +103,9 @@ pub async fn fetch_events(
 ) -> impl Responder {
     let device_id = path.into_inner();
 
-    match get_system_events(
-        &app_state.pg_pool,
-        &device_id,
-        query.category.as_deref(),
-        query.limit,
-    )
-    .await
-    {
+    let categories = normalize_categories(&query.category);
+
+    match get_system_events(&app_state.pg_pool, &device_id, &categories, query.limit).await {
         Ok(events) => HttpResponse::Ok().json(json!({ "status": "success", "data": events })),
         Err(e) => {
             tracing::error!("Lỗi lấy system_events: {:?}", e);

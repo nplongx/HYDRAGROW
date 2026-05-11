@@ -68,7 +68,10 @@ const Dashboard = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, isSensorOnline, settings } = useDeviceContext();
   console.log("Dữ liệu deviceStatus:", deviceStatus);
   // const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
-  useFCM(deviceId || "");
+  const {
+    enableNotifications,
+    permission
+  } = useFCM(deviceId || "");
 
   useEffect(() => {
     const run = async () => {
@@ -156,6 +159,24 @@ const Dashboard = () => {
           <h4 className="text-sm font-semibold text-red-400">{faultGuide.short}</h4>
           <p className="text-xs text-slate-300 mt-1">{faultGuide.action}</p>
         </div>
+      )}
+
+      {permission !== 'granted' && (
+        <button
+          onClick={enableNotifications}
+          className="
+            px-4 py-2
+            rounded-xl
+            bg-blue-500
+            hover:bg-blue-600
+            text-white
+            text-sm
+            font-medium
+            transition-colors
+          "
+        >
+          Bật thông báo
+        </button>
       )}
 
       {/* Trong component Dashboard, lấy ngân sách trực tiếp từ deviceStatus */}

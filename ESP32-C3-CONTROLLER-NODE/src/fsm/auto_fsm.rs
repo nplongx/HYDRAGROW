@@ -497,7 +497,6 @@ fn handle_dosing_decisions(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn try_ec_dosing(
     current_time_ms: u64,
     current_time_sec: u64,

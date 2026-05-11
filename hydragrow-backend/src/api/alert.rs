@@ -5,7 +5,7 @@ use serde_json::json;
 #[derive(serde::Deserialize)]
 pub struct EventsQuery {
     #[serde(default)]
-    pub category: Vec<String>,
+    pub category: Option<String>,
     #[serde(default = "default_limit")]
     pub limit: i64,
 }
@@ -14,7 +14,7 @@ fn default_limit() -> i64 {
     200
 }
 
-fn normalize_categories(raw_categories: &[String]) -> Vec<String> {
+fn normalize_categories(raw_categories: Option<&String>) -> Vec<String> {
     let mut categories = Vec::new();
 
     for raw in raw_categories {
@@ -103,7 +103,7 @@ pub async fn fetch_events(
 ) -> impl Responder {
     let device_id = path.into_inner();
 
-    let categories = normalize_categories(&query.category);
+    let categories = normalize_categories(query.category.as_ref());
 
     match get_system_events(&app_state.pg_pool, &device_id, &categories, query.limit).await {
         Ok(events) => HttpResponse::Ok().json(json!({ "status": "success", "data": events })),

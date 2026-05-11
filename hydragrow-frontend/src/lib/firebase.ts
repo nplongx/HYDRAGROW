@@ -21,24 +21,25 @@ export const messaging = getMessaging(app);
 
 export const requestForWebToken = async () => {
   try {
+    // Đăng ký service worker trước, rồi truyền vào getToken
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
     const currentToken = await getToken(messaging, {
-      // VAPID KEY lấy từ Firebase Console -> Project Settings -> Cloud Messaging -> Web push certificates
-      vapidKey: 'BDHacUd3ZPRTo5QfnaErWYyXIgxW2sjOR22A9HrIyLzuPrJ62cylLTgaooS3PhscRnZ6jggodBFmd3hJ3izr33I'
+      vapidKey: 'BDHacUd3ZPRTo5QfnaErWYyXIgxW2sjOR22A9HrIyLzuPrJ62cylLTgaooS3PhscRnZ6jggodBFmd3hJ3izr33I',
+      serviceWorkerRegistration: registration,
     });
+
     if (currentToken) {
       console.log('Web FCM Token:', currentToken);
-      // Trả về token để hook có thể gửi lên hydragrow-backend
       return currentToken;
-    } else {
-      console.log('Không thể lấy FCM token.');
-      return null;
     }
+    console.log('Không thể lấy FCM token.');
+    return null;
   } catch (err) {
     console.error('Lỗi khi lấy token:', err);
     return null;
   }
 };
-
 // Hàm lắng nghe thông báo khi Web App đang mở (Foreground)
 export const onWebMessageListener = () =>
   new Promise((resolve) => {

@@ -43,7 +43,7 @@ export function useFCM(deviceId: string) {
       console.log("FCM Token:", token);
 
       const res = await httpFetch(
-        `${settings.backend_url}/api/notifications/register-token`,
+        `${settings.backend_url}/api/notifications/register`,
         {
           method: 'POST',
           headers: {

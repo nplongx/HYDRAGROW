@@ -163,17 +163,21 @@ const Dashboard = () => {
 
       {permission !== 'granted' && (
         <button
-          onClick={enableNotifications}
-          className="
-            px-4 py-2
-            rounded-xl
-            bg-blue-500
-            hover:bg-blue-600
-            text-white
-            text-sm
-            font-medium
-            transition-colors
-          "
+          onClick={async () => {
+            // Cảnh báo nếu trình duyệt không hỗ trợ
+            if (!('Notification' in window)) {
+              alert("Trình duyệt hoặc môi trường này (không có HTTPS) không hỗ trợ Push Notification!");
+              return;
+            }
+
+            try {
+              alert(`Trạng thái quyền hiện tại: ${Notification.permission}`);
+              await enableNotifications(); // Hàm từ useFCM
+            } catch (err: any) {
+              alert(`Lỗi xin quyền: ${err.message || err}`);
+            }
+          }}
+          className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
         >
           Bật thông báo
         </button>

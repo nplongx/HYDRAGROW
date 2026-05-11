@@ -29,7 +29,7 @@ use crate::fsm::utils::{get_current_time_ms, get_current_time_sec};
 
 const WIFI_SSID: &str = "Huynh Hong";
 const WIFI_PASS: &str = "123443215";
-const MQTT_URL: &str = "mqtt://interchange.proxy.rlwy.net:50133";
+const MQTT_URL: &str = "mqtt://viaduct.proxy.rlwy.net:45131";
 const DEVICE_ID: &str = "device_001";
 
 fn main() -> anyhow::Result<()> {
@@ -279,11 +279,15 @@ fn main() -> anyhow::Result<()> {
         if let Ok(payload) = fsm_rx.try_recv() {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    if let Ok(v)=serde_json::from_str::<serde_json::Value>(&payload){
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
                         let topic = match v.get("type").and_then(|t| t.as_str()) {
-                            Some("water_event")|Some("system_alert")|Some("dosing_cycle")=>format!("AGITECH/{}/fsm/events", DEVICE_ID),
-                            Some("ema_update")|Some("auto_tune")=>format!("AGITECH/{}/calibration", DEVICE_ID),
-                            _=>format!("AGITECH/{}/fsm/state", DEVICE_ID),
+                            Some("water_event") | Some("system_alert") | Some("dosing_cycle") => {
+                                format!("AGITECH/{}/fsm/events", DEVICE_ID)
+                            }
+                            Some("ema_update") | Some("auto_tune") => {
+                                format!("AGITECH/{}/calibration", DEVICE_ID)
+                            }
+                            _ => format!("AGITECH/{}/fsm/state", DEVICE_ID),
                         };
                         let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
                     }

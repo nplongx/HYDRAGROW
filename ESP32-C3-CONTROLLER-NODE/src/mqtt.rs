@@ -236,7 +236,7 @@ pub fn init_mqtt_client(
     let mqtt_config = MqttClientConfiguration {
         buffer_size: 4096,
         keep_alive_interval: Some(std::time::Duration::from_secs(15)),
-        password: Some("53zx37kxq3epbexgqt6rjlce1d0e0gwq"),
+        password: Some("s7cjsq7bmxd7v4hlrf9idtwv6983rf3i"),
         username: Some("long"),
         lwt: Some(lwt_config),
         ..Default::default()

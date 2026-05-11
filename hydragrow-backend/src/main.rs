@@ -160,32 +160,8 @@ async fn main() -> anyhow::Result<()> {
                 continue;
             }
 
-            // Phân loại category dựa theo nội dung alert
-            let category = if alert.level == "critical" || alert.level == "warning" {
-                "alert"
-            } else if alert.title.contains("Châm Phân")
-                || alert.title.contains("pH")
-                || alert.title.contains("Blockchain")
-                || alert.title.contains("Chu Trình")
-                || alert.title.contains("Sục Trộn")
-                || alert.title.contains("Hiệu Chuẩn")
-            {
-                "dosing"
-            } else if alert.title.contains("Nước")
-                || alert.title.contains("Súc Rửa")
-                || alert.title.contains("Cấp Nước")
-                || alert.title.contains("Xả Nước")
-            {
-                "water" // ← thêm category riêng
-            } else if alert.title.contains("Trạng thái") || alert.title.contains("Kết Nối") {
-                "system"
-            } else {
-                "system"
-            }
-            .to_string();
-
             let record = crate::db::postgres::NewSystemEventRecord {
-                category,
+                category: alert.category.clone(),
                 device_id: alert.device_id.clone(),
                 level: alert.level.clone(),
                 title: alert.title.clone(),

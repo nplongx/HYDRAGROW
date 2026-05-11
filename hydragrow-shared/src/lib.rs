@@ -62,6 +62,7 @@ pub struct SensorData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlertMessage {
     pub level: String,
+    pub category: String,
     pub title: String,
     pub message: String,
     pub device_id: String,

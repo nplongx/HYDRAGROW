@@ -105,6 +105,55 @@ fn parse_agitech_topic(topic: &str) -> Option<(String, String)> {
     Some((device_id, suffix))
 }
 
+#[inline]
+fn metadata_with_event_type(
+    mut metadata: serde_json::Value,
+    event_type: &str,
+) -> serde_json::Value {
+    match metadata {
+        serde_json::Value::Object(ref mut map) => {
+            map.insert("event_type".to_string(), json!(event_type));
+            metadata
+        }
+        value => json!({
+            "event_type": event_type,
+            "payload": value
+        }),
+    }
+}
+
+#[inline]
+fn fsm_state_event_type(state: &str) -> Option<&'static str> {
+    if state.starts_with("EmergencyStop")
+        || state.starts_with("SystemFault")
+        || state.starts_with("Warning:")
+    {
+        return Some("system_alert");
+    }
+
+    if state.starts_with("SensorCalibration:") {
+        return Some("ph_calibration");
+    }
+
+    if state.starts_with("Cooldown:") {
+        return Some("dosing_step");
+    }
+
+    if state.starts_with("LogInfo:") {
+        return Some("system_event");
+    }
+
+    match state {
+        "WaterRefilling" | "WaterDraining" => Some("water_event"),
+        "DosingCycleComplete" => Some("dosing_cycle"),
+        "DosingPumpA" | "DosingPumpB" | "DosingPH" | "ActiveMixing" | "Cooldown" => {
+            Some("dosing_step")
+        }
+        "SystemBooting" | "ManualMode" | "EmergencyStop" => Some("system_event"),
+        _ => None,
+    }
+}
+
 #[instrument(skip(app_state, publish), fields(topic = %publish.topic))]
 pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
     let topic = publish.topic.clone();
@@ -183,6 +232,7 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
                         let mist_alert = if mist_on {
                             AlertMessage {
                                 level: "FSM_UPDATE".to_string(),
+                                category: "system".to_string(),
                                 title: "FSM_SYNC".to_string(),
                                 message: "Misting".to_string(),
                                 device_id: device_id.clone(),
@@ -193,6 +243,7 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
                         } else {
                             AlertMessage {
                                 level: "FSM_UPDATE".to_string(),
+                                category: "system".to_string(),
                                 title: "FSM_SYNC".to_string(),
                                 message: "Monitoring".to_string(),
                                 device_id: device_id.clone(),
@@ -333,6 +384,7 @@ async fn handle_device_status(
         } else {
             "warning".to_string()
         },
+        category: "system".to_string(),
         title: format!("Trạng thái {}", node_type),
         message: format!(
             "{} ({}) vừa {}",
@@ -347,7 +399,7 @@ async fn handle_device_status(
         device_id: device_id.clone(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reason: None,
-        metadata: None,
+        metadata: Some(json!({ "event_type": "device_status" })),
     };
     let _ = app_state.alert_sender.send(alert);
 
@@ -367,6 +419,10 @@ fn build_relevant_metadata(
     fsm_payload: &serde_json::Value,
 ) -> Option<serde_json::Value> {
     let mut m = serde_json::Map::new();
+
+    if let Some(event_type) = fsm_state_event_type(state) {
+        m.insert("event_type".to_string(), json!(event_type));
+    }
 
     // 1. Lấy trạng thái cảm biến hiện tại từ cache
     if let Some(c) = cache {
@@ -449,9 +505,10 @@ fn fsm_state_to_alert(
 ) -> Option<AlertMessage> {
     let ts = chrono::Utc::now().timestamp_millis() as u64;
 
-    let make = |level: &str, title: &str, message: &str| -> Option<AlertMessage> {
+    let make = |level: &str, category: &str, title: &str, message: &str| -> Option<AlertMessage> {
         Some(AlertMessage {
             level: level.to_string(),
+            category: category.to_string(),
             title: title.to_string(),
             message: message.to_string(),
             device_id: device_id.to_string(),
@@ -464,6 +521,7 @@ fn fsm_state_to_alert(
     if let Some(reason) = state.strip_prefix("EmergencyStop:") {
         return Some(AlertMessage {
             level: "critical".to_string(),
+            category: "alert".to_string(),
             title: "Dừng Khẩn Cấp!".to_string(),
             message: format!("Hệ thống bị ngắt khẩn cấp. Lý do: {}", reason),
             device_id: device_id.to_string(),
@@ -476,6 +534,7 @@ fn fsm_state_to_alert(
     if let Some(reason) = state.strip_prefix("SystemFault:") {
         return Some(AlertMessage {
             level: "critical".to_string(),
+            category: "alert".to_string(),
             title: "Lỗi Hệ Thống!".to_string(),
             message: format!("Phát hiện lỗi phần cứng: {}. Vui lòng kiểm tra!", reason),
             device_id: device_id.to_string(),
@@ -488,6 +547,7 @@ fn fsm_state_to_alert(
     if let Some(reason) = state.strip_prefix("Warning:") {
         return Some(AlertMessage {
             level: "warning".to_string(),
+            category: "alert".to_string(),
             title: "Cảnh Báo Hệ Thống".to_string(),
             message: format!("Phát hiện cảnh báo: {}", reason),
             device_id: device_id.to_string(),
@@ -498,13 +558,14 @@ fn fsm_state_to_alert(
     }
 
     if let Some(msg) = state.strip_prefix("LogInfo:") {
-        return make("info", "Nhật Ký (Log)", msg);
+        return make("info", "system", "Nhật Ký (Log)", msg);
     }
 
     if state.starts_with("SensorCalibration:") {
         let step = state.replace("SensorCalibration:", "");
         return make(
             "info",
+            "calibration",
             "Hiệu Chuẩn Cảm Biến",
             &format!("Đang hiệu chuẩn tại bước: {}.", step),
         );
@@ -513,6 +574,7 @@ fn fsm_state_to_alert(
     if state.starts_with("Cooldown:") {
         return make(
             "info",
+            "dosing",
             "Hạ Nhiệt Bơm (Cooldown)",
             "Hệ thống đang chờ nguội trước khi tiếp tục châm phân.",
         );
@@ -521,21 +583,25 @@ fn fsm_state_to_alert(
     match state {
         "SystemBooting" => make(
             "success",
+            "system",
             "Khởi Động Hệ Thống",
             "Trạm điều khiển vừa được cấp nguồn và đang hoạt động.",
         ),
         "ManualMode" => make(
             "info",
+            "system",
             "Điều Khiển Thủ Công",
             "Đang ở chế độ Manual. Hệ thống tắt tự động hóa.",
         ),
         "DosingCycleComplete" => make(
             "success",
+            "dosing",
             "Hoàn Tất Chu Trình",
             "Chu trình châm phân và điều chỉnh pH đã hoàn thành.",
         ),
         "EmergencyStop" => Some(AlertMessage {
             level: "critical".to_string(),
+            category: "alert".to_string(),
             title: "Dừng Khẩn Cấp!".to_string(),
             message: "Hệ thống đã bị ngắt khẩn cấp do vi phạm ngưỡng an toàn.".to_string(),
             device_id: device_id.to_string(),
@@ -543,8 +609,18 @@ fn fsm_state_to_alert(
             reason: None,
             metadata: alert_metadata.clone(),
         }),
-        "WaterRefilling" => make("info", "Cấp Nước", "Hệ thống đang bơm cấp nước vào bồn."),
-        "WaterDraining" => make("info", "Xả Nước", "Hệ thống đang xả bớt nước trong bồn."),
+        "WaterRefilling" => make(
+            "info",
+            "water",
+            "Cấp Nước",
+            "Hệ thống đang bơm cấp nước vào bồn.",
+        ),
+        "WaterDraining" => make(
+            "info",
+            "water",
+            "Xả Nước",
+            "Hệ thống đang xả bớt nước trong bồn.",
+        ),
         "DosingPumpA" => {
             let dose_ml = fsm_payload
                 .get("dose_target_ml")
@@ -552,6 +628,7 @@ fn fsm_state_to_alert(
                 .unwrap_or(0.0);
             make(
                 "info",
+                "dosing",
                 "Châm Phân A",
                 &format!(
                     "Đang tiến hành châm {:.1}ml phân bón Dinh Dưỡng A.",
@@ -566,6 +643,7 @@ fn fsm_state_to_alert(
                 .unwrap_or(0.0);
             make(
                 "info",
+                "dosing",
                 "Châm Phân B",
                 &format!(
                     "Đang tiến hành châm {:.1}ml phân bón Dinh Dưỡng B.",
@@ -585,12 +663,14 @@ fn fsm_state_to_alert(
             let direction = if is_up { "Tăng (Up)" } else { "Giảm (Down)" };
             make(
                 "info",
+                "dosing",
                 "Điều Chỉnh pH",
                 &format!("Đang bơm {:.1}ml dung dịch pH {}.", dose_ml, direction),
             )
         }
         "ActiveMixing" => make(
             "info",
+            "dosing",
             "Sục Trộn Dinh Dưỡng",
             "Đang trộn đều dung dịch trong bồn (Jet Mixing).",
         ),
@@ -613,6 +693,19 @@ enum PrefixedFsmEventType {
     EmaUpdate,
     AutoTune,
     SensorNoise,
+}
+
+impl PrefixedFsmEventType {
+    fn event_type(self) -> &'static str {
+        match self {
+            Self::WaterEvent => "water_event",
+            Self::SystemAlert => "system_alert",
+            Self::DosingCycle => "dosing_cycle",
+            Self::EmaUpdate => "ema_update",
+            Self::AutoTune => "auto_tune",
+            Self::SensorNoise => "sensor_noise",
+        }
+    }
 }
 
 #[inline]
@@ -670,7 +763,7 @@ fn prefixed_event_to_system_record(
                 },
                 message: format!("Sự kiện nước: trigger={} | success={}", trigger, success),
                 reason: None,
-                metadata: Some(payload),
+                metadata: Some(metadata_with_event_type(payload, event_type.event_type())),
                 timestamp: now,
             }
         }
@@ -699,7 +792,7 @@ fn prefixed_event_to_system_record(
                 title: title.to_string(),
                 message: format!("[{}] {}", source, message),
                 reason: Some(alert_type.to_string()),
-                metadata: Some(payload),
+                metadata: Some(metadata_with_event_type(payload, event_type.event_type())),
                 timestamp: now,
             }
         }
@@ -719,7 +812,7 @@ fn prefixed_event_to_system_record(
                 title: "Chu trình châm phân".to_string(),
                 message: format!("Hoàn tất chu trình {} (trigger={})", cycle_id, trigger),
                 reason: None,
-                metadata: Some(payload),
+                metadata: Some(metadata_with_event_type(payload, event_type.event_type())),
                 timestamp: now,
             }
         }
@@ -730,7 +823,7 @@ fn prefixed_event_to_system_record(
             title: "Cập nhật hệ số EMA".to_string(),
             message: "Hệ số EMA runtime đã được cập nhật".to_string(),
             reason: None,
-            metadata: Some(payload),
+            metadata: Some(metadata_with_event_type(payload, event_type.event_type())),
             timestamp: now,
         },
         PrefixedFsmEventType::AutoTune => NewSystemEventRecord {
@@ -740,7 +833,7 @@ fn prefixed_event_to_system_record(
             title: "Tự điều chỉnh bước châm".to_string(),
             message: "Auto-tune đã điều chỉnh thông số dosing".to_string(),
             reason: None,
-            metadata: Some(payload),
+            metadata: Some(metadata_with_event_type(payload, event_type.event_type())),
             timestamp: now,
         },
         PrefixedFsmEventType::SensorNoise => {
@@ -755,7 +848,7 @@ fn prefixed_event_to_system_record(
                 title: "Nhiễu cảm biến".to_string(),
                 message: format!("Phát hiện mẫu nhiễu từ cảm biến {}", sensor),
                 reason: None,
-                metadata: Some(payload),
+                metadata: Some(metadata_with_event_type(payload, event_type.event_type())),
                 timestamp: now,
             }
         }
@@ -999,6 +1092,7 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
 
     // Sau khi đã có report: DosingReportPayload
     let metadata = json!({
+        "event_type": "dosing_cycle",
         "pre": {
             "ec": report.pre.ec,
             "ph": report.pre.ph,
@@ -1062,12 +1156,16 @@ async fn handle_dosing_report(device_id: String, payload: &[u8], app_state: web:
 
     let alert = AlertMessage {
         level: "success".to_string(),
+        category: "dosing".to_string(),
         title: "Lưu Báo Cáo Châm Phân Thành Công".to_string(),
         message: alert_msg_text,
         device_id: device_id.clone(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reason: None,
-        metadata: None,
+        metadata: Some(json!({
+            "event_type": "dosing_cycle",
+            "cycle_id": report.cycle_id,
+        })),
     };
     let _ = app_state.alert_sender.send(alert);
 }
@@ -1190,6 +1288,7 @@ async fn update_dosing_dynamic_learning(
                 ),
                 reason: None,
                 metadata: Some(json!({
+                    "event_type": "ema_update",
                     "base_ec_gain_per_ml": state.base_ec_gain_per_ml,
                     "dynamic_ec_gain_per_ml": state.dynamic_ec_gain_per_ml,
                     "confidence": state.confidence,
@@ -1275,11 +1374,17 @@ async fn handle_runtime_calibration_update(
     {
         Ok(Some(cfg)) => cfg,
         Ok(None) => {
-            warn!("⚠️ [EMA CALIBRATION] Không tìm thấy dosing_calibration cho {}", device_id);
+            warn!(
+                "⚠️ [EMA CALIBRATION] Không tìm thấy dosing_calibration cho {}",
+                device_id
+            );
             return;
         }
         Err(e) => {
-            error!("❌ [EMA CALIBRATION] Lỗi tải dosing_calibration cho {}: {:?}", device_id, e);
+            error!(
+                "❌ [EMA CALIBRATION] Lỗi tải dosing_calibration cho {}: {:?}",
+                device_id, e
+            );
             return;
         }
     };
@@ -1350,7 +1455,7 @@ async fn handle_runtime_calibration_update(
                         title: "Runtime Calibration Tự Động (EMA)".to_string(),
                         message: msg,
                         reason: None,
-                        metadata: Some(json.clone()), // Lưu nguyên JSON để sau này tiện debug
+                        metadata: Some(metadata_with_event_type(json.clone(), "ema_update")), // Lưu nguyên JSON để sau này tiện debug
                         timestamp: chrono::Utc::now().timestamp_millis(),
                     },
                 )
@@ -1359,6 +1464,7 @@ async fn handle_runtime_calibration_update(
                 // (Optional) Gửi alert để UI hiện popup
                 let alert = AlertMessage {
                     level: "info".to_string(),
+                    category: "calibration".to_string(),
                     title: "Cập nhật hệ số Calibration".to_string(),
                     message: format!(
                         "Hệ thống vừa cập nhật tự động (EMA) hệ số châm phân cho thiết bị {}.",
@@ -1367,7 +1473,7 @@ async fn handle_runtime_calibration_update(
                     device_id: device_id.clone(),
                     timestamp: chrono::Utc::now().timestamp_millis() as u64,
                     reason: None,
-                    metadata: Some(json.clone()),
+                    metadata: Some(metadata_with_event_type(json.clone(), "ema_update")),
                 };
                 let _ = app_state.alert_sender.send(alert);
 
@@ -1384,6 +1490,7 @@ async fn handle_runtime_calibration_update(
                 if auto_tune_locked {
                     let lock_alert = AlertMessage {
                         level: "warning".to_string(),
+                        category: "alert".to_string(),
                         title: "Auto-tune EMA đã bị khóa".to_string(),
                         message: format!(
                             "Thiết bị {} báo auto_tune_locked=true. Hệ số EMA sẽ không tự điều chỉnh thêm.",
@@ -1392,7 +1499,7 @@ async fn handle_runtime_calibration_update(
                         device_id: device_id.clone(),
                         timestamp: chrono::Utc::now().timestamp_millis() as u64,
                         reason: Some("auto_tune_locked".to_string()),
-                        metadata: Some(json.clone()),
+                        metadata: Some(metadata_with_event_type(json.clone(), "auto_tune")),
                     };
                     let _ = app_state.alert_sender.send(lock_alert);
                 }

@@ -452,7 +452,7 @@ pub async fn insert_system_event(
 pub async fn get_system_events(
     pool: &PgPool,
     device_id: &str,
-    category: Option<&str>, // ← thêm
+    categories: &[String],
     limit: i64,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
@@ -460,13 +460,13 @@ pub async fn get_system_events(
         SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
         FROM system_events
         WHERE device_id = $1
-          AND ($2::text IS NULL OR category = $2)
+          AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
         ORDER BY timestamp DESC
         LIMIT $3
         "#,
     )
     .bind(device_id)
-    .bind(category)
+    .bind(categories)
     .bind(limit)
     .fetch_all(pool)
     .await

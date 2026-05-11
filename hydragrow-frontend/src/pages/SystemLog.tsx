@@ -40,15 +40,121 @@ const getMetaNumber = (meta: any, keys: string[]): number | undefined => {
 const DosingMetadata = ({ meta }: { meta: any }) => {
   if (!meta) return null;
 
+  const eventType = meta.event_type ?? meta.type;
+  const cycleMeta = meta.dosing_report ?? meta.dosing_data ?? meta;
+  const isCycle = eventType === 'dosing_cycle'
+    || cycleMeta.pre != null
+    || cycleMeta.post != null
+    || cycleMeta.post_stable != null
+    || cycleMeta.post_mixing != null
+    || cycleMeta.dose != null;
+
+  if (isCycle) {
+    const pre = cycleMeta.pre ?? {};
+    const post = cycleMeta.post_stable ?? cycleMeta.post ?? {};
+    const correction = cycleMeta.correction_progress ?? {};
+    const dose = cycleMeta.dose ?? {};
+    const target = cycleMeta.target ?? {};
+    const error = cycleMeta.error ?? {};
+    const delta = cycleMeta.delta ?? {};
+
+    const sections: { title?: string; rows: { label: string; value: string; accent?: string }[] }[] = [];
+
+    const infoRows: { label: string; value: string; accent?: string }[] = [];
+    if (cycleMeta.cycle_id) infoRows.push({ label: 'Cycle ID', value: String(cycleMeta.cycle_id).slice(0, 8), accent: 'text-slate-200' });
+    if (cycleMeta.trigger) infoRows.push({ label: 'Trigger', value: String(cycleMeta.trigger) });
+    if (cycleMeta.duration_ms != null) infoRows.push({ label: 'Thời gian', value: `${(Number(cycleMeta.duration_ms) / 1000).toFixed(1)}s` });
+    if (infoRows.length) sections.push({ title: 'Chu kỳ', rows: infoRows });
+
+    const doseRows: { label: string; value: string; accent?: string }[] = [];
+    if (dose.pump_a_ml != null && dose.pump_a_ml > 0) doseRows.push({ label: 'Phân A', value: `${Number(dose.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
+    if (dose.pump_b_ml != null && dose.pump_b_ml > 0) doseRows.push({ label: 'Phân B', value: `${Number(dose.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
+    if (dose.ph_up_ml != null && dose.ph_up_ml > 0) doseRows.push({ label: 'pH Tăng', value: `${Number(dose.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
+    if (dose.ph_down_ml != null && dose.ph_down_ml > 0) doseRows.push({ label: 'pH Giảm', value: `${Number(dose.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
+    if (doseRows.length) sections.push({ title: 'Bơm', rows: doseRows });
+
+    const deltaRows: { label: string; value: string; accent?: string }[] = [];
+    const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
+    const ecAfter = getMetaNumber(post, ['ec', 'EC']);
+    const phBefore = getMetaNumber(pre, ['ph', 'pH']);
+    const phAfter = getMetaNumber(post, ['ph', 'pH']);
+
+    if (ecBefore != null && ecAfter != null) {
+      const diff = (ecAfter - ecBefore).toFixed(2);
+      const sign = ecAfter >= ecBefore ? '+' : '';
+      deltaRows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${sign}${diff})`, accent: 'text-cyan-400' });
+    } else if (ecBefore != null) deltaRows.push({ label: 'EC trước', value: ecBefore.toFixed(2), accent: 'text-cyan-400' });
+    else if (ecAfter != null) deltaRows.push({ label: 'EC sau', value: ecAfter.toFixed(2), accent: 'text-cyan-400' });
+
+    if (phBefore != null && phAfter != null) {
+      const diff = (phAfter - phBefore).toFixed(2);
+      const sign = phAfter >= phBefore ? '+' : '';
+      deltaRows.push({ label: 'pH', value: `${phBefore.toFixed(2)} → ${phAfter.toFixed(2)} (${sign}${diff})`, accent: 'text-fuchsia-400' });
+    } else if (phBefore != null) deltaRows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
+    else if (phAfter != null) deltaRows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
+
+    const deltaEc = getMetaNumber(cycleMeta, ['delta_ec']) ?? getMetaNumber(delta, ['ec']);
+    const deltaPh = getMetaNumber(cycleMeta, ['delta_ph']) ?? getMetaNumber(delta, ['ph']);
+    if (deltaEc != null) deltaRows.push({ label: 'Δ EC', value: deltaEc.toFixed(2), accent: 'text-cyan-300' });
+    if (deltaPh != null) deltaRows.push({ label: 'Δ pH', value: deltaPh.toFixed(2), accent: 'text-fuchsia-300' });
+    if (deltaRows.length) sections.push({ title: 'Biến động', rows: deltaRows });
+
+    const targetRows: { label: string; value: string; accent?: string }[] = [];
+    const targetEc = getMetaNumber(cycleMeta, ['target_ec']) ?? getMetaNumber(target, ['ec']);
+    const targetPh = getMetaNumber(cycleMeta, ['target_ph']) ?? getMetaNumber(target, ['ph']);
+    const errorEc = getMetaNumber(cycleMeta, ['error_ec']) ?? getMetaNumber(error, ['ec']);
+    const errorPh = getMetaNumber(cycleMeta, ['error_ph']) ?? getMetaNumber(error, ['ph']);
+    if (targetEc != null) targetRows.push({ label: 'Mục tiêu EC', value: targetEc.toFixed(2), accent: 'text-cyan-300' });
+    if (targetPh != null) targetRows.push({ label: 'Mục tiêu pH', value: targetPh.toFixed(2), accent: 'text-fuchsia-300' });
+    if (errorEc != null) targetRows.push({ label: 'Sai số EC', value: errorEc.toFixed(2), accent: 'text-amber-400' });
+    if (errorPh != null) targetRows.push({ label: 'Sai số pH', value: errorPh.toFixed(2), accent: 'text-amber-400' });
+
+    if (correction.ec_remaining != null) {
+      const val = Number(correction.ec_remaining);
+      targetRows.push({ label: 'EC còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-cyan-200' : 'text-red-400' });
+    }
+    if (correction.ph_remaining != null) {
+      const val = Number(correction.ph_remaining);
+      targetRows.push({ label: 'pH còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-fuchsia-200' : 'text-red-400' });
+    }
+    if (targetRows.length) sections.push({ title: 'Đánh giá', rows: targetRows });
+
+    const coefRows: { label: string; value: string; accent?: string }[] = [];
+    if (cycleMeta.step_ratio_ec != null) coefRows.push({ label: 'Bước EC', value: Number(cycleMeta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
+    if (cycleMeta.step_ratio_ph != null) coefRows.push({ label: 'Bước pH', value: Number(cycleMeta.step_ratio_ph).toFixed(2), accent: 'text-yellow-400' });
+    if (cycleMeta.ema_ec_gain_used != null) coefRows.push({ label: 'EMA EC gain', value: Number(cycleMeta.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
+    if (cycleMeta.ema_ph_shift_used != null) coefRows.push({ label: 'EMA pH shift', value: Number(cycleMeta.ema_ph_shift_used).toFixed(5), accent: 'text-fuchsia-500' });
+    if (coefRows.length) sections.push({ title: 'Hệ số', rows: coefRows });
+
+    if (sections.length === 0) return null;
+
+    return (
+      <div className="mt-3 space-y-2 text-xs">
+        {sections.map((sec, idx) => (
+          <div key={idx} className="bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2">
+            {sec.title && <div className="text-[10px] font-semibold text-orange-300/70 mb-1 uppercase tracking-wide">{sec.title}</div>}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {sec.rows.map(r => (
+                <div key={r.label} className="flex items-baseline gap-1.5">
+                  <span className="text-slate-500 shrink-0">{r.label}</span>
+                  <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const rows: { label: string; value: string; accent?: string }[] = [];
 
-  // Hiển thị lượng bơm
-  if (meta.pump_a_ml != null && meta.pump_a_ml > 0) rows.push({ label: 'Phân A', value: `${Number(meta.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
-  if (meta.pump_b_ml != null && meta.pump_b_ml > 0) rows.push({ label: 'Phân B', value: `${Number(meta.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
-  if (meta.ph_up_ml != null && meta.ph_up_ml > 0) rows.push({ label: 'pH Tăng', value: `${Number(meta.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
-  if (meta.ph_down_ml != null && meta.ph_down_ml > 0) rows.push({ label: 'pH Giảm', value: `${Number(meta.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
+  const dose = meta.dose ?? meta;
+  if (dose.pump_a_ml != null && dose.pump_a_ml > 0) rows.push({ label: 'Phân A', value: `${Number(dose.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
+  if (dose.pump_b_ml != null && dose.pump_b_ml > 0) rows.push({ label: 'Phân B', value: `${Number(dose.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
+  if (dose.ph_up_ml != null && dose.ph_up_ml > 0) rows.push({ label: 'pH Tăng', value: `${Number(dose.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
+  if (dose.ph_down_ml != null && dose.ph_down_ml > 0) rows.push({ label: 'pH Giảm', value: `${Number(dose.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
 
-  // EC trước/sau
   const startEc = getMetaNumber(meta, ['start_ec', 'before_ec', 'ec_before', 'pre_ec']);
   const afterEc = getMetaNumber(meta, ['after_ec', 'stabilized_ec', 'ec_after', 'post_ec']);
   if (startEc != null && afterEc != null) {
@@ -61,7 +167,6 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
     rows.push({ label: 'EC sau', value: afterEc.toFixed(2), accent: 'text-cyan-400' });
   }
 
-  // pH trước/sau
   const startPh = getMetaNumber(meta, ['start_ph', 'before_ph', 'ph_before', 'pre_ph']);
   const afterPh = getMetaNumber(meta, ['after_ph', 'stabilized_ph', 'ph_after', 'post_ph']);
   if (startPh != null && afterPh != null) {
@@ -74,7 +179,6 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
     rows.push({ label: 'pH sau', value: afterPh.toFixed(2), accent: 'text-fuchsia-400' });
   }
 
-  // Mục tiêu
   if (meta.target_ec != null) rows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
   if (meta.target_ph != null) rows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
 
@@ -237,104 +341,7 @@ const WaterMetadata = ({ meta }: { meta: any }) => {
     </div>
   );
 };
-// ========== Cập nhật DosingCycleMetadata (rõ ràng hơn) ==========
-// Chỉ hiển thị phần sửa đổi của DosingCycleMetadata và bổ sung nếu cần
-const DosingCycleMetadata = ({ meta }: { meta: any }) => {
-  if (!meta) return null;
-  const pre = meta.pre ?? {};
-  const post = meta.post_stable ?? meta.post ?? {};
-  const correction = meta.correction_progress ?? {};
 
-  const sections: { title?: string; rows: { label: string; value: string; accent?: string }[] }[] = [];
-
-  // 1. Thông tin chu kỳ
-  const infoRows: { label: string; value: string; accent?: string }[] = [];
-  if (meta.cycle_id) infoRows.push({ label: 'Cycle ID', value: String(meta.cycle_id).slice(0, 8), accent: 'text-slate-200' });
-  if (meta.trigger) infoRows.push({ label: 'Trigger', value: String(meta.trigger) });
-  if (meta.duration_ms != null) infoRows.push({ label: 'Thời gian', value: `${(Number(meta.duration_ms) / 1000).toFixed(1)}s` });
-  if (infoRows.length) sections.push({ title: 'Chu kỳ', rows: infoRows });
-
-  // 2. Liều lượng bơm
-  const doseRows: { label: string; value: string; accent?: string }[] = [];
-  const dose = meta.dose ?? {};
-  if (dose.pump_a_ml != null && dose.pump_a_ml > 0) doseRows.push({ label: 'Phân A', value: `${Number(dose.pump_a_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
-  if (dose.pump_b_ml != null && dose.pump_b_ml > 0) doseRows.push({ label: 'Phân B', value: `${Number(dose.pump_b_ml).toFixed(2)} ml`, accent: 'text-orange-400' });
-  if (dose.ph_up_ml != null && dose.ph_up_ml > 0) doseRows.push({ label: 'pH Tăng', value: `${Number(dose.ph_up_ml).toFixed(2)} ml`, accent: 'text-purple-400' });
-  if (dose.ph_down_ml != null && dose.ph_down_ml > 0) doseRows.push({ label: 'pH Giảm', value: `${Number(dose.ph_down_ml).toFixed(2)} ml`, accent: 'text-rose-400' });
-  if (doseRows.length) sections.push({ title: 'Bơm', rows: doseRows });
-
-  // 3. Biến động EC/pH (trước → sau ổn định)
-  const deltaRows: { label: string; value: string; accent?: string }[] = [];
-  const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
-  const ecAfter = getMetaNumber(post, ['ec', 'EC']);
-  const phBefore = getMetaNumber(pre, ['ph', 'pH']);
-  const phAfter = getMetaNumber(post, ['ph', 'pH']);
-
-  if (ecBefore != null && ecAfter != null) {
-    const delta = (ecAfter - ecBefore).toFixed(2);
-    const sign = ecAfter >= ecBefore ? '+' : '';
-    deltaRows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-cyan-400' });
-  } else if (ecBefore != null) deltaRows.push({ label: 'EC trước', value: ecBefore.toFixed(2), accent: 'text-cyan-400' });
-  else if (ecAfter != null) deltaRows.push({ label: 'EC sau', value: ecAfter.toFixed(2), accent: 'text-cyan-400' });
-
-  if (phBefore != null && phAfter != null) {
-    const delta = (phAfter - phBefore).toFixed(2);
-    const sign = phAfter >= phBefore ? '+' : '';
-    deltaRows.push({ label: 'pH', value: `${phBefore.toFixed(2)} → ${phAfter.toFixed(2)} (${sign}${delta})`, accent: 'text-fuchsia-400' });
-  } else if (phBefore != null) deltaRows.push({ label: 'pH trước', value: phBefore.toFixed(2), accent: 'text-fuchsia-400' });
-  else if (phAfter != null) deltaRows.push({ label: 'pH sau', value: phAfter.toFixed(2), accent: 'text-fuchsia-400' });
-
-  if (meta.delta_ec != null) deltaRows.push({ label: 'Δ EC', value: Number(meta.delta_ec).toFixed(2), accent: 'text-cyan-300' });
-  if (meta.delta_ph != null) deltaRows.push({ label: 'Δ pH', value: Number(meta.delta_ph).toFixed(2), accent: 'text-fuchsia-300' });
-  if (deltaRows.length) sections.push({ title: 'Biến động', rows: deltaRows });
-
-  // 4. Mục tiêu, sai số & tiến độ hiệu chỉnh còn lại
-  const targetRows: { label: string; value: string; accent?: string }[] = [];
-  if (meta.target_ec != null) targetRows.push({ label: 'Mục tiêu EC', value: Number(meta.target_ec).toFixed(2), accent: 'text-cyan-300' });
-  if (meta.target_ph != null) targetRows.push({ label: 'Mục tiêu pH', value: Number(meta.target_ph).toFixed(2), accent: 'text-fuchsia-300' });
-  if (meta.error_ec != null) targetRows.push({ label: 'Sai số EC', value: Number(meta.error_ec).toFixed(2), accent: 'text-amber-400' });
-  if (meta.error_ph != null) targetRows.push({ label: 'Sai số pH', value: Number(meta.error_ph).toFixed(2), accent: 'text-amber-400' });
-
-  // Hiển thị tiến độ còn thiếu sau khi châm (nếu có)
-  if (correction.ec_remaining != null) {
-    const val = Number(correction.ec_remaining);
-    targetRows.push({ label: 'EC còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-cyan-200' : 'text-red-400' });
-  }
-  if (correction.ph_remaining != null) {
-    const val = Number(correction.ph_remaining);
-    targetRows.push({ label: 'pH còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-fuchsia-200' : 'text-red-400' });
-  }
-
-  if (targetRows.length) sections.push({ title: 'Đánh giá', rows: targetRows });
-
-  // 5. Hệ số sử dụng trong lần châm này
-  const coefRows: { label: string; value: string; accent?: string }[] = [];
-  if (meta.step_ratio_ec != null) coefRows.push({ label: 'Bước EC', value: Number(meta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
-  if (meta.step_ratio_ph != null) coefRows.push({ label: 'Bước pH', value: Number(meta.step_ratio_ph).toFixed(2), accent: 'text-yellow-400' });
-  if (meta.ema_ec_gain_used != null) coefRows.push({ label: 'EMA EC gain', value: Number(meta.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
-  if (meta.ema_ph_shift_used != null) coefRows.push({ label: 'EMA pH shift', value: Number(meta.ema_ph_shift_used).toFixed(5), accent: 'text-fuchsia-500' });
-  if (coefRows.length) sections.push({ title: 'Hệ số', rows: coefRows });
-
-  if (sections.length === 0) return null;
-
-  return (
-    <div className="mt-3 space-y-2 text-xs">
-      {sections.map((sec, idx) => (
-        <div key={idx} className="bg-orange-950/20 border border-orange-900/40 rounded-lg px-3 py-2">
-          {sec.title && <div className="text-[10px] font-semibold text-orange-300/70 mb-1 uppercase tracking-wide">{sec.title}</div>}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            {sec.rows.map(r => (
-              <div key={r.label} className="flex items-baseline gap-1.5">
-                <span className="text-slate-500 shrink-0">{r.label}</span>
-                <span className={r.accent ?? 'text-slate-300'}>{r.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 // ========== Cập nhật AlertMetadata (lỗi rõ ràng) ==========
 const AlertMetadata = ({ meta }: { meta: any }) => {
@@ -374,17 +381,10 @@ const AlertMetadata = ({ meta }: { meta: any }) => {
 const MetadataRenderer = ({ category, level, metadata }: { category: string; level: string; title: string; metadata?: Record<string, any> }) => {
   if (!metadata) return null;
 
-  // dosing: ưu tiên dạng dosing cycle nếu có pre/post
-  if (category === 'dosing') {
-    const dosingData = metadata.dosing_report ?? metadata;
-    if (dosingData.pre || dosingData.post || dosingData.post_stable) {
-      return <DosingCycleMetadata meta={dosingData} />;
-    }
-    return <DosingMetadata meta={metadata} />;
-  }
+  if (category === 'dosing') return <DosingMetadata meta={metadata} />;
   if (category === 'water') return <WaterMetadata meta={metadata} />;
   if (category === 'calibration') return <CalibrationMetadata meta={metadata} />;
-  if (category === 'sensor_noise' || category === 'sensor') return <SensorNoiseMetadata meta={metadata} />;
+  if (category === 'sensor') return <SensorNoiseMetadata meta={metadata} />;
   if (category === 'alert' || level === 'critical' || level === 'warning') return <AlertMetadata meta={metadata} />;
 
   // fallback: thử parse như dosing nếu có dữ liệu EC/pH
@@ -436,7 +436,6 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
       }
       return { icon: Activity, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
 
-    case 'sensor_noise':
     case 'sensor':
       return { icon: Radio, iconColor: 'text-amber-400', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5', dot: 'bg-amber-400' };
 
@@ -465,7 +464,7 @@ const FILTERS = [
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
   { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
-  { id: 'sensor', label: 'Cảm biến', icon: Radio }, // giờ sẽ gửi thêm sensor_noise
+  { id: 'sensor', label: 'Cảm biến', icon: Radio },
   { id: 'system', label: 'Hệ thống', icon: Power },
 ];
 
@@ -535,13 +534,8 @@ const SystemLog = () => {
       setIsLoading(true);
       try {
         let url = `${appConfig.backend_url}/api/devices/${deviceId}/events?limit=200`;
-        // Xử lý filter: nếu là 'sensor' thì gửi cả sensor và sensor_noise
         if (filter !== 'all') {
-          if (filter === 'sensor') {
-            url += '&category=sensor&category=sensor_noise';
-          } else {
-            url += `&category=${filter}`;
-          }
+          url += `&category=${encodeURIComponent(filter)}`;
         }
         const res = await httpFetch(url, {
           headers: { 'X-API-Key': appConfig.api_key || '' }

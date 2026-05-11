@@ -176,6 +176,7 @@ pub async fn control_pump(
 
     let alert_msg = crate::models::alert::AlertMessage {
         level: "warning".to_string(), // Dùng màu Vàng (Warning) cho thao tác can thiệp thủ công
+        category: "alert".to_string(),
         title: "Can Thiệp Thủ Công".to_string(),
         message: format!(
             "Lệnh: {} thiết bị [{}]\nBởi: Người dùng / Ứng dụng",
@@ -183,7 +184,11 @@ pub async fn control_pump(
         ),
         device_id: device_id.clone(),
         reason: Some(format!("Người dùng bấm nút điều khiển qua Web/App")), // 🟢 Bổ sung reason
-        metadata: None,
+        metadata: Some(json!({
+            "event_type": "manual_control",
+            "action": req_data.action,
+            "pump": pump_name,
+        })),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
     };
 

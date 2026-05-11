@@ -51,8 +51,7 @@ export function useFCM(deviceId: string) {
             'X-API-Key': settings.api_key
           },
           body: JSON.stringify({
-            device_id: deviceId,
-            token
+            fcm_token: token
           })
         }
       );

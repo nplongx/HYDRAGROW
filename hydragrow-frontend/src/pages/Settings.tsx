@@ -147,9 +147,9 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
         </div>
       </div>
 
-      <div className="pt-3 border-t border-slate-800">
-        <span className="text-xs text-slate-500 font-mono">Cron: {value || "0 0 8 * * *"}</span>
-      </div>
+      {/* <div className="pt-3 border-t border-slate-800"> */}
+      {/*   <span className="text-xs text-slate-500 font-mono">Cron: {value || "0 0 8 * * *"}</span> */}
+      {/* </div> */}
     </div>
   );
 };
@@ -632,7 +632,7 @@ const Settings = () => {
         {/* SAFETY */}
         {isAdvancedMode && (
           <AccordionSection id="safety" title="An Toàn" icon={ShieldAlert} isOpen={openSection === 'safety'} onToggle={() => handleToggleSection('safety')}>
-            <SubCard title="Ngưỡng Còi Hú">
+            <SubCard title="Ngưỡng cảnh báo">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputGroup label="Nhiệt độ thấp (°C)" value={config.min_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_temp_limit: e.target.value })} />
                 <InputGroup label="Nhiệt độ cao (°C)" value={config.max_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_temp_limit: e.target.value })} />

@@ -10,11 +10,11 @@
 // ==========================================
 const char *ssid = "Huynh Hong";
 const char *password = "123443215";
-const char *mqtt_server = "interchange.proxy.rlwy.net";
-const int mqtt_port = 50133;
+const char *mqtt_server = "viaduct.proxy.rlwy.net";
+const int mqtt_port = 45131;
 const char *device_id = "device_001";
 const char *mqtt_user = "long";
-const char *mqtt_pass = "53zx37kxq3epbexgqt6rjlce1d0e0gwq";
+const char *mqtt_pass = "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i";
 
 String topic_sensors = String("AGITECH/") + device_id + "/sensors";
 String topic_config = String("AGITECH/") + device_id + "/sensors/config";

@@ -8,10 +8,13 @@ import {
   Settings2,
   Hash,
   Radio,
+  Download
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
 import { httpFetch } from '../platform/http';
+import { saveTextFile } from '../platform/file';
 import { loadAppSettings } from '../platform/settings';
 
 // ─── Kiểu event từ backend ───────────────────────────────────────────────────
@@ -50,8 +53,6 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   const correction = cycleMeta.correction_progress ?? {};
   const dose = cycleMeta.dose ?? cycleMeta;
   const target = cycleMeta.target ?? cycleMeta;
-  // const error = cycleMeta.error ?? cycleMeta;
-  // const delta = cycleMeta.delta ?? cycleMeta;
 
   const sections: { title?: string; rows: { label: string; value: string; accent?: string }[] }[] = [];
 
@@ -88,7 +89,6 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   const targetRows: { label: string; value: string; accent?: string }[] = [];
   const targetEc = getMetaNumber(target, ['ec', 'target_ec']);
   const targetPh = getMetaNumber(target, ['ph', 'target_ph']);
-  // const errorEc = getMetaNumber(error, ['ec', 'error_ec']);
 
   if (targetEc != null) targetRows.push({ label: 'Mục tiêu EC', value: targetEc.toFixed(2), accent: 'text-cyan-300' });
   if (targetPh != null) targetRows.push({ label: 'Mục tiêu pH', value: targetPh.toFixed(2), accent: 'text-fuchsia-300' });
@@ -348,6 +348,13 @@ const FsmBadge = ({ message }: { message: string }) => {
   );
 };
 
+// ─── Escape text cho CSV ─────────────────────────────────────────────────────
+const escapeCsv = (val: any) => {
+  if (val == null) return '""';
+  const str = String(val);
+  return `"${str.replace(/"/g, '""')}"`;
+};
+
 // ─── Component chính ─────────────────────────────────────────────────────────
 const SystemLog = () => {
   const [filter, setFilter] = useState<string>('all');
@@ -392,6 +399,59 @@ const SystemLog = () => {
     loadEvents();
   }, [filter, deviceId, appConfig]);
 
+  // ─── Handle Export CSV ─────────────────────────────────────────────────────
+  const handleExportCSV = async () => {
+    if (systemEvents.length === 0) {
+      toast.error("Không có dữ liệu để xuất!");
+      return;
+    }
+
+    try {
+      const headers = [
+        "ID",
+        "Thời Gian",
+        "Mã Thiết Bị",
+        "Mức Độ (Level)",
+        "Danh Mục (Category)",
+        "Tiêu Đề",
+        "Nội Dung",
+        "Mã Lỗi",
+        "Cycle ID",
+        "Metadata Chi Tiết (JSON)"
+      ];
+
+      const csvRows = systemEvents.map(ev => {
+        const date = new Date(ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000).toLocaleString('vi-VN');
+        const displayTitle = friendlyTitle(ev.title);
+        const cycleId = ev.metadata?.cycle_id || '';
+        const metaString = ev.metadata ? JSON.stringify(ev.metadata) : '';
+
+        return [
+          ev.id || '',
+          date,
+          ev.device_id || '',
+          ev.level || '',
+          ev.category || '',
+          displayTitle || '',
+          ev.message || '',
+          ev.reason || '',
+          cycleId,
+          metaString
+        ].map(escapeCsv).join(",");
+      });
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
+      const saved = await saveTextFile(`nhat-ky-he-thong-${deviceId || 'all'}.csv`, csvContent);
+
+      if (saved) {
+        toast.success("Đã lưu file thành công!");
+      }
+    } catch (err: any) {
+      console.error("ERROR SAVE FILE:", err);
+      toast.error(err?.message || "Lỗi khi lưu file!");
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto pb-28">
       <PageHeader
@@ -400,8 +460,8 @@ const SystemLog = () => {
         subtitle={`Lịch sử vận hành trạm ${deviceId || '—'}`}
       />
 
-      {/* Bộ lọc */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-8">
+      {/* Bộ lọc & Export CSV */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map(btn => {
             const Icon = btn.icon;
@@ -422,6 +482,16 @@ const SystemLog = () => {
             );
           })}
         </div>
+
+        <button
+          onClick={handleExportCSV}
+          disabled={systemEvents.length === 0}
+          className="flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-all border border-slate-700 active:scale-95 shrink-0"
+          title="Xuất dữ liệu ra Excel"
+        >
+          <Download size={16} className={systemEvents.length > 0 ? "text-emerald-400" : "text-slate-500"} />
+          <span className="text-xs font-medium">Xuất CSV</span>
+        </button>
       </div>
 
       {/* Timeline */}

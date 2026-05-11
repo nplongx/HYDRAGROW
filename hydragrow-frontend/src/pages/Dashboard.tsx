@@ -9,6 +9,7 @@ import { extractFaultCode } from '../components/ui/FsmStatusBadge';
 import { getFaultGuide } from '../components/ui/FaultExplanation';
 import { httpFetch } from '../platform/http';
 import { loadAppSettings } from '../platform/settings';
+import { useFCM } from '../hooks/useFCM';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${color}`}>
@@ -67,6 +68,7 @@ const Dashboard = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, isSensorOnline, settings } = useDeviceContext();
   console.log("Dữ liệu deviceStatus:", deviceStatus);
   // const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
+  useFCM(deviceId || "");
 
   useEffect(() => {
     const run = async () => {

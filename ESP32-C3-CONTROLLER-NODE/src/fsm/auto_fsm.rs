@@ -665,14 +665,14 @@ fn try_ph_dosing(
         return true;
     }
 
-    let final_dose_ml = (diff / ratio * config.ph_step_ratio).clamp(0.0, config.max_dose_per_cycle);
-    if final_dose_ml <= 0.0 {
-        return false;
-    }
+    // let final_dose_ml = (diff / ratio * config.ph_step_ratio).clamp(0.0, config.max_dose_per_cycle);
+    // if final_dose_ml <= 0.0 {
+    //     return false;
+    // }
 
     info!(
         "🧪 [PH DOSING] Bắt đầu bù pH ({}). Lệch: {:.2} (Hiện: {:.2}, Mục tiêu: {:.2}). Liều lượng: {:.2}ml", 
-        if is_ph_up { "UP ⬆️" } else { "DOWN ⬇️" }, diff, sensors.ph, config.ph_target, final_dose_ml
+        if is_ph_up { "UP ⬆️" } else { "DOWN ⬇️" }, diff, sensors.ph, config.ph_target, dose_ml
     );
 
     ctx.last_ph_before_dosing = Some(sensors.ph);
@@ -681,7 +681,7 @@ fn try_ph_dosing(
         finish_time: current_time_ms + config.soft_start_duration as u64,
         pending_action: PendingDose::PH {
             is_up: is_ph_up,
-            dose_ml: final_dose_ml,
+            dose_ml,
             target_ph: config.ph_target,
             pwm_percent: safe_pwm,
         },

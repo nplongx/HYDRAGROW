@@ -264,19 +264,33 @@ impl ControlContext {
         if config.enable_ec_sensor && !sensors.err_ec {
             if let Some(last_ec) = self.last_ec_before_dosing {
                 let response = sensors.ec - last_ec;
-                if response >= config.ec_ack_threshold {
+                let reached_target = (sensors.ec - config.ec_target).abs() <= config.ec_tolerance;
+                if response >= config.ec_ack_threshold || reached_target {
                     self.ec_retry_count = 0;
                     if !self.auto_tune_locked {
-                        let gain_vs_expected = response / config.ec_ack_threshold.max(0.001);
-                        let tune_delta = if gain_vs_expected > 2.0 {
-                            -0.01
-                        } else if gain_vs_expected < 1.0 {
-                            0.02
-                        } else {
-                            0.0
-                        };
-                        self.adjust_ec_step_ratio(config, now_sec, tune_delta, "ec_ack_ok");
-                        self.best_known_ec_step_ratio = self.adaptive_ec_step_ratio;
+                        // 1. Phân tích đạo hàm: Tỷ lệ giữa thực tế đạt được và kỳ vọng
+                        // (response là Delta pH thực tế)
+                        let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
+
+                        // 2. Nếu tỷ lệ này lệch quá 20% (tức là < 0.8 hoặc > 1.2), tiến hành nội suy bù trừ
+                        if gain_vs_expected < 0.8 || gain_vs_expected > 1.2 {
+                            // 3. Hệ số nội suy nghịch đảo (Nước ít -> gain cao -> cần giảm step_ratio)
+                            let interpolation_factor = 1.0 / gain_vs_expected;
+
+                            // 4. Tính ra giá trị step_ratio mới cần đạt tới
+                            let target_ratio = self.adaptive_ec_step_ratio * interpolation_factor;
+
+                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust_ph_step_ratio (có sẵn budget an toàn)
+                            let tune_delta = target_ratio - self.adaptive_ec_step_ratio;
+
+                            self.adjust_ph_step_ratio(
+                                config,
+                                now_sec,
+                                tune_delta,
+                                "ec_derivative_interpolation",
+                            );
+                            self.best_known_ec_step_ratio = self.adaptive_ec_step_ratio;
+                        }
                     }
                 } else {
                     self.ec_retry_count += 1;
@@ -313,19 +327,35 @@ impl ControlContext {
                 } else {
                     last_ph - sensors.ph
                 };
-                if response >= config.ph_ack_threshold {
+
+                let reached_target = (sensors.ph - config.ph_target).abs() <= config.ph_tolerance;
+
+                if response >= config.ph_ack_threshold || reached_target {
                     self.ph_retry_count = 0;
                     if !self.auto_tune_locked {
+                        // 1. Phân tích đạo hàm: Tỷ lệ giữa thực tế đạt được và kỳ vọng
+                        // (response là Delta pH thực tế)
                         let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
-                        let tune_delta = if gain_vs_expected > 2.0 {
-                            -0.01
-                        } else if gain_vs_expected < 1.0 {
-                            0.02
-                        } else {
-                            0.0
-                        };
-                        self.adjust_ph_step_ratio(config, now_sec, tune_delta, "ph_ack_ok");
-                        self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
+
+                        // 2. Nếu tỷ lệ này lệch quá 20% (tức là < 0.8 hoặc > 1.2), tiến hành nội suy bù trừ
+                        if gain_vs_expected < 0.8 || gain_vs_expected > 1.2 {
+                            // 3. Hệ số nội suy nghịch đảo (Nước ít -> gain cao -> cần giảm step_ratio)
+                            let interpolation_factor = 1.0 / gain_vs_expected;
+
+                            // 4. Tính ra giá trị step_ratio mới cần đạt tới
+                            let target_ratio = self.adaptive_ph_step_ratio * interpolation_factor;
+
+                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust_ph_step_ratio (có sẵn budget an toàn)
+                            let tune_delta = target_ratio - self.adaptive_ph_step_ratio;
+
+                            self.adjust_ph_step_ratio(
+                                config,
+                                now_sec,
+                                tune_delta,
+                                "ph_derivative_interpolation",
+                            );
+                            self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
+                        }
                     }
                 } else {
                     self.ph_retry_count += 1;
@@ -568,7 +598,6 @@ impl ControlContext {
             .push((now_sec, dose_ml));
         true
     }
-
 
     pub fn rollback_last_reservation(&mut self, pump: &str) -> bool {
         if let Some(history) = self.hourly_dose_history_ml_by_pump.get_mut(pump) {

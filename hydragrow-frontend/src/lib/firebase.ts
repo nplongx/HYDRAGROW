@@ -23,7 +23,7 @@ export const requestForWebToken = async () => {
   try {
     const currentToken = await getToken(messaging, {
       // VAPID KEY lấy từ Firebase Console -> Project Settings -> Cloud Messaging -> Web push certificates
-      vapidKey: 'YOUR_VAPID_KEY_HERE'
+      vapidKey: 'BDHacUd3ZPRTo5QfnaErWYyXIgxW2sjOR22A9HrIyLzuPrJ62cylLTgaooS3PhscRnZ6jggodBFmd3hJ3izr33I'
     });
     if (currentToken) {
       console.log('Web FCM Token:', currentToken);

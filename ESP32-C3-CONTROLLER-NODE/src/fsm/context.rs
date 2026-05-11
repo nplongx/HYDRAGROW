@@ -1,4 +1,4 @@
-use hydragrow_shared::{ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
+use hydragrow_shared::{AlertMetadata, CalibrationMetadata, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
 use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
@@ -222,6 +222,7 @@ impl ControlContext {
         &mut self,
         sensors: &SensorData,
         config: &ControllerConfig,
+        fsm_mqtt_tx: &Sender<String>
     ) -> bool {
         let mut is_noisy = false;
 
@@ -229,9 +230,19 @@ impl ControlContext {
             if let Some(prev_ec) = self.previous_ec {
                 let delta = (sensors.ec - prev_ec).abs();
                 if delta > config.max_ec_delta {
-                    warn!(
-                        r#"[SENSOR NOISE] {{ "sensor": "ec", "raw_value": {:.2}, "prev_value": {:.2}, "delta": {:.2}, "max_allowed": {:.2}, "action": "rejected" }}"#,
-                        sensors.ec, prev_ec, delta, config.max_ec_delta
+                    warn!("Phát hiện nhiễu EC: Raw {:.2}, Delta {:.2}", sensors.ec, delta);
+                    send_system_log(
+                        fsm_mqtt_tx,
+                        &config.device_id,
+                        LogLevel::Warning,
+                        LogCategory::Sensor,
+                        "Nhiễu cảm biến EC",
+                        SystemLogEvent::SystemAlert(AlertMetadata {
+                            alert_type: "sensor_noise".to_string(),
+                            source: "ec".to_string(),
+                            retry_count: 0,
+                            limit_value: Some(config.max_ec_delta),
+                        }),
                     );
                     is_noisy = true;
                 }
@@ -243,9 +254,19 @@ impl ControlContext {
             if let Some(prev_ph) = self.previous_ph {
                 let delta = (sensors.ph - prev_ph).abs();
                 if delta > config.max_ph_delta {
-                    warn!(
-                        r#"[SENSOR NOISE] {{ "sensor": "ph", "raw_value": {:.2}, "prev_value": {:.2}, "delta": {:.2}, "max_allowed": {:.2}, "action": "rejected" }}"#,
-                        sensors.ph, prev_ph, delta, config.max_ph_delta
+                    warn!("Phát hiện nhiễu pH: Raw {:.2}, Delta {:.2}", sensors.ph, delta);
+                    send_system_log(
+                        fsm_mqtt_tx,
+                        &config.device_id,
+                        LogLevel::Warning,
+                        LogCategory::Sensor,
+                        "Nhiễu cảm biến pH",
+                        SystemLogEvent::SystemAlert(AlertMetadata {
+                            alert_type: "sensor_noise".to_string(),
+                            source: "ph".to_string(),
+                            retry_count: 0,
+                            limit_value: Some(config.max_ph_delta),
+                        }),
                     );
                     is_noisy = true;
                 }
@@ -299,11 +320,11 @@ impl ControlContext {
                             let tune_delta = target_ratio - self.adaptive_ec_step_ratio;
 
                             self.adjust_ec_step_ratio(
-                                // ✅ ĐÃ SỬA: Gọi đúng hàm của EC
                                 config,
                                 now_sec,
                                 tune_delta,
                                 "ec_derivative_interpolation",
+                                fsm_mqtt_tx
                             );
                             self.best_known_ec_step_ratio = self.adaptive_ec_step_ratio;
                         }
@@ -312,15 +333,23 @@ impl ControlContext {
                     self.ec_retry_count += 1;
                     warn!("⚠️ EC không tăng! Lần thử: {}/3", self.ec_retry_count);
                     if self.ec_retry_count <= 2 {
-                        let msg = match self.ec_retry_count {
+                        let _msg = match self.ec_retry_count {
                             1 => "EC không tăng sau lần bơm đầu",
                             _ => "EC vẫn không tăng sau 2 lần bơm",
                         };
-                        let payload = format!(
-                            r#"[SYSTEM ALERT] {{ "type": "warning", "source": "ec_dosing", "retry_count": {}, "message": "{}" }}"#,
-                            self.ec_retry_count, msg
+                        send_system_log(
+                            fsm_mqtt_tx,
+                            &config.device_id,
+                            LogLevel::Warning,
+                            LogCategory::Alert,
+                            "Cảnh báo bù EC",
+                            SystemLogEvent::SystemAlert(AlertMetadata {
+                                alert_type: "sensor_no_response".to_string(),
+                                source: "ec_dosing".to_string(),
+                                retry_count: self.ec_retry_count as u32,
+                                limit_value: None,
+                            }),
                         );
-                        let _ = fsm_mqtt_tx.send(payload);
                     }
                     if !self.auto_tune_locked {
                         self.adjust_ec_step_ratio(
@@ -328,6 +357,7 @@ impl ControlContext {
                             now_sec,
                             0.03,
                             "ec_retry_count_increased",
+                            fsm_mqtt_tx
                         );
                     }
                 }
@@ -370,6 +400,7 @@ impl ControlContext {
                                 now_sec,
                                 tune_delta,
                                 "ph_derivative_interpolation",
+                                fsm_mqtt_tx
                             );
                             self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
                         }
@@ -378,15 +409,23 @@ impl ControlContext {
                     self.ph_retry_count += 1;
                     warn!("⚠️ pH không đổi hướng! Lần thử: {}/3", self.ph_retry_count);
                     if self.ph_retry_count <= 2 {
-                        let msg = match self.ph_retry_count {
+                        let _msg = match self.ph_retry_count {
                             1 => "pH chưa đổi sau lần bơm đầu",
                             _ => "pH vẫn chưa đổi sau 2 lần bơm",
                         };
-                        let payload = format!(
-                            r#"[SYSTEM ALERT] {{ "type": "warning", "source": "ph_dosing", "retry_count": {}, "message": "{}" }}"#,
-                            self.ph_retry_count, msg
+                        send_system_log(
+                            fsm_mqtt_tx,
+                            &config.device_id,
+                            LogLevel::Warning,
+                            LogCategory::Alert,
+                            "Cảnh báo bù pH",
+                            SystemLogEvent::SystemAlert(AlertMetadata {
+                                alert_type: "sensor_no_response".to_string(),
+                                source: "ph_dosing".to_string(),
+                                retry_count: self.ph_retry_count as u32,
+                                limit_value: None,
+                            }),
                         );
-                        let _ = fsm_mqtt_tx.send(payload);
                     }
                     if !self.auto_tune_locked {
                         self.adjust_ph_step_ratio(
@@ -394,6 +433,7 @@ impl ControlContext {
                             now_sec,
                             0.03,
                             "ph_retry_count_increased",
+                            fsm_mqtt_tx
                         );
                     }
                 }
@@ -409,16 +449,24 @@ impl ControlContext {
                 } else {
                     self.water_refill_retry_count += 1;
                     if self.water_refill_retry_count <= 2 {
-                        let msg = if self.water_refill_retry_count == 1 {
+                        let _msg = if self.water_refill_retry_count == 1 {
                             "Mực nước chưa tăng sau lần bơm vào đầu"
                         } else {
                             "Mực nước vẫn chưa tăng sau 2 lần bơm vào"
                         };
-                        let payload = format!(
-                            r#"[SYSTEM ALERT] {{ "type": "warning", "source": "water_refill", "retry_count": {}, "message": "{}" }}"#,
-                            self.water_refill_retry_count, msg
+                        send_system_log(
+                            fsm_mqtt_tx,
+                            &config.device_id,
+                            LogLevel::Warning,
+                            LogCategory::Alert,
+                            "Cảnh báo cấp nước",
+                            SystemLogEvent::SystemAlert(AlertMetadata {
+                                alert_type: "sensor_no_response".to_string(),
+                                source: "water_refill".to_string(),
+                                retry_count: self.water_refill_retry_count as u32,
+                                limit_value: None,
+                            }),
                         );
-                        let _ = fsm_mqtt_tx.send(payload);
                     }
                 }
                 self.last_water_before_refill = None;
@@ -429,16 +477,24 @@ impl ControlContext {
                 } else {
                     self.water_refill_retry_count += 1;
                     if self.water_refill_retry_count <= 2 {
-                        let msg = if self.water_refill_retry_count == 1 {
+                        let _msg = if self.water_refill_retry_count == 1 {
                             "Mực nước chưa giảm sau lần xả đầu"
                         } else {
                             "Mực nước vẫn chưa giảm sau 2 lần xả"
                         };
-                        let payload = format!(
-                            r#"[SYSTEM ALERT] {{ "type": "warning", "source": "water_drain", "retry_count": {}, "message": "{}" }}"#,
-                            self.water_refill_retry_count, msg
+                        send_system_log(
+                            fsm_mqtt_tx,
+                            &config.device_id,
+                            LogLevel::Warning,
+                            LogCategory::Alert,
+                            "Cảnh báo xả nước",
+                            SystemLogEvent::SystemAlert(AlertMetadata {
+                                alert_type: "sensor_no_response".to_string(),
+                                source: "water_drain".to_string(),
+                                retry_count: self.water_refill_retry_count as u32,
+                                limit_value: None,
+                            }),
                         );
-                        let _ = fsm_mqtt_tx.send(payload);
                     }
                 }
                 self.last_water_before_drain = None;
@@ -484,6 +540,7 @@ impl ControlContext {
         now_sec: u64,
         requested_delta: f32,
         reason: &str,
+        fsm_mqtt_tx: &Sender<String>
     ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ec_step_ratio * 0.4).max(0.05);
@@ -505,14 +562,19 @@ impl ControlContext {
             self.tuning_hour_ec_delta += actual_delta;
             self.tuning_day_ec_delta += actual_delta;
 
-            info!(
-                r#"[AUTO TUNE] {{ "param": "ec_step_ratio", "old": {:.2}, "new": {:.2}, "delta": {:.2}, "reason": "{}", "hour_budget_used": {:.2}, "day_budget_used": {:.2} }}"#,
-                old_ratio,
-                self.adaptive_ec_step_ratio,
-                actual_delta,
-                reason,
-                self.tuning_hour_ec_delta,
-                self.tuning_day_ec_delta
+            send_system_log(
+                fsm_mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::Calibration,
+                "Auto-tune Bước châm EC",
+                SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+                    parameter: "ec_step_ratio".to_string(),
+                    old_value: Some(old_ratio),
+                    new_value: Some(self.adaptive_ec_step_ratio),
+                    skip_reason: Some(reason.to_string()),
+                    cycle_id: None,
+                }),
             );
         }
 
@@ -525,6 +587,7 @@ impl ControlContext {
         now_sec: u64,
         requested_delta: f32,
         reason: &str,
+        fsm_mqtt_tx: &Sender<String>
     ) {
         self.ensure_tuning_windows(now_sec);
         let min_ratio = (config.ph_step_ratio * 0.4).max(0.05);
@@ -546,14 +609,19 @@ impl ControlContext {
             self.tuning_hour_ph_delta += actual_delta;
             self.tuning_day_ph_delta += actual_delta;
 
-            info!(
-                r#"[AUTO TUNE] {{ "param": "ph_step_ratio", "old": {:.2}, "new": {:.2}, "delta": {:.2}, "reason": "{}", "hour_budget_used": {:.2}, "day_budget_used": {:.2} }}"#,
-                old_ratio,
-                self.adaptive_ph_step_ratio,
-                actual_delta,
-                reason,
-                self.tuning_hour_ph_delta,
-                self.tuning_day_ph_delta
+            send_system_log(
+                fsm_mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::Calibration,
+                "Auto-tune Bước châm pH",
+                SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+                    parameter: "ph_step_ratio".to_string(),
+                    old_value: Some(old_ratio),
+                    new_value: Some(self.adaptive_ph_step_ratio),
+                    skip_reason: Some(reason.to_string()),
+                    cycle_id: None,
+                }),
             );
         }
 
@@ -564,7 +632,7 @@ impl ControlContext {
         &mut self,
         abnormal_sample: bool,
         device_id: &str,
-        fsm_mqtt_tx: &std::sync::mpsc::Sender<String>,
+        fsm_mqtt_tx: &Sender<String>,
     ) {
         if abnormal_sample {
             self.abnormal_sample_streak = self.abnormal_sample_streak.saturating_add(1);

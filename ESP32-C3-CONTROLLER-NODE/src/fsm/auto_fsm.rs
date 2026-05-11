@@ -71,7 +71,7 @@ pub fn run_auto_fsm(
                 ctx,
                 pump_ctrl,
                 nvs,
-                fsm_mqtt_tx, // <--- TRUYỀN fsm_mqtt_tx XUỐNG DƯỚI
+                fsm_mqtt_tx,
             );
         }
 
@@ -96,10 +96,10 @@ pub fn run_auto_fsm(
                         trigger: trigger.clone(),
                         level_before: start_level,
                         level_after: sensors.water_level,
-                        target_level: target_level, // Lấy từ state params
+                        target_level: target_level,
                         duration_sec,
                         success: target_reached,
-                        cycle_id: None, // Nếu có truyền cycle_id từ lúc bắt đầu thì gắn vào đây
+                        cycle_id: None,
                     }),
                 );
 
@@ -120,8 +120,22 @@ pub fn run_auto_fsm(
                 ctx.pump_status.water_pump_out = false;
                 ctx.fsm_osaka_active = false;
 
-                let report_json = serde_json::json!({"type":"water_event","trigger":trigger,"level_before":start_level,"level_after":sensors.water_level,"duration_sec":duration_sec,"ec_before":start_ec,"ec_after":sensors.ec,"success":target_reached}).to_string();
-                let _ = fsm_mqtt_tx.send(report_json);
+                send_system_log(
+                    fsm_mqtt_tx,
+                    &config.device_id,
+                    if target_reached { LogLevel::Success } else { LogLevel::Warning },
+                    LogCategory::Water,
+                    if trigger.contains("drain") { "Hoàn tất Xả nước" } else { "Hoàn tất Cấp nước" },
+                    SystemLogEvent::WaterEvent(WaterMetadata {
+                        trigger: trigger.clone(),
+                        level_before: start_level,
+                        level_after: sensors.water_level,
+                        target_level: target_level,
+                        duration_sec,
+                        success: target_reached,
+                        cycle_id: None,
+                    }),
+                );
 
                 ctx.current_state = SystemState::Stabilizing {
                     finish_time: current_time_ms + (config.sensor_stabilize_sec as u64 * 1000),
@@ -212,11 +226,11 @@ pub fn run_auto_fsm(
                         sample.post_mixing_ec, sample.post_mixing_ph, sensors.ec, sensors.ph,
                         delta_ec, delta_ph, sample.target_ec, sample.target_ph, error_ec, error_ph, duration_ms,
                         config.ec_gain_per_ml, ema_ph_shift_used,
-                        // 👇 Lấy giá trị step_ratio an toàn (hoặc trả về mặc định nếu None)
                         ctx.adaptive_ec_step_ratio, 
                         ctx.adaptive_ph_step_ratio 
                     );
 
+                    // Report này gửi qua channel riêng `/dosing_report` nên vẫn dùng JSON format cũ để cho backend bắt (hoặc có thể refactor sau).
                     let _ = dosing_report_tx.send(report_json);
                 }
                 apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
@@ -327,9 +341,19 @@ fn try_scheduled_water_change(
     }
 
     if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32) {
-        let msg = format!("Quá giới hạn mở van xả nước trong 1 giờ (max: {} lần).", config.max_drain_cycles_per_hour);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "drain", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn xả nước an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "drain".to_string(),
+                retry_count: 0,
+                limit_value: Some(config.max_drain_cycles_per_hour as f32),
+            }),
+        );
         
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
@@ -365,10 +389,20 @@ fn try_auto_refill(
     }
 
     if ctx.water_refill_retry_count >= 3 {
-        let msg = "Hủy cấp nước: Đã thử 3 lần nhưng mực nước không tăng (kẹt phao hoặc hết nước nguồn).";
-        warn!("🚨 {}", msg);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "fault", "source": "refill", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        warn!("🚨 Hủy cấp nước: Đã thử 3 lần nhưng mực nước không tăng.");
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Lỗi cấp nước (Thất bại)",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "fault".to_string(),
+                source: "refill".to_string(),
+                retry_count: ctx.water_refill_retry_count as u32,
+                limit_value: None,
+            }),
+        );
         
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("WATER_REFILL_FAILED".to_string());
@@ -376,11 +410,9 @@ fn try_auto_refill(
     }
 
     if !ctx.check_and_record_refill_limit(current_time_sec, config.max_refill_cycles_per_hour as u32) {
-         let msg = format!("Quá giới hạn bơm nước vào bồn trong 1 giờ (max: {} lần).", config.max_refill_cycles_per_hour);
-
         send_system_log(
             fsm_mqtt_tx,
-            &config.device_id, // Giả sử config chứa device_id
+            &config.device_id,
             LogLevel::Critical,
             LogCategory::Alert,
             "Chặn cấp nước an toàn",
@@ -429,9 +461,19 @@ fn try_auto_drain_overflow(
     }
 
     if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32) {
-        let msg = format!("Quá giới hạn xả nước tràn trong 1 giờ (max: {} lần).", config.max_drain_cycles_per_hour);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "drain_overflow", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn xả nước an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "drain_overflow".to_string(),
+                retry_count: 0,
+                limit_value: Some(config.max_drain_cycles_per_hour as f32),
+            }),
+        );
         
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
@@ -467,9 +509,19 @@ fn try_auto_dilute(
     }
 
     if !ctx.check_and_record_drain_limit(current_time_sec, config.max_drain_cycles_per_hour as u32) {
-        let msg = format!("Quá giới hạn xả nước pha loãng trong 1 giờ (max: {} lần).", config.max_drain_cycles_per_hour);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "dilute", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn xả nước an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "dilute".to_string(),
+                retry_count: 0,
+                limit_value: Some(config.max_drain_cycles_per_hour as f32),
+            }),
+        );
         
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("TOO_MANY_DRAINS".to_string());
@@ -539,10 +591,20 @@ fn try_ec_dosing(
     }
 
     if ctx.ec_retry_count >= 3 {
-        let msg = "🚨 Hủy bù EC: Đã bơm thử 3 lần nhưng cảm biến EC không tăng.";
-        warn!("{}", msg);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "fault", "source": "ec_dosing", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        warn!("🚨 Hủy bù EC: Đã bơm thử 3 lần nhưng cảm biến EC không tăng.");
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Lỗi bù EC (Thất bại)",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "fault".to_string(),
+                source: "ec_dosing".to_string(),
+                retry_count: ctx.ec_retry_count as u32,
+                limit_value: None,
+            }),
+        );
         
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("EC_DOSING_FAILED".to_string());
@@ -567,11 +629,20 @@ fn try_ec_dosing(
     let reserved_a =
         ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
     if !reserved_a {
-        let msg = format!("⚠️ [EC] Bơm A bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
-        warn!("{}", msg);
-
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ec_dosing", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        warn!("⚠️ [EC] Bơm A bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn bơm A an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "ec_dosing".to_string(),
+                retry_count: 0,
+                limit_value: Some(max_hourly_ml),
+            }),
+        );
 
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_EC".to_string());
@@ -583,11 +654,20 @@ fn try_ec_dosing(
     if !reserved_b {
         let _ = ctx.rollback_last_reservation("NutrientA");
 
-        let msg = format!("⚠️ [EC] Bơm B bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
-        warn!("{}", msg);
-
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ec_dosing", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        warn!("⚠️ [EC] Bơm B bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", dose_ml, max_hourly_ml);
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn bơm B an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "ec_dosing".to_string(),
+                retry_count: 0,
+                limit_value: Some(max_hourly_ml),
+            }),
+        );
 
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_EC".to_string());
@@ -628,10 +708,20 @@ fn try_ph_dosing(
     }
 
     if ctx.ph_retry_count >= 3 {
-        let msg = "🚨 Hủy bù pH: Đã bơm thử 3 lần nhưng cảm biến pH không đổi hướng.";
-        warn!("{}", msg);
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "fault", "source": "ph_dosing", "message": "{}" }}"#, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        warn!("🚨 Hủy bù pH: Đã bơm thử 3 lần nhưng cảm biến pH không đổi hướng.");
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Lỗi bù pH (Thất bại)",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "fault".to_string(),
+                source: "ph_dosing".to_string(),
+                retry_count: ctx.ph_retry_count as u32,
+                limit_value: None,
+            }),
+        );
         
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("PH_DOSING_FAILED".to_string());
@@ -680,21 +770,25 @@ fn try_ph_dosing(
     }
     
     if !ctx.reserve_dose_if_within_hourly_limit(ph_pump_name, current_time_sec, dose_ml, max_hourly_ml) {
-        let msg = format!("⚠️ [{}] Bơm bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", ph_pump_name, dose_ml, max_hourly_ml);
-        warn!("{}", msg);
-        
-        let alert_json = format!(r#"[SYSTEM ALERT] {{ "type": "rate_limit", "source": "ph_dosing", "pump": "{}", "message": "{}" }}"#, ph_pump_name, msg);
-        let _ = fsm_mqtt_tx.send(alert_json);
+        warn!("⚠️ [{}] Bơm bị khóa! Yêu cầu {:.2}ml làm vượt giới hạn giờ (Max: {}ml/h)", ph_pump_name, dose_ml, max_hourly_ml);
+        send_system_log(
+            fsm_mqtt_tx,
+            &config.device_id,
+            LogLevel::Critical,
+            LogCategory::Alert,
+            "Chặn bơm pH an toàn",
+            SystemLogEvent::SystemAlert(AlertMetadata {
+                alert_type: "rate_limit".to_string(),
+                source: "ph_dosing".to_string(),
+                retry_count: 0,
+                limit_value: Some(max_hourly_ml),
+            }),
+        );
 
         ctx.stop_all_pumps(pump_ctrl);
         ctx.current_state = SystemState::SystemFault("MAX_HOURLY_DOSE_PH".to_string());
         return true;
     }
-
-    // let final_dose_ml = (diff / ratio * config.ph_step_ratio).clamp(0.0, config.max_dose_per_cycle);
-    // if final_dose_ml <= 0.0 {
-    //     return false;
-    // }
 
     info!(
         "🧪 [PH DOSING] Bắt đầu bù pH ({}). Lệch: {:.2} (Hiện: {:.2}, Mục tiêu: {:.2}). Liều lượng: {:.2}ml", 

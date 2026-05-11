@@ -6,7 +6,8 @@ import {
   AlertCircle, Power, Cpu,
   Beaker,
   Settings2,
-  Hash
+  Hash,
+  Radio,
 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
@@ -283,6 +284,9 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
       if (title.includes('Offline') || title.includes('Mất') || title.includes('tắt bơm')) {
         return { icon: Power, iconColor: 'text-slate-400', borderColor: 'border-slate-500/20', bgColor: 'bg-slate-500/5', dot: 'bg-slate-400' };
       }
+      if (title.includes('Trực tuyến') || title.includes('Online') || title.includes('kết nối')) {
+        return { icon: Radio, iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/20', bgColor: 'bg-emerald-500/5', dot: 'bg-emerald-400' };
+      }
       return { icon: Cpu, iconColor: 'text-slate-300', borderColor: 'border-slate-700', bgColor: 'bg-slate-900', dot: 'bg-slate-500' };
 
     default:
@@ -318,6 +322,30 @@ const friendlyTitle = (title: string): string => {
     'Lưu Báo Cáo Châm Phân Thành Công': 'Báo cáo châm phân',
   };
   return map[title] ?? title;
+};
+
+// ─── FSM State badge ─────────────────────────────────────────────────────────
+const FsmBadge = ({ message }: { message: string }) => {
+  const stateMap: Record<string, { label: string; color: string }> = {
+    'WaterRefilling': { label: 'Cấp nước', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+    'WaterDraining': { label: 'Xả nước', color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
+    'DosingPumpA': { label: 'Châm A', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+    'DosingPumpB': { label: 'Châm B', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+    'DosingPH': { label: 'Chỉnh pH', color: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20' },
+    'ActiveMixing': { label: 'Sục trộn', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+    'Stabilizing': { label: 'Chờ ổn định', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+    'DosingStabilizing': { label: 'Chờ ổn định', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+    'Monitoring': { label: 'Giám sát', color: 'text-slate-400 bg-slate-800 border-slate-700' },
+    'Idle': { label: 'Nghỉ', color: 'text-slate-400 bg-slate-800 border-slate-700' },
+    'EmergencyStop': { label: 'Dừng khẩn', color: 'text-red-400 bg-red-500/10 border-red-500/20' },
+  };
+  const matched = stateMap[message];
+  if (!matched) return null;
+  return (
+    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${matched.color}`}>
+      {matched.label}
+    </span>
+  );
 };
 
 // ─── Component chính ─────────────────────────────────────────────────────────
@@ -448,6 +476,7 @@ const SystemLog = () => {
                         <h4 className={`text-sm font-semibold leading-tight ${style.iconColor}`}>
                           {displayTitle}
                         </h4>
+                        <FsmBadge message={ev.message} />
                       </div>
                       <time className="text-[10px] text-slate-500 font-mono whitespace-nowrap shrink-0 mt-0.5">
                         {date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

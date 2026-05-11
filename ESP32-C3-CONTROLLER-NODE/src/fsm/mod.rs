@@ -6,7 +6,6 @@ pub mod auto_fsm;
 pub mod calibration;
 pub mod commands;
 pub mod context;
-pub mod systemlog;
 pub mod types;
 pub mod utils;
 
@@ -143,7 +142,7 @@ pub fn start_fsm_control_loop(
         // --- Phần còn lại giữ nguyên (kiểm tra safety, auto FSM...) ---
         let is_safety_overridden = current_time_ms < ctx.safety_override_until;
         if !is_safety_overridden {
-            let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config);
+            let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config, &fsm_mqtt_tx);
             let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
                 || (config.enable_ec_sensor && sensors.err_ec)
                 || (config.enable_ph_sensor && sensors.err_ph)

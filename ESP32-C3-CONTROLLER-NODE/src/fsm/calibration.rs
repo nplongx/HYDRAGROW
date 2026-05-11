@@ -1,6 +1,5 @@
 use log::{debug, info, warn};
 use std::sync::mpsc::Sender;
-use uuid::Uuid;
 
 use super::context::ControlContext;
 use super::types::PendingCalibrationSample;
@@ -41,7 +40,6 @@ pub fn start_pending_calibration_sample(
     };
 
     // Lấy water_level lúc bắt đầu (giả sử có lưu lại trong ctx hoặc dùng config.water_level_target tạm)
-    // Tốt nhất là thêm last_water_before_dosing vào ControlContext, ở đây dùng tạm target nếu ko có
     let start_water_level = ctx
         .last_water_before_refill
         .unwrap_or(config.water_level_target);
@@ -89,6 +87,13 @@ pub fn apply_runtime_calibration_ema(
         Some(s) => s,
         None => return,
     };
+
+    // Lấy device_id từ shared_config để dùng chung cho mọi log trong hàm này
+    let device_id = shared_config
+        .read()
+        .map(|c| c.device_id.clone())
+        .unwrap_or_else(|_| "unknown_device".to_string());
+
     let stabilizing_start_ms = match sample.stabilizing_start_ms {
         Some(v) => v,
         None => {
@@ -106,7 +111,7 @@ pub fn apply_runtime_calibration_ema(
 
     let active_mixing_elapsed_ms = sample
         .active_mixing_finish_ms
-        .saturating_sub(sample.start_ms); // Tính từ lúc bắt đầu cycle (trước là active_mixing_start_ms)
+        .saturating_sub(sample.start_ms);
     let stabilizing_elapsed_ms = stabilizing_finish_ms.saturating_sub(stabilizing_start_ms);
 
     let mixing_ok = active_mixing_elapsed_ms >= MIN_ACTIVE_MIXING_SEC_FOR_CALIB * 1000;
@@ -129,7 +134,7 @@ pub fn apply_runtime_calibration_ema(
     if let Some(reason) = skip_reason {
         send_system_log(
             fsm_mqtt_tx,
-            "device_001",
+            &device_id, // ✅ Sửa cứng "device_001" thành device_id động
             LogLevel::Warning,
             LogCategory::Calibration,
             "Bỏ qua cập nhật EMA",
@@ -183,7 +188,6 @@ pub fn apply_runtime_calibration_ema(
                 applied_ec_gain = Some(cfg.ec_gain_per_ml);
                 updated = true;
 
-                // --- BẮT ĐẦU: GHI LOG EMA EC (P2 - D) ---
                 info!(
                     r#"[EMA UPDATE] {{ "parameter": "ec_gain_per_ml", "old_value": {:.4}, "observed": {:.4}, "new_ema": {:.4}, "alpha": {:.2}, "sample_count": {}, "skip_reason": null }}"#,
                     old_val,
@@ -196,7 +200,7 @@ pub fn apply_runtime_calibration_ema(
 
                 send_system_log(
                     fsm_mqtt_tx,
-                    "device_001",
+                    &device_id, // ✅ Sửa lỗi cứng device_id
                     LogLevel::Info,
                     LogCategory::Calibration,
                     "Cập nhật hệ số EC EMA",
@@ -208,7 +212,6 @@ pub fn apply_runtime_calibration_ema(
                         cycle_id: Some(sample.cycle_id.clone()),
                     }),
                 );
-                // --- KẾT THÚC LOG EMA EC ---
             } else {
                 warn!(
                     "⚠️ [EMA UPDATE EC] Bỏ qua quan trắc EC bất thường: {:.4}",
@@ -225,7 +228,6 @@ pub fn apply_runtime_calibration_ema(
                 applied_ph_up = Some(cfg.ph_shift_up_per_ml);
                 updated = true;
 
-                // --- BẮT ĐẦU: GHI LOG EMA PH UP (P2 - D) ---
                 info!(
                     r#"[EMA UPDATE] {{ "parameter": "ph_shift_up_per_ml", "old_value": {:.4}, "observed": {:.4}, "new_ema": {:.4}, "alpha": {:.2}, "sample_count": {}, "skip_reason": null }}"#,
                     old_val,
@@ -238,20 +240,18 @@ pub fn apply_runtime_calibration_ema(
 
                 send_system_log(
                     fsm_mqtt_tx,
-                    "device_001",
+                    &device_id, // ✅ Sửa cứng device_id
                     LogLevel::Info,
                     LogCategory::Calibration,
-                    "Cập nhật hệ số EC EMA",
+                    "Cập nhật hệ số pH UP EMA", // ✅ Sửa tiêu đề bị lộn thành "EC EMA"
                     SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
                         parameter: "ph_shift_up_per_ml".to_string(),
                         old_value: Some(old_val),
-                        new_value: Some(cfg.ec_gain_per_ml),
+                        new_value: Some(cfg.ph_shift_up_per_ml),
                         skip_reason: None,
                         cycle_id: Some(sample.cycle_id.clone()),
                     }),
                 );
-
-                // --- KẾT THÚC LOG EMA PH UP ---
             } else {
                 warn!(
                     "⚠️ [EMA UPDATE PH UP] Bỏ qua quan trắc pH UP bất thường: {:.4}",
@@ -268,7 +268,6 @@ pub fn apply_runtime_calibration_ema(
                 applied_ph_down = Some(cfg.ph_shift_down_per_ml);
                 updated = true;
 
-                // --- BẮT ĐẦU: GHI LOG EMA PH DOWN (P2 - D) ---
                 info!(
                     r#"[EMA UPDATE] {{ "parameter": "ph_shift_down_per_ml", "old_value": {:.4}, "observed": {:.4}, "new_ema": {:.4}, "alpha": {:.2}, "sample_count": {}, "skip_reason": null }}"#,
                     old_val,
@@ -281,19 +280,18 @@ pub fn apply_runtime_calibration_ema(
 
                 send_system_log(
                     fsm_mqtt_tx,
-                    "device_001",
+                    &device_id, // ✅ Sửa cứng device_id
                     LogLevel::Info,
                     LogCategory::Calibration,
-                    "Cập nhật hệ số EC EMA",
+                    "Cập nhật hệ số pH DOWN EMA", // ✅ Sửa tiêu đề bị lộn
                     SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
                         parameter: "ph_shift_down_per_ml".to_string(),
                         old_value: Some(old_val),
-                        new_value: Some(cfg.ec_gain_per_ml),
+                        new_value: Some(cfg.ph_shift_down_per_ml), // ✅ Sửa lỗi truyền nhầm cfg.ec_gain_per_ml
                         skip_reason: None,
                         cycle_id: Some(sample.cycle_id.clone()),
                     }),
                 );
-                // --- KẾT THÚC LOG EMA PH DOWN ---
             } else {
                 warn!(
                     "⚠️ [EMA UPDATE PH DOWN] Bỏ qua quan trắc pH DOWN bất thường: {:.4}",
@@ -308,6 +306,7 @@ pub fn apply_runtime_calibration_ema(
         return;
     }
 
+    // Gửi payload Raw JSON cũ để Backend update xuống PostgreSQL bảng `dosing_calibration`
     ctx.calibration_pending_publish_count += 1;
     if ctx.calibration_pending_publish_count >= CALIBRATION_PERSIST_BATCH_SIZE {
         info!(
@@ -335,8 +334,8 @@ pub fn apply_runtime_calibration_ema(
                 "ec_gain_per_ml": applied_ec_gain,
                 "ph_shift_up_per_ml": applied_ph_up,
                 "ph_shift_down_per_ml": applied_ph_down,
-                "step_ratio_ec": ctx.adaptive_ec_step_ratio, // Lấy từ biến tính toán thực tế của bạn
-                "step_ratio_ph": ctx.adaptive_ph_step_ratio, // Lấy từ biến tính toán thực tế của bạn
+                "step_ratio_ec": ctx.adaptive_ec_step_ratio,
+                "step_ratio_ph": ctx.adaptive_ph_step_ratio,
                 "auto_tune_locked": ctx.auto_tune_locked
             },
             "auto_tune_locked": ctx.auto_tune_locked
@@ -349,3 +348,4 @@ pub fn apply_runtime_calibration_ema(
         );
     }
 }
+

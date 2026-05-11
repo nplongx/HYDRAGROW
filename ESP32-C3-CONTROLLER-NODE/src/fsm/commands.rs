@@ -1,9 +1,10 @@
-use hydragrow_shared::{ControlMode, ControllerConfig};
+use hydragrow_shared::{ControlMode, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
 use super::context::ControlContext;
 use super::types::SystemState;
+use crate::fsm::utils::send_system_log;
 use crate::mqtt::MqttCommandPayload;
 use crate::pump::{PumpController, PumpType, WaterDirection};
 
@@ -19,7 +20,7 @@ pub fn process_mqtt_commands(
     pump_ctrl: &mut PumpController,
     ctx: &mut ControlContext,
     current_time_ms: u64,
-    fsm_mqtt_tx: &Sender<String>, // 👇 BỔ SUNG THAM SỐ NÀY
+    fsm_mqtt_tx: &Sender<String>, // Bổ sung tham số để bắn log MQTT
 ) -> bool {
     let mut force_sync = false;
 
@@ -64,7 +65,7 @@ pub fn process_mqtt_commands(
             info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
             ctx.stop_all_pumps(pump_ctrl);
 
-            // 👇 SỬA Ở ĐÂY: Bổ sung 2 tham số bị thiếu
+            // Đã bổ sung 2 tham số: device_id và kênh MQTT để ghi log
             ctx.reset_faults(&config.device_id, fsm_mqtt_tx);
 
             force_sync = true;
@@ -122,6 +123,33 @@ pub fn process_mqtt_commands(
             info!("⚠️ NGƯỜI DÙNG CƯỠNG CHẾ BẬT {}!", pump_name);
             let duration = duration_sec.unwrap_or(120);
             ctx.safety_override_until = current_time_ms + (duration as u64 * 1000);
+
+            // Bắn log cảnh báo User dùng quyền Cưỡng chế
+            send_system_log(
+                fsm_mqtt_tx,
+                &config.device_id,
+                LogLevel::Warning,
+                LogCategory::UserAction,
+                "Cưỡng chế Bơm (Force On)",
+                SystemLogEvent::BasicSystemLog {
+                    message: format!(
+                        "Người dùng đã dùng lệnh FORCE ON để ép bật {} trong {} giây, vượt qua các lớp bảo vệ an toàn.",
+                        pump_name, duration
+                    ),
+                },
+            );
+        } else if is_on {
+            // Bắn log thông báo User bật bơm thủ công bình thường
+            send_system_log(
+                fsm_mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::UserAction,
+                "Điều khiển Bơm Thủ công",
+                SystemLogEvent::BasicSystemLog {
+                    message: format!("Người dùng đã bật bơm {}.", pump_name),
+                },
+            );
         }
 
         // Ghi timeout thủ công
@@ -156,6 +184,7 @@ pub fn process_mqtt_commands(
 
     force_sync
 }
+
 // ---------------------------------------------------------------------------
 // apply_pump_command – áp dụng lệnh bơm cụ thể lên phần cứng + trạng thái
 // ---------------------------------------------------------------------------
@@ -248,3 +277,4 @@ fn apply_pump_command(
         _ => Ok(()),
     };
 }
+

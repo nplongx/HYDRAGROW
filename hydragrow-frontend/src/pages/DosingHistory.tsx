@@ -39,7 +39,6 @@ interface DosingReportRecord {
       ema_ph_shift_used?: number;
       step_ratio_ec?: number;
       step_ratio_ph?: number;
-      // Có thể có thêm trường khác
       [key: string]: any;
     };
     [key: string]: any;
@@ -75,12 +74,9 @@ const DosingReportDetail = ({ record }: { record: DosingReportRecord }) => {
   const rows: { label: string; value: string; accent?: string }[] = [];
 
   // --- Thông tin chu kỳ ---
-  if (dosing.cycle_id) rows.push({ label: 'Cycle ID', value: String(dosing.cycle_id).slice(0, 8), accent: 'text-slate-200' });
+  // Đã ẨN cycle_id khỏi UI
   if (dosing.trigger) rows.push({ label: 'Trigger', value: dosing.trigger.replace(/_/g, ' '), accent: 'text-indigo-300' });
   if (dosing.duration_ms != null) rows.push({ label: 'Thời gian', value: `${(Number(dosing.duration_ms) / 1000).toFixed(1)}s` });
-
-  // --- Liều lượng bơm (đã có sẵn từ record top-level, nhưng hiển thị lại để đầy đủ) ---
-  // Sẽ hiển thị bên ngoài badge, không cần trong bảng chi tiết này.
 
   // --- Chỉ số trước/sau ---
   const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
@@ -228,7 +224,7 @@ const DosingHistory = () => {
 
     try {
       const headers = [
-        "ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Trigger",
+        "ID", "Mã Thiết Bị", "Mã Vụ Mùa", "Cycle ID", "Trigger",
         "Bơm A (ml)", "Bơm B (ml)", "pH Tăng (ml)", "pH Giảm (ml)",
         "pH Trước", "pH Sau", "EC Trước", "EC Sau",
         "Mục tiêu EC", "Mục tiêu pH", "Sai số EC", "Sai số pH",
@@ -239,6 +235,8 @@ const DosingHistory = () => {
 
       const csvRows = history.map(row => {
         const d = row.payload?.dosing_data ?? {};
+        // Cycle ID vẫn giữ trong CSV để dev debug
+        const cycleId = d.cycle_id || '';
         const trigger = (d.trigger || 'Không rõ').replace(/_/g, ' ');
         const prePh = d.pre?.ph?.toFixed(2) ?? '';
         const postPh = d.post_stable?.ph?.toFixed(2) ?? '';
@@ -257,7 +255,7 @@ const DosingHistory = () => {
         const stepPh = d.step_ratio_ph?.toFixed(2) ?? '';
 
         return [
-          row.id, row.device_id, row.season_id || '', trigger,
+          row.id, row.device_id, row.season_id || '', cycleId, trigger,
           row.pump_a_ml || 0, row.pump_b_ml || 0,
           row.ph_up_ml || 0, row.ph_down_ml || 0,
           prePh, postPh, preEc, postEc,
@@ -310,8 +308,7 @@ const DosingHistory = () => {
       <div className="ui-card flex flex-col md:flex-row md:items-center justify-between gap-6 border-indigo-500/20">
         <PageHeader
           icon={ShieldCheck}
-          title="Nhật Ký Châm Phân & pH"
-          subtitle="Minh bạch và lưu trữ dữ liệu các hoạt động canh tác."
+          title="Nhật ký châm phân & pH"
           className="w-full"
         />
 
@@ -328,7 +325,7 @@ const DosingHistory = () => {
 
           <div className="relative min-w-[220px] w-full sm:w-auto">
             <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 block ml-1 flex items-center gap-1.5">
-              <Calendar size={12} /> Mẻ trồng (Vụ mùa)
+              <Calendar size={12} /> Mùa vụ
             </label>
             <div className="relative">
               <select
@@ -404,11 +401,7 @@ const DosingHistory = () => {
                         <h4 className="text-white font-bold text-sm capitalize tracking-wide">
                           {triggerName}
                         </h4>
-                        {dosing?.cycle_id && (
-                          <span className="text-[10px] text-slate-500 font-mono bg-slate-800 px-1.5 py-0.5 rounded">
-                            {String(dosing.cycle_id).slice(0, 8)}
-                          </span>
-                        )}
+                        {/* Đã ẨN badge cycle_id ở đây */}
                       </div>
 
                       <div className="flex items-center space-x-3 text-xs text-slate-400 font-medium">
@@ -499,7 +492,6 @@ const DosingHistory = () => {
                     )}
                   </div>
 
-                  {/* Phân tích chi tiết (ẩn/hiện nếu cần) – ở đây hiển thị luôn để tránh bỏ sót */}
                   <DosingReportDetail record={record} />
                 </div>
               </div>

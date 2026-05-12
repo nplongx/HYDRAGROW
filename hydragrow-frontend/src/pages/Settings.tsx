@@ -66,12 +66,14 @@ const validateDosingConfig = (inputConfig: any): DosingValidationErrors => {
 const VisualCronPicker = ({ value, onChange, label, desc }: {
   value: string; onChange: (val: string) => void; label: string; desc?: string;
 }) => {
-  const parts = (value || "0 0 8 * * *").trim().split(/\s+/);
+  // 🟢 Đã thêm trường thứ 7 (year) ngầm định là *
+  const parts = (value || "0 0 8 * * * *").trim().split(/\s+/);
   const minute = parts[1] !== '*' && parts[1] !== undefined ? parts[1].padStart(2, '0') : '00';
   const hour = parts[2] !== '*' && parts[2] !== undefined ? parts[2].padStart(2, '0') : '08';
   const timeStr = `${hour}:${minute}`;
 
   const dow = parts[5] || '*';
+  const year = parts[6] || '*'; // 🟢 Giữ nguyên trường năm
   const isEveryDay = dow === '*';
   const selectedDays = isEveryDay ? [] : dow.split(',');
 
@@ -79,7 +81,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
     const val = e.target.value;
     if (!val) return;
     const [h, m] = val.split(':');
-    onChange(`${parts[0] || '0'} ${parseInt(m)} ${parseInt(h)} ${parts[3] || '*'} ${parts[4] || '*'} ${dow}`);
+    onChange(`${parts[0] || '0'} ${parseInt(m)} ${parseInt(h)} ${parts[3] || '*'} ${parts[4] || '*'} ${dow} ${year}`);
   };
 
   const toggleDay = (dayVal: string) => {
@@ -87,10 +89,10 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
     if (newDays.includes(dayVal)) newDays = newDays.filter(d => d !== dayVal);
     else newDays.push(dayVal);
     const newDow = newDays.length === 0 ? '*' : newDays.join(',');
-    onChange(`${parts[0] || '0'} ${parseInt(minute)} ${parseInt(hour)} ${parts[3] || '*'} ${parts[4] || '*'} ${newDow}`);
+    onChange(`${parts[0] || '0'} ${parseInt(minute)} ${parseInt(hour)} ${parts[3] || '*'} ${parts[4] || '*'} ${newDow} ${year}`);
   };
 
-  const setEveryDay = () => onChange(`${parts[0] || '0'} ${parseInt(minute)} ${parseInt(hour)} ${parts[3] || '*'} ${parts[4] || '*'} *`);
+  const setEveryDay = () => onChange(`${parts[0] || '0'} ${parseInt(minute)} ${parseInt(hour)} ${parts[3] || '*'} ${parts[4] || '*'} * ${year}`);
 
   const daysOfWeek = [
     { val: 'MON', label: 'T2' }, { val: 'TUE', label: 'T3' }, { val: 'WED', label: 'T4' },
@@ -165,7 +167,7 @@ const Settings = () => {
     misting_temp_threshold: 30.0, high_temp_misting_on_duration_ms: 15000, high_temp_misting_off_duration_ms: 60000,
     tank_height: 50, water_level_min: 20.0, water_level_target: 80.0, water_level_max: 90.0, water_level_drain: 5.0,
     water_level_tolerance: 5.0, auto_refill_enabled: true, auto_drain_overflow: true, auto_dilute_enabled: false, dilute_drain_amount_cm: 5.0,
-    scheduled_water_change_enabled: false, water_change_cron: '0 0 7 * * SUN', scheduled_drain_amount_cm: 10.0,
+    scheduled_water_change_enabled: false, water_change_cron: '0 0 7 * * SUN *', scheduled_drain_amount_cm: 10.0, // Đã bổ sung * ở đuôi
     ec_gain_per_ml: 0.1, ph_shift_up_per_ml: 0.2, ph_shift_down_per_ml: 0.2,
     ec_step_ratio: 0.4, ph_step_ratio: 0.1, delay_between_a_and_b_sec: 10,
     pump_a_capacity_ml_per_sec: 1.2, pump_b_capacity_ml_per_sec: 1.2, pump_ph_up_capacity_ml_per_sec: 1.2, pump_ph_down_capacity_ml_per_sec: 1.2,
@@ -351,7 +353,7 @@ const Settings = () => {
           water_level_tolerance: toNumberOr(savingConfig.water_level_tolerance, 5.0), auto_refill_enabled: savingConfig.auto_refill_enabled ?? true,
           auto_drain_overflow: savingConfig.auto_drain_overflow ?? true, auto_dilute_enabled: savingConfig.auto_dilute_enabled ?? false,
           dilute_drain_amount_cm: toNumberOr(savingConfig.dilute_drain_amount_cm, 5.0), scheduled_water_change_enabled: savingConfig.scheduled_water_change_enabled ?? false,
-          water_change_cron: String(savingConfig.water_change_cron || '0 0 7 * * SUN'), scheduled_drain_amount_cm: toNumberOr(savingConfig.scheduled_drain_amount_cm, 10.0),
+          water_change_cron: String(savingConfig.water_change_cron || '0 0 7 * * SUN *'), scheduled_drain_amount_cm: toNumberOr(savingConfig.scheduled_drain_amount_cm, 10.0), // 🟢 Đảm bảo trường 7
           misting_on_duration_ms: toNumberOr(savingConfig.misting_on_duration_ms, 10000), misting_off_duration_ms: toNumberOr(savingConfig.misting_off_duration_ms, 180000),
           misting_temp_threshold: toNumberOr(savingConfig.misting_temp_threshold, 30.0), high_temp_misting_on_duration_ms: toNumberOr(savingConfig.high_temp_misting_on_duration_ms, 15000),
           high_temp_misting_off_duration_ms: toNumberOr(savingConfig.high_temp_misting_off_duration_ms, 60000), last_updated: ts,
@@ -547,7 +549,7 @@ const Settings = () => {
                   <InputGroup label="Bơm Phân (%)" value={config.dosing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_pwm_percent} />
                   <InputGroup label="Bơm Trộn (%)" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
                   <InputGroup label="Bơm Sương (%)" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
-                  <InputGroup label="Soft Start (ms)" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} />
+                  <InputGroup label="Khởi động mềm (ms)" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} />
                 </div>
               </SubCard>
 

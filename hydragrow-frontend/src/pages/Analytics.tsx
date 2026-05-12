@@ -398,7 +398,7 @@ const Analytics = () => {
               {selectedSeasonId !== 'realtime' && <option value="all">Toàn bộ mùa vụ</option>}
               <option value="24h">24 Giờ {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
               <option value="7d">7 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
-              <option value="30d">30 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
+              {/* <option value="30d">30 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option> */}
             </select>
           </div>
 

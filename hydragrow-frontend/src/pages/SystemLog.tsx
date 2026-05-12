@@ -4,7 +4,7 @@ import {
   Filter, Clock, Zap, Waves, RefreshCw,
   FlaskConical, Activity,
   AlertCircle, Power, Cpu,
-  Beaker, Settings2, Hash, Radio,
+  Beaker, Settings2, Radio,
   Wifi, Download, UserCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -68,7 +68,7 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   const phBefore = getMetaNumber(pre, ['ph', 'pH', 'start_ph']);
   const phAfter = getMetaNumber(post, ['ph', 'pH', 'after_ph']);
 
-  if (ecBefore != null && ecAfter != null) {
+  if ((ecBefore != null && ecBefore != 0.0) && (ecAfter != null && ecAfter != 0.0)) {
     const diff = (ecAfter - ecBefore).toFixed(2);
     const sign = ecAfter >= ecBefore ? '+' : '';
     deltaRows.push({ label: 'EC', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${sign}${diff})`, accent: 'text-cyan-400' });
@@ -100,12 +100,6 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
     targetRows.push({ label: 'pH còn lệch', value: val.toFixed(2), accent: Math.abs(val) <= 0.1 ? 'text-emerald-300' : 'text-fuchsia-300' });
   }
   if (targetRows.length) sections.push({ title: 'Đánh giá', rows: targetRows });
-
-  // --- Hệ số AI ---
-  // const coefRows: { label: string; value: string; accent?: string }[] = [];
-  // if (cycleMeta.step_ratio_ec != null) coefRows.push({ label: 'Bước EC', value: Number(cycleMeta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
-  // if (cycleMeta.ema_ec_gain_used != null) coefRows.push({ label: 'EMA EC', value: Number(cycleMeta.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
-  // if (coefRows.length) sections.push({ title: 'Hệ số', rows: coefRows });
 
   if (sections.length === 0) return null;
 
@@ -289,7 +283,7 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
     case 'sensor':
       return { icon: Radio, iconColor: 'text-amber-400', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5', dot: 'bg-amber-400' };
 
-    case 'useraction': // Đã normalize ở trên
+    case 'useraction':
       return { icon: UserCheck, iconColor: 'text-indigo-400', borderColor: 'border-indigo-500/20', bgColor: 'bg-indigo-500/5', dot: 'bg-indigo-400' };
 
     case 'system':
@@ -315,7 +309,6 @@ const FILTERS = [
   { id: 'alert', label: 'Cảnh báo', icon: AlertTriangle },
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
-  // { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
   { id: 'sensor', label: 'Cảm biến', icon: Radio },
   { id: 'user_action', label: 'Người dùng', icon: UserCheck },
   { id: 'system', label: 'Hệ thống', icon: Cpu },
@@ -531,7 +524,7 @@ const SystemLog = () => {
               const Icon = style.icon;
               const date = new Date(ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000);
               const displayTitle = friendlyTitle(ev.title);
-              const cycleId = ev.metadata?.cycle_id;
+              // const cycleId = ev.metadata?.cycle_id; // Đã bỏ sử dụng biến cycleId cho UI
 
               return (
                 <div key={ev.id ?? idx} className="relative flex gap-4">
@@ -545,15 +538,7 @@ const SystemLog = () => {
                   {/* Card */}
                   <div className={`flex-1 min-w-0 border rounded-xl p-4 transition-colors hover:brightness-110 ${style.bgColor} ${style.borderColor}`}>
 
-                    {/* Badge Cycle ID nếu có (Nhỏ xinh ở góc phải trên) */}
-                    {cycleId && (
-                      <div className="absolute top-3 right-4 flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-pointer">
-                        <Hash size={10} className="text-slate-400" />
-                        <span className="text-[9px] font-mono text-slate-400" title="Cycle ID (Mã quy trình liên kết)">
-                          {String(cycleId).substring(0, 8)}
-                        </span>
-                      </div>
-                    )}
+                    {/* Đã ẨN badge cycle_id ở đây */}
 
                     <div className="flex items-start justify-between gap-2 mb-1 pr-16">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">

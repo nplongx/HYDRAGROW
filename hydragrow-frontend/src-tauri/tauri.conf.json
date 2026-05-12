@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "hydragrow-frontend",
+  "productName": "Hệ thống tưới thông minh",
   "version": "0.1.0",
   "identifier": "com.hydragrow-frontend",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "hydragrow-frontend",
+        "title": "Hệ thống tưới thông minh",
         "width": 800,
         "height": 600
       }

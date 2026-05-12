@@ -183,7 +183,7 @@ pub async fn control_pump(
             action_vn, pump_name
         ),
         device_id: device_id.clone(),
-        reason: Some(format!("Người dùng bấm nút điều khiển qua Web/App")), // 🟢 Bổ sung reason
+        reason: None,
         metadata: Some(json!({
             "event_type": "manual_control",
             "action": req_data.action,
@@ -337,3 +337,4 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/control", web::post().to(control_pump))
         .route("/control/sync", web::post().to(request_device_sync));
 }
+

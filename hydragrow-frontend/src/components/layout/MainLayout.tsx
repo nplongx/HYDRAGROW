@@ -86,7 +86,7 @@ const MainLayout: React.FC = () => {
             <Sprout size={16} className="text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-semibold tracking-tight leading-none">HydraGrow</h1>
+            <h1 className="text-sm font-semibold tracking-tight leading-none">Hệ thống tưới tự động</h1>
             {/* <p className="text-[10px] text-slate-400 font-medium">Tủ điện thông minh</p> */}
           </div>
         </div>

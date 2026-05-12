@@ -309,7 +309,7 @@ const FILTERS = [
   { id: 'alert', label: 'Cảnh báo', icon: AlertTriangle },
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
-  { id: 'sensor', label: 'Cảm biến', icon: Radio },
+  // { id: 'sensor', label: 'Cảm biến', icon: Radio },
   { id: 'user_action', label: 'Người dùng', icon: UserCheck },
   { id: 'system', label: 'Hệ thống', icon: Cpu },
 ];

@@ -132,7 +132,7 @@ const Dashboard = () => {
       {/* HEADER KHU VỰC TRẠM */}
       <div className="flex flex-col space-y-1.5">
         <h1 className="text-2xl font-semibold text-slate-100 tracking-tight">
-          Trạm Trung Tâm
+          Dashboard
         </h1>
         <div className="flex items-center gap-2">
           <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${isOnline ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :

@@ -19,6 +19,15 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     };
 
+    if json.get("level").is_some() && json.get("category").is_some() && json.get("event").is_some()
+    {
+        warn!("⚠️ [MQTT-FSM] Firmware gửi System Log vào topic FSM. Đang Forward...");
+
+        crate::mqtt::handlers::system_log::handle(device_id, payload, app_state).await;
+
+        return;
+    }
+
     // -----------------------------------------------------------------------
     // THÊM MỚI: Bắt payload yêu cầu cập nhật hệ số Calibration (EMA) vào DB
     // -----------------------------------------------------------------------

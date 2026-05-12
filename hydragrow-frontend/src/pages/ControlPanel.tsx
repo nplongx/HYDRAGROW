@@ -322,7 +322,7 @@ const ControlPanel = () => {
       )}
 
       <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Máy pha dinh dưỡng</h2>
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Pha dinh dưỡng</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AdvancedDeviceControl
             deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical}

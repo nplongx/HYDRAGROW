@@ -102,10 +102,10 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   if (targetRows.length) sections.push({ title: 'Đánh giá', rows: targetRows });
 
   // --- Hệ số AI ---
-  const coefRows: { label: string; value: string; accent?: string }[] = [];
-  if (cycleMeta.step_ratio_ec != null) coefRows.push({ label: 'Bước EC', value: Number(cycleMeta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
-  if (cycleMeta.ema_ec_gain_used != null) coefRows.push({ label: 'EMA EC', value: Number(cycleMeta.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
-  if (coefRows.length) sections.push({ title: 'Hệ số', rows: coefRows });
+  // const coefRows: { label: string; value: string; accent?: string }[] = [];
+  // if (cycleMeta.step_ratio_ec != null) coefRows.push({ label: 'Bước EC', value: Number(cycleMeta.step_ratio_ec).toFixed(2), accent: 'text-yellow-400' });
+  // if (cycleMeta.ema_ec_gain_used != null) coefRows.push({ label: 'EMA EC', value: Number(cycleMeta.ema_ec_gain_used).toFixed(5), accent: 'text-cyan-500' });
+  // if (coefRows.length) sections.push({ title: 'Hệ số', rows: coefRows });
 
   if (sections.length === 0) return null;
 
@@ -230,13 +230,14 @@ const MetadataRenderer = ({ category, level, metadata }: { category: string; lev
   if (eventType === 'SystemAlert') return <AlertMetadata meta={metadata} />;
   if (eventType === 'CalibrationUpdate' || eventType === 'ema_update' || eventType === 'auto_tune') return <CalibrationMetadata meta={metadata} />;
   if (eventType === 'DosingCycleComplete' || eventType === 'dosing_cycle') return <DosingMetadata meta={metadata} />;
-  if (eventType === 'BasicSystemLog') return null; // Message đã có trong text nên không cần render bảng metadata
+  if (eventType === 'BasicSystemLog') return null;
 
-  // 2. Fallback: Dựa vào category của hệ thống cũ (nếu bản ghi cũ không có event_type)
-  if (category === 'dosing') return <DosingMetadata meta={metadata} />;
-  if (category === 'water') return <WaterMetadata meta={metadata} />;
-  if (category === 'calibration') return <CalibrationMetadata meta={metadata} />;
-  if (category === 'alert' || level === 'critical' || level === 'warning') return <AlertMetadata meta={metadata} />;
+  // 2. Fallback: Kháng lỗi phân biệt chữ hoa, chữ thường, dấu gạch dưới
+  const normCategory = category?.toLowerCase().replace('_', '');
+  if (normCategory === 'dosing') return <DosingMetadata meta={metadata} />;
+  if (normCategory === 'water') return <WaterMetadata meta={metadata} />;
+  if (normCategory === 'calibration') return <CalibrationMetadata meta={metadata} />;
+  if (normCategory === 'alert' || level === 'critical' || level === 'warning') return <AlertMetadata meta={metadata} />;
 
   return null;
 };
@@ -260,7 +261,10 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
     return { icon: AlertTriangle, iconColor: 'text-amber-500', borderColor: 'border-amber-500/25', bgColor: 'bg-amber-500/5', dot: 'bg-amber-500' };
   }
 
-  switch (category) {
+  // 🟢 Chuẩn hóa bằng cách xóa bỏ gạch dưới và in thường ('user_action' -> 'useraction', 'UserAction' -> 'useraction')
+  const normCategory = category?.toLowerCase().replace('_', '');
+
+  switch (normCategory) {
     case 'dosing':
       if (title.includes('Chu trình') || title.includes('Báo cáo')) {
         return { icon: FlaskConical, iconColor: 'text-orange-400', borderColor: 'border-orange-500/20', bgColor: 'bg-orange-500/5', dot: 'bg-orange-400' };
@@ -285,7 +289,7 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
     case 'sensor':
       return { icon: Radio, iconColor: 'text-amber-400', borderColor: 'border-amber-500/20', bgColor: 'bg-amber-500/5', dot: 'bg-amber-400' };
 
-    case 'user_action':
+    case 'useraction': // Đã normalize ở trên
       return { icon: UserCheck, iconColor: 'text-indigo-400', borderColor: 'border-indigo-500/20', bgColor: 'bg-indigo-500/5', dot: 'bg-indigo-400' };
 
     case 'system':
@@ -311,7 +315,7 @@ const FILTERS = [
   { id: 'alert', label: 'Cảnh báo', icon: AlertTriangle },
   { id: 'dosing', label: 'Dinh dưỡng', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
-  { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
+  // { id: 'calibration', label: 'Hiệu chuẩn', icon: Activity },
   { id: 'sensor', label: 'Cảm biến', icon: Radio },
   { id: 'user_action', label: 'Người dùng', icon: UserCheck },
   { id: 'system', label: 'Hệ thống', icon: Cpu },

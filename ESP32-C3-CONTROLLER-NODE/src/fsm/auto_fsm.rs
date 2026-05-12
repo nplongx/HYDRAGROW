@@ -590,6 +590,29 @@ fn try_ec_dosing(
         return false;
     }
 
+    // 1. Tính toán lượng dung dịch cần châm TRƯỚC
+    let ec_error = config.ec_target - sensors.ec;
+    let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
+    let active_ec_step_ratio = if ctx.auto_tune_locked {
+        ctx.best_known_ec_step_ratio
+    } else {
+        ctx.adaptive_ec_step_ratio
+    };
+    let dose_ml = (ec_error / config.ec_gain_per_ml * active_ec_step_ratio * deadband_scale)
+        .clamp(0.0, config.max_dose_per_cycle);
+
+    if dose_ml <= 0.0 {
+        return false;
+    }
+
+    // --- FIX: BỎ QUA LỖI ACK NẾU CHÂM VI LƯỢNG ---
+    // Nếu lượng châm nhỏ hơn ngưỡng bù liên tục (chế độ Pulse), 
+    // cảm biến có thể chưa nhận ra ngay. Ta cho phép cộng dồn và reset retry_count.
+    if dose_ml < config.dosing_min_dose_ml {
+        ctx.ec_retry_count = 0;
+    }
+
+    // 2. KIỂM TRA LỖI SAU KHI ĐÃ RESET (nếu có)
     if ctx.ec_retry_count >= 3 {
         warn!("🚨 Hủy bù EC: Đã bơm thử 3 lần nhưng cảm biến EC không tăng.");
         send_system_log(
@@ -612,19 +635,6 @@ fn try_ec_dosing(
     }
 
     let safe_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
-    let ec_error = config.ec_target - sensors.ec;
-    let deadband_scale = soft_deadband_scale(ec_error, config.ec_tolerance);
-    let active_ec_step_ratio = if ctx.auto_tune_locked {
-        ctx.best_known_ec_step_ratio
-    } else {
-        ctx.adaptive_ec_step_ratio
-    };
-    let dose_ml = (ec_error / config.ec_gain_per_ml * active_ec_step_ratio * deadband_scale)
-        .clamp(0.0, config.max_dose_per_cycle);
-
-    if dose_ml <= 0.0 {
-        return false;
-    }
 
     let reserved_a =
         ctx.reserve_dose_if_within_hourly_limit("NutrientA", current_time_sec, dose_ml, max_hourly_ml);
@@ -707,6 +717,30 @@ fn try_ph_dosing(
         return false;
     }
 
+    // 1. Tính toán lượng dung dịch cần châm TRƯỚC
+    let is_ph_up = sensors.ph < config.ph_target;
+    let diff = (sensors.ph - config.ph_target).abs();
+    let ratio = if is_ph_up {
+        config.ph_shift_up_per_ml
+    } else {
+        config.ph_shift_down_per_ml
+    };
+    
+    let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
+    let active_ph_step_ratio = if ctx.auto_tune_locked {
+        ctx.best_known_ph_step_ratio
+    } else {
+        ctx.adaptive_ph_step_ratio
+    };
+    let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
+        .clamp(0.0, config.max_dose_per_cycle);
+
+    // --- FIX: BỎ QUA LỖI ACK NẾU CHÂM VI LƯỢNG ---
+    if dose_ml < config.dosing_min_dose_ml {
+        ctx.ph_retry_count = 0;
+    }
+
+    // 2. KIỂM TRA LỖI SAU KHI ĐÃ RESET (nếu có)
     if ctx.ph_retry_count >= 3 {
         warn!("🚨 Hủy bù pH: Đã bơm thử 3 lần nhưng cảm biến pH không đổi hướng.");
         send_system_log(
@@ -728,13 +762,6 @@ fn try_ph_dosing(
         return true;
     }
 
-    let is_ph_up = sensors.ph < config.ph_target;
-    let diff = (sensors.ph - config.ph_target).abs();
-    let ratio = if is_ph_up {
-        config.ph_shift_up_per_ml
-    } else {
-        config.ph_shift_down_per_ml
-    };
     let safe_pwm = config.dosing_pwm_percent.clamp(1, 100) as u32;
     let pump_kind = if is_ph_up {
         DosePumpKind::PhUp
@@ -752,15 +779,6 @@ fn try_ph_dosing(
             return false;
         }
     };
-
-    let deadband_scale = soft_deadband_scale(diff, config.ph_tolerance);
-    let active_ph_step_ratio = if ctx.auto_tune_locked {
-        ctx.best_known_ph_step_ratio
-    } else {
-        ctx.adaptive_ph_step_ratio
-    };
-    let dose_ml = (diff / ratio * active_ph_step_ratio * deadband_scale)
-        .clamp(0.0, config.max_dose_per_cycle);
 
     let ph_pump_name = if is_ph_up { "PhUp" } else { "PhDown" };
     let duration_ms = ((dose_ml / active_capacity) * 1000.0) as u64;

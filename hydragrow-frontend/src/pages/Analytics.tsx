@@ -21,7 +21,7 @@ const CHART_THEMES: Record<string, any> = {
   blue: { stroke: '#3b82f6', fill1: '#3b82f6', fill2: '#172554', text: 'text-blue-400', bg: 'bg-blue-500/10' }
 };
 
-// --- FlatChartCard (không đổi) ---
+// --- FlatChartCard ---
 const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) => {
   const theme = CHART_THEMES[color];
 
@@ -102,35 +102,13 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
   );
 };
 
-// Component hiển thị khi cảm biến bị vô hiệu
-const SensorDisabledCard = ({ title, icon: Icon }: { title: string; icon: any }) => (
-  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center justify-center h-[280px]">
-    <Icon size={32} className="text-slate-600 mb-3" />
-    <h3 className="text-sm font-semibold text-slate-400">{title}</h3>
-    <p className="text-xs text-slate-500 mt-1">Cảm biến chưa được kích hoạt</p>
-  </div>
-);
-
-// Hàm xác định độ phân giải
-const getResolutionForTimeRange = (range: string): string | undefined => {
-  switch (range) {
-    case '24h': return undefined;   // backend limit 2000 điểm
-    case '7d': return '5m';
-    case '30d': return '1h';
-    default: return undefined;
-  }
-};
-
 // Hàm tạo UTC ISO string
 const getUtcIsoString = (date: Date) => date.toISOString();
 
 // Hàm kiểm tra trạng thái cảm biến để render chính xác (chống lỗi Type Mismatch hoặc undefined)
 const isSensorEnabled = (val: any, defaultState: boolean = true) => {
   if (val === undefined || val === null) return defaultState;
-
-  // Ép mọi thứ về chuỗi viết thường để so sánh
   const strVal = String(val).toLowerCase().trim();
-
   if (strVal === 'false' || strVal === '0' || strVal === 'off') return false;
   return true;
 };
@@ -165,7 +143,6 @@ const Analytics = () => {
 
   const fetchDeviceConfig = async (id: string, settings: any) => {
     try {
-      // 1. Đổi endpoint sang /config/unified
       const res = await fetch(`${settings.backend_url}/api/devices/${id}/config/unified`, {
         method: 'GET',
         headers: {
@@ -178,9 +155,6 @@ const Analytics = () => {
 
       if (res.ok) {
         const data = await res.json();
-
-        // 2. Làm phẳng (Flatten) dữ liệu từ các nested object của Backend
-        // Backend trả về dạng { device_config: {...}, sensor_calibration: {...} }
         const unifiedData = {
           ...(data.device_config || {}),
           ...(data.water_config || {}),
@@ -188,8 +162,6 @@ const Analytics = () => {
           ...(data.dosing_calibration || {}),
           ...(data.sensor_calibration || {})
         };
-
-        console.log("🛠 [Debug Analytics] Cấu hình Unified Đã Gộp:", unifiedData);
         setDeviceConfig(unifiedData);
       }
     } catch (e) {
@@ -225,6 +197,15 @@ const Analytics = () => {
     return allSeasons.find(s => s.id.toString() === selectedSeasonId);
   }, [allSeasons, selectedSeasonId]);
 
+  // Tự động chuyển TimeRange sang "Toàn bộ" khi chọn mùa cụ thể
+  useEffect(() => {
+    if (selectedSeasonId !== 'realtime') {
+      setTimeRange('all');
+    } else if (timeRange === 'all') {
+      setTimeRange('24h'); // Trả về 24h nếu quay lại Realtime
+    }
+  }, [selectedSeasonId]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadHistory = useCallback(async () => {
@@ -241,34 +222,38 @@ const Analytics = () => {
 
     let startIso = '';
     let endIso = '';
+    const now = new Date();
 
-    if (selectedSeasonId !== 'realtime') {
-      if (selectedSeason) {
-        startIso = getUtcIsoString(new Date(selectedSeason.start_time));
-        endIso = selectedSeason.end_time
-          ? getUtcIsoString(new Date(selectedSeason.end_time))
-          : getUtcIsoString(new Date());
+    // Tính toán mốc thời gian thông minh
+    if (selectedSeasonId !== 'realtime' && selectedSeason) {
+      const seasonStart = new Date(selectedSeason.start_time);
+      const seasonEnd = selectedSeason.end_time ? new Date(selectedSeason.end_time) : now;
+      endIso = getUtcIsoString(seasonEnd);
+
+      if (timeRange === 'all') {
+        startIso = getUtcIsoString(seasonStart);
+      } else {
+        const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
+        const computedStart = new Date(seasonEnd.getTime() - diffHours * 60 * 60 * 1000);
+        // Không cho phép khoảng thời gian lùi quá thời điểm bắt đầu mùa vụ
+        startIso = getUtcIsoString(computedStart > seasonStart ? computedStart : seasonStart);
       }
     } else {
-      const now = new Date();
-      const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
-      const startDate = new Date(now.getTime() - diffHours * 60 * 60 * 1000);
-      startIso = getUtcIsoString(startDate);
       endIso = getUtcIsoString(now);
+      const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
+      startIso = getUtcIsoString(new Date(now.getTime() - diffHours * 60 * 60 * 1000));
     }
 
+    // Tự động tính độ phân giải dữ liệu (giảm tải cho Backend)
     let resolution: string | undefined;
-    if (selectedSeasonId === 'realtime') {
-      resolution = getResolutionForTimeRange(timeRange);
-    } else {
-      if (selectedSeason) {
-        const seasonDays = Math.ceil(
-          (new Date(endIso).getTime() - new Date(startIso).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        if (seasonDays > 30) resolution = '1h';
-        else if (seasonDays > 7) resolution = '30m';
-        else resolution = '5m';
-      }
+    if (timeRange === '24h') resolution = undefined;
+    else if (timeRange === '7d') resolution = '5m';
+    else if (timeRange === '30d') resolution = '1h';
+    else if (timeRange === 'all') {
+      const days = (new Date(endIso).getTime() - new Date(startIso).getTime()) / 86400000;
+      if (days > 30) resolution = '1h';
+      else if (days > 7) resolution = '30m';
+      else resolution = '5m';
     }
 
     const fetchWithRetry = async (attempt = 1): Promise<any> => {
@@ -279,7 +264,6 @@ const Analytics = () => {
         if (resolution) params.append('resolution', resolution);
 
         const url = `${appConfig.backend_url}/api/devices/${deviceId}/sensors/history?${params.toString()}`;
-        console.log(`Fetching history with resolution=${resolution}, attempt=${attempt}`);
 
         const response = await fetch(url, {
           method: 'GET',
@@ -295,7 +279,6 @@ const Analytics = () => {
           }
           return [];
         } else if ((response.status === 502 || response.status === 503) && attempt < 3) {
-          console.warn(`Lỗi ${response.status}, thử lại lần ${attempt + 1}...`);
           await new Promise(resolve => setTimeout(resolve, 2000));
           return fetchWithRetry(attempt + 1);
         } else {
@@ -318,14 +301,14 @@ const Analytics = () => {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
           }),
-          time: selectedSeasonId === 'realtime' && timeRange === '24h'
+          time: (selectedSeasonId === 'realtime' && timeRange === '24h') || (timeRange === '24h')
             ? dateObj.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
             : dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         };
       });
       setHistoryData(formatted);
     } catch (error: any) {
-      if (error.name === 'AbortError') { /* bỏ qua */ } else {
+      if (error.name !== 'AbortError') {
         console.error("Fetch history error:", error);
         setHistoryData([]);
         setFetchError(error.message || 'Lỗi không xác định');
@@ -408,13 +391,14 @@ const Analytics = () => {
               <Clock size={14} className="text-blue-500" /> Thời gian
             </label>
             <select
-              disabled={selectedSeasonId !== 'realtime'}
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-blue-500"
             >
-              <option value="24h">24 Giờ Qua</option>
-              <option value="7d">7 Ngày Qua</option>
+              {selectedSeasonId !== 'realtime' && <option value="all">Toàn bộ mùa vụ</option>}
+              <option value="24h">24 Giờ {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
+              <option value="7d">7 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
+              <option value="30d">30 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
             </select>
           </div>
 
@@ -481,31 +465,23 @@ const Analytics = () => {
         ) : (
           <div className="space-y-6">
             {/* EC Chart */}
-            {isSensorEnabled(deviceConfig?.enable_ec_sensor) ? (
+            {isSensorEnabled(deviceConfig?.enable_ec_sensor) && (
               <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
-            ) : (
-              <SensorDisabledCard title="Chỉ Số dinh dưỡng (EC)" icon={Activity} />
             )}
 
             {/* pH Chart */}
-            {isSensorEnabled(deviceConfig?.enable_ph_sensor) ? (
+            {isSensorEnabled(deviceConfig?.enable_ph_sensor) && (
               <FlatChartCard title="Chỉ Số cân bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
-            ) : (
-              <SensorDisabledCard title="Chỉ Số cân bằng (pH)" icon={Droplets} />
             )}
 
             {/* Nhiệt độ */}
-            {isSensorEnabled(deviceConfig?.enable_temp_sensor) ? (
+            {isSensorEnabled(deviceConfig?.enable_temp_sensor) && (
               <FlatChartCard title="Nhiệt Độ môi trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
-            ) : (
-              <SensorDisabledCard title="Nhiệt độ môi trường" icon={Thermometer} />
             )}
 
             {/* Mực nước */}
-            {isSensorEnabled(deviceConfig?.enable_water_level_sensor) ? (
+            {isSensorEnabled(deviceConfig?.enable_water_level_sensor) && (
               <FlatChartCard title="Mực nước (%)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
-            ) : (
-              <SensorDisabledCard title="Mực mước (%)" icon={Waves} />
             )}
           </div>
         )}

@@ -35,7 +35,7 @@ const defaultPumpStatus: PumpStatus = {
 };
 
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
-  if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus;
+  if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus as any;
 
   const mapped: Record<string, string> = {
     PUMP_A: 'pump_a',
@@ -50,8 +50,8 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
     WATER_PUMP_OUT: 'water_pump_out'
   };
 
-  const normalized = { ...defaultPumpStatus };
-  const booleanKeys: Array<keyof PumpStatus> = [
+  const normalized: any = { ...defaultPumpStatus };
+  const booleanKeys = [
     'pump_a',
     'pump_b',
     'ph_up',
@@ -64,8 +64,12 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
 
   Object.entries(rawPumpStatus).forEach(([key, value]) => {
     const normalizedKey = mapped[key] || mapped[key.toUpperCase()] || key.toLowerCase();
-    if (booleanKeys.includes(normalizedKey as keyof PumpStatus)) {
-      (normalized as unknown as Record<string, boolean>)[normalizedKey] = Boolean(value);
+
+    // 🟢 FIX 2: Giữ lại cả giá trị bool và pwm để chức năng slider thủ công không bị mất
+    if (booleanKeys.includes(normalizedKey)) {
+      normalized[normalizedKey] = Boolean(value);
+    } else if (normalizedKey.includes('pwm')) {
+      normalized[normalizedKey] = Number(value);
     }
   });
 
@@ -117,7 +121,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
     sensorTimeoutRef.current = setTimeout(() => {
       setIsSensorOnline(false);
-      // setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ec: true, err_ph: true } : prev);
       toast.error("Mất kết nối mạch cảm biến. Đang hiển thị dữ liệu lưu lần cuối.");
     }, 65000);
   }, []);
@@ -169,7 +172,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           const cachedPwmPrefs = await loadPwmPrefsFromStore();
           if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
 
-          // 🟢 FIX 1: Lấy FSM State từ REST API để UI khỏi bị kẹt chữ Offline
           if (initialData?.fsm_state) {
             setFsmState(initialData.fsm_state);
           }
@@ -221,18 +223,25 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-
             console.log("📥 RAW WS MESSAGE:", data.type || data._msg_type, data);
 
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
 
-              if (payload.fsm_state) setFsmState(payload.fsm_state);
-              else if (payload.current_state) setFsmState(payload.current_state);
+              let newState = payload.fsm_state || payload.current_state;
+              if (newState) {
+                setFsmState(typeof newState === 'object' ? JSON.stringify(newState) : String(newState));
+              }
 
               if (payload.budgets) {
                 setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
               }
+
+              // 🟢 FIX 1: Cập nhật Pump Status cùng lúc FSM chuyển trạng thái (VD: Chuyển Manual tắt bơm)
+              if (payload.pump_status && Object.keys(payload.pump_status).length > 0) {
+                applyPumpStatus(normalizePumpStatus(payload.pump_status));
+              }
+
               return;
             }
 
@@ -338,9 +347,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 uptime: healthData.uptime_sec
               });
 
-              // 🟢 FIX 3: Luôn đồng bộ FSM state từ gói health (nếu có) để phòng trường hợp bị rớt nhịp
               if (healthData.fsm_state) {
-                setFsmState(healthData.fsm_state);
+                setFsmState(typeof healthData.fsm_state === 'object' ? JSON.stringify(healthData.fsm_state) : String(healthData.fsm_state));
               }
 
               if (healthData.budgets && Object.keys(healthData.budgets).length > 0) {
@@ -348,7 +356,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               }
 
               if (healthData.pump_status) {
-                applyPumpStatus(healthData.pump_status);
+                // 🟢 FIX 3: Phải bọc normalizePumpStatus vào đây, nếu không nó ghi nhận key viết Hoa
+                applyPumpStatus(normalizePumpStatus(healthData.pump_status));
               }
 
               setDeviceStatus(prev => !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev);
@@ -374,7 +383,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
         ws.onerror = (_err) => ws.close();
       };
-      setSensorData
+
       connectWs();
     };
 

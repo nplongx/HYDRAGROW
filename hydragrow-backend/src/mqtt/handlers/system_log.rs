@@ -6,6 +6,18 @@ use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
 
+// 🟢 TẠO MỚI: Hàm helper chuyển đổi PascalCase sang chuẩn snake_case
+fn to_snake_case(s: &str) -> String {
+    let mut result = String::new();
+    for (i, c) in s.char_indices() {
+        if c.is_uppercase() && i > 0 {
+            result.push('_');
+        }
+        result.push(c.to_ascii_lowercase());
+    }
+    result
+}
+
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     // 1. Deserialize trực tiếp từ JSON sang Struct
     let log_data: UnifiedSystemLog = match serde_json::from_slice(payload) {
@@ -16,19 +28,22 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
-    let level_str = serde_json::to_value(&log_data.level)
+    // 🟢 SỬA LỖI Ở ĐÂY: Ép về snake_case trước khi đưa vào Database
+    let raw_level = serde_json::to_value(&log_data.level)
         .unwrap()
         .as_str()
         .unwrap()
         .to_string();
+    let level_str = to_snake_case(&raw_level);
 
-    let category_str = serde_json::to_value(&log_data.category)
+    let raw_category = serde_json::to_value(&log_data.category)
         .unwrap()
         .as_str()
         .unwrap()
         .to_string();
+    let category_str = to_snake_case(&raw_category);
 
-    // TẠO ĐOẠN NÀY: Dịch nghĩa event thành message chi tiết thay vì hardcode
+    // Dịch nghĩa event thành message chi tiết thay vì hardcode
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog { message } => message.clone(),
         SystemLogEvent::SystemAlert(meta) => {
@@ -52,10 +67,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     // 2. Chuyển đổi thành Record để lưu Database
     let db_record = NewSystemEventRecord {
         device_id: log_data.device_id.clone(),
-        level: level_str,
-        category: category_str,
+        level: level_str.clone(),
+        category: category_str.clone(),
         title: log_data.title.clone(),
-        message: message_str.clone(), // <-- Áp dụng message động vào DB
+        message: message_str.clone(),
         reason: None,
         metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
         timestamp: log_data.timestamp_ms as i64,
@@ -75,10 +90,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         info!("🚨 Gửi Alert tới UI: [{}] {}", device_id, log_data.title);
 
         let alert = AlertMessage {
-            level: format!("{:?}", log_data.level).to_lowercase(),
-            category: format!("{:?}", log_data.category).to_lowercase(),
+            level: level_str.clone(),
+            category: category_str.clone(),
             title: log_data.title.clone(),
-            message: message_str.clone(), // <-- Áp dụng message động cho Alert UI
+            message: message_str.clone(),
             device_id: log_data.device_id.clone(),
             timestamp: log_data.timestamp_ms,
             reason: None,
@@ -94,7 +109,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 tokio::spawn(async move {
                     crate::services::fcm::send_push_notification(
                         &alert.title,
-                        &alert.message, // FCM cũng sẽ nhận được message thật
+                        &alert.message,
                         tokens,
                     )
                     .await;

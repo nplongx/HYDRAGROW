@@ -5,7 +5,7 @@ import { useDeviceContext } from '../context/DeviceContext';
 import { httpFetch } from '../platform/http';
 import toast from 'react-hot-toast';
 
-export function useFCM(deviceId: string) {
+export function useFCM() {
   const { settings } = useDeviceContext();
 
   const [fcmToken, setFcmToken] = useState<string | null>(null);

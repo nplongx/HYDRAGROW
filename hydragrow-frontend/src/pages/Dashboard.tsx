@@ -142,15 +142,15 @@ const Dashboard = () => {
             <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : (isControllerStatusKnown ? 'bg-red-500' : 'bg-amber-500')}`}></span>
             {isOnline ? 'Đang Hoạt Động' : (isControllerStatusKnown ? 'Mất Kết Nối' : 'Đang Kết Nối...')}
           </div>
-          <span className="text-xs text-slate-500">{deviceId}</span>
+          {/* <span className="text-xs text-slate-500">{deviceId}</span> */}
         </div>
       </div>
 
       {/* HEALTH BARS */}
       {isOnline && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <HealthBar title="Controller Node" icon={Server} data={controllerHealth} isNodeOnline={true} />
-          <HealthBar title="Sensor Node" icon={RadioReceiver} data={sensorData} isNodeOnline={isSensorOnline} />
+          <HealthBar title="Nút điều khiển" icon={Server} data={controllerHealth} isNodeOnline={true} />
+          <HealthBar title="Nút cảm biến" icon={RadioReceiver} data={sensorData} isNodeOnline={isSensorOnline} />
         </div>
       )}
 

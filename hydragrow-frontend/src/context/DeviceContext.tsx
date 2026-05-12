@@ -303,9 +303,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
               setSystemEvents(prev => [alert, ...prev].slice(0, 50));
               if (alert.level === 'critical' || alert.level === 'warning') {
-                toast.error(`⚠️ ${alert.title}\n${alert.message}`, { id: alert.title, duration: 6000 });
+                toast.error(`${alert.title}\n${alert.message}`, { id: alert.title, duration: 6000 });
               } else if (alert.level === 'success') {
-                toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 });
+                toast.success(`${alert.title}\n${alert.message}`, { duration: 5000 });
               } return;
             }
 

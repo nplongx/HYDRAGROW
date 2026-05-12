@@ -275,7 +275,7 @@ const ControlPanel = () => {
           <h1 className="text-2xl font-semibold text-slate-100 flex items-center gap-2">
             Điều khiển <Settings2 size={22} className="text-slate-500" />
           </h1>
-          <p className="text-sm text-slate-500">Can thiệp và vận hành thiết bị thủ công.</p>
+          {/* <p className="text-sm text-slate-500">Can thiệp và vận hành thiết bị thủ công.</p> */}
         </div>
 
         <button
@@ -360,8 +360,14 @@ const ControlPanel = () => {
             currentStatus={pumps.water_pump_out} allowPwm={false}
             isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
           />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Khí hậu</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="OSAKA" title="Trộn Osaka" icon={Power}
+            deviceId={deviceId} pumpId="OSAKA" title="Bơm trộn" icon={Power}
             currentStatus={pumps.osaka_pump} allowPwm={true}
             isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
           />
@@ -372,6 +378,7 @@ const ControlPanel = () => {
           />
         </div>
       </div>
+
 
     </div>
   );

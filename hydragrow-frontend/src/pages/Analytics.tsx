@@ -361,7 +361,7 @@ const Analytics = () => {
       <PageHeader
         icon={ChartIcon}
         title="Phân Tích"
-        subtitle="Theo dõi biến động và khai thác dữ liệu chuỗi thời gian"
+      // subtitle="Theo dõi biến động và khai thác dữ liệu chuỗi thời gian"
       />
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-5">

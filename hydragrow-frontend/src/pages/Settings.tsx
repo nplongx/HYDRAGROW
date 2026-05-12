@@ -13,7 +13,6 @@ import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
-import { getItem, setItem } from '../platform/storage';
 import { isTauriRuntime, loadAppSettings } from '../platform/settings';
 
 // --- LOGIC & TYPES ---
@@ -187,14 +186,12 @@ const Settings = () => {
 
   const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'http://localhost:8000', device_id: '' });
 
-  // Xóa logic 3 điểm, hardcode mảng 2 điểm
   const calibrationPoints = [7, 4];
   const [wizardStep, setWizardStep] = useState(0);
   const [isCapturingPoint, setIsCapturingPoint] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [_stabilityStatus, setStabilityStatus] = useState<'idle' | 'waiting' | 'stable'>('idle');
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
-  const [adaptivePhases, setAdaptivePhases] = useState({ observe: true, recommend: true, auto_apply: false, confidence_threshold: 85 });
 
   const activePoint = calibrationPoints[wizardStep];
   const isPhError = sensorData?.err_ph === true;
@@ -272,29 +269,6 @@ const Settings = () => {
       reliability: Math.max(0, Math.min(100, avgConf + spreadBonus))
     };
   })();
-
-  const phaseConfigStorageKey = 'adaptive-calibration-phase-by-device';
-  const effectiveDeviceId = appSettings.device_id || ctxDeviceId || '';
-
-  useEffect(() => {
-    if (!effectiveDeviceId) return;
-    (async () => {
-      try {
-        const raw = await getItem<Record<string, any>>(phaseConfigStorageKey);
-        const perDevice = raw?.[effectiveDeviceId] ?? null;
-        if (perDevice && typeof perDevice === 'object') setAdaptivePhases((prev) => ({ ...prev, ...perDevice }));
-      } catch (error) { }
-    })();
-  }, [effectiveDeviceId]);
-
-  const saveAdaptivePhases = async (nextValue: any) => {
-    setAdaptivePhases(nextValue);
-    if (!effectiveDeviceId) return;
-    try {
-      const all = (await getItem<Record<string, any>>(phaseConfigStorageKey)) || {};
-      all[effectiveDeviceId] = nextValue; await setItem(phaseConfigStorageKey, all);
-    } catch (error) { }
-  };
 
   const applyCalibrationToConfig = (): any | null => {
     if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null) {
@@ -639,16 +613,16 @@ const Settings = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
               <SubCard title="Giới hạn chạy thiết bị">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputGroup label="Max bơm phân/chu kỳ (ml)" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
-                  <InputGroup label="Max bơm phân/giờ (ml)" value={config.max_dose_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_hour: e.target.value })} />
+                  <InputGroup label="Max dung dịch/chu kỳ (ml)" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
+                  <InputGroup label="Max dung dịch/giờ (ml)" value={config.max_dose_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_hour: e.target.value })} />
                   <div className="sm:col-span-2"><InputGroup label="Nghỉ tản nhiệt bơm (s)" value={config.cooldown_sec} onChange={(e: InputEvent) => setConfig({ ...config, cooldown_sec: e.target.value })} /></div>
 
                   <div className="sm:col-span-2 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mạch lọc chống nhiễu</span></div>
-                  <InputGroup label="Bỏ qua nhảy EC (Δ)" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
-                  <InputGroup label="Bỏ qua nhảy pH (Δ)" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
-                  <InputGroup label="Đổi min sau châm EC >" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
-                  <InputGroup label="Đổi min sau châm pH >" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
-                  <div className="sm:col-span-2"><InputGroup label="Bật bơm nước nếu lệch (%) >" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} /></div>
+                  <InputGroup label="Bỏ qua nếu EC >" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
+                  <InputGroup label="Bỏ qua nếu pH >" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
+                  <InputGroup label="Đổi min EC sau châm >" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
+                  <InputGroup label="Đổi min pH sau châm >" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
+                  <div className="sm:col-span-2"><InputGroup label="Bật bơm nước nếu lệch (cm) >" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} /></div>
                 </div>
               </SubCard>
 
@@ -699,12 +673,10 @@ const Settings = () => {
                   </div>
                 </SubCard>
 
-                <SubCard title="Analog (EC/Nhiệt độ)">
+                <SubCard title="Hiệu chuẩn EC">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <InputGroup label="K Factor (EC)" value={config.ec_factor} onChange={(e: InputEvent) => setConfig({ ...config, ec_factor: e.target.value })} />
-                    <InputGroup label="Offset (EC)" value={config.ec_offset} onChange={(e: InputEvent) => setConfig({ ...config, ec_offset: e.target.value })} />
-                    <InputGroup label="Offset (Temp)" value={config.temp_offset} onChange={(e: InputEvent) => setConfig({ ...config, temp_offset: e.target.value })} />
-                    <InputGroup label="Bù nhiệt EC (Beta)" value={config.temp_compensation_beta} onChange={(e: InputEvent) => setConfig({ ...config, temp_compensation_beta: e.target.value })} />
+                    <InputGroup label="K Factor" value={config.ec_factor} onChange={(e: InputEvent) => setConfig({ ...config, ec_factor: e.target.value })} />
+                    <InputGroup label="Offset" value={config.ec_offset} onChange={(e: InputEvent) => setConfig({ ...config, ec_offset: e.target.value })} />
                   </div>
                 </SubCard>
               </div>
@@ -712,22 +684,6 @@ const Settings = () => {
 
             <SubCard title="Hiệu Chuẩn pH" className="h-full">
               <div className="space-y-4">
-                {/* 
-                  ĐÃ XÓA KHỐI CHỌN 2 ĐIỂM/ 3 ĐIỂM Ở ĐÂY
-                */}
-
-                {isAdvancedMode && (
-                  <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 space-y-3">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Hành vi Adaptive</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                      <div className="flex items-center justify-between"><span className="text-xs text-slate-300">1: Thu mẫu</span><Switch isOn={adaptivePhases.observe} onClick={(v) => saveAdaptivePhases({ ...adaptivePhases, observe: v })} /></div>
-                      <div className="flex items-center justify-between"><span className="text-xs text-slate-300">2: Chờ xác nhận</span><Switch isOn={adaptivePhases.recommend} onClick={(v) => saveAdaptivePhases({ ...adaptivePhases, recommend: v })} /></div>
-                      <div className="flex items-center justify-between"><span className="text-xs text-slate-300">3: Tự áp dụng</span><Switch isOn={adaptivePhases.auto_apply} onClick={(v) => saveAdaptivePhases({ ...adaptivePhases, auto_apply: v })} /></div>
-                      <InputGroup label="Tin cậy cần (%)" type="number" value={adaptivePhases.confidence_threshold} onChange={(e: InputEvent) => saveAdaptivePhases({ ...adaptivePhases, confidence_threshold: Math.max(0, Math.min(100, Number(e.target.value))) })} />
-                    </div>
-                  </div>
-                )}
-
                 {isCalibrationBlocked && (
                   <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs flex items-center gap-2">
                     <ShieldAlert size={16} />

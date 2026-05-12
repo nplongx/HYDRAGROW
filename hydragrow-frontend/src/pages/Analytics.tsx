@@ -165,22 +165,32 @@ const Analytics = () => {
 
   const fetchDeviceConfig = async (id: string, settings: any) => {
     try {
-      const res = await fetch(`${settings.backend_url}/api/devices/${id}/config`, {
+      // 1. Đổi endpoint sang /config/unified
+      const res = await fetch(`${settings.backend_url}/api/devices/${id}/config/unified`, {
         method: 'GET',
         headers: {
           'X-API-Key': settings.api_key,
-          'Cache-Control': 'no-cache', // Chặn cache
+          'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         },
-        cache: 'no-store' // Ép trình duyệt luôn tải dữ liệu mới nhất
+        cache: 'no-store'
       });
+
       if (res.ok) {
         const data = await res.json();
-        const config = data.data || data;
 
-        console.log("🛠 [Debug Analytics] Cấu hình thiết bị:", config);
+        // 2. Làm phẳng (Flatten) dữ liệu từ các nested object của Backend
+        // Backend trả về dạng { device_config: {...}, sensor_calibration: {...} }
+        const unifiedData = {
+          ...(data.device_config || {}),
+          ...(data.water_config || {}),
+          ...(data.safety_config || {}),
+          ...(data.dosing_calibration || {}),
+          ...(data.sensor_calibration || {})
+        };
 
-        setDeviceConfig(config);
+        console.log("🛠 [Debug Analytics] Cấu hình Unified Đã Gộp:", unifiedData);
+        setDeviceConfig(unifiedData);
       }
     } catch (e) {
       console.error("Lỗi tải cấu hình thiết bị:", e);

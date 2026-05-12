@@ -7,12 +7,11 @@ use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
 
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    // 1. Deserialize trực tiếp từ JSON sang Struct (Nhanh và không bao giờ sai lệch)
+    // 1. Deserialize trực tiếp từ JSON sang Struct
     let log_data: UnifiedSystemLog = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
             error!("❌ [SYSTEM LOG] Lỗi Parse JSON từ {}: {:?}", device_id, e);
-            // Có thể log thêm payload gốc ra để debug nếu cần
             return;
         }
     };
@@ -29,15 +28,35 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         .unwrap()
         .to_string();
 
+    // TẠO ĐOẠN NÀY: Dịch nghĩa event thành message chi tiết thay vì hardcode
+    let message_str = match &log_data.event {
+        SystemLogEvent::BasicSystemLog { message } => message.clone(),
+        SystemLogEvent::SystemAlert(meta) => {
+            format!("Nguồn: {} (Thử lại: {})", meta.source, meta.retry_count)
+        }
+        SystemLogEvent::CalibrationUpdate(meta) => {
+            if let Some(reason) = &meta.skip_reason {
+                format!("Bỏ qua cập nhật: {}", reason)
+            } else {
+                format!("Đã cập nhật hệ số: {}", meta.parameter)
+            }
+        }
+        SystemLogEvent::WaterEvent(meta) => format!(
+            "Mực nước: {:.1} -> {:.1}",
+            meta.level_before, meta.level_after
+        ),
+        SystemLogEvent::DosingCycleComplete(_) => "Hoàn tất chu kỳ châm phân".to_string(),
+        _ => log_data.title.clone(), // Fallback: Dùng luôn tiêu đề nếu không khớp loại nào
+    };
+
     // 2. Chuyển đổi thành Record để lưu Database
-    // Vì log_data.event là Enum, serde_json::to_value sẽ tự động map ra JSONB tuyệt đẹp
     let db_record = NewSystemEventRecord {
         device_id: log_data.device_id.clone(),
         level: level_str,
         category: category_str,
         title: log_data.title.clone(),
-        message: "Log từ thiết bị".to_string(), // Tùy bạn custom (hoặc thêm field msg vào struct)
-        reason: None, // Nếu bạn muốn bóc tách skip_reason ra cột riêng thì lấy ở đây
+        message: message_str.clone(), // <-- Áp dụng message động vào DB
+        reason: None,
         metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
         timestamp: log_data.timestamp_ms as i64,
     };
@@ -48,11 +67,8 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     }
 
     // 4. Quyết định xem có bắn Push Notification / Toast Alert lên App không
-    // Chỉ bắn Alert với các sự kiện Quan trọng (Critical, Warning) hoặc DosingCycleComplete
     let is_critical = log_data.level == LogLevel::Critical;
     let is_warning = log_data.level == LogLevel::Warning;
-
-    // Bạn có thể check cụ thể loại event:
     let is_dosing_done = matches!(log_data.event, SystemLogEvent::DosingCycleComplete(_));
 
     if is_critical || is_warning || is_dosing_done {
@@ -62,7 +78,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             level: format!("{:?}", log_data.level).to_lowercase(),
             category: format!("{:?}", log_data.category).to_lowercase(),
             title: log_data.title.clone(),
-            message: "Xem chi tiết trong lịch sử".to_string(),
+            message: message_str.clone(), // <-- Áp dụng message động cho Alert UI
             device_id: log_data.device_id.clone(),
             timestamp: log_data.timestamp_ms,
             reason: None,
@@ -78,7 +94,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 tokio::spawn(async move {
                     crate::services::fcm::send_push_notification(
                         &alert.title,
-                        &alert.message, // Truyền msg cụ thể nếu muốn
+                        &alert.message, // FCM cũng sẽ nhận được message thật
                         tokens,
                     )
                     .await;
@@ -87,3 +103,4 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     }
 }
+

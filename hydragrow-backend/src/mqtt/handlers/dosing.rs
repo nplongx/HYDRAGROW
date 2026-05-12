@@ -66,7 +66,7 @@ pub async fn handle_report(device_id: String, payload: &[u8], app_state: web::Da
         report.dose.pump_a_ml, report.dose.pump_b_ml, report.dose.ph_up_ml, report.dose.ph_down_ml
     );
 
-    let metadata = json!({
+    let mut metadata = json!({
         "event_type": "dosing_cycle",
         "pre": report.pre,
         "post_mixing": report.post_mixing,
@@ -90,6 +90,17 @@ pub async fn handle_report(device_id: String, payload: &[u8], app_state: web::Da
 
     let has_ec_dose = report.dose.pump_a_ml > 0.0 || report.dose.pump_b_ml > 0.0;
     let has_ph_dose = report.dose.ph_up_ml > 0.0 || report.dose.ph_down_ml > 0.0;
+
+    if has_ec_dose {
+        metadata["ema_ec_gain_used"] = json!(report.ema_ec_gain_used);
+        metadata["step_ratio_ec"] = json!(report.step_ratio_ec);
+    }
+
+    // CHỈ chèn thông số pH nếu chu kỳ này thực sự có châm pH
+    if has_ph_dose {
+        metadata["ema_ph_shift_used"] = json!(report.ema_ph_shift_used);
+        metadata["step_ratio_ph"] = json!(report.step_ratio_ph);
+    }
 
     let alert_title = match (has_ec_dose, has_ph_dose) {
         (true, true) => "Lưu Báo Cáo Châm EC/pH Thành Công",

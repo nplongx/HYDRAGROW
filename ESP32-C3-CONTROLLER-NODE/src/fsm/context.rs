@@ -305,25 +305,23 @@ impl ControlContext {
 
                     // ✅ CHỈ nội suy đạo hàm nếu tín hiệu thay đổi đủ rõ ràng (>= ack_threshold)
                     if response >= config.ec_ack_threshold && !self.auto_tune_locked {
-                        // 1. Phân tích đạo hàm: Tỷ lệ giữa thực tế đạt được và kỳ vọng
                         let gain_vs_expected = response / config.ec_ack_threshold.max(0.001);
+    
+                        // Chỉ tăng/giảm một lượng delta cố định rất nhỏ, tuyệt đối không dùng phép nhân/chia
+                        let tune_delta = if gain_vs_expected > 2.0 {
+                            -0.01 // Phản hồi quá mạnh -> Giảm nhẹ bước châm
+                        } else if gain_vs_expected < 1.0 {
+                            0.02  // Phản hồi quá yếu -> Tăng nhẹ bước châm
+                        } else {
+                            0.0   // Ổn định -> Giữ nguyên
+                        };
 
-                        // 2. Nếu tỷ lệ này lệch quá 20% (tức là < 0.8 hoặc > 1.2), tiến hành nội suy bù trừ
-                        if gain_vs_expected < 0.8 || gain_vs_expected > 1.2 {
-                            // 3. Hệ số nội suy nghịch đảo (Nước ít -> gain cao -> cần giảm step_ratio)
-                            let interpolation_factor = 1.0 / gain_vs_expected;
-
-                            // 4. Tính ra giá trị step_ratio mới cần đạt tới
-                            let target_ratio = self.adaptive_ec_step_ratio * interpolation_factor;
-
-                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust (có sẵn budget an toàn)
-                            let tune_delta = target_ratio - self.adaptive_ec_step_ratio;
-
+                        if tune_delta != 0.0 {
                             self.adjust_ec_step_ratio(
                                 config,
                                 now_sec,
                                 tune_delta,
-                                "ec_derivative_interpolation",
+                                "ec_safe_auto_tune",
                                 fsm_mqtt_tx
                             );
                             self.best_known_ec_step_ratio = self.adaptive_ec_step_ratio;
@@ -377,33 +375,26 @@ impl ControlContext {
                 let reached_target = (sensors.ph - config.ph_target).abs() <= config.ph_tolerance;
 
                 if response >= config.ph_ack_threshold || reached_target {
-                    self.ph_retry_count = 0;
+                    let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
+    
+                    // Thay vì nhân hệ số gấp nhiều lần, chỉ nhích lên 2% mỗi lần bơm
+                    let tune_delta = if gain_vs_expected > 2.0 {
+                        -0.01 // Giảm 1% nếu vọt quá nhanh
+                    } else if gain_vs_expected < 1.0 {
+                        0.02  // Tăng 2% nếu lên quá chậm
+                    } else {
+                        0.0
+                    };
 
-                    // ✅ CHỈ nội suy đạo hàm nếu tín hiệu thay đổi đủ rõ ràng (>= ack_threshold)
-                    if response >= config.ph_ack_threshold && !self.auto_tune_locked {
-                        // 1. Phân tích đạo hàm: Tỷ lệ giữa thực tế đạt được và kỳ vọng
-                        let gain_vs_expected = response / config.ph_ack_threshold.max(0.001);
-
-                        // 2. Nếu tỷ lệ này lệch quá 20% (tức là < 0.8 hoặc > 1.2), tiến hành nội suy bù trừ
-                        if gain_vs_expected < 0.8 || gain_vs_expected > 1.2 {
-                            // 3. Hệ số nội suy nghịch đảo (Nước ít -> gain cao -> cần giảm step_ratio)
-                            let interpolation_factor = 1.0 / gain_vs_expected;
-
-                            // 4. Tính ra giá trị step_ratio mới cần đạt tới
-                            let target_ratio = self.adaptive_ph_step_ratio * interpolation_factor;
-
-                            // 5. Tính lượng chênh lệch (Delta) để đưa vào hàm adjust (có sẵn budget an toàn)
-                            let tune_delta = target_ratio - self.adaptive_ph_step_ratio;
-
-                            self.adjust_ph_step_ratio(
-                                config,
-                                now_sec,
-                                tune_delta,
-                                "ph_derivative_interpolation",
-                                fsm_mqtt_tx
-                            );
-                            self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
-                        }
+                    if tune_delta != 0.0 {
+                        self.adjust_ph_step_ratio(
+                            config,
+                            now_sec,
+                            tune_delta,
+                            "ph_safe_auto_tune",
+                            fsm_mqtt_tx
+                        );
+                        self.best_known_ph_step_ratio = self.adaptive_ph_step_ratio;
                     }
                 } else {
                     self.ph_retry_count += 1;

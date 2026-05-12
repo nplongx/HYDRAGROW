@@ -127,7 +127,11 @@ const getUtcIsoString = (date: Date) => date.toISOString();
 // Hàm kiểm tra trạng thái cảm biến để render chính xác (chống lỗi Type Mismatch hoặc undefined)
 const isSensorEnabled = (val: any, defaultState: boolean = true) => {
   if (val === undefined || val === null) return defaultState;
-  if (val === 'false' || val === 0 || val === false) return false;
+
+  // Ép mọi thứ về chuỗi viết thường để so sánh
+  const strVal = String(val).toLowerCase().trim();
+
+  if (strVal === 'false' || strVal === '0' || strVal === 'off') return false;
   return true;
 };
 
@@ -162,11 +166,21 @@ const Analytics = () => {
   const fetchDeviceConfig = async (id: string, settings: any) => {
     try {
       const res = await fetch(`${settings.backend_url}/api/devices/${id}/config`, {
-        headers: { 'X-API-Key': settings.api_key }
+        method: 'GET',
+        headers: {
+          'X-API-Key': settings.api_key,
+          'Cache-Control': 'no-cache', // Chặn cache
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store' // Ép trình duyệt luôn tải dữ liệu mới nhất
       });
       if (res.ok) {
         const data = await res.json();
-        setDeviceConfig(data.data || data);
+        const config = data.data || data;
+
+        console.log("🛠 [Debug Analytics] Cấu hình thiết bị:", config);
+
+        setDeviceConfig(config);
       }
     } catch (e) {
       console.error("Lỗi tải cấu hình thiết bị:", e);

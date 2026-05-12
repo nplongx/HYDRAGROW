@@ -45,7 +45,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
                     ph_shift_down_per_ml = COALESCE($3, ph_shift_down_per_ml),
                     ec_step_ratio = COALESCE($4, ec_step_ratio),
                     ph_step_ratio = COALESCE($5, ph_step_ratio),
-                    updated_at = NOW()
+                    last_calibrated = NOW()
                 WHERE device_id = $6
             "#;
 
@@ -119,4 +119,3 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         states.insert(device_id.clone(), json!({"fsm_state": state}).to_string());
     }
 }
-

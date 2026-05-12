@@ -71,7 +71,7 @@ const Dashboard = () => {
   const {
     enableNotifications,
     permission
-  } = useFCM(deviceId || "");
+  } = useFCM();
 
   useEffect(() => {
     const run = async () => {

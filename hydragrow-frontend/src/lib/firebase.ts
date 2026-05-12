@@ -1,6 +1,8 @@
 // src/lib/firebase.ts
-import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+
+import { initializeApp } from "firebase/app";
+// SỬA: Import toàn bộ từ firebase/messaging thay vì rải rác
+import { getMessaging, getToken, onMessage, MessagePayload } from "firebase/messaging";
 
 // Thay thế bằng Firebase Config thực tế từ Firebase Console của bạn
 const firebaseConfig = {
@@ -12,7 +14,6 @@ const firebaseConfig = {
   appId: "1:810716913891:web:a2fea867c0d63df1bfa5d6",
   measurementId: "G-14M8B93S7V"
 };
-
 
 const app = initializeApp(firebaseConfig);
 
@@ -40,10 +41,12 @@ export const requestForWebToken = async () => {
     return null;
   }
 };
+
 // Hàm lắng nghe thông báo khi Web App đang mở (Foreground)
 export const onWebMessageListener = () =>
-  new Promise((resolve) => {
-    onMessage(messaging, (payload) => {
+  new Promise<MessagePayload>((resolve) => {
+    // SỬA: Dùng onMessage (chữ M hoa) và định nghĩa type cho payload
+    onMessage(messaging, (payload: MessagePayload) => {
       resolve(payload);
     });
   });

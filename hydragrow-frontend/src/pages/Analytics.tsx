@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useCallback, useRef, Activity } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import {
   LineChart as ChartIcon, Clock, Filter,
-  Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2, AlertTriangle
+  Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2, AlertTriangle, Activity
 } from 'lucide-react';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -123,6 +123,13 @@ const getResolutionForTimeRange = (range: string): string | undefined => {
 
 // Hàm tạo UTC ISO string
 const getUtcIsoString = (date: Date) => date.toISOString();
+
+// Hàm kiểm tra trạng thái cảm biến để render chính xác (chống lỗi Type Mismatch hoặc undefined)
+const isSensorEnabled = (val: any, defaultState: boolean = true) => {
+  if (val === undefined || val === null) return defaultState;
+  if (val === 'false' || val === 0 || val === false) return false;
+  return true;
+};
 
 // --- Component chính Analytics ---
 const Analytics = () => {
@@ -384,7 +391,6 @@ const Analytics = () => {
             >
               <option value="24h">24 Giờ Qua</option>
               <option value="7d">7 Ngày Qua</option>
-              {/* <option value="30d">30 Ngày Qua</option> */}
             </select>
           </div>
 
@@ -451,28 +457,28 @@ const Analytics = () => {
         ) : (
           <div className="space-y-6">
             {/* EC Chart */}
-            {deviceConfig?.enable_ec_sensor !== false ? (
+            {isSensorEnabled(deviceConfig?.enable_ec_sensor) ? (
               <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
             ) : (
               <SensorDisabledCard title="Chỉ Số dinh dưỡng (EC)" icon={Activity} />
             )}
 
             {/* pH Chart */}
-            {deviceConfig?.enable_ph_sensor !== false ? (
+            {isSensorEnabled(deviceConfig?.enable_ph_sensor) ? (
               <FlatChartCard title="Chỉ Số cân bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
             ) : (
               <SensorDisabledCard title="Chỉ Số cân bằng (pH)" icon={Droplets} />
             )}
 
             {/* Nhiệt độ */}
-            {deviceConfig?.enable_temp_sensor !== false ? (
+            {isSensorEnabled(deviceConfig?.enable_temp_sensor) ? (
               <FlatChartCard title="Nhiệt Độ môi trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             ) : (
               <SensorDisabledCard title="Nhiệt độ môi trường" icon={Thermometer} />
             )}
 
             {/* Mực nước */}
-            {deviceConfig?.enable_water_level_sensor !== false ? (
+            {isSensorEnabled(deviceConfig?.enable_water_level_sensor) ? (
               <FlatChartCard title="Mực nước (%)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
             ) : (
               <SensorDisabledCard title="Mực mước (%)" icon={Waves} />

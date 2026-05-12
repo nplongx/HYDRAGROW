@@ -86,12 +86,18 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   const targetRows: { label: string; value: string; accent?: string }[] = [];
   const targetEc = getMetaNumber(target, ['ec', 'target_ec']);
   const targetPh = getMetaNumber(target, ['ph', 'target_ph']);
+  const hasEcDose = Number(dose.pump_a_ml ?? 0) > 0 || Number(dose.pump_b_ml ?? 0) > 0;
+  const hasPhDose = Number(dose.ph_up_ml ?? 0) > 0 || Number(dose.ph_down_ml ?? 0) > 0;
 
-  if (targetEc != null) targetRows.push({ label: 'Mục tiêu EC', value: targetEc.toFixed(2), accent: 'text-cyan-300' });
-  if (targetPh != null) targetRows.push({ label: 'Mục tiêu pH', value: targetPh.toFixed(2), accent: 'text-fuchsia-300' });
-  if (correction.ec_remaining != null) {
+  if (targetEc != null && hasEcDose) targetRows.push({ label: 'Mục tiêu EC', value: targetEc.toFixed(2), accent: 'text-cyan-300' });
+  if (targetPh != null && hasPhDose) targetRows.push({ label: 'Mục tiêu pH', value: targetPh.toFixed(2), accent: 'text-fuchsia-300' });
+  if (correction.ec_remaining != null && hasEcDose) {
     const val = Number(correction.ec_remaining);
     targetRows.push({ label: 'EC còn thiếu', value: val.toFixed(2), accent: val >= 0 ? 'text-cyan-200' : 'text-red-400' });
+  }
+  if (correction.ph_remaining != null && hasPhDose) {
+    const val = Number(correction.ph_remaining);
+    targetRows.push({ label: 'pH còn lệch', value: val.toFixed(2), accent: Math.abs(val) <= 0.1 ? 'text-emerald-300' : 'text-fuchsia-300' });
   }
   if (targetRows.length) sections.push({ title: 'Đánh giá', rows: targetRows });
 

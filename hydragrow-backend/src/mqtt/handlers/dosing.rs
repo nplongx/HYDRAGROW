@@ -88,33 +88,25 @@ pub async fn handle_report(device_id: String, payload: &[u8], app_state: web::Da
         }
     });
 
-    let _ = insert_system_event(
-        &app_state.pg_pool,
-        &NewSystemEventRecord {
-            device_id: device_id.clone(),
-            level: "success".to_string(),
-            category: "dosing".to_string(),
-            title: "Lưu Báo Cáo Châm Phân Thành Công".to_string(),
-            message: alert_msg_text.clone(),
-            reason: None,
-            metadata: Some(metadata),
-            timestamp: chrono::Utc::now().timestamp_millis(),
-        },
-    )
-    .await;
+    let has_ec_dose = report.dose.pump_a_ml > 0.0 || report.dose.pump_b_ml > 0.0;
+    let has_ph_dose = report.dose.ph_up_ml > 0.0 || report.dose.ph_down_ml > 0.0;
+
+    let alert_title = match (has_ec_dose, has_ph_dose) {
+        (true, true) => "Lưu Báo Cáo Châm EC/pH Thành Công",
+        (true, false) => "Lưu Báo Cáo Châm EC Thành Công",
+        (false, true) => "Lưu Báo Cáo Châm pH Thành Công",
+        (false, false) => "Lưu Báo Cáo Châm Dinh Dưỡng Thành Công",
+    };
 
     let alert = AlertMessage {
         level: "success".to_string(),
         category: "dosing".to_string(),
-        title: "Lưu Báo Cáo Châm Phân Thành Công".to_string(),
+        title: alert_title.to_string(),
         message: alert_msg_text,
         device_id: device_id.clone(),
         timestamp: chrono::Utc::now().timestamp_millis() as u64,
         reason: None,
-        metadata: Some(json!({
-            "event_type": "dosing_cycle",
-            "cycle_id": report.cycle_id,
-        })),
+        metadata: Some(metadata),
     };
     let _ = app_state.alert_sender.send(alert);
 }

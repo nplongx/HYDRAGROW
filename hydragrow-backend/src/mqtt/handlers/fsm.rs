@@ -19,6 +19,11 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     };
 
+    if json.get("event").is_some() && json.get("title").is_some() {
+        crate::mqtt::handlers::system_log::handle(device_id, payload, app_state).await;
+        return;
+    }
+
     // 2. Trích xuất trường current_state
     let state = match json.get("current_state").and_then(|s| s.as_str()) {
         Some(s) => s.to_string(),

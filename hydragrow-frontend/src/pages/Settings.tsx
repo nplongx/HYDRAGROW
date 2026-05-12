@@ -16,7 +16,7 @@ import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
 import { isTauriRuntime, loadAppSettings } from '../platform/settings';
 
-// --- LOGIC & TYPES (Giữ nguyên 100%) ---
+// --- LOGIC & TYPES ---
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type DosingFieldKey =
   | 'dosing_pwm_percent' | 'dosing_min_pwm_percent' | 'pump_a_capacity_ml_per_sec'
@@ -186,7 +186,9 @@ const Settings = () => {
   });
 
   const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'http://localhost:8000', device_id: '' });
-  const [calibrationPointsCount, setCalibrationPointsCount] = useState<2 | 3>(2);
+
+  // Xóa logic 3 điểm, hardcode mảng 2 điểm
+  const calibrationPoints = [7, 4];
   const [wizardStep, setWizardStep] = useState(0);
   const [isCapturingPoint, setIsCapturingPoint] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -194,7 +196,6 @@ const Settings = () => {
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
   const [adaptivePhases, setAdaptivePhases] = useState({ observe: true, recommend: true, auto_apply: false, confidence_threshold: 85 });
 
-  const calibrationPoints = calibrationPointsCount === 3 ? [7, 4, 10] : [7, 4];
   const activePoint = calibrationPoints[wizardStep];
   const isPhError = sensorData?.err_ph === true;
   const isCalibrationBlocked = !isSensorOnline || isPhError;
@@ -235,7 +236,7 @@ const Settings = () => {
     if (!currentDeviceId || !currentSettings?.backend_url) { toast.error('Thiếu Device ID hoặc URL máy chủ.'); return; }
     setIsCapturingPoint(true);
     if (wizardStep === 0) {
-      try { await callApi(`/api/devices/${currentDeviceId}/calibration/ph/start`, 'POST', { mode: calibrationPointsCount === 3 ? '3-point' : '2-point' }, currentSettings); }
+      try { await callApi(`/api/devices/${currentDeviceId}/calibration/ph/start`, 'POST', { mode: '2-point' }, currentSettings); }
       catch (error: any) { toast.error(`Lỗi: ${error.message}`); setIsCapturingPoint(false); return; }
     }
     const targetSamples = 5;
@@ -260,7 +261,7 @@ const Settings = () => {
   const goToNextPoint = () => { if (wizardStep < calibrationPoints.length - 1) { setWizardStep((prev) => prev + 1); return; } setWizardStep(calibrationPoints.length); };
 
   const calibrationSummary = (() => {
-    const p7 = capturedPoints[7]?.voltage; const p4 = capturedPoints[4]?.voltage; const p10 = capturedPoints[10]?.voltage;
+    const p7 = capturedPoints[7]?.voltage; const p4 = capturedPoints[4]?.voltage;
     const confList = Object.values(capturedPoints).map((p) => p.confidence);
     const avgConf = confList.length ? Math.round(confList.reduce((s, v) => s + v, 0) / confList.length) : 0;
     const spread = Number.isFinite(p7) && Number.isFinite(p4) ? Math.abs((p7 as number) - (p4 as number)) : 0;
@@ -268,7 +269,6 @@ const Settings = () => {
     return {
       ph_v7: Number.isFinite(p7) ? Number((p7 as number).toFixed(3)) : null,
       ph_v4: Number.isFinite(p4) ? Number((p4 as number).toFixed(3)) : null,
-      ph_v10: Number.isFinite(p10) ? Number((p10 as number).toFixed(3)) : null,
       reliability: Math.max(0, Math.min(100, avgConf + spreadBonus))
     };
   })();
@@ -297,10 +297,10 @@ const Settings = () => {
   };
 
   const applyCalibrationToConfig = (): any | null => {
-    if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null || (calibrationPointsCount === 3 && calibrationSummary.ph_v10 === null)) {
+    if (calibrationSummary.ph_v7 === null || calibrationSummary.ph_v4 === null) {
       toast.error(`Chưa đủ dữ liệu.`); return null;
     }
-    const nextConfig = { ...config, ph_v7: calibrationSummary.ph_v7, ph_v4: calibrationSummary.ph_v4, ph_v10: calibrationSummary.ph_v10, ph_calibration_mode: calibrationPointsCount === 3 ? '3-point' : '2-point' };
+    const nextConfig = { ...config, ph_v7: calibrationSummary.ph_v7, ph_v4: calibrationSummary.ph_v4, ph_calibration_mode: '2-point' };
     setConfig(nextConfig); toast.success('Đã áp dụng kết quả.'); return nextConfig;
   };
 
@@ -412,7 +412,7 @@ const Settings = () => {
         },
         sensor_calibration: {
           device_id: devId, ph_v7: toNumberOr(savingConfig.ph_v7, 2.5), ph_v4: toNumberOr(savingConfig.ph_v4, 1.428),
-          ph_v10: savingConfig.ph_v10 !== null ? Number(savingConfig.ph_v10) : null, ph_calibration_mode: savingConfig.ph_calibration_mode || '2-point',
+          ph_v10: savingConfig.ph_v10 !== null ? Number(savingConfig.ph_v10) : null, ph_calibration_mode: '2-point',
           ec_factor: toNumberOr(savingConfig.ec_factor, 880.0), ec_offset: toNumberOr(savingConfig.ec_offset, 0.0),
           temp_offset: toNumberOr(savingConfig.temp_offset, 0.0), temp_compensation_beta: toNumberOr(savingConfig.temp_compensation_beta, 0.02),
           publish_interval: toNumberOr(savingConfig.publish_interval, 5000), moving_average_window: toNumberOr(savingConfig.moving_average_window, 15),
@@ -429,11 +429,11 @@ const Settings = () => {
 
   if (isLoading) return <LoadingState message="Đang tải..." />;
 
-  // ------------------------- RENDER GIAO DIỆN (ĐÃ KHỚP CHUẨN MAX-W-5XL & FIX NÚT SAVE) -------------------------
+  // ------------------------- RENDER GIAO DIỆN -------------------------
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto pb-36 min-h-screen font-sans">
 
-      {/* Header dàn trải */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex flex-col space-y-1">
           <h1 className="text-2xl font-semibold text-slate-100 flex items-center gap-2">
@@ -712,10 +712,9 @@ const Settings = () => {
 
             <SubCard title="Hiệu Chuẩn pH" className="h-full">
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={() => { setCalibrationPointsCount(2); setWizardStep(0); setCapturedPoints({}); }} className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${calibrationPointsCount === 2 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>2 ĐIỂM (7, 4)</button>
-                  <button onClick={() => { setCalibrationPointsCount(3); setWizardStep(0); setCapturedPoints({}); }} className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${calibrationPointsCount === 3 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>3 ĐIỂM (7, 4, 10)</button>
-                </div>
+                {/* 
+                  ĐÃ XÓA KHỐI CHỌN 2 ĐIỂM/ 3 ĐIỂM Ở ĐÂY
+                */}
 
                 {isAdvancedMode && (
                   <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 space-y-3">
@@ -752,10 +751,10 @@ const Settings = () => {
                   </div>
                 ) : (
                   <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 shadow-inner space-y-4">
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="grid grid-cols-2 gap-2 text-center">
                       <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">v7</p><p className="text-sm font-mono text-slate-200">{calibrationSummary.ph_v7}V</p></div>
                       <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">v4</p><p className="text-sm font-mono text-slate-200">{calibrationSummary.ph_v4}V</p></div>
-                      <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">Tin cậy</p><p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-green-400' : 'text-yellow-400'}`}>{calibrationSummary.reliability}%</p></div>
+                      <div className="col-span-2 p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">Tin cậy</p><p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-green-400' : 'text-yellow-400'}`}>{calibrationSummary.reliability}%</p></div>
                     </div>
 
                     <button onClick={handleFinishAndSaveCalibration} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-all text-sm">
@@ -769,7 +768,7 @@ const Settings = () => {
         </AccordionSection>
       </div>
 
-      {/* 🟢 THANH ĐIỀU KHIỂN FIXED - Đã đẩy lên [84px] để không bị Bottom Navigation đè */}
+      {/* 🟢 THANH ĐIỀU KHIỂN FIXED */}
       <div className="fixed bottom-[84px] md:bottom-[90px] left-0 right-0 z-40 pointer-events-none p-4 md:p-0 flex justify-center md:justify-end md:right-8">
         <button
           onClick={() => handleSave()}

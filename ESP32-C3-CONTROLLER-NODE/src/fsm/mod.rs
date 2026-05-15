@@ -3,6 +3,10 @@
 // Re-export các kiểu public để code bên ngoài chỉ cần `use crate::fsm::*`.
 
 pub mod auto_fsm;
+pub mod actors;
+pub mod orchestrator;
+pub mod phases;
+pub mod system_context;
 pub mod calibration;
 pub mod commands;
 pub mod context;
@@ -10,6 +14,8 @@ pub mod types;
 pub mod utils;
 
 pub use context::ControlContext;
+pub use phases::{FaultCode, SystemPhase};
+pub use system_context::SystemContext;
 pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData, SystemState};
 
 use std::sync::mpsc::{Receiver, Sender};
@@ -23,7 +29,6 @@ use crate::config::SharedConfig;
 use crate::mqtt::MqttCommandPayload;
 use crate::pump::PumpController;
 
-use auto_fsm::run_auto_fsm;
 use commands::process_mqtt_commands;
 use utils::{get_current_time_ms, get_current_time_sec};
 
@@ -46,6 +51,7 @@ pub fn start_fsm_control_loop(
     current_time_sec: u64,
 ) {
     let mut ctx = ControlContext::default();
+    let mut new_ctx = SystemContext::from_legacy(&ctx);
     let mut last_reported_state = String::new();
 
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
@@ -159,12 +165,13 @@ pub fn start_fsm_control_loop(
             }
 
             if !(is_noisy_sample && config.control_mode == ControlMode::Auto) {
-                tick_safety_and_control(
+                // Step 8: swap sang orchestrator mới, không chạy auto FSM cũ nữa.
+                new_ctx.sync_from_legacy(&ctx);
+                orchestrator::tick(
                     current_time_ms,
-                    current_time_sec,
                     &config,
                     &sensors,
-                    &mut ctx,
+                    &mut new_ctx,
                     &mut pump_ctrl,
                     &shared_config,
                     &mut nvs,
@@ -260,17 +267,7 @@ fn tick_safety_and_control(
         tick_scheduled_mixing(current_time_sec, config, ctx);
 
         if !matches!(ctx.current_state, SystemState::SystemFault(_)) {
-            run_auto_fsm(
-                current_time_ms,
-                config,
-                sensors,
-                ctx,
-                pump_ctrl,
-                shared_config,
-                nvs,
-                dosing_report_tx,
-                fsm_mqtt_tx,
-            );
+            let _ = (current_time_ms, config, sensors, ctx, pump_ctrl, shared_config, nvs, dosing_report_tx, fsm_mqtt_tx);
         }
 
         // --- Điều khiển bơm Osaka ---

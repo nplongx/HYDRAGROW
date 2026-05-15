@@ -179,6 +179,7 @@ pub fn start_fsm_control_loop(
                     &dosing_report_tx,
                     &fsm_mqtt_tx,
                 );
+                new_ctx.sync_to_legacy(&mut ctx, current_time_ms);
             }
         }
 

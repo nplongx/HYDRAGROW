@@ -3,6 +3,7 @@ use crate::mqtt::PumpStatus;
 use super::actors::{dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor};
 use super::context::ControlContext;
 use super::phases::SystemPhase;
+use super::types::SystemState;
 use super::types::PendingCalibrationSample;
 
 pub type CronSchedule = String;
@@ -114,6 +115,82 @@ impl SystemContext {
         self.water_change_cron = legacy.current_water_change_cron_expr.clone();
         self.last_water_change_sec = legacy.last_water_change_time;
         self.next_water_change_trigger_sec = legacy.next_water_change_trigger_sec;
+    }
+
+    pub fn sync_to_legacy(&self, legacy: &mut ControlContext, now_ms: u64) {
+        legacy.current_state = match &self.phase {
+            SystemPhase::Booting => SystemState::SystemBooting,
+            SystemPhase::Monitoring => SystemState::Monitoring,
+            SystemPhase::ManualMode => SystemState::ManualMode,
+            SystemPhase::WaterRefilling => SystemState::WaterRefilling {
+                trigger: "orchestrator".to_string(),
+                target_level: 0.0,
+                start_time: now_ms / 1000,
+                start_level: 0.0,
+                start_ec: 0.0,
+            },
+            SystemPhase::WaterDraining => SystemState::WaterDraining {
+                trigger: "orchestrator".to_string(),
+                target_level: 0.0,
+                start_time: now_ms / 1000,
+                start_level: 0.0,
+                start_ec: 0.0,
+            },
+            SystemPhase::DosingEC => SystemState::DosingPumpA {
+                next_toggle_time: now_ms,
+                dose_target_ml: 0.0,
+                delivered_ml_est: 0.0,
+                dose_b_ml: 0.0,
+                pulse_on: false,
+                pulse_count: 0,
+                max_pulse_count: 1,
+                pulse_on_ms: 0,
+                pulse_off_ms: 0,
+                pwm_percent: 0,
+                active_capacity_ml_per_sec: 0.0,
+                target_ec: 0.0,
+                start_ec: 0.0,
+                start_ph: 0.0,
+            },
+            SystemPhase::DosingPH => SystemState::DosingPH {
+                next_toggle_time: now_ms,
+                is_up: self.safety.last_ph_dose_up.unwrap_or(true),
+                dose_target_ml: 0.0,
+                delivered_ml_est: 0.0,
+                pulse_on: false,
+                pulse_count: 0,
+                max_pulse_count: 1,
+                pulse_on_ms: 0,
+                pulse_off_ms: 0,
+                pwm_percent: 0,
+                active_capacity_ml_per_sec: 0.0,
+                target_ph: 0.0,
+                start_ec: 0.0,
+                start_ph: 0.0,
+            },
+            SystemPhase::ActiveMixing => SystemState::ActiveMixing { finish_time: self.phase_finish_ms.unwrap_or(now_ms) },
+            SystemPhase::Stabilizing => SystemState::Stabilizing { finish_time: self.phase_finish_ms.unwrap_or(now_ms) },
+            SystemPhase::Cooldown => SystemState::Cooldown { finish_time: self.phase_finish_ms.unwrap_or(now_ms) },
+            SystemPhase::SensorCalibration { step } => SystemState::SensorCalibration { step: step.clone(), finish_time: now_ms },
+            SystemPhase::Fault(code) => SystemState::SystemFault(code.as_str().to_string()),
+            SystemPhase::EmergencyStop(reason) => SystemState::EmergencyStop(reason.clone()),
+        };
+
+        legacy.pump_status = self.peripherals.pump_status.clone();
+        legacy.fsm_osaka_active = self.peripherals.osaka_active;
+        legacy.current_osaka_pwm = self.peripherals.osaka_pwm;
+        legacy.is_misting_active = self.peripherals.is_misting_active;
+        legacy.last_mist_toggle_time = self.peripherals.last_mist_toggle_time;
+        legacy.is_scheduled_mixing_active = self.peripherals.is_scheduled_mixing_active;
+        legacy.last_mixing_start_sec = self.peripherals.last_mixing_start_sec;
+
+        legacy.last_ec_before_dosing = self.safety.last_ec_before_dose;
+        legacy.last_ph_before_dosing = self.safety.last_ph_before_dose;
+        legacy.last_ph_dosing_is_up = self.safety.last_ph_dose_up;
+        legacy.last_water_before_refill = self.safety.last_water_before_refill;
+        legacy.ec_retry_count = self.dosing.retry_ec;
+        legacy.ph_retry_count = self.dosing.retry_ph;
+        legacy.pending_calibration_sample = self.calibration.pending_sample.clone();
     }
 }
 

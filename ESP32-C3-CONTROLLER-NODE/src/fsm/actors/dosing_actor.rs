@@ -8,7 +8,7 @@ use super::super::phases::FaultCode;
 #[derive(Debug, Clone)]
 pub enum DosingSubState {
     Idle,
-    SoftStarting { finish_ms: u64 },
+    SoftStarting { finish_ms: u64, next_state: Box<DosingSubState> },
     PumpingA(PulseJob),
     WaitingAtoB { finish_ms: u64, b_job: PulseJob },
     PumpingB(PulseJob),
@@ -108,26 +108,79 @@ impl DosingActor {
         let safe_pwm = pwm.clamp(1, 100);
         let ml_per_sec = config.pump_a_capacity_ml_per_sec * (safe_pwm as f32 / 100.0);
 
-        let delivered_ml = ml_per_sec * (on_ms as f32 / 1000.0);
-        self.sub_state = DosingSubState::SoftStarting { finish_ms: now_ms + config.soft_start_duration as u64 };
-        self.sub_state = DosingSubState::PumpingA(PulseJob {
+        self.sub_state = DosingSubState::SoftStarting {
+            finish_ms: now_ms + config.soft_start_duration as u64,
+            next_state: Box::new(DosingSubState::PumpingA(PulseJob {
             pump: PumpTarget::NutrientA { dose_b_ml: dose_ml },
             target_ml: dose_ml,
-            delivered_ml,
-            pulse_on: true,
-            pulse_count: 1,
+            delivered_ml: 0.0,
+            pulse_on: false,
+            pulse_count: 0,
             max_pulses,
             on_ms,
             off_ms,
             pwm: safe_pwm,
             ml_per_sec,
-            next_toggle_ms: now_ms + on_ms,
+            next_toggle_ms: now_ms,
+        })),
+        };
+    }
+
+
+    pub fn start_ph_cycle(
+        &mut self,
+        now_ms: u64,
+        is_up: bool,
+        dose_ml: f32,
+        target_ph: f32,
+        pwm: u32,
+        config: &ControllerConfig,
+    ) {
+        self.cycle_ctx = Some(DosingCycleCtx {
+            cycle_id: format!("ph-{now_ms}"),
+            trigger: "ph_control".to_string(),
+            start_ec: 0.0,
+            start_ph: 0.0,
+            target_ec: 0.0,
+            target_ph,
+            start_water_level: 0.0,
+            start_ms: now_ms,
+            post_mixing_ec: 0.0,
+            post_mixing_ph: 0.0,
         });
+
+        let safe_pwm = pwm.clamp(1, 100);
+        let pump_kind = if is_up { DosePumpKind::PumpPhUp } else { DosePumpKind::PumpPhDown };
+        let ml_per_sec = match effective_flow_ml_per_sec(pump_kind, safe_pwm, config) {
+            Some(v) => v,
+            None => return,
+        };
+        let (on_ms, off_ms, max_pulses) = pulse_params(dose_ml, ml_per_sec, config);
+
+        self.sub_state = DosingSubState::SoftStarting {
+            finish_ms: now_ms + config.soft_start_duration as u64,
+            next_state: Box::new(DosingSubState::PumpingPH(PulseJob {
+                pump: if is_up { PumpTarget::PhUp } else { PumpTarget::PhDown },
+                target_ml: dose_ml,
+                delivered_ml: 0.0,
+                pulse_on: false,
+                pulse_count: 0,
+                max_pulses,
+                on_ms,
+                off_ms,
+                pwm: safe_pwm,
+                ml_per_sec,
+                next_toggle_ms: now_ms,
+            })),
+        };
     }
 
     pub fn tick(&mut self, now_ms: u64, config: &ControllerConfig, pumps: &mut PumpController) -> DosingEvent {
         match &self.sub_state.clone() {
-            DosingSubState::SoftStarting { finish_ms } if now_ms >= *finish_ms => DosingEvent::SoftStartDone,
+            DosingSubState::SoftStarting { finish_ms, next_state } if now_ms >= *finish_ms => {
+                self.sub_state = *next_state.clone();
+                DosingEvent::SoftStartDone
+            },
             DosingSubState::PumpingA(job) if now_ms >= job.next_toggle_ms => self.tick_pump_a(now_ms, config, pumps),
             DosingSubState::WaitingAtoB { finish_ms, b_job } if now_ms >= *finish_ms => {
                 self.begin_pump_b(b_job.clone(), now_ms, pumps)

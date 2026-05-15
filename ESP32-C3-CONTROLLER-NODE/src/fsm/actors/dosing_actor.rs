@@ -1,6 +1,7 @@
 use hydragrow_shared::ControllerConfig;
 
-use crate::pump::PumpController;
+use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
+use crate::pump::{PumpController, PumpType};
 
 use super::super::phases::FaultCode;
 
@@ -54,8 +55,15 @@ pub struct DosingCycleCtx {
 #[must_use]
 pub enum DosingEvent {
     Pending,
-    PulseComplete { pump: PumpTarget, delivered_ml: f32 },
-    CycleComplete,
+    SoftStartDone,
+    PulseToggle { pump: PumpTarget, pulse_on: bool },
+    PhaseTransition,
+    CycleComplete {
+        dose_a_ml: f32,
+        dose_b_ml: f32,
+        ph_up_ml: f32,
+        ph_down_ml: f32,
+    },
     Failed(FaultCode),
 }
 
@@ -75,13 +83,209 @@ impl DosingActor {
         matches!(self.sub_state, DosingSubState::Idle)
     }
 
-    pub fn tick(&mut self, now_ms: u64, _config: &ControllerConfig, _pumps: &mut PumpController) -> DosingEvent {
-        match &self.sub_state {
+    pub fn start_ec_cycle(
+        &mut self,
+        now_ms: u64,
+        dose_ml: f32,
+        target_ec: f32,
+        pwm: u32,
+        config: &ControllerConfig,
+    ) {
+        self.cycle_ctx = Some(DosingCycleCtx {
+            cycle_id: format!("ec-{now_ms}"),
+            trigger: "ec_control".to_string(),
+            start_ec: 0.0,
+            start_ph: 0.0,
+            target_ec,
+            target_ph: 0.0,
+            start_water_level: 0.0,
+            start_ms: now_ms,
+            post_mixing_ec: 0.0,
+            post_mixing_ph: 0.0,
+        });
+
+        let (on_ms, off_ms, max_pulses) = pulse_params(dose_ml, config.pump_a_capacity_ml_per_sec, config);
+        let safe_pwm = pwm.clamp(1, 100);
+        let ml_per_sec = config.pump_a_capacity_ml_per_sec * (safe_pwm as f32 / 100.0);
+
+        let delivered_ml = ml_per_sec * (on_ms as f32 / 1000.0);
+        self.sub_state = DosingSubState::SoftStarting { finish_ms: now_ms + config.soft_start_duration as u64 };
+        self.sub_state = DosingSubState::PumpingA(PulseJob {
+            pump: PumpTarget::NutrientA { dose_b_ml: dose_ml },
+            target_ml: dose_ml,
+            delivered_ml,
+            pulse_on: true,
+            pulse_count: 1,
+            max_pulses,
+            on_ms,
+            off_ms,
+            pwm: safe_pwm,
+            ml_per_sec,
+            next_toggle_ms: now_ms + on_ms,
+        });
+    }
+
+    pub fn tick(&mut self, now_ms: u64, config: &ControllerConfig, pumps: &mut PumpController) -> DosingEvent {
+        match &self.sub_state.clone() {
+            DosingSubState::SoftStarting { finish_ms } if now_ms >= *finish_ms => DosingEvent::SoftStartDone,
+            DosingSubState::PumpingA(job) if now_ms >= job.next_toggle_ms => self.tick_pump_a(now_ms, config, pumps),
             DosingSubState::WaitingAtoB { finish_ms, b_job } if now_ms >= *finish_ms => {
-                self.sub_state = DosingSubState::PumpingB(b_job.clone());
-                DosingEvent::Pending
+                self.begin_pump_b(b_job.clone(), now_ms, pumps)
             }
+            DosingSubState::PumpingB(job) if now_ms >= job.next_toggle_ms => self.tick_pump_b(now_ms, pumps),
+            DosingSubState::PumpingPH(job) if now_ms >= job.next_toggle_ms => self.tick_pump_ph(now_ms, pumps),
             _ => DosingEvent::Pending,
         }
     }
+
+    fn tick_pump_a(&mut self, now_ms: u64, config: &ControllerConfig, pumps: &mut PumpController) -> DosingEvent {
+        let DosingSubState::PumpingA(mut job) = self.sub_state.clone() else {
+            return DosingEvent::Pending;
+        };
+        let pump = PumpType::NutrientA;
+
+        if job.pulse_on {
+            let _ = pumps.set_dosing_pump_pulse(pump, false, 0);
+            if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
+                let PumpTarget::NutrientA { dose_b_ml } = job.pump else { return DosingEvent::Failed(FaultCode::EcDosingFailed); };
+                if dose_b_ml <= 0.0 {
+                    self.sub_state = DosingSubState::Idle;
+                    return DosingEvent::CycleComplete { dose_a_ml: job.delivered_ml, dose_b_ml: 0.0, ph_up_ml: 0.0, ph_down_ml: 0.0 };
+                }
+
+                let safe_pwm = job.pwm.clamp(1, 100);
+                let ml_per_sec = match effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config) {
+                    Some(v) => v,
+                    None => return DosingEvent::Failed(FaultCode::EcDosingFailed),
+                };
+                let (on_ms, off_ms, max_pulses) = pulse_params(dose_b_ml, ml_per_sec, config);
+                let delivered_ml = ml_per_sec * (on_ms as f32 / 1000.0);
+                let b_job = PulseJob {
+                    pump: PumpTarget::NutrientB,
+                    target_ml: dose_b_ml,
+                    delivered_ml,
+                    pulse_on: true,
+                    pulse_count: 1,
+                    max_pulses,
+                    on_ms,
+                    off_ms,
+                    pwm: safe_pwm,
+                    ml_per_sec,
+                    next_toggle_ms: now_ms + on_ms,
+                };
+                self.sub_state = DosingSubState::WaitingAtoB {
+                    finish_ms: now_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
+                    b_job,
+                };
+                DosingEvent::PhaseTransition
+            } else {
+                job.pulse_on = false;
+                job.next_toggle_ms = now_ms + job.off_ms;
+                self.sub_state = DosingSubState::PumpingA(job.clone());
+                DosingEvent::PulseToggle { pump: job.pump, pulse_on: false }
+            }
+        } else {
+            let _ = pumps.set_dosing_pump_pulse(pump, true, job.pwm);
+            job.pulse_on = true;
+            job.pulse_count += 1;
+            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
+            job.next_toggle_ms = now_ms + job.on_ms;
+            self.sub_state = DosingSubState::PumpingA(job.clone());
+            DosingEvent::PulseToggle { pump: job.pump, pulse_on: true }
+        }
+    }
+
+    fn begin_pump_b(&mut self, mut b_job: PulseJob, now_ms: u64, pumps: &mut PumpController) -> DosingEvent {
+        let _ = pumps.set_dosing_pump_pulse(PumpType::NutrientB, true, b_job.pwm);
+        b_job.pulse_on = true;
+        b_job.next_toggle_ms = now_ms + b_job.on_ms;
+        self.sub_state = DosingSubState::PumpingB(b_job.clone());
+        DosingEvent::PhaseTransition
+    }
+
+    fn tick_pump_b(&mut self, now_ms: u64, pumps: &mut PumpController) -> DosingEvent {
+        let DosingSubState::PumpingB(mut job) = self.sub_state.clone() else {
+            return DosingEvent::Pending;
+        };
+
+        if job.pulse_on {
+            let _ = pumps.set_dosing_pump_pulse(PumpType::NutrientB, false, 0);
+            if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
+                let delivered = job.delivered_ml;
+                self.sub_state = DosingSubState::Idle;
+                DosingEvent::CycleComplete { dose_a_ml: 0.0, dose_b_ml: delivered, ph_up_ml: 0.0, ph_down_ml: 0.0 }
+            } else {
+                job.pulse_on = false;
+                job.next_toggle_ms = now_ms + job.off_ms;
+                self.sub_state = DosingSubState::PumpingB(job.clone());
+                DosingEvent::PulseToggle { pump: job.pump, pulse_on: false }
+            }
+        } else {
+            let _ = pumps.set_dosing_pump_pulse(PumpType::NutrientB, true, job.pwm);
+            job.pulse_on = true;
+            job.pulse_count += 1;
+            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
+            job.next_toggle_ms = now_ms + job.on_ms;
+            self.sub_state = DosingSubState::PumpingB(job.clone());
+            DosingEvent::PulseToggle { pump: job.pump, pulse_on: true }
+        }
+    }
+
+    fn tick_pump_ph(&mut self, now_ms: u64, pumps: &mut PumpController) -> DosingEvent {
+        let DosingSubState::PumpingPH(mut job) = self.sub_state.clone() else {
+            return DosingEvent::Pending;
+        };
+
+        let pump_type = match job.pump {
+            PumpTarget::PhUp => PumpType::PhUp,
+            PumpTarget::PhDown => PumpType::PhDown,
+            _ => return DosingEvent::Failed(FaultCode::EcDosingFailed),
+        };
+
+        if job.pulse_on {
+            let _ = pumps.set_dosing_pump_pulse(pump_type, false, 0);
+            if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
+                self.sub_state = DosingSubState::Idle;
+                DosingEvent::CycleComplete {
+                    dose_a_ml: 0.0,
+                    dose_b_ml: 0.0,
+                    ph_up_ml: if matches!(job.pump, PumpTarget::PhUp) { job.delivered_ml } else { 0.0 },
+                    ph_down_ml: if matches!(job.pump, PumpTarget::PhDown) { job.delivered_ml } else { 0.0 },
+                }
+            } else {
+                job.pulse_on = false;
+                job.next_toggle_ms = now_ms + job.off_ms;
+                self.sub_state = DosingSubState::PumpingPH(job.clone());
+                DosingEvent::PulseToggle { pump: job.pump, pulse_on: false }
+            }
+        } else {
+            let _ = pumps.set_dosing_pump_pulse(pump_type, true, job.pwm);
+            job.pulse_on = true;
+            job.pulse_count += 1;
+            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
+            job.next_toggle_ms = now_ms + job.on_ms;
+            self.sub_state = DosingSubState::PumpingPH(job.clone());
+            DosingEvent::PulseToggle { pump: job.pump, pulse_on: true }
+        }
+    }
+}
+
+fn pulse_params(dose_ml: f32, capacity_ml_per_sec: f32, config: &ControllerConfig) -> (u64, u64, u32) {
+    let is_pulse_mode = dose_ml < config.dosing_min_dose_ml;
+    let pulse_on_ms = if is_pulse_mode {
+        config.dosing_pulse_on_ms.max(1) as u64
+    } else {
+        ((dose_ml / capacity_ml_per_sec) * 1000.0).max(1.0) as u64
+    };
+    let pulse_off_ms = if is_pulse_mode {
+        config.dosing_pulse_off_ms as u64
+    } else {
+        0
+    };
+    let max_pulse_count = if is_pulse_mode {
+        config.dosing_max_pulse_count_per_cycle.max(1) as u32
+    } else {
+        1
+    };
+    (pulse_on_ms, pulse_off_ms, max_pulse_count)
 }

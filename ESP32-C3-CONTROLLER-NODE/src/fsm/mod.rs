@@ -10,6 +10,7 @@ pub mod system_context;
 pub mod calibration;
 pub mod commands;
 pub mod context;
+pub mod peripheral;
 pub mod types;
 pub mod utils;
 

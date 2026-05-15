@@ -215,25 +215,23 @@ const CalibrationMetadata = ({ meta }: { meta: any }) => {
 };
 
 // ─── Component Router điều hướng hiển thị Metadata ────────────────────────────
-const MetadataRenderer = ({ category, level, metadata }: { category: string; level: string; title: string; metadata?: Record<string, any> }) => {
+const MetadataRenderer = ({ metadata }: { metadata?: Record<string, any> }) => {
   if (!metadata) return null;
 
-  // 1. Ưu tiên cao nhất: Dựa vào event_type của kiến trúc mới
   const eventType = metadata.event_type;
-  if (eventType === 'WaterEvent') return <WaterMetadata meta={metadata} />;
-  if (eventType === 'SystemAlert') return <AlertMetadata meta={metadata} />;
-  if (eventType === 'CalibrationUpdate' || eventType === 'ema_update' || eventType === 'auto_tune') return <CalibrationMetadata meta={metadata} />;
-  if (eventType === 'DosingCycleComplete' || eventType === 'dosing_cycle') return <DosingMetadata meta={metadata} />;
-  if (eventType === 'BasicSystemLog') return null;
-
-  // 2. Fallback: Kháng lỗi phân biệt chữ hoa, chữ thường, dấu gạch dưới
-  const normCategory = category?.toLowerCase().replace('_', '');
-  if (normCategory === 'dosing') return <DosingMetadata meta={metadata} />;
-  if (normCategory === 'water') return <WaterMetadata meta={metadata} />;
-  if (normCategory === 'calibration') return <CalibrationMetadata meta={metadata} />;
-  if (normCategory === 'alert' || level === 'critical' || level === 'warning') return <AlertMetadata meta={metadata} />;
-
-  return null;
+  switch (eventType) {
+    case 'WaterEvent':
+      return <WaterMetadata meta={metadata} />;
+    case 'SystemAlert':
+      return <AlertMetadata meta={metadata} />;
+    case 'CalibrationUpdate':
+      return <CalibrationMetadata meta={metadata} />;
+    case 'DosingCycleComplete':
+      return <DosingMetadata meta={metadata} />;
+    case 'BasicSystemLog':
+    default:
+      return null;
+  }
 };
 
 // ─── Kiểu hiển thị icon/color ────────────────────────────────────────────────
@@ -571,12 +569,7 @@ const SystemLog = () => {
                       </div>
                     )}
 
-                    <MetadataRenderer
-                      category={ev.category}
-                      level={ev.level}
-                      title={ev.title}
-                      metadata={ev.metadata}
-                    />
+                    <MetadataRenderer metadata={ev.metadata} />
                   </div>
                 </div>
               );

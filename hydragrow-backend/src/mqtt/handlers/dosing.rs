@@ -10,17 +10,11 @@ use crate::models::config::DosingCalibration;
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_report(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    let raw_payload = std::str::from_utf8(payload).unwrap_or("{}");
-    let clean_payload = if let Some(stripped) = raw_payload.strip_prefix("[DOSING CYCLE] ") {
-        stripped.trim()
-    } else {
-        raw_payload.trim()
-    };
-
-    let report: DosingReportPayload = match serde_json::from_str(clean_payload) {
+    let report: DosingReportPayload = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
-            error!(error = ?e, payload = %clean_payload, "Lỗi parse DosingReport (Cấu trúc không khớp)");
+            let payload_preview = String::from_utf8_lossy(payload);
+            error!(error = ?e, payload = %payload_preview, "Lỗi parse DosingReport (Cấu trúc không khớp)");
             return;
         }
     };

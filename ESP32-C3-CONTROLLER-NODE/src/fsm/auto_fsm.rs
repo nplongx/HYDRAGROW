@@ -3,7 +3,10 @@ use std::sync::mpsc::Sender;
 
 use chrono::{Local, TimeZone};
 use cron::Schedule;
-use hydragrow_shared::{AlertMetadata, ControllerConfig, LogCategory, LogLevel, SystemLogEvent, WaterMetadata};
+use hydragrow_shared::{
+    AlertMetadata, ControllerConfig, DoseData, DosingReportPayload, LogCategory, LogLevel,
+    PhaseData, SystemLogEvent, WaterMetadata,
+};
 use log::{debug, error, info, warn};
 
 use crate::config::SharedConfig;
@@ -219,19 +222,52 @@ pub fn run_auto_fsm(
                         config.ph_shift_down_per_ml
                     };
 
-                    let report_json = format!(
-                        r#"[DOSING CYCLE] {{ "cycle_id": "{}", "trigger": "{}", "pre": {{ "ec": {:.2}, "ph": {:.2}, "water_level": {:.1} }}, "dose": {{ "pump_a_ml": {:.2}, "pump_b_ml": {:.2}, "ph_up_ml": {:.2}, "ph_down_ml": {:.2} }}, "post_mixing": {{ "ec": {:.2}, "ph": {:.2} }}, "post_stable": {{ "ec": {:.2}, "ph": {:.2} }}, "delta_ec": {:.2}, "delta_ph": {:.2}, "target_ec": {:.2}, "target_ph": {:.2}, "error_ec": {:.2}, "error_ph": {:.2}, "duration_ms": {}, "ema_ec_gain_used": {:.4}, "ema_ph_shift_used": {:.4}, "step_ratio_ec": {:.2}, "step_ratio_ph": {:.2} }}"#,
-                        sample.cycle_id, sample.trigger, sample.start_ec, sample.start_ph, sample.start_water_level,
-                        sample.dose_a_ml, sample.dose_b_ml, sample.dose_ph_up_ml, sample.dose_ph_down_ml,
-                        sample.post_mixing_ec, sample.post_mixing_ph, sensors.ec, sensors.ph,
-                        delta_ec, delta_ph, sample.target_ec, sample.target_ph, error_ec, error_ph, duration_ms,
-                        config.ec_gain_per_ml, ema_ph_shift_used,
-                        ctx.adaptive_ec_step_ratio, 
-                        ctx.adaptive_ph_step_ratio 
-                    );
+                    let report = DosingReportPayload {
+                        cycle_id: sample.cycle_id.clone(),
+                        trigger: sample.trigger.clone(),
+                        pre: PhaseData {
+                            ec: sample.start_ec,
+                            ph: sample.start_ph,
+                            water_level: Some(sample.start_water_level),
+                        },
+                        dose: DoseData {
+                            pump_a_ml: sample.dose_a_ml,
+                            pump_b_ml: sample.dose_b_ml,
+                            ph_up_ml: sample.dose_ph_up_ml,
+                            ph_down_ml: sample.dose_ph_down_ml,
+                        },
+                        post_mixing: PhaseData {
+                            ec: sample.post_mixing_ec,
+                            ph: sample.post_mixing_ph,
+                            water_level: None,
+                        },
+                        post_stable: PhaseData {
+                            ec: sensors.ec,
+                            ph: sensors.ph,
+                            water_level: None,
+                        },
+                        delta_ec,
+                        delta_ph,
+                        target_ec: sample.target_ec,
+                        target_ph: sample.target_ph,
+                        error_ec,
+                        error_ph,
+                        duration_ms,
+                        ema_ec_gain_used: config.ec_gain_per_ml,
+                        ema_ph_shift_used,
+                        step_ratio_ec: Some(ctx.adaptive_ec_step_ratio),
+                        step_ratio_ph: Some(ctx.adaptive_ph_step_ratio),
+                        stabilized_window_sec: Some(config.sensor_stabilize_sec as u32),
+                    };
 
-                    // Report này gửi qua channel riêng `/dosing_report` nên vẫn dùng JSON format cũ để cho backend bắt (hoặc có thể refactor sau).
-                    let _ = dosing_report_tx.send(report_json);
+                    match serde_json::to_string(&report) {
+                        Ok(json) => {
+                            let _ = dosing_report_tx.send(json);
+                        }
+                        Err(e) => {
+                            error!("❌ Không thể serialize DosingReportPayload: {:?}", e);
+                        }
+                    }
                 }
                 apply_runtime_calibration_ema(sensors, shared_config, ctx, fsm_mqtt_tx);
                 ctx.current_state = SystemState::DosingCycleComplete;

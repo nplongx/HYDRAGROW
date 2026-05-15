@@ -27,7 +27,13 @@ impl SafetyGuard {
         }
     }
 
-    pub fn check_hourly_dose(&mut self, pump: &str, now_sec: u64, dose_ml: f32, max_ml: f32) -> bool {
+    pub fn check_hourly_dose(
+        &mut self,
+        pump: &str,
+        now_sec: u64,
+        dose_ml: f32,
+        max_ml: f32,
+    ) -> bool {
         let history = self.hourly_doses.entry(pump.to_string()).or_default();
         history.retain(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600);
         let total = history.iter().map(|(_, ml)| *ml).sum::<f32>();
@@ -39,17 +45,46 @@ impl SafetyGuard {
     }
 
     pub fn record_drain(&mut self, now_sec: u64, max: u32) -> bool {
-        self.drain_history.retain(|ts| now_sec.saturating_sub(*ts) <= 3600);
-        if self.drain_history.len() as u32 >= max { return false; }
+        self.drain_history
+            .retain(|ts| now_sec.saturating_sub(*ts) <= 3600);
+        if self.drain_history.len() as u32 >= max {
+            return false;
+        }
         self.drain_history.push(now_sec);
         true
     }
 
     pub fn record_refill(&mut self, now_sec: u64, max: u32) -> bool {
-        self.refill_history.retain(|ts| now_sec.saturating_sub(*ts) <= 3600);
-        if self.refill_history.len() as u32 >= max { return false; }
+        self.refill_history
+            .retain(|ts| now_sec.saturating_sub(*ts) <= 3600);
+        if self.refill_history.len() as u32 >= max {
+            return false;
+        }
         self.refill_history.push(now_sec);
         true
+    }
+
+    pub fn replace_hourly_histories(
+        &mut self,
+        doses: HashMap<String, Vec<(u64, f32)>>,
+        refill: Vec<u64>,
+        drain: Vec<u64>,
+    ) {
+        self.hourly_doses = doses;
+        self.refill_history = refill;
+        self.drain_history = drain;
+    }
+
+    pub fn hourly_doses(&self) -> &HashMap<String, Vec<(u64, f32)>> {
+        &self.hourly_doses
+    }
+
+    pub fn refill_history(&self) -> &[u64] {
+        &self.refill_history
+    }
+
+    pub fn drain_history(&self) -> &[u64] {
+        &self.drain_history
     }
 
     pub fn flush_for_reset(&mut self) {

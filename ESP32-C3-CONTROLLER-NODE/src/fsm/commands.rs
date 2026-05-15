@@ -2,8 +2,8 @@ use hydragrow_shared::{ControlMode, ControllerConfig, LogCategory, LogLevel, Sys
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
-use super::context::ControlContext;
-use super::types::SystemState;
+use super::phases::SystemPhase;
+use super::system_context::SystemContext;
 use crate::fsm::utils::send_system_log;
 use crate::mqtt::MqttCommandPayload;
 use crate::pump::{PumpController, PumpType, WaterDirection};
@@ -18,17 +18,17 @@ pub fn process_mqtt_commands(
     cmd_rx: &Receiver<MqttCommandPayload>,
     config: &ControllerConfig,
     pump_ctrl: &mut PumpController,
-    ctx: &mut ControlContext,
+    ctx: &mut SystemContext,
     current_time_ms: u64,
     fsm_mqtt_tx: &Sender<String>, // Bổ sung tham số để bắn log MQTT
 ) -> bool {
     let mut force_sync = false;
 
     let is_emergency_state = matches!(
-        ctx.current_state,
-        SystemState::EmergencyStop(_)
-            | SystemState::SystemFault(_)
-            | SystemState::SensorCalibration { .. }
+        ctx.phase,
+        SystemPhase::EmergencyStop(_)
+            | SystemPhase::Fault(_)
+            | SystemPhase::SensorCalibration { .. }
     );
 
     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -37,20 +37,19 @@ pub fn process_mqtt_commands(
         // --- Lệnh hệ thống (không phụ thuộc mode) ---
         if action_lower == "enter_calibration" {
             info!("🛠️ Bắt đầu chế độ Hiệu chuẩn Cảm biến! Khóa chéo an toàn.");
-            ctx.stop_all_pumps(pump_ctrl);
+            crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
             let step = cmd.target.clone().unwrap_or_else(|| "IDLE".to_string());
-            ctx.current_state = SystemState::SensorCalibration {
-                step,
-                finish_time: current_time_ms + 3_600_000,
-            };
+            ctx.phase = SystemPhase::SensorCalibration { step };
+            ctx.phase_finish_ms = Some(current_time_ms + 3_600_000);
             force_sync = true;
             continue;
         }
 
         if action_lower == "exit_calibration" {
-            if matches!(ctx.current_state, SystemState::SensorCalibration { .. }) {
+            if matches!(ctx.phase, SystemState::SensorCalibration { .. }) {
                 info!("✅ Thoát chế độ Hiệu chuẩn, quay về Monitoring.");
-                ctx.current_state = SystemState::Monitoring;
+                ctx.phase = SystemPhase::Monitoring;
+                ctx.phase_finish_ms = None;
                 force_sync = true;
             }
             continue;
@@ -63,10 +62,10 @@ pub fn process_mqtt_commands(
 
         if action_lower == "reset_fault" {
             info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
-            ctx.stop_all_pumps(pump_ctrl);
+            crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
 
             // Đã bổ sung 2 tham số: device_id và kênh MQTT để ghi log
-            ctx.reset_faults(&config.device_id, fsm_mqtt_tx);
+            crate::fsm::mod_helpers::reset_faults_from_system_ctx(ctx, &config.device_id, fsm_mqtt_tx);
 
             force_sync = true;
             continue;
@@ -122,7 +121,7 @@ pub fn process_mqtt_commands(
         if is_force_on {
             info!("⚠️ NGƯỜI DÙNG CƯỠNG CHẾ BẬT {}!", pump_name);
             let duration = duration_sec.unwrap_or(120);
-            ctx.safety_override_until = current_time_ms + (duration as u64 * 1000);
+            ctx.safety.safety_override_until = current_time_ms + (duration as u64 * 1000);
 
             // Bắn log cảnh báo User dùng quyền Cưỡng chế
             send_system_log(
@@ -157,14 +156,14 @@ pub fn process_mqtt_commands(
             match duration_sec {
                 Some(duration) if duration > 0 => {
                     let finish_time = current_time_ms + (duration as u64 * 1000);
-                    ctx.manual_timeouts.insert(pump_name.clone(), finish_time);
+                    ctx.safety.manual_timeouts.insert(pump_name.clone(), finish_time);
                 }
                 _ => {
-                    ctx.manual_timeouts.remove(&pump_name);
+                    ctx.safety.manual_timeouts.remove(&pump_name);
                 }
             }
         } else {
-            ctx.manual_timeouts.remove(&pump_name);
+            ctx.safety.manual_timeouts.remove(&pump_name);
         }
 
         let pwm_val = pwm.unwrap_or(if is_on { 100 } else { 0 });
@@ -189,7 +188,7 @@ pub fn process_mqtt_commands(
 // apply_pump_command – áp dụng lệnh bơm cụ thể lên phần cứng + trạng thái
 // ---------------------------------------------------------------------------
 fn apply_pump_command(
-    ctx: &mut ControlContext,
+    ctx: &mut SystemContext,
     pump_ctrl: &mut PumpController,
     pump_name: &str,
     is_on: bool,
@@ -200,8 +199,8 @@ fn apply_pump_command(
 ) {
     let _ = match pump_name {
         "A" | "PUMP_A" => {
-            ctx.pump_status.pump_a = is_on;
-            ctx.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 });
+            ctx.peripherals.pump_status.pump_a = is_on;
+            ctx.peripherals.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 });
             if pwm.is_some() || is_set_pwm {
                 pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientA, is_on, pwm_val)
             } else {
@@ -209,8 +208,8 @@ fn apply_pump_command(
             }
         }
         "B" | "PUMP_B" => {
-            ctx.pump_status.pump_b = is_on;
-            ctx.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 });
+            ctx.peripherals.pump_status.pump_b = is_on;
+            ctx.peripherals.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 });
             if pwm.is_some() || is_set_pwm {
                 pump_ctrl.set_dosing_pump_pwm(PumpType::NutrientB, is_on, pwm_val)
             } else {
@@ -218,8 +217,8 @@ fn apply_pump_command(
             }
         }
         "PH_UP" | "PUMP_PH_UP" => {
-            ctx.pump_status.ph_up = is_on;
-            ctx.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 });
+            ctx.peripherals.pump_status.ph_up = is_on;
+            ctx.peripherals.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 });
             if pwm.is_some() || is_set_pwm {
                 pump_ctrl.set_dosing_pump_pwm(PumpType::PhUp, is_on, pwm_val)
             } else {
@@ -227,8 +226,8 @@ fn apply_pump_command(
             }
         }
         "PH_DOWN" | "PUMP_PH_DOWN" => {
-            ctx.pump_status.ph_down = is_on;
-            ctx.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 });
+            ctx.peripherals.pump_status.ph_down = is_on;
+            ctx.peripherals.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 });
             if pwm.is_some() || is_set_pwm {
                 pump_ctrl.set_dosing_pump_pwm(PumpType::PhDown, is_on, pwm_val)
             } else {
@@ -236,8 +235,8 @@ fn apply_pump_command(
             }
         }
         "OSAKA_PUMP" | "OSAKA" => {
-            ctx.pump_status.osaka_pump = is_on;
-            ctx.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
+            ctx.peripherals.pump_status.osaka_pump = is_on;
+            ctx.peripherals.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
             if pwm.is_some() || is_set_pwm {
                 pump_ctrl.set_osaka_pump_pwm(pwm_val)
             } else {
@@ -245,17 +244,17 @@ fn apply_pump_command(
             }
         }
         "MIST_VALVE" | "MIST" => {
-            ctx.pump_status.mist_valve = is_on;
-            ctx.is_misting_active = is_on;
+            ctx.peripherals.pump_status.mist_valve = is_on;
+            ctx.peripherals.is_misting_active = is_on;
             if is_on {
-                ctx.last_mist_toggle_time = current_time_ms;
+                ctx.peripherals.last_mist_toggle_time = current_time_ms;
             }
             pump_ctrl.set_mist_valve(is_on)
         }
         "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
-            ctx.pump_status.water_pump_in = is_on;
+            ctx.peripherals.pump_status.water_pump_in = is_on;
             if is_on {
-                ctx.pump_status.water_pump_out = false;
+                ctx.peripherals.pump_status.water_pump_out = false;
             }
             pump_ctrl.set_water_pump(if is_on {
                 WaterDirection::In
@@ -264,9 +263,9 @@ fn apply_pump_command(
             })
         }
         "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
-            ctx.pump_status.water_pump_out = is_on;
+            ctx.peripherals.pump_status.water_pump_out = is_on;
             if is_on {
-                ctx.pump_status.water_pump_in = false;
+                ctx.peripherals.pump_status.water_pump_in = false;
             }
             pump_ctrl.set_water_pump(if is_on {
                 WaterDirection::Out
@@ -277,4 +276,3 @@ fn apply_pump_command(
         _ => Ok(()),
     };
 }
-

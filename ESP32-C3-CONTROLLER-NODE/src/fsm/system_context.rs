@@ -1,10 +1,12 @@
 use crate::mqtt::PumpStatus;
 
-use super::actors::{dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor};
+use super::actors::{
+    dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
+};
 use super::context::ControlContext;
 use super::phases::SystemPhase;
-use super::types::SystemState;
 use super::types::PendingCalibrationSample;
+use super::types::SystemState;
 
 pub type CronSchedule = String;
 
@@ -105,6 +107,11 @@ impl SystemContext {
         self.peripherals.previous_ec = legacy.previous_ec;
         self.peripherals.previous_ph = legacy.previous_ph;
 
+        self.safety.replace_hourly_histories(
+            legacy.hourly_dose_history_ml_by_pump.clone(),
+            legacy.hourly_refill_history.clone(),
+            legacy.hourly_drain_history.clone(),
+        );
         self.safety.manual_timeouts = legacy.manual_timeouts.clone();
         self.safety.safety_override_until = legacy.safety_override_until;
         self.safety.last_ec_before_dose = legacy.last_ec_before_dosing;
@@ -168,10 +175,19 @@ impl SystemContext {
                 start_ec: 0.0,
                 start_ph: 0.0,
             },
-            SystemPhase::ActiveMixing => SystemState::ActiveMixing { finish_time: self.phase_finish_ms.unwrap_or(now_ms) },
-            SystemPhase::Stabilizing => SystemState::Stabilizing { finish_time: self.phase_finish_ms.unwrap_or(now_ms) },
-            SystemPhase::Cooldown => SystemState::Cooldown { finish_time: self.phase_finish_ms.unwrap_or(now_ms) },
-            SystemPhase::SensorCalibration { step } => SystemState::SensorCalibration { step: step.clone(), finish_time: now_ms },
+            SystemPhase::ActiveMixing => SystemState::ActiveMixing {
+                finish_time: self.phase_finish_ms.unwrap_or(now_ms),
+            },
+            SystemPhase::Stabilizing => SystemState::Stabilizing {
+                finish_time: self.phase_finish_ms.unwrap_or(now_ms),
+            },
+            SystemPhase::Cooldown => SystemState::Cooldown {
+                finish_time: self.phase_finish_ms.unwrap_or(now_ms),
+            },
+            SystemPhase::SensorCalibration { step } => SystemState::SensorCalibration {
+                step: step.clone(),
+                finish_time: now_ms,
+            },
             SystemPhase::Fault(code) => SystemState::SystemFault(code.as_str().to_string()),
             SystemPhase::EmergencyStop(reason) => SystemState::EmergencyStop(reason.clone()),
         };
@@ -183,6 +199,10 @@ impl SystemContext {
         legacy.last_mist_toggle_time = self.peripherals.last_mist_toggle_time;
         legacy.is_scheduled_mixing_active = self.peripherals.is_scheduled_mixing_active;
         legacy.last_mixing_start_sec = self.peripherals.last_mixing_start_sec;
+
+        legacy.hourly_dose_history_ml_by_pump = self.safety.hourly_doses().clone();
+        legacy.hourly_refill_history = self.safety.refill_history().to_vec();
+        legacy.hourly_drain_history = self.safety.drain_history().to_vec();
 
         legacy.last_ec_before_dosing = self.safety.last_ec_before_dose;
         legacy.last_ph_before_dosing = self.safety.last_ph_before_dose;
@@ -257,7 +277,6 @@ impl Default for AutoTuner {
     }
 }
 
-
 impl CalibrationSampler {
     pub fn start_sample(&mut self, sample: PendingCalibrationSample) {
         self.pending_sample = Some(sample);
@@ -269,24 +288,52 @@ impl CalibrationSampler {
 }
 
 impl AutoTuner {
-    pub fn on_dosing_ack(
+    pub fn on_ec_dosing_ack(
         &mut self,
         response: f32,
         expected: f32,
         _config: &hydragrow_shared::ControllerConfig,
         now_sec: u64,
     ) {
-        if expected <= 0.0 || !response.is_finite() || !expected.is_finite() {
+        self.on_dosing_ack(response, expected, true, now_sec);
+    }
+
+    pub fn on_ph_dosing_ack(
+        &mut self,
+        response: f32,
+        expected: f32,
+        _config: &hydragrow_shared::ControllerConfig,
+        now_sec: u64,
+    ) {
+        self.on_dosing_ack(response, expected, false, now_sec);
+    }
+
+    fn on_dosing_ack(&mut self, response: f32, expected: f32, is_ec: bool, now_sec: u64) {
+        if self.locked || expected <= 0.0 || !response.is_finite() || !expected.is_finite() {
             return;
         }
 
-        let ratio = (response / expected).clamp(0.1, 3.0);
-        let alpha = 0.1;
-        self.adaptive_ec_ratio = self.adaptive_ec_ratio * (1.0 - alpha) + ratio * alpha;
-        self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
+        let gain_vs_expected = response / expected.max(0.001);
+        let tune_delta = if gain_vs_expected > 2.0 {
+            -0.01
+        } else if gain_vs_expected < 1.0 {
+            0.02
+        } else {
+            0.0
+        };
+
+        if tune_delta != 0.0 {
+            self.adjust_step_ratio(is_ec, tune_delta);
+            if is_ec {
+                self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
+            } else {
+                self.best_ph_ratio = self.best_ph_ratio.max(self.adaptive_ph_ratio);
+            }
+        }
+
         self.last_update_sec = now_sec;
 
-        if (ratio - 1.0).abs() > 0.8 {
+        if (gain_vs_expected - 1.0).abs() > 1.0 {
             self.abnormal_streak = self.abnormal_streak.saturating_add(1);
         } else {
             self.abnormal_streak = 0;
@@ -295,6 +342,15 @@ impl AutoTuner {
         if self.abnormal_streak >= 3 {
             self.locked = true;
         }
+    }
+
+    pub fn adjust_step_ratio(&mut self, is_ec: bool, delta: f32) {
+        let ratio = if is_ec {
+            &mut self.adaptive_ec_ratio
+        } else {
+            &mut self.adaptive_ph_ratio
+        };
+        *ratio = (*ratio + delta).clamp(0.1, 2.0);
     }
 
     pub fn is_locked(&self) -> bool {
@@ -307,6 +363,11 @@ impl AutoTuner {
 }
 impl Default for DeltaWindow {
     fn default() -> Self {
-        Self { hour_total: 0.0, hour_anchor_sec: 0, day_total: 0.0, day_anchor_sec: 0 }
+        Self {
+            hour_total: 0.0,
+            hour_anchor_sec: 0,
+            day_total: 0.0,
+            day_anchor_sec: 0,
+        }
     }
 }

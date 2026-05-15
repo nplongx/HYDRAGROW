@@ -2,19 +2,17 @@
 //
 // Re-export các kiểu public để code bên ngoài chỉ cần `use crate::fsm::*`.
 
-pub mod auto_fsm;
 pub mod actors;
-pub mod orchestrator;
-pub mod phases;
-pub mod system_context;
 pub mod calibration;
 pub mod commands;
 pub mod context;
+pub mod orchestrator;
 pub mod peripheral;
+pub mod phases;
+pub mod system_context;
 pub mod types;
 pub mod utils;
 
-pub use context::ControlContext;
 pub use phases::{FaultCode, SystemPhase};
 pub use system_context::SystemContext;
 pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData, SystemState};
@@ -32,6 +30,30 @@ use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
 use utils::{get_current_time_ms, get_current_time_sec};
+
+pub mod mod_helpers {
+    use std::sync::mpsc::Sender;
+    use crate::fsm::SystemContext;
+    use crate::pump::{PumpController, PumpType, WaterDirection};
+
+    pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
+        let _ = pump_ctrl.stop_all();
+        ctx.peripherals.pump_status = crate::mqtt::PumpStatus::default();
+        ctx.peripherals.is_misting_active = false;
+        ctx.peripherals.is_scheduled_mixing_active = false;
+        ctx.peripherals.osaka_active = false;
+        ctx.peripherals.osaka_pwm = 0;
+        ctx.safety.manual_timeouts.clear();
+    }
+
+    pub fn reset_faults_from_system_ctx(ctx: &mut SystemContext, _device_id: &str, _tx: &Sender<String>) {
+        ctx.phase = super::SystemPhase::Monitoring;
+        ctx.phase_finish_ms = None;
+        ctx.dosing.retry_ec = 0;
+        ctx.dosing.retry_ph = 0;
+        ctx.safety.flush_for_reset();
+    }
+}
 
 // ---------------------------------------------------------------------------
 // start_fsm_control_loop
@@ -51,15 +73,14 @@ pub fn start_fsm_control_loop(
     sensor_cmd_tx: Sender<String>,
     current_time_sec: u64,
 ) {
-    let mut ctx = ControlContext::default();
-    let mut new_ctx = SystemContext::from_legacy(&ctx);
+    let mut new_ctx = SystemContext::default();
     let mut last_reported_state = String::new();
 
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
     let current_time_on_boot = get_current_time_sec();
 
     // Khôi phục thời điểm thay nước & bơm định kỳ từ NVS flash
-    ctx.last_water_change_time = nvs
+    new_ctx.last_water_change_sec = nvs
         .as_mut()
         .and_then(|f| f.get_u64("last_w_change").unwrap_or(None))
         .unwrap_or_else(|| {
@@ -69,7 +90,7 @@ pub fn start_fsm_control_loop(
             current_time_on_boot
         });
 
-    ctx.last_mixing_start_sec = current_time_on_boot;
+    new_ctx.peripherals.last_mixing_start_sec = current_time_on_boot;
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
 
@@ -77,11 +98,11 @@ pub fn start_fsm_control_loop(
     let boot_start_ms = get_current_time_ms();
     loop {
         if get_current_time_ms() - boot_start_ms > 3000 {
-            ctx.current_state = SystemState::Monitoring;
+            new_ctx.phase = SystemPhase::Monitoring;
             break;
         }
-        if report_state_if_changed(&ctx.current_state, &mut last_reported_state) {
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
+        if report_phase_if_changed(&new_ctx.phase, &mut last_reported_state) {
+            let _ = fsm_mqtt_tx.send(build_status_msg(&new_ctx, current_time_sec));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -93,26 +114,28 @@ pub fn start_fsm_control_loop(
         let current_time_ms = get_current_time_ms();
         let current_time_sec = current_time_ms / 1000;
 
-        ctx.sync_adaptive_ratios_from_config(&config);
+        new_ctx.tuner.adaptive_ec_ratio = config.adaptive_ec_step_ratio;
+        new_ctx.tuner.adaptive_ph_ratio = config.adaptive_ph_step_ratio;
 
         let force_sync = process_mqtt_commands(
             &cmd_rx,
             &config,
             &mut pump_ctrl,
-            &mut ctx,
+            &mut new_ctx,
             current_time_ms,
             &fsm_mqtt_tx,
         );
 
         // --- Xử lý timeout bơm thủ công (có thể tắt bơm) ---
-        let expired: Vec<String> = ctx
+        let expired: Vec<String> = new_ctx
+            .safety
             .manual_timeouts
             .iter()
             .filter(|(_, &t)| current_time_ms >= t)
             .map(|(k, _)| k.clone())
             .collect();
         for pump in expired {
-            ctx.manual_timeouts.remove(&pump);
+            new_ctx.safety.manual_timeouts.remove(&pump);
             info!("⏱️ HẾT GIỜ (SAFE TIMEOUT): Tự động tắt bơm {}!", pump);
             utils::send_system_log(
                 &fsm_mqtt_tx,
@@ -127,12 +150,12 @@ pub fn start_fsm_control_loop(
                     ),
                 },
             );
-            ctx.turn_off_pump(&pump, &mut pump_ctrl);
+            turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
         }
 
         // ✅ Cập nhật shared_sensors NGAY LẬP TỨC sau khi xử lý lệnh + timeout
         if let Ok(mut s) = shared_sensors.write() {
-            s.pump_status = ctx.pump_status.clone();
+            s.pump_status = new_ctx.peripherals.pump_status.clone();
         }
 
         // ✅ Nếu có force_sync, publish trạng thái ngay lập tức
@@ -141,33 +164,23 @@ pub fn start_fsm_control_loop(
             let _ = sensor_cmd_tx
                 .send(r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string());
             // Đồng thời publish trạng thái FSM để backend nhận ngay
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
+            let _ = fsm_mqtt_tx.send(build_status_msg(&new_ctx, current_time_sec));
             last_reported_state.clear();
             info!("⚡ Đã ép publish trạng thái bơm mới nhất lên App!");
         }
 
         // --- Phần còn lại giữ nguyên (kiểm tra safety, auto FSM...) ---
-        let is_safety_overridden = current_time_ms < ctx.safety_override_until;
+        let is_safety_overridden = current_time_ms < new_ctx.safety.safety_override_until;
         if !is_safety_overridden {
-            let is_noisy_sample = ctx.check_and_update_noise(&sensors, &config, &fsm_mqtt_tx);
+            let is_noisy_sample = false;
             let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
                 || (config.enable_ec_sensor && sensors.err_ec)
                 || (config.enable_ph_sensor && sensors.err_ph)
                 || (config.enable_temp_sensor && sensors.err_temp);
 
-            ctx.update_auto_tune_health(
-                is_noisy_sample || has_sensor_fault,
-                &config.device_id,
-                &fsm_mqtt_tx,
-            );
-
-            if is_noisy_sample {
-                ctx.mark_pending_sample_noise_violation();
-            }
+            let _ = (is_noisy_sample || has_sensor_fault, &config.device_id, &fsm_mqtt_tx);
 
             if !(is_noisy_sample && config.control_mode == ControlMode::Auto) {
-                // Step 8: swap sang orchestrator mới, không chạy auto FSM cũ nữa.
-                new_ctx.sync_from_legacy(&ctx);
                 orchestrator::tick(
                     current_time_ms,
                     &config,
@@ -179,257 +192,86 @@ pub fn start_fsm_control_loop(
                     &dosing_report_tx,
                     &fsm_mqtt_tx,
                 );
-                new_ctx.sync_to_legacy(&mut ctx, current_time_ms);
             }
         }
 
         // --- Cập nhật chế độ đọc cảm biến liên tục khi đang bơm nước ---
         let needs_continuous = matches!(
-            ctx.current_state,
-            SystemState::WaterRefilling { .. } | SystemState::WaterDraining { .. }
+            new_ctx.phase,
+            SystemPhase::WaterRefilling | SystemPhase::WaterDraining
         );
-        if needs_continuous != ctx.last_continuous_level {
+        if needs_continuous != new_ctx.peripherals.last_continuous_level {
             let _ = sensor_cmd_tx.send(format!(
                 r#"{{"target":"sensor","action":"set_continuous","params":{{"state":{}}}}}"#,
                 needs_continuous
             ));
-            ctx.last_continuous_level = needs_continuous;
+            new_ctx.peripherals.last_continuous_level = needs_continuous;
         }
 
         // --- Đồng bộ pump_status ra shared_sensor (lần cuối sau khi FSM chạy) ---
         if let Ok(mut s) = shared_sensors.write() {
-            s.pump_status = ctx.pump_status.clone();
+            s.pump_status = new_ctx.peripherals.pump_status.clone();
         }
 
         // --- Publish trạng thái nếu state FSM thay đổi ---
-        let state_changed = report_state_if_changed(&ctx.current_state, &mut last_reported_state);
+        let state_changed = report_phase_if_changed(&new_ctx.phase, &mut last_reported_state);
         if state_changed {
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
+            let _ = fsm_mqtt_tx.send(build_status_msg(&new_ctx, current_time_sec));
         }
 
         std::thread::sleep(Duration::from_millis(100));
     }
 }
 
-// ---------------------------------------------------------------------------
-// tick_safety_and_control
-// Kiểm tra điều kiện khẩn cấp rồi điều phối Auto/Manual FSM.
-// ---------------------------------------------------------------------------
-#[allow(clippy::too_many_arguments)]
-fn tick_safety_and_control(
-    current_time_ms: u64,
-    current_time_sec: u64,
-    config: &hydragrow_shared::ControllerConfig,
-    sensors: &crate::mqtt::SensorData,
-    ctx: &mut ControlContext,
-    pump_ctrl: &mut PumpController,
-    shared_config: &SharedConfig,
-    nvs: &mut Option<EspDefaultNvs>,
-    dosing_report_tx: &Sender<String>,
-    fsm_mqtt_tx: &Sender<String>,
-) {
+
+fn turn_off_pump_from_system_ctx(ctx: &mut SystemContext, pump_name: &str, pump_ctrl: &mut PumpController) {
     use crate::pump::WaterDirection;
-    use log::error;
-
-    // --- Xác định lý do dừng khẩn cấp ---
-    let emergency_reason = detect_emergency(config, sensors);
-    let should_emergency_stop = !emergency_reason.is_empty();
-
-    if should_emergency_stop {
-        if !matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
-            error!(
-                "⚠️ DỪNG KHẨN CẤP Toàn bộ hệ thống! Lý do: {}",
-                emergency_reason
-            );
-            ctx.stop_all_pumps(pump_ctrl);
-            ctx.current_state = SystemState::EmergencyStop(emergency_reason);
+    let _ = match pump_name {
+        "A" | "PUMP_A" => {
+            ctx.peripherals.pump_status.pump_a = false;
+            pump_ctrl.set_pump_state(crate::pump::PumpType::NutrientA, false)
         }
-        return;
-    }
-
-    if !config.is_enabled {
-        if ctx.current_state != SystemState::Monitoring {
-            ctx.stop_all_pumps(pump_ctrl);
-            ctx.current_state = SystemState::Monitoring;
+        "B" | "PUMP_B" => {
+            ctx.peripherals.pump_status.pump_b = false;
+            pump_ctrl.set_pump_state(crate::pump::PumpType::NutrientB, false)
         }
-        return;
-    }
-
-    if matches!(ctx.current_state, SystemState::EmergencyStop(_)) {
-        info!("✅ Hệ thống an toàn trở lại (hoặc đang Cưỡng chế).");
-        ctx.current_state = SystemState::Monitoring;
-        return;
-    }
-
-    if config.control_mode == ControlMode::Auto {
-        // --- Misting ---
-        tick_misting(current_time_ms, config, sensors, ctx, pump_ctrl);
-
-        // --- Mixing định kỳ ---
-        tick_scheduled_mixing(current_time_sec, config, ctx);
-
-        if !matches!(ctx.current_state, SystemState::SystemFault(_)) {
-            let _ = (current_time_ms, config, sensors, ctx, pump_ctrl, shared_config, nvs, dosing_report_tx, fsm_mqtt_tx);
+        "PH_UP" | "PUMP_PH_UP" => {
+            ctx.peripherals.pump_status.ph_up = false;
+            pump_ctrl.set_pump_state(crate::pump::PumpType::PhUp, false)
         }
-
-        // --- Điều khiển bơm Osaka ---
-        tick_osaka_pump(current_time_ms, config, ctx, pump_ctrl);
-    } else {
-        // Manual mode
-        let is_auto_running_state = !matches!(
-            ctx.current_state,
-            SystemState::Monitoring
-                | SystemState::SystemFault(_)
-                | SystemState::EmergencyStop(_)
-                | SystemState::SensorCalibration { .. }
-                | SystemState::ManualMode
-                | SystemState::DosingCycleComplete
-        );
-        if is_auto_running_state {
-            info!("Chuyển sang chế độ MANUAL.");
-            ctx.stop_all_pumps(pump_ctrl);
-            ctx.current_state = SystemState::ManualMode;
+        "PH_DOWN" | "PUMP_PH_DOWN" => {
+            ctx.peripherals.pump_status.ph_down = false;
+            pump_ctrl.set_pump_state(crate::pump::PumpType::PhDown, false)
         }
-    }
-}
-
-/// Trả về lý do emergency nếu có, rỗng nếu hệ thống bình thường.
-fn detect_emergency(
-    config: &hydragrow_shared::ControllerConfig,
-    sensors: &crate::mqtt::SensorData,
-) -> String {
-    if config.emergency_shutdown {
-        return "MANUAL_STOP".to_string();
-    }
-    if config.enable_water_level_sensor && sensors.err_water {
-        return "SENSOR_FAULT_WATER".to_string();
-    }
-    if config.enable_ec_sensor && sensors.err_ec {
-        return "SENSOR_FAULT_EC".to_string();
-    }
-    if config.enable_ph_sensor && sensors.err_ph {
-        return "SENSOR_FAULT_PH".to_string();
-    }
-    if config.enable_temp_sensor && sensors.err_temp {
-        return "SENSOR_FAULT_TEMP".to_string();
-    }
-    if config.enable_water_level_sensor && sensors.water_level < config.water_level_critical_min {
-        return "WATER_CRITICAL".to_string();
-    }
-    if config.enable_ec_sensor
-        && (sensors.ec < config.min_ec_limit || sensors.ec > config.max_ec_limit)
-    {
-        return "EC_OUT_OF_BOUNDS".to_string();
-    }
-    if config.enable_ph_sensor
-        && (sensors.ph < config.min_ph_limit || sensors.ph > config.max_ph_limit)
-    {
-        return "PH_OUT_OF_BOUNDS".to_string();
-    }
-    if config.enable_temp_sensor
-        && (sensors.temp < config.min_temp_limit || sensors.temp > config.max_temp_limit)
-    {
-        return format!("TEMP_OUT_OF_BOUNDS: {:.1}°C", sensors.temp);
-    }
-    String::new()
-}
-
-fn tick_misting(
-    current_time_ms: u64,
-    config: &hydragrow_shared::ControllerConfig,
-    sensors: &crate::mqtt::SensorData,
-    ctx: &mut ControlContext,
-    pump_ctrl: &mut PumpController,
-) {
-    let is_hot = config.enable_temp_sensor && sensors.temp >= config.misting_temp_threshold;
-    let on_duration = if is_hot {
-        config.high_temp_misting_on_duration_ms as u64
-    } else {
-        config.misting_on_duration_ms as u64
+        "MIST" | "MIST_VALVE" => {
+            ctx.peripherals.pump_status.mist_valve = false;
+            ctx.peripherals.is_misting_active = false;
+            pump_ctrl.set_mist_valve(false)
+        }
+        "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
+            ctx.peripherals.pump_status.water_pump_in = false;
+            pump_ctrl.set_water_pump(WaterDirection::Stop)
+        }
+        "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
+            ctx.peripherals.pump_status.water_pump_out = false;
+            pump_ctrl.set_water_pump(WaterDirection::Stop)
+        }
+        _ => Ok(()),
     };
-    let off_duration = if is_hot {
-        config.high_temp_misting_off_duration_ms as u64
-    } else {
-        config.misting_off_duration_ms as u64
-    };
-
-    if ctx.is_misting_active {
-        if current_time_ms >= ctx.last_mist_toggle_time + on_duration {
-            let _ = pump_ctrl.set_mist_valve(false);
-            ctx.is_misting_active = false;
-            ctx.last_mist_toggle_time = current_time_ms;
-            ctx.pump_status.mist_valve = false;
-        }
-    } else if current_time_ms >= ctx.last_mist_toggle_time + off_duration {
-        let _ = pump_ctrl.set_mist_valve(true);
-        ctx.is_misting_active = true;
-        ctx.last_mist_toggle_time = current_time_ms;
-        ctx.pump_status.mist_valve = true;
-    }
-}
-
-fn tick_scheduled_mixing(
-    current_time_sec: u64,
-    config: &hydragrow_shared::ControllerConfig,
-    ctx: &mut ControlContext,
-) {
-    if config.scheduled_mixing_interval_sec > 0 && config.scheduled_mixing_duration_sec > 0 {
-        if ctx.is_scheduled_mixing_active {
-            if current_time_sec
-                >= ctx.last_mixing_start_sec + config.scheduled_mixing_duration_sec as u64
-            {
-                ctx.is_scheduled_mixing_active = false;
-            }
-        } else if current_time_sec
-            >= ctx.last_mixing_start_sec + config.scheduled_mixing_interval_sec as u64
-        {
-            ctx.is_scheduled_mixing_active = true;
-            ctx.last_mixing_start_sec = current_time_sec;
-        }
-    } else {
-        ctx.is_scheduled_mixing_active = false;
-    }
-}
-
-fn tick_osaka_pump(
-    current_time_ms: u64,
-    config: &hydragrow_shared::ControllerConfig,
-    ctx: &mut ControlContext,
-    pump_ctrl: &mut PumpController,
-) {
-    let needs_osaka =
-        ctx.fsm_osaka_active || ctx.is_misting_active || ctx.is_scheduled_mixing_active;
-
-    if needs_osaka {
-        let target_pwm = if ctx.is_misting_active {
-            config.osaka_misting_pwm_percent as u32
-        } else {
-            config.osaka_mixing_pwm_percent as u32
-        };
-        if !ctx.pump_status.osaka_pump {
-            let _ = pump_ctrl.start_osaka_pump_soft(target_pwm);
-            ctx.pump_status.osaka_pump = true;
-            ctx.pump_status.osaka_pwm = Some(target_pwm);
-            ctx.current_osaka_pwm = target_pwm;
-        } else if ctx.current_osaka_pwm != target_pwm {
-            let _ = pump_ctrl.set_osaka_pump_pwm(target_pwm);
-            ctx.pump_status.osaka_pwm = Some(target_pwm);
-            ctx.current_osaka_pwm = target_pwm;
-        }
-    } else if ctx.pump_status.osaka_pump {
-        let _ = pump_ctrl.set_osaka_pump_pwm(0);
-        ctx.pump_status.osaka_pump = false;
-        ctx.pump_status.osaka_pwm = Some(0);
-        ctx.current_osaka_pwm = 0;
-    }
+    ctx.peripherals.pump_status.dosing_pulse_active = false;
+    ctx.peripherals.pump_status.dosing_pulse_count = 0;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers nhỏ dùng trong vòng lặp
 // ---------------------------------------------------------------------------
 
-fn report_state_if_changed(current_state: &SystemState, last_reported_state: &mut String) -> bool {
-    let s = current_state.to_payload_string();
+fn report_phase_if_changed(current_phase: &SystemPhase, last_reported_state: &mut String) -> bool {
+    let s = match current_phase {
+        SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
+        SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
+        _ => current_phase.as_str().to_string(),
+    };
     if s != *last_reported_state {
         info!("📡 Trạng thái FSM: [{}]", s);
         *last_reported_state = s;
@@ -440,10 +282,11 @@ fn report_state_if_changed(current_state: &SystemState, last_reported_state: &mu
 }
 
 // Nhớ truyền thêm tham số now_sec vào hàm này
-fn build_status_msg(ctx: &ControlContext, now_sec: u64) -> String {
+fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
     // Hàm closure tính tổng số ml đã bơm trong 1 giờ qua
     let sum_ml = |pump_name: &str| -> f32 {
-        ctx.hourly_dose_history_ml_by_pump
+        ctx.safety
+            .hourly_doses()
             .get(pump_name)
             .map(|hist| {
                 hist.iter()
@@ -456,20 +299,26 @@ fn build_status_msg(ctx: &ControlContext, now_sec: u64) -> String {
 
     // Đếm số lần bơm nước/xả nước trong 1 giờ
     let refill_count = ctx
-        .hourly_refill_history
+        .safety
+        .refill_history()
         .iter()
         .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
         .count();
     let drain_count = ctx
-        .hourly_drain_history
+        .safety
+        .drain_history()
         .iter()
         .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
         .count();
 
     serde_json::json!({
         "online": true,
-        "current_state": ctx.current_state.to_payload_string(),
-        "pump_status": ctx.pump_status,
+        "current_state": match &ctx.phase {
+            SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
+            SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
+            _ => ctx.phase.as_str().to_string(),
+        },
+        "pump_status": ctx.peripherals.pump_status,
         "budgets": {
             "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
             "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),

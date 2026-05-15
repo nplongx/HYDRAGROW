@@ -5,6 +5,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use super::phases::SystemPhase;
 use super::system_context::SystemContext;
 use crate::fsm::utils::send_system_log;
+use crate::fsm::SystemState;
 use crate::mqtt::MqttCommandPayload;
 use crate::pump::{PumpController, PumpType, WaterDirection};
 
@@ -46,7 +47,7 @@ pub fn process_mqtt_commands(
         }
 
         if action_lower == "exit_calibration" {
-            if matches!(ctx.phase, SystemState::SensorCalibration { .. }) {
+            if matches!(ctx.phase, SystemPhase::SensorCalibration { .. }) {
                 info!("✅ Thoát chế độ Hiệu chuẩn, quay về Monitoring.");
                 ctx.phase = SystemPhase::Monitoring;
                 ctx.phase_finish_ms = None;
@@ -65,7 +66,11 @@ pub fn process_mqtt_commands(
             crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
 
             // Đã bổ sung 2 tham số: device_id và kênh MQTT để ghi log
-            crate::fsm::mod_helpers::reset_faults_from_system_ctx(ctx, &config.device_id, fsm_mqtt_tx);
+            crate::fsm::mod_helpers::reset_faults_from_system_ctx(
+                ctx,
+                &config.device_id,
+                fsm_mqtt_tx,
+            );
 
             force_sync = true;
             continue;
@@ -156,7 +161,9 @@ pub fn process_mqtt_commands(
             match duration_sec {
                 Some(duration) if duration > 0 => {
                     let finish_time = current_time_ms + (duration as u64 * 1000);
-                    ctx.safety.manual_timeouts.insert(pump_name.clone(), finish_time);
+                    ctx.safety
+                        .manual_timeouts
+                        .insert(pump_name.clone(), finish_time);
                 }
                 _ => {
                     ctx.safety.manual_timeouts.remove(&pump_name);

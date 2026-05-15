@@ -11,7 +11,11 @@ name = "esp32-c3-mist-weaver-os"
 harness = false                  # do not use the built-in cargo test harness -> resolve rust-analyzer errors
 
 [profile.release]
-opt-level = "s"
+opt-level = "s"   # Tối ưu hóa cho dung lượng (hoặc dùng "z" để ép nhỏ nhất có thể)
+lto = true        # Bật Link-Time Optimization (Build sẽ lâu hơn nhưng file nhỏ hơn)
+codegen-units = 1 # Giúp LTO hoạt động tốt nhất
+strip = "symbols" # Xóa bỏ các symbol debug không cần thiết trên file release
+panic = "abort"   # Xóa code xử lý stack-unwinding khi panic
 
 [profile.dev]
 debug = true    # Symbols are nice, and they don't increase the size on Flash

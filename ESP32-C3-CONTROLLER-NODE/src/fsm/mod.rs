@@ -3,7 +3,6 @@
 // Re-export các kiểu public để code bên ngoài chỉ cần `use crate::fsm::*`.
 
 pub mod actors;
-pub mod calibration;
 pub mod commands;
 pub mod context;
 pub mod orchestrator;
@@ -32,9 +31,9 @@ use commands::process_mqtt_commands;
 use utils::{get_current_time_ms, get_current_time_sec};
 
 pub mod mod_helpers {
-    use std::sync::mpsc::Sender;
     use crate::fsm::SystemContext;
     use crate::pump::{PumpController, PumpType, WaterDirection};
+    use std::sync::mpsc::Sender;
 
     pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
         let _ = pump_ctrl.stop_all();
@@ -46,7 +45,11 @@ pub mod mod_helpers {
         ctx.safety.manual_timeouts.clear();
     }
 
-    pub fn reset_faults_from_system_ctx(ctx: &mut SystemContext, _device_id: &str, _tx: &Sender<String>) {
+    pub fn reset_faults_from_system_ctx(
+        ctx: &mut SystemContext,
+        _device_id: &str,
+        _tx: &Sender<String>,
+    ) {
         ctx.phase = super::SystemPhase::Monitoring;
         ctx.phase_finish_ms = None;
         ctx.dosing.retry_ec = 0;
@@ -114,8 +117,8 @@ pub fn start_fsm_control_loop(
         let current_time_ms = get_current_time_ms();
         let current_time_sec = current_time_ms / 1000;
 
-        new_ctx.tuner.adaptive_ec_ratio = config.adaptive_ec_step_ratio;
-        new_ctx.tuner.adaptive_ph_ratio = config.adaptive_ph_step_ratio;
+        new_ctx.tuner.adaptive_ec_ratio = config.ec_step_ratio;
+        new_ctx.tuner.adaptive_ph_ratio = config.ph_step_ratio;
 
         let force_sync = process_mqtt_commands(
             &cmd_rx,
@@ -178,7 +181,11 @@ pub fn start_fsm_control_loop(
                 || (config.enable_ph_sensor && sensors.err_ph)
                 || (config.enable_temp_sensor && sensors.err_temp);
 
-            let _ = (is_noisy_sample || has_sensor_fault, &config.device_id, &fsm_mqtt_tx);
+            let _ = (
+                is_noisy_sample || has_sensor_fault,
+                &config.device_id,
+                &fsm_mqtt_tx,
+            );
 
             if !(is_noisy_sample && config.control_mode == ControlMode::Auto) {
                 orchestrator::tick(
@@ -223,8 +230,11 @@ pub fn start_fsm_control_loop(
     }
 }
 
-
-fn turn_off_pump_from_system_ctx(ctx: &mut SystemContext, pump_name: &str, pump_ctrl: &mut PumpController) {
+fn turn_off_pump_from_system_ctx(
+    ctx: &mut SystemContext,
+    pump_name: &str,
+    pump_ctrl: &mut PumpController,
+) {
     use crate::pump::WaterDirection;
     let _ = match pump_name {
         "A" | "PUMP_A" => {

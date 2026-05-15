@@ -15,6 +15,26 @@ pub enum SystemPhase {
     EmergencyStop(String),
 }
 
+impl SystemPhase {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SystemPhase::Booting => "Booting",
+            SystemPhase::Monitoring => "Monitoring",
+            SystemPhase::ManualMode => "ManualMode",
+            SystemPhase::WaterRefilling => "WaterRefilling",
+            SystemPhase::WaterDraining => "WaterDraining",
+            SystemPhase::DosingEC => "DosingEC",
+            SystemPhase::DosingPH => "DosingPH",
+            SystemPhase::ActiveMixing => "ActiveMixing",
+            SystemPhase::Stabilizing => "Stabilizing",
+            SystemPhase::Cooldown => "Cooldown",
+            SystemPhase::SensorCalibration { .. } => "SensorCalibration",
+            SystemPhase::Fault(_) => "Fault",
+            SystemPhase::EmergencyStop(_) => "EmergencyStop",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum FaultCode {
     EcDosingFailed,
@@ -49,14 +69,18 @@ impl From<&SystemState> for SystemPhase {
             SystemState::ManualMode => Self::ManualMode,
             SystemState::Monitoring => Self::Monitoring,
             SystemState::Cooldown { .. } | SystemState::DosingCycleComplete => Self::Cooldown,
-            SystemState::SensorCalibration { step, .. } => Self::SensorCalibration { step: step.clone() },
+            SystemState::SensorCalibration { step, .. } => {
+                Self::SensorCalibration { step: step.clone() }
+            }
             SystemState::WaterRefilling { .. } => Self::WaterRefilling,
             SystemState::WaterDraining { .. } => Self::WaterDraining,
             SystemState::DosingPumpA { .. }
             | SystemState::WaitingBetweenDose { .. }
             | SystemState::DosingPumpB { .. } => Self::DosingEC,
             SystemState::DosingPH { .. } => Self::DosingPH,
-            SystemState::StartingOsakaPump { .. } | SystemState::ActiveMixing { .. } => Self::ActiveMixing,
+            SystemState::StartingOsakaPump { .. } | SystemState::ActiveMixing { .. } => {
+                Self::ActiveMixing
+            }
             SystemState::Stabilizing { .. } => Self::Stabilizing,
             SystemState::EmergencyStop(reason) => Self::EmergencyStop(reason.clone()),
             SystemState::SystemFault(reason) => Self::Fault(map_fault_code(reason)),

@@ -18,6 +18,7 @@ pub struct SystemContext {
     pub peripherals: PeripheralState,
     pub water_change_cron: CronSchedule,
     pub last_water_change_sec: u64,
+    pub next_water_change_trigger_sec: Option<u64>,
 }
 
 pub struct PeripheralState {
@@ -112,6 +113,7 @@ impl SystemContext {
 
         self.water_change_cron = legacy.current_water_change_cron_expr.clone();
         self.last_water_change_sec = legacy.last_water_change_time;
+        self.next_water_change_trigger_sec = legacy.next_water_change_trigger_sec;
     }
 }
 
@@ -128,6 +130,7 @@ impl Default for SystemContext {
             peripherals: PeripheralState::default(),
             water_change_cron: String::new(),
             last_water_change_sec: 0,
+            next_water_change_trigger_sec: None,
         }
     }
 }
@@ -177,6 +180,54 @@ impl Default for AutoTuner {
     }
 }
 
+
+impl CalibrationSampler {
+    pub fn start_sample(&mut self, sample: PendingCalibrationSample) {
+        self.pending_sample = Some(sample);
+    }
+
+    pub fn finalize(&mut self) -> Option<PendingCalibrationSample> {
+        self.pending_sample.take()
+    }
+}
+
+impl AutoTuner {
+    pub fn on_dosing_ack(
+        &mut self,
+        response: f32,
+        expected: f32,
+        _config: &hydragrow_shared::ControllerConfig,
+        now_sec: u64,
+    ) {
+        if expected <= 0.0 || !response.is_finite() || !expected.is_finite() {
+            return;
+        }
+
+        let ratio = (response / expected).clamp(0.1, 3.0);
+        let alpha = 0.1;
+        self.adaptive_ec_ratio = self.adaptive_ec_ratio * (1.0 - alpha) + ratio * alpha;
+        self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
+        self.last_update_sec = now_sec;
+
+        if (ratio - 1.0).abs() > 0.8 {
+            self.abnormal_streak = self.abnormal_streak.saturating_add(1);
+        } else {
+            self.abnormal_streak = 0;
+        }
+
+        if self.abnormal_streak >= 3 {
+            self.locked = true;
+        }
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    pub fn active_ec_ratio(&self) -> f32 {
+        self.adaptive_ec_ratio
+    }
+}
 impl Default for DeltaWindow {
     fn default() -> Self {
         Self { hour_total: 0.0, hour_anchor_sec: 0, day_total: 0.0, day_anchor_sec: 0 }

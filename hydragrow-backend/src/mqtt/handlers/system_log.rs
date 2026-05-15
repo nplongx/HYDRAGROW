@@ -6,18 +6,6 @@ use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
 
-// 🟢 TẠO MỚI: Hàm helper chuyển đổi PascalCase sang chuẩn snake_case
-fn to_snake_case(s: &str) -> String {
-    let mut result = String::new();
-    for (i, c) in s.char_indices() {
-        if c.is_uppercase() && i > 0 {
-            result.push('_');
-        }
-        result.push(c.to_ascii_lowercase());
-    }
-    result
-}
-
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     // 1. Deserialize trực tiếp từ JSON sang Struct
     let log_data: UnifiedSystemLog = match serde_json::from_slice(payload) {
@@ -28,20 +16,17 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
-    // 🟢 SỬA LỖI Ở ĐÂY: Ép về snake_case trước khi đưa vào Database
-    let raw_level = serde_json::to_value(&log_data.level)
+    let level_str = serde_json::to_value(&log_data.level)
         .unwrap()
         .as_str()
         .unwrap()
         .to_string();
-    let level_str = to_snake_case(&raw_level);
 
-    let raw_category = serde_json::to_value(&log_data.category)
+    let category_str = serde_json::to_value(&log_data.category)
         .unwrap()
         .as_str()
         .unwrap()
         .to_string();
-    let category_str = to_snake_case(&raw_category);
 
     // Dịch nghĩa event thành message chi tiết thay vì hardcode
     let message_str = match &log_data.event {
@@ -118,4 +103,3 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     }
 }
-

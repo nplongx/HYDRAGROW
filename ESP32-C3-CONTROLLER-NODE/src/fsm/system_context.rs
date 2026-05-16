@@ -155,25 +155,31 @@ impl AutoTuner {
             return;
         }
 
-        let window = if is_ec {
-            &mut self.ec_delta_window
-        } else {
-            &mut self.ph_delta_window
+        // Đưa window vào scope riêng để giải phóng borrow ngay khi tính xong allowed_delta
+        let allowed_delta = {
+            let window = if is_ec {
+                &mut self.ec_delta_window
+            } else {
+                &mut self.ph_delta_window
+            };
+
+            if window.hour_anchor_sec == 0 || now_sec.saturating_sub(window.hour_anchor_sec) >= 3600
+            {
+                window.hour_anchor_sec = now_sec;
+                window.hour_total = 0.0;
+            }
+
+            let max_hour_delta: f32 = 0.08;
+            (max_hour_delta - window.hour_total.abs()).max(0.0)
         };
 
-        if window.hour_anchor_sec == 0 || now_sec.saturating_sub(window.hour_anchor_sec) >= 3600 {
-            window.hour_anchor_sec = now_sec;
-            window.hour_total = 0.0;
-        }
-
-        let max_hour_delta: f32 = 0.08;
-        let allowed_delta = (max_hour_delta - window.hour_total.abs()).max(0.0);
         if allowed_delta < 0.005 {
             return;
         }
 
-        let gain_vs_expected = response / expected.max(0.001);
-        let raw_delta = if gain_vs_expected > 2.0 {
+        // Áp dụng luôn _f32 để tránh lỗi E0689 tương tự
+        let gain_vs_expected: f32 = response / expected.max(0.001_f32);
+        let raw_delta: f32 = if gain_vs_expected > 2.0 {
             -0.01
         } else if gain_vs_expected < 1.0 {
             0.02
@@ -183,8 +189,17 @@ impl AutoTuner {
         let tune_delta = raw_delta.clamp(-allowed_delta, allowed_delta);
 
         if tune_delta != 0.0 {
+            // self đã không còn bị borrow bởi window nên gọi hàm bình thường
             self.adjust_step_ratio(is_ec, tune_delta);
+
+            // Re-borrow window cục bộ để update hour_total
+            let window = if is_ec {
+                &mut self.ec_delta_window
+            } else {
+                &mut self.ph_delta_window
+            };
             window.hour_total += tune_delta;
+
             if is_ec {
                 self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
             } else {
@@ -211,7 +226,7 @@ impl AutoTuner {
         } else {
             &mut self.adaptive_ph_ratio
         };
-        *ratio = (*ratio + delta).clamp(0.1, 2.0);
+        *ratio = (*ratio + delta).clamp(0.1_f32, 2.0_f32);
     }
 
     pub fn is_locked(&self) -> bool {

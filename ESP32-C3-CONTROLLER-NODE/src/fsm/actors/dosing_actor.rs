@@ -1,6 +1,7 @@
-use hydragrow_shared::{ControllerConfig, SensorData};
+use hydragrow_shared::ControllerConfig;
 
 use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
+use crate::mqtt::SensorData;
 use crate::pump::{PumpController, PumpType};
 
 use super::super::phases::FaultCode;

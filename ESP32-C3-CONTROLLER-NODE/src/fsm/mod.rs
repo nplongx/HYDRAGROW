@@ -72,7 +72,7 @@ pub mod mod_helpers {
             _ => Ok(()),
         };
         ctx.peripherals.pump_status.dosing_pulse_active = false;
-        ctx.peripherals.pump_status.dosing_pulse_count = Some(0);
+        ctx.peripherals.pump_status.dosing_pulse_count = 0;
     }
 
     pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
@@ -260,7 +260,6 @@ pub fn start_fsm_control_loop(
         std::thread::sleep(Duration::from_millis(100));
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Helpers nhỏ dùng trong vòng lặp

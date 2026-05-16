@@ -32,10 +32,10 @@ pub struct PumpStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
     pub device_id: String,
-    pub ec: f64,
-    pub ph: f64,
-    pub temp: f64,
-    pub water_level: f64,
+    pub ec: f32,
+    pub ph: f32,
+    pub temp: f32,
+    pub water_level: f32,
     #[serde(default)]
     pub pump_status: PumpStatus,
     pub time: String,
@@ -56,7 +56,7 @@ pub struct SensorData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_continuous: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ph_voltage_mv: Option<f64>,
+    pub ph_voltage_mv: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

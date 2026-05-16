@@ -4,6 +4,7 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
+use hydragrow_shared::events::AppEvent;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
 use crate::models::config::DosingCalibration;
@@ -113,7 +114,7 @@ pub async fn handle_report(device_id: String, payload: &[u8], app_state: web::Da
         reason: None,
         metadata: Some(metadata),
     };
-    let _ = app_state.alert_sender.send(alert);
+    let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert));
 }
 
 async fn update_dosing_dynamic_learning(

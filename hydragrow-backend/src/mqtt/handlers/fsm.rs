@@ -3,6 +3,7 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
+use hydragrow_shared::events::{AppEvent, FsmTransitionPayload};
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
@@ -111,7 +112,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         "pump_status": json.get("pump_status").unwrap_or(&json!({})),
     });
 
-    let _ = app_state.health_sender.send(fsm_status_payload);
+    let _ = app_state.event_bus.send(AppEvent::FsmTransition(FsmTransitionPayload { device_id: device_id.clone(), state: state.clone(), pump_status: serde_json::from_value(json.get("pump_status").cloned().unwrap_or_else(|| serde_json::json!({}))).ok() }));
 
     // 4. Cập nhật fsm_state vào bộ nhớ đệm (Cache tĩnh) của AppState
     let mut states = app_state.device_states.write().await;

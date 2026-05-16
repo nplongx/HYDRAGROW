@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, instrument};
 
 use crate::AppState;
+use hydragrow_shared::events::AppEvent;
 use crate::db::influx::write_sensor_data;
 use crate::models::sensor::{PumpStatus, SensorData};
 
@@ -111,6 +112,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         error!(error = ?e, "Lỗi lưu SensorData vào InfluxDB");
     }
 
-    let _ = app_state.sensor_sender.send(sensor_data);
+    let _ = app_state.event_bus.send(AppEvent::SensorUpdate(sensor_data));
 }
 

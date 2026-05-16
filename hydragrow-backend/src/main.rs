@@ -17,6 +17,7 @@ use tokio::sync::{
 };
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
+use hydragrow_shared::events::AppEvent;
 
 use crate::{
     models::{alert::AlertMessage, sensor::SensorData},
@@ -92,6 +93,7 @@ pub struct AppState {
     pub solana_traceability: SolanaTraceability,
     pub sensor_sender: broadcast::Sender<SensorData>,
     pub health_sender: broadcast::Sender<serde_json::Value>,
+    pub event_bus: broadcast::Sender<AppEvent>,
     pub fcm_tokens: Mutex<Vec<String>>,
     pub ph_calibration_sessions: std::sync::Arc<RwLock<HashMap<String, PhCalibrationSession>>>,
     pub ph_voltage_samples: std::sync::Arc<RwLock<HashMap<String, VecDeque<PhVoltageSample>>>>,
@@ -180,6 +182,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let (sensor_sender, _) = broadcast::channel(100);
+    let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let device_states = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
@@ -195,11 +198,14 @@ async fn main() -> anyhow::Result<()> {
         sensor_sender,
         fcm_tokens: Mutex::new(Vec::new()),
         health_sender: health_tx,
+        event_bus: event_bus.clone(),
         ph_calibration_sessions: Arc::new(RwLock::new(HashMap::new())),
         ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
         dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
     });
 
+
+    tokio::spawn(crate::services::event_dispatcher::run(event_bus.subscribe(), app_state.clone()));
     mqtt_client
         .subscribe("AGITECH/+/sensors", QoS::AtMostOnce)
         .await

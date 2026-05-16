@@ -4,6 +4,7 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
+use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
 use crate::models::alert::AlertMessage;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -27,7 +28,6 @@ pub async fn handle_device(
     };
 
     let is_online = status.online;
-    let now_iso = chrono::Utc::now().to_rfc3339();
 
     info!(
         "Trạng thái: {}",
@@ -57,14 +57,9 @@ pub async fn handle_device(
         reason: None,
         metadata: Some(json!({ "event_type": "device_status" })),
     };
-    let _ = app_state.alert_sender.send(alert);
+    let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert));
 
-    let status_payload = json!({
-        "_msg_type": "device_status",
-        "is_online": is_online,
-        "last_seen": now_iso
-    });
-    let _ = app_state.health_sender.send(status_payload);
+    let _ = app_state.event_bus.send(AppEvent::DeviceStatus(SharedDeviceStatusPayload { device_id: device_id.clone(), is_online }));
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
@@ -119,7 +114,7 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
                     reason: None,
                     metadata: None,
                 };
-                let _ = app_state.alert_sender.send(mist_alert);
+                let _ = app_state.event_bus.send(AppEvent::SystemAlert(mist_alert));
             }
         }
 

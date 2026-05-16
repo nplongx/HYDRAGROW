@@ -248,9 +248,6 @@ impl PumpController {
         if let Ok(mut rpwm) = self.osaka_rpwm.lock() {
             let _ = rpwm.set_duty(0);
         }
-        // if let Ok(mut lpwm) = self.osaka_lpwm.lock() {
-        //     let _ = lpwm.set_duty(0);
-        // }
 
         self.set_water_pump(WaterDirection::Stop)?;
         Ok(())

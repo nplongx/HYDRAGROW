@@ -60,33 +60,6 @@ impl FaultCode {
     }
 }
 
-use super::types::SystemState;
-
-impl From<&SystemState> for SystemPhase {
-    fn from(value: &SystemState) -> Self {
-        match value {
-            SystemState::SystemBooting => Self::Booting,
-            SystemState::ManualMode => Self::ManualMode,
-            SystemState::Monitoring => Self::Monitoring,
-            SystemState::Cooldown { .. } | SystemState::DosingCycleComplete => Self::Cooldown,
-            SystemState::SensorCalibration { step, .. } => {
-                Self::SensorCalibration { step: step.clone() }
-            }
-            SystemState::WaterRefilling { .. } => Self::WaterRefilling,
-            SystemState::WaterDraining { .. } => Self::WaterDraining,
-            SystemState::DosingPumpA { .. }
-            | SystemState::WaitingBetweenDose { .. }
-            | SystemState::DosingPumpB { .. } => Self::DosingEC,
-            SystemState::DosingPH { .. } => Self::DosingPH,
-            SystemState::StartingOsakaPump { .. } | SystemState::ActiveMixing { .. } => {
-                Self::ActiveMixing
-            }
-            SystemState::Stabilizing { .. } => Self::Stabilizing,
-            SystemState::EmergencyStop(reason) => Self::EmergencyStop(reason.clone()),
-            SystemState::SystemFault(reason) => Self::Fault(map_fault_code(reason)),
-        }
-    }
-}
 
 fn map_fault_code(reason: &str) -> FaultCode {
     if reason.contains("EC_DOSING_FAILED") {

@@ -3,10 +3,8 @@ use crate::mqtt::PumpStatus;
 use super::actors::{
     dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
 };
-use super::context::ControlContext;
 use super::phases::SystemPhase;
 use super::types::PendingCalibrationSample;
-use super::types::SystemState;
 
 pub type CronSchedule = String;
 
@@ -39,10 +37,6 @@ pub struct PeripheralState {
 
 pub struct CalibrationSampler {
     pub pending_sample: Option<PendingCalibrationSample>,
-    pub pending_publish_count: u32,
-    pub sample_count_ec: u32,
-    pub sample_count_ph_up: u32,
-    pub sample_count_ph_down: u32,
 }
 
 pub struct AutoTuner {
@@ -64,155 +58,7 @@ pub struct DeltaWindow {
     pub day_anchor_sec: u64,
 }
 
-impl SystemContext {
-    pub fn from_legacy(ctx: &ControlContext) -> Self {
-        let mut state = Self::default();
-        state.sync_from_legacy(ctx);
-        state
-    }
-
-    pub fn sync_from_legacy(&mut self, legacy: &ControlContext) {
-        self.phase = SystemPhase::from(&legacy.current_state);
-
-        self.calibration.pending_sample = legacy.pending_calibration_sample.clone();
-        self.calibration.pending_publish_count = legacy.calibration_pending_publish_count;
-        self.calibration.sample_count_ec = legacy.calibration_sample_count_ec;
-        self.calibration.sample_count_ph_up = legacy.calibration_sample_count_ph_up;
-        self.calibration.sample_count_ph_down = legacy.calibration_sample_count_ph_down;
-
-        self.tuner.adaptive_ec_ratio = legacy.adaptive_ec_step_ratio;
-        self.tuner.adaptive_ph_ratio = legacy.adaptive_ph_step_ratio;
-        self.tuner.best_ec_ratio = legacy.best_known_ec_step_ratio;
-        self.tuner.best_ph_ratio = legacy.best_known_ph_step_ratio;
-        self.tuner.locked = legacy.auto_tune_locked;
-        self.tuner.abnormal_streak = legacy.abnormal_sample_streak;
-        self.tuner.last_update_sec = legacy.tuning_last_update_sec;
-        self.tuner.ec_delta_window.hour_total = legacy.tuning_hour_ec_delta;
-        self.tuner.ec_delta_window.hour_anchor_sec = legacy.tuning_hour_anchor_sec;
-        self.tuner.ec_delta_window.day_total = legacy.tuning_day_ec_delta;
-        self.tuner.ec_delta_window.day_anchor_sec = legacy.tuning_day_anchor_sec;
-        self.tuner.ph_delta_window.hour_total = legacy.tuning_hour_ph_delta;
-        self.tuner.ph_delta_window.hour_anchor_sec = legacy.tuning_hour_anchor_sec;
-        self.tuner.ph_delta_window.day_total = legacy.tuning_day_ph_delta;
-        self.tuner.ph_delta_window.day_anchor_sec = legacy.tuning_day_anchor_sec;
-
-        self.peripherals.pump_status = legacy.pump_status.clone();
-        self.peripherals.osaka_active = legacy.fsm_osaka_active;
-        self.peripherals.osaka_pwm = legacy.current_osaka_pwm;
-        self.peripherals.is_misting_active = legacy.is_misting_active;
-        self.peripherals.last_mist_toggle_time = legacy.last_mist_toggle_time;
-        self.peripherals.is_scheduled_mixing_active = legacy.is_scheduled_mixing_active;
-        self.peripherals.last_mixing_start_sec = legacy.last_mixing_start_sec;
-        self.peripherals.last_continuous_level = legacy.last_continuous_level;
-        self.peripherals.previous_ec = legacy.previous_ec;
-        self.peripherals.previous_ph = legacy.previous_ph;
-
-        self.safety.replace_hourly_histories(
-            legacy.hourly_dose_history_ml_by_pump.clone(),
-            legacy.hourly_refill_history.clone(),
-            legacy.hourly_drain_history.clone(),
-        );
-        self.safety.manual_timeouts = legacy.manual_timeouts.clone();
-        self.safety.safety_override_until = legacy.safety_override_until;
-        self.safety.last_ec_before_dose = legacy.last_ec_before_dosing;
-        self.safety.last_ph_before_dose = legacy.last_ph_before_dosing;
-        self.safety.last_ph_dose_up = legacy.last_ph_dosing_is_up;
-        self.safety.last_water_before_refill = legacy.last_water_before_refill;
-
-        self.water_change_cron = legacy.current_water_change_cron_expr.clone();
-        self.last_water_change_sec = legacy.last_water_change_time;
-        self.next_water_change_trigger_sec = legacy.next_water_change_trigger_sec;
-    }
-
-    pub fn sync_to_legacy(&self, legacy: &mut ControlContext, now_ms: u64) {
-        legacy.current_state = match &self.phase {
-            SystemPhase::Booting => SystemState::SystemBooting,
-            SystemPhase::Monitoring => SystemState::Monitoring,
-            SystemPhase::ManualMode => SystemState::ManualMode,
-            SystemPhase::WaterRefilling => SystemState::WaterRefilling {
-                trigger: "orchestrator".to_string(),
-                target_level: 0.0,
-                start_time: now_ms / 1000,
-                start_level: 0.0,
-                start_ec: 0.0,
-            },
-            SystemPhase::WaterDraining => SystemState::WaterDraining {
-                trigger: "orchestrator".to_string(),
-                target_level: 0.0,
-                start_time: now_ms / 1000,
-                start_level: 0.0,
-                start_ec: 0.0,
-            },
-            SystemPhase::DosingEC => SystemState::DosingPumpA {
-                next_toggle_time: now_ms,
-                dose_target_ml: 0.0,
-                delivered_ml_est: 0.0,
-                dose_b_ml: 0.0,
-                pulse_on: false,
-                pulse_count: 0,
-                max_pulse_count: 1,
-                pulse_on_ms: 0,
-                pulse_off_ms: 0,
-                pwm_percent: 0,
-                active_capacity_ml_per_sec: 0.0,
-                target_ec: 0.0,
-                start_ec: 0.0,
-                start_ph: 0.0,
-            },
-            SystemPhase::DosingPH => SystemState::DosingPH {
-                next_toggle_time: now_ms,
-                is_up: self.safety.last_ph_dose_up.unwrap_or(true),
-                dose_target_ml: 0.0,
-                delivered_ml_est: 0.0,
-                pulse_on: false,
-                pulse_count: 0,
-                max_pulse_count: 1,
-                pulse_on_ms: 0,
-                pulse_off_ms: 0,
-                pwm_percent: 0,
-                active_capacity_ml_per_sec: 0.0,
-                target_ph: 0.0,
-                start_ec: 0.0,
-                start_ph: 0.0,
-            },
-            SystemPhase::ActiveMixing => SystemState::ActiveMixing {
-                finish_time: self.phase_finish_ms.unwrap_or(now_ms),
-            },
-            SystemPhase::Stabilizing => SystemState::Stabilizing {
-                finish_time: self.phase_finish_ms.unwrap_or(now_ms),
-            },
-            SystemPhase::Cooldown => SystemState::Cooldown {
-                finish_time: self.phase_finish_ms.unwrap_or(now_ms),
-            },
-            SystemPhase::SensorCalibration { step } => SystemState::SensorCalibration {
-                step: step.clone(),
-                finish_time: now_ms,
-            },
-            SystemPhase::Fault(code) => SystemState::SystemFault(code.as_str().to_string()),
-            SystemPhase::EmergencyStop(reason) => SystemState::EmergencyStop(reason.clone()),
-        };
-
-        legacy.pump_status = self.peripherals.pump_status.clone();
-        legacy.fsm_osaka_active = self.peripherals.osaka_active;
-        legacy.current_osaka_pwm = self.peripherals.osaka_pwm;
-        legacy.is_misting_active = self.peripherals.is_misting_active;
-        legacy.last_mist_toggle_time = self.peripherals.last_mist_toggle_time;
-        legacy.is_scheduled_mixing_active = self.peripherals.is_scheduled_mixing_active;
-        legacy.last_mixing_start_sec = self.peripherals.last_mixing_start_sec;
-
-        legacy.hourly_dose_history_ml_by_pump = self.safety.hourly_doses().clone();
-        legacy.hourly_refill_history = self.safety.refill_history().to_vec();
-        legacy.hourly_drain_history = self.safety.drain_history().to_vec();
-
-        legacy.last_ec_before_dosing = self.safety.last_ec_before_dose;
-        legacy.last_ph_before_dosing = self.safety.last_ph_before_dose;
-        legacy.last_ph_dosing_is_up = self.safety.last_ph_dose_up;
-        legacy.last_water_before_refill = self.safety.last_water_before_refill;
-        legacy.ec_retry_count = self.dosing.retry_ec;
-        legacy.ph_retry_count = self.dosing.retry_ph;
-        legacy.pending_calibration_sample = self.calibration.pending_sample.clone();
-    }
-}
+impl SystemContext {}
 
 impl Default for SystemContext {
     fn default() -> Self {
@@ -253,10 +99,6 @@ impl Default for CalibrationSampler {
     fn default() -> Self {
         Self {
             pending_sample: None,
-            pending_publish_count: 0,
-            sample_count_ec: 0,
-            sample_count_ph_up: 0,
-            sample_count_ph_down: 0,
         }
     }
 }
@@ -313,17 +155,36 @@ impl AutoTuner {
             return;
         }
 
+        let window = if is_ec {
+            &mut self.ec_delta_window
+        } else {
+            &mut self.ph_delta_window
+        };
+
+        if window.hour_anchor_sec == 0 || now_sec.saturating_sub(window.hour_anchor_sec) >= 3600 {
+            window.hour_anchor_sec = now_sec;
+            window.hour_total = 0.0;
+        }
+
+        let max_hour_delta: f32 = 0.08;
+        let allowed_delta = (max_hour_delta - window.hour_total.abs()).max(0.0);
+        if allowed_delta < 0.005 {
+            return;
+        }
+
         let gain_vs_expected = response / expected.max(0.001);
-        let tune_delta = if gain_vs_expected > 2.0 {
+        let raw_delta = if gain_vs_expected > 2.0 {
             -0.01
         } else if gain_vs_expected < 1.0 {
             0.02
         } else {
             0.0
         };
+        let tune_delta = raw_delta.clamp(-allowed_delta, allowed_delta);
 
         if tune_delta != 0.0 {
             self.adjust_step_ratio(is_ec, tune_delta);
+            window.hour_total += tune_delta;
             if is_ec {
                 self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
             } else {

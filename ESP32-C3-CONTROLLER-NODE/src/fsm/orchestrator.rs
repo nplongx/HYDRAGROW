@@ -7,7 +7,7 @@ use cron::Schedule;
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_shared::ControllerConfig;
 
-use crate::{config::SharedConfig, mqtt::SensorData, pump::PumpController};
+use crate::{mqtt::SensorData, pump::PumpController};
 
 use super::{
     actors::{dosing_actor::DosingEvent, water_actor::WaterEvent},
@@ -246,7 +246,7 @@ fn apply_decision(
                 return;
             }
             ctx.dosing
-                .start_ec_cycle(now_ms, dose_ml, target_ec, pwm, config);
+                .start_ec_cycle(now_ms, dose_ml, target_ec, pwm, config, sensors);
             ctx.phase = SystemPhase::DosingEC;
             ctx.safety.last_ec_before_dose = Some(sensors.ec);
         }
@@ -264,7 +264,7 @@ fn apply_decision(
                 return;
             }
             ctx.dosing
-                .start_ph_cycle(now_ms, is_up, dose_ml, target_ph, pwm, config);
+                .start_ph_cycle(now_ms, is_up, dose_ml, target_ph, pwm, config, sensors);
             ctx.phase = SystemPhase::DosingPH;
             ctx.safety.last_ph_before_dose = Some(sensors.ph);
             ctx.safety.last_ph_dose_up = Some(is_up);
@@ -306,17 +306,16 @@ pub fn tick(
     sensors: &SensorData,
     ctx: &mut SystemContext,
     pumps: &mut PumpController,
-    shared_config: &SharedConfig,
     nvs: &mut Option<EspDefaultNvs>,
     dosing_report_tx: &Sender<String>,
     mqtt_tx: &Sender<String>,
 ) {
-    let _ = shared_config; // shared_config is currently unused, giữ lại macro cho biến này
-
-    if check_sensor_noise(ctx, sensors, config) {
+    let is_noisy = check_sensor_noise(ctx, sensors, config);
+    if is_noisy {
         if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
             sample.invalid_by_noise = true;
         }
+        return;
     }
 
     match &ctx.phase.clone() {

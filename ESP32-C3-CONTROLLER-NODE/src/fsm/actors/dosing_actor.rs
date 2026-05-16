@@ -1,4 +1,4 @@
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{ControllerConfig, SensorData};
 
 use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
 use crate::pump::{PumpController, PumpType};
@@ -104,15 +104,16 @@ impl DosingActor {
         target_ec: f32,
         pwm: u32,
         config: &ControllerConfig,
+        sensors: &SensorData,
     ) {
         self.cycle_ctx = Some(DosingCycleCtx {
             cycle_id: format!("ec-{now_ms}"),
             trigger: "ec_control".to_string(),
-            start_ec: 0.0,
-            start_ph: 0.0,
+            start_ec: sensors.ec as f32,
+            start_ph: sensors.ph as f32,
             target_ec,
             target_ph: 0.0,
-            start_water_level: 0.0,
+            start_water_level: sensors.water_level as f32,
             start_ms: now_ms,
             post_mixing_ec: 0.0,
             post_mixing_ph: 0.0,
@@ -149,15 +150,16 @@ impl DosingActor {
         target_ph: f32,
         pwm: u32,
         config: &ControllerConfig,
+        sensors: &SensorData,
     ) {
         self.cycle_ctx = Some(DosingCycleCtx {
             cycle_id: format!("ph-{now_ms}"),
             trigger: "ph_control".to_string(),
-            start_ec: 0.0,
-            start_ph: 0.0,
+            start_ec: sensors.ec as f32,
+            start_ph: sensors.ph as f32,
             target_ec: 0.0,
             target_ph,
-            start_water_level: 0.0,
+            start_water_level: sensors.water_level as f32,
             start_ms: now_ms,
             post_mixing_ec: 0.0,
             post_mixing_ph: 0.0,

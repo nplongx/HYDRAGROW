@@ -4,7 +4,6 @@
 
 pub mod actors;
 pub mod commands;
-pub mod context;
 pub mod orchestrator;
 pub mod peripheral;
 pub mod phases;
@@ -14,7 +13,7 @@ pub mod utils;
 
 pub use phases::{FaultCode, SystemPhase};
 pub use system_context::SystemContext;
-pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData, SystemState};
+pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData};
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -34,6 +33,47 @@ pub mod mod_helpers {
     use crate::fsm::SystemContext;
     use crate::pump::{PumpController, PumpType, WaterDirection};
     use std::sync::mpsc::Sender;
+
+    pub fn turn_off_pump_from_system_ctx(
+        ctx: &mut SystemContext,
+        pump_name: &str,
+        pump_ctrl: &mut PumpController,
+    ) {
+        let _ = match pump_name {
+            "A" | "PUMP_A" => {
+                ctx.peripherals.pump_status.pump_a = false;
+                pump_ctrl.set_pump_state(PumpType::NutrientA, false)
+            }
+            "B" | "PUMP_B" => {
+                ctx.peripherals.pump_status.pump_b = false;
+                pump_ctrl.set_pump_state(PumpType::NutrientB, false)
+            }
+            "PH_UP" | "PUMP_PH_UP" => {
+                ctx.peripherals.pump_status.ph_up = false;
+                pump_ctrl.set_pump_state(PumpType::PhUp, false)
+            }
+            "PH_DOWN" | "PUMP_PH_DOWN" => {
+                ctx.peripherals.pump_status.ph_down = false;
+                pump_ctrl.set_pump_state(PumpType::PhDown, false)
+            }
+            "MIST" | "MIST_VALVE" => {
+                ctx.peripherals.pump_status.mist_valve = false;
+                ctx.peripherals.is_misting_active = false;
+                pump_ctrl.set_mist_valve(false)
+            }
+            "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
+                ctx.peripherals.pump_status.water_pump_in = false;
+                pump_ctrl.set_water_pump(WaterDirection::Stop)
+            }
+            "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
+                ctx.peripherals.pump_status.water_pump_out = false;
+                pump_ctrl.set_water_pump(WaterDirection::Stop)
+            }
+            _ => Ok(()),
+        };
+        ctx.peripherals.pump_status.dosing_pulse_active = false;
+        ctx.peripherals.pump_status.dosing_pulse_count = Some(0);
+    }
 
     pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
         let _ = pump_ctrl.stop_all();
@@ -153,7 +193,7 @@ pub fn start_fsm_control_loop(
                     ),
                 },
             );
-            turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
+            mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
         }
 
         // ✅ Cập nhật shared_sensors NGAY LẬP TỨC sau khi xử lý lệnh + timeout
@@ -175,26 +215,17 @@ pub fn start_fsm_control_loop(
         // --- Phần còn lại giữ nguyên (kiểm tra safety, auto FSM...) ---
         let is_safety_overridden = current_time_ms < new_ctx.safety.safety_override_until;
         if !is_safety_overridden {
-            let is_noisy_sample = false;
             let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
                 || (config.enable_ec_sensor && sensors.err_ec)
                 || (config.enable_ph_sensor && sensors.err_ph)
                 || (config.enable_temp_sensor && sensors.err_temp);
-
-            let _ = (
-                is_noisy_sample || has_sensor_fault,
-                &config.device_id,
-                &fsm_mqtt_tx,
-            );
-
-            if !(is_noisy_sample && config.control_mode == ControlMode::Auto) {
+            if !has_sensor_fault {
                 orchestrator::tick(
                     current_time_ms,
                     &config,
                     &sensors,
                     &mut new_ctx,
                     &mut pump_ctrl,
-                    &shared_config,
                     &mut nvs,
                     &dosing_report_tx,
                     &fsm_mqtt_tx,
@@ -230,47 +261,6 @@ pub fn start_fsm_control_loop(
     }
 }
 
-fn turn_off_pump_from_system_ctx(
-    ctx: &mut SystemContext,
-    pump_name: &str,
-    pump_ctrl: &mut PumpController,
-) {
-    use crate::pump::WaterDirection;
-    let _ = match pump_name {
-        "A" | "PUMP_A" => {
-            ctx.peripherals.pump_status.pump_a = false;
-            pump_ctrl.set_pump_state(crate::pump::PumpType::NutrientA, false)
-        }
-        "B" | "PUMP_B" => {
-            ctx.peripherals.pump_status.pump_b = false;
-            pump_ctrl.set_pump_state(crate::pump::PumpType::NutrientB, false)
-        }
-        "PH_UP" | "PUMP_PH_UP" => {
-            ctx.peripherals.pump_status.ph_up = false;
-            pump_ctrl.set_pump_state(crate::pump::PumpType::PhUp, false)
-        }
-        "PH_DOWN" | "PUMP_PH_DOWN" => {
-            ctx.peripherals.pump_status.ph_down = false;
-            pump_ctrl.set_pump_state(crate::pump::PumpType::PhDown, false)
-        }
-        "MIST" | "MIST_VALVE" => {
-            ctx.peripherals.pump_status.mist_valve = false;
-            ctx.peripherals.is_misting_active = false;
-            pump_ctrl.set_mist_valve(false)
-        }
-        "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
-            ctx.peripherals.pump_status.water_pump_in = false;
-            pump_ctrl.set_water_pump(WaterDirection::Stop)
-        }
-        "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
-            ctx.peripherals.pump_status.water_pump_out = false;
-            pump_ctrl.set_water_pump(WaterDirection::Stop)
-        }
-        _ => Ok(()),
-    };
-    ctx.peripherals.pump_status.dosing_pulse_active = false;
-    ctx.peripherals.pump_status.dosing_pulse_count = 0;
-}
 
 // ---------------------------------------------------------------------------
 // Helpers nhỏ dùng trong vòng lặp

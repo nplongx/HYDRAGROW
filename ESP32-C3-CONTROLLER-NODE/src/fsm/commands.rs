@@ -5,7 +5,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use super::phases::SystemPhase;
 use super::system_context::SystemContext;
 use crate::fsm::utils::send_system_log;
-use crate::fsm::SystemState;
 use crate::mqtt::MqttCommandPayload;
 use crate::pump::{PumpController, PumpType, WaterDirection};
 

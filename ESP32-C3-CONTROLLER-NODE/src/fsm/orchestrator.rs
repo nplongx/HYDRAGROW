@@ -311,7 +311,7 @@ pub fn tick(
     dosing_report_tx: &Sender<String>,
     mqtt_tx: &Sender<String>,
 ) {
-    let _ = (shared_config, dosing_report_tx, mqtt_tx);
+    let _ = shared_config; // shared_config is currently unused, giữ lại macro cho biến này
 
     if check_sensor_noise(ctx, sensors, config) {
         if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
@@ -352,8 +352,8 @@ pub fn tick(
                             dose_b_ml,
                             dose_ph_up_ml: ph_up_ml,
                             dose_ph_down_ml: ph_down_ml,
-                            post_mixing_ec: 0.0,
-                            post_mixing_ph: 0.0,
+                            post_mixing_ec: c.post_mixing_ec,
+                            post_mixing_ph: c.post_mixing_ph,
                             start_ms: c.start_ms,
                             active_mixing_finish_ms: now_ms
                                 + config.active_mixing_sec as u64 * 1000,
@@ -363,10 +363,7 @@ pub fn tick(
                             invalid_by_water_change: false,
                         });
                     }
-                    let _ = dosing_report_tx.send(format!(
-                    "{{\"type\":\"dosing_cycle_complete\",\"dose_a_ml\":{:.3},\"dose_b_ml\":{:.3},\"ph_up_ml\":{:.3},\"ph_down_ml\":{:.3}}}",
-                    dose_a_ml, dose_b_ml, ph_up_ml, ph_down_ml
-                ));
+
                     ctx.phase = SystemPhase::ActiveMixing;
                     ctx.phase_finish_ms = Some(now_ms + config.active_mixing_sec as u64 * 1000);
                 }
@@ -477,14 +474,53 @@ pub fn tick(
                             now_ms / 1000,
                         );
                     }
-                    let _ = mqtt_tx.send(format!(
-                        "[EMA SAMPLE] cycle={} ec:{:.3}->{:.3} ph:{:.3}->{:.3}",
-                        sample.cycle_id,
-                        sample.start_ec,
-                        sample.post_mixing_ec,
-                        sample.start_ph,
-                        sample.post_mixing_ph
-                    ));
+
+                    use hydragrow_shared::{DoseData, DosingReportPayload, PhaseData};
+                    let report = DosingReportPayload {
+                        cycle_id: sample.cycle_id.clone(),
+                        trigger: sample.trigger.clone(),
+                        pre: PhaseData {
+                            ec: sample.start_ec,
+                            ph: sample.start_ph,
+                            water_level: Some(sample.start_water_level),
+                        },
+                        dose: DoseData {
+                            pump_a_ml: sample.dose_a_ml,
+                            pump_b_ml: sample.dose_b_ml,
+                            ph_up_ml: sample.dose_ph_up_ml,
+                            ph_down_ml: sample.dose_ph_down_ml,
+                        },
+                        post_mixing: PhaseData {
+                            ec: sample.post_mixing_ec,
+                            ph: sample.post_mixing_ph,
+                            water_level: None,
+                        },
+                        post_stable: PhaseData {
+                            ec: sensors.ec,
+                            ph: sensors.ph,
+                            water_level: None,
+                        },
+                        delta_ec: sensors.ec - sample.start_ec,
+                        delta_ph: sensors.ph - sample.start_ph,
+                        target_ec: sample.target_ec,
+                        target_ph: sample.target_ph,
+                        error_ec: sample.target_ec - sensors.ec,
+                        error_ph: sample.target_ph - sensors.ph,
+                        duration_ms: now_ms.saturating_sub(sample.start_ms),
+                        ema_ec_gain_used: config.ec_gain_per_ml,
+                        ema_ph_shift_used: if sample.dose_ph_up_ml > 0.0 {
+                            config.ph_shift_up_per_ml
+                        } else {
+                            config.ph_shift_down_per_ml
+                        },
+                        step_ratio_ec: Some(ctx.tuner.active_ec_ratio()),
+                        step_ratio_ph: Some(ctx.tuner.adaptive_ph_ratio),
+                        stabilized_window_sec: Some(config.sensor_stabilize_sec as u32),
+                    };
+
+                    if let Ok(json) = serde_json::to_string(&report) {
+                        let _ = dosing_report_tx.send(json);
+                    }
                 }
 
                 ctx.phase = SystemPhase::Cooldown;

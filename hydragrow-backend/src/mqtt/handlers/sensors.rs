@@ -3,16 +3,16 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, instrument};
 
 use crate::AppState;
-use hydragrow_shared::events::AppEvent;
 use crate::db::influx::write_sensor_data;
 use crate::models::sensor::{PumpStatus, SensorData};
+use hydragrow_shared::events::AppEvent;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IncomingSensorPayload {
-    pub temp: Option<f64>,
-    pub ec: Option<f64>,
-    pub ph: Option<f64>,
-    pub water_level: Option<f64>,
+    pub temp: Option<f32>,
+    pub ec: Option<f32>,
+    pub ph: Option<f32>,
+    pub water_level: Option<f32>,
     #[serde(rename = "last_update_ms", alias = "timestamp_ms")]
     pub timestamp_ms: Option<u64>,
     pub time: Option<String>,
@@ -112,6 +112,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         error!(error = ?e, "Lỗi lưu SensorData vào InfluxDB");
     }
 
-    let _ = app_state.event_bus.send(AppEvent::SensorUpdate(sensor_data));
+    let _ = app_state
+        .event_bus
+        .send(AppEvent::SensorUpdate(sensor_data));
 }
-

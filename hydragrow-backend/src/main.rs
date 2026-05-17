@@ -1,6 +1,7 @@
 use actix_web::{App, HttpServer, web};
 use anyhow::Context;
 use dotenvy::dotenv;
+use hydragrow_shared::events::AppEvent;
 use influxdb2::Client as InfluxClient;
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde::Serialize;
@@ -17,7 +18,6 @@ use tokio::sync::{
 };
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
-use hydragrow_shared::events::AppEvent;
 
 use crate::{
     models::{alert::AlertMessage, sensor::SensorData},
@@ -204,8 +204,10 @@ async fn main() -> anyhow::Result<()> {
         dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
     });
 
-
-    tokio::spawn(crate::services::event_dispatcher::run(event_bus.subscribe(), app_state.clone()));
+    tokio::spawn(crate::services::event_dispatcher::run(
+        event_bus.subscribe(),
+        app_state.clone(),
+    ));
     mqtt_client
         .subscribe("AGITECH/+/sensors", QoS::AtMostOnce)
         .await

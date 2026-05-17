@@ -293,17 +293,18 @@ const Dashboard = () => {
           {/* </div> */}
 
           <div className="relative">
-            {/* Ép hiển thị icon lỗi luôn */}
-            <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
-              <AlertTriangle size={14} />
-            </div>
-            <div className="opacity-60"> {/* Làm mờ card */}
+            {sensorData?.err_ec === true && (
+              <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
+                <AlertTriangle size={14} />
+              </div>
+            )}
+            <div className={sensorData?.err_ec === true ? "opacity-60" : ""}>
               <SensorBentoCard
                 title="EC"
-                value={-1} // Gán giá trị -1 để hiện "--" hoặc "Lỗi" tùy component con
+                value={sensorData?.err_ec === true ? -1 : sensorData?.ec}
                 unit="mS/cm"
                 icon={Activity}
-                theme="rose" // Chuyển sang tông màu đỏ báo lỗi
+                theme={sensorData?.err_ec === true ? "rose" : "blue"}
               />
             </div>
           </div>

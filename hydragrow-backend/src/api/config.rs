@@ -944,12 +944,16 @@ mod tests {
     }
 
     #[test]
-    fn validate_dosing_constraints_rejects_too_long_scheduled_duration() {
+    fn validate_dosing_constraints_rejects_min_pwm_exceeding_dosing_pwm() {
         let mut dose = DosingCalibration::default();
-        dose.dosing_pwm_percent = 50;
-        dose.pump_a_capacity_ml_per_sec = 1.0;
+        dose.dosing_pwm_percent = 30;
+        dose.dosing_min_pwm_percent = 50;
+
         let result = validate_dosing_constraints(&dose);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("scheduled_dose_a_ml"));
+
+        assert_eq!(
+            result,
+            Err("dosing_min_pwm_percent must be <= dosing_pwm_percent".to_string())
+        );
     }
 }

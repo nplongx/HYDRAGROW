@@ -61,6 +61,7 @@ impl FaultCode {
 }
 
 
+#[allow(dead_code)]
 fn map_fault_code(reason: &str) -> FaultCode {
     if reason.contains("EC_DOSING_FAILED") {
         FaultCode::EcDosingFailed

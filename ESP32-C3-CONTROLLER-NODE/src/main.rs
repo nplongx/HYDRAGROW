@@ -6,7 +6,7 @@ use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::log::EspLogger;
 use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
-use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
 use log::{error, info, warn, LevelFilter};
@@ -74,6 +74,18 @@ fn main() -> anyhow::Result<()> {
 
     let shared_config = create_shared_config();
     let shared_sensor_data = create_shared_sensor_data();
+    if let Ok(mut cfg) = shared_config.write() {
+        if let Ok(mut agitech_nvs) = EspNvs::new(nvs.clone(), "agitech", true) {
+            if let Ok(Some(saved_id)) = agitech_nvs.get_str("device_id", &mut [0; 64]) {
+                cfg.device_id = saved_id.to_string();
+            } else {
+                cfg.device_id = DEVICE_ID.to_string();
+                let _ = agitech_nvs.set_str("device_id", DEVICE_ID);
+            }
+        } else {
+            cfg.device_id = DEVICE_ID.to_string();
+        }
+    }
 
     let (conn_tx, conn_rx) = mpsc::channel::<ConnectionState>();
     let (cmd_tx, cmd_rx) = mpsc::channel();

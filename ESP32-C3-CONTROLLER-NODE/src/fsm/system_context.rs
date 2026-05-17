@@ -1,4 +1,5 @@
 use crate::mqtt::PumpStatus;
+use serde::{Deserialize, Serialize};
 
 use super::actors::{
     dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
@@ -9,6 +10,7 @@ use super::types::PendingCalibrationSample;
 pub type CronSchedule = String;
 
 pub struct SystemContext {
+    pub dosing_cycle_count: u64,
     pub phase: SystemPhase,
     pub phase_finish_ms: Option<u64>,
     pub dosing: DosingActor,
@@ -18,8 +20,10 @@ pub struct SystemContext {
     pub tuner: AutoTuner,
     pub peripherals: PeripheralState,
     pub water_change_cron: CronSchedule,
+    pub scheduled_dosing_cron: CronSchedule,
     pub last_water_change_sec: u64,
     pub next_water_change_trigger_sec: Option<u64>,
+    pub next_scheduled_dosing_trigger_sec: Option<u64>,
 }
 
 pub struct PeripheralState {
@@ -49,6 +53,21 @@ pub struct AutoTuner {
     pub last_update_sec: u64,
     pub ec_delta_window: DeltaWindow,
     pub ph_delta_window: DeltaWindow,
+    pub gain_learner: GainLearner,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NvsSnapshot {
+    pub step_ratio_ec: f32,
+    pub step_ratio_ph: f32,
+    pub last_water_change_sec: u64,
+    pub hourly_dose_ec_ml: f32,
+    pub hourly_dose_ph_ml: f32,
+    pub hourly_window_start_sec: u64,
+    pub retry_ec: u8,
+    pub retry_ph: u8,
+    pub dosing_cycle_count: u64,
 }
 
 pub struct DeltaWindow {
@@ -58,12 +77,23 @@ pub struct DeltaWindow {
     pub day_anchor_sec: u64,
 }
 
+pub struct GainLearner {
+    pub ema_ec_gain: f32,
+    pub ema_ph_up_gain: f32,
+    pub ema_ph_down_gain: f32,
+    pub sample_count: u32,
+    pub alpha: f32,
+    pub confidence: f32,
+    pub min_samples_to_trust: u32,
+}
+
 impl SystemContext {}
 
 impl Default for SystemContext {
     fn default() -> Self {
         Self {
             phase: SystemPhase::Booting,
+            dosing_cycle_count: 0,
             phase_finish_ms: None,
             dosing: DosingActor::new(),
             water: WaterActor::new(),
@@ -72,8 +102,10 @@ impl Default for SystemContext {
             tuner: AutoTuner::default(),
             peripherals: PeripheralState::default(),
             water_change_cron: String::new(),
+            scheduled_dosing_cron: String::new(),
             last_water_change_sec: 0,
             next_water_change_trigger_sec: None,
+            next_scheduled_dosing_trigger_sec: None,
         }
     }
 }
@@ -115,6 +147,7 @@ impl Default for AutoTuner {
             last_update_sec: 0,
             ec_delta_window: DeltaWindow::default(),
             ph_delta_window: DeltaWindow::default(),
+            gain_learner: GainLearner::default(),
         }
     }
 }
@@ -145,8 +178,10 @@ impl AutoTuner {
         response: f32,
         expected: f32,
         _config: &hydragrow_shared::ControllerConfig,
+        is_up: bool,
         now_sec: u64,
     ) {
+        let _ = is_up;
         self.on_dosing_ack(response, expected, false, now_sec);
     }
 
@@ -236,7 +271,77 @@ impl AutoTuner {
     pub fn active_ec_ratio(&self) -> f32 {
         self.adaptive_ec_ratio
     }
+
+    pub fn to_mqtt_payload(
+        &self,
+        device_id: &str,
+        config: &hydragrow_shared::ControllerConfig,
+        now_ms: u64,
+    ) -> String {
+        serde_json::json!({
+            "type": "runtime_calibration_update",
+            "device_id": device_id,
+            "runtime_coefficients": {
+                "step_ratio_ec": self.adaptive_ec_ratio,
+                "step_ratio_ph": self.adaptive_ph_ratio,
+                "best_ec_ratio": self.best_ec_ratio,
+                "best_ph_ratio": self.best_ph_ratio,
+                "locked": self.locked,
+                "abnormal_streak": self.abnormal_streak,
+                "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
+                "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
+                "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
+            },
+            "timestamp_ms": now_ms
+        })
+        .to_string()
+    }
 }
+
+impl NvsSnapshot {
+    pub fn from_context(ctx: &SystemContext, now_sec: u64) -> Self {
+        let hourly_dose_ec_ml = ctx
+            .safety
+            .hourly_doses()
+            .iter()
+            .filter(|(pump, _)| pump.as_str() == "NutrientA" || pump.as_str() == "NutrientB")
+            .map(|(_, history)| {
+                history
+                    .iter()
+                    .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                    .map(|(_, ml)| ml)
+                    .sum::<f32>()
+            })
+            .sum();
+
+        let hourly_dose_ph_ml = ctx
+            .safety
+            .hourly_doses()
+            .iter()
+            .filter(|(pump, _)| pump.as_str() == "PhUp" || pump.as_str() == "PhDown")
+            .map(|(_, history)| {
+                history
+                    .iter()
+                    .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                    .map(|(_, ml)| ml)
+                    .sum::<f32>()
+            })
+            .sum();
+
+        Self {
+            step_ratio_ec: ctx.tuner.adaptive_ec_ratio,
+            step_ratio_ph: ctx.tuner.adaptive_ph_ratio,
+            last_water_change_sec: ctx.last_water_change_sec,
+            hourly_dose_ec_ml,
+            hourly_dose_ph_ml,
+            hourly_window_start_sec: now_sec.saturating_sub(3600),
+            retry_ec: ctx.dosing.retry_ec,
+            retry_ph: ctx.dosing.retry_ph,
+            dosing_cycle_count: ctx.dosing_cycle_count,
+        }
+    }
+}
+
 impl Default for DeltaWindow {
     fn default() -> Self {
         Self {
@@ -244,6 +349,103 @@ impl Default for DeltaWindow {
             hour_anchor_sec: 0,
             day_total: 0.0,
             day_anchor_sec: 0,
+        }
+    }
+}
+
+impl Default for GainLearner {
+    fn default() -> Self {
+        Self {
+            ema_ec_gain: 0.0,
+            ema_ph_up_gain: 0.0,
+            ema_ph_down_gain: 0.0,
+            sample_count: 0,
+            alpha: 0.1,
+            confidence: 0.0,
+            min_samples_to_trust: 5,
+        }
+    }
+}
+
+impl GainLearner {
+    pub fn update_ec_gain(
+        &mut self,
+        dose_ml: f32,
+        delta_ec: f32,
+        config: &hydragrow_shared::ControllerConfig,
+    ) {
+        if dose_ml <= 0.0 || delta_ec <= 0.0 {
+            return;
+        }
+        let observed_gain = delta_ec / dose_ml;
+        let base = config.ec_gain_per_ml.max(0.0001);
+        if observed_gain < base * 0.3 || observed_gain > base * 3.0 {
+            return;
+        }
+        self.ema_ec_gain = if self.sample_count == 0 {
+            observed_gain
+        } else {
+            self.alpha * observed_gain + (1.0 - self.alpha) * self.ema_ec_gain
+        };
+        self.sample_count = self.sample_count.saturating_add(1);
+        self.confidence = (self.sample_count as f32 / self.min_samples_to_trust as f32).min(1.0);
+    }
+
+    pub fn update_ph_gain(
+        &mut self,
+        dose_ml: f32,
+        delta_ph: f32,
+        is_up: bool,
+        config: &hydragrow_shared::ControllerConfig,
+    ) {
+        if dose_ml <= 0.0 || delta_ph <= 0.0 {
+            return;
+        }
+        let observed_gain = delta_ph / dose_ml;
+        let base = if is_up {
+            config.ph_shift_up_per_ml
+        } else {
+            config.ph_shift_down_per_ml
+        }
+        .max(0.0001);
+        if observed_gain < base * 0.3 || observed_gain > base * 3.0 {
+            return;
+        }
+        let target = if is_up {
+            &mut self.ema_ph_up_gain
+        } else {
+            &mut self.ema_ph_down_gain
+        };
+        *target = if self.sample_count == 0 {
+            observed_gain
+        } else {
+            self.alpha * observed_gain + (1.0 - self.alpha) * *target
+        };
+        self.sample_count = self.sample_count.saturating_add(1);
+        self.confidence = (self.sample_count as f32 / self.min_samples_to_trust as f32).min(1.0);
+    }
+
+    pub fn effective_ec_gain(&self, config_gain: f32) -> f32 {
+        if self.confidence >= 0.6 && self.sample_count >= self.min_samples_to_trust {
+            0.6 * self.ema_ec_gain + 0.4 * config_gain
+        } else {
+            config_gain
+        }
+    }
+
+    pub fn effective_ph_up_gain(&self, config_gain: f32) -> f32 {
+        if self.confidence >= 0.6 && self.sample_count >= self.min_samples_to_trust {
+            0.6 * self.ema_ph_up_gain + 0.4 * config_gain
+        } else {
+            config_gain
+        }
+    }
+
+    pub fn effective_ph_down_gain(&self, config_gain: f32) -> f32 {
+        if self.confidence >= 0.6 && self.sample_count >= self.min_samples_to_trust {
+            0.6 * self.ema_ph_down_gain + 0.4 * config_gain
+        } else {
+            config_gain
         }
     }
 }

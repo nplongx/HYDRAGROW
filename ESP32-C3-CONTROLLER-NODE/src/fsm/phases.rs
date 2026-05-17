@@ -44,6 +44,10 @@ pub enum FaultCode {
     TooManyDrains,
     MaxHourlyDoseEc,
     MaxHourlyDosePh,
+    SensorTimeout,
+    EcStagnant,
+    PhOscillating,
+    WaterLevelCritical,
 }
 
 impl FaultCode {
@@ -56,6 +60,10 @@ impl FaultCode {
             Self::TooManyDrains => "TOO_MANY_DRAINS",
             Self::MaxHourlyDoseEc => "MAX_HOURLY_DOSE_EC",
             Self::MaxHourlyDosePh => "MAX_HOURLY_DOSE_PH",
+            Self::SensorTimeout => "SENSOR_TIMEOUT",
+            Self::EcStagnant => "EC_STAGNANT",
+            Self::PhOscillating => "PH_OSCILLATING",
+            Self::WaterLevelCritical => "WATER_LEVEL_CRITICAL",
         }
     }
 }

@@ -3,12 +3,11 @@ use hydragrow_shared::{LogLevel, SystemLogEvent, UnifiedSystemLog};
 use tracing::{error, info, warn};
 
 use crate::AppState;
-use hydragrow_shared::events::AppEvent;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
+use hydragrow_shared::events::AppEvent;
 
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    // 1. Deserialize trực tiếp từ JSON sang Struct
     let log_data: UnifiedSystemLog = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
@@ -29,7 +28,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         .unwrap()
         .to_string();
 
-    // Dịch nghĩa event thành message chi tiết thay vì hardcode
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog { message } => message.clone(),
         SystemLogEvent::SystemAlert(meta) => {
@@ -86,7 +84,9 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
         };
 
-        let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert.clone()));
+        let _ = app_state
+            .event_bus
+            .send(AppEvent::SystemAlert(alert.clone()));
 
         // Push FCM cho lỗi nghiêm trọng
         if is_critical || is_warning {

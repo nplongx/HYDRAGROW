@@ -7,33 +7,9 @@ use crate::db::influx::write_sensor_data;
 use crate::models::sensor::{PumpStatus, SensorData};
 use hydragrow_shared::events::AppEvent;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct IncomingSensorPayload {
-    pub temp: Option<f32>,
-    pub ec: Option<f32>,
-    pub ph: Option<f32>,
-    pub water_level: Option<f32>,
-    #[serde(rename = "last_update_ms", alias = "timestamp_ms")]
-    pub timestamp_ms: Option<u64>,
-    pub time: Option<String>,
-    pub pump_status: Option<PumpStatus>,
-
-    pub rssi: Option<i32>,
-    pub free_heap: Option<u32>,
-    pub uptime: Option<u32>,
-
-    pub err_water: Option<bool>,
-    pub err_temp: Option<bool>,
-    pub err_ph: Option<bool>,
-    pub err_ec: Option<bool>,
-
-    pub is_continuous: Option<bool>,
-    pub ph_voltage_mv: Option<f64>,
-}
-
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    let incoming: IncomingSensorPayload = match serde_json::from_slice(payload) {
+    let incoming: SensorData = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
             error!(error = ?e, "Lỗi parse JSON SensorData");
@@ -41,24 +17,15 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
-    let time = incoming
-        .time
-        .clone()
-        .or_else(|| {
-            incoming
-                .timestamp_ms
-                .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms as i64))
-                .map(|dt| dt.to_rfc3339())
-        })
-        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+    let time = incoming.time.clone();
 
     let sensor_data = SensorData {
         device_id: device_id.clone(),
-        temp: incoming.temp.unwrap_or(0.0),
-        ec: incoming.ec.unwrap_or(0.0),
-        ph: incoming.ph.unwrap_or(0.0),
-        water_level: incoming.water_level.unwrap_or(0.0),
-        pump_status: incoming.pump_status.unwrap_or_default(),
+        temp: incoming.temp,
+        ec: incoming.ec,
+        ph: incoming.ph,
+        water_level: incoming.water_level,
+        pump_status: incoming.pump_status,
         time,
         rssi: incoming.rssi,
         free_heap: incoming.free_heap,

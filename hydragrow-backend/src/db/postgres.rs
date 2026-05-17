@@ -428,11 +428,11 @@ pub async fn update_active_crop_season(
 // System Events
 
 pub async fn insert_system_event(
-    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>, // 👈 Thay vì &sqlx::PgPool
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
     record: &NewSystemEventRecord,
 ) -> Result<(), sqlx::Error> {
     let query = r#"
-        INSERT INTO system_events (
+        INSERT INTO system_event (
             device_id, level, category, title, message, reason, metadata, timestamp
         ) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

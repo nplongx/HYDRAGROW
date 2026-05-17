@@ -7,7 +7,6 @@ mod handlers; // Import thư mục con
 
 #[inline]
 fn parse_agitech_topic(topic: &str) -> Option<(String, String)> {
-    // ... (Giữ nguyên logic của bạn) ...
     let prefix = "AGITECH/";
     if !topic.starts_with(prefix) {
         return None;
@@ -48,8 +47,6 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handlers::dosing::handle_report(device_id, &payload_bytes, app_state).await
         }
 
-        // 👇 ĐÂY LÀ ĐIỂM THAY ĐỔI LỚN NHẤT CỦA GIAI ĐOẠN 2
-        // Gộp chung /fsm/events và /calibration vào một topic duy nhất
         "/system_log" => handlers::system_log::handle(device_id, &payload_bytes, app_state).await,
 
         _ => debug!("Nhận được topic không quản lý: {}", topic),

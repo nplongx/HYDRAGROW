@@ -34,8 +34,7 @@ const DEVICE_ID: &str = "device_001";
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
-    let mut logger = EspLogger::initialize_default(); // Có thể cần lấy instance nếu thư viện hỗ trợ,
-                                                      // nhưng cách chuẩn của ESP-IDF v5+ với Rust là gọi C API:
+    EspLogger::initialize_default();
 
     // Gọi trực tiếp API C của ESP-IDF để set log level cho tag cụ thể
     unsafe {

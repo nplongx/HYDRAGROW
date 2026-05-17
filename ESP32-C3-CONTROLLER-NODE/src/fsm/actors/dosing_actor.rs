@@ -48,6 +48,7 @@ pub enum PumpTarget {
 #[derive(Debug, Clone)]
 pub struct DosingCycleCtx {
     pub cycle_id: String,
+    pub dose_a_delivered_ml: f32,
     pub trigger: String,
     pub start_ec: f32,
     pub start_ph: f32,
@@ -109,6 +110,7 @@ impl DosingActor {
     ) {
         self.cycle_ctx = Some(DosingCycleCtx {
             cycle_id: format!("ec-{now_ms}"),
+            dose_a_delivered_ml: 0.0,
             trigger: "ec_control".to_string(),
             start_ec: sensors.ec as f32,
             start_ph: sensors.ph as f32,
@@ -155,6 +157,7 @@ impl DosingActor {
     ) {
         self.cycle_ctx = Some(DosingCycleCtx {
             cycle_id: format!("ph-{now_ms}"),
+            dose_a_delivered_ml: 0.0,
             trigger: "ph_control".to_string(),
             start_ec: sensors.ec as f32,
             start_ph: sensors.ph as f32,
@@ -247,6 +250,9 @@ impl DosingActor {
                 let PumpTarget::NutrientA { dose_b_ml } = job.pump else {
                     return DosingEvent::Failed(FaultCode::EcDosingFailed);
                 };
+                if let Some(ctx) = self.cycle_ctx.as_mut() {
+                    ctx.dose_a_delivered_ml = job.delivered_ml;
+                }
                 if dose_b_ml <= 0.0 {
                     self.sub_state = DosingSubState::Idle;
                     return DosingEvent::CycleComplete {
@@ -264,19 +270,18 @@ impl DosingActor {
                         None => return DosingEvent::Failed(FaultCode::EcDosingFailed),
                     };
                 let (on_ms, off_ms, max_pulses) = pulse_params(dose_b_ml, ml_per_sec, config);
-                let delivered_ml = ml_per_sec * (on_ms as f32 / 1000.0);
                 let b_job = PulseJob {
                     pump: PumpTarget::NutrientB,
                     target_ml: dose_b_ml,
-                    delivered_ml,
-                    pulse_on: true,
-                    pulse_count: 1,
+                    delivered_ml: 0.0,
+                    pulse_on: false,
+                    pulse_count: 0,
                     max_pulses,
                     on_ms,
                     off_ms,
                     pwm: safe_pwm,
                     ml_per_sec,
-                    next_toggle_ms: now_ms + on_ms,
+                    next_toggle_ms: now_ms,
                 };
                 self.sub_state = DosingSubState::WaitingAtoB {
                     finish_ms: now_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
@@ -330,7 +335,11 @@ impl DosingActor {
                 let delivered = job.delivered_ml;
                 self.sub_state = DosingSubState::Idle;
                 DosingEvent::CycleComplete {
-                    dose_a_ml: 0.0,
+                    dose_a_ml: self
+                        .cycle_ctx
+                        .as_ref()
+                        .map(|c| c.dose_a_delivered_ml)
+                        .unwrap_or(0.0),
                     dose_b_ml: delivered,
                     ph_up_ml: 0.0,
                     ph_down_ml: 0.0,

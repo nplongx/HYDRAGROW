@@ -119,20 +119,13 @@ pub async fn fetch_events(
 }
 
 // 2. 👇 THÊM STRUCT & HÀM NÀY: Để xử lý endpoint /events/cycle/{cycle_id}
-#[derive(serde::Deserialize)]
-pub struct CyclePathParams {
-    pub device_id: String,
-    pub cycle_id: String,
-}
-
 pub async fn get_cycle_timeline(
-    path: web::Path<CyclePathParams>,
+    path: web::Path<(String, String)>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
-    let device_id = &path.device_id;
-    let cycle_id = &path.cycle_id;
+    let (device_id, cycle_id) = path.into_inner();
 
-    match get_events_by_cycle_id(&app_state.pg_pool, device_id, cycle_id).await {
+    match get_events_by_cycle_id(&app_state.pg_pool, &device_id, &cycle_id).await {
         Ok(events) => HttpResponse::Ok().json(json!({
             "status": "success",
             "data": events
@@ -156,3 +149,33 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
+
+
+#[cfg(test)]
+mod tests {
+    use actix_web::{test, web, App, HttpResponse, Responder};
+
+    async fn dummy_cycle(path: web::Path<(String, String)>) -> impl Responder {
+        let (device_id, cycle_id) = path.into_inner();
+        HttpResponse::Ok().body(format!("{device_id}:{cycle_id}"))
+    }
+
+    #[actix_web::test]
+    async fn nested_scope_path_extracts_device_and_cycle_ids() {
+        let app = test::init_service(
+            App::new()
+                .service(
+                    web::scope("/api/devices/{device_id}")
+                        .route("/events/cycle/{cycle_id}", web::get().to(dummy_cycle)),
+                ),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/devices/dev-01/events/cycle/cycle-99")
+            .to_request();
+        let resp = test::call_and_read_body(&app, req).await;
+
+        assert_eq!(resp, web::Bytes::from_static(b"dev-01:cycle-99"));
+    }
+}

@@ -54,8 +54,6 @@ pub struct AutoTuner {
     pub ec_delta_window: DeltaWindow,
     pub ph_delta_window: DeltaWindow,
     pub gain_learner: GainLearner,
-    pub cooldown_adaptor: CooldownAdaptor,
-    pub oscillation_detector: OscillationDetector,
 }
 
 
@@ -87,17 +85,6 @@ pub struct GainLearner {
     pub alpha: f32,
     pub confidence: f32,
     pub min_samples_to_trust: u32,
-}
-
-pub struct CooldownAdaptor {
-    pub current_cooldown_sec: u64,
-    pub min_cooldown_sec: u64,
-    pub max_cooldown_sec: u64,
-}
-
-pub struct OscillationDetector {
-    pub ph_direction_history: [bool; 4],
-    pub streak: u8,
 }
 
 impl SystemContext {}
@@ -161,8 +148,6 @@ impl Default for AutoTuner {
             ec_delta_window: DeltaWindow::default(),
             ph_delta_window: DeltaWindow::default(),
             gain_learner: GainLearner::default(),
-            cooldown_adaptor: CooldownAdaptor::default(),
-            oscillation_detector: OscillationDetector::default(),
         }
     }
 }
@@ -379,73 +364,6 @@ impl Default for GainLearner {
             confidence: 0.0,
             min_samples_to_trust: 5,
         }
-    }
-}
-
-impl Default for CooldownAdaptor {
-    fn default() -> Self {
-        Self {
-            current_cooldown_sec: 60,
-            min_cooldown_sec: 20,
-            max_cooldown_sec: 300,
-        }
-    }
-}
-
-impl CooldownAdaptor {
-    pub fn observe_cycle(
-        &mut self,
-        reached_target: bool,
-        sensor_stabilize_sec: u64,
-        config_cooldown_sec: u64,
-    ) {
-        if self.current_cooldown_sec == 0 {
-            self.current_cooldown_sec = config_cooldown_sec.max(self.min_cooldown_sec);
-        }
-        if reached_target {
-            self.current_cooldown_sec = self
-                .current_cooldown_sec
-                .saturating_sub((sensor_stabilize_sec / 3).max(1))
-                .max(self.min_cooldown_sec);
-        } else {
-            self.current_cooldown_sec = (self.current_cooldown_sec
-                + (sensor_stabilize_sec / 2).max(2))
-            .min(self.max_cooldown_sec);
-        }
-    }
-
-    pub fn effective_cooldown_sec(&self, config_cooldown_sec: u64) -> u64 {
-        let base = if self.current_cooldown_sec == 0 {
-            config_cooldown_sec
-        } else {
-            self.current_cooldown_sec
-        };
-        base.clamp(self.min_cooldown_sec, self.max_cooldown_sec)
-    }
-}
-
-impl Default for OscillationDetector {
-    fn default() -> Self {
-        Self {
-            ph_direction_history: [false; 4],
-            streak: 0,
-        }
-    }
-}
-
-impl OscillationDetector {
-    pub fn record_ph_dose(&mut self, is_up: bool) -> bool {
-        self.ph_direction_history.rotate_right(1);
-        self.ph_direction_history[0] = is_up;
-        let oscillating = self.ph_direction_history[0] != self.ph_direction_history[1]
-            && self.ph_direction_history[1] != self.ph_direction_history[2]
-            && self.ph_direction_history[2] != self.ph_direction_history[3];
-        if oscillating {
-            self.streak = self.streak.saturating_add(1);
-        } else {
-            self.streak = 0;
-        }
-        oscillating
     }
 }
 

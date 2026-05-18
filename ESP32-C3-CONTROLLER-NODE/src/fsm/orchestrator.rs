@@ -722,18 +722,6 @@ pub fn tick(
                         ctx.tuner.to_mqtt_payload(&config.device_id, config, now_ms);
                     let _ = mqtt_tx.send(calibration_payload);
                 }
-                let ec_ok = (config.ec_target - sensors.ec).abs() <= config.ec_tolerance;
-                let ph_ok = (config.ph_target - sensors.ph).abs() <= config.ph_tolerance;
-                let reached_target = ec_ok && ph_ok;
-                ctx.tuner.cooldown_adaptor.observe_cycle(
-                    reached_target,
-                    config.sensor_stabilize_sec as u64,
-                    config.cooldown_sec as u64,
-                );
-                let effective_cooldown = ctx
-                    .tuner
-                    .cooldown_adaptor
-                    .effective_cooldown_sec(config.cooldown_sec as u64);
                 if let Some(flash) = nvs.as_mut() {
                     let snapshot = NvsSnapshot::from_context(ctx, now_ms / 1000);
                     if let Ok(serialized) = serde_json::to_string(&snapshot) {

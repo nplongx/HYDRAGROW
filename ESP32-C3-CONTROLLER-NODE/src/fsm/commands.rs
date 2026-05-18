@@ -60,6 +60,30 @@ pub fn process_mqtt_commands(
             continue;
         }
 
+        if action_lower == "ota_update" {
+            let ota_url = cmd
+                .params
+                .as_ref()
+                .and_then(|p| p.ota_url.as_deref())
+                .unwrap_or("");
+            send_system_log(
+                fsm_mqtt_tx,
+                &config.device_id,
+                LogLevel::Warning,
+                LogCategory::System,
+                "OTA Update Trigger",
+                SystemLogEvent::BasicSystemLog {
+                    message: format!(
+                        "Nhận lệnh OTA từ MQTT. URL: {}. Firmware sẽ chuyển giao cho OTA task.",
+                        if ota_url.is_empty() { "<missing>" } else { ota_url }
+                    ),
+                },
+            );
+            info!("📦 OTA trigger received: {}", ota_url);
+            force_sync = true;
+            continue;
+        }
+
         if action_lower == "reset_fault" {
             info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
             crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);

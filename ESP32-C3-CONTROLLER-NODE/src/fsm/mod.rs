@@ -27,6 +27,7 @@ use crate::mqtt::MqttCommandPayload;
 use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
+use system_context::NvsSnapshot;
 use utils::{get_current_time_ms, get_current_time_sec};
 
 pub mod mod_helpers {
@@ -134,6 +135,20 @@ pub fn start_fsm_control_loop(
         });
 
     new_ctx.peripherals.last_mixing_start_sec = current_time_on_boot;
+    if let Some(flash) = nvs.as_mut() {
+        if let Ok(Some(raw)) = flash.get_str("runtime_snap", &mut [0; 384]) {
+            if let Ok(snapshot) = serde_json::from_str::<NvsSnapshot>(raw) {
+                new_ctx.tuner.adaptive_ec_ratio = snapshot.step_ratio_ec.clamp(0.1, 2.0);
+                new_ctx.tuner.best_ec_ratio = new_ctx.tuner.adaptive_ec_ratio;
+                new_ctx.tuner.adaptive_ph_ratio = snapshot.step_ratio_ph.clamp(0.1, 2.0);
+                new_ctx.tuner.best_ph_ratio = new_ctx.tuner.adaptive_ph_ratio;
+                new_ctx.last_water_change_sec = snapshot.last_water_change_sec;
+                new_ctx.dosing.retry_ec = snapshot.retry_ec;
+                new_ctx.dosing.retry_ph = snapshot.retry_ph;
+                new_ctx.dosing_cycle_count = snapshot.dosing_cycle_count;
+            }
+        }
+    }
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");
 
@@ -156,9 +171,6 @@ pub fn start_fsm_control_loop(
         let sensors = shared_sensors.read().unwrap().clone();
         let current_time_ms = get_current_time_ms();
         let current_time_sec = current_time_ms / 1000;
-
-        new_ctx.tuner.adaptive_ec_ratio = config.ec_step_ratio;
-        new_ctx.tuner.adaptive_ph_ratio = config.ph_step_ratio;
 
         let force_sync = process_mqtt_commands(
             &cmd_rx,

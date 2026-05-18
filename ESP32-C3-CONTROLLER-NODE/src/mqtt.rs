@@ -171,6 +171,7 @@ pub struct MqttCommandParams {
     pub duration_sec: Option<u64>,
     pub pwm: Option<u32>,
     pub state: Option<bool>,
+    pub ota_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

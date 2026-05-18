@@ -5,7 +5,9 @@ use chrono::Local;
 use cron::Schedule;
 
 use esp_idf_svc::nvs::EspDefaultNvs;
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{
+    AlertMetadata, ControllerConfig, LogCategory, LogLevel, SystemLogEvent, WaterMetadata,
+};
 
 use crate::{mqtt::SensorData, pump::PumpController};
 
@@ -13,9 +15,9 @@ use super::{
     actors::{dosing_actor::DosingEvent, water_actor::WaterEvent},
     peripheral::PeripheralController,
     phases::{FaultCode, SystemPhase},
-    system_context::SystemContext,
+    system_context::{NvsSnapshot, SystemContext},
     types::PendingCalibrationSample,
-    utils::soft_deadband_scale,
+    utils::{send_system_log, soft_deadband_scale},
 };
 
 enum OrchestratorDecision {
@@ -95,6 +97,62 @@ fn check_scheduled_water_change(
     })
 }
 
+fn check_scheduled_dosing(
+    ctx: &mut SystemContext,
+    config: &ControllerConfig,
+    sensors: &SensorData,
+    now_sec: u64,
+) -> Option<OrchestratorDecision> {
+    if !(config.enable_ec_sensor && config.is_enabled) {
+        return None;
+    }
+    // Reuse cron field to support preventive dosing without backend schema change.
+    if ctx.scheduled_dosing_cron != config.water_change_cron {
+        ctx.scheduled_dosing_cron = config.water_change_cron.clone();
+        match Schedule::from_str(&ctx.scheduled_dosing_cron) {
+            Ok(schedule) => {
+                if let Some(next) = schedule.upcoming(Local).next() {
+                    ctx.next_scheduled_dosing_trigger_sec = Some(next.timestamp() as u64);
+                }
+            }
+            Err(_) => {
+                ctx.next_scheduled_dosing_trigger_sec = None;
+                return None;
+            }
+        }
+    }
+    let next_trigger = ctx.next_scheduled_dosing_trigger_sec?;
+    if now_sec < next_trigger {
+        return None;
+    }
+    if let Ok(schedule) = Schedule::from_str(&ctx.scheduled_dosing_cron) {
+        let future = Local::now() + chrono::Duration::seconds(1);
+        if let Some(next) = schedule.after(&future).next() {
+            ctx.next_scheduled_dosing_trigger_sec = Some(next.timestamp() as u64);
+        }
+    }
+    let delta = (config.ec_target - sensors.ec).max(config.ec_tolerance * 0.5);
+    let step_ratio = if ctx.tuner.is_locked() {
+        ctx.tuner.best_ec_ratio
+    } else {
+        ctx.tuner.active_ec_ratio()
+    };
+    let effective_gain = ctx
+        .tuner
+        .gain_learner
+        .effective_ec_gain(config.ec_gain_per_ml)
+        .max(0.0001);
+    let dose_ml = (delta / effective_gain * step_ratio * 0.35).clamp(0.0, config.max_dose_per_cycle);
+    if dose_ml <= 0.0 {
+        return None;
+    }
+    Some(OrchestratorDecision::StartEcDosing {
+        dose_ml,
+        target_ec: config.ec_target,
+        pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
+    })
+}
+
 fn decide_monitoring(
     sensors: &SensorData,
     config: &ControllerConfig,
@@ -128,7 +186,12 @@ fn decide_monitoring(
         } else {
             ctx.tuner.active_ec_ratio()
         };
-        let dose_ml = (delta / config.ec_gain_per_ml.max(0.0001) * step_ratio * deadband_scale)
+        let effective_gain = ctx
+            .tuner
+            .gain_learner
+            .effective_ec_gain(config.ec_gain_per_ml)
+            .max(0.0001);
+        let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
             .clamp(0.0, config.max_dose_per_cycle);
         if dose_ml > 0.0 {
             return OrchestratorDecision::StartEcDosing {
@@ -159,9 +222,13 @@ fn decide_monitoring(
             } else {
                 ctx.tuner.adaptive_ph_ratio
             };
-            let dose_ml =
-                (delta / config.ph_shift_down_per_ml.max(0.0001) * step_ratio * deadband_scale)
-                    .clamp(0.0, config.max_dose_per_cycle);
+            let effective_gain = ctx
+                .tuner
+                .gain_learner
+                .effective_ph_down_gain(config.ph_shift_down_per_ml)
+                .max(0.0001);
+            let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
+                .clamp(0.0, config.max_dose_per_cycle);
             if dose_ml > 0.0 {
                 return OrchestratorDecision::StartPhDosing {
                     is_up: false,
@@ -178,9 +245,13 @@ fn decide_monitoring(
             } else {
                 ctx.tuner.adaptive_ph_ratio
             };
-            let dose_ml =
-                (delta / config.ph_shift_up_per_ml.max(0.0001) * step_ratio * deadband_scale)
-                    .clamp(0.0, config.max_dose_per_cycle);
+            let effective_gain = ctx
+                .tuner
+                .gain_learner
+                .effective_ph_up_gain(config.ph_shift_up_per_ml)
+                .max(0.0001);
+            let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
+                .clamp(0.0, config.max_dose_per_cycle);
             if dose_ml > 0.0 {
                 return OrchestratorDecision::StartPhDosing {
                     is_up: true,
@@ -265,6 +336,13 @@ fn apply_decision(
             }
             ctx.dosing
                 .start_ph_cycle(now_ms, is_up, dose_ml, target_ph, pwm, config, sensors);
+            if ctx.tuner.oscillation_detector.record_ph_dose(is_up) {
+                ctx.tuner.adaptive_ph_ratio = (ctx.tuner.adaptive_ph_ratio * 0.5).clamp(0.1, 2.0);
+                if ctx.tuner.oscillation_detector.streak >= 3 {
+                    set_fault_with_log(ctx, FaultCode::PhOscillating, mqtt_tx, &config.device_id);
+                    return;
+                }
+            }
             ctx.phase = SystemPhase::DosingPH;
             ctx.safety.last_ph_before_dose = Some(sensors.ph);
             ctx.safety.last_ph_dose_up = Some(is_up);
@@ -299,6 +377,32 @@ fn apply_decision(
     }
 }
 
+fn log_fault_transition(code: &FaultCode, mqtt_tx: &Sender<String>, device_id: &str) {
+    send_system_log(
+        mqtt_tx,
+        device_id,
+        LogLevel::Critical,
+        LogCategory::Alert,
+        &format!("Lỗi hệ thống: {}", code.as_str()),
+        SystemLogEvent::SystemAlert(AlertMetadata {
+            alert_type: code.as_str().to_string(),
+            source: "fsm_orchestrator".to_string(),
+            retry_count: 0,
+            limit_value: None,
+        }),
+    );
+}
+
+fn set_fault_with_log(
+    ctx: &mut SystemContext,
+    code: FaultCode,
+    mqtt_tx: &Sender<String>,
+    device_id: &str,
+) {
+    log_fault_transition(&code, mqtt_tx, device_id);
+    ctx.phase = SystemPhase::Fault(code);
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn tick(
     now_ms: u64,
@@ -310,6 +414,19 @@ pub fn tick(
     dosing_report_tx: &Sender<String>,
     mqtt_tx: &Sender<String>,
 ) {
+    let sensor_timeout_ms: u64 = 90_000;
+    let sensor_age_ms = now_ms.saturating_sub(sensors.last_update_ms);
+    if sensor_age_ms > sensor_timeout_ms {
+        if !matches!(ctx.phase, SystemPhase::Monitoring | SystemPhase::Cooldown) {
+            set_fault_with_log(ctx, FaultCode::SensorTimeout, mqtt_tx, &config.device_id);
+            let _ = mqtt_tx.send(format!(
+                "[ORCH] sensor_timeout age_ms={} timeout_ms={}",
+                sensor_age_ms, sensor_timeout_ms
+            ));
+        }
+        return;
+    }
+
     let is_noisy = check_sensor_noise(ctx, sensors, config);
     if is_noisy {
         if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
@@ -323,6 +440,8 @@ pub fn tick(
             let now_sec = now_ms / 1000;
             if let Some(decision) = check_scheduled_water_change(ctx, config, sensors, now_sec, nvs)
             {
+                apply_decision(decision, ctx, config, sensors, now_ms);
+            } else if let Some(decision) = check_scheduled_dosing(ctx, config, sensors, now_sec) {
                 apply_decision(decision, ctx, config, sensors, now_ms);
             } else {
                 let decision = decide_monitoring(sensors, config, ctx, now_ms);
@@ -367,6 +486,7 @@ pub fn tick(
                     ctx.phase_finish_ms = Some(now_ms + config.active_mixing_sec as u64 * 1000);
                 }
                 DosingEvent::Failed(code) => {
+                    log_fault_transition(&code, mqtt_tx, &config.device_id);
                     let _ = mqtt_tx.send(format!("[ORCH] dosing_failed:{}", code.as_str()));
                     ctx.phase = SystemPhase::Fault(code);
                 }
@@ -375,12 +495,47 @@ pub fn tick(
         }
 
         SystemPhase::WaterRefilling | SystemPhase::WaterDraining => {
+            let water_log_ctx = match &ctx.water.sub_state {
+                super::actors::water_actor::WaterSubState::Filling { job }
+                | super::actors::water_actor::WaterSubState::Draining { job } => Some((
+                    job.trigger.clone(),
+                    job.start_level,
+                    job.target_level,
+                )),
+                super::actors::water_actor::WaterSubState::Idle => None,
+            };
             match ctx.water.tick(now_ms, sensors, config, pumps) {
                 WaterEvent::Done {
                     success,
                     duration_sec,
                 } => {
-                    let _ = duration_sec;
+                    send_system_log(
+                        mqtt_tx,
+                        &config.device_id,
+                        if success {
+                            LogLevel::Info
+                        } else {
+                            LogLevel::Warning
+                        },
+                        LogCategory::Water,
+                        if success {
+                            "Hoàn tất cấp/xả nước"
+                        } else {
+                            "Timeout cấp/xả nước"
+                        },
+                        SystemLogEvent::WaterEvent(WaterMetadata {
+                            trigger: water_log_ctx
+                                .as_ref()
+                                .map(|x| x.0.clone())
+                                .unwrap_or_else(|| "unknown".to_string()),
+                            level_before: water_log_ctx.as_ref().map(|x| x.1).unwrap_or(0.0),
+                            level_after: sensors.water_level,
+                            target_level: water_log_ctx.as_ref().map(|x| x.2).unwrap_or(0.0),
+                            duration_sec,
+                            success,
+                            cycle_id: None,
+                        }),
+                    );
                     ctx.phase = if success {
                         SystemPhase::ActiveMixing
                     } else {
@@ -416,7 +571,12 @@ pub fn tick(
                     if sensors.ec < before + config.ec_ack_threshold {
                         ctx.dosing.retry_ec = ctx.dosing.retry_ec.saturating_add(1);
                         if ctx.dosing.retry_ec >= 3 {
-                            ctx.phase = SystemPhase::Fault(FaultCode::EcDosingFailed);
+                            set_fault_with_log(
+                                ctx,
+                                FaultCode::EcDosingFailed,
+                                mqtt_tx,
+                                &config.device_id,
+                            );
                             let _ =
                                 mqtt_tx.send("[ORCH] ec_ack_failed_after_3_retries".to_string());
                             return;
@@ -437,7 +597,12 @@ pub fn tick(
                     if moved < config.ph_ack_threshold {
                         ctx.dosing.retry_ph = ctx.dosing.retry_ph.saturating_add(1);
                         if ctx.dosing.retry_ph >= 3 {
-                            ctx.phase = SystemPhase::Fault(FaultCode::PhDosingFailed);
+                            set_fault_with_log(
+                                ctx,
+                                FaultCode::PhDosingFailed,
+                                mqtt_tx,
+                                &config.device_id,
+                            );
                             let _ =
                                 mqtt_tx.send("[ORCH] ph_ack_failed_after_3_retries".to_string());
                             return;
@@ -459,12 +624,37 @@ pub fn tick(
                         ph_response,
                         config.ph_ack_threshold,
                         config,
+                        is_up,
                         now_ms / 1000,
                     );
                 }
 
                 if let Some(sample) = ctx.calibration.pending_sample.take() {
+                    ctx.dosing_cycle_count = ctx.dosing_cycle_count.saturating_add(1);
                     let ec_response = sample.post_mixing_ec - sample.start_ec;
+                    let ec_dose_ml = sample.dose_a_ml + sample.dose_b_ml;
+                    if ec_dose_ml > 0.0 {
+                        ctx.tuner
+                            .gain_learner
+                            .update_ec_gain(ec_dose_ml, ec_response.max(0.0), config);
+                    }
+                    let ph_response_signed = sensors.ph - sample.start_ph;
+                    if sample.dose_ph_up_ml > 0.0 {
+                        ctx.tuner.gain_learner.update_ph_gain(
+                            sample.dose_ph_up_ml,
+                            ph_response_signed.max(0.0),
+                            true,
+                            config,
+                        );
+                    }
+                    if sample.dose_ph_down_ml > 0.0 {
+                        ctx.tuner.gain_learner.update_ph_gain(
+                            sample.dose_ph_down_ml,
+                            (-ph_response_signed).max(0.0),
+                            false,
+                            config,
+                        );
+                    }
                     if sample.dose_a_ml > 0.0 || sample.dose_b_ml > 0.0 {
                         ctx.tuner.on_ec_dosing_ack(
                             ec_response,
@@ -520,10 +710,40 @@ pub fn tick(
                     if let Ok(json) = serde_json::to_string(&report) {
                         let _ = dosing_report_tx.send(json);
                     }
+                    send_system_log(
+                        mqtt_tx,
+                        &config.device_id,
+                        LogLevel::Success,
+                        LogCategory::Dosing,
+                        "Hoàn tất chu kỳ châm phân",
+                        SystemLogEvent::DosingCycleComplete(report),
+                    );
+                    let calibration_payload =
+                        ctx.tuner.to_mqtt_payload(&config.device_id, config, now_ms);
+                    let _ = mqtt_tx.send(calibration_payload);
+                }
+                let ec_ok = (config.ec_target - sensors.ec).abs() <= config.ec_tolerance;
+                let ph_ok = (config.ph_target - sensors.ph).abs() <= config.ph_tolerance;
+                let reached_target = ec_ok && ph_ok;
+                ctx.tuner.cooldown_adaptor.observe_cycle(
+                    reached_target,
+                    config.sensor_stabilize_sec as u64,
+                    config.cooldown_sec as u64,
+                );
+                let effective_cooldown = ctx
+                    .tuner
+                    .cooldown_adaptor
+                    .effective_cooldown_sec(config.cooldown_sec as u64);
+                if let Some(flash) = nvs.as_mut() {
+                    let snapshot = NvsSnapshot::from_context(ctx, now_ms / 1000);
+                    if let Ok(serialized) = serde_json::to_string(&snapshot) {
+                        let _ = flash.set_str("runtime_snap", &serialized);
+                    }
+                    let _ = flash.set_u64("last_w_change", ctx.last_water_change_sec);
                 }
 
                 ctx.phase = SystemPhase::Cooldown;
-                ctx.phase_finish_ms = Some(now_ms + config.cooldown_sec as u64 * 1000);
+                ctx.phase_finish_ms = Some(now_ms + effective_cooldown * 1000);
             }
         }
 

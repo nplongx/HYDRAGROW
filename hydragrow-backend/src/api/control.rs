@@ -145,6 +145,7 @@ pub async fn control_pump(
     };
 
     let command = MqttCommandPayload {
+        schema_version: Some(CURRENT_SCHEMA_VERSION),
         target,
         action: mqtt_action.to_string(),
         params: Some(MqttCommandParams {

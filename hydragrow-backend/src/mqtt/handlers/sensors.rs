@@ -5,6 +5,7 @@ use tracing::{debug, error, instrument};
 use crate::AppState;
 use crate::db::influx::write_sensor_data;
 use crate::models::sensor::{PumpStatus, SensorData};
+use crate::services::schema_version::validate_payload_schema;
 use hydragrow_shared::events::AppEvent;
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
@@ -19,7 +20,12 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
 
     let time = incoming.time.clone();
 
+    if !validate_payload_schema("sensor_update", &device_id, incoming.schema_version) {
+        return;
+    }
+
     let sensor_data = SensorData {
+        schema_version: incoming.schema_version,
         device_id: device_id.clone(),
         temp: incoming.temp,
         ec: incoming.ec,

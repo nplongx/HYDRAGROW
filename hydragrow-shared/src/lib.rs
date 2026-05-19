@@ -4,6 +4,9 @@ pub mod events;
 pub mod helper;
 pub mod topics;
 
+pub const CURRENT_SCHEMA_VERSION: u16 = 2;
+pub const MIN_SUPPORTED_SCHEMA_VERSION: u16 = CURRENT_SCHEMA_VERSION - 1;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DeviceState {
@@ -33,6 +36,8 @@ pub struct PumpStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub device_id: String,
     pub ec: f64,
     pub ph: f64,
@@ -73,23 +78,28 @@ pub struct AlertMessage {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MqttCommandPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub target: String,
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<MqttCommandParams>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MqttCommandParams {
-    pub pump_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pump_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_sec: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pwm: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ota_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -397,6 +407,7 @@ pub enum LogCategory {
 /// Metadata cho các sự kiện Cấp/Xả nước
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaterMetadata {
+    pub source: String,
     pub trigger: String, // VD: "auto_refill", "scheduled_change", "dilute"
     pub level_before: f32,
     pub level_after: f32,
@@ -405,6 +416,8 @@ pub struct WaterMetadata {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cycle_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_count: Option<u32>,
 }
 
 /// Metadata cho các cảnh báo An toàn / Lỗi hệ thống
@@ -415,11 +428,16 @@ pub struct AlertMetadata {
     pub retry_count: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit_value: Option<f32>, // Dùng nếu vượt ngưỡng (VD: max_hourly_ml)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threshold_before: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threshold_after: Option<f32>,
 }
 
 /// Metadata cho các sự kiện AI Learning & Calibration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalibrationMetadata {
+    pub source: String,
     pub parameter: String, // VD: "ec_gain_per_ml", "ec_step_ratio", "skipped"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub old_value: Option<f32>,
@@ -429,6 +447,14 @@ pub struct CalibrationMetadata {
     pub skip_reason: Option<String>, // VD: "noise", "short_mixing"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cycle_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BasicSystemLogMetadata {
+    pub source: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_reason: Option<String>,
 }
 
 // Đối với Dosing, bạn đã có sẵn `DosingReportPayload` ở Backend,
@@ -448,18 +474,36 @@ pub enum SystemLogEvent {
     CalibrationUpdate(CalibrationMetadata),
 
     /// Dành cho các log text cơ bản không cần metadata phức tạp
-    BasicSystemLog {
-        message: String,
-    },
+    BasicSystemLog(BasicSystemLogMetadata),
 }
 
 /// Struct cuối cùng gói toàn bộ thông tin để lưu vào DB / bắn Alert
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnifiedSystemLog {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub device_id: String,
     pub level: LogLevel,
     pub category: LogCategory,
     pub title: String,
     pub event: SystemLogEvent, // Chứa cả event_type và metadata chi tiết
     pub timestamp_ms: u64,
+}
+
+impl UnifiedSystemLog {
+    pub fn info(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
+        Self { device_id: device_id.into(), level: LogLevel::Info, category, title: title.into(), event, timestamp_ms }
+    }
+
+    pub fn warning(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
+        Self { device_id: device_id.into(), level: LogLevel::Warning, category, title: title.into(), event, timestamp_ms }
+    }
+
+    pub fn critical(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
+        Self { device_id: device_id.into(), level: LogLevel::Critical, category, title: title.into(), event, timestamp_ms }
+    }
+
+    pub fn success(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
+        Self { device_id: device_id.into(), level: LogLevel::Success, category, title: title.into(), event, timestamp_ms }
+    }
 }

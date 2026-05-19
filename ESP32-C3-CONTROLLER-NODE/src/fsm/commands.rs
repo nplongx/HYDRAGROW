@@ -1,4 +1,4 @@
-use hydragrow_shared::{ControlMode, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
+use hydragrow_shared::{BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -38,7 +38,7 @@ pub fn process_mqtt_commands(
         if action_lower == "enter_calibration" {
             info!("🛠️ Bắt đầu chế độ Hiệu chuẩn Cảm biến! Khóa chéo an toàn.");
             crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
-            let step = cmd.target.clone().unwrap_or_else(|| "IDLE".to_string());
+            let step = cmd.target.clone();
             ctx.phase = SystemPhase::SensorCalibration { step };
             ctx.phase_finish_ms = Some(current_time_ms + 3_600_000);
             force_sync = true;
@@ -72,12 +72,14 @@ pub fn process_mqtt_commands(
                 LogLevel::Warning,
                 LogCategory::System,
                 "OTA Update Trigger",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!(
                         "Nhận lệnh OTA từ MQTT. URL: {}. Firmware sẽ chuyển giao cho OTA task.",
                         if ota_url.is_empty() { "<missing>" } else { ota_url }
                     ),
-                },
+                    skip_reason: None,
+                }),
             );
             info!("📦 OTA trigger received: {}", ota_url);
             force_sync = true;
@@ -105,11 +107,9 @@ pub fn process_mqtt_commands(
             continue;
         }
 
-        if let Some(target) = &cmd.target {
-            let target_lower = target.to_lowercase();
-            if target_lower != "pump" && target_lower != "all" {
-                continue;
-            }
+        let target_lower = cmd.target.to_lowercase();
+        if target_lower != "pump" && target_lower != "all" {
+            continue;
         }
 
         let pump_name = cmd
@@ -117,17 +117,15 @@ pub fn process_mqtt_commands(
             .as_ref()
             .and_then(|p| p.pump_id.as_ref())
             .map(|p| p.to_uppercase())
-            .or_else(|| cmd.pump.as_ref().map(|p| p.to_uppercase()))
             .unwrap_or_else(|| "ALL".to_string());
 
         let is_force_on = action_lower == "force_on";
         let is_set_pwm = action_lower == "set_pwm";
-        let pwm = cmd.params.as_ref().and_then(|p| p.pwm).or(cmd.pwm);
+        let pwm = cmd.params.as_ref().and_then(|p| p.pwm);
         let duration_sec = cmd
             .params
             .as_ref()
-            .and_then(|p| p.duration_sec)
-            .or(cmd.duration_sec);
+            .and_then(|p| p.duration_sec);
         let explicit_state = cmd.params.as_ref().and_then(|p| p.state);
 
         let mut is_on = is_force_on
@@ -158,12 +156,14 @@ pub fn process_mqtt_commands(
                 LogLevel::Warning,
                 LogCategory::UserAction,
                 "Cưỡng chế Bơm (Force On)",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!(
                         "Người dùng đã dùng lệnh FORCE ON để ép bật {} trong {} giây, vượt qua các lớp bảo vệ an toàn.",
                         pump_name, duration
                     ),
-                },
+                    skip_reason: None,
+                }),
             );
         } else if is_on {
             // Bắn log thông báo User bật bơm thủ công bình thường
@@ -173,9 +173,11 @@ pub fn process_mqtt_commands(
                 LogLevel::Info,
                 LogCategory::UserAction,
                 "Điều khiển Bơm Thủ công",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!("Người dùng đã bật bơm {}.", pump_name),
-                },
+                    skip_reason: None,
+                }),
             );
         }
 

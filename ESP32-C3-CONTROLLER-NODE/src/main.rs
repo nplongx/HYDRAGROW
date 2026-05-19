@@ -292,7 +292,13 @@ fn main() -> anyhow::Result<()> {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        let topic = match v.get("type").and_then(|t| t.as_str()) {
+                        let topic = if v.get("event_type").is_some()
+                            && v.get("level").is_some()
+                            && v.get("category").is_some()
+                        {
+                            format!("AGITECH/{}/system_log", DEVICE_ID)
+                        } else {
+                            match v.get("type").and_then(|t| t.as_str()) {
                             Some("water_event") | Some("system_alert") | Some("dosing_cycle") => {
                                 topic_fsm_events(DEVICE_ID)
                             }

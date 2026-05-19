@@ -20,67 +20,6 @@ pub enum ConnectionState {
     MqttDisconnected,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PumpStatus {
-    pub pump_a: bool,
-    pub pump_b: bool,
-    pub ph_up: bool,
-    pub ph_down: bool,
-    pub osaka_pump: bool,
-    pub mist_valve: bool,
-    pub water_pump_in: bool,
-    pub water_pump_out: bool,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pump_a_pwm: Option<u32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pump_b_pwm: Option<u32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ph_up_pwm: Option<u32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ph_down_pwm: Option<u32>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub osaka_pwm: Option<u32>,
-
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub dosing_pulse_active: bool,
-    #[serde(default, skip_serializing_if = "is_zero_u32")]
-    pub dosing_pulse_count: u32,
-}
-
-impl Default for PumpStatus {
-    fn default() -> Self {
-        Self {
-            pump_a: false,
-            pump_b: false,
-            ph_up: false,
-            ph_down: false,
-            osaka_pump: false,
-            mist_valve: false,
-            water_pump_in: false,
-            water_pump_out: false,
-            pump_a_pwm: Some(0),
-            pump_b_pwm: Some(0),
-            ph_up_pwm: Some(0),
-            ph_down_pwm: Some(0),
-            osaka_pwm: Some(0),
-            dosing_pulse_active: false,
-            dosing_pulse_count: 0,
-        }
-    }
-}
-
-fn is_zero_u32(value: &u32) -> bool {
-    *value == 0
-}
-
-fn is_false(value: &bool) -> bool {
-    !*value
-}
 
 #[derive(Debug, Deserialize)]
 pub struct IncomingSensorPayload {
@@ -102,7 +41,7 @@ pub struct IncomingSensorPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SensorData {
+pub struct RuntimeSensorData {
     pub ec: f32,
     pub ph: f32,
     pub temp: f32,
@@ -114,65 +53,21 @@ pub struct SensorData {
     pub uptime: Option<u32>,
     pub time: Option<String>,
     pub last_update_ms: u64,
-    #[serde(default)]
     pub pump_status: PumpStatus,
-
-    #[serde(default)]
     pub err_water: bool,
-    #[serde(default)]
     pub err_temp: bool,
-    #[serde(default)]
     pub err_ph: bool,
-    #[serde(default)]
     pub err_ec: bool,
 }
-
-impl Default for SensorData {
-    fn default() -> Self {
-        Self {
-            ec: 0.0,
-            ph: 7.0,
-            temp: 25.0,
-            water_level: 20.0,
-            ph_voltage_mv: None,
-            is_continuous: false,
-            rssi: None,
-            free_heap: None,
-            uptime: None,
-            time: None,
-            last_update_ms: 0,
-            pump_status: PumpStatus::default(),
-            err_water: false,
-            err_temp: false,
-            err_ph: false,
-            err_ec: false,
-        }
-    }
+impl Default for RuntimeSensorData {
+    fn default() -> Self { Self { ec:0.0, ph:7.0, temp:25.0, water_level:20.0, ph_voltage_mv:None, is_continuous:false, rssi:None, free_heap:None, uptime:None, time:None, last_update_ms:0, pump_status:PumpStatus::default(), err_water:false, err_temp:false, err_ph:false, err_ec:false } }
 }
-
-pub type SharedSensorData = Arc<RwLock<SensorData>>;
+pub type SharedSensorData = Arc<RwLock<RuntimeSensorData>>;
 
 pub fn create_shared_sensor_data() -> SharedSensorData {
-    Arc::new(RwLock::new(SensorData::default()))
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct MqttCommandPayload {
-    pub target: Option<String>,
-    pub action: String,
-    pub params: Option<MqttCommandParams>,
-    pub pump: Option<String>,
-    pub duration_sec: Option<u64>,
-    pub pwm: Option<u32>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct MqttCommandParams {
-    pub pump_id: Option<String>,
-    pub duration_sec: Option<u64>,
-    pub pwm: Option<u32>,
-    pub state: Option<bool>,
-    pub ota_url: Option<String>,
+    Arc::new(RwLock::new(RuntimeSensorData {
+        ..RuntimeSensorData::default()
+    }))
 }
 
 #[derive(Debug, Serialize)]
@@ -318,21 +213,11 @@ pub fn init_mqtt_client(
                                 if let Some(ph_voltage_mv) = payload.ph_voltage_mv {
                                     sensors.ph_voltage_mv = Some(ph_voltage_mv);
                                 }
-                                if let Some(is_continuous) = payload.is_continuous {
-                                    sensors.is_continuous = is_continuous;
-                                }
-                                if let Some(err) = payload.err_water {
-                                    sensors.err_water = err;
-                                }
-                                if let Some(err) = payload.err_temp {
-                                    sensors.err_temp = err;
-                                }
-                                if let Some(err) = payload.err_ec {
-                                    sensors.err_ec = err;
-                                }
-                                if let Some(err) = payload.err_ph {
-                                    sensors.err_ph = err;
-                                }
+                                if let Some(is_continuous) = payload.is_continuous { sensors.is_continuous = is_continuous; }
+                                if let Some(err) = payload.err_water { sensors.err_water = err; }
+                                if let Some(err) = payload.err_temp { sensors.err_temp = err; }
+                                if let Some(err) = payload.err_ec { sensors.err_ec = err; }
+                                if let Some(err) = payload.err_ph { sensors.err_ph = err; }
                                 sensors.rssi = payload.rssi;
                                 sensors.free_heap = payload.free_heap;
                                 sensors.uptime = payload.uptime;
@@ -348,7 +233,8 @@ pub fn init_mqtt_client(
 
                                 info!(
                                     "🌱 CẢM BIẾN | T: {:.1}°C | EC: {:.2} | pH: {:.2} | Lv: {:.1}cm | Sóng: {:?}dBm | Lỗi nước: {:?}",
-                                    sensors.temp, sensors.ec, sensors.ph, sensors.water_level, sensors.rssi, payload.err_water
+                                    sensors.temp, sensors.ec, sensors.ph, sensors.water_level, sensors.rssi,
+                                    payload.err_water
                                 );
                             } else {
                                 error!("❌ Failed to acquire sensor write lock");

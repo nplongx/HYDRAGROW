@@ -29,7 +29,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         .to_string();
 
     let message_str = match &log_data.event {
-        SystemLogEvent::BasicSystemLog { message } => message.clone(),
+        SystemLogEvent::BasicSystemLog(meta) => meta.message.clone(),
         SystemLogEvent::SystemAlert(meta) => {
             format!("Nguồn: {} (Thử lại: {})", meta.source, meta.retry_count)
         }
@@ -45,7 +45,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             meta.level_before, meta.level_after
         ),
         SystemLogEvent::DosingCycleComplete(_) => "Hoàn tất chu kỳ châm phân".to_string(),
-        _ => log_data.title.clone(), // Fallback: Dùng luôn tiêu đề nếu không khớp loại nào
     };
 
     // 2. Chuyển đổi thành Record để lưu Database

@@ -404,6 +404,8 @@ fn log_fault_transition(code: &FaultCode, mqtt_tx: &Sender<String>, device_id: &
             source: "fsm_orchestrator".to_string(),
             retry_count: 0,
             limit_value: None,
+            threshold_before: None,
+            threshold_after: None,
         }),
     );
 }
@@ -558,6 +560,7 @@ pub fn tick(
                             "Timeout cấp/xả nước"
                         },
                         SystemLogEvent::WaterEvent(WaterMetadata {
+                            source: "water_actor".to_string(),
                             trigger: water_log_ctx
                                 .as_ref()
                                 .map(|x| x.0.clone())
@@ -568,6 +571,7 @@ pub fn tick(
                             duration_sec,
                             success,
                             cycle_id: None,
+                            retry_count: Some(ctx.water.retry_refill),
                         }),
                     );
 

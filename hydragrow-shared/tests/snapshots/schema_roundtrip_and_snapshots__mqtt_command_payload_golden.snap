@@ -1,0 +1,14 @@
+---
+source: tests/schema_roundtrip_and_snapshots.rs
+expression: command
+---
+{
+  "target": "pump_b",
+  "action": "start",
+  "params": {
+    "pump_id": "pump_b",
+    "duration_sec": 12,
+    "pwm": 65,
+    "state": true
+  }
+}

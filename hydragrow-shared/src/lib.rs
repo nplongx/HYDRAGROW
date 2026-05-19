@@ -72,7 +72,7 @@ pub struct AlertMessage {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MqttCommandPayload {
     pub target: String,
     pub action: String,
@@ -80,7 +80,7 @@ pub struct MqttCommandPayload {
     pub params: Option<MqttCommandParams>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MqttCommandParams {
     pub pump_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]

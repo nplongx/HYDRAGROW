@@ -1,0 +1,38 @@
+---
+source: tests/schema_roundtrip_and_snapshots.rs
+expression: sensor
+---
+{
+  "device_id": "sensor-001",
+  "ec": 1.55,
+  "ph": 5.98,
+  "temp": 27.1,
+  "water_level": 20.0,
+  "pump_status": {
+    "pump_a": false,
+    "pump_b": false,
+    "ph_up": false,
+    "ph_down": false,
+    "osaka_pump": false,
+    "mist_valve": false,
+    "water_pump_in": false,
+    "water_pump_out": false,
+    "pump_a_pwm": null,
+    "pump_b_pwm": null,
+    "ph_up_pwm": null,
+    "ph_down_pwm": null,
+    "osaka_pwm": null,
+    "dosing_pulse_active": null,
+    "dosing_pulse_count": null
+  },
+  "time": "2026-05-19T12:00:00Z",
+  "rssi": -59,
+  "free_heap": 176320,
+  "uptime": 42000,
+  "err_water": false,
+  "err_temp": false,
+  "err_ph": false,
+  "err_ec": false,
+  "is_continuous": true,
+  "ph_voltage_mv": 2105.2
+}

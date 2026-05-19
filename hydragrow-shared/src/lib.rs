@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 pub mod events;
 pub mod helper;
 
+pub const CURRENT_SCHEMA_VERSION: u16 = 2;
+pub const MIN_SUPPORTED_SCHEMA_VERSION: u16 = CURRENT_SCHEMA_VERSION - 1;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DeviceState {
@@ -32,6 +35,8 @@ pub struct PumpStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub device_id: String,
     pub ec: f64,
     pub ph: f64,
@@ -74,6 +79,8 @@ pub struct AlertMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MqttCommandPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub target: String,
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -472,6 +479,8 @@ pub enum SystemLogEvent {
 /// Struct cuối cùng gói toàn bộ thông tin để lưu vào DB / bắn Alert
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnifiedSystemLog {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub device_id: String,
     pub level: LogLevel,
     pub category: LogCategory,

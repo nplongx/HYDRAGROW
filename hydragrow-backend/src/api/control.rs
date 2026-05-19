@@ -1,5 +1,5 @@
 use actix_web::{HttpResponse, Responder, web};
-use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
+use hydragrow_shared::{CURRENT_SCHEMA_VERSION, MqttCommandParams, MqttCommandPayload};
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -144,6 +144,7 @@ pub async fn control_pump(
     };
 
     let command = MqttCommandPayload {
+        schema_version: Some(CURRENT_SCHEMA_VERSION),
         target,
         action: mqtt_action.to_string(),
         params: Some(MqttCommandParams {
@@ -337,4 +338,3 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/control", web::post().to(control_pump))
         .route("/control/sync", web::post().to(request_device_sync));
 }
-

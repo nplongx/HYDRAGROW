@@ -121,31 +121,39 @@ fn check_scheduled_dosing(
             }
         }
     }
+
     let next_trigger = ctx.next_scheduled_dosing_trigger_sec?;
     if now_sec < next_trigger {
         return None;
     }
+
     if let Ok(schedule) = Schedule::from_str(&ctx.scheduled_dosing_cron) {
         let future = Local::now() + chrono::Duration::seconds(1);
         if let Some(next) = schedule.after(&future).next() {
             ctx.next_scheduled_dosing_trigger_sec = Some(next.timestamp() as u64);
         }
     }
+
     let delta = (config.ec_target - sensors.ec).max(config.ec_tolerance * 0.5);
     let step_ratio = if ctx.tuner.is_locked() {
         ctx.tuner.best_ec_ratio
     } else {
         ctx.tuner.active_ec_ratio()
     };
+
     let effective_gain = ctx
         .tuner
         .gain_learner
         .effective_ec_gain(config.ec_gain_per_ml)
         .max(0.0001);
-    let dose_ml = (delta / effective_gain * step_ratio * 0.35).clamp(0.0, config.max_dose_per_cycle);
+
+    let dose_ml =
+        (delta / effective_gain * step_ratio * 0.35).clamp(0.0, config.max_dose_per_cycle);
+
     if dose_ml <= 0.0 {
         return None;
     }
+
     Some(OrchestratorDecision::StartEcDosing {
         dose_ml,
         target_ec: config.ec_target,
@@ -159,6 +167,10 @@ fn decide_monitoring(
     ctx: &SystemContext,
     _now_ms: u64,
 ) -> OrchestratorDecision {
+    if config.enable_water_level_sensor && sensors.water_level < 0.0 {
+        return OrchestratorDecision::Fault(FaultCode::SensorTimeout);
+    }
+
     if config.enable_water_level_sensor
         && config.auto_drain_overflow
         && sensors.water_level > config.water_level_max
@@ -439,11 +451,30 @@ pub fn tick(
             } else {
                 let decision = decide_monitoring(sensors, config, ctx, now_ms);
                 apply_decision(decision, ctx, config, sensors, now_ms);
+
+                if matches!(ctx.phase, SystemPhase::Fault(_)) {
+                    if let SystemPhase::Fault(code) = &ctx.phase {
+                        log_fault_transition(code, mqtt_tx, &config.device_id);
+                    }
+                }
             }
         }
 
         SystemPhase::DosingEC | SystemPhase::DosingPH => {
             match ctx.dosing.tick(now_ms, config, pumps) {
+                DosingEvent::Pending => {}
+                DosingEvent::SoftStartDone => {
+                    let _ = mqtt_tx.send("[ORCH] Dosing soft-start completed".to_string());
+                }
+                DosingEvent::PulseToggle { pump, pulse_on } => {
+                    let _ = mqtt_tx.send(format!(
+                        "[ORCH] Dosing Pulse Toggle: {:?} -> ON: {}",
+                        pump, pulse_on
+                    ));
+                }
+                DosingEvent::PhaseTransition => {
+                    let _ = mqtt_tx.send("[ORCH] Dosing Phase Transition".to_string());
+                }
                 DosingEvent::CycleComplete {
                     dose_a_ml,
                     dose_b_ml,
@@ -483,20 +514,20 @@ pub fn tick(
                     let _ = mqtt_tx.send(format!("[ORCH] dosing_failed:{}", code.as_str()));
                     ctx.phase = SystemPhase::Fault(code);
                 }
-                _ => {}
             }
         }
 
         SystemPhase::WaterRefilling | SystemPhase::WaterDraining => {
             let water_log_ctx = match &ctx.water.sub_state {
                 super::actors::water_actor::WaterSubState::Filling { job }
-                | super::actors::water_actor::WaterSubState::Draining { job } => Some((
-                    job.trigger.clone(),
-                    job.start_level,
-                    job.target_level,
-                )),
+                | super::actors::water_actor::WaterSubState::Draining { job } => {
+                    Some((job.trigger.clone(), job.start_level, job.target_level))
+                }
                 super::actors::water_actor::WaterSubState::Idle => None,
             };
+
+            let is_filling = matches!(ctx.phase, SystemPhase::WaterRefilling);
+
             match ctx.water.tick(now_ms, sensors, config, pumps) {
                 WaterEvent::Done {
                     success,
@@ -529,13 +560,40 @@ pub fn tick(
                             cycle_id: None,
                         }),
                     );
-                    ctx.phase = if success {
-                        SystemPhase::ActiveMixing
-                    } else {
-                        SystemPhase::Fault(FaultCode::WaterRefillFailed)
-                    };
-                    if matches!(ctx.phase, SystemPhase::ActiveMixing) {
+
+                    if success {
+                        ctx.phase = SystemPhase::ActiveMixing;
                         ctx.phase_finish_ms = Some(now_ms + config.active_mixing_sec as u64 * 1000);
+                    } else {
+                        if is_filling {
+                            ctx.water.retry_refill = ctx.water.retry_refill.saturating_add(1);
+
+                            if ctx.water.retry_refill >= 3 {
+                                set_fault_with_log(
+                                    ctx,
+                                    FaultCode::WaterRefillFailed,
+                                    mqtt_tx,
+                                    &config.device_id,
+                                );
+                                let _ = mqtt_tx
+                                    .send("[ORCH] water_refill_failed_after_3_retries".to_string());
+                            } else {
+                                let target = config.water_level_target;
+                                ctx.water
+                                    .start_fill(now_ms, target, sensors, "retry_auto_refill");
+                                let _ = mqtt_tx.send(format!(
+                                    "[ORCH] Retrying water refill... Attempt {}",
+                                    ctx.water.retry_refill
+                                ));
+                            }
+                        } else {
+                            set_fault_with_log(
+                                ctx,
+                                FaultCode::WaterLevelCritical,
+                                mqtt_tx,
+                                &config.device_id,
+                            );
+                        }
                     }
                 }
                 WaterEvent::Pending => {}
@@ -622,14 +680,16 @@ pub fn tick(
                     );
                 }
 
-                if let Some(sample) = ctx.calibration.pending_sample.take() {
+                if let Some(sample) = ctx.calibration.finalize() {
                     ctx.dosing_cycle_count = ctx.dosing_cycle_count.saturating_add(1);
                     let ec_response = sample.post_mixing_ec - sample.start_ec;
                     let ec_dose_ml = sample.dose_a_ml + sample.dose_b_ml;
                     if ec_dose_ml > 0.0 {
-                        ctx.tuner
-                            .gain_learner
-                            .update_ec_gain(ec_dose_ml, ec_response.max(0.0), config);
+                        ctx.tuner.gain_learner.update_ec_gain(
+                            ec_dose_ml,
+                            ec_response.max(0.0),
+                            config,
+                        );
                     }
                     let ph_response_signed = sensors.ph - sample.start_ph;
                     if sample.dose_ph_up_ml > 0.0 {
@@ -735,7 +795,6 @@ pub fn tick(
             }
         }
 
-        SystemPhase::Fault(_) | SystemPhase::EmergencyStop(_) => {}
         _ => {}
     }
 
@@ -748,3 +807,4 @@ pub fn tick(
     );
     PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
 }
+

@@ -75,7 +75,9 @@ impl WaterActor {
                 let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
                 let reached = sensors.water_level >= job.target_level;
                 let timeout = elapsed > config.max_refill_duration_sec as u64;
+
                 if reached || timeout {
+                    // Dừng bơm khi hoàn thành hoặc quá thời gian
                     let _ = pumps.set_water_pump(WaterDirection::Stop);
                     self.sub_state = WaterSubState::Idle;
                     return WaterEvent::Done {
@@ -83,12 +85,15 @@ impl WaterActor {
                         duration_sec: elapsed,
                     };
                 }
+
+                let _ = pumps.set_water_pump(WaterDirection::In);
                 WaterEvent::Pending
             }
             WaterSubState::Draining { job } => {
                 let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
                 let reached = sensors.water_level <= job.target_level;
                 let timeout = elapsed > config.max_drain_duration_sec as u64;
+
                 if reached || timeout {
                     let _ = pumps.set_water_pump(WaterDirection::Stop);
                     self.sub_state = WaterSubState::Idle;
@@ -97,9 +102,16 @@ impl WaterActor {
                         duration_sec: elapsed,
                     };
                 }
+
+                let _ = pumps.set_water_pump(WaterDirection::Out);
                 WaterEvent::Pending
             }
-            WaterSubState::Idle => WaterEvent::Pending,
+            WaterSubState::Idle => {
+                // Đảm bảo bơm không hoạt động khi đang rảnh
+                let _ = pumps.set_water_pump(WaterDirection::Stop);
+                WaterEvent::Pending
+            }
         }
     }
 }
+

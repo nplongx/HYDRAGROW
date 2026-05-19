@@ -68,9 +68,8 @@ impl FaultCode {
     }
 }
 
-
 #[allow(dead_code)]
-fn map_fault_code(reason: &str) -> FaultCode {
+pub fn map_fault_code(reason: &str) -> FaultCode {
     if reason.contains("EC_DOSING_FAILED") {
         FaultCode::EcDosingFailed
     } else if reason.contains("PH_DOSING_FAILED") {
@@ -87,3 +86,4 @@ fn map_fault_code(reason: &str) -> FaultCode {
         FaultCode::MaxHourlyDoseEc
     }
 }
+

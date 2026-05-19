@@ -78,7 +78,7 @@ pub mod mod_helpers {
 
     pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
         let _ = pump_ctrl.stop_all();
-        ctx.peripherals.pump_status = crate::mqtt::PumpStatus::default();
+        ctx.peripherals.pump_status = PumpStatus::default();
         ctx.peripherals.is_misting_active = false;
         ctx.peripherals.is_scheduled_mixing_active = false;
         ctx.peripherals.osaka_active = false;

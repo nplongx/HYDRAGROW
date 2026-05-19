@@ -19,7 +19,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
-use hydragrow_shared::{ControlMode, LogCategory, LogLevel, PumpStatus, SystemLogEvent};
+use hydragrow_shared::{BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, SystemLogEvent};
 use log::info;
 
 use crate::config::SharedConfig;
@@ -241,12 +241,14 @@ pub fn start_fsm_control_loop(
                 LogLevel::Warning,
                 LogCategory::UserAction,
                 "Tự động tắt bơm (Safety Timeout)",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!(
                         "Bơm {} đã tự động tắt do hết thời gian an toàn của chế độ thủ công.",
                         pump
                     ),
-                },
+                    skip_reason: None,
+                }),
             );
             mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
         }

@@ -1,4 +1,4 @@
-use hydragrow_shared::{ControlMode, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
+use hydragrow_shared::{BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -72,12 +72,14 @@ pub fn process_mqtt_commands(
                 LogLevel::Warning,
                 LogCategory::System,
                 "OTA Update Trigger",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!(
                         "Nhận lệnh OTA từ MQTT. URL: {}. Firmware sẽ chuyển giao cho OTA task.",
                         if ota_url.is_empty() { "<missing>" } else { ota_url }
                     ),
-                },
+                    skip_reason: None,
+                }),
             );
             info!("📦 OTA trigger received: {}", ota_url);
             force_sync = true;
@@ -154,12 +156,14 @@ pub fn process_mqtt_commands(
                 LogLevel::Warning,
                 LogCategory::UserAction,
                 "Cưỡng chế Bơm (Force On)",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!(
                         "Người dùng đã dùng lệnh FORCE ON để ép bật {} trong {} giây, vượt qua các lớp bảo vệ an toàn.",
                         pump_name, duration
                     ),
-                },
+                    skip_reason: None,
+                }),
             );
         } else if is_on {
             // Bắn log thông báo User bật bơm thủ công bình thường
@@ -169,9 +173,11 @@ pub fn process_mqtt_commands(
                 LogLevel::Info,
                 LogCategory::UserAction,
                 "Điều khiển Bơm Thủ công",
-                SystemLogEvent::BasicSystemLog {
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "fsm_command".to_string(),
                     message: format!("Người dùng đã bật bơm {}.", pump_name),
-                },
+                    skip_reason: None,
+                }),
             );
         }
 

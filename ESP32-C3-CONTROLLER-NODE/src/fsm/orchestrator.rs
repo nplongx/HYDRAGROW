@@ -348,6 +348,13 @@ fn apply_decision(
             }
             ctx.dosing
                 .start_ph_cycle(now_ms, is_up, dose_ml, target_ph, pwm, config, sensors);
+            if ctx.tuner.oscillation_detector.record_ph_dose(is_up) {
+                ctx.tuner.adaptive_ph_ratio = (ctx.tuner.adaptive_ph_ratio * 0.5).clamp(0.1, 2.0);
+                if ctx.tuner.oscillation_detector.streak >= 3 {
+                    set_fault_with_log(ctx, FaultCode::PhOscillating, mqtt_tx, &config.device_id);
+                    return;
+                }
+            }
             ctx.phase = SystemPhase::DosingPH;
             ctx.safety.last_ph_before_dose = Some(sensors.ph);
             ctx.safety.last_ph_dose_up = Some(is_up);
@@ -784,7 +791,7 @@ pub fn tick(
                 }
 
                 ctx.phase = SystemPhase::Cooldown;
-                ctx.phase_finish_ms = Some(now_ms + config.cooldown_sec as u64 * 1000);
+                ctx.phase_finish_ms = Some(now_ms + effective_cooldown * 1000);
             }
         }
 

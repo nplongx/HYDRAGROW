@@ -2,6 +2,7 @@ use crate::config::SharedConfig;
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
+use hydragrow_shared::topics::{topic_controller_command, topic_controller_config, topic_sensors, topic_status};
 use hydragrow_shared::ControllerConfig;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -212,9 +213,9 @@ pub fn init_mqtt_client(
 
     let device_id = shared_config.read().unwrap().device_id.to_string();
 
-    let topic_config = format!("AGITECH/{}/controller/config", device_id);
-    let topic_command = format!("AGITECH/{}/controller/command", device_id);
-    let topic_sensors = format!("AGITECH/{}/sensors", device_id);
+    let topic_config = topic_controller_config(&device_id);
+    let topic_command = topic_controller_command(&device_id);
+    let topic_sensors = topic_sensors(&device_id);
 
     info!("Subscribing topics:");
     info!("Config: {}", topic_config);
@@ -225,7 +226,7 @@ pub fn init_mqtt_client(
     let topic_command_cb = topic_command.clone();
     let topic_sensors_cb = topic_sensors.clone();
 
-    let lwt_topic = format!("AGITECH/{}/status", device_id);
+    let lwt_topic = topic_status(&device_id);
     let lwt_payload = r#"{"online": false, "status": "disconnected"}"#.as_bytes();
     let lwt_config = LwtConfiguration {
         topic: &lwt_topic,

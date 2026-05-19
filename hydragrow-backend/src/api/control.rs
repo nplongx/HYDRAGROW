@@ -1,4 +1,5 @@
 use actix_web::{HttpResponse, Responder, web};
+use hydragrow_shared::topics::topic_controller_command;
 use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
@@ -310,7 +311,7 @@ pub async fn request_device_sync(
     let device_id = path.into_inner();
 
     // Gửi lệnh "SYNC" xuống topic điều khiển của ESP32
-    let topic = format!("AGITECH/{}/controller/command", device_id);
+    let topic = topic_controller_command(device_id);
     let payload = json!({
         "action": "SYNC_STATUS",
         "value": 0
@@ -337,4 +338,3 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/control", web::post().to(control_pump))
         .route("/control/sync", web::post().to(request_device_sync));
 }
-

@@ -360,6 +360,9 @@ fn apply_decision(
                 ctx.phase = SystemPhase::Fault(FaultCode::TooManyDrains);
                 return;
             }
+            if trigger == "scheduled_change" || trigger == "manual_drain" {
+                ctx.tuner.on_water_change();
+            }
             ctx.water.start_drain(now_ms, target, sensors, &trigger);
             ctx.phase = SystemPhase::WaterDraining;
         }

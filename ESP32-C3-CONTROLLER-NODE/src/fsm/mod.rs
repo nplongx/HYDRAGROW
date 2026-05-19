@@ -27,7 +27,7 @@ use crate::mqtt::MqttCommandPayload;
 use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
-use system_context::NvsSnapshot;
+use system_context::{NvsSnapshot, TunerState};
 use utils::{get_current_time_ms, get_current_time_sec};
 
 pub mod mod_helpers {
@@ -91,6 +91,7 @@ pub mod mod_helpers {
         _device_id: &str,
         _tx: &Sender<String>,
     ) {
+        ctx.tuner.on_manual_reset();
         ctx.phase = super::SystemPhase::Monitoring;
         ctx.phase_finish_ms = None;
         ctx.dosing.retry_ec = 0;
@@ -136,12 +137,54 @@ pub fn start_fsm_control_loop(
 
     new_ctx.peripherals.last_mixing_start_sec = current_time_on_boot;
     if let Some(flash) = nvs.as_mut() {
-        if let Ok(Some(raw)) = flash.get_str("runtime_snap", &mut [0; 384]) {
+        if let Ok(Some(raw)) = flash.get_str("runtime_snap", &mut [0; 1024]) {
             if let Ok(snapshot) = serde_json::from_str::<NvsSnapshot>(raw) {
-                new_ctx.tuner.adaptive_ec_ratio = snapshot.step_ratio_ec.clamp(0.1, 2.0);
-                new_ctx.tuner.best_ec_ratio = new_ctx.tuner.adaptive_ec_ratio;
-                new_ctx.tuner.adaptive_ph_ratio = snapshot.step_ratio_ph.clamp(0.1, 2.0);
-                new_ctx.tuner.best_ph_ratio = new_ctx.tuner.adaptive_ph_ratio;
+                if snapshot.step_ratio_ec.is_finite() {
+                    new_ctx.tuner.adaptive_ec_ratio = snapshot.step_ratio_ec.clamp(0.1, 2.0);
+                }
+                if snapshot.best_ec_ratio.is_finite() {
+                    new_ctx.tuner.best_ec_ratio = snapshot.best_ec_ratio.clamp(0.1, 2.0);
+                }
+                if snapshot.step_ratio_ph.is_finite() {
+                    new_ctx.tuner.adaptive_ph_ratio = snapshot.step_ratio_ph.clamp(0.1, 2.0);
+                }
+                if snapshot.best_ph_ratio.is_finite() {
+                    new_ctx.tuner.best_ph_ratio = snapshot.best_ph_ratio.clamp(0.1, 2.0);
+                }
+                if snapshot.ema_ec_gain.is_finite() {
+                    new_ctx.tuner.gain_learner.ec.ema = snapshot.ema_ec_gain;
+                }
+                if snapshot.ema_ph_up_gain.is_finite() {
+                    new_ctx.tuner.gain_learner.ph_up.ema = snapshot.ema_ph_up_gain;
+                }
+                if snapshot.ema_ph_down_gain.is_finite() {
+                    new_ctx.tuner.gain_learner.ph_down.ema = snapshot.ema_ph_down_gain;
+                }
+                new_ctx.tuner.gain_learner.ec.sample_count = snapshot.ec_sample_count;
+                let ph_up_count = if snapshot.ph_up_sample_count > 0 {
+                    snapshot.ph_up_sample_count
+                } else {
+                    snapshot.ph_sample_count
+                };
+                let ph_down_count = if snapshot.ph_down_sample_count > 0 {
+                    snapshot.ph_down_sample_count
+                } else {
+                    snapshot.ph_sample_count
+                };
+                new_ctx.tuner.gain_learner.ph_up.sample_count = ph_up_count;
+                new_ctx.tuner.gain_learner.ph_down.sample_count = ph_down_count;
+                new_ctx.tuner.gain_learner.ec.recalculate_confidence();
+                new_ctx.tuner.gain_learner.ph_up.recalculate_confidence();
+                new_ctx.tuner.gain_learner.ph_down.recalculate_confidence();
+                if snapshot.ec_variance_baseline.is_finite() && snapshot.ec_variance_baseline >= 0.0
+                {
+                    new_ctx.tuner.ec_variance_baseline = snapshot.ec_variance_baseline;
+                }
+                if snapshot.ph_variance_baseline.is_finite() && snapshot.ph_variance_baseline >= 0.0
+                {
+                    new_ctx.tuner.ph_variance_baseline = snapshot.ph_variance_baseline;
+                }
+                new_ctx.tuner.state = TunerState::from_u8(snapshot.tuner_state);
                 new_ctx.last_water_change_sec = snapshot.last_water_change_sec;
                 new_ctx.dosing.retry_ec = snapshot.retry_ec;
                 new_ctx.dosing.retry_ph = snapshot.retry_ph;

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod events;
 pub mod helper;
+pub mod topics;
 
 pub const CURRENT_SCHEMA_VERSION: u16 = 2;
 pub const MIN_SUPPORTED_SCHEMA_VERSION: u16 = CURRENT_SCHEMA_VERSION - 1;

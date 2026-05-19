@@ -209,35 +209,59 @@ async fn main() -> anyhow::Result<()> {
         app_state.clone(),
     ));
     mqtt_client
-        .subscribe("AGITECH/+/sensors", QoS::AtMostOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "sensors"),
+            QoS::AtMostOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/status", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "status"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/sensor/status", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "sensor/status"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/fsm/state", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "fsm/state"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/fsm/events", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "fsm/events"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/calibration", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "calibration"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/controller/status", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "controller/status"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
     mqtt_client
-        .subscribe("AGITECH/+/dosing_report", QoS::AtLeastOnce)
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "dosing_report"),
+            QoS::AtLeastOnce,
+        )
         .await
         .expect("Lỗi sub");
 

@@ -1,6 +1,6 @@
 use crate::AppState;
 use anyhow::{Context, Result};
-use hydragrow_shared::CURRENT_SCHEMA_VERSION;
+use hydragrow_shared::topics::topic_controller_command;
 use rumqttc::QoS;
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -22,7 +22,7 @@ pub async fn send_command(
     device_id: &str,
     payload: &CommandPayload,
 ) -> Result<()> {
-    let topic = format!("AGITECH/{}/command", device_id);
+    let topic = topic_controller_command(device_id);
     let payload_bytes = serde_json::to_vec(payload)?;
 
     app_state

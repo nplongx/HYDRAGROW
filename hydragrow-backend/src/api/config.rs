@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::topics::{topic_controller_config, topic_sensors};
 use rumqttc::QoS;
 use serde_json::json;
 use tracing::{error, info, instrument};
@@ -114,7 +115,7 @@ pub async fn sync_config_to_esp32(
 ) -> Result<(), String> {
     // 1. GỬI CẤU HÌNH TỔNG HỢP CHO CONTROLLER NODE
     let payload = fetch_unified_config_concurrently(&app_state.pg_pool, device_id).await?;
-    let mqtt_topic_controller = format!("AGITECH/{}/controller/config", device_id);
+    let mqtt_topic_controller = topic_controller_config(device_id);
     let mqtt_bytes_controller =
         serde_json::to_vec(&payload).map_err(|e| format!("Lỗi serialize payload: {:?}", e))?;
 
@@ -140,7 +141,7 @@ pub async fn sync_config_to_esp32(
     .flatten();
 
     if let Some(sensor_config) = sens {
-        let mqtt_topic_sensor = format!("AGITECH/{}/sensors/config", device_id);
+        let mqtt_topic_sensor = format!("{}/config", topic_sensors(device_id));
 
         let sensor_payload = json!({
             "ph_v7": sensor_config.ph_v7,
@@ -309,7 +310,6 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
     }
 }
 
-
 fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
     if !(1..=100).contains(&dose.dosing_pwm_percent) {
         return Err("dosing_pwm_percent must be in range [1..100]".to_string());
@@ -423,14 +423,18 @@ pub async fn update_unified_config(
 
     payload.device_config.device_id = device_id.clone();
     payload.device_config.last_updated = now;
-    if let Err(e) = crate::db::postgres::upsert_device_config(&app_state.pg_pool, &payload.device_config).await {
+    if let Err(e) =
+        crate::db::postgres::upsert_device_config(&app_state.pg_pool, &payload.device_config).await
+    {
         error!("Failed to update device config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Device"}));
     }
 
     payload.safety_config.device_id = device_id.clone();
     payload.safety_config.last_updated = now.clone();
-    if let Err(e) = crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &payload.safety_config).await {
+    if let Err(e) =
+        crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &payload.safety_config).await
+    {
         error!("Failed to update safety config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Safety"}));
     }

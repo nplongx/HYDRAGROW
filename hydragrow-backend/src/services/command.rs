@@ -1,11 +1,14 @@
 use crate::AppState;
 use anyhow::{Context, Result};
+use hydragrow_shared::topics::topic_controller_command;
 use rumqttc::QoS;
 use serde::Deserialize;
 use tracing::{info, instrument};
 
 #[derive(serde::Serialize, Deserialize, Debug)]
 pub struct CommandPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<u16>,
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pump: Option<String>,
@@ -19,7 +22,7 @@ pub async fn send_command(
     device_id: &str,
     payload: &CommandPayload,
 ) -> Result<()> {
-    let topic = format!("AGITECH/{}/command", device_id);
+    let topic = topic_controller_command(device_id);
     let payload_bytes = serde_json::to_vec(payload)?;
 
     app_state
@@ -34,6 +37,7 @@ pub async fn send_command(
 
 pub async fn trigger_emergency_stop(app_state: &AppState, device_id: &str) -> Result<()> {
     let payload = CommandPayload {
+        schema_version: Some(CURRENT_SCHEMA_VERSION),
         action: "emergency_stop".to_string(),
         pump: None,
         duration_sec: None,

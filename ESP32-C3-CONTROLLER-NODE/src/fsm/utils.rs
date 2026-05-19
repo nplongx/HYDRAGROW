@@ -111,13 +111,12 @@ pub fn send_system_log(
     title: &str,
     event: SystemLogEvent,
 ) {
-    let log = UnifiedSystemLog {
-        device_id: device_id.to_string(),
-        level,
-        category,
-        title: title.to_string(),
-        event,
-        timestamp_ms: get_current_time_ms(),
+    let ts = get_current_time_ms();
+    let log = match level {
+        LogLevel::Info => UnifiedSystemLog::info(device_id, category, title, event, ts),
+        LogLevel::Warning => UnifiedSystemLog::warning(device_id, category, title, event, ts),
+        LogLevel::Critical => UnifiedSystemLog::critical(device_id, category, title, event, ts),
+        LogLevel::Success => UnifiedSystemLog::success(device_id, category, title, event, ts),
     };
 
     // Đóng gói thành JSON và gửi vào channel MQTT

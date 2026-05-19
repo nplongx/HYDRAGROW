@@ -10,6 +10,7 @@ use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
 use log::{error, info, warn, LevelFilter};
+use hydragrow_shared::topics::{topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors, topic_status};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -263,10 +264,10 @@ fn main() -> anyhow::Result<()> {
                     is_mqtt_connected = true;
 
                     if let Some(client) = mqtt_client.as_mut() {
-                        let topic_config = format!("AGITECH/{}/controller/config", DEVICE_ID);
-                        let topic_command = format!("AGITECH/{}/controller/command", DEVICE_ID);
-                        let topic_status = format!("AGITECH/{}/status", DEVICE_ID);
-                        let topic_sensors = format!("AGITECH/{}/sensors", DEVICE_ID);
+                        let topic_config = topic_controller_config(DEVICE_ID);
+                        let topic_command = topic_controller_command(DEVICE_ID);
+                        let topic_status = topic_status(DEVICE_ID);
+                        let topic_sensors = topic_sensors(DEVICE_ID);
 
                         let _ = client.publish(
                             &topic_status,
@@ -291,14 +292,20 @@ fn main() -> anyhow::Result<()> {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        let topic = match v.get("type").and_then(|t| t.as_str()) {
+                        let topic = if v.get("event_type").is_some()
+                            && v.get("level").is_some()
+                            && v.get("category").is_some()
+                        {
+                            format!("AGITECH/{}/system_log", DEVICE_ID)
+                        } else {
+                            match v.get("type").and_then(|t| t.as_str()) {
                             Some("water_event") | Some("system_alert") | Some("dosing_cycle") => {
-                                format!("AGITECH/{}/fsm/events", DEVICE_ID)
+                                topic_fsm_events(DEVICE_ID)
                             }
                             Some("ema_update") | Some("auto_tune") => {
-                                format!("AGITECH/{}/calibration", DEVICE_ID)
+                                topic_calibration(DEVICE_ID)
                             }
-                            _ => format!("AGITECH/{}/fsm/state", DEVICE_ID),
+                            _ => topic_fsm_state(DEVICE_ID),
                         };
                         let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
                     }
@@ -309,7 +316,7 @@ fn main() -> anyhow::Result<()> {
         if let Ok(report_json) = dosing_report_rx.try_recv() {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    let topic = format!("AGITECH/{}/dosing_report", DEVICE_ID);
+                    let topic = topic_dosing_report(DEVICE_ID);
                     let _ = client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
                 }
             }
@@ -320,7 +327,7 @@ fn main() -> anyhow::Result<()> {
                 force_publish_next = true;
             } else if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    let topic_sensor_cmd = format!("AGITECH/{}/sensor/command", DEVICE_ID);
+                    let topic_sensor_cmd = topic_sensor_command(DEVICE_ID);
                     let _ = client.publish(
                         &topic_sensor_cmd,
                         QoS::AtLeastOnce,
@@ -348,7 +355,7 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 if let Ok(json_string) = serde_json::to_string(&health_payload) {
-                    let topic_health = format!("AGITECH/{}/controller/status", DEVICE_ID);
+                    let topic_health = topic_controller_status(DEVICE_ID);
                     let _ = client.publish(
                         &topic_health,
                         QoS::AtMostOnce, // Đổi thành AtMostOnce cho bản tin health liên tục

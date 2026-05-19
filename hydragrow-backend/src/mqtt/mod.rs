@@ -3,31 +3,24 @@ use rumqttc::Publish;
 use tracing::{debug, instrument, warn};
 
 use crate::AppState;
+use hydragrow_shared::topics::parse_agitech_topic;
 mod handlers; // Import thư mục con
-
-#[inline]
-fn parse_agitech_topic(topic: &str) -> Option<(String, String)> {
-    let prefix = "AGITECH/";
-    if !topic.starts_with(prefix) {
-        return None;
-    }
-    let rest = &topic[prefix.len()..];
-    let slash = rest.find('/')?;
-    Some((rest[..slash].to_string(), rest[slash..].to_string()))
-}
 
 #[instrument(skip(app_state, publish), fields(topic = %publish.topic))]
 pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
     let topic = publish.topic.clone();
     let payload_bytes = publish.payload;
 
-    let (device_id, suffix) = match parse_agitech_topic(&topic) {
+    let parsed = match parse_agitech_topic(&topic) {
         Some(v) => v,
         None => {
             warn!("Bỏ qua topic không đúng chuẩn: {}", topic);
             return;
         }
     };
+
+    let device_id = parsed.device_id.to_string();
+    let suffix = format!("/{}", parsed.suffix);
 
     match suffix.as_str() {
         "/sensors" => handlers::sensors::handle(device_id, &payload_bytes, app_state).await,

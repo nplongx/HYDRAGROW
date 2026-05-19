@@ -5,3 +5,4 @@ pub mod solana;
 pub mod ph_calibration;
 
 pub mod event_dispatcher;
+pub mod schema_version;

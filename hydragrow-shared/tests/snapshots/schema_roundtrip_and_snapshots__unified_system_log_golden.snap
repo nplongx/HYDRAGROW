@@ -1,0 +1,18 @@
+---
+source: tests/schema_roundtrip_and_snapshots.rs
+expression: unified
+---
+{
+  "device_id": "device-001",
+  "level": "info",
+  "category": "system",
+  "title": "schema-test",
+  "event": {
+    "event_type": "CalibrationUpdate",
+    "parameter": "ec_gain_per_ml",
+    "old_value": 0.012,
+    "new_value": 0.015,
+    "cycle_id": "c-42"
+  },
+  "timestamp_ms": 1717171717000
+}

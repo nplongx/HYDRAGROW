@@ -1,0 +1,40 @@
+name: shared-schema-check
+
+on:
+  pull_request:
+    paths:
+      - 'hydragrow-shared/**'
+      - '.github/workflows/shared-schema-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'hydragrow-shared/**'
+      - '.github/workflows/shared-schema-check.yml'
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hydragrow-shared
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hydragrow-shared
+
+      - name: Run shared crate tests (includes schema snapshots)
+        run: cargo test
+
+      - name: Snapshot update instruction
+        if: failure()
+        run: |
+          echo "Schema snapshot mismatch detected."
+          echo "If this is intentional, run: INSTA_UPDATE=always cargo test --test schema_roundtrip_and_snapshots"
+          exit 1

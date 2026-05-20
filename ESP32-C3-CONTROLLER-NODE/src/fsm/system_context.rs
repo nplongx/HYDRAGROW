@@ -348,6 +348,8 @@ impl AutoTuner {
         config: &hydragrow_shared::ControllerConfig,
         now_ms: u64,
     ) -> String {
+        let flat = self.interaction_matrix.as_flat();
+
         serde_json::json!({
             "type": "runtime_calibration_update",
             "device_id": device_id,
@@ -360,6 +362,14 @@ impl AutoTuner {
                 "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
                 "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
                 "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
+                "interaction_matrix": flat,
+                "matrix_update_count": self.matrix_update_count,
+                "matrix_is_warm": self.matrix_is_warm,
+                "kalman_confidence": [
+                    self.gain_learner.ec.confidence,
+                    self.gain_learner.ph_up.confidence,
+                    self.gain_learner.ph_down.confidence,
+                ],
             },
             "timestamp_ms": now_ms
         })

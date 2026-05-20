@@ -145,6 +145,10 @@ pub struct NvsSnapshot {
     pub ec_variance_baseline: f32,
     #[serde(default)]
     pub ph_variance_baseline: f32,
+    #[serde(default)]
+    pub interaction_matrix: Option<[f32; 6]>,
+    #[serde(default)]
+    pub matrix_update_count: u32,
 }
 
 pub struct ConvergenceTracker {
@@ -406,6 +410,8 @@ impl NvsSnapshot {
             tuner_state: ctx.tuner.state.as_u8(),
             ec_variance_baseline: ctx.tuner.ec_variance_baseline,
             ph_variance_baseline: ctx.tuner.ph_variance_baseline,
+            interaction_matrix: Some(ctx.tuner.interaction_matrix.as_flat()),
+            matrix_update_count: ctx.tuner.matrix_update_count,
         }
     }
 }
@@ -447,6 +453,14 @@ impl Default for GainLearner {
             ec: SingleGainLearner::default(),
             ph_up: SingleGainLearner::default(),
             ph_down: SingleGainLearner::default(),
+        }
+    }
+}
+
+impl Default for InteractionMatrix {
+    fn default() -> Self {
+        Self {
+            values: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
         }
     }
 }

@@ -246,6 +246,18 @@ impl Default for AutoTuner {
     }
 }
 
+impl Default for KalmanState {
+    fn default() -> Self {
+        Self { g: [[0.0; 3]; 2] }
+    }
+}
+
+impl KalmanState {
+    pub fn predict(&mut self) {
+        // Placeholder for process-model prediction step.
+    }
+}
+
 impl CalibrationSampler {
     pub fn start_sample(&mut self, sample: PendingCalibrationSample) {
         self.pending_sample = Some(sample);

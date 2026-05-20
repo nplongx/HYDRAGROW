@@ -1,5 +1,5 @@
 use actix_web::web;
-use hydragrow_shared::{LogLevel, SystemLogEvent, UnifiedSystemLog};
+use hydragrow_shared::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
 use tracing::{error, info, warn};
 
 use crate::AppState;
@@ -16,17 +16,8 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
-    let level_str = serde_json::to_value(&log_data.level)
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_string();
-
-    let category_str = serde_json::to_value(&log_data.category)
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_string();
+    let level_str = log_data.level.as_str().to_string();
+    let category_str = log_data.category.as_str().to_string();
 
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog(meta) => meta.message.clone(),
@@ -44,7 +35,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             "Mực nước: {:.1} -> {:.1}",
             meta.level_before, meta.level_after
         ),
-        SystemLogEvent::DosingCycleComplete(_) => "Hoàn tất chu kỳ châm phân".to_string(),
     };
 
     // 2. Chuyển đổi thành Record để lưu Database
@@ -67,9 +57,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     // 4. Quyết định xem có bắn Push Notification / Toast Alert lên App không
     let is_critical = log_data.level == LogLevel::Critical;
     let is_warning = log_data.level == LogLevel::Warning;
-    let is_dosing_done = matches!(log_data.event, SystemLogEvent::DosingCycleComplete(_));
+    let is_success = log_data.level == LogLevel::Success;
+    let category_is_priority = matches!(
+        log_data.category,
+        LogCategory::Dosing | LogCategory::Water | LogCategory::Alert
+    );
+    let should_push_ws = is_critical || is_warning || is_success || category_is_priority;
 
-    if is_critical || is_warning || is_dosing_done {
+    if should_push_ws {
         info!("🚨 Gửi Alert tới UI: [{}] {}", device_id, log_data.title);
 
         let alert = AlertMessage {

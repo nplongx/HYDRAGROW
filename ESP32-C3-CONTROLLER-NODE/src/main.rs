@@ -9,10 +9,13 @@ use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
-use hydragrow_shared::topics::{
+use hydragrow_shared::{
+    topics::{
     topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
     topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
     topic_status,
+    },
+    UnifiedSystemLog,
 };
 use log::{error, info, warn, LevelFilter};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -296,11 +299,8 @@ fn main() -> anyhow::Result<()> {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        let topic = if v.get("event_type").is_some()
-                            && v.get("level").is_some()
-                            && v.get("category").is_some()
-                        {
-                            format!("AGITECH/{}/system_log", DEVICE_ID)
+                        let topic = if serde_json::from_str::<UnifiedSystemLog>(&payload).is_ok() {
+                            format!("AGITECH/{}/{}", DEVICE_ID, UnifiedSystemLog::mqtt_topic_suffix())
                         } else {
                             match v.get("type").and_then(|t| t.as_str()) {
                                 Some("water_event") | Some("system_alert")

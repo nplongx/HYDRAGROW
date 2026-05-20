@@ -1,7 +1,7 @@
 use hydragrow_shared::{
-    AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, DoseData, DosingReportPayload,
-    LogCategory, LogLevel, MqttCommandParams, MqttCommandOut, PhaseData, PumpStatus,
-    SensorData, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
+    AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
+    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData, SystemLogEvent, UnifiedSystemLog,
+    WaterMetadata,
 };
 
 fn sample_system_log(event: SystemLogEvent) -> UnifiedSystemLog {
@@ -28,43 +28,6 @@ fn unified_system_log_round_trip_for_all_event_variants() {
             success: true,
             cycle_id: Some("cycle-water-001".into()),
             retry_count: Some(0),
-        }),
-        SystemLogEvent::DosingCycleComplete(DosingReportPayload {
-            cycle_id: "dose-001".into(),
-            trigger: "ec_control".into(),
-            pre: PhaseData {
-                ec: 1.5,
-                ph: 6.0,
-                water_level: Some(20.0),
-            },
-            dose: DoseData {
-                pump_a_ml: 1.2,
-                pump_b_ml: 0.8,
-                ph_up_ml: 0.0,
-                ph_down_ml: 0.4,
-            },
-            post_mixing: PhaseData {
-                ec: 1.8,
-                ph: 6.2,
-                water_level: None,
-            },
-            post_stable: PhaseData {
-                ec: 1.9,
-                ph: 6.4,
-                water_level: None,
-            },
-            delta_ec: 0.4,
-            delta_ph: 0.4,
-            target_ec: 2.1,
-            target_ph: 6.0,
-            error_ec: 0.2,
-            error_ph: -0.4,
-            duration_ms: 15000,
-            ema_ec_gain_used: 0.015,
-            ema_ph_shift_used: 0.02,
-            step_ratio_ec: Some(0.4),
-            step_ratio_ph: Some(0.2),
-            stabilized_window_sec: Some(5),
         }),
         SystemLogEvent::SystemAlert(AlertMetadata {
             alert_type: "rate_limit".into(),

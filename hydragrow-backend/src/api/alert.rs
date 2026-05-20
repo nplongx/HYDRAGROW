@@ -12,6 +12,10 @@ pub struct EventsQuery {
     pub category: Option<String>,
     #[serde(default = "default_limit")]
     pub limit: i64,
+    #[serde(default)]
+    pub before_timestamp: Option<i64>,
+    #[serde(default)]
+    pub level: Option<String>,
 }
 
 fn default_limit() -> i64 {
@@ -53,7 +57,7 @@ pub async fn health_summary(
     let now = chrono::Utc::now().timestamp_millis();
     let window_ms = 3_600_000i64;
 
-    match get_system_events(&app_state.pg_pool, &device_id, &[], 500).await {
+    match get_system_events(&app_state.pg_pool, &device_id, &[], 500, None, None).await {
         Ok(events) => {
             let recent: Vec<_> = events
                 .into_iter()
@@ -109,7 +113,16 @@ pub async fn fetch_events(
 
     let categories = normalize_categories(query.category.as_ref());
 
-    match get_system_events(&app_state.pg_pool, &device_id, &categories, query.limit).await {
+    match get_system_events(
+        &app_state.pg_pool,
+        &device_id,
+        &categories,
+        query.limit,
+        query.before_timestamp,
+        query.level.clone(),
+    )
+    .await
+    {
         Ok(events) => HttpResponse::Ok().json(json!({ "status": "success", "data": events })),
         Err(e) => {
             tracing::error!("Lỗi lấy system_events: {:?}", e);
@@ -149,11 +162,9 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     );
 }
 
-
-
 #[cfg(test)]
 mod tests {
-    use actix_web::{test, web, App, HttpResponse, Responder};
+    use actix_web::{App, HttpResponse, Responder, test, web};
 
     async fn dummy_cycle(path: web::Path<(String, String)>) -> impl Responder {
         let (device_id, cycle_id) = path.into_inner();
@@ -163,11 +174,10 @@ mod tests {
     #[actix_web::test]
     async fn nested_scope_path_extracts_device_and_cycle_ids() {
         let app = test::init_service(
-            App::new()
-                .service(
-                    web::scope("/api/devices/{device_id}")
-                        .route("/events/cycle/{cycle_id}", web::get().to(dummy_cycle)),
-                ),
+            App::new().service(
+                web::scope("/api/devices/{device_id}")
+                    .route("/events/cycle/{cycle_id}", web::get().to(dummy_cycle)),
+            ),
         )
         .await;
 

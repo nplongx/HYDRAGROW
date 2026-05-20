@@ -16,7 +16,7 @@ use super::{
     actors::{dosing_actor::DosingEvent, water_actor::WaterEvent},
     peripheral::PeripheralController,
     phases::{FaultCode, SystemPhase},
-    system_context::{NvsSnapshot, SystemContext},
+    system_context::{AutoTuner, NvsSnapshot, SystemContext},
     types::PendingCalibrationSample,
     utils::{send_system_log, soft_deadband_scale},
 };
@@ -315,6 +315,39 @@ fn check_sensor_noise(
     }
 
     is_noisy
+}
+
+fn update_interaction_matrix(
+    tuner: &mut AutoTuner,
+    sample: &PendingCalibrationSample,
+    post_ec: f32,
+    post_ph: f32,
+) {
+    let observed_delta_ec = post_ec - sample.start_ec;
+    let observed_delta_ph = post_ph - sample.start_ph;
+    tuner.kalman.predict();
+
+    if sample.dose_a_ml > 0.0 {
+        tuner.kalman.g[0][0] = observed_delta_ec / sample.dose_a_ml.max(1e-6);
+    }
+    if sample.dose_b_ml > 0.0 {
+        tuner.kalman.g[0][1] = observed_delta_ec / sample.dose_b_ml.max(1e-6);
+    }
+
+    let net_ec_dose_ml = sample.dose_a_ml + sample.dose_b_ml;
+    if net_ec_dose_ml > 0.0 {
+        tuner.kalman.g[1][0] = observed_delta_ph / net_ec_dose_ml.max(1e-6);
+    }
+
+    let net_ph_dose_ml = sample.dose_ph_up_ml - sample.dose_ph_down_ml;
+    if net_ph_dose_ml.abs() > 0.0 {
+        tuner.kalman.g[1][2] = observed_delta_ph / net_ph_dose_ml;
+    }
+
+    tuner.matrix_update_count = tuner.matrix_update_count.saturating_add(1);
+    if tuner.matrix_update_count >= 10 {
+        tuner.matrix_is_warm = true;
+    }
 }
 
 fn apply_decision(
@@ -764,6 +797,12 @@ pub fn tick(
                             now_ms / 1000,
                         );
                     }
+                    update_interaction_matrix(
+                        &mut ctx.tuner,
+                        &sample,
+                        sensors.ec as f32,
+                        sensors.ph as f32,
+                    );
 
                     use hydragrow_shared::{DoseData, DosingReportPayload, PhaseData};
                     let report = DosingReportPayload {

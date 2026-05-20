@@ -55,6 +55,13 @@ pub struct AutoTuner {
     pub gain_learner: GainLearner,
     pub ec_variance_baseline: f32,
     pub ph_variance_baseline: f32,
+    pub kalman: KalmanState,
+    pub matrix_update_count: u32,
+    pub matrix_is_warm: bool,
+}
+
+pub struct KalmanState {
+    pub g: [[f32; 3]; 2],
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -198,7 +205,22 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
+            kalman: KalmanState::default(),
+            matrix_update_count: 0,
+            matrix_is_warm: false,
         }
+    }
+}
+
+impl Default for KalmanState {
+    fn default() -> Self {
+        Self { g: [[0.0; 3]; 2] }
+    }
+}
+
+impl KalmanState {
+    pub fn predict(&mut self) {
+        // Placeholder for process-model prediction step.
     }
 }
 

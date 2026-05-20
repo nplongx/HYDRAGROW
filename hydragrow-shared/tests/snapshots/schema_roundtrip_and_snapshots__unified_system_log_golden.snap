@@ -9,6 +9,7 @@ expression: unified
   "title": "schema-test",
   "event": {
     "event_type": "CalibrationUpdate",
+    "source": "auto_tuner",
     "parameter": "ec_gain_per_ml",
     "old_value": 0.012,
     "new_value": 0.015,

@@ -833,4 +833,3 @@ pub fn tick(
     );
     PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
 }
-

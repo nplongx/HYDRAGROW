@@ -20,10 +20,10 @@ impl From<SensorDataRow> for SensorData {
     fn from(row: SensorDataRow) -> Self {
         Self {
             device_id: row.device_id,
-            ec: row.ec,
-            ph: row.ph,
-            temp: row.temp,
-            water_level: row.water_level,
+            ec: row.ec as f32,
+            ph: row.ph as f32,
+            temp: row.temp as f32,
+            water_level: row.water_level as f32,
             pump_status: PumpStatus::default(),
 
             time: row.time.to_rfc3339(),

@@ -89,7 +89,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     // 2. Trích xuất trường current_state cho các bản tin FSM bình thường
     let (state, pump_status, budgets) = if let Some(fsm_state) = parsed_fsm_state {
         let state =
-            match serde_json::from_str::<SystemPhase>(&format!(""{}"", fsm_state.current_state)) {
+            match serde_json::from_str::<SystemPhase>(&format!("{}", fsm_state.current_state)) {
                 Ok(phase) => format!("{:?}", phase),
                 Err(_) => fsm_state.current_state,
             };

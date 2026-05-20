@@ -6,8 +6,8 @@ use cron::Schedule;
 
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_shared::{
-    AlertMetadata, ControllerConfig, LogCategory, LogLevel, SensorData, SystemLogEvent,
-    WaterMetadata,
+    AlertMetadata, BasicSystemLogMetadata, ControllerConfig, LogCategory, LogLevel, SensorData,
+    SystemLogEvent, WaterMetadata,
 };
 
 use crate::pump::PumpController;
@@ -443,10 +443,21 @@ pub fn tick(
     if sensor_age_ms > sensor_timeout_ms {
         if !matches!(ctx.phase, SystemPhase::Monitoring | SystemPhase::Cooldown) {
             set_fault_with_log(ctx, FaultCode::SensorTimeout, mqtt_tx, &config.device_id);
-            let _ = mqtt_tx.send(format!(
-                "[ORCH] sensor_timeout age_ms={} timeout_ms={}",
-                sensor_age_ms, sensor_timeout_ms
-            ));
+            send_system_log(
+                mqtt_tx,
+                &config.device_id,
+                LogLevel::Critical,
+                LogCategory::Sensor,
+                "Sensor timeout — FSM tạm dừng",
+                SystemLogEvent::SystemAlert(AlertMetadata {
+                    alert_type: "SENSOR_TIMEOUT".to_string(),
+                    source: "orchestrator".to_string(),
+                    retry_count: 0,
+                    limit_value: Some(sensor_timeout_ms as f32 / 1000.0),
+                    threshold_before: Some(sensor_age_ms as f32 / 1000.0),
+                    threshold_after: None,
+                }),
+            );
         }
         return;
     }
@@ -483,16 +494,19 @@ pub fn tick(
             match ctx.dosing.tick(now_ms, config, pumps) {
                 DosingEvent::Pending => {}
                 DosingEvent::SoftStartDone => {
-                    let _ = mqtt_tx.send("[ORCH] Dosing soft-start completed".to_string());
+                    // let _ = mqtt_tx.send("[ORCH] Dosing soft-start completed".to_string());
+                    log::debug!("[ORCH] Dosing soft-start completed");
                 }
                 DosingEvent::PulseToggle { pump, pulse_on } => {
-                    let _ = mqtt_tx.send(format!(
-                        "[ORCH] Dosing Pulse Toggle: {:?} -> ON: {}",
-                        pump, pulse_on
-                    ));
+                    // let _ = mqtt_tx.send(format!(
+                    //     "[ORCH] Dosing Pulse Toggle: {:?} -> ON: {}",
+                    //     pump, pulse_on
+                    // ));
+                    log::debug!("[ORCH] Dosing Pulse Toggle: {:?} -> ON: {}", pump, pulse_on);
                 }
                 DosingEvent::PhaseTransition => {
-                    let _ = mqtt_tx.send("[ORCH] Dosing Phase Transition".to_string());
+                    // let _ = mqtt_tx.send("[ORCH] Dosing Phase Transition".to_string());
+                    log::debug!("[ORCH] A→B phase transition");
                 }
                 DosingEvent::CycleComplete {
                     dose_a_ml,
@@ -530,7 +544,7 @@ pub fn tick(
                 }
                 DosingEvent::Failed(code) => {
                     log_fault_transition(&code, mqtt_tx, &config.device_id);
-                    let _ = mqtt_tx.send(format!("[ORCH] dosing_failed:{}", code.as_str()));
+                    // let _ = mqtt_tx.send(format!("[ORCH] dosing_failed:{}", code.as_str()));
                     ctx.phase = SystemPhase::Fault(code);
                 }
             }
@@ -596,16 +610,25 @@ pub fn tick(
                                     mqtt_tx,
                                     &config.device_id,
                                 );
-                                let _ = mqtt_tx
-                                    .send("[ORCH] water_refill_failed_after_3_retries".to_string());
                             } else {
                                 let target = config.water_level_target;
                                 ctx.water
                                     .start_fill(now_ms, target, sensors, "retry_auto_refill");
-                                let _ = mqtt_tx.send(format!(
-                                    "[ORCH] Retrying water refill... Attempt {}",
-                                    ctx.water.retry_refill
-                                ));
+                                send_system_log(
+                                    mqtt_tx,
+                                    &config.device_id,
+                                    LogLevel::Warning,
+                                    LogCategory::Water,
+                                    "Đang thử lại bơm nước",
+                                    SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                                        source: "orchestrator".to_string(),
+                                        message: format!(
+                                            "Lần thử {}/3 — mức nước hiện tại: {:.1}cm, mục tiêu: {:.1}cm",
+                                            ctx.water.retry_refill, sensors.water_level, target
+                                        ),
+                                        skip_reason: None,
+                                    }),
+                                );
                             }
                         } else {
                             set_fault_with_log(
@@ -649,8 +672,8 @@ pub fn tick(
                                 mqtt_tx,
                                 &config.device_id,
                             );
-                            let _ =
-                                mqtt_tx.send("[ORCH] ec_ack_failed_after_3_retries".to_string());
+                            // let _ =
+                            //     mqtt_tx.send("[ORCH] ec_ack_failed_after_3_retries".to_string());
                             return;
                         }
                     } else {

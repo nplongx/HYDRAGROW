@@ -16,8 +16,9 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
-    let level_str = log_data.level.as_str().to_string();
-    let category_str = log_data.category.as_str().to_string();
+    let level_str = serde_json::to_value(&log_data.level).as_str();
+
+    let category_str = serde_json::to_value(&log_data.category).as_str();
 
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog(meta) => meta.message.clone(),

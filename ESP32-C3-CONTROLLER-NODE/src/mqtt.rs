@@ -5,7 +5,9 @@ use esp_idf_svc::mqtt::client::{
 use hydragrow_shared::topics::{
     topic_controller_command, topic_controller_config, topic_sensors, topic_status,
 };
-use hydragrow_shared::{ControllerConfig, ControllerHealthPayload, MqttCommandIn, PumpStatus, SensorData};
+use hydragrow_shared::{
+    ControllerConfig, ControllerHealthPayload, MqttCommandIn, PumpStatus, SensorData,
+};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{mpsc::Sender, Arc, RwLock};
@@ -65,7 +67,6 @@ pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
     }))
 }
 
-#[derive(Debug, Serialize)]
 pub fn get_free_heap() -> u32 {
     unsafe { esp_get_free_heap_size() as u32 }
 }

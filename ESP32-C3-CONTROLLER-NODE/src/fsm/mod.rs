@@ -4,6 +4,7 @@
 
 pub mod actors;
 pub mod commands;
+pub mod matrix;
 pub mod orchestrator;
 pub mod peripheral;
 pub mod phases;

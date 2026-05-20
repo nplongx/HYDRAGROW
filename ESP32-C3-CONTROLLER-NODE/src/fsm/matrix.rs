@@ -114,13 +114,14 @@ impl KalmanCovarianceDiag {
             return 0.0;
         }
 
-        let p = self.p[idx];
+        let p = self.p[idx].max(0.0);
         let denom = p + self.r;
-        if denom <= 0.0 {
+        if denom <= 1e-9 {
             return 0.0;
         }
-        let k = p / denom;
-        self.p[idx] = ((1.0 - k) * p).max(0.0);
+
+        let k = (p / denom).clamp(0.0, 1.0);
+        self.p[idx] = ((1.0 - k) * p).max(1e-9);
         k
     }
 

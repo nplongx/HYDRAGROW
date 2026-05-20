@@ -42,6 +42,55 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
             let step_ec = coeffs.get("step_ratio_ec").and_then(|v| v.as_f64());
             let step_ph = coeffs.get("step_ratio_ph").and_then(|v| v.as_f64());
 
+            // Field mới: ma trận tương tác calibration (6 phần tử số hữu hạn)
+            let interaction_matrix = match coeffs.get("interaction_matrix") {
+                Some(raw_matrix) => match raw_matrix.as_array() {
+                    Some(items) if items.len() == 6 => {
+                        let mut parsed = Vec::with_capacity(6);
+                        let mut is_valid = true;
+
+                        for item in items {
+                            match item.as_f64() {
+                                Some(value) if value.is_finite() => parsed.push(value),
+                                _ => {
+                                    is_valid = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if is_valid {
+                            Some(parsed)
+                        } else {
+                            warn!(
+                                "⚠️ [MQTT-FSM] interaction_matrix của {} có phần tử không hợp lệ, bỏ qua field này",
+                                device_id
+                            );
+                            None
+                        }
+                    }
+                    Some(items) => {
+                        warn!(
+                            "⚠️ [MQTT-FSM] interaction_matrix của {} sai shape ({} phần tử, cần 6), bỏ qua field này",
+                            device_id,
+                            items.len()
+                        );
+                        None
+                    }
+                    None => {
+                        warn!(
+                            "⚠️ [MQTT-FSM] interaction_matrix của {} không phải mảng JSON, bỏ qua field này",
+                            device_id
+                        );
+                        None
+                    }
+                },
+                None => None,
+            };
+
+            let matrix_update_count = coeffs.get("matrix_update_count").and_then(|v| v.as_i64());
+            let matrix_is_warm = coeffs.get("matrix_is_warm").and_then(|v| v.as_bool());
+
             // Câu lệnh SQL linh hoạt, chỉ update những biến có giá trị (không null)
             let query = r#"
                 UPDATE dosing_calibration 
@@ -51,8 +100,11 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
                     ph_shift_down_per_ml = COALESCE($3, ph_shift_down_per_ml),
                     ec_step_ratio = COALESCE($4, ec_step_ratio),
                     ph_step_ratio = COALESCE($5, ph_step_ratio),
+                    interaction_matrix = COALESCE($6, interaction_matrix),
+                    matrix_update_count = COALESCE($7, matrix_update_count),
+                    matrix_is_warm = COALESCE($8, matrix_is_warm),
                     last_calibrated = NOW()
-                WHERE device_id = $6
+                WHERE device_id = $9
             "#;
 
             match sqlx::query(query)
@@ -61,6 +113,9 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
                 .bind(ph_down)
                 .bind(step_ec)
                 .bind(step_ph)
+                .bind(interaction_matrix)
+                .bind(matrix_update_count)
+                .bind(matrix_is_warm)
                 .bind(&device_id)
                 .execute(&app_state.pg_pool)
                 .await

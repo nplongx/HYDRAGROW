@@ -185,6 +185,12 @@ fn check_scheduled_water_change(
     let w_level = sensors.water_level as f32; // f64 -> f32
     let target = (w_level - config.scheduled_drain_amount_cm).max(config.water_level_min);
 
+    // THÊM: log trigger (không thể dùng mqtt_tx vì hàm không nhận tx)
+    // Thay vào đó, trả về một wrapper để caller log.
+    // → Giải pháp đơn giản: thêm log khi apply_decision nhận StartWaterDrain với trigger="scheduled_change"
+    // → Đã cover bởi Step 2 ở trên với trigger field trong message.
+    // → Không cần thêm gì ở đây.
+
     Some(OrchestratorDecision::StartWaterDrain {
         target,
         trigger: "scheduled_change".to_string(),
@@ -546,6 +552,29 @@ fn apply_decision(
                 .start_ec_cycle(now_ms, dose_ml, target_ec, pwm, config, sensors);
             ctx.phase = SystemPhase::DosingEC;
             ctx.safety.last_ec_before_dose = Some(sensors.ec as f32);
+
+            let cycle_id = ctx
+                .dosing
+                .cycle_ctx
+                .as_ref()
+                .map(|c| c.cycle_id.clone())
+                .unwrap_or_else(|| format!("ec-{now_ms}"));
+            send_system_log(
+                mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::Dosing,
+                "Bắt đầu châm EC",
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "orchestrator".to_string(),
+                    message: format!(
+                        "Bơm A+B: {:.2}ml | EC hiện tại: {:.2} | Mục tiêu: {:.2} | PWM: {}%",
+                        dose_ml, sensors.ec, target_ec, pwm
+                    ),
+                    skip_reason: None,
+                    cycle_id: Some(cycle_id),
+                }),
+            );
         }
         OrchestratorDecision::StartPhDosing {
             is_up,
@@ -566,6 +595,30 @@ fn apply_decision(
             ctx.phase = SystemPhase::DosingPH;
             ctx.safety.last_ph_before_dose = Some(sensors.ph as f32);
             ctx.safety.last_ph_dose_up = Some(is_up);
+
+            let cycle_id = ctx
+                .dosing
+                .cycle_ctx
+                .as_ref()
+                .map(|c| c.cycle_id.clone())
+                .unwrap_or_else(|| format!("ph-{now_ms}"));
+            let direction = if is_up { "Up" } else { "Down" };
+            send_system_log(
+                mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::Dosing,
+                &format!("Bắt đầu châm pH {direction}"),
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "orchestrator".to_string(),
+                    message: format!(
+                        "pH {direction}: {:.2}ml | pH hiện tại: {:.2} | Mục tiêu: {:.2} | PWM: {}%",
+                        dose_ml, sensors.ph, target_ph, pwm
+                    ),
+                    skip_reason: None,
+                    cycle_id: Some(cycle_id),
+                }),
+            );
         }
         OrchestratorDecision::StartWaterFill { target } => {
             if !ctx
@@ -578,6 +631,23 @@ fn apply_decision(
             ctx.water.start_fill(now_ms, target, sensors, "auto_refill");
             ctx.phase = SystemPhase::WaterRefilling;
             ctx.safety.last_water_before_refill = Some(sensors.water_level as f32);
+
+            send_system_log(
+                mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::Water,
+                "Bắt đầu bơm nước vào",
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "orchestrator".to_string(),
+                    message: format!(
+                        "Mức nước hiện tại: {:.1}cm | Mục tiêu: {:.1}cm | Timeout: {}s",
+                        sensors.water_level, target, config.max_refill_duration_sec
+                    ),
+                    skip_reason: None,
+                    cycle_id: None,
+                }),
+            );
         }
         OrchestratorDecision::StartWaterDrain { target, trigger } => {
             if !ctx
@@ -592,6 +662,23 @@ fn apply_decision(
             }
             ctx.water.start_drain(now_ms, target, sensors, &trigger);
             ctx.phase = SystemPhase::WaterDraining;
+
+            send_system_log(
+                mqtt_tx,
+                &config.device_id,
+                LogLevel::Info,
+                LogCategory::Water,
+                "Bắt đầu xả nước",
+                SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                    source: "orchestrator".to_string(),
+                    message: format!(
+                        "Trigger: {} | Mức nước hiện tại: {:.1}cm | Mục tiêu xả về: {:.1}cm",
+                        trigger, sensors.water_level, target
+                    ),
+                    skip_reason: None,
+                    cycle_id: None,
+                }),
+            );
         }
         OrchestratorDecision::Fault(code) => {
             ctx.phase = SystemPhase::Fault(code);
@@ -807,6 +894,24 @@ pub fn tick(
                         });
                     }
 
+                    send_system_log(
+                        mqtt_tx,
+                        &config.device_id,
+                        LogLevel::Info,
+                        LogCategory::Dosing,
+                        "Hoàn tất bơm — bắt đầu hòa trộn",
+                        SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                            source: "dosing_actor".to_string(),
+                            message: format!(
+                    "A: {:.2}ml | B: {:.2}ml | pH Up: {:.2}ml | pH Down: {:.2}ml | Mixing: {}s",
+                    dose_a_ml, dose_b_ml, ph_up_ml, ph_down_ml,
+                    config.active_mixing_sec
+                ),
+                            skip_reason: None,
+                            cycle_id: Some(c.cycle_id.clone()),
+                        }),
+                    );
+
                     ctx.phase = SystemPhase::ActiveMixing;
                     ctx.phase_finish_ms = Some(now_ms + config.active_mixing_sec as u64 * 1000);
                 }
@@ -914,6 +1019,29 @@ pub fn tick(
 
         SystemPhase::ActiveMixing => {
             if now_ms >= ctx.phase_finish_ms.unwrap_or(0) {
+                // LOG: vào Stabilizing
+                let cycle_id = ctx
+                    .calibration
+                    .pending_sample
+                    .as_ref()
+                    .map(|s| s.cycle_id.clone());
+                send_system_log(
+                    mqtt_tx,
+                    &config.device_id,
+                    LogLevel::Info,
+                    LogCategory::Dosing,
+                    "Hòa trộn xong — chờ ổn định cảm biến",
+                    SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+                        source: "orchestrator".to_string(),
+                        message: format!(
+                            "Đang chờ {}s để cảm biến ổn định | EC hiện tại: {:.2} | pH: {:.2}",
+                            config.sensor_stabilize_sec, sensors.ec, sensors.ph
+                        ),
+                        skip_reason: None,
+                        cycle_id,
+                    }),
+                );
+
                 ctx.phase = SystemPhase::Stabilizing;
                 ctx.phase_finish_ms = Some(now_ms + config.sensor_stabilize_sec as u64 * 1000);
             }

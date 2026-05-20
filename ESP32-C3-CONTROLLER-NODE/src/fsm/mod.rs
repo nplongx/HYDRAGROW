@@ -459,7 +459,8 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
             "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
             "refill_count": refill_count,
             "drain_count": drain_count
-        }
+        },
+        "log_drop_count": crate::fsm::utils::get_log_drop_count(),
     })
     .to_string()
 }

@@ -186,6 +186,9 @@ async fn main() -> anyhow::Result<()> {
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let device_states = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
+    // Spawn retention task: xóa system_events cũ hơn 90 ngày, mỗi 24h
+    crate::services::retention::spawn(pg_pool.clone());
+
     let app_state = web::Data::new(AppState {
         pg_pool,
         influx_client,
@@ -208,6 +211,7 @@ async fn main() -> anyhow::Result<()> {
         event_bus.subscribe(),
         app_state.clone(),
     ));
+
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "sensors"),

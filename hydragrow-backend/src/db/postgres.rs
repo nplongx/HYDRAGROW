@@ -459,6 +459,7 @@ pub async fn get_system_events(
     categories: &[String],
     limit: i64,
     before_timestamp: Option<i64>,
+    after_timestamp: Option<i64>,
     level: Option<String>,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
@@ -468,8 +469,11 @@ pub async fn get_system_events(
         WHERE device_id = $1
           AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
           AND ($4::bigint IS NULL OR timestamp < $4)
-          AND ($5::text IS NULL OR level = $5)
-        ORDER BY timestamp DESC
+          AND ($5::bigint IS NULL OR timestamp > $5)
+          AND ($6::text IS NULL OR level = $6)
+        ORDER BY
+            CASE WHEN $5::bigint IS NOT NULL THEN timestamp END ASC,
+            CASE WHEN $5::bigint IS NULL THEN timestamp END DESC
         LIMIT $3
         "#,
     )
@@ -477,28 +481,59 @@ pub async fn get_system_events(
     .bind(categories)
     .bind(limit)
     .bind(before_timestamp)
+    .bind(after_timestamp)
     .bind(level)
     .fetch_all(pool)
     .await
 }
-/// Tìm toàn bộ log liên quan đến một quy trình (cycle_id) cụ thể
+
 pub async fn get_events_by_cycle_id(
     pool: &sqlx::PgPool,
     device_id: &str,
     cycle_id: &str,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     let query = r#"
-        SELECT * FROM system_events 
-        WHERE device_id = $1 
-          AND metadata ->> 'cycle_id' = $2
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
+        FROM system_events
+        WHERE device_id = $1
+          AND (
+              metadata ->> 'cycle_id' = $2
+              OR metadata -> 'dosing_data' ->> 'cycle_id' = $2
+          )
         ORDER BY timestamp ASC
     "#;
 
-    let records = sqlx::query_as::<_, SystemEventRecord>(query)
+    sqlx::query_as::<_, SystemEventRecord>(query)
         .bind(device_id)
         .bind(cycle_id)
         .fetch_all(pool)
-        .await?;
+        .await
+}
 
-    Ok(records)
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn basic_system_log_metadata_cycle_id_is_at_top_level_of_serialized_event() {
+        use hydragrow_shared::{BasicSystemLogMetadata, SystemLogEvent};
+
+        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            source: "test".into(),
+            message: "msg".into(),
+            skip_reason: None,
+            cycle_id: Some("cycle-xyz".into()),
+        });
+
+        let json_val = serde_json::to_value(&event).unwrap();
+        // Với #[serde(tag = "event_type")], cycle_id xuất hiện ở top-level
+        assert_eq!(
+            json_val.get("cycle_id").and_then(|v| v.as_str()),
+            Some("cycle-xyz"),
+            "cycle_id phải ở top-level của serialized event: {}",
+            json_val
+        );
+        assert_eq!(
+            json_val.get("event_type").and_then(|v| v.as_str()),
+            Some("BasicSystemLog")
+        );
+    }
 }

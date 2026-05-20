@@ -505,6 +505,8 @@ pub struct CalibrationMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BasicSystemLogMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle_id: Option<String>,
     pub source: String,
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

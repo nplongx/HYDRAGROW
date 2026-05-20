@@ -46,6 +46,7 @@ fn unified_system_log_round_trip_for_all_event_variants() {
             cycle_id: Some("cal-001".into()),
         }),
         SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            cycle_id: None,
             source: "system".into(),
             message: "node boot".into(),
             skip_reason: None,
@@ -57,7 +58,6 @@ fn unified_system_log_round_trip_for_all_event_variants() {
         let json = serde_json::to_string(&original).expect("serialize unified log");
         let decoded: UnifiedSystemLog =
             serde_json::from_str(&json).expect("deserialize unified log");
-
         assert_eq!(decoded.device_id, original.device_id);
         assert_eq!(decoded.level, original.level);
         assert_eq!(decoded.category, original.category);
@@ -213,4 +213,74 @@ fn golden_payload_snapshots() {
     insta::assert_json_snapshot!("unified_system_log_golden", unified);
     insta::assert_json_snapshot!("sensor_data_golden", sensor);
     insta::assert_json_snapshot!("mqtt_command_payload_golden", command);
+}
+
+#[test]
+fn basic_system_log_metadata_cycle_id_round_trips() {
+    use hydragrow_shared::{BasicSystemLogMetadata, SystemLogEvent};
+
+    let with_cycle = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+        source: "orchestrator".into(),
+        message: "Bắt đầu châm EC".into(),
+        skip_reason: None,
+        cycle_id: Some("ec-1748000000000".into()),
+    });
+
+    let json = serde_json::to_string(&with_cycle).expect("serialize");
+    assert!(
+        json.contains("ec-1748000000000"),
+        "cycle_id phải xuất hiện trong JSON: {}",
+        json
+    );
+
+    let decoded: SystemLogEvent = serde_json::from_str(&json).expect("deserialize");
+    match decoded {
+        SystemLogEvent::BasicSystemLog(meta) => {
+            assert_eq!(meta.cycle_id.as_deref(), Some("ec-1748000000000"));
+        }
+        _ => panic!("Sai variant"),
+    }
+}
+
+#[test]
+fn basic_system_log_metadata_without_cycle_id_omits_field() {
+    use hydragrow_shared::{BasicSystemLogMetadata, SystemLogEvent};
+
+    let without_cycle = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+        source: "system".into(),
+        message: "Khởi động".into(),
+        skip_reason: None,
+        cycle_id: None,
+    });
+
+    let json = serde_json::to_string(&without_cycle).expect("serialize");
+    // Với skip_serializing_if = "Option::is_none", field không được xuất hiện
+    assert!(
+        !json.contains("cycle_id"),
+        "cycle_id None phải bị omit: {}",
+        json
+    );
+}
+
+#[test]
+fn golden_basic_system_log_with_cycle_id() {
+    use hydragrow_shared::{
+        BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog,
+    };
+
+    let log = UnifiedSystemLog {
+        device_id: "device-001".into(),
+        level: LogLevel::Info,
+        category: LogCategory::Dosing,
+        title: "Bắt đầu châm EC".into(),
+        event: SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            source: "orchestrator".into(),
+            message: "Bơm A+B: 5.00ml | EC hiện tại: 1.20 | Mục tiêu: 2.00 | PWM: 50%".into(),
+            skip_reason: None,
+            cycle_id: Some("ec-1748000000000".into()),
+        }),
+        timestamp_ms: 1_748_000_000_000,
+    };
+
+    insta::assert_json_snapshot!("basic_system_log_with_cycle_id_golden", log);
 }

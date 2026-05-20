@@ -21,7 +21,19 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     let category_str = log_data.category.as_str().to_string();
 
     let message_str = match &log_data.event {
-        SystemLogEvent::BasicSystemLog(meta) => meta.message.clone(),
+        SystemLogEvent::BasicSystemLog(meta) => {
+            // Log server-side warning khi firmware chủ động skip một chu kỳ
+            if let Some(reason) = &meta.skip_reason {
+                tracing::warn!(
+                    device_id = %log_data.device_id,
+                    cycle_id = ?meta.cycle_id,
+                    skip_reason = %reason,
+                    "⚠️ [SYSTEM LOG] Firmware báo cáo skip cycle: {}",
+                    reason
+                );
+            }
+            meta.message.clone()
+        }
         SystemLogEvent::SystemAlert(meta) => {
             format!("Nguồn: {} (Thử lại: {})", meta.source, meta.retry_count)
         }

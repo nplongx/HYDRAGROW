@@ -1,0 +1,17 @@
+---
+source: tests/schema_roundtrip_and_snapshots.rs
+expression: log
+---
+{
+  "device_id": "device-001",
+  "level": "info",
+  "category": "dosing",
+  "title": "Bắt đầu châm EC",
+  "event": {
+    "event_type": "BasicSystemLog",
+    "cycle_id": "ec-1748000000000",
+    "source": "orchestrator",
+    "message": "Bơm A+B: 5.00ml | EC hiện tại: 1.20 | Mục tiêu: 2.00 | PWM: 50%"
+  },
+  "timestamp_ms": 1748000000000
+}

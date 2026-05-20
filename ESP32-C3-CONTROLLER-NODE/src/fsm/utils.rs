@@ -1,6 +1,9 @@
 use hydragrow_shared::{ControllerConfig, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
 use std::{
-    sync::mpsc::Sender,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        mpsc::Sender,
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -13,6 +16,8 @@ pub const MIN_PH_DOSE_ML: f32 = 0.05;
 pub const MIN_ACTIVE_MIXING_SEC_FOR_CALIB: u64 = 3;
 pub const MIN_STABILIZING_SEC_FOR_CALIB: u64 = 3;
 pub const CALIBRATION_PERSIST_BATCH_SIZE: u32 = 3;
+
+static LOG_DROP_COUNT: AtomicU32 = AtomicU32::new(0);
 
 // ---------------------------------------------------------------------------
 // DosePumpKind – dùng nội bộ để tra flow capacity theo loại bơm
@@ -105,7 +110,7 @@ pub fn get_current_time_sec() -> u64 {
 /// Hàm tiện ích để đóng gói và gửi log hệ thống
 pub fn send_system_log(
     tx: &Sender<String>,
-    device_id: &str, // Có thể lấy từ config
+    device_id: &str,
     level: LogLevel,
     category: LogCategory,
     title: &str,
@@ -119,12 +124,22 @@ pub fn send_system_log(
         LogLevel::Success => UnifiedSystemLog::success(device_id, category, title, event, ts),
     };
 
-    // Đóng gói thành JSON và gửi vào channel MQTT
     if let Ok(json_str) = serde_json::to_string(&log) {
-        // Lưu ý: Task MQTT pub của bạn cần được cấu hình để
-        // publish các message từ channel này vào topic `.../system_log`
-        let _ = tx.send(json_str);
+        if tx.send(json_str).is_err() {
+            let prev = LOG_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
+            // Log cảnh báo mỗi 10 drops để tránh vòng lặp vô hạn
+            if prev % 10 == 0 {
+                log::warn!(
+                    "⚠️ MQTT log channel đầy! Đã drop {} log kể từ boot.",
+                    prev + 1
+                );
+            }
+        }
     } else {
         log::error!("Lỗi Serialize SystemLogEvent!");
     }
+}
+
+pub fn get_log_drop_count() -> u32 {
+    LOG_DROP_COUNT.load(Ordering::Relaxed)
 }

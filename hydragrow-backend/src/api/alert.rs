@@ -15,6 +15,8 @@ pub struct EventsQuery {
     #[serde(default)]
     pub before_timestamp: Option<i64>,
     #[serde(default)]
+    pub after_timestamp: Option<i64>,
+    #[serde(default)]
     pub level: Option<String>,
 }
 
@@ -57,7 +59,7 @@ pub async fn health_summary(
     let now = chrono::Utc::now().timestamp_millis();
     let window_ms = 3_600_000i64;
 
-    match get_system_events(&app_state.pg_pool, &device_id, &[], 500, None, None).await {
+    match get_system_events(&app_state.pg_pool, &device_id, &[], 500, None, None, None).await {
         Ok(events) => {
             let recent: Vec<_> = events
                 .into_iter()
@@ -110,7 +112,6 @@ pub async fn fetch_events(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
-
     let categories = normalize_categories(query.category.as_ref());
 
     match get_system_events(
@@ -119,6 +120,7 @@ pub async fn fetch_events(
         &categories,
         query.limit,
         query.before_timestamp,
+        query.after_timestamp,
         query.level.clone(),
     )
     .await
@@ -164,6 +166,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use actix_web::{App, HttpResponse, Responder, test, web};
 
     async fn dummy_cycle(path: web::Path<(String, String)>) -> impl Responder {
@@ -187,5 +190,23 @@ mod tests {
         let resp = test::call_and_read_body(&app, req).await;
 
         assert_eq!(resp, web::Bytes::from_static(b"dev-01:cycle-99"));
+    }
+
+    #[test]
+    async fn events_query_deserializes_after_timestamp() {
+        // Kiểm tra struct deserialization từ query string
+        let qs = "after_timestamp=1717000000000&limit=50&category=dosing";
+        let query: EventsQuery = serde_urlencoded::from_str(qs).unwrap();
+        assert_eq!(query.after_timestamp, Some(1717000000000_i64));
+        assert_eq!(query.limit, 50);
+        assert_eq!(query.category.as_deref(), Some("dosing"));
+    }
+
+    #[test]
+    async fn events_query_without_after_timestamp_defaults_to_none() {
+        let qs = "limit=100";
+        let query: EventsQuery = serde_urlencoded::from_str(qs).unwrap();
+        assert_eq!(query.after_timestamp, None);
+        assert_eq!(query.before_timestamp, None);
     }
 }

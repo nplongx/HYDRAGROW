@@ -230,6 +230,9 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                         );
                     }
                 }
+                new_ctx.tuner.matrix_update_count = snapshot.matrix_update_count;
+                new_ctx.tuner.matrix_is_warm =
+                    snapshot.matrix_is_warm || new_ctx.tuner.matrix_update_count >= 10;
                 new_ctx.tuner.state = TunerState::from_u8(snapshot.tuner_state);
                 new_ctx.last_water_change_sec = snapshot.last_water_change_sec;
                 new_ctx.dosing.retry_ec = snapshot.retry_ec;
@@ -237,6 +240,23 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 new_ctx.dosing_cycle_count = snapshot.dosing_cycle_count;
             }
         }
+    }
+
+    if !new_ctx.tuner.matrix_is_warm {
+        let config = shared_config.read().unwrap().clone();
+        if config.ec_gain_per_ml > 0.0 && config.ph_shift_up_per_ml > 0.0 {
+            new_ctx.tuner.interaction_matrix = InteractionMatrix::from_scalar(
+                config.ec_gain_per_ml,
+                config.ph_shift_up_per_ml,
+            );
+            info!(
+                "🧊 Cold matrix boot: re-seeded interaction matrix from shared_config (ec_gain_per_ml={}, ph_shift_up_per_ml={})",
+                config.ec_gain_per_ml,
+                config.ph_shift_up_per_ml
+            );
+        }
+    } else {
+        info!("🔥 Warm restore: keeping restored interaction matrix from NVS snapshot");
     }
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");

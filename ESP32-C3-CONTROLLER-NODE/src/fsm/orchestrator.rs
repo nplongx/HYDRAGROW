@@ -428,8 +428,15 @@ fn update_interaction_matrix(
     // 1. Dự đoán trạng thái hiệp biến Kalman (Q tăng)
     tuner.kalman.predict();
 
-    // 2. Cập nhật hiệp biến và lấy Kalman Gain (K) cho từng kênh theo từng phép đo.
-    // `update_and_get_gain` vừa trả K vừa cập nhật lại P, tránh update P hai lần trong cùng nhịp.
+    // 2. Định nghĩa hệ số Kalman Gain (K) cho từng kênh dựa trên cấu trúc `KalmanCovarianceDiag`
+    // Do `kalman.p` của bạn là [f32; 3], ta tính toán độ lợi K tương ứng cho từng giếng bơm:
+    // Index 0: Nutrient A, Index 1: Nutrient B (nếu có), Index 2: pH Agent
+    let denom_a = (tuner.kalman.p[0] + tuner.kalman.r).max(1e-9);
+    let denom_b = (tuner.kalman.p[1] + tuner.kalman.r).max(1e-9);
+    let denom_ph = (tuner.kalman.p[2] + tuner.kalman.r).max(1e-9);
+    let k_a = tuner.kalman.p[0] / denom_a;
+    let k_b = tuner.kalman.p[1] / denom_b;
+    let k_ph = tuner.kalman.p[2] / denom_ph;
 
     // 3. Cập nhật các cột trong ma trận tương tác (InteractionMatrix) bằng hàm `.update_column`
     // update_column(col, dose_ml, observed_delta, row, gain_k)
@@ -450,8 +457,7 @@ fn update_interaction_matrix(
     }
 
     let net_ph_dose_ml = sample.dose_ph_up_ml - sample.dose_ph_down_ml;
-    if net_ph_dose_ml.abs() > 0.0 {
-        let k_ph = tuner.kalman.update_and_get_gain(2);
+    if net_ph_dose_ml.abs() > 1e-6 {
         // Cột 2 đại diện cho tác nhân điều chỉnh pH, tác động lên hàng 1 (pH)
         tuner
             .interaction_matrix

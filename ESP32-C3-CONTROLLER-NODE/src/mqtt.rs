@@ -5,7 +5,7 @@ use esp_idf_svc::mqtt::client::{
 use hydragrow_shared::topics::{
     topic_controller_command, topic_controller_config, topic_sensors, topic_status,
 };
-use hydragrow_shared::{ControllerConfig, MqttCommandPayload, PumpStatus, SensorData};
+use hydragrow_shared::{ControllerConfig, ControllerHealthPayload, MqttCommandIn, PumpStatus, SensorData};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{mpsc::Sender, Arc, RwLock};
@@ -66,13 +66,6 @@ pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ControllerHealthPayload {
-    pub free_heap: u32,
-    pub uptime_sec: u64,
-    pub rssi: i8,
-    pub pump_status: PumpStatus,
-}
-
 pub fn get_free_heap() -> u32 {
     unsafe { esp_get_free_heap_size() as u32 }
 }
@@ -95,7 +88,7 @@ pub fn init_mqtt_client(
     broker_url: &str,
     shared_config: SharedConfig,
     shared_sensor_data: SharedSensorData,
-    cmd_tx: Sender<MqttCommandPayload>,
+    cmd_tx: Sender<MqttCommandIn>,
     conn_tx: Sender<ConnectionState>,
 ) -> anyhow::Result<EspMqttClient<'static>> {
     info!("🚀 Initializing MQTT client...");
@@ -176,7 +169,7 @@ pub fn init_mqtt_client(
                 // COMMAND
                 else if topic_str == topic_command_cb {
                     debug!("🎮 Processing COMMAND");
-                    match serde_json::from_slice::<MqttCommandPayload>(data) {
+                    match serde_json::from_slice::<MqttCommandIn>(data) {
                         Ok(cmd) => {
                             info!("🎯 Command received: {:?}", cmd);
                             if let Err(e) = cmd_tx.send(cmd) {

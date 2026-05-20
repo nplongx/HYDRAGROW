@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
-use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
+use hydragrow_shared::{MqttCommandParams, MqttCommandOut};
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -32,7 +32,7 @@ pub struct PumpControlParams {
 }
 
 // #[derive(Debug, Serialize)]
-// struct MqttCommandPayload {
+// struct MqttCommandOut {
 //     pub target: String,
 //     pub action: String,
 //     #[serde(skip_serializing_if = "Option::is_none")]
@@ -144,7 +144,7 @@ pub async fn control_pump(
         _ => "pump_off",
     };
 
-    let command = MqttCommandPayload {
+    let command = MqttCommandOut {
         target,
         action: mqtt_action.to_string(),
         params: Some(MqttCommandParams {

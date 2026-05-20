@@ -1,6 +1,6 @@
 use hydragrow_shared::{
     BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel,
-    MqttCommandPayload, SystemLogEvent,
+    MqttCommandIn, SystemLogEvent,
 };
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
@@ -17,7 +17,7 @@ use crate::pump::{PumpController, PumpType, WaterDirection};
 // Trả về `true` nếu cần force-publish trạng thái ngay lập tức.
 // ---------------------------------------------------------------------------
 pub fn process_mqtt_commands(
-    cmd_rx: &Receiver<MqttCommandPayload>,
+    cmd_rx: &Receiver<MqttCommandIn>,
     config: &ControllerConfig,
     pump_ctrl: &mut PumpController,
     ctx: &mut SystemContext,
@@ -40,7 +40,7 @@ pub fn process_mqtt_commands(
         if action_lower == "enter_calibration" {
             info!("🛠️ Bắt đầu chế độ Hiệu chuẩn Cảm biến! Khóa chéo an toàn.");
             crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
-            let step = cmd.target.clone();
+            let step = cmd.target.clone().unwrap_or_else(|| "default".to_string());
             ctx.phase = SystemPhase::SensorCalibration { step };
             ctx.phase_finish_ms = Some(current_time_ms + 3_600_000);
             force_sync = true;
@@ -113,7 +113,7 @@ pub fn process_mqtt_commands(
             continue;
         }
 
-        let target_lower = cmd.target.to_lowercase();
+        let target_lower = cmd.target.as_deref().unwrap_or("pump").to_lowercase();
         if target_lower != "pump" && target_lower != "all" {
             continue;
         }
@@ -122,13 +122,15 @@ pub fn process_mqtt_commands(
             .params
             .as_ref()
             .and_then(|p| p.pump_id.as_ref())
+            .cloned()
+            .or_else(|| cmd.pump.clone())
             .map(|p| p.to_uppercase())
             .unwrap_or_else(|| "ALL".to_string());
 
         let is_force_on = action_lower == "force_on";
         let is_set_pwm = action_lower == "set_pwm";
-        let pwm = cmd.params.as_ref().and_then(|p| p.pwm);
-        let duration_sec = cmd.params.as_ref().and_then(|p| p.duration_sec);
+        let pwm = cmd.params.as_ref().and_then(|p| p.pwm).or(cmd.pwm);
+        let duration_sec = cmd.params.as_ref().and_then(|p| p.duration_sec).or(cmd.duration_sec);
         let explicit_state = cmd.params.as_ref().and_then(|p| p.state);
 
         let mut is_on = is_force_on

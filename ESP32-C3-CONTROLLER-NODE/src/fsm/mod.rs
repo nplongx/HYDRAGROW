@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
 use hydragrow_shared::{
-    BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, MqttCommandPayload, SystemLogEvent,
+    BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, MqttCommandIn, SystemLogEvent,
 };
 use log::info;
 
@@ -116,7 +116,7 @@ pub fn start_fsm_control_loop(
     shared_sensors: SharedSensorData,
     mut pump_ctrl: PumpController,
     nvs_partition: EspDefaultNvsPartition,
-    cmd_rx: Receiver<MqttCommandPayload>,
+    cmd_rx: Receiver<MqttCommandIn>,
     fsm_mqtt_tx: Sender<String>,
     dosing_report_tx: Sender<String>,
     sensor_cmd_tx: Sender<String>,

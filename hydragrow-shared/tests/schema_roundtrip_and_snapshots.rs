@@ -1,6 +1,6 @@
 use hydragrow_shared::{
     AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, DoseData, DosingReportPayload,
-    LogCategory, LogLevel, MqttCommandParams, MqttCommandPayload, PhaseData, PumpStatus,
+    LogCategory, LogLevel, MqttCommandParams, MqttCommandOut, PhaseData, PumpStatus,
     SensorData, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
 };
 
@@ -154,7 +154,7 @@ fn sensor_data_round_trip_with_and_without_optional_fields() {
 #[test]
 fn mqtt_command_payload_round_trip_for_common_actions() {
     let actions = vec![
-        MqttCommandPayload {
+        MqttCommandOut {
             target: "pump_a".into(),
             action: "start".into(),
             params: Some(MqttCommandParams {
@@ -165,7 +165,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 ota_url: None,
             }),
         },
-        MqttCommandPayload {
+        MqttCommandOut {
             target: "pump_a".into(),
             action: "stop".into(),
             params: Some(MqttCommandParams {
@@ -176,7 +176,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 ota_url: None,
             }),
         },
-        MqttCommandPayload {
+        MqttCommandOut {
             target: "controller".into(),
             action: "set_pwm".into(),
             params: Some(MqttCommandParams {
@@ -187,7 +187,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 ota_url: None,
             }),
         },
-        MqttCommandPayload {
+        MqttCommandOut {
             target: "controller".into(),
             action: "set_mode".into(),
             params: None,
@@ -196,7 +196,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
 
     for original in actions {
         let json = serde_json::to_string(&original).expect("serialize mqtt payload");
-        let decoded: MqttCommandPayload =
+        let decoded: MqttCommandOut =
             serde_json::from_str(&json).expect("deserialize mqtt payload");
         assert_eq!(
             serde_json::to_value(&decoded).unwrap(),
@@ -235,7 +235,7 @@ fn golden_payload_snapshots() {
         ph_voltage_mv: Some(2105.2),
     };
 
-    let command = MqttCommandPayload {
+    let command = MqttCommandOut {
         target: "pump_b".into(),
         action: "start".into(),
         params: Some(MqttCommandParams {

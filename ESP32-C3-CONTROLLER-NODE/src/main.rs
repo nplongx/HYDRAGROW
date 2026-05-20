@@ -351,7 +351,7 @@ fn main() -> anyhow::Result<()> {
             if let Some(client) = mqtt_client.as_mut() {
                 let current_pump_status = shared_sensor_data.read().unwrap().pump_status.clone();
 
-                let health_payload = crate::mqtt::ControllerHealthPayload {
+                let health_payload = hydragrow_shared::ControllerHealthPayload {
                     free_heap: crate::mqtt::get_free_heap(),
                     uptime_sec: crate::mqtt::get_uptime_sec(),
                     rssi: crate::mqtt::get_wifi_rssi(),

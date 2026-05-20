@@ -31,6 +31,9 @@ use commands::process_mqtt_commands;
 use system_context::{NvsSnapshot, TunerState};
 use utils::{get_current_time_ms, get_current_time_sec};
 
+const INTERACTION_MATRIX_MIN: f32 = -10.0;
+const INTERACTION_MATRIX_MAX: f32 = 10.0;
+
 pub mod mod_helpers {
     use hydragrow_shared::PumpStatus;
 
@@ -192,6 +195,19 @@ pub fn start_fsm_control_loop(
                 {
                     new_ctx.tuner.ph_variance_baseline = snapshot.ph_variance_baseline;
                 }
+                if let Some(interaction_matrix) = snapshot.interaction_matrix {
+                    let matrix_is_valid = interaction_matrix.iter().all(|value| {
+                        value.is_finite()
+                            && (*value >= INTERACTION_MATRIX_MIN)
+                            && (*value <= INTERACTION_MATRIX_MAX)
+                    });
+                    if matrix_is_valid {
+                        new_ctx.tuner.interaction_matrix =
+                            system_context::InteractionMatrix::from_flat(interaction_matrix);
+                    }
+                }
+                new_ctx.tuner.matrix_update_count = snapshot.matrix_update_count;
+                new_ctx.tuner.matrix_is_warm = new_ctx.tuner.matrix_update_count >= 10;
                 new_ctx.tuner.state = TunerState::from_u8(snapshot.tuner_state);
                 new_ctx.last_water_change_sec = snapshot.last_water_change_sec;
                 new_ctx.dosing.retry_ec = snapshot.retry_ec;
@@ -403,4 +419,3 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
     })
     .to_string()
 }
-

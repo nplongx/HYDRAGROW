@@ -1,6 +1,6 @@
 use hydragrow_shared::{
-    BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel,
-    MqttCommandIn, SystemLogEvent,
+    BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel, MqttCommandIn,
+    SystemLogEvent,
 };
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
@@ -85,6 +85,7 @@ pub fn process_mqtt_commands(
                         }
                     ),
                     skip_reason: None,
+                    cycle_id: None,
                 }),
             );
             info!("📦 OTA trigger received: {}", ota_url);
@@ -130,7 +131,11 @@ pub fn process_mqtt_commands(
         let is_force_on = action_lower == "force_on";
         let is_set_pwm = action_lower == "set_pwm";
         let pwm = cmd.params.as_ref().and_then(|p| p.pwm).or(cmd.pwm);
-        let duration_sec = cmd.params.as_ref().and_then(|p| p.duration_sec).or(cmd.duration_sec);
+        let duration_sec = cmd
+            .params
+            .as_ref()
+            .and_then(|p| p.duration_sec)
+            .or(cmd.duration_sec);
         let explicit_state = cmd.params.as_ref().and_then(|p| p.state);
 
         let mut is_on = is_force_on
@@ -168,6 +173,7 @@ pub fn process_mqtt_commands(
                         pump_name, duration
                     ),
                     skip_reason: None,
+                    cycle_id: None
                 }),
             );
         } else if is_on {
@@ -182,6 +188,7 @@ pub fn process_mqtt_commands(
                     source: "fsm_command".to_string(),
                     message: format!("Người dùng đã bật bơm {}.", pump_name),
                     skip_reason: None,
+                    cycle_id: None,
                 }),
             );
         }

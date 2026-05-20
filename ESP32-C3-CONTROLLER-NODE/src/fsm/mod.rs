@@ -322,6 +322,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                         pump
                     ),
                     skip_reason: None,
+                    cycle_id: None,
                 }),
             );
             mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);

@@ -351,7 +351,6 @@ pub async fn create_crop_season(
 ) -> Result<Option<CropSeason>, sqlx::Error> {
     let id = uuid::Uuid::new_v4().to_string();
 
-    // 🟢 SỬA LỖI: Thêm trường description và $5 vào câu SQL
     sqlx::query(
         "INSERT INTO crop_seasons (id, device_id, name, plant_type, status, description) VALUES ($1, $2, $3, $4, 'active', $5)",
     )
@@ -359,7 +358,7 @@ pub async fn create_crop_season(
     .bind(device_id)
     .bind(&req.name)
     .bind(&req.plant_type)
-    .bind(&req.description) // 🟢 BIND thêm description từ request
+    .bind(&req.description) 
     .execute(pool)
     .await?;
 

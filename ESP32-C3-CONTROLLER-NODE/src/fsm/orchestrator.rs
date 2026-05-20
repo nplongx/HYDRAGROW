@@ -871,7 +871,7 @@ pub fn tick(
 
                     if let Some(c) = ctx.dosing.cycle_ctx.clone() {
                         ctx.calibration.start_sample(PendingCalibrationSample {
-                            cycle_id: c.cycle_id,
+                            cycle_id: c.cycle_id.clone(),
                             trigger: c.trigger,
                             start_ec: sensors.ec as f32,
                             start_ph: sensors.ph as f32,
@@ -892,9 +892,8 @@ pub fn tick(
                             invalid_by_noise: false,
                             invalid_by_water_change: false,
                         });
-                    }
 
-                    send_system_log(
+                        send_system_log(
                         mqtt_tx,
                         &config.device_id,
                         LogLevel::Info,
@@ -903,14 +902,15 @@ pub fn tick(
                         SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
                             source: "dosing_actor".to_string(),
                             message: format!(
-                    "A: {:.2}ml | B: {:.2}ml | pH Up: {:.2}ml | pH Down: {:.2}ml | Mixing: {}s",
-                    dose_a_ml, dose_b_ml, ph_up_ml, ph_down_ml,
-                    config.active_mixing_sec
-                ),
+                                "A: {:.2}ml | B: {:.2}ml | pH Up: {:.2}ml | pH Down: {:.2}ml | Mixing: {}s",
+                                dose_a_ml, dose_b_ml, ph_up_ml, ph_down_ml,
+                                config.active_mixing_sec
+                            ),
                             skip_reason: None,
                             cycle_id: Some(c.cycle_id.clone()),
                         }),
                     );
+                    }
 
                     ctx.phase = SystemPhase::ActiveMixing;
                     ctx.phase_finish_ms = Some(now_ms + config.active_mixing_sec as u64 * 1000);
@@ -1000,6 +1000,7 @@ pub fn tick(
                                             ctx.water.retry_refill, sensors.water_level, target
                                         ),
                                         skip_reason: None,
+                                        cycle_id: None
                                     }),
                                 );
                             }

@@ -1,6 +1,8 @@
 use hydragrow_shared::PumpStatus;
 use serde::{Deserialize, Serialize};
 
+use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
+
 use super::actors::{
     dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
 };
@@ -61,37 +63,37 @@ pub struct AutoTuner {
     pub matrix_is_warm: bool,
 }
 
-pub struct InteractionMatrix {
-    pub ec_to_ec: f32,
-    pub ec_to_ph: f32,
-    pub ph_to_ec: f32,
-    pub ph_to_ph: f32,
-}
-
-impl InteractionMatrix {
-    pub fn from_scalar(value: f32) -> Self {
-        Self {
-            ec_to_ec: value,
-            ec_to_ph: value,
-            ph_to_ec: value,
-            ph_to_ph: value,
-        }
-    }
-}
-
-pub struct KalmanCovarianceDiag {
-    pub ec_variance: f32,
-    pub ph_variance: f32,
-}
-
-impl KalmanCovarianceDiag {
-    pub fn new() -> Self {
-        Self {
-            ec_variance: 1.0,
-            ph_variance: 1.0,
-        }
-    }
-}
+// pub struct InteractionMatrix {
+//     pub ec_to_ec: f32,
+//     pub ec_to_ph: f32,
+//     pub ph_to_ec: f32,
+//     pub ph_to_ph: f32,
+// }
+//
+// impl InteractionMatrix {
+//     pub fn from_scalar(value: f32) -> Self {
+//         Self {
+//             ec_to_ec: value,
+//             ec_to_ph: value,
+//             ph_to_ec: value,
+//             ph_to_ph: value,
+//         }
+//     }
+// }
+//
+// pub struct KalmanCovarianceDiag {
+//     pub ec_variance: f32,
+//     pub ph_variance: f32,
+// }
+//
+// impl KalmanCovarianceDiag {
+//     pub fn new() -> Self {
+//         Self {
+//             ec_variance: 1.0,
+//             ph_variance: 1.0,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TunerState {
@@ -238,25 +240,25 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            interaction_matrix: InteractionMatrix::from_scalar(0.0),
-            kalman: KalmanCovarianceDiag::new(),
+            interaction_matrix: InteractionMatrix::from_scalar(0.0, 0.0),
+            kalman: KalmanCovarianceDiag::new(0.0, 0.0, 0.0),
             matrix_update_count: 0,
             matrix_is_warm: false,
         }
     }
 }
-
-impl Default for KalmanState {
-    fn default() -> Self {
-        Self { g: [[0.0; 3]; 2] }
-    }
-}
-
-impl KalmanState {
-    pub fn predict(&mut self) {
-        // Placeholder for process-model prediction step.
-    }
-}
+//
+// impl Default for KalmanState {
+//     fn default() -> Self {
+//         Self { g: [[0.0; 3]; 2] }
+//     }
+// }
+//
+// impl KalmanState {
+//     pub fn predict(&mut self) {
+//         // Placeholder for process-model prediction step.
+//     }
+// }
 
 impl CalibrationSampler {
     pub fn start_sample(&mut self, sample: PendingCalibrationSample) {
@@ -346,19 +348,6 @@ impl AutoTuner {
         config: &hydragrow_shared::ControllerConfig,
         now_ms: u64,
     ) -> String {
-        let ec_gain = self.gain_learner.effective_ec_gain(config.ec_gain_per_ml);
-        let ph_up_gain = self
-            .gain_learner
-            .effective_ph_up_gain(config.ph_shift_up_per_ml);
-        let ph_down_gain = self
-            .gain_learner
-            .effective_ph_down_gain(config.ph_shift_down_per_ml);
-        let ph_confidence = self
-            .gain_learner
-            .ph_up
-            .confidence
-            .max(self.gain_learner.ph_down.confidence);
-
         serde_json::json!({
             "type": "runtime_calibration_update",
             "device_id": device_id,
@@ -368,23 +357,9 @@ impl AutoTuner {
                 "best_ec_ratio": self.best_ec_ratio,
                 "best_ph_ratio": self.best_ph_ratio,
                 "state": self.state as u8,
-                "ec_gain_per_ml": ec_gain,
-                "ph_shift_up_per_ml": ph_up_gain,
-                "ph_shift_down_per_ml": ph_down_gain,
-                "interaction_matrix": {
-                    "data": [ec_gain, 0.0_f32, 0.0_f32, 0.0_f32, ph_up_gain, ph_down_gain],
-                    "layout": "row_major",
-                    "rows": 2,
-                    "cols": 3,
-                    "warm": self.gain_learner.ec.confidence >= 0.6 && ph_confidence >= 0.6,
-                    "update_count": self
-                        .gain_learner
-                        .ec
-                        .sample_count
-                        .saturating_add(self.gain_learner.ph_up.sample_count)
-                        .saturating_add(self.gain_learner.ph_down.sample_count),
-                },
-                "kalman_confidence": [self.gain_learner.ec.confidence, ph_confidence],
+                "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
+                "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
+                "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
             },
             "timestamp_ms": now_ms
         })
@@ -496,13 +471,13 @@ impl Default for GainLearner {
     }
 }
 
-impl Default for InteractionMatrix {
-    fn default() -> Self {
-        Self {
-            values: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
-        }
-    }
-}
+// impl Default for InteractionMatrix {
+//     fn default() -> Self {
+//         Self {
+//             values: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
+//         }
+//     }
+// }
 
 impl GainLearner {
     pub fn update_ec_gain(
@@ -763,3 +738,4 @@ impl AutoTuner {
         ec_degraded || ph_degraded
     }
 }
+

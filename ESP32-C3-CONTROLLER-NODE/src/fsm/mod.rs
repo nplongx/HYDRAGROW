@@ -4,8 +4,8 @@
 
 pub mod actors;
 pub mod commands;
-pub mod optimizer;
 pub mod matrix;
+pub mod optimizer;
 pub mod orchestrator;
 pub mod peripheral;
 pub mod phases;
@@ -27,6 +27,7 @@ use hydragrow_shared::{
 use log::info;
 
 use crate::config::SharedConfig;
+use crate::fsm::matrix::InteractionMatrix;
 use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
@@ -205,7 +206,7 @@ pub fn start_fsm_control_loop(
                     });
                     if matrix_is_valid {
                         new_ctx.tuner.interaction_matrix =
-                            system_context::InteractionMatrix::from_flat(interaction_matrix);
+                            InteractionMatrix::from_flat(interaction_matrix);
                     }
                 }
                 new_ctx.tuner.matrix_update_count = snapshot.matrix_update_count;

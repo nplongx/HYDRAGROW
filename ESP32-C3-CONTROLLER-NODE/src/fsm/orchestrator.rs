@@ -44,7 +44,6 @@ enum OrchestratorDecision {
     Fault(FaultCode),
 }
 
-
 struct MonitoringMatrixResult {
     pump_a_ml: f32,
     ph_agent_ml: f32,
@@ -425,25 +424,45 @@ fn update_interaction_matrix(
 ) {
     let observed_delta_ec = post_ec - sample.start_ec;
     let observed_delta_ph = post_ph - sample.start_ph;
+
+    // 1. Dự đoán trạng thái hiệp biến Kalman (Q tăng)
     tuner.kalman.predict();
 
+    // 2. Định nghĩa hệ số Kalman Gain (K) cho từng kênh dựa trên cấu trúc `KalmanCovarianceDiag`
+    // Do `kalman.p` của bạn là [f32; 3], ta tính toán độ lợi K tương ứng cho từng giếng bơm:
+    // Index 0: Nutrient A, Index 1: Nutrient B (nếu có), Index 2: pH Agent
+    let k_a = tuner.kalman.p[0] / (tuner.kalman.p[0] + tuner.kalman.r);
+    let k_b = tuner.kalman.p[1] / (tuner.kalman.p[1] + tuner.kalman.r);
+    let k_ph = tuner.kalman.p[2] / (tuner.kalman.p[2] + tuner.kalman.r);
+
+    // 3. Cập nhật các cột trong ma trận tương tác (InteractionMatrix) bằng hàm `.update_column`
+    // update_column(col, dose_ml, observed_delta, row, gain_k)
+
+    // Hàng 0 là EC, Hàng 1 là pH
     if sample.dose_a_ml > 0.0 {
-        tuner.kalman.g[0][0] = observed_delta_ec / sample.dose_a_ml.max(1e-6);
-    }
-    if sample.dose_b_ml > 0.0 {
-        tuner.kalman.g[0][1] = observed_delta_ec / sample.dose_b_ml.max(1e-6);
+        tuner
+            .interaction_matrix
+            .update_column(0, sample.dose_a_ml, observed_delta_ec, 0, k_a);
+        tuner.kalman.update(0); // Cập nhật lại P sau khi đo lường
     }
 
-    let net_ec_dose_ml = sample.dose_a_ml + sample.dose_b_ml;
-    if net_ec_dose_ml > 0.0 {
-        tuner.kalman.g[1][0] = observed_delta_ph / net_ec_dose_ml.max(1e-6);
+    if sample.dose_b_ml > 0.0 {
+        tuner
+            .interaction_matrix
+            .update_column(1, sample.dose_b_ml, observed_delta_ec, 0, k_b);
+        tuner.kalman.update(1);
     }
 
     let net_ph_dose_ml = sample.dose_ph_up_ml - sample.dose_ph_down_ml;
     if net_ph_dose_ml.abs() > 0.0 {
-        tuner.kalman.g[1][2] = observed_delta_ph / net_ph_dose_ml;
+        // Cột 2 đại diện cho tác nhân điều chỉnh pH, tác động lên hàng 1 (pH)
+        tuner
+            .interaction_matrix
+            .update_column(2, net_ph_dose_ml, observed_delta_ph, 1, k_ph);
+        tuner.kalman.update(2);
     }
 
+    // 4. Cập nhật trạng thái Warm-up của ma trận
     tuner.matrix_update_count = tuner.matrix_update_count.saturating_add(1);
     if tuner.matrix_update_count >= 10 {
         tuner.matrix_is_warm = true;

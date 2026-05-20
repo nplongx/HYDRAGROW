@@ -24,7 +24,7 @@ use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
 use hydragrow_shared::{
     BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, MqttCommandIn, SystemLogEvent,
 };
-use log::info;
+use log::{info, warn};
 
 use crate::config::SharedConfig;
 use crate::fsm::matrix::InteractionMatrix;
@@ -199,18 +199,40 @@ pub fn start_fsm_control_loop(
                     new_ctx.tuner.ph_variance_baseline = snapshot.ph_variance_baseline;
                 }
                 if let Some(interaction_matrix) = snapshot.interaction_matrix {
-                    let matrix_is_valid = interaction_matrix.iter().all(|value| {
+                    let matrix_values_are_valid = interaction_matrix.iter().all(|value| {
                         value.is_finite()
                             && (*value >= INTERACTION_MATRIX_MIN)
                             && (*value <= INTERACTION_MATRIX_MAX)
                     });
+                    let matrix_diagonal_gain_is_valid =
+                        interaction_matrix[0] > 0.0 && interaction_matrix[5] > 0.0;
+                    let matrix_is_valid = matrix_values_are_valid && matrix_diagonal_gain_is_valid;
+
                     if matrix_is_valid {
                         new_ctx.tuner.interaction_matrix =
                             InteractionMatrix::from_flat(interaction_matrix);
+                        new_ctx.tuner.matrix_update_count = snapshot.matrix_update_count;
+                        new_ctx.tuner.matrix_is_warm = if snapshot.matrix_is_warm {
+                            true
+                        } else {
+                            snapshot.matrix_update_count >= 10
+                        };
+                    } else {
+                        warn!(
+                            "⚠️ Bỏ qua interaction_matrix từ snapshot do invalid. \
+values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_warm={}",
+                            matrix_values_are_valid,
+                            matrix_diagonal_gain_is_valid,
+                            interaction_matrix[0],
+                            interaction_matrix[5],
+                            snapshot.matrix_update_count,
+                            snapshot.matrix_is_warm
+                        );
                     }
                 }
                 new_ctx.tuner.matrix_update_count = snapshot.matrix_update_count;
-                new_ctx.tuner.matrix_is_warm = new_ctx.tuner.matrix_update_count >= 10;
+                new_ctx.tuner.matrix_is_warm =
+                    snapshot.matrix_is_warm || new_ctx.tuner.matrix_update_count >= 10;
                 new_ctx.tuner.state = TunerState::from_u8(snapshot.tuner_state);
                 new_ctx.last_water_change_sec = snapshot.last_water_change_sec;
                 new_ctx.dosing.retry_ec = snapshot.retry_ec;
@@ -218,6 +240,23 @@ pub fn start_fsm_control_loop(
                 new_ctx.dosing_cycle_count = snapshot.dosing_cycle_count;
             }
         }
+    }
+
+    if !new_ctx.tuner.matrix_is_warm {
+        let config = shared_config.read().unwrap().clone();
+        if config.ec_gain_per_ml > 0.0 && config.ph_shift_up_per_ml > 0.0 {
+            new_ctx.tuner.interaction_matrix = InteractionMatrix::from_scalar(
+                config.ec_gain_per_ml,
+                config.ph_shift_up_per_ml,
+            );
+            info!(
+                "🧊 Cold matrix boot: re-seeded interaction matrix from shared_config (ec_gain_per_ml={}, ph_shift_up_per_ml={})",
+                config.ec_gain_per_ml,
+                config.ph_shift_up_per_ml
+            );
+        }
+    } else {
+        info!("🔥 Warm restore: keeping restored interaction matrix from NVS snapshot");
     }
 
     info!("🚀 Bắt đầu chạy Máy trạng thái (FSM) Đa luồng Hợp nhất...");

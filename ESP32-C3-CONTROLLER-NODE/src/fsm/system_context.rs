@@ -151,6 +151,8 @@ pub struct NvsSnapshot {
     pub interaction_matrix: Option<[f32; 6]>,
     #[serde(default)]
     pub matrix_update_count: u32,
+    #[serde(default)]
+    pub matrix_is_warm: bool,
 }
 
 pub struct ConvergenceTracker {
@@ -240,8 +242,8 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            interaction_matrix: InteractionMatrix::from_scalar(0.0, 0.0),
-            kalman: KalmanCovarianceDiag::new(0.0, 0.0, 0.0),
+            interaction_matrix: InteractionMatrix::from_scalar(0.015, 0.02),
+            kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1),
             matrix_update_count: 0,
             matrix_is_warm: false,
         }
@@ -348,6 +350,8 @@ impl AutoTuner {
         config: &hydragrow_shared::ControllerConfig,
         now_ms: u64,
     ) -> String {
+        let flat = self.interaction_matrix.as_flat();
+
         serde_json::json!({
             "type": "runtime_calibration_update",
             "device_id": device_id,
@@ -360,9 +364,14 @@ impl AutoTuner {
                 "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
                 "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
                 "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
-                "interaction_matrix": self.interaction_matrix.as_flat(),
+                "interaction_matrix": flat,
                 "matrix_update_count": self.matrix_update_count,
                 "matrix_is_warm": self.matrix_is_warm,
+                "kalman_confidence": [
+                    self.gain_learner.ec.confidence,
+                    self.gain_learner.ph_up.confidence,
+                    self.gain_learner.ph_down.confidence,
+                ],
             },
             "timestamp_ms": now_ms
         })
@@ -429,6 +438,7 @@ impl NvsSnapshot {
             ph_variance_baseline: ctx.tuner.ph_variance_baseline,
             interaction_matrix: Some(ctx.tuner.interaction_matrix.as_flat()),
             matrix_update_count: ctx.tuner.matrix_update_count,
+            matrix_is_warm: ctx.tuner.matrix_is_warm,
         }
     }
 }
@@ -730,8 +740,7 @@ impl AutoTuner {
                 (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5;
             self.ph_variance_baseline = ph_var.max(1e-6);
         }
-        // Single source of truth for warm/cold path is matrix_update_count.
-        self.matrix_is_warm = self.matrix_update_count >= 10;
+        // EMA readiness != matrix RLS readiness; matrix_is_warm is updated by RLS/restore flow.
     }
     fn is_degraded(&self) -> bool {
         let ec_degraded = self.ec_variance_baseline > 0.0
@@ -742,4 +751,3 @@ impl AutoTuner {
         ec_degraded || ph_degraded
     }
 }
-

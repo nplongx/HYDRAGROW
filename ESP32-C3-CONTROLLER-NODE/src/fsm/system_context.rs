@@ -55,13 +55,42 @@ pub struct AutoTuner {
     pub gain_learner: GainLearner,
     pub ec_variance_baseline: f32,
     pub ph_variance_baseline: f32,
-    pub kalman: KalmanState,
+    pub interaction_matrix: InteractionMatrix,
+    pub kalman: KalmanCovarianceDiag,
     pub matrix_update_count: u32,
     pub matrix_is_warm: bool,
 }
 
-pub struct KalmanState {
-    pub g: [[f32; 3]; 2],
+pub struct InteractionMatrix {
+    pub ec_to_ec: f32,
+    pub ec_to_ph: f32,
+    pub ph_to_ec: f32,
+    pub ph_to_ph: f32,
+}
+
+impl InteractionMatrix {
+    pub fn from_scalar(value: f32) -> Self {
+        Self {
+            ec_to_ec: value,
+            ec_to_ph: value,
+            ph_to_ec: value,
+            ph_to_ph: value,
+        }
+    }
+}
+
+pub struct KalmanCovarianceDiag {
+    pub ec_variance: f32,
+    pub ph_variance: f32,
+}
+
+impl KalmanCovarianceDiag {
+    pub fn new() -> Self {
+        Self {
+            ec_variance: 1.0,
+            ph_variance: 1.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -116,6 +145,10 @@ pub struct NvsSnapshot {
     pub ec_variance_baseline: f32,
     #[serde(default)]
     pub ph_variance_baseline: f32,
+    #[serde(default)]
+    pub interaction_matrix: Option<[f32; 6]>,
+    #[serde(default)]
+    pub matrix_update_count: u32,
 }
 
 pub struct ConvergenceTracker {
@@ -205,7 +238,8 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            kalman: KalmanState::default(),
+            interaction_matrix: InteractionMatrix::from_scalar(0.0),
+            kalman: KalmanCovarianceDiag::new(),
             matrix_update_count: 0,
             matrix_is_warm: false,
         }
@@ -388,6 +422,8 @@ impl NvsSnapshot {
             tuner_state: ctx.tuner.state.as_u8(),
             ec_variance_baseline: ctx.tuner.ec_variance_baseline,
             ph_variance_baseline: ctx.tuner.ph_variance_baseline,
+            interaction_matrix: Some(ctx.tuner.interaction_matrix.as_flat()),
+            matrix_update_count: ctx.tuner.matrix_update_count,
         }
     }
 }
@@ -429,6 +465,14 @@ impl Default for GainLearner {
             ec: SingleGainLearner::default(),
             ph_up: SingleGainLearner::default(),
             ph_down: SingleGainLearner::default(),
+        }
+    }
+}
+
+impl Default for InteractionMatrix {
+    fn default() -> Self {
+        Self {
+            values: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
         }
     }
 }

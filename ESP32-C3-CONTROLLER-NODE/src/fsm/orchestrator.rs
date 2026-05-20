@@ -18,7 +18,8 @@ use super::{
     phases::{FaultCode, SystemPhase},
     system_context::{AutoTuner, NvsSnapshot, SystemContext},
     types::PendingCalibrationSample,
-    utils::{send_system_log, soft_deadband_scale},
+    optimizer::apply_deadband,
+    utils::send_system_log,
 };
 
 enum OrchestratorDecision {
@@ -49,20 +50,18 @@ struct MonitoringMatrixResult {
     ph_agent_ml: f32,
 }
 
-struct DoseOptimizer;
-
-impl DoseOptimizer {
+impl MonitoringMatrixResult {
     fn solve(
         ec_delta: f32,
         ph_delta: f32,
         config: &ControllerConfig,
         ctx: &SystemContext,
-    ) -> MonitoringMatrixResult {
+    ) -> Self {
         let mut pump_a_ml = 0.0;
         let mut ph_agent_ml = 0.0;
 
         if ec_delta > config.ec_tolerance {
-            let deadband_scale = soft_deadband_scale(ec_delta, config.ec_tolerance);
+            let deadband_scale = apply_deadband(ec_delta, config.ec_tolerance);
             let step_ratio = if ctx.tuner.is_locked() {
                 ctx.tuner.best_ec_ratio
             } else {
@@ -80,7 +79,7 @@ impl DoseOptimizer {
         if ph_delta.abs() > config.ph_tolerance {
             let is_up = ph_delta > 0.0;
             let delta = ph_delta.abs();
-            let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
+            let deadband_scale = apply_deadband(delta, config.ph_tolerance);
             let step_ratio = if ctx.tuner.is_locked() {
                 ctx.tuner.best_ph_ratio
             } else {
@@ -102,7 +101,7 @@ impl DoseOptimizer {
             ph_agent_ml = if is_up { dose_ml } else { -dose_ml };
         }
 
-        MonitoringMatrixResult {
+        Self {
             pump_a_ml,
             ph_agent_ml,
         }
@@ -241,7 +240,7 @@ fn decide_monitoring_matrix(
 
     if !ctx.tuner.matrix_is_warm {
         if config.enable_ec_sensor && ec_val < (config.ec_target - config.ec_tolerance) {
-            let deadband_scale = soft_deadband_scale(ec_delta, config.ec_tolerance);
+            let deadband_scale = apply_deadband(ec_delta, config.ec_tolerance);
             let step_ratio = if ctx.tuner.is_locked() {
                 ctx.tuner.best_ec_ratio
             } else {
@@ -266,7 +265,7 @@ fn decide_monitoring_matrix(
         if config.enable_ph_sensor {
             if ph_val > (config.ph_target + config.ph_tolerance) {
                 let delta = (ph_val - config.ph_target).max(0.0);
-                let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
+                let deadband_scale = apply_deadband(delta, config.ph_tolerance);
                 let step_ratio = if ctx.tuner.is_locked() {
                     ctx.tuner.best_ph_ratio
                 } else {
@@ -289,7 +288,7 @@ fn decide_monitoring_matrix(
                 }
             } else if ph_val < (config.ph_target - config.ph_tolerance) {
                 let delta = (config.ph_target - ph_val).max(0.0);
-                let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
+                let deadband_scale = apply_deadband(delta, config.ph_tolerance);
                 let step_ratio = if ctx.tuner.is_locked() {
                     ctx.tuner.best_ph_ratio
                 } else {
@@ -316,7 +315,7 @@ fn decide_monitoring_matrix(
         return OrchestratorDecision::Idle;
     }
 
-    let optimized = DoseOptimizer::solve(ec_delta, ph_delta, config, ctx);
+    let optimized = MonitoringMatrixResult::solve(ec_delta, ph_delta, config, ctx);
 
     if config.enable_ec_sensor && optimized.pump_a_ml > 0.0 {
         return OrchestratorDecision::StartEcDosing {

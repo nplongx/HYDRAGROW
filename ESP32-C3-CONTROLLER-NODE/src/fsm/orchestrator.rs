@@ -832,8 +832,17 @@ pub fn tick(
                                 mqtt_tx,
                                 &config.device_id,
                             );
-                            let _ =
-                                mqtt_tx.send("[ORCH] ph_ack_failed_after_3_retries".to_string());
+                            // let _ =
+                            //     mqtt_tx.send("[ORCH] ph_ack_failed_after_3_retries".to_string());
+                            if ctx.dosing.retry_ec >= 3 {
+                                set_fault_with_log(
+                                    ctx,
+                                    FaultCode::PhDosingFailed,
+                                    mqtt_tx,
+                                    &config.device_id,
+                                );
+                                return;
+                            }
                             return;
                         }
                     } else {

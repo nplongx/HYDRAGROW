@@ -431,9 +431,17 @@ fn update_interaction_matrix(
     // 2. Định nghĩa hệ số Kalman Gain (K) cho từng kênh dựa trên cấu trúc `KalmanCovarianceDiag`
     // Do `kalman.p` của bạn là [f32; 3], ta tính toán độ lợi K tương ứng cho từng giếng bơm:
     // Index 0: Nutrient A, Index 1: Nutrient B (nếu có), Index 2: pH Agent
-    let k_a = tuner.kalman.p[0] / (tuner.kalman.p[0] + tuner.kalman.r);
-    let k_b = tuner.kalman.p[1] / (tuner.kalman.p[1] + tuner.kalman.r);
-    let k_ph = tuner.kalman.p[2] / (tuner.kalman.p[2] + tuner.kalman.r);
+    let safe_gain = |p: f32, r: f32| {
+        let denom = p + r;
+        if denom.abs() <= f32::EPSILON {
+            0.0
+        } else {
+            (p / denom).clamp(0.0, 1.0)
+        }
+    };
+    let k_a = safe_gain(tuner.kalman.p[0], tuner.kalman.r);
+    let k_b = safe_gain(tuner.kalman.p[1], tuner.kalman.r);
+    let k_ph = safe_gain(tuner.kalman.p[2], tuner.kalman.r);
 
     // 3. Cập nhật các cột trong ma trận tương tác (InteractionMatrix) bằng hàm `.update_column`
     // update_column(col, dose_ml, observed_delta, row, gain_k)
@@ -464,9 +472,7 @@ fn update_interaction_matrix(
 
     // 4. Cập nhật trạng thái Warm-up của ma trận
     tuner.matrix_update_count = tuner.matrix_update_count.saturating_add(1);
-    if tuner.matrix_update_count >= 10 {
-        tuner.matrix_is_warm = true;
-    }
+    tuner.matrix_is_warm = tuner.matrix_update_count >= 10;
 }
 
 fn apply_decision(

@@ -360,6 +360,9 @@ impl AutoTuner {
                 "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
                 "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
                 "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
+                "interaction_matrix": self.interaction_matrix.as_flat(),
+                "matrix_update_count": self.matrix_update_count,
+                "matrix_is_warm": self.matrix_is_warm,
             },
             "timestamp_ms": now_ms
         })
@@ -727,7 +730,8 @@ impl AutoTuner {
                 (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5;
             self.ph_variance_baseline = ph_var.max(1e-6);
         }
-        self.matrix_is_warm = ec_ready && ph_ready;
+        // Single source of truth for warm/cold path is matrix_update_count.
+        self.matrix_is_warm = self.matrix_update_count >= 10;
     }
     fn is_degraded(&self) -> bool {
         let ec_degraded = self.ec_variance_baseline > 0.0

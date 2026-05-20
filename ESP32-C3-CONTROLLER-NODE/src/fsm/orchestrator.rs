@@ -422,10 +422,15 @@ fn update_interaction_matrix(
     post_ec: f32,
     post_ph: f32,
 ) {
+    let ec_dose_ml = sample.dose_a_ml + sample.dose_b_ml;
+    let ph_dose_ml = sample.dose_ph_up_ml + sample.dose_ph_down_ml;
+    if ec_dose_ml <= 0.0 && ph_dose_ml <= 0.0 {
+        return;
+    }
+
     let observed_delta_ec = post_ec - sample.start_ec;
     let observed_delta_ph = post_ph - sample.start_ph;
 
-    // 1. Dự đoán trạng thái hiệp biến Kalman (Q tăng)
     tuner.kalman.predict();
 
     // 2. Định nghĩa hệ số Kalman Gain (K) cho từng kênh dựa trên cấu trúc `KalmanCovarianceDiag`
@@ -464,12 +469,23 @@ fn update_interaction_matrix(
             .update_column(2, net_ph_dose_ml, observed_delta_ph, 1, k_ph);
     }
 
-    // 4. Cập nhật trạng thái Warm-up của ma trận
     tuner.matrix_update_count = tuner.matrix_update_count.saturating_add(1);
-    if tuner.matrix_update_count >= 10 {
-        tuner.matrix_is_warm = true;
-    }
+    tuner.matrix_is_warm = tuner.matrix_update_count >= 10;
+
+    let data = tuner.interaction_matrix.data;
+    log::debug!(
+        "[ORCH] Interaction matrix updated: ec_a={:.6}, ec_b={:.6}, ec_ph={:.6}, ph_a={:.6}, ph_b={:.6}, ph_ph={:.6}, updates={}, warm={}",
+        data[0][0],
+        data[0][1],
+        data[0][2],
+        data[1][0],
+        data[1][1],
+        data[1][2],
+        tuner.matrix_update_count,
+        tuner.matrix_is_warm,
+    );
 }
+
 
 fn apply_decision(
     decision: OrchestratorDecision,

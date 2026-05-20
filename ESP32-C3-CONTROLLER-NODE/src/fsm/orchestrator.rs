@@ -44,6 +44,72 @@ enum OrchestratorDecision {
     Fault(FaultCode),
 }
 
+
+struct MonitoringMatrixResult {
+    pump_a_ml: f32,
+    ph_agent_ml: f32,
+}
+
+struct DoseOptimizer;
+
+impl DoseOptimizer {
+    fn solve(
+        ec_delta: f32,
+        ph_delta: f32,
+        config: &ControllerConfig,
+        ctx: &SystemContext,
+    ) -> MonitoringMatrixResult {
+        let mut pump_a_ml = 0.0;
+        let mut ph_agent_ml = 0.0;
+
+        if ec_delta > config.ec_tolerance {
+            let deadband_scale = soft_deadband_scale(ec_delta, config.ec_tolerance);
+            let step_ratio = if ctx.tuner.is_locked() {
+                ctx.tuner.best_ec_ratio
+            } else {
+                ctx.tuner.active_ec_ratio()
+            };
+            let effective_gain = ctx
+                .tuner
+                .gain_learner
+                .effective_ec_gain(config.ec_gain_per_ml)
+                .max(0.0001);
+            pump_a_ml = (ec_delta / effective_gain * step_ratio * deadband_scale)
+                .clamp(0.0, config.max_dose_per_cycle);
+        }
+
+        if ph_delta.abs() > config.ph_tolerance {
+            let is_up = ph_delta > 0.0;
+            let delta = ph_delta.abs();
+            let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
+            let step_ratio = if ctx.tuner.is_locked() {
+                ctx.tuner.best_ph_ratio
+            } else {
+                ctx.tuner.adaptive_ph_ratio
+            };
+            let effective_gain = if is_up {
+                ctx.tuner
+                    .gain_learner
+                    .effective_ph_up_gain(config.ph_shift_up_per_ml)
+            } else {
+                ctx.tuner
+                    .gain_learner
+                    .effective_ph_down_gain(config.ph_shift_down_per_ml)
+            }
+            .max(0.0001);
+
+            let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
+                .clamp(0.0, config.max_dose_per_cycle);
+            ph_agent_ml = if is_up { dose_ml } else { -dose_ml };
+        }
+
+        MonitoringMatrixResult {
+            pump_a_ml,
+            ph_agent_ml,
+        }
+    }
+}
+
 fn check_scheduled_water_change(
     ctx: &mut SystemContext,
     config: &ControllerConfig,
@@ -164,6 +230,115 @@ fn check_scheduled_dosing(
     })
 }
 
+fn decide_monitoring_matrix(
+    sensors: &SensorData,
+    config: &ControllerConfig,
+    ctx: &SystemContext,
+) -> OrchestratorDecision {
+    let ec_val = sensors.ec as f32;
+    let ph_val = sensors.ph as f32;
+    let ec_delta = (config.ec_target - ec_val).max(0.0);
+    let ph_delta = config.ph_target - ph_val;
+
+    if !ctx.tuner.matrix_is_warm {
+        if config.enable_ec_sensor && ec_val < (config.ec_target - config.ec_tolerance) {
+            let deadband_scale = soft_deadband_scale(ec_delta, config.ec_tolerance);
+            let step_ratio = if ctx.tuner.is_locked() {
+                ctx.tuner.best_ec_ratio
+            } else {
+                ctx.tuner.active_ec_ratio()
+            };
+            let effective_gain = ctx
+                .tuner
+                .gain_learner
+                .effective_ec_gain(config.ec_gain_per_ml)
+                .max(0.0001);
+            let dose_ml = (ec_delta / effective_gain * step_ratio * deadband_scale)
+                .clamp(0.0, config.max_dose_per_cycle);
+            if dose_ml > 0.0 {
+                return OrchestratorDecision::StartEcDosing {
+                    dose_ml,
+                    target_ec: config.ec_target,
+                    pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
+                };
+            }
+        }
+
+        if config.enable_ph_sensor {
+            if ph_val > (config.ph_target + config.ph_tolerance) {
+                let delta = (ph_val - config.ph_target).max(0.0);
+                let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
+                let step_ratio = if ctx.tuner.is_locked() {
+                    ctx.tuner.best_ph_ratio
+                } else {
+                    ctx.tuner.adaptive_ph_ratio
+                };
+                let effective_gain = ctx
+                    .tuner
+                    .gain_learner
+                    .effective_ph_down_gain(config.ph_shift_down_per_ml)
+                    .max(0.0001);
+                let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
+                    .clamp(0.0, config.max_dose_per_cycle);
+                if dose_ml > 0.0 {
+                    return OrchestratorDecision::StartPhDosing {
+                        is_up: false,
+                        dose_ml,
+                        target_ph: config.ph_target,
+                        pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
+                    };
+                }
+            } else if ph_val < (config.ph_target - config.ph_tolerance) {
+                let delta = (config.ph_target - ph_val).max(0.0);
+                let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
+                let step_ratio = if ctx.tuner.is_locked() {
+                    ctx.tuner.best_ph_ratio
+                } else {
+                    ctx.tuner.adaptive_ph_ratio
+                };
+                let effective_gain = ctx
+                    .tuner
+                    .gain_learner
+                    .effective_ph_up_gain(config.ph_shift_up_per_ml)
+                    .max(0.0001);
+                let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
+                    .clamp(0.0, config.max_dose_per_cycle);
+                if dose_ml > 0.0 {
+                    return OrchestratorDecision::StartPhDosing {
+                        is_up: true,
+                        dose_ml,
+                        target_ph: config.ph_target,
+                        pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
+                    };
+                }
+            }
+        }
+
+        return OrchestratorDecision::Idle;
+    }
+
+    let optimized = DoseOptimizer::solve(ec_delta, ph_delta, config, ctx);
+
+    if config.enable_ec_sensor && optimized.pump_a_ml > 0.0 {
+        return OrchestratorDecision::StartEcDosing {
+            dose_ml: optimized.pump_a_ml,
+            target_ec: config.ec_target,
+            pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
+        };
+    }
+
+    if config.enable_ph_sensor && optimized.ph_agent_ml.abs() >= config.dosing_min_dose_ml {
+        return OrchestratorDecision::StartPhDosing {
+            is_up: optimized.ph_agent_ml.is_sign_positive(),
+            dose_ml: optimized.ph_agent_ml.abs(),
+            target_ph: config.ph_target,
+            pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
+        };
+    }
+
+    OrchestratorDecision::Idle
+}
+
 fn decide_monitoring(
     sensors: &SensorData,
     config: &ControllerConfig,
@@ -172,7 +347,6 @@ fn decide_monitoring(
 ) -> OrchestratorDecision {
     let w_level = sensors.water_level as f32; // f64 -> f32
     let ec_val = sensors.ec as f32; // f64 -> f32
-    let ph_val = sensors.ph as f32; // f64 -> f32
 
     if config.enable_water_level_sensor && w_level < 0.0 {
         return OrchestratorDecision::Fault(FaultCode::SensorTimeout);
@@ -197,30 +371,6 @@ fn decide_monitoring(
         };
     }
 
-    if config.enable_ec_sensor && ec_val < (config.ec_target - config.ec_tolerance) {
-        let delta = (config.ec_target - ec_val).max(0.0);
-        let deadband_scale = soft_deadband_scale(delta, config.ec_tolerance);
-        let step_ratio = if ctx.tuner.is_locked() {
-            ctx.tuner.best_ec_ratio
-        } else {
-            ctx.tuner.active_ec_ratio()
-        };
-        let effective_gain = ctx
-            .tuner
-            .gain_learner
-            .effective_ec_gain(config.ec_gain_per_ml)
-            .max(0.0001);
-        let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
-            .clamp(0.0, config.max_dose_per_cycle);
-        if dose_ml > 0.0 {
-            return OrchestratorDecision::StartEcDosing {
-                dose_ml,
-                target_ec: config.ec_target,
-                pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
-            };
-        }
-    }
-
     if config.enable_ec_sensor
         && config.enable_water_level_sensor
         && config.auto_dilute_enabled
@@ -232,57 +382,7 @@ fn decide_monitoring(
         };
     }
 
-    if config.enable_ph_sensor {
-        if ph_val > (config.ph_target + config.ph_tolerance) {
-            let delta = (ph_val - config.ph_target).max(0.0);
-            let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
-            let step_ratio = if ctx.tuner.is_locked() {
-                ctx.tuner.best_ph_ratio
-            } else {
-                ctx.tuner.adaptive_ph_ratio
-            };
-            let effective_gain = ctx
-                .tuner
-                .gain_learner
-                .effective_ph_down_gain(config.ph_shift_down_per_ml)
-                .max(0.0001);
-            let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
-                .clamp(0.0, config.max_dose_per_cycle);
-            if dose_ml > 0.0 {
-                return OrchestratorDecision::StartPhDosing {
-                    is_up: false,
-                    dose_ml,
-                    target_ph: config.ph_target,
-                    pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
-                };
-            }
-        } else if ph_val < (config.ph_target - config.ph_tolerance) {
-            let delta = (config.ph_target - ph_val).max(0.0);
-            let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
-            let step_ratio = if ctx.tuner.is_locked() {
-                ctx.tuner.best_ph_ratio
-            } else {
-                ctx.tuner.adaptive_ph_ratio
-            };
-            let effective_gain = ctx
-                .tuner
-                .gain_learner
-                .effective_ph_up_gain(config.ph_shift_up_per_ml)
-                .max(0.0001);
-            let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
-                .clamp(0.0, config.max_dose_per_cycle);
-            if dose_ml > 0.0 {
-                return OrchestratorDecision::StartPhDosing {
-                    is_up: true,
-                    dose_ml,
-                    target_ph: config.ph_target,
-                    pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
-                };
-            }
-        }
-    }
-
-    OrchestratorDecision::Idle
+    decide_monitoring_matrix(sensors, config, ctx)
 }
 
 fn check_sensor_noise(

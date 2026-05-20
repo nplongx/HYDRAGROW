@@ -55,6 +55,7 @@ pub struct AutoTuner {
     pub gain_learner: GainLearner,
     pub ec_variance_baseline: f32,
     pub ph_variance_baseline: f32,
+    pub matrix_is_warm: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -109,6 +110,7 @@ pub struct NvsSnapshot {
     pub ec_variance_baseline: f32,
     #[serde(default)]
     pub ph_variance_baseline: f32,
+    pub matrix_is_warm: bool,
 }
 
 pub struct ConvergenceTracker {
@@ -198,6 +200,7 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
+            matrix_is_warm: false,
         }
     }
 }
@@ -647,18 +650,19 @@ impl AutoTuner {
         self.state = TunerState::Converging;
     }
     fn refresh_variance_baseline(&mut self) {
-        if self.gain_learner.ec.sample_count >= self.gain_learner.ec.min_samples
-            && self.ec_variance_baseline <= 0.0
-        {
+        let ec_ready = self.gain_learner.ec.sample_count >= self.gain_learner.ec.min_samples;
+        if ec_ready && self.ec_variance_baseline <= 0.0 {
             self.ec_variance_baseline = self.gain_learner.ec.variance.max(1e-6);
         }
         let ph_samples =
             self.gain_learner.ph_up.sample_count + self.gain_learner.ph_down.sample_count;
-        if ph_samples >= self.gain_learner.ph_up.min_samples && self.ph_variance_baseline <= 0.0 {
+        let ph_ready = ph_samples >= self.gain_learner.ph_up.min_samples;
+        if ph_ready && self.ph_variance_baseline <= 0.0 {
             let ph_var =
                 (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5;
             self.ph_variance_baseline = ph_var.max(1e-6);
         }
+        self.matrix_is_warm = ec_ready && ph_ready;
     }
     fn is_degraded(&self) -> bool {
         let ec_degraded = self.ec_variance_baseline > 0.0

@@ -56,21 +56,40 @@ pub struct AutoTuner {
     pub ec_variance_baseline: f32,
     pub ph_variance_baseline: f32,
     pub interaction_matrix: InteractionMatrix,
+    pub kalman: KalmanCovarianceDiag,
     pub matrix_update_count: u32,
     pub matrix_is_warm: bool,
 }
 
 pub struct InteractionMatrix {
-    values: [f32; 6],
+    pub ec_to_ec: f32,
+    pub ec_to_ph: f32,
+    pub ph_to_ec: f32,
+    pub ph_to_ph: f32,
 }
 
 impl InteractionMatrix {
-    pub fn as_flat(&self) -> [f32; 6] {
-        self.values
+    pub fn from_scalar(value: f32) -> Self {
+        Self {
+            ec_to_ec: value,
+            ec_to_ph: value,
+            ph_to_ec: value,
+            ph_to_ph: value,
+        }
     }
+}
 
-    pub fn from_flat(values: [f32; 6]) -> Self {
-        Self { values }
+pub struct KalmanCovarianceDiag {
+    pub ec_variance: f32,
+    pub ph_variance: f32,
+}
+
+impl KalmanCovarianceDiag {
+    pub fn new() -> Self {
+        Self {
+            ec_variance: 1.0,
+            ph_variance: 1.0,
+        }
     }
 }
 
@@ -219,7 +238,8 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            interaction_matrix: InteractionMatrix::default(),
+            interaction_matrix: InteractionMatrix::from_scalar(0.0),
+            kalman: KalmanCovarianceDiag::new(),
             matrix_update_count: 0,
             matrix_is_warm: false,
         }

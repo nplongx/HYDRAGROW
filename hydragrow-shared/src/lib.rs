@@ -89,8 +89,6 @@ pub struct MqttCommandOut {
     pub params: Option<MqttCommandParams>,
 }
 
-
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MqttCommandIn {
     pub action: String,
@@ -435,6 +433,31 @@ pub enum LogCategory {
     UserAction,  // Can thiệp thủ công từ App/Web
 }
 
+impl LogLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Info => "info",
+            Self::Success => "success",
+            Self::Warning => "warning",
+            Self::Critical => "critical",
+        }
+    }
+}
+
+impl LogCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Dosing => "dosing",
+            Self::Water => "water",
+            Self::Calibration => "calibration",
+            Self::Sensor => "sensor",
+            Self::Alert => "alert",
+            Self::UserAction => "user_action",
+        }
+    }
+}
+
 /// Metadata cho các sự kiện Cấp/Xả nước
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaterMetadata {
@@ -497,9 +520,6 @@ pub struct BasicSystemLogMetadata {
 pub enum SystemLogEvent {
     WaterEvent(WaterMetadata),
 
-    // Sử dụng lại struct DosingReportPayload bạn đã định nghĩa
-    DosingCycleComplete(DosingReportPayload),
-
     SystemAlert(AlertMetadata),
 
     CalibrationUpdate(CalibrationMetadata),
@@ -520,6 +540,10 @@ pub struct UnifiedSystemLog {
 }
 
 impl UnifiedSystemLog {
+    pub fn mqtt_topic_suffix() -> &'static str {
+        "system_log"
+    }
+
     pub fn info(
         device_id: impl Into<String>,
         category: LogCategory,
@@ -589,7 +613,6 @@ impl UnifiedSystemLog {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControllerHealthPayload {
     pub free_heap: u32,
@@ -601,13 +624,29 @@ pub struct ControllerHealthPayload {
 impl ControllerConfig {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.ec_target <= 0.0 || self.ec_target > 10.0 { errors.push("ec_target phải trong khoảng (0, 10]".into()); }
-        if self.ec_tolerance < 0.0 || self.ec_tolerance >= self.ec_target { errors.push("ec_tolerance phải >= 0 và < ec_target".into()); }
-        if self.ph_target < 0.0 || self.ph_target > 14.0 { errors.push("ph_target phải trong khoảng [0, 14]".into()); }
-        if self.dosing_pwm_percent < 1 || self.dosing_pwm_percent > 100 { errors.push("dosing_pwm_percent phải trong [1, 100]".into()); }
-        if self.dosing_min_pwm_percent > self.dosing_pwm_percent { errors.push("dosing_min_pwm_percent không được vượt dosing_pwm_percent".into()); }
-        if self.pump_a_capacity_ml_per_sec <= 0.0 { errors.push("pump_a_capacity_ml_per_sec phải > 0".into()); }
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        if self.ec_target <= 0.0 || self.ec_target > 10.0 {
+            errors.push("ec_target phải trong khoảng (0, 10]".into());
+        }
+        if self.ec_tolerance < 0.0 || self.ec_tolerance >= self.ec_target {
+            errors.push("ec_tolerance phải >= 0 và < ec_target".into());
+        }
+        if self.ph_target < 0.0 || self.ph_target > 14.0 {
+            errors.push("ph_target phải trong khoảng [0, 14]".into());
+        }
+        if self.dosing_pwm_percent < 1 || self.dosing_pwm_percent > 100 {
+            errors.push("dosing_pwm_percent phải trong [1, 100]".into());
+        }
+        if self.dosing_min_pwm_percent > self.dosing_pwm_percent {
+            errors.push("dosing_min_pwm_percent không được vượt dosing_pwm_percent".into());
+        }
+        if self.pump_a_capacity_ml_per_sec <= 0.0 {
+            errors.push("pump_a_capacity_ml_per_sec phải > 0".into());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 
@@ -615,7 +654,10 @@ impl DosingReportPayload {
     pub fn to_metadata_json(&self) -> serde_json::Value {
         let mut v = serde_json::to_value(self).unwrap_or_default();
         if let Some(obj) = v.as_object_mut() {
-            obj.insert("event_type".into(), serde_json::Value::String("dosing_cycle".into()));
+            obj.insert(
+                "event_type".into(),
+                serde_json::Value::String("dosing_cycle".into()),
+            );
         }
         v
     }

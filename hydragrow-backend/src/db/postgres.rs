@@ -458,6 +458,8 @@ pub async fn get_system_events(
     device_id: &str,
     categories: &[String],
     limit: i64,
+    before_timestamp: Option<i64>,
+    level: Option<String>,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
         r#"
@@ -465,6 +467,8 @@ pub async fn get_system_events(
         FROM system_events
         WHERE device_id = $1
           AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
+          AND ($4::bigint IS NULL OR timestamp < $4)
+          AND ($5::text IS NULL OR level = $5)
         ORDER BY timestamp DESC
         LIMIT $3
         "#,
@@ -472,6 +476,8 @@ pub async fn get_system_events(
     .bind(device_id)
     .bind(categories)
     .bind(limit)
+    .bind(before_timestamp)
+    .bind(level)
     .fetch_all(pool)
     .await
 }

@@ -1,5 +1,5 @@
 use actix_web::web;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
@@ -24,15 +24,6 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     };
 
     let parsed_fsm_state = serde_json::from_slice::<FsmStatePayload>(payload).ok();
-
-    if json.get("level").is_some() && json.get("category").is_some() && json.get("event").is_some()
-    {
-        warn!("⚠️ [MQTT-FSM] Firmware gửi System Log vào topic FSM. Đang Forward...");
-
-        crate::mqtt::handlers::system_log::handle(device_id, payload, app_state).await;
-
-        return;
-    }
 
     // -----------------------------------------------------------------------
     // THÊM MỚI: Bắt payload yêu cầu cập nhật hệ số Calibration (EMA) vào DB
@@ -97,11 +88,16 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
 
     // 2. Trích xuất trường current_state cho các bản tin FSM bình thường
     let (state, pump_status, budgets) = if let Some(fsm_state) = parsed_fsm_state {
-        let state = match serde_json::from_str::<SystemPhase>(&format!(""{}"", fsm_state.current_state)) {
-            Ok(phase) => format!("{:?}", phase),
-            Err(_) => fsm_state.current_state,
-        };
-        (state, serde_json::to_value(fsm_state.pump_status).unwrap_or_else(|_| json!({})), serde_json::to_value(fsm_state.budgets).unwrap_or_else(|_| json!({})))
+        let state =
+            match serde_json::from_str::<SystemPhase>(&format!(""{}"", fsm_state.current_state)) {
+                Ok(phase) => format!("{:?}", phase),
+                Err(_) => fsm_state.current_state,
+            };
+        (
+            state,
+            serde_json::to_value(fsm_state.pump_status).unwrap_or_else(|_| json!({})),
+            serde_json::to_value(fsm_state.budgets).unwrap_or_else(|_| json!({})),
+        )
     } else {
         let state = match json.get("current_state").and_then(|s| s.as_str()) {
             Some(s) => s.to_string(),
@@ -115,7 +111,9 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         };
         (
             state,
-            json.get("pump_status").cloned().unwrap_or_else(|| json!({})),
+            json.get("pump_status")
+                .cloned()
+                .unwrap_or_else(|| json!({})),
             json.get("budgets").cloned().unwrap_or_else(|| json!({})),
         )
     };
@@ -129,7 +127,13 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         "pump_status": pump_status,
     });
 
-    let _ = app_state.event_bus.send(AppEvent::FsmTransition(FsmTransitionPayload { device_id: device_id.clone(), state: state.clone(), pump_status: serde_json::from_value(pump_status.clone()).ok() }));
+    let _ = app_state
+        .event_bus
+        .send(AppEvent::FsmTransition(FsmTransitionPayload {
+            device_id: device_id.clone(),
+            state: state.clone(),
+            pump_status: serde_json::from_value(pump_status.clone()).ok(),
+        }));
 
     // 4. Cập nhật fsm_state vào bộ nhớ đệm (Cache tĩnh) của AppState
     let mut states = app_state.device_states.write().await;

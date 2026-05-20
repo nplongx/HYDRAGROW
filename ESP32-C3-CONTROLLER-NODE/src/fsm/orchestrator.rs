@@ -788,14 +788,6 @@ pub fn tick(
                     if let Ok(json) = serde_json::to_string(&report) {
                         let _ = dosing_report_tx.send(json);
                     }
-                    send_system_log(
-                        mqtt_tx,
-                        &config.device_id,
-                        LogLevel::Success,
-                        LogCategory::Dosing,
-                        "Hoàn tất chu kỳ châm phân",
-                        SystemLogEvent::DosingCycleComplete(report),
-                    );
                     let calibration_payload =
                         ctx.tuner.to_mqtt_payload(&config.device_id, config, now_ms);
                     let _ = mqtt_tx.send(calibration_payload);

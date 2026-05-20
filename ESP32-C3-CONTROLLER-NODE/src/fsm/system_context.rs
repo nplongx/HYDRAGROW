@@ -346,6 +346,19 @@ impl AutoTuner {
         config: &hydragrow_shared::ControllerConfig,
         now_ms: u64,
     ) -> String {
+        let ec_gain = self.gain_learner.effective_ec_gain(config.ec_gain_per_ml);
+        let ph_up_gain = self
+            .gain_learner
+            .effective_ph_up_gain(config.ph_shift_up_per_ml);
+        let ph_down_gain = self
+            .gain_learner
+            .effective_ph_down_gain(config.ph_shift_down_per_ml);
+        let ph_confidence = self
+            .gain_learner
+            .ph_up
+            .confidence
+            .max(self.gain_learner.ph_down.confidence);
+
         serde_json::json!({
             "type": "runtime_calibration_update",
             "device_id": device_id,
@@ -355,9 +368,23 @@ impl AutoTuner {
                 "best_ec_ratio": self.best_ec_ratio,
                 "best_ph_ratio": self.best_ph_ratio,
                 "state": self.state as u8,
-                "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
-                "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
-                "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
+                "ec_gain_per_ml": ec_gain,
+                "ph_shift_up_per_ml": ph_up_gain,
+                "ph_shift_down_per_ml": ph_down_gain,
+                "interaction_matrix": {
+                    "data": [ec_gain, 0.0_f32, 0.0_f32, 0.0_f32, ph_up_gain, ph_down_gain],
+                    "layout": "row_major",
+                    "rows": 2,
+                    "cols": 3,
+                    "warm": self.gain_learner.ec.confidence >= 0.6 && ph_confidence >= 0.6,
+                    "update_count": self
+                        .gain_learner
+                        .ec
+                        .sample_count
+                        .saturating_add(self.gain_learner.ph_up.sample_count)
+                        .saturating_add(self.gain_learner.ph_down.sample_count),
+                },
+                "kalman_confidence": [self.gain_learner.ec.confidence, ph_confidence],
             },
             "timestamp_ms": now_ms
         })

@@ -109,18 +109,24 @@ impl KalmanCovarianceDiag {
         }
     }
 
-    pub fn update(&mut self, idx: usize) {
+    pub fn update_and_get_gain(&mut self, idx: usize) -> f32 {
         if idx >= self.p.len() {
-            return;
+            return 0.0;
         }
 
-        let p = self.p[idx];
+        let p = self.p[idx].max(0.0);
         let denom = p + self.r;
-        if denom <= 0.0 {
-            return;
+        if denom <= 1e-9 {
+            return 0.0;
         }
-        let k = p / denom;
-        self.p[idx] = ((1.0 - k) * p).max(0.0);
+
+        let k = (p / denom).clamp(0.0, 1.0);
+        self.p[idx] = ((1.0 - k) * p).max(1e-9);
+        k
+    }
+
+    pub fn update(&mut self, idx: usize) {
+        let _ = self.update_and_get_gain(idx);
     }
 
     pub fn confidence(&self, idx: usize) -> f32 {

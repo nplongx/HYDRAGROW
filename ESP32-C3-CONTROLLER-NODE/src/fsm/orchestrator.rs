@@ -443,17 +443,17 @@ fn update_interaction_matrix(
 
     // Hàng 0 là EC, Hàng 1 là pH
     if sample.dose_a_ml > 0.0 {
+        let k_a = tuner.kalman.update_and_get_gain(0);
         tuner
             .interaction_matrix
             .update_column(0, sample.dose_a_ml, observed_delta_ec, 0, k_a);
-        tuner.kalman.update(0); // Cập nhật lại P sau khi đo lường
     }
 
     if sample.dose_b_ml > 0.0 {
+        let k_b = tuner.kalman.update_and_get_gain(1);
         tuner
             .interaction_matrix
             .update_column(1, sample.dose_b_ml, observed_delta_ec, 0, k_b);
-        tuner.kalman.update(1);
     }
 
     let net_ph_dose_ml = sample.dose_ph_up_ml - sample.dose_ph_down_ml;
@@ -462,7 +462,6 @@ fn update_interaction_matrix(
         tuner
             .interaction_matrix
             .update_column(2, net_ph_dose_ml, observed_delta_ph, 1, k_ph);
-        tuner.kalman.update(2);
     }
 
     // 4. Cập nhật trạng thái Warm-up của ma trận

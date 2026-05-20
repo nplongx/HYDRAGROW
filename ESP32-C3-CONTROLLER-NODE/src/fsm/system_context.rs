@@ -240,8 +240,8 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            interaction_matrix: InteractionMatrix::from_scalar(0.0, 0.0),
-            kalman: KalmanCovarianceDiag::new(0.0, 0.0, 0.0),
+            interaction_matrix: InteractionMatrix::from_scalar(0.015, 0.02),
+            kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1),
             matrix_update_count: 0,
             matrix_is_warm: false,
         }

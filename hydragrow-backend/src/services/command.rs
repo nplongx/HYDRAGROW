@@ -7,8 +7,6 @@ use tracing::{info, instrument};
 
 #[derive(serde::Serialize, Deserialize, Debug)]
 pub struct CommandPayload {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub schema_version: Option<u16>,
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pump: Option<String>,
@@ -37,7 +35,6 @@ pub async fn send_command(
 
 pub async fn trigger_emergency_stop(app_state: &AppState, device_id: &str) -> Result<()> {
     let payload = CommandPayload {
-        schema_version: Some(CURRENT_SCHEMA_VERSION),
         action: "emergency_stop".to_string(),
         pump: None,
         duration_sec: None,

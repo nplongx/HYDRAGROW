@@ -6,10 +6,11 @@ use cron::Schedule;
 
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_shared::{
-    AlertMetadata, ControllerConfig, LogCategory, LogLevel, SystemLogEvent, WaterMetadata,
+    AlertMetadata, ControllerConfig, LogCategory, LogLevel, SensorData, SystemLogEvent,
+    WaterMetadata,
 };
 
-use crate::{mqtt::SensorData, pump::PumpController};
+use crate::pump::PumpController;
 
 use super::{
     actors::{dosing_actor::DosingEvent, water_actor::WaterEvent},
@@ -89,8 +90,9 @@ fn check_scheduled_water_change(
         let _ = flash.set_u64("last_w_change", now_sec);
     }
 
-    let target =
-        (sensors.water_level - config.scheduled_drain_amount_cm).max(config.water_level_min);
+    let w_level = sensors.water_level as f32; // f64 -> f32
+    let target = (w_level - config.scheduled_drain_amount_cm).max(config.water_level_min);
+
     Some(OrchestratorDecision::StartWaterDrain {
         target,
         trigger: "scheduled_change".to_string(),
@@ -134,7 +136,8 @@ fn check_scheduled_dosing(
         }
     }
 
-    let delta = (config.ec_target - sensors.ec).max(config.ec_tolerance * 0.5);
+    let ec_val = sensors.ec as f32; // f64 -> f32
+    let delta = (config.ec_target - ec_val).max(config.ec_tolerance * 0.5);
     let step_ratio = if ctx.tuner.is_locked() {
         ctx.tuner.best_ec_ratio
     } else {
@@ -167,13 +170,17 @@ fn decide_monitoring(
     ctx: &SystemContext,
     _now_ms: u64,
 ) -> OrchestratorDecision {
-    if config.enable_water_level_sensor && sensors.water_level < 0.0 {
+    let w_level = sensors.water_level as f32; // f64 -> f32
+    let ec_val = sensors.ec as f32; // f64 -> f32
+    let ph_val = sensors.ph as f32; // f64 -> f32
+
+    if config.enable_water_level_sensor && w_level < 0.0 {
         return OrchestratorDecision::Fault(FaultCode::SensorTimeout);
     }
 
     if config.enable_water_level_sensor
         && config.auto_drain_overflow
-        && sensors.water_level > config.water_level_max
+        && w_level > config.water_level_max
     {
         return OrchestratorDecision::StartWaterDrain {
             target: config.water_level_target,
@@ -183,15 +190,15 @@ fn decide_monitoring(
 
     if config.enable_water_level_sensor
         && config.auto_refill_enabled
-        && sensors.water_level < (config.water_level_target - config.water_level_tolerance)
+        && w_level < (config.water_level_target - config.water_level_tolerance)
     {
         return OrchestratorDecision::StartWaterFill {
             target: config.water_level_target,
         };
     }
 
-    if config.enable_ec_sensor && sensors.ec < (config.ec_target - config.ec_tolerance) {
-        let delta = (config.ec_target - sensors.ec).max(0.0);
+    if config.enable_ec_sensor && ec_val < (config.ec_target - config.ec_tolerance) {
+        let delta = (config.ec_target - ec_val).max(0.0);
         let deadband_scale = soft_deadband_scale(delta, config.ec_tolerance);
         let step_ratio = if ctx.tuner.is_locked() {
             ctx.tuner.best_ec_ratio
@@ -217,7 +224,7 @@ fn decide_monitoring(
     if config.enable_ec_sensor
         && config.enable_water_level_sensor
         && config.auto_dilute_enabled
-        && sensors.ec > (config.ec_target + config.ec_tolerance)
+        && ec_val > (config.ec_target + config.ec_tolerance)
     {
         return OrchestratorDecision::StartWaterDrain {
             target: config.water_level_target,
@@ -226,8 +233,8 @@ fn decide_monitoring(
     }
 
     if config.enable_ph_sensor {
-        if sensors.ph > (config.ph_target + config.ph_tolerance) {
-            let delta = (sensors.ph - config.ph_target).max(0.0);
+        if ph_val > (config.ph_target + config.ph_tolerance) {
+            let delta = (ph_val - config.ph_target).max(0.0);
             let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
             let step_ratio = if ctx.tuner.is_locked() {
                 ctx.tuner.best_ph_ratio
@@ -249,8 +256,8 @@ fn decide_monitoring(
                     pwm: config.dosing_pwm_percent.clamp(1, 100) as u32,
                 };
             }
-        } else if sensors.ph < (config.ph_target - config.ph_tolerance) {
-            let delta = (config.ph_target - sensors.ph).max(0.0);
+        } else if ph_val < (config.ph_target - config.ph_tolerance) {
+            let delta = (config.ph_target - ph_val).max(0.0);
             let deadband_scale = soft_deadband_scale(delta, config.ph_tolerance);
             let step_ratio = if ctx.tuner.is_locked() {
                 ctx.tuner.best_ph_ratio
@@ -284,25 +291,27 @@ fn check_sensor_noise(
     config: &ControllerConfig,
 ) -> bool {
     let mut is_noisy = false;
+    let ec_val = sensors.ec as f32;
+    let ph_val = sensors.ph as f32;
 
-    if config.enable_ec_sensor && !sensors.err_ec {
+    if config.enable_ec_sensor && !sensors.err_ec.unwrap_or(false) {
         if let Some(prev_ec) = ctx.peripherals.previous_ec {
-            let delta = (sensors.ec - prev_ec).abs();
+            let delta = (ec_val - prev_ec).abs();
             if delta > config.max_ec_delta {
                 is_noisy = true;
             }
         }
-        ctx.peripherals.previous_ec = Some(sensors.ec);
+        ctx.peripherals.previous_ec = Some(ec_val);
     }
 
-    if config.enable_ph_sensor && !sensors.err_ph {
+    if config.enable_ph_sensor && !sensors.err_ph.unwrap_or(false) {
         if let Some(prev_ph) = ctx.peripherals.previous_ph {
-            let delta = (sensors.ph - prev_ph).abs();
+            let delta = (ph_val - prev_ph).abs();
             if delta > config.max_ph_delta {
                 is_noisy = true;
             }
         }
-        ctx.peripherals.previous_ph = Some(sensors.ph);
+        ctx.peripherals.previous_ph = Some(ph_val);
     }
 
     is_noisy
@@ -314,6 +323,7 @@ fn apply_decision(
     config: &ControllerConfig,
     sensors: &SensorData,
     now_ms: u64,
+    mqtt_tx: &Sender<String>,
 ) {
     match decision {
         OrchestratorDecision::StartEcDosing {
@@ -331,7 +341,7 @@ fn apply_decision(
             ctx.dosing
                 .start_ec_cycle(now_ms, dose_ml, target_ec, pwm, config, sensors);
             ctx.phase = SystemPhase::DosingEC;
-            ctx.safety.last_ec_before_dose = Some(sensors.ec);
+            ctx.safety.last_ec_before_dose = Some(sensors.ec as f32);
         }
         OrchestratorDecision::StartPhDosing {
             is_up,
@@ -348,15 +358,9 @@ fn apply_decision(
             }
             ctx.dosing
                 .start_ph_cycle(now_ms, is_up, dose_ml, target_ph, pwm, config, sensors);
-            if ctx.tuner.oscillation_detector.record_ph_dose(is_up) {
-                ctx.tuner.adaptive_ph_ratio = (ctx.tuner.adaptive_ph_ratio * 0.5).clamp(0.1, 2.0);
-                if ctx.tuner.oscillation_detector.streak >= 3 {
-                    set_fault_with_log(ctx, FaultCode::PhOscillating, mqtt_tx, &config.device_id);
-                    return;
-                }
-            }
+
             ctx.phase = SystemPhase::DosingPH;
-            ctx.safety.last_ph_before_dose = Some(sensors.ph);
+            ctx.safety.last_ph_before_dose = Some(sensors.ph as f32);
             ctx.safety.last_ph_dose_up = Some(is_up);
         }
         OrchestratorDecision::StartWaterFill { target } => {
@@ -369,7 +373,7 @@ fn apply_decision(
             }
             ctx.water.start_fill(now_ms, target, sensors, "auto_refill");
             ctx.phase = SystemPhase::WaterRefilling;
-            ctx.safety.last_water_before_refill = Some(sensors.water_level);
+            ctx.safety.last_water_before_refill = Some(sensors.water_level as f32);
         }
         OrchestratorDecision::StartWaterDrain { target, trigger } => {
             if !ctx
@@ -425,6 +429,7 @@ pub fn tick(
     now_ms: u64,
     config: &ControllerConfig,
     sensors: &SensorData,
+    sensor_last_update_ms: u64, // THÊM: Biến phụ để biết lần cuối nhận dữ liệu cảm biến
     ctx: &mut SystemContext,
     pumps: &mut PumpController,
     nvs: &mut Option<EspDefaultNvs>,
@@ -432,7 +437,9 @@ pub fn tick(
     mqtt_tx: &Sender<String>,
 ) {
     let sensor_timeout_ms: u64 = 90_000;
-    let sensor_age_ms = now_ms.saturating_sub(sensors.last_update_ms);
+
+    let sensor_age_ms = now_ms.saturating_sub(sensor_last_update_ms);
+
     if sensor_age_ms > sensor_timeout_ms {
         if !matches!(ctx.phase, SystemPhase::Monitoring | SystemPhase::Cooldown) {
             set_fault_with_log(ctx, FaultCode::SensorTimeout, mqtt_tx, &config.device_id);
@@ -457,12 +464,12 @@ pub fn tick(
             let now_sec = now_ms / 1000;
             if let Some(decision) = check_scheduled_water_change(ctx, config, sensors, now_sec, nvs)
             {
-                apply_decision(decision, ctx, config, sensors, now_ms);
+                apply_decision(decision, ctx, config, sensors, now_ms, mqtt_tx);
             } else if let Some(decision) = check_scheduled_dosing(ctx, config, sensors, now_sec) {
-                apply_decision(decision, ctx, config, sensors, now_ms);
+                apply_decision(decision, ctx, config, sensors, now_ms, mqtt_tx);
             } else {
                 let decision = decide_monitoring(sensors, config, ctx, now_ms);
-                apply_decision(decision, ctx, config, sensors, now_ms);
+                apply_decision(decision, ctx, config, sensors, now_ms, mqtt_tx);
 
                 if matches!(ctx.phase, SystemPhase::Fault(_)) {
                     if let SystemPhase::Fault(code) = &ctx.phase {
@@ -497,9 +504,9 @@ pub fn tick(
                         ctx.calibration.start_sample(PendingCalibrationSample {
                             cycle_id: c.cycle_id,
                             trigger: c.trigger,
-                            start_ec: sensors.ec,
-                            start_ph: sensors.ph,
-                            start_water_level: sensors.water_level,
+                            start_ec: sensors.ec as f32,
+                            start_ph: sensors.ph as f32,
+                            start_water_level: sensors.water_level as f32,
                             target_ec: c.target_ec,
                             target_ph: c.target_ph,
                             dose_a_ml,
@@ -566,7 +573,7 @@ pub fn tick(
                                 .map(|x| x.0.clone())
                                 .unwrap_or_else(|| "unknown".to_string()),
                             level_before: water_log_ctx.as_ref().map(|x| x.1).unwrap_or(0.0),
-                            level_after: sensors.water_level,
+                            level_after: sensors.water_level as f32, // f64 -> f32
                             target_level: water_log_ctx.as_ref().map(|x| x.2).unwrap_or(0.0),
                             duration_sec,
                             success,
@@ -628,12 +635,12 @@ pub fn tick(
             if now_ms >= ctx.phase_finish_ms.unwrap_or(0) {
                 if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
                     sample.stabilizing_finish_ms = Some(now_ms);
-                    sample.post_mixing_ec = sensors.ec;
-                    sample.post_mixing_ph = sensors.ph;
+                    sample.post_mixing_ec = sensors.ec as f32; // f64 -> f32
+                    sample.post_mixing_ph = sensors.ph as f32; // f64 -> f32
                 }
 
                 if let Some(before) = ctx.safety.last_ec_before_dose {
-                    if sensors.ec < before + config.ec_ack_threshold {
+                    if (sensors.ec as f32) < before + config.ec_ack_threshold {
                         ctx.dosing.retry_ec = ctx.dosing.retry_ec.saturating_add(1);
                         if ctx.dosing.retry_ec >= 3 {
                             set_fault_with_log(
@@ -654,10 +661,11 @@ pub fn tick(
                 if let (Some(before), Some(is_up)) =
                     (ctx.safety.last_ph_before_dose, ctx.safety.last_ph_dose_up)
                 {
+                    let ph_val = sensors.ph as f32;
                     let moved = if is_up {
-                        sensors.ph - before
+                        ph_val - before
                     } else {
-                        before - sensors.ph
+                        before - ph_val
                     };
                     if moved < config.ph_ack_threshold {
                         ctx.dosing.retry_ph = ctx.dosing.retry_ph.saturating_add(1);
@@ -680,10 +688,11 @@ pub fn tick(
                 if let (Some(before), Some(is_up)) =
                     (ctx.safety.last_ph_before_dose, ctx.safety.last_ph_dose_up)
                 {
+                    let ph_val = sensors.ph as f32;
                     let ph_response = if is_up {
-                        sensors.ph - before
+                        ph_val - before
                     } else {
-                        before - sensors.ph
+                        before - ph_val
                     };
                     ctx.tuner.on_ph_dosing_ack(
                         ph_response,
@@ -705,7 +714,9 @@ pub fn tick(
                             config,
                         );
                     }
-                    let ph_response_signed = sensors.ph - sample.start_ph;
+
+                    let ph_val = sensors.ph as f32;
+                    let ph_response_signed = ph_val - sample.start_ph;
                     if sample.dose_ph_up_ml > 0.0 {
                         ctx.tuner.gain_learner.update_ph_gain(
                             sample.dose_ph_up_ml,
@@ -752,16 +763,16 @@ pub fn tick(
                             water_level: None,
                         },
                         post_stable: PhaseData {
-                            ec: sensors.ec,
-                            ph: sensors.ph,
+                            ec: sensors.ec as f32,
+                            ph: sensors.ph as f32,
                             water_level: None,
                         },
-                        delta_ec: sensors.ec - sample.start_ec,
-                        delta_ph: sensors.ph - sample.start_ph,
+                        delta_ec: (sensors.ec as f32) - sample.start_ec,
+                        delta_ph: (sensors.ph as f32) - sample.start_ph,
                         target_ec: sample.target_ec,
                         target_ph: sample.target_ph,
-                        error_ec: sample.target_ec - sensors.ec,
-                        error_ph: sample.target_ph - sensors.ph,
+                        error_ec: sample.target_ec - (sensors.ec as f32),
+                        error_ph: sample.target_ph - (sensors.ph as f32),
                         duration_ms: now_ms.saturating_sub(sample.start_ms),
                         ema_ec_gain_used: config.ec_gain_per_ml,
                         ema_ph_shift_used: if sample.dose_ph_up_ml > 0.0 {
@@ -798,6 +809,7 @@ pub fn tick(
                 }
 
                 ctx.phase = SystemPhase::Cooldown;
+                let effective_cooldown = config.cooldown_sec.max(0) as u64;
                 ctx.phase_finish_ms = Some(now_ms + effective_cooldown * 1000);
             }
         }

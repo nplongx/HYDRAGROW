@@ -1,11 +1,13 @@
-use hydragrow_shared::{BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel, SystemLogEvent};
+use hydragrow_shared::{
+    BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel,
+    MqttCommandPayload, SystemLogEvent,
+};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
 use super::phases::SystemPhase;
 use super::system_context::SystemContext;
 use crate::fsm::utils::send_system_log;
-use crate::mqtt::MqttCommandPayload;
 use crate::pump::{PumpController, PumpType, WaterDirection};
 
 // ---------------------------------------------------------------------------
@@ -76,7 +78,11 @@ pub fn process_mqtt_commands(
                     source: "fsm_command".to_string(),
                     message: format!(
                         "Nhận lệnh OTA từ MQTT. URL: {}. Firmware sẽ chuyển giao cho OTA task.",
-                        if ota_url.is_empty() { "<missing>" } else { ota_url }
+                        if ota_url.is_empty() {
+                            "<missing>"
+                        } else {
+                            ota_url
+                        }
                     ),
                     skip_reason: None,
                 }),
@@ -122,10 +128,7 @@ pub fn process_mqtt_commands(
         let is_force_on = action_lower == "force_on";
         let is_set_pwm = action_lower == "set_pwm";
         let pwm = cmd.params.as_ref().and_then(|p| p.pwm);
-        let duration_sec = cmd
-            .params
-            .as_ref()
-            .and_then(|p| p.duration_sec);
+        let duration_sec = cmd.params.as_ref().and_then(|p| p.duration_sec);
         let explicit_state = cmd.params.as_ref().and_then(|p| p.state);
 
         let mut is_on = is_force_on

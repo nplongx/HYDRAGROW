@@ -1,6 +1,5 @@
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{ControllerConfig, SensorData};
 
-use crate::mqtt::SensorData;
 use crate::pump::{PumpController, WaterDirection};
 
 #[derive(Debug, Clone)]
@@ -27,7 +26,7 @@ pub enum WaterEvent {
 
 pub struct WaterActor {
     pub sub_state: WaterSubState,
-    pub retry_refill: u8,
+    pub retry_refill: u32,
 }
 
 impl WaterActor {
@@ -114,4 +113,3 @@ impl WaterActor {
         }
     }
 }
-

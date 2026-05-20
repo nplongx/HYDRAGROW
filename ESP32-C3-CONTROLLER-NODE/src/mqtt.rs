@@ -2,8 +2,10 @@ use crate::config::SharedConfig;
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
-use hydragrow_shared::topics::{topic_controller_command, topic_controller_config, topic_sensors, topic_status};
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::topics::{
+    topic_controller_command, topic_controller_config, topic_sensors, topic_status,
+};
+use hydragrow_shared::{ControllerConfig, MqttCommandPayload, PumpStatus, SensorData};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::{mpsc::Sender, Arc, RwLock};
@@ -19,7 +21,6 @@ pub enum ConnectionState {
     MqttConnected,
     MqttDisconnected,
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct IncomingSensorPayload {
@@ -40,33 +41,27 @@ pub struct IncomingSensorPayload {
     pub err_ec: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RuntimeSensorData {
-    pub ec: f32,
-    pub ph: f32,
-    pub temp: f32,
-    pub water_level: f32,
-    pub ph_voltage_mv: Option<f32>,
-    pub is_continuous: bool,
-    pub rssi: Option<i32>,
-    pub free_heap: Option<u32>,
-    pub uptime: Option<u32>,
-    pub time: Option<String>,
-    pub last_update_ms: u64,
-    pub pump_status: PumpStatus,
-    pub err_water: bool,
-    pub err_temp: bool,
-    pub err_ph: bool,
-    pub err_ec: bool,
-}
-impl Default for RuntimeSensorData {
-    fn default() -> Self { Self { ec:0.0, ph:7.0, temp:25.0, water_level:20.0, ph_voltage_mv:None, is_continuous:false, rssi:None, free_heap:None, uptime:None, time:None, last_update_ms:0, pump_status:PumpStatus::default(), err_water:false, err_temp:false, err_ph:false, err_ec:false } }
-}
-pub type SharedSensorData = Arc<RwLock<RuntimeSensorData>>;
+// XÓA BỎ RuntimeSensorData VÀ CHUYỂN SANG DÙNG SensorData TỪ shared_library
+pub type SharedSensorData = Arc<RwLock<SensorData>>;
 
-pub fn create_shared_sensor_data() -> SharedSensorData {
-    Arc::new(RwLock::new(RuntimeSensorData {
-        ..RuntimeSensorData::default()
+pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
+    Arc::new(RwLock::new(SensorData {
+        device_id: device_id.to_string(),
+        ec: 0.0,
+        ph: 7.0,
+        temp: 25.0,
+        water_level: 20.0,
+        pump_status: PumpStatus::default(),
+        time: String::new(),
+        rssi: None,
+        free_heap: None,
+        uptime: None,
+        err_water: None,
+        err_temp: None,
+        err_ph: None,
+        err_ec: None,
+        is_continuous: None,
+        ph_voltage_mv: None,
     }))
 }
 
@@ -211,30 +206,34 @@ pub fn init_mqtt_client(
                                 }
 
                                 if let Some(ph_voltage_mv) = payload.ph_voltage_mv {
-                                    sensors.ph_voltage_mv = Some(ph_voltage_mv);
+                                    sensors.ph_voltage_mv = Some(ph_voltage_mv as f64);
                                 }
-                                if let Some(is_continuous) = payload.is_continuous { sensors.is_continuous = is_continuous; }
-                                if let Some(err) = payload.err_water { sensors.err_water = err; }
-                                if let Some(err) = payload.err_temp { sensors.err_temp = err; }
-                                if let Some(err) = payload.err_ec { sensors.err_ec = err; }
-                                if let Some(err) = payload.err_ph { sensors.err_ph = err; }
+                                if let Some(is_continuous) = payload.is_continuous {
+                                    sensors.is_continuous = Some(is_continuous);
+                                }
+                                if let Some(err) = payload.err_water {
+                                    sensors.err_water = Some(err);
+                                }
+                                if let Some(err) = payload.err_temp {
+                                    sensors.err_temp = Some(err);
+                                }
+                                if let Some(err) = payload.err_ec {
+                                    sensors.err_ec = Some(err);
+                                }
+                                if let Some(err) = payload.err_ph {
+                                    sensors.err_ph = Some(err);
+                                }
                                 sensors.rssi = payload.rssi;
                                 sensors.free_heap = payload.free_heap;
                                 sensors.uptime = payload.uptime;
                                 if let Some(time) = payload.time {
-                                    sensors.time = Some(time);
+                                    sensors.time = time;
                                 }
-
-                                sensors.last_update_ms = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_millis()
-                                    as u64;
 
                                 info!(
                                     "🌱 CẢM BIẾN | T: {:.1}°C | EC: {:.2} | pH: {:.2} | Lv: {:.1}cm | Sóng: {:?}dBm | Lỗi nước: {:?}",
                                     sensors.temp, sensors.ec, sensors.ph, sensors.water_level, sensors.rssi,
-                                    payload.err_water
+                                    sensors.err_water
                                 );
                             } else {
                                 error!("❌ Failed to acquire sensor write lock");

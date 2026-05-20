@@ -1,6 +1,7 @@
 use hydragrow_shared::{
-    AlertMetadata, CalibrationMetadata, DosingReportPayload, LogCategory, LogLevel, MqttCommandParams,
-    MqttCommandPayload, PumpStatus, SensorData, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
+    AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, DoseData, DosingReportPayload,
+    LogCategory, LogLevel, MqttCommandParams, MqttCommandPayload, PhaseData, PumpStatus,
+    SensorData, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
 };
 
 fn sample_system_log(event: SystemLogEvent) -> UnifiedSystemLog {
@@ -18,6 +19,7 @@ fn sample_system_log(event: SystemLogEvent) -> UnifiedSystemLog {
 fn unified_system_log_round_trip_for_all_event_variants() {
     let variants = vec![
         SystemLogEvent::WaterEvent(WaterMetadata {
+            source: "scheduler".into(),
             trigger: "auto_refill".into(),
             level_before: 11.5,
             level_after: 19.9,
@@ -25,50 +27,83 @@ fn unified_system_log_round_trip_for_all_event_variants() {
             duration_sec: 24,
             success: true,
             cycle_id: Some("cycle-water-001".into()),
+            retry_count: Some(0),
         }),
         SystemLogEvent::DosingCycleComplete(DosingReportPayload {
             cycle_id: "dose-001".into(),
-            result: "ok".into(),
-            target_ec: Some(2.1),
-            current_ec: Some(1.9),
-            target_ph: Some(6.0),
-            current_ph: Some(6.4),
-            dose_a_ml: 1.2,
-            dose_b_ml: 0.8,
-            dose_ph_up_ml: 0.0,
-            dose_ph_down_ml: 0.4,
-            notes: Some("stable".into()),
-            timestamp_ms: 1_717_171_717_001,
+            trigger: "ec_control".into(),
+            pre: PhaseData {
+                ec: 1.5,
+                ph: 6.0,
+                water_level: Some(20.0),
+            },
+            dose: DoseData {
+                pump_a_ml: 1.2,
+                pump_b_ml: 0.8,
+                ph_up_ml: 0.0,
+                ph_down_ml: 0.4,
+            },
+            post_mixing: PhaseData {
+                ec: 1.8,
+                ph: 6.2,
+                water_level: None,
+            },
+            post_stable: PhaseData {
+                ec: 1.9,
+                ph: 6.4,
+                water_level: None,
+            },
+            delta_ec: 0.4,
+            delta_ph: 0.4,
+            target_ec: 2.1,
+            target_ph: 6.0,
+            error_ec: 0.2,
+            error_ph: -0.4,
+            duration_ms: 15000,
+            ema_ec_gain_used: 0.015,
+            ema_ph_shift_used: 0.02,
+            step_ratio_ec: Some(0.4),
+            step_ratio_ph: Some(0.2),
+            stabilized_window_sec: Some(5),
         }),
         SystemLogEvent::SystemAlert(AlertMetadata {
             alert_type: "rate_limit".into(),
             source: "ec_dosing".into(),
             retry_count: 2,
             limit_value: Some(200.0),
+            threshold_before: None,
+            threshold_after: None,
         }),
         SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+            source: "auto_tuner".into(),
             parameter: "ec_step_ratio".into(),
             old_value: Some(0.3),
             new_value: Some(0.4),
             skip_reason: None,
             cycle_id: Some("cal-001".into()),
         }),
-        SystemLogEvent::BasicSystemLog {
+        SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            source: "system".into(),
             message: "node boot".into(),
-        },
+            skip_reason: None,
+        }),
     ];
 
     for event in variants {
         let original = sample_system_log(event);
         let json = serde_json::to_string(&original).expect("serialize unified log");
-        let decoded: UnifiedSystemLog = serde_json::from_str(&json).expect("deserialize unified log");
+        let decoded: UnifiedSystemLog =
+            serde_json::from_str(&json).expect("deserialize unified log");
 
         assert_eq!(decoded.device_id, original.device_id);
         assert_eq!(decoded.level, original.level);
         assert_eq!(decoded.category, original.category);
         assert_eq!(decoded.title, original.title);
         assert_eq!(decoded.timestamp_ms, original.timestamp_ms);
-        assert_eq!(serde_json::to_value(&decoded.event).unwrap(), serde_json::to_value(&original.event).unwrap());
+        assert_eq!(
+            serde_json::to_value(&decoded.event).unwrap(),
+            serde_json::to_value(&original.event).unwrap()
+        );
     }
 }
 
@@ -109,7 +144,10 @@ fn sensor_data_round_trip_with_and_without_optional_fields() {
     for original in [base, with_optionals] {
         let json = serde_json::to_string(&original).expect("serialize sensor data");
         let decoded: SensorData = serde_json::from_str(&json).expect("deserialize sensor data");
-        assert_eq!(serde_json::to_value(&decoded).unwrap(), serde_json::to_value(&original).unwrap());
+        assert_eq!(
+            serde_json::to_value(&decoded).unwrap(),
+            serde_json::to_value(&original).unwrap()
+        );
     }
 }
 
@@ -120,30 +158,33 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
             target: "pump_a".into(),
             action: "start".into(),
             params: Some(MqttCommandParams {
-                pump_id: "pump_a".into(),
+                pump_id: Some("pump_a".into()), // 👈 Chuyển thành Some()
                 duration_sec: Some(8),
                 pwm: Some(70),
                 state: Some(true),
+                ota_url: None,
             }),
         },
         MqttCommandPayload {
             target: "pump_a".into(),
             action: "stop".into(),
             params: Some(MqttCommandParams {
-                pump_id: "pump_a".into(),
+                pump_id: Some("pump_a".into()), // 👈 Chuyển thành Some()
                 duration_sec: None,
                 pwm: None,
                 state: Some(false),
+                ota_url: None,
             }),
         },
         MqttCommandPayload {
             target: "controller".into(),
             action: "set_pwm".into(),
             params: Some(MqttCommandParams {
-                pump_id: "osaka_pump".into(),
+                pump_id: Some("osaka_pump".into()), // 👈 Chuyển thành Some()
                 duration_sec: None,
                 pwm: Some(55),
                 state: None,
+                ota_url: None,
             }),
         },
         MqttCommandPayload {
@@ -155,14 +196,19 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
 
     for original in actions {
         let json = serde_json::to_string(&original).expect("serialize mqtt payload");
-        let decoded: MqttCommandPayload = serde_json::from_str(&json).expect("deserialize mqtt payload");
-        assert_eq!(serde_json::to_value(&decoded).unwrap(), serde_json::to_value(&original).unwrap());
+        let decoded: MqttCommandPayload =
+            serde_json::from_str(&json).expect("deserialize mqtt payload");
+        assert_eq!(
+            serde_json::to_value(&decoded).unwrap(),
+            serde_json::to_value(&original).unwrap()
+        );
     }
 }
 
 #[test]
 fn golden_payload_snapshots() {
     let unified = sample_system_log(SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
+        source: "auto_tuner".into(),
         parameter: "ec_gain_per_ml".into(),
         old_value: Some(0.012),
         new_value: Some(0.015),
@@ -193,10 +239,11 @@ fn golden_payload_snapshots() {
         target: "pump_b".into(),
         action: "start".into(),
         params: Some(MqttCommandParams {
-            pump_id: "pump_b".into(),
+            pump_id: Some("pump_b".into()),
             duration_sec: Some(12),
             pwm: Some(65),
             state: Some(true),
+            ota_url: None,
         }),
     };
 

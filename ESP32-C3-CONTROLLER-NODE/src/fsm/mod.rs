@@ -19,11 +19,12 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
-use hydragrow_shared::{BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, SystemLogEvent};
+use hydragrow_shared::{
+    BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, MqttCommandPayload, SystemLogEvent,
+};
 use log::info;
 
 use crate::config::SharedConfig;
-use crate::mqtt::MqttCommandPayload;
 use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
@@ -31,6 +32,8 @@ use system_context::{NvsSnapshot, TunerState};
 use utils::{get_current_time_ms, get_current_time_sec};
 
 pub mod mod_helpers {
+    use hydragrow_shared::PumpStatus;
+
     use crate::fsm::SystemContext;
     use crate::pump::{PumpController, PumpType, WaterDirection};
     use std::sync::mpsc::Sender;
@@ -72,8 +75,9 @@ pub mod mod_helpers {
             }
             _ => Ok(()),
         };
-        ctx.peripherals.pump_status.dosing_pulse_active = false;
-        ctx.peripherals.pump_status.dosing_pulse_count = 0;
+        // SỬA LỖI: Wrap bằng Some()
+        ctx.peripherals.pump_status.dosing_pulse_active = Some(false);
+        ctx.peripherals.pump_status.dosing_pulse_count = Some(0);
     }
 
     pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
@@ -123,6 +127,10 @@ pub fn start_fsm_control_loop(
 
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
     let current_time_on_boot = get_current_time_sec();
+
+    // Biến phụ để tracking timeout sensor dựa trên `time: String`
+    let mut last_sensor_time_str = String::new();
+    let mut sensor_last_update_ms = get_current_time_ms();
 
     // Khôi phục thời điểm thay nước & bơm định kỳ từ NVS flash
     new_ctx.last_water_change_sec = nvs
@@ -215,6 +223,12 @@ pub fn start_fsm_control_loop(
         let current_time_ms = get_current_time_ms();
         let current_time_sec = current_time_ms / 1000;
 
+        // Xử lý kiểm tra timeout của sensor (Cập nhật thời điểm khi gói dữ liệu thay đổi)
+        if sensors.time != last_sensor_time_str {
+            last_sensor_time_str = sensors.time.clone();
+            sensor_last_update_ms = current_time_ms;
+        }
+
         let force_sync = process_mqtt_commands(
             &cmd_rx,
             &config,
@@ -272,15 +286,20 @@ pub fn start_fsm_control_loop(
         // --- Phần còn lại giữ nguyên (kiểm tra safety, auto FSM...) ---
         let is_safety_overridden = current_time_ms < new_ctx.safety.safety_override_until;
         if !is_safety_overridden {
-            let has_sensor_fault = (config.enable_water_level_sensor && sensors.err_water)
-                || (config.enable_ec_sensor && sensors.err_ec)
-                || (config.enable_ph_sensor && sensors.err_ph)
-                || (config.enable_temp_sensor && sensors.err_temp);
+            // SỬA LỖI: Sử dụng unwrap_or(false)
+            let has_sensor_fault = (config.enable_water_level_sensor
+                && sensors.err_water.unwrap_or(false))
+                || (config.enable_ec_sensor && sensors.err_ec.unwrap_or(false))
+                || (config.enable_ph_sensor && sensors.err_ph.unwrap_or(false))
+                || (config.enable_temp_sensor && sensors.err_temp.unwrap_or(false));
+
             if !has_sensor_fault {
+                // SỬA LỖI: Thêm tham số sensor_last_update_ms
                 orchestrator::tick(
                     current_time_ms,
                     &config,
                     &sensors,
+                    sensor_last_update_ms,
                     &mut new_ctx,
                     &mut pump_ctrl,
                     &mut nvs,
@@ -384,3 +403,4 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
     })
     .to_string()
 }
+

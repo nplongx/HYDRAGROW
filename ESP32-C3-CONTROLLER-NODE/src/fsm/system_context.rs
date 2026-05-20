@@ -1,4 +1,4 @@
-use crate::mqtt::PumpStatus;
+use hydragrow_shared::PumpStatus;
 use serde::{Deserialize, Serialize};
 
 use super::actors::{
@@ -246,7 +246,11 @@ impl AutoTuner {
             return;
         }
         let gain_vs_expected: f32 = response / expected.max(0.001_f32);
-        let tracker = if is_ec { &mut self.ec_tracker } else { &mut self.ph_tracker };
+        let tracker = if is_ec {
+            &mut self.ec_tracker
+        } else {
+            &mut self.ph_tracker
+        };
         tracker.push(gain_vs_expected - 1.0);
         let tune_delta = self.compute_delta(is_ec).clamp(-0.08, 0.08);
 
@@ -513,12 +517,17 @@ impl ConvergenceTracker {
     fn push(&mut self, error: f32) {
         self.error_history[self.head] = error;
         self.head = (self.head + 1) % self.error_history.len();
-        self.count = self.count.saturating_add(1).min(self.error_history.len() as u8);
+        self.count = self
+            .count
+            .saturating_add(1)
+            .min(self.error_history.len() as u8);
         self.recompute();
     }
     fn recompute(&mut self) {
         let n = self.count as usize;
-        if n < 2 { return; }
+        if n < 2 {
+            return;
+        }
         let mut first = 0.0;
         let mut last = 0.0;
         let mut prev_sign = 0_i8;
@@ -527,38 +536,73 @@ impl ConvergenceTracker {
         for i in 0..n {
             let idx = (self.head + self.error_history.len() - n + i) % self.error_history.len();
             let v = self.error_history[idx];
-            if i == 0 { first = v; }
-            if i == n - 1 { last = v; }
+            if i == 0 {
+                first = v;
+            }
+            if i == n - 1 {
+                last = v;
+            }
             abs_sum += v.abs();
-            let sign = if v > 0.0 { 1 } else if v < 0.0 { -1 } else { 0 };
-            if prev_sign != 0 && sign != 0 && sign != prev_sign { sign_changes = sign_changes.saturating_add(1); }
-            if sign != 0 { prev_sign = sign; }
+            let sign = if v > 0.0 {
+                1
+            } else if v < 0.0 {
+                -1
+            } else {
+                0
+            };
+            if prev_sign != 0 && sign != 0 && sign != prev_sign {
+                sign_changes = sign_changes.saturating_add(1);
+            }
+            if sign != 0 {
+                prev_sign = sign;
+            }
         }
         self.trend = first.abs() - last.abs();
         self.oscillation = sign_changes as f32 / (n.saturating_sub(1) as f32);
         let mean_abs = abs_sum / n as f32;
-        if mean_abs > 0.98 { self.stagnant_cycles = self.stagnant_cycles.saturating_add(1); } else { self.stagnant_cycles = 0; }
+        if mean_abs > 0.98 {
+            self.stagnant_cycles = self.stagnant_cycles.saturating_add(1);
+        } else {
+            self.stagnant_cycles = 0;
+        }
     }
     fn current_error(&self) -> f32 {
-        if self.count == 0 { return 0.0; }
+        if self.count == 0 {
+            return 0.0;
+        }
         let idx = (self.head + self.error_history.len() - 1) % self.error_history.len();
         self.error_history[idx]
     }
-    pub fn reset(&mut self) { *self = Self::default(); }
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
 }
 
 impl AutoTuner {
     fn compute_delta(&self, is_ec: bool) -> f32 {
-        let tracker = if is_ec { &self.ec_tracker } else { &self.ph_tracker };
+        let tracker = if is_ec {
+            &self.ec_tracker
+        } else {
+            &self.ph_tracker
+        };
         let error = tracker.current_error();
         let p_term = error * 0.04;
         let d_term = tracker.trend * (-0.015);
         let damp = 1.0 - (tracker.oscillation * 0.6).clamp(0.0, 0.8);
-        let scale = if matches!(self.state, TunerState::Stable) { 0.1 } else { 1.0 };
+        let scale = if matches!(self.state, TunerState::Stable) {
+            0.1
+        } else {
+            1.0
+        };
         (p_term + d_term) * damp * scale
     }
     fn update_state(&mut self, is_ec: bool, is_ph_up: Option<bool>) {
-        let tracker = if is_ec { &self.ec_tracker } else { &self.ph_tracker };
+        let (err, tracker_count) = if is_ec {
+            (self.ec_tracker.current_error().abs(), self.ec_tracker.count)
+        } else {
+            (self.ph_tracker.current_error().abs(), self.ph_tracker.count)
+        };
+
         let confidence = if is_ec {
             self.gain_learner.ec.confidence
         } else {
@@ -572,23 +616,27 @@ impl AutoTuner {
                     .max(self.gain_learner.ph_down.confidence),
             }
         };
-        let err = tracker.current_error().abs();
+
         self.refresh_variance_baseline();
+
         if self.is_degraded() {
             self.state = TunerState::Degraded;
             return;
         }
+
         self.state = match self.state {
             TunerState::Exploring if confidence > 0.3 => TunerState::Converging,
-            TunerState::Converging if err < 0.1 && tracker.count >= 3 => TunerState::Stable,
+            TunerState::Converging if err < 0.1 && tracker_count >= 3 => TunerState::Stable,
             TunerState::Stable if err > 0.2 => TunerState::Converging,
             TunerState::Degraded if err <= 0.2 => TunerState::Converging,
             state => state,
         };
     }
     pub fn on_water_change(&mut self) {
-        self.adaptive_ec_ratio = self.adaptive_ec_ratio + (self.best_ec_ratio - self.adaptive_ec_ratio) * 0.5;
-        self.adaptive_ph_ratio = self.adaptive_ph_ratio + (self.best_ph_ratio - self.adaptive_ph_ratio) * 0.5;
+        self.adaptive_ec_ratio =
+            self.adaptive_ec_ratio + (self.best_ec_ratio - self.adaptive_ec_ratio) * 0.5;
+        self.adaptive_ph_ratio =
+            self.adaptive_ph_ratio + (self.best_ph_ratio - self.adaptive_ph_ratio) * 0.5;
         self.ec_tracker.reset();
         self.ph_tracker.reset();
         self.state = TunerState::Converging;
@@ -607,8 +655,8 @@ impl AutoTuner {
         let ph_samples =
             self.gain_learner.ph_up.sample_count + self.gain_learner.ph_down.sample_count;
         if ph_samples >= self.gain_learner.ph_up.min_samples && self.ph_variance_baseline <= 0.0 {
-            let ph_var = (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance)
-                * 0.5;
+            let ph_var =
+                (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5;
             self.ph_variance_baseline = ph_var.max(1e-6);
         }
     }

@@ -1,5 +1,6 @@
-use crate::mqtt::SensorData;
 use std::sync::{Arc, RwLock};
+
+use hydragrow_shared::SensorData;
 
 pub type SharedSensorData = Arc<RwLock<SensorData>>;
 

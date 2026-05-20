@@ -5,7 +5,6 @@ use tracing::{error, info, warn};
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
-use crate::services::schema_version::validate_payload_schema;
 use hydragrow_shared::events::AppEvent;
 
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
@@ -16,10 +15,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             return;
         }
     };
-
-    if !validate_payload_schema("system_log", &device_id, log_data.schema_version) {
-        return;
-    }
 
     let level_str = serde_json::to_value(&log_data.level)
         .unwrap()

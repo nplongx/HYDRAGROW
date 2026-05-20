@@ -4,11 +4,9 @@ use serde_json::json;
 use tracing::{error, info, warn};
 use yup_oauth2::{ServiceAccountAuthenticator, read_service_account_key};
 
-// 🔴 THAY BẰNG PROJECT ID FIREBASE CỦA BẠN
 const PROJECT_ID: &str = "hydragrow-iot";
 
 async fn get_oauth_token() -> Result<String, Box<dyn std::error::Error>> {
-    // File này tải từ Firebase Console, để ở thư mục gốc ngang với Cargo.toml
     let secret = read_service_account_key("firebase-service-account.json").await?;
     let auth = ServiceAccountAuthenticator::builder(secret).build().await?;
     let scopes = &["https://www.googleapis.com/auth/firebase.messaging"];

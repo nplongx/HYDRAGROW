@@ -4,9 +4,6 @@ pub mod events;
 pub mod helper;
 pub mod topics;
 
-pub const CURRENT_SCHEMA_VERSION: u16 = 2;
-pub const MIN_SUPPORTED_SCHEMA_VERSION: u16 = CURRENT_SCHEMA_VERSION - 1;
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DeviceState {
@@ -36,13 +33,11 @@ pub struct PumpStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub schema_version: Option<u16>,
     pub device_id: String,
-    pub ec: f64,
-    pub ph: f64,
-    pub temp: f64,
-    pub water_level: f64,
+    pub ec: f32,
+    pub ph: f32,
+    pub temp: f32,
+    pub water_level: f32,
     #[serde(default)]
     pub pump_status: PumpStatus,
     pub time: String,
@@ -80,8 +75,6 @@ pub struct AlertMessage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MqttCommandPayload {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub schema_version: Option<u16>,
     pub target: String,
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -480,8 +473,6 @@ pub enum SystemLogEvent {
 /// Struct cuối cùng gói toàn bộ thông tin để lưu vào DB / bắn Alert
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnifiedSystemLog {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub schema_version: Option<u16>,
     pub device_id: String,
     pub level: LogLevel,
     pub category: LogCategory,
@@ -491,19 +482,71 @@ pub struct UnifiedSystemLog {
 }
 
 impl UnifiedSystemLog {
-    pub fn info(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
-        Self { device_id: device_id.into(), level: LogLevel::Info, category, title: title.into(), event, timestamp_ms }
+    pub fn info(
+        device_id: impl Into<String>,
+        category: LogCategory,
+        title: impl Into<String>,
+        event: SystemLogEvent,
+        timestamp_ms: u64,
+    ) -> Self {
+        Self {
+            device_id: device_id.into(),
+            level: LogLevel::Info,
+            category,
+            title: title.into(),
+            event,
+            timestamp_ms,
+        }
     }
 
-    pub fn warning(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
-        Self { device_id: device_id.into(), level: LogLevel::Warning, category, title: title.into(), event, timestamp_ms }
+    pub fn warning(
+        device_id: impl Into<String>,
+        category: LogCategory,
+        title: impl Into<String>,
+        event: SystemLogEvent,
+        timestamp_ms: u64,
+    ) -> Self {
+        Self {
+            device_id: device_id.into(),
+            level: LogLevel::Warning,
+            category,
+            title: title.into(),
+            event,
+            timestamp_ms,
+        }
     }
 
-    pub fn critical(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
-        Self { device_id: device_id.into(), level: LogLevel::Critical, category, title: title.into(), event, timestamp_ms }
+    pub fn critical(
+        device_id: impl Into<String>,
+        category: LogCategory,
+        title: impl Into<String>,
+        event: SystemLogEvent,
+        timestamp_ms: u64,
+    ) -> Self {
+        Self {
+            device_id: device_id.into(),
+            level: LogLevel::Critical,
+            category,
+            title: title.into(),
+            event,
+            timestamp_ms,
+        }
     }
 
-    pub fn success(device_id: impl Into<String>, category: LogCategory, title: impl Into<String>, event: SystemLogEvent, timestamp_ms: u64) -> Self {
-        Self { device_id: device_id.into(), level: LogLevel::Success, category, title: title.into(), event, timestamp_ms }
+    pub fn success(
+        device_id: impl Into<String>,
+        category: LogCategory,
+        title: impl Into<String>,
+        event: SystemLogEvent,
+        timestamp_ms: u64,
+    ) -> Self {
+        Self {
+            device_id: device_id.into(),
+            level: LogLevel::Success,
+            category,
+            title: title.into(),
+            event,
+            timestamp_ms,
+        }
     }
 }

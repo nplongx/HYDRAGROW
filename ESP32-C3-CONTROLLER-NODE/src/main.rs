@@ -9,8 +9,12 @@ use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
+use hydragrow_shared::topics::{
+    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
+    topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
+    topic_status,
+};
 use log::{error, info, warn, LevelFilter};
-use hydragrow_shared::topics::{topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors, topic_status};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -74,7 +78,7 @@ fn main() -> anyhow::Result<()> {
     let nvs = EspDefaultNvsPartition::take()?;
 
     let shared_config = create_shared_config();
-    let shared_sensor_data = create_shared_sensor_data();
+    let shared_sensor_data = create_shared_sensor_data(DEVICE_ID);
     if let Ok(mut cfg) = shared_config.write() {
         if let Ok(mut agitech_nvs) = EspNvs::new(nvs.clone(), "agitech", true) {
             if let Ok(Some(saved_id)) = agitech_nvs.get_str("device_id", &mut [0; 64]) {
@@ -272,7 +276,7 @@ fn main() -> anyhow::Result<()> {
                         let _ = client.publish(
                             &topic_status,
                             QoS::AtLeastOnce,
-                            true, // Retain = true để giữ trạng thái
+                            true,
                             r#"{"online": true}"#.as_bytes(),
                         );
                         let _ = client.subscribe(&topic_config, QoS::AtLeastOnce);
@@ -299,13 +303,13 @@ fn main() -> anyhow::Result<()> {
                             format!("AGITECH/{}/system_log", DEVICE_ID)
                         } else {
                             match v.get("type").and_then(|t| t.as_str()) {
-                            Some("water_event") | Some("system_alert") | Some("dosing_cycle") => {
-                                topic_fsm_events(DEVICE_ID)
+                                Some("water_event") | Some("system_alert")
+                                | Some("dosing_cycle") => topic_fsm_events(DEVICE_ID),
+                                Some("ema_update") | Some("auto_tune") => {
+                                    topic_calibration(DEVICE_ID)
+                                }
+                                _ => topic_fsm_state(DEVICE_ID),
                             }
-                            Some("ema_update") | Some("auto_tune") => {
-                                topic_calibration(DEVICE_ID)
-                            }
-                            _ => topic_fsm_state(DEVICE_ID),
                         };
                         let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
                     }

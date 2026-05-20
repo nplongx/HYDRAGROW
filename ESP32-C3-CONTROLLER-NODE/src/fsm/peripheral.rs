@@ -1,6 +1,5 @@
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{ControllerConfig, SensorData};
 
-use crate::mqtt::SensorData;
 use crate::pump::PumpController;
 
 use super::system_context::PeripheralState;
@@ -88,7 +87,8 @@ impl PeripheralController {
         if config.scheduled_mixing_interval_sec > 0 && config.scheduled_mixing_duration_sec > 0 {
             if peripherals.is_scheduled_mixing_active {
                 if now_sec
-                    >= peripherals.last_mixing_start_sec + config.scheduled_mixing_duration_sec as u64
+                    >= peripherals.last_mixing_start_sec
+                        + config.scheduled_mixing_duration_sec as u64
                 {
                     peripherals.is_scheduled_mixing_active = false;
                 }

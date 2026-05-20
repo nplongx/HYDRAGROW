@@ -145,14 +145,14 @@ pub async fn control_pump(
     };
 
     let command = MqttCommandPayload {
-        schema_version: Some(CURRENT_SCHEMA_VERSION),
         target,
         action: mqtt_action.to_string(),
         params: Some(MqttCommandParams {
-            pump_id: pump_name.clone(),
+            pump_id: Some(pump_name.clone()),
             duration_sec,
             pwm,
             state: explicit_state,
+            ota_url: None,
         }),
     };
 
@@ -177,7 +177,7 @@ pub async fn control_pump(
     };
 
     let alert_msg = crate::models::alert::AlertMessage {
-        level: "warning".to_string(), // Dùng màu Vàng (Warning) cho thao tác can thiệp thủ công
+        level: "warning".to_string(),
         category: "alert".to_string(),
         title: "Can Thiệp Thủ Công".to_string(),
         message: format!(
@@ -312,7 +312,7 @@ pub async fn request_device_sync(
     let device_id = path.into_inner();
 
     // Gửi lệnh "SYNC" xuống topic điều khiển của ESP32
-    let topic = topic_controller_command(device_id);
+    let topic = topic_controller_command(&device_id);
     let payload = json!({
         "action": "SYNC_STATUS",
         "value": 0

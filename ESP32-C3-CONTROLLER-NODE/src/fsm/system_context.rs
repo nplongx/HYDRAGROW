@@ -151,6 +151,8 @@ pub struct NvsSnapshot {
     pub interaction_matrix: Option<[f32; 6]>,
     #[serde(default)]
     pub matrix_update_count: u32,
+    #[serde(default)]
+    pub matrix_is_warm: bool,
 }
 
 pub struct ConvergenceTracker {
@@ -436,6 +438,7 @@ impl NvsSnapshot {
             ph_variance_baseline: ctx.tuner.ph_variance_baseline,
             interaction_matrix: Some(ctx.tuner.interaction_matrix.as_flat()),
             matrix_update_count: ctx.tuner.matrix_update_count,
+            matrix_is_warm: ctx.tuner.matrix_is_warm,
         }
     }
 }

@@ -210,7 +210,8 @@ pub fn start_fsm_control_loop(
                     }
                 }
                 new_ctx.tuner.matrix_update_count = snapshot.matrix_update_count;
-                new_ctx.tuner.matrix_is_warm = new_ctx.tuner.matrix_update_count >= 10;
+                new_ctx.tuner.matrix_is_warm =
+                    snapshot.matrix_is_warm || new_ctx.tuner.matrix_update_count >= 10;
                 new_ctx.tuner.state = TunerState::from_u8(snapshot.tuner_state);
                 new_ctx.last_water_change_sec = snapshot.last_water_change_sec;
                 new_ctx.dosing.retry_ec = snapshot.retry_ec;

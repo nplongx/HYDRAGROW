@@ -13,6 +13,7 @@ pub mod system_context;
 pub mod types;
 pub mod utils;
 
+pub use optimizer::{apply_deadband, confidence_from_error_ratio};
 pub use phases::{FaultCode, SystemPhase};
 pub use system_context::SystemContext;
 pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData};

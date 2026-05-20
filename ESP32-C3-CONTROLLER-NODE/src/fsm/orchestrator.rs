@@ -428,38 +428,34 @@ fn update_interaction_matrix(
     // 1. Dự đoán trạng thái hiệp biến Kalman (Q tăng)
     tuner.kalman.predict();
 
-    // 2. Định nghĩa hệ số Kalman Gain (K) cho từng kênh dựa trên cấu trúc `KalmanCovarianceDiag`
-    // Do `kalman.p` của bạn là [f32; 3], ta tính toán độ lợi K tương ứng cho từng giếng bơm:
-    // Index 0: Nutrient A, Index 1: Nutrient B (nếu có), Index 2: pH Agent
-    let k_a = tuner.kalman.p[0] / (tuner.kalman.p[0] + tuner.kalman.r);
-    let k_b = tuner.kalman.p[1] / (tuner.kalman.p[1] + tuner.kalman.r);
-    let k_ph = tuner.kalman.p[2] / (tuner.kalman.p[2] + tuner.kalman.r);
+    // 2. Cập nhật hiệp biến và lấy Kalman Gain (K) cho từng kênh theo từng phép đo.
+    // `update_and_get_gain` vừa trả K vừa cập nhật lại P, tránh update P hai lần trong cùng nhịp.
 
     // 3. Cập nhật các cột trong ma trận tương tác (InteractionMatrix) bằng hàm `.update_column`
     // update_column(col, dose_ml, observed_delta, row, gain_k)
 
     // Hàng 0 là EC, Hàng 1 là pH
     if sample.dose_a_ml > 0.0 {
+        let k_a = tuner.kalman.update_and_get_gain(0);
         tuner
             .interaction_matrix
             .update_column(0, sample.dose_a_ml, observed_delta_ec, 0, k_a);
-        tuner.kalman.update(0); // Cập nhật lại P sau khi đo lường
     }
 
     if sample.dose_b_ml > 0.0 {
+        let k_b = tuner.kalman.update_and_get_gain(1);
         tuner
             .interaction_matrix
             .update_column(1, sample.dose_b_ml, observed_delta_ec, 0, k_b);
-        tuner.kalman.update(1);
     }
 
     let net_ph_dose_ml = sample.dose_ph_up_ml - sample.dose_ph_down_ml;
     if net_ph_dose_ml.abs() > 0.0 {
+        let k_ph = tuner.kalman.update_and_get_gain(2);
         // Cột 2 đại diện cho tác nhân điều chỉnh pH, tác động lên hàng 1 (pH)
         tuner
             .interaction_matrix
             .update_column(2, net_ph_dose_ml, observed_delta_ph, 1, k_ph);
-        tuner.kalman.update(2);
     }
 
     // 4. Cập nhật trạng thái Warm-up của ma trận

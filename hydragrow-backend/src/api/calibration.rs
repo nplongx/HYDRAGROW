@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 use std::{cmp::Ordering, error};
 
-use hydragrow_shared::{MqttCommandParams, MqttCommandPayload};
+use hydragrow_shared::{MqttCommandParams, MqttCommandOut};
 use tracing::{error, info, instrument, warn};
 
 use actix_web::{HttpResponse, Responder, web};
@@ -138,7 +138,7 @@ pub async fn start_ph_calibration(
         "3-point"
     };
 
-    let command = MqttCommandPayload {
+    let command = MqttCommandOut {
         target: format!("PH_{}", mode_text),
         action: "enter_calibration".to_string(),
         params: None,
@@ -368,7 +368,7 @@ pub async fn finish_ph_calibration(
     let mut captured_points: Vec<PhCapturedPoint> = session.captured_points.into_values().collect();
     captured_points.sort_by_key(|p| p.point);
 
-    let command = MqttCommandPayload {
+    let command = MqttCommandOut {
         target: String::new(),
         action: "exit_calibration".to_string(),
         params: None,

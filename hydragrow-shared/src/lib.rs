@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod events;
+pub mod fsm;
 pub mod helper;
 pub mod topics;
 
@@ -22,12 +23,19 @@ pub struct PumpStatus {
     pub mist_valve: bool,
     pub water_pump_in: bool,
     pub water_pump_out: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pump_a_pwm: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pump_b_pwm: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ph_up_pwm: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ph_down_pwm: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub osaka_pwm: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dosing_pulse_active: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dosing_pulse_count: Option<u32>,
 }
 
@@ -74,13 +82,43 @@ pub struct AlertMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MqttCommandPayload {
+pub struct MqttCommandOut {
     pub target: String,
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<MqttCommandParams>,
 }
 
+
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MqttCommandIn {
+    pub action: String,
+    #[serde(default)]
+    pub target: Option<String>,
+    #[serde(default)]
+    pub params: Option<MqttCommandInParams>,
+    #[serde(default)]
+    pub pump: Option<String>,
+    #[serde(default)]
+    pub duration_sec: Option<u64>,
+    #[serde(default)]
+    pub pwm: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MqttCommandInParams {
+    #[serde(default)]
+    pub pump_id: Option<String>,
+    #[serde(default)]
+    pub duration_sec: Option<u64>,
+    #[serde(default)]
+    pub pwm: Option<u32>,
+    #[serde(default)]
+    pub state: Option<bool>,
+    #[serde(default)]
+    pub ota_url: Option<String>,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MqttCommandParams {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -548,5 +586,37 @@ impl UnifiedSystemLog {
             event,
             timestamp_ms,
         }
+    }
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ControllerHealthPayload {
+    pub free_heap: u32,
+    pub uptime_sec: u64,
+    pub rssi: i8,
+    pub pump_status: PumpStatus,
+}
+
+impl ControllerConfig {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.ec_target <= 0.0 || self.ec_target > 10.0 { errors.push("ec_target phải trong khoảng (0, 10]".into()); }
+        if self.ec_tolerance < 0.0 || self.ec_tolerance >= self.ec_target { errors.push("ec_tolerance phải >= 0 và < ec_target".into()); }
+        if self.ph_target < 0.0 || self.ph_target > 14.0 { errors.push("ph_target phải trong khoảng [0, 14]".into()); }
+        if self.dosing_pwm_percent < 1 || self.dosing_pwm_percent > 100 { errors.push("dosing_pwm_percent phải trong [1, 100]".into()); }
+        if self.dosing_min_pwm_percent > self.dosing_pwm_percent { errors.push("dosing_min_pwm_percent không được vượt dosing_pwm_percent".into()); }
+        if self.pump_a_capacity_ml_per_sec <= 0.0 { errors.push("pump_a_capacity_ml_per_sec phải > 0".into()); }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+}
+
+impl DosingReportPayload {
+    pub fn to_metadata_json(&self) -> serde_json::Value {
+        let mut v = serde_json::to_value(self).unwrap_or_default();
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert("event_type".into(), serde_json::Value::String("dosing_cycle".into()));
+        }
+        v
     }
 }

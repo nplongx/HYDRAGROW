@@ -1,9 +1,12 @@
 use actix_web::web;
-use serde_json::json;
+use serde_json::{json, Value};
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
-use hydragrow_shared::events::{AppEvent, FsmTransitionPayload};
+use hydragrow_shared::{
+    events::{AppEvent, FsmTransitionPayload},
+    fsm::{FsmStatePayload, SystemPhase},
+};
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
@@ -12,13 +15,15 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     // info!("📥 [MQTT-FSM] Nhận: {}", raw_payload);
 
     // 1. Parse payload JSON từ Firmware
-    let json = match serde_json::from_slice::<serde_json::Value>(payload) {
+    let json = match serde_json::from_slice::<Value>(payload) {
         Ok(j) => j,
         Err(e) => {
             error!("❌ [MQTT-FSM] Cấu trúc JSON bị sai định dạng: {:?}", e);
             return;
         }
     };
+
+    let parsed_fsm_state = serde_json::from_slice::<FsmStatePayload>(payload).ok();
 
     if json.get("level").is_some() && json.get("category").is_some() && json.get("event").is_some()
     {
@@ -91,16 +96,28 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     }
 
     // 2. Trích xuất trường current_state cho các bản tin FSM bình thường
-    let state = match json.get("current_state").and_then(|s| s.as_str()) {
-        Some(s) => s.to_string(),
-        None => {
-            // Firmware gửi thứ gì đó không phải state FSM và cũng không phải Calibration Update
-            error!(
-                "❌ [MQTT-FSM] JSON hợp lệ nhưng thiếu trường 'current_state': {}",
-                raw_payload
-            );
-            return;
-        }
+    let (state, pump_status, budgets) = if let Some(fsm_state) = parsed_fsm_state {
+        let state = match serde_json::from_str::<SystemPhase>(&format!(""{}"", fsm_state.current_state)) {
+            Ok(phase) => format!("{:?}", phase),
+            Err(_) => fsm_state.current_state,
+        };
+        (state, serde_json::to_value(fsm_state.pump_status).unwrap_or_else(|_| json!({})), serde_json::to_value(fsm_state.budgets).unwrap_or_else(|_| json!({})))
+    } else {
+        let state = match json.get("current_state").and_then(|s| s.as_str()) {
+            Some(s) => s.to_string(),
+            None => {
+                error!(
+                    "❌ [MQTT-FSM] JSON hợp lệ nhưng thiếu trường 'current_state': {}",
+                    raw_payload
+                );
+                return;
+            }
+        };
+        (
+            state,
+            json.get("pump_status").cloned().unwrap_or_else(|| json!({})),
+            json.get("budgets").cloned().unwrap_or_else(|| json!({})),
+        )
     };
 
     // 3. Gửi thông tin trạng thái qua kênh Health/LiveStatus cho WebSocket/UI
@@ -108,11 +125,11 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         "_msg_type": "fsm_status",
         "device_id": device_id.clone(),
         "fsm_state": state.clone(),
-        "budgets": json.get("budgets").unwrap_or(&json!({})),
-        "pump_status": json.get("pump_status").unwrap_or(&json!({})),
+        "budgets": budgets,
+        "pump_status": pump_status,
     });
 
-    let _ = app_state.event_bus.send(AppEvent::FsmTransition(FsmTransitionPayload { device_id: device_id.clone(), state: state.clone(), pump_status: serde_json::from_value(json.get("pump_status").cloned().unwrap_or_else(|| serde_json::json!({}))).ok() }));
+    let _ = app_state.event_bus.send(AppEvent::FsmTransition(FsmTransitionPayload { device_id: device_id.clone(), state: state.clone(), pump_status: serde_json::from_value(pump_status.clone()).ok() }));
 
     // 4. Cập nhật fsm_state vào bộ nhớ đệm (Cache tĩnh) của AppState
     let mut states = app_state.device_states.write().await;

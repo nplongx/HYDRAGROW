@@ -1,5 +1,5 @@
 use anyhow::Result;
-use hydragrow_shared::{MqttCommandPayload, topics::topic_controller_command};
+use hydragrow_shared::{MqttCommandOut, topics::topic_controller_command};
 use rumqttc::QoS;
 
 use crate::AppState;
@@ -7,7 +7,7 @@ use crate::AppState;
 pub async fn publish_command(
     app_state: &AppState,
     device_id: &str,
-    payload: &MqttCommandPayload,
+    payload: &MqttCommandOut,
 ) -> Result<()> {
     let topic = topic_controller_command(device_id);
     let payload_bytes = serde_json::to_vec(payload)?;

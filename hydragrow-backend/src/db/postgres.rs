@@ -432,7 +432,7 @@ pub async fn insert_system_event(
     record: &NewSystemEventRecord,
 ) -> Result<(), sqlx::Error> {
     let query = r#"
-        INSERT INTO system_event (
+        INSERT INTO system_events (
             device_id, level, category, title, message, reason, metadata, timestamp
         ) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

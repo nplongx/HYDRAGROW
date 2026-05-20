@@ -14,11 +14,11 @@ use crate::pump::PumpController;
 
 use super::{
     actors::{dosing_actor::DosingEvent, water_actor::WaterEvent},
+    optimizer::apply_deadband,
     peripheral::PeripheralController,
     phases::{FaultCode, SystemPhase},
     system_context::{AutoTuner, NvsSnapshot, SystemContext},
     types::PendingCalibrationSample,
-    optimizer::apply_deadband,
     utils::send_system_log,
 };
 
@@ -51,54 +51,82 @@ struct MonitoringMatrixResult {
 }
 
 impl MonitoringMatrixResult {
-    fn solve(
-        ec_delta: f32,
-        ph_delta: f32,
-        config: &ControllerConfig,
-        ctx: &SystemContext,
-    ) -> Self {
+    fn solve(ec_delta: f32, ph_delta: f32, config: &ControllerConfig, ctx: &SystemContext) -> Self {
         let mut pump_a_ml = 0.0;
         let mut ph_agent_ml = 0.0;
 
-        if ec_delta > config.ec_tolerance {
-            let deadband_scale = apply_deadband(ec_delta, config.ec_tolerance);
-            let step_ratio = if ctx.tuner.is_locked() {
-                ctx.tuner.best_ec_ratio
-            } else {
-                ctx.tuner.active_ec_ratio()
-            };
-            let effective_gain = ctx
-                .tuner
-                .gain_learner
-                .effective_ec_gain(config.ec_gain_per_ml)
-                .max(0.0001);
-            pump_a_ml = (ec_delta / effective_gain * step_ratio * deadband_scale)
-                .clamp(0.0, config.max_dose_per_cycle);
-        }
-
-        if ph_delta.abs() > config.ph_tolerance {
-            let is_up = ph_delta > 0.0;
-            let delta = ph_delta.abs();
-            let deadband_scale = apply_deadband(delta, config.ph_tolerance);
-            let step_ratio = if ctx.tuner.is_locked() {
-                ctx.tuner.best_ph_ratio
-            } else {
-                ctx.tuner.adaptive_ph_ratio
-            };
-            let effective_gain = if is_up {
-                ctx.tuner
-                    .gain_learner
-                    .effective_ph_up_gain(config.ph_shift_up_per_ml)
-            } else {
-                ctx.tuner
-                    .gain_learner
-                    .effective_ph_down_gain(config.ph_shift_down_per_ml)
+        if ctx.tuner.matrix_is_warm {
+            // Dùng matrix prediction để back-calculate dose
+            // EC: dose_a = ec_delta / matrix[0][0] (col A → row EC)
+            let ec_gain_from_matrix = ctx.tuner.interaction_matrix.get(0, 0).max(0.0001);
+            if config.enable_ec_sensor && ec_delta > config.ec_tolerance {
+                let deadband_scale = apply_deadband(ec_delta, config.ec_tolerance);
+                let step_ratio = if ctx.tuner.is_locked() {
+                    ctx.tuner.best_ec_ratio
+                } else {
+                    ctx.tuner.active_ec_ratio()
+                };
+                pump_a_ml = (ec_delta / ec_gain_from_matrix * step_ratio * deadband_scale)
+                    .clamp(0.0, config.max_dose_per_cycle);
             }
-            .max(0.0001);
 
-            let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
-                .clamp(0.0, config.max_dose_per_cycle);
-            ph_agent_ml = if is_up { dose_ml } else { -dose_ml };
+            // pH: dùng matrix[1][2] (ph_up agent → row pH)
+            if config.enable_ph_sensor && ph_delta.abs() > config.ph_tolerance {
+                let is_up = ph_delta > 0.0;
+                let delta = ph_delta.abs();
+                let deadband_scale = apply_deadband(delta, config.ph_tolerance);
+                let step_ratio = if ctx.tuner.is_locked() {
+                    ctx.tuner.best_ph_ratio
+                } else {
+                    ctx.tuner.adaptive_ph_ratio
+                };
+                // col 2 = pH agent; sign: ph_up làm tăng pH (positive row 1)
+                let ph_gain_from_matrix = ctx.tuner.interaction_matrix.get(1, 2).abs().max(0.0001);
+                let dose_ml = (delta / ph_gain_from_matrix * step_ratio * deadband_scale)
+                    .clamp(0.0, config.max_dose_per_cycle);
+                ph_agent_ml = if is_up { dose_ml } else { -dose_ml };
+            }
+        } else {
+            // Cold path: scalar gain (giữ nguyên logic cũ)
+            if config.enable_ec_sensor && ec_delta > config.ec_tolerance {
+                let deadband_scale = apply_deadband(ec_delta, config.ec_tolerance);
+                let step_ratio = if ctx.tuner.is_locked() {
+                    ctx.tuner.best_ec_ratio
+                } else {
+                    ctx.tuner.active_ec_ratio()
+                };
+                let effective_gain = ctx
+                    .tuner
+                    .gain_learner
+                    .effective_ec_gain(config.ec_gain_per_ml)
+                    .max(0.0001);
+                pump_a_ml = (ec_delta / effective_gain * step_ratio * deadband_scale)
+                    .clamp(0.0, config.max_dose_per_cycle);
+            }
+
+            if config.enable_ph_sensor && ph_delta.abs() > config.ph_tolerance {
+                let is_up = ph_delta > 0.0;
+                let delta = ph_delta.abs();
+                let deadband_scale = apply_deadband(delta, config.ph_tolerance);
+                let step_ratio = if ctx.tuner.is_locked() {
+                    ctx.tuner.best_ph_ratio
+                } else {
+                    ctx.tuner.adaptive_ph_ratio
+                };
+                let effective_gain = if is_up {
+                    ctx.tuner
+                        .gain_learner
+                        .effective_ph_up_gain(config.ph_shift_up_per_ml)
+                } else {
+                    ctx.tuner
+                        .gain_learner
+                        .effective_ph_down_gain(config.ph_shift_down_per_ml)
+                }
+                .max(0.0001);
+                let dose_ml = (delta / effective_gain * step_ratio * deadband_scale)
+                    .clamp(0.0, config.max_dose_per_cycle);
+                ph_agent_ml = if is_up { dose_ml } else { -dose_ml };
+            }
         }
 
         Self {
@@ -430,61 +458,68 @@ fn update_interaction_matrix(
     let observed_delta_ec = post_ec - sample.start_ec;
     let observed_delta_ph = post_ph - sample.start_ph;
 
+    // Predict step: tăng uncertainty trước khi cập nhật
     tuner.kalman.predict();
 
-    // 2. Định nghĩa hệ số Kalman Gain (K) cho từng kênh dựa trên cấu trúc `KalmanCovarianceDiag`
-    // Do `kalman.p` của bạn là [f32; 3], ta tính toán độ lợi K tương ứng cho từng giếng bơm:
-    // Index 0: Nutrient A, Index 1: Nutrient B (nếu có), Index 2: pH Agent
-    let denom_a = (tuner.kalman.p[0] + tuner.kalman.r).max(1e-9);
-    let denom_b = (tuner.kalman.p[1] + tuner.kalman.r).max(1e-9);
-    let denom_ph = (tuner.kalman.p[2] + tuner.kalman.r).max(1e-9);
-    let k_a = tuner.kalman.p[0] / denom_a;
-    let k_b = tuner.kalman.p[1] / denom_b;
-    let k_ph = tuner.kalman.p[2] / denom_ph;
-
-    // 3. Cập nhật các cột trong ma trận tương tác (InteractionMatrix) bằng hàm `.update_column`
-    // update_column(col, dose_ml, observed_delta, row, gain_k)
-
-    // Hàng 0 là EC, Hàng 1 là pH
+    // Cập nhật từng kênh: gọi update_and_get_gain ngay trước khi dùng gain
     if sample.dose_a_ml > 0.0 {
         let k_a = tuner.kalman.update_and_get_gain(0);
-        tuner
-            .interaction_matrix
-            .update_column(0, sample.dose_a_ml, observed_delta_ec, 0, k_a);
+        tuner.interaction_matrix.update_column(
+            0,
+            sample.dose_a_ml,
+            observed_delta_ec,
+            0, // row EC
+            k_a,
+        );
     }
 
     if sample.dose_b_ml > 0.0 {
         let k_b = tuner.kalman.update_and_get_gain(1);
-        tuner
-            .interaction_matrix
-            .update_column(1, sample.dose_b_ml, observed_delta_ec, 0, k_b);
+        tuner.interaction_matrix.update_column(
+            1,
+            sample.dose_b_ml,
+            observed_delta_ec,
+            0, // row EC
+            k_b,
+        );
     }
 
     let net_ph_dose_ml = sample.dose_ph_up_ml - sample.dose_ph_down_ml;
     if net_ph_dose_ml.abs() > 1e-6 {
-        // Cột 2 đại diện cho tác nhân điều chỉnh pH, tác động lên hàng 1 (pH)
-        tuner
-            .interaction_matrix
-            .update_column(2, net_ph_dose_ml, observed_delta_ph, 1, k_ph);
+        let k_ph = tuner.kalman.update_and_get_gain(2);
+        tuner.interaction_matrix.update_column(
+            2,
+            net_ph_dose_ml,
+            observed_delta_ph,
+            1, // row pH
+            k_ph,
+        );
     }
 
     tuner.matrix_update_count = tuner.matrix_update_count.saturating_add(1);
     tuner.matrix_is_warm = tuner.matrix_update_count >= 10;
 
+    let just_became_warm = !tuner.matrix_is_warm && tuner.matrix_update_count >= 10;
+    tuner.matrix_is_warm = tuner.matrix_update_count >= 10;
+
+    if just_became_warm {
+        log::info!(
+            "🧠 [MATRIX] Ma trận tương tác đã đủ ấm sau {} chu kỳ! \
+         Chuyển sang chế độ inference phối hợp EC/pH.",
+            tuner.matrix_update_count
+        );
+    }
+
     let data = tuner.interaction_matrix.data;
     log::debug!(
-        "[ORCH] Interaction matrix updated: ec_a={:.6}, ec_b={:.6}, ec_ph={:.6}, ph_a={:.6}, ph_b={:.6}, ph_ph={:.6}, updates={}, warm={}",
+        "[ORCH] Matrix updated: ec_a={:.6}, ec_b={:.6}, ph_ph={:.6}, updates={}, warm={}",
         data[0][0],
         data[0][1],
-        data[0][2],
-        data[1][0],
-        data[1][1],
         data[1][2],
         tuner.matrix_update_count,
         tuner.matrix_is_warm,
     );
 }
-
 
 fn apply_decision(
     decision: OrchestratorDecision,
@@ -645,11 +680,50 @@ pub fn tick(
             if let Some(decision) = check_scheduled_water_change(ctx, config, sensors, now_sec, nvs)
             {
                 apply_decision(decision, ctx, config, sensors, now_ms, mqtt_tx);
+
+                // Log trạng thái matrix định kỳ (không spam)
+                if ctx.dosing_cycle_count % 10 == 0 {
+                    let flat = ctx.tuner.interaction_matrix.as_flat();
+                    log::debug!(
+                        "[MATRIX] warm={} updates={} ec_a={:.5} ec_b={:.5} ph_ph={:.5}",
+                        ctx.tuner.matrix_is_warm,
+                        ctx.tuner.matrix_update_count,
+                        flat[0],
+                        flat[1],
+                        flat[5]
+                    );
+                }
             } else if let Some(decision) = check_scheduled_dosing(ctx, config, sensors, now_sec) {
                 apply_decision(decision, ctx, config, sensors, now_ms, mqtt_tx);
+
+                // Log trạng thái matrix định kỳ (không spam)
+                if ctx.dosing_cycle_count % 10 == 0 {
+                    let flat = ctx.tuner.interaction_matrix.as_flat();
+                    log::debug!(
+                        "[MATRIX] warm={} updates={} ec_a={:.5} ec_b={:.5} ph_ph={:.5}",
+                        ctx.tuner.matrix_is_warm,
+                        ctx.tuner.matrix_update_count,
+                        flat[0],
+                        flat[1],
+                        flat[5]
+                    );
+                }
             } else {
                 let decision = decide_monitoring(sensors, config, ctx, now_ms);
                 apply_decision(decision, ctx, config, sensors, now_ms, mqtt_tx);
+
+                // Log trạng thái matrix định kỳ (không spam)
+                if ctx.dosing_cycle_count % 10 == 0 {
+                    let flat = ctx.tuner.interaction_matrix.as_flat();
+                    log::debug!(
+                        "[MATRIX] warm={} updates={} ec_a={:.5} ec_b={:.5} ph_ph={:.5}",
+                        ctx.tuner.matrix_is_warm,
+                        ctx.tuner.matrix_update_count,
+                        flat[0],
+                        flat[1],
+                        flat[5]
+                    );
+                }
 
                 if matches!(ctx.phase, SystemPhase::Fault(_)) {
                     if let SystemPhase::Fault(code) = &ctx.phase {
@@ -667,10 +741,29 @@ pub fn tick(
                     log::debug!("[ORCH] Dosing soft-start completed");
                 }
                 DosingEvent::PulseToggle { pump, pulse_on } => {
-                    // let _ = mqtt_tx.send(format!(
-                    //     "[ORCH] Dosing Pulse Toggle: {:?} -> ON: {}",
-                    //     pump, pulse_on
-                    // ));
+                    // Cập nhật pump_status để frontend/backend biết pump nào đang pulse
+                    match &pump {
+                        crate::fsm::actors::dosing_actor::PumpTarget::NutrientA { .. } => {
+                            ctx.peripherals.pump_status.pump_a = pulse_on;
+                            ctx.peripherals.pump_status.dosing_pulse_active = Some(pulse_on);
+                        }
+                        crate::fsm::actors::dosing_actor::PumpTarget::NutrientB => {
+                            ctx.peripherals.pump_status.pump_b = pulse_on;
+                            ctx.peripherals.pump_status.dosing_pulse_active = Some(pulse_on);
+                        }
+                        crate::fsm::actors::dosing_actor::PumpTarget::PhUp => {
+                            ctx.peripherals.pump_status.ph_up = pulse_on;
+                        }
+                        crate::fsm::actors::dosing_actor::PumpTarget::PhDown => {
+                            ctx.peripherals.pump_status.ph_down = pulse_on;
+                        }
+                    }
+                    if !pulse_on {
+                        // Khi tắt pulse, increment counter
+                        let prev = ctx.peripherals.pump_status.dosing_pulse_count.unwrap_or(0);
+                        ctx.peripherals.pump_status.dosing_pulse_count =
+                            Some(prev.saturating_add(1));
+                    }
                     log::debug!("[ORCH] Dosing Pulse Toggle: {:?} -> ON: {}", pump, pulse_on);
                 }
                 DosingEvent::PhaseTransition => {
@@ -683,6 +776,12 @@ pub fn tick(
                     ph_up_ml,
                     ph_down_ml,
                 } => {
+                    ctx.peripherals.pump_status.pump_a = false;
+                    ctx.peripherals.pump_status.pump_b = false;
+                    ctx.peripherals.pump_status.ph_up = false;
+                    ctx.peripherals.pump_status.ph_down = false;
+                    ctx.peripherals.pump_status.dosing_pulse_active = Some(false);
+
                     if let Some(c) = ctx.dosing.cycle_ctx.clone() {
                         ctx.calibration.start_sample(PendingCalibrationSample {
                             cycle_id: c.cycle_id,
@@ -1031,4 +1130,15 @@ pub fn tick(
         SystemPhase::DosingEC | SystemPhase::DosingPH | SystemPhase::ActiveMixing
     );
     PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
+}
+
+#[cfg(test)]
+pub fn solve_for_test(
+    ec_delta: f32,
+    ph_delta: f32,
+    config: &hydragrow_shared::ControllerConfig,
+    ctx: &crate::fsm::system_context::SystemContext,
+) -> (f32, f32) {
+    let r = MonitoringMatrixResult::solve(ec_delta, ph_delta, config, ctx);
+    (r.pump_a_ml, r.ph_agent_ml)
 }

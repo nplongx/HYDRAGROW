@@ -13,6 +13,9 @@ pub mod system_context;
 pub mod types;
 pub mod utils;
 
+#[cfg(test)]
+pub mod tests;
+
 pub use optimizer::{apply_deadband, confidence_from_error_ratio};
 pub use phases::{FaultCode, SystemPhase};
 pub use system_context::SystemContext;
@@ -246,10 +249,8 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
     if !new_ctx.tuner.matrix_is_warm {
         let config = shared_config.read().unwrap().clone();
         if config.ec_gain_per_ml > 0.0 && config.ph_shift_up_per_ml > 0.0 {
-            new_ctx.tuner.interaction_matrix = InteractionMatrix::from_scalar(
-                config.ec_gain_per_ml,
-                config.ph_shift_up_per_ml,
-            );
+            new_ctx.tuner.interaction_matrix =
+                InteractionMatrix::from_scalar(config.ec_gain_per_ml, config.ph_shift_up_per_ml);
             info!(
                 "🧊 Cold matrix boot: re-seeded interaction matrix from shared_config (ec_gain_per_ml={}, ph_shift_up_per_ml={})",
                 config.ec_gain_per_ml,

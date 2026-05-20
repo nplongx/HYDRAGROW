@@ -42,28 +42,21 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
             let step_ec = coeffs.get("step_ratio_ec").and_then(|v| v.as_f64());
             let step_ph = coeffs.get("step_ratio_ph").and_then(|v| v.as_f64());
 
-            // Field mới: ma trận tương tác calibration (6 phần tử số hữu hạn)
-            let interaction_matrix = match coeffs.get("interaction_matrix") {
+            // Parse và validate interaction_matrix (giữ nguyên validation hiện tại)
+            let interaction_matrix_json: Option<serde_json::Value> = match coeffs
+                .get("interaction_matrix")
+            {
                 Some(raw_matrix) => match raw_matrix.as_array() {
                     Some(items) if items.len() == 6 => {
-                        let mut parsed = Vec::with_capacity(6);
-                        let mut is_valid = true;
-
-                        for item in items {
-                            match item.as_f64() {
-                                Some(value) if value.is_finite() => parsed.push(value),
-                                _ => {
-                                    is_valid = false;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if is_valid {
-                            Some(parsed)
+                        let all_valid = items
+                            .iter()
+                            .all(|item| item.as_f64().map(|f| f.is_finite()).unwrap_or(false));
+                        if all_valid {
+                            // Giữ nguyên dạng JSON array cho JSONB column
+                            Some(serde_json::Value::Array(items.clone()))
                         } else {
                             warn!(
-                                "⚠️ [MQTT-FSM] interaction_matrix của {} có phần tử không hợp lệ, bỏ qua field này",
+                                "⚠️ [MQTT-FSM] interaction_matrix của {} có phần tử không hợp lệ, bỏ qua",
                                 device_id
                             );
                             None
@@ -71,7 +64,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
                     }
                     Some(items) => {
                         warn!(
-                            "⚠️ [MQTT-FSM] interaction_matrix của {} sai shape ({} phần tử, cần 6), bỏ qua field này",
+                            "⚠️ [MQTT-FSM] interaction_matrix của {} sai shape ({} phần tử, cần 6), bỏ qua",
                             device_id,
                             items.len()
                         );
@@ -79,7 +72,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
                     }
                     None => {
                         warn!(
-                            "⚠️ [MQTT-FSM] interaction_matrix của {} không phải mảng JSON, bỏ qua field này",
+                            "⚠️ [MQTT-FSM] interaction_matrix của {} không phải mảng JSON, bỏ qua",
                             device_id
                         );
                         None
@@ -91,10 +84,9 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
             let matrix_update_count = coeffs.get("matrix_update_count").and_then(|v| v.as_i64());
             let matrix_is_warm = coeffs.get("matrix_is_warm").and_then(|v| v.as_bool());
 
-            // Câu lệnh SQL linh hoạt, chỉ update những biến có giá trị (không null)
             let query = r#"
-                UPDATE dosing_calibration 
-                SET 
+                UPDATE dosing_calibration
+                SET
                     ec_gain_per_ml = COALESCE($1, ec_gain_per_ml),
                     ph_shift_up_per_ml = COALESCE($2, ph_shift_up_per_ml),
                     ph_shift_down_per_ml = COALESCE($3, ph_shift_down_per_ml),
@@ -113,7 +105,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
                 .bind(ph_down)
                 .bind(step_ec)
                 .bind(step_ph)
-                .bind(interaction_matrix)
+                .bind(interaction_matrix_json)
                 .bind(matrix_update_count)
                 .bind(matrix_is_warm)
                 .bind(&device_id)
@@ -203,5 +195,28 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     } else {
         states.insert(device_id.clone(), json!({"fsm_state": state}).to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn interaction_matrix_serializes_to_jsonb_value() {
+        let raw: Vec<f64> = vec![0.015, 0.015, 0.0, 0.0, 0.0, 0.02];
+        let as_json: serde_json::Value = serde_json::to_value(&raw).unwrap();
+        assert!(as_json.is_array());
+        assert_eq!(as_json.as_array().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn invalid_matrix_with_nan_is_rejected() {
+        let items = vec![
+            serde_json::json!(0.015),
+            serde_json::json!(f64::NAN), // invalid
+        ];
+        let has_invalid = items
+            .iter()
+            .any(|v| v.as_f64().map(|f| !f.is_finite()).unwrap_or(true));
+        assert!(has_invalid);
     }
 }

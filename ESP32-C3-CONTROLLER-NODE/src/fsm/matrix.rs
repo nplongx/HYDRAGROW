@@ -13,7 +13,7 @@ pub struct ResponseVector {
 
 #[derive(Debug, Clone)]
 pub struct InteractionMatrix {
-    data: [[f32; 3]; 2],
+    pub data: [[f32; 3]; 2],
 }
 
 impl Default for InteractionMatrix {
@@ -36,17 +36,22 @@ impl InteractionMatrix {
 
     pub fn predict(&self, dose: &DoseVector) -> ResponseVector {
         let doses = [dose.nutrient_a_ml, dose.nutrient_b_ml, dose.ph_up_ml];
-        let ec_delta = self.data[0][0] * doses[0]
-            + self.data[0][1] * doses[1]
-            + self.data[0][2] * doses[2];
-        let ph_delta = self.data[1][0] * doses[0]
-            + self.data[1][1] * doses[1]
-            + self.data[1][2] * doses[2];
+        let ec_delta =
+            self.data[0][0] * doses[0] + self.data[0][1] * doses[1] + self.data[0][2] * doses[2];
+        let ph_delta =
+            self.data[1][0] * doses[0] + self.data[1][1] * doses[1] + self.data[1][2] * doses[2];
 
         ResponseVector { ec_delta, ph_delta }
     }
 
-    pub fn update_column(&mut self, col: usize, dose_ml: f32, observed: f32, row: usize, gain_k: f32) {
+    pub fn update_column(
+        &mut self,
+        col: usize,
+        dose_ml: f32,
+        observed: f32,
+        row: usize,
+        gain_k: f32,
+    ) {
         if row >= 2 || col >= 3 || dose_ml.abs() < 1e-6 {
             return;
         }
@@ -78,10 +83,7 @@ impl InteractionMatrix {
 
     pub fn from_flat(flat: [f32; 6]) -> Self {
         Self {
-            data: [
-                [flat[0], flat[1], flat[2]],
-                [flat[3], flat[4], flat[5]],
-            ],
+            data: [[flat[0], flat[1], flat[2]], [flat[3], flat[4], flat[5]]],
         }
     }
 }

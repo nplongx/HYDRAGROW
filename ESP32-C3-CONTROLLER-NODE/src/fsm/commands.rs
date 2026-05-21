@@ -97,7 +97,25 @@ pub fn process_mqtt_commands(
             info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
             crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
 
-            // Đã bổ sung 2 tham số: device_id và kênh MQTT để ghi log
+            // Xóa sạch cờ và mốc thời gian của mạch sục trộn Osaka định kỳ & Phun sương
+            ctx.peripherals.reset();
+
+            // Xóa sạch bộ đếm tín hiệu phẳng (chống lỗi hàm is_stable bị kẹt false)
+            ctx.stabilizer_tracker.reset();
+
+            // Hủy bỏ mẫu học tập Kalman đang thu thập dở dang (nếu có)
+            if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
+                sample.invalid_by_noise = true;
+            }
+
+            // Xóa trắng mốc thời gian pha FSM để tránh bị rơi ngược lại vào Cooldown
+            ctx.phase_start_ms = None;
+            ctx.phase_finish_ms = None;
+
+            // Mở khóa giải phóng FSM về trạng thái Monitoring an toàn
+            ctx.phase = SystemPhase::Monitoring;
+
+            // Giữ nguyên hàm gọi của bạn để clear các cờ lỗi bên trong module safety
             crate::fsm::mod_helpers::reset_faults_from_system_ctx(
                 ctx,
                 &config.device_id,
@@ -320,3 +338,4 @@ fn apply_pump_command(
         _ => Ok(()),
     };
 }
+

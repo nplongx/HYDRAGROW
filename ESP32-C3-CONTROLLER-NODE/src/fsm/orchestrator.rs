@@ -346,7 +346,7 @@ fn update_interaction_matrix(
             .update_column(3, sample.dose_ph_down_ml, delta_ph, 1, k3);
     }
 
-    // --- CỘT 4: Học đặc tính Bơm cấp nước vào (Hàng 2: Mực nước & Hàng 0: Pha loãng EC) ---
+    // --- CỘT 4: Học đặc tính Bơm cấp nước vào (Hàng 2: Mực nước, Hàng 0: EC & Hàng 1: pH) ---
     if sample.water_in_sec > 0.1 {
         let k4 = tuner.kalman.update_and_get_gain(4);
         tuner
@@ -355,6 +355,9 @@ fn update_interaction_matrix(
         tuner
             .interaction_matrix
             .update_column(4, sample.water_in_sec, delta_ec, 0, k4);
+        tuner
+            .interaction_matrix
+            .update_column(4, sample.water_in_sec, delta_ph, 1, k4);
     }
 
     // --- CỘT 5: Học đặc tính Bơm xả nước ra ngoài (Hàng 2: Mực nước) ---
@@ -365,7 +368,32 @@ fn update_interaction_matrix(
             .update_column(5, sample.water_out_sec, delta_water, 2, k5);
     }
 
-    // --- CỘT 7: Học đặc tính Van phun sương giải nhiệt (Hàng 2: Hao nước & Hàng 3: Tụt nhiệt độ) ---
+    // --- CỘT 6: Học đặc tính bơm Osaka khuấy trộn (Hàng 0: EC nhiễu nhẹ, Hàng 2: mực nước gợn) ---
+    // Ước tính thời gian osaka chạy = tổng thời gian phase DosingEC + ActiveMixing
+    let actual_osaka_sec = (sample
+        .active_mixing_finish_ms
+        .saturating_sub(sample.start_ms) as f32
+        / 1000.0)
+        .clamp(0.0, 300.0);
+
+    if actual_osaka_sec > 1.0 {
+        let k6 = tuner.kalman.update_and_get_gain(6);
+        // Osaka có thể làm đọc mực nước dao động nhẹ (hàng 2)
+        tuner
+            .interaction_matrix
+            .update_column(6, actual_osaka_sec, delta_water, 2, k6);
+        // Osaka pha loãng đồng đều → ảnh hưởng EC rất nhỏ (hàng 0)
+        // Dùng hệ số k6 * 0.1 để không over-weight
+        tuner
+            .interaction_matrix
+            .update_column(6, actual_osaka_sec, delta_ec * 0.1, 0, k6 * 0.1);
+        // Osaka khuấy động làm thoát khí CO2 -> pH tăng nhẹ (Hàng 1)
+        tuner
+            .interaction_matrix
+            .update_column(6, actual_osaka_sec, delta_ph * 0.1, 1, k6 * 0.1);
+    }
+
+    // --- CỘT 7: Học đặc tính Van phun sương giải nhiệt (Toàn bộ 4 Hàng: EC, pH, Nước, Nhiệt) ---
     let actual_misting_sec = (sample
         .stabilizing_finish_ms
         .unwrap_or(sample.start_ms)
@@ -375,12 +403,27 @@ fn update_interaction_matrix(
 
     if actual_misting_sec > 0.1 {
         let k7 = tuner.kalman.update_and_get_gain(7);
+
+        // Học cơ chế hao hụt nước do bay hơi sương (Hàng 2 - Water Level)
         tuner
             .interaction_matrix
             .update_column(7, actual_misting_sec, delta_water, 2, k7);
+
+        // Học cơ chế tụt giảm nhiệt độ môi trường thực tế (Hàng 3 - Temperature)
         tuner
             .interaction_matrix
             .update_column(7, actual_misting_sec, delta_temp, 3, k7);
+
+        // Học hệ số cô đặc làm tăng EC do mất nước bay hơi (Hàng 0 - EC)
+        // Nhân thêm 0.1 để bộ lọc Kalman hấp thụ thông tin từ từ, tránh giật cục
+        tuner
+            .interaction_matrix
+            .update_column(7, actual_misting_sec, delta_ec * 0.1, 0, k7 * 0.1);
+
+        // Học hệ số tăng pH do thoát khí CO2 và nhiễm tạp chất đường hồi (Hàng 1 - pH)
+        tuner
+            .interaction_matrix
+            .update_column(7, actual_misting_sec, delta_ph * 0.1, 1, k7 * 0.1);
     }
 
     tuner.matrix_update_count = tuner.matrix_update_count.saturating_add(1);
@@ -391,6 +434,8 @@ fn update_interaction_matrix(
     let c3 = tuner.kalman.confidence(3);
     let c4 = tuner.kalman.confidence(4);
     let c5 = tuner.kalman.confidence(5);
+    let c6 = tuner.kalman.confidence(6);
+    let c7 = tuner.kalman.confidence(7);
 
     let is_now_warm = tuner.matrix_update_count >= 5
         && c0 > 0.75
@@ -398,7 +443,9 @@ fn update_interaction_matrix(
         && c2 > 0.75
         && c3 > 0.75
         && c4 > 0.75
-        && c5 > 0.75;
+        && c5 > 0.75
+        && c6 > 0.5
+        && c7 > 0.5;
 
     if is_now_warm && c0 > 0.90 {
         tuner.adaptive_ec_ratio = (tuner.adaptive_ec_ratio + 0.02).min(1.0);
@@ -423,19 +470,69 @@ fn apply_decision(
             target_ph,
             pwm,
         } => {
-            let total_ml_this_cycle = control.nutrient_a_ml
-                + control.nutrient_b_ml
-                + control.ph_up_ml
-                + control.ph_down_ml;
-            if total_ml_this_cycle > 0.0
+            // Kiểm tra budget từng bơm riêng để hiển thị đúng trên Dashboard
+            if control.nutrient_a_ml > 0.0
                 && !ctx.safety.check_hourly_dose(
-                    "dosing_total",
+                    "NutrientA",
                     now_ms / 1000,
-                    total_ml_this_cycle,
-                    config.max_dose_per_hour,
+                    control.nutrient_a_ml,
+                    config.max_dose_per_hour / 2.0,
                 )
             {
                 ctx.phase = SystemPhase::Fault(FaultCode::MaxHourlyDoseEc);
+                return;
+            }
+            if control.nutrient_b_ml > 0.0
+                && !ctx.safety.check_hourly_dose(
+                    "NutrientB",
+                    now_ms / 1000,
+                    control.nutrient_b_ml,
+                    config.max_dose_per_hour / 2.0,
+                )
+            {
+                ctx.phase = SystemPhase::Fault(FaultCode::MaxHourlyDoseEc);
+                return;
+            }
+            if control.ph_up_ml > 0.0 {
+                let _ = ctx.safety.check_hourly_dose(
+                    "PhUp",
+                    now_ms / 1000,
+                    control.ph_up_ml,
+                    config.max_dose_per_hour / 4.0,
+                );
+            }
+            if control.ph_down_ml > 0.0 {
+                let _ = ctx.safety.check_hourly_dose(
+                    "PhDown",
+                    now_ms / 1000,
+                    control.ph_down_ml,
+                    config.max_dose_per_hour / 4.0,
+                );
+            }
+
+            // Thực thi rate limit cấp/xả nước
+            if control.water_in_sec > 0.0
+                && !ctx
+                    .safety
+                    .record_refill(now_ms / 1000, config.max_refill_cycles_per_hour as u32)
+            {
+                warn!(
+                    "⚠️ [SAFETY] Vượt giới hạn {} lần cấp nước/giờ. Bỏ qua chu kỳ này.",
+                    config.max_refill_cycles_per_hour
+                );
+                ctx.phase = SystemPhase::Fault(FaultCode::TooManyRefills);
+                return;
+            }
+            if control.water_out_sec > 0.0
+                && !ctx
+                    .safety
+                    .record_drain(now_ms / 1000, config.max_drain_cycles_per_hour as u32)
+            {
+                warn!(
+                    "⚠️ [SAFETY] Vượt giới hạn {} lần xả nước/giờ. Bỏ qua chu kỳ này.",
+                    config.max_drain_cycles_per_hour
+                );
+                ctx.phase = SystemPhase::Fault(FaultCode::TooManyDrains);
                 return;
             }
 
@@ -549,8 +646,86 @@ pub fn tick(
                 ctx.peripherals.pump_status.water_pump_out = false;
             }
 
+            // Nếu phase timeout hoàn toàn (cả hardware timeout lẫn dosing idle),
+            // thoát khỏi phase tránh kẹt vô thời hạn
+            if now_ms >= ctx.phase_finish_ms.unwrap_or(u64::MAX) + 5_000 {
+                warn!("⚠️ [FSM] Dosing phase timeout cứng! Chuyển về Monitoring để tránh kẹt.");
+                let _ = pumps.set_water_pump(WaterDirection::Stop);
+                let _ = pumps.set_mist_valve(false);
+                ctx.peripherals.pump_status.water_pump_in = false;
+                ctx.peripherals.pump_status.water_pump_out = false;
+                ctx.phase = SystemPhase::Cooldown;
+                ctx.phase_finish_ms = Some(now_ms + config.cooldown_sec.max(30) as u64 * 1000);
+                return; // thoát khỏi tick() ngay
+            }
+
             match ctx.dosing.tick(now_ms, config, pumps) {
-                DosingEvent::Pending => {}
+                DosingEvent::Pending => {
+                    // Nếu dosing actor Idle (water-only cycle) và đủ thời gian,
+                    // chuyển thẳng sang ActiveMixing
+                    if ctx.dosing.is_idle() {
+                        let elapsed_ms =
+                            now_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(now_ms));
+                        let min_water_run_ms = 500_u64; // Tối thiểu 500ms để nước chạy vào/ra
+                        if elapsed_ms >= min_water_run_ms {
+                            let _ = pumps.set_water_pump(WaterDirection::Stop);
+                            let _ = pumps.set_mist_valve(false);
+
+                            // Tạo sample với water data từ context
+                            let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
+                                let ms =
+                                    elapsed_ms.min(config.max_refill_duration_sec as u64 * 1000);
+                                ms as f32 / 1000.0
+                            } else {
+                                0.0
+                            };
+                            let water_out_spent = if ctx.peripherals.pump_status.water_pump_out {
+                                let ms =
+                                    elapsed_ms.min(config.max_drain_duration_sec as u64 * 1000);
+                                ms as f32 / 1000.0
+                            } else {
+                                0.0
+                            };
+
+                            ctx.peripherals.pump_status.water_pump_in = false;
+                            ctx.peripherals.pump_status.water_pump_out = false;
+                            ctx.peripherals.pump_status.mist_valve = false;
+                            ctx.peripherals.is_misting_active = false;
+
+                            ctx.calibration.start_sample(PendingCalibrationSample {
+                                cycle_id: format!("water-{now_ms}"),
+                                trigger: "water_only_cycle".to_string(),
+                                start_ec: ctx.safety.last_ec_before_dose.unwrap_or(sensors.ec),
+                                start_ph: ctx.safety.last_ph_before_dose.unwrap_or(sensors.ph),
+                                start_water_level: sensors.water_level,
+                                start_temp: sensors.temp,
+                                target_ec: config.ec_target,
+                                target_ph: config.ph_target,
+                                dose_a_ml: 0.0,
+                                dose_b_ml: 0.0,
+                                dose_ph_up_ml: 0.0,
+                                dose_ph_down_ml: 0.0,
+                                water_in_sec: water_in_spent,
+                                water_out_sec: water_out_spent,
+                                post_mixing_ec: 0.0,
+                                post_mixing_ph: 0.0,
+                                start_ms: ctx.phase_start_ms.unwrap_or(now_ms),
+                                active_mixing_finish_ms: now_ms
+                                    + (ctx.diagnostic.adaptive_mixing_sec as u64 * 1000),
+                                stabilizing_start_ms: None,
+                                stabilizing_finish_ms: None,
+                                invalid_by_noise: false,
+                                invalid_by_water_change: false,
+                            });
+
+                            ctx.phase = SystemPhase::ActiveMixing;
+                            ctx.phase_start_ms = Some(now_ms);
+                            ctx.phase_finish_ms =
+                                Some(now_ms + ctx.diagnostic.adaptive_mixing_sec as u64 * 1000);
+                            ctx.stabilizer_tracker.reset();
+                        }
+                    }
+                }
                 DosingEvent::SoftStartDone => {}
                 DosingEvent::PulseToggle {
                     pump: _,
@@ -563,13 +738,7 @@ pub fn tick(
                     ph_up_ml,
                     ph_down_ml,
                 } => {
-                    let _ = pumps.set_water_pump(WaterDirection::Stop);
-                    let _ = pumps.set_mist_valve(false);
-                    ctx.peripherals.pump_status.water_pump_in = false;
-                    ctx.peripherals.pump_status.water_pump_out = false;
-                    ctx.peripherals.pump_status.mist_valve = false;
-                    ctx.peripherals.is_misting_active = false;
-
+                    // capture trước rồi mỡi clear
                     let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
                         config.max_refill_duration_sec as f32
                     } else {
@@ -580,6 +749,13 @@ pub fn tick(
                     } else {
                         0.0
                     };
+
+                    let _ = pumps.set_water_pump(WaterDirection::Stop);
+                    let _ = pumps.set_mist_valve(false);
+                    ctx.peripherals.pump_status.water_pump_in = false;
+                    ctx.peripherals.pump_status.water_pump_out = false;
+                    ctx.peripherals.pump_status.mist_valve = false;
+                    ctx.peripherals.is_misting_active = false;
 
                     ctx.calibration.start_sample(PendingCalibrationSample {
                         cycle_id: format!("mimo-{now_ms}"),
@@ -668,6 +844,92 @@ pub fn tick(
                     let actual_delta_ec = final_ec - sample.start_ec;
                     let actual_delta_ph = final_ph - sample.start_ph;
                     let actual_delta_water = final_water - sample.start_water_level;
+
+                    // MỚI: Cập nhật EMA GainLearner với dữ liệu thực đo
+                    // Chỉ học khi sample hợp lệ (không nhiễu, không water change làm pha loãng)
+                    if !sample.invalid_by_noise && !sample.invalid_by_water_change {
+                        // Học EC gain từ tổng ml dinh dưỡng A+B
+                        let total_nutrient_ml = sample.dose_a_ml + sample.dose_b_ml;
+                        if total_nutrient_ml > 0.1 && actual_delta_ec > 0.0 {
+                            ctx.tuner.gain_learner.update_ec_gain(
+                                total_nutrient_ml,
+                                actual_delta_ec,
+                                config,
+                            );
+                        }
+
+                        // Học pH Up gain
+                        if sample.dose_ph_up_ml > 0.05 && actual_delta_ph > 0.0 {
+                            ctx.tuner.gain_learner.update_ph_gain(
+                                sample.dose_ph_up_ml,
+                                actual_delta_ph,
+                                true,
+                                config,
+                            );
+                        }
+
+                        // Học pH Down gain (delta_ph âm khi pH giảm → truyền abs)
+                        if sample.dose_ph_down_ml > 0.05 && actual_delta_ph < 0.0 {
+                            ctx.tuner.gain_learner.update_ph_gain(
+                                sample.dose_ph_down_ml,
+                                actual_delta_ph.abs(),
+                                false,
+                                config,
+                            );
+                        }
+                    }
+
+                    // Cập nhật AutoTuner step-ratio convergence
+                    if !sample.invalid_by_noise && !sample.invalid_by_water_change {
+                        let total_nutrient_ml = sample.dose_a_ml + sample.dose_b_ml;
+
+                        if total_nutrient_ml > 0.1 {
+                            // expected = mức EC tăng mà ma trận dự đoán sẽ đạt
+                            let expected_ec_delta = total_nutrient_ml
+                                * ctx
+                                    .tuner
+                                    .gain_learner
+                                    .effective_ec_gain(config.ec_gain_per_ml);
+                            // response = mức EC thực tế đo được
+                            let response_ec_delta = actual_delta_ec.max(0.0);
+                            ctx.tuner.on_ec_dosing_ack(
+                                response_ec_delta,
+                                expected_ec_delta,
+                                config,
+                                now_ms / 1000,
+                            );
+                        }
+
+                        if sample.dose_ph_up_ml > 0.05 && actual_delta_ph > 0.0 {
+                            let expected_ph_delta = sample.dose_ph_up_ml
+                                * ctx
+                                    .tuner
+                                    .gain_learner
+                                    .effective_ph_up_gain(config.ph_shift_up_per_ml);
+                            ctx.tuner.on_ph_dosing_ack(
+                                actual_delta_ph,
+                                expected_ph_delta,
+                                config,
+                                true,
+                                now_ms / 1000,
+                            );
+                        }
+
+                        if sample.dose_ph_down_ml > 0.05 && actual_delta_ph < 0.0 {
+                            let expected_ph_delta = sample.dose_ph_down_ml
+                                * ctx
+                                    .tuner
+                                    .gain_learner
+                                    .effective_ph_down_gain(config.ph_shift_down_per_ml);
+                            ctx.tuner.on_ph_dosing_ack(
+                                actual_delta_ph.abs(),
+                                expected_ph_delta,
+                                config,
+                                false,
+                                now_ms / 1000,
+                            );
+                        }
+                    }
 
                     if let Err(hardware_fault_code) = ctx.diagnostic.diagnose_hardware_fault(
                         &sample,

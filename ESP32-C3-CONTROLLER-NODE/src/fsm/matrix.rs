@@ -63,7 +63,7 @@ impl Default for InteractionMatrix {
 }
 
 impl InteractionMatrix {
-    /// Khởi tạo ma trận từ các hằng số cấu hình tĩnh ban đầu với các dấu vật lý chuẩn xác
+    /// Khởi tạo ma trận từ các hằng số cấu hình tĩnh ban đầu
     pub fn from_scalar(
         ec_gain_per_ml: f32,
         ph_shift_up_per_ml: f32,
@@ -81,6 +81,7 @@ impl InteractionMatrix {
         // --- HÀNG 1: Biến thiên pH ---
         m.data[1][2] = ph_shift_up_per_ml; // Thuốc pH Up làm tăng pH (+)
         m.data[1][3] = -ph_shift_down_per_ml.abs(); // Thuốc pH Down làm giảm pH (-)
+        m.data[1][4] = 0.002;
 
         // --- HÀNG 2: Biến thiên Mức nước (Water Level) ---
         m.data[2][4] = water_in_cm_per_sec; // Bơm nước vào làm tăng mực nước (+)

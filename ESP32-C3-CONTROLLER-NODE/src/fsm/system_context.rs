@@ -135,6 +135,18 @@ pub struct PeripheralState {
     pub previous_ph: Option<f32>,
 }
 
+impl PeripheralState {
+    pub fn reset(&mut self) {
+        self.pump_status = PumpStatus::default();
+        self.osaka_active = false;
+        self.osaka_pwm = 0;
+        self.is_misting_active = false;
+        self.is_scheduled_mixing_active = false;
+        self.last_mist_toggle_time = 0;
+        self.last_mixing_start_sec = 0;
+    }
+}
+
 pub struct CalibrationSampler {
     pub pending_sample: Option<PendingCalibrationSample>,
 }

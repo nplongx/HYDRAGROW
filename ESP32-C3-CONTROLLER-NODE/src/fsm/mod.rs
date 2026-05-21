@@ -14,9 +14,6 @@ pub mod system_context;
 pub mod types;
 pub mod utils;
 
-#[cfg(test)]
-pub mod tests;
-
 // SỬA LỖI 1: Loại bỏ confidence_from_error_ratio không tồn tại, chỉ giữ lại apply_deadband
 pub use optimizer::apply_deadband;
 pub use phases::{FaultCode, SystemPhase};

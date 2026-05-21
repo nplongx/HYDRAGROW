@@ -40,17 +40,30 @@ impl SensorStabilizerTracker {
         }
     }
 
-    pub fn is_stable(&self) -> bool {
+    pub fn is_stable(&self, config: &hydragrow_shared::ControllerConfig) -> bool {
         if self.count < 5 {
-            return false; // Chưa thu thập đủ 5 mẫu lịch sử gần nhất
+            return false; // Chưa tích lũy đủ 5 mốc dữ liệu nền
         }
-        let max_ec = self.history_ec.iter().fold(f32::MIN, |a, &b| a.max(b));
-        let min_ec = self.history_ec.iter().fold(f32::MAX, |a, &b| a.min(b));
-        let max_ph = self.history_ph.iter().fold(f32::MIN, |a, &b| a.max(b));
-        let min_ph = self.history_ph.iter().fold(f32::MAX, |a, &b| a.min(b));
 
-        // Điều kiện phẳng: dao động EC dưới 0.01 và pH dưới 0.02 trong 5 giây liên tục
-        (max_ec - min_ec) < 0.01 && (max_ph - min_ph) < 0.02
+        // Trục kiểm tra Dinh dưỡng EC (Chỉ xét khi cảm biến bật)
+        let ec_is_stable = if config.enable_ec_sensor {
+            let max_ec = self.history_ec.iter().fold(f32::MIN, |a, &b| a.max(b));
+            let min_ec = self.history_ec.iter().fold(f32::MAX, |a, &b| a.min(b));
+            (max_ec - min_ec) < 0.01
+        } else {
+            true // Nếu cảm biến tắt, mặc định trục này bỏ qua, coi như đã phẳng an toàn
+        };
+
+        // Trục kiểm tra Độ kiềm pH (Chỉ xét khi cảm biến bật)
+        let ph_is_stable = if config.enable_ph_sensor {
+            let max_ph = self.history_ph.iter().fold(f32::MIN, |a, &b| a.max(b));
+            let min_ph = self.history_ph.iter().fold(f32::MAX, |a, &b| a.min(b));
+            (max_ph - min_ph) < 0.02
+        } else {
+            true
+        };
+
+        ec_is_stable && ph_is_stable
     }
 
     pub fn reset(&mut self) {

@@ -50,29 +50,41 @@ impl MonitoringMatrixResult {
         let w_level = sensors.water_level as f32;
         let temp_val = sensors.temp as f32;
 
+        // Tính toán độ lệch cơ bản
         let ec_delta = (config.ec_target - ec_val).max(0.0);
         let ph_delta = config.ph_target - ph_val;
         let water_delta = config.water_level_target - w_level;
         let temp_delta = config.misting_temp_threshold - temp_val;
 
-        // Áp dụng vùng chết deadband lọc nhiễu dao động quanh điểm đặt mục tiêu
-        let safe_ec_delta = if ec_delta.abs() > config.ec_tolerance {
+        // 🛡️ CHỐT CHẶN BẢO VỆ MỚI: Chỉ tính sai số nếu cấu hình cho phép bật cảm biến (enable_sensor)
+        // Nếu cảm biến bị tắt, hạ mức delta mục tiêu về 0.0 để cô lập trục tính toán Moore-Penrose hoàn toàn
+        let safe_ec_delta = if config.enable_ec_sensor && ec_delta.abs() > config.ec_tolerance {
             ec_delta
         } else {
             0.0
         };
-        let safe_ph_delta = if ph_delta.abs() > config.ph_tolerance {
+
+        let safe_ph_delta = if config.enable_ph_sensor && ph_delta.abs() > config.ph_tolerance {
             ph_delta
         } else {
             0.0
         };
-        let safe_water_delta = if water_delta.abs() > config.water_level_tolerance {
+
+        let safe_water_delta = if config.enable_water_level_sensor
+            && water_delta.abs() > config.water_level_tolerance
+        {
             water_delta
         } else {
             0.0
         };
-        let safe_temp_delta = if temp_delta < 0.0 { temp_delta } else { 0.0 };
 
+        let safe_temp_delta = if config.enable_temp_sensor && temp_delta < 0.0 {
+            temp_delta
+        } else {
+            0.0
+        };
+
+        // Nếu tất cả các trục đều nằm trong deadband hoặc bị tắt cảm biến -> Đứng im trạng thái nghỉ (Idle)
         if safe_ec_delta == 0.0
             && safe_ph_delta == 0.0
             && safe_water_delta == 0.0
@@ -305,6 +317,7 @@ fn update_interaction_matrix(
     let delta_ph = post_ph - sample.start_ph;
     let delta_water = post_water - sample.start_water_level;
     let delta_temp = post_temp - sample.start_temp;
+
     // --- CỘT 0 & 1: Học đặc tính châm thuốc phân bón (Hàng 0: EC) ---
     if sample.dose_a_ml > 0.0 {
         let k0 = tuner.kalman.update_and_get_gain(0);
@@ -352,17 +365,6 @@ fn update_interaction_matrix(
             .update_column(5, sample.water_out_sec, delta_water, 2, k5);
     }
 
-    // Nếu muốn mở rộng học tập cho Cột 6 (Osaka Mixing) sau này:
-    // if sample.mixing_sec > 0.1 {
-    //     let k6 = tuner.kalman.update_and_get_gain(6);
-    //     let delta_temp = post_temp - sample.start_temp;
-    //
-    //     // Học hệ số sinh nhiệt của động cơ bơm trộn vào Hàng 3 (Nhiệt độ)
-    //     tuner
-    //         .interaction_matrix
-    //         .update_column(6, sample.mixing_sec, delta_temp, 3, k6);
-    // }
-
     // --- CỘT 7: Học đặc tính Van phun sương giải nhiệt (Hàng 2: Hao nước & Hàng 3: Tụt nhiệt độ) ---
     let actual_misting_sec = (sample
         .stabilizing_finish_ms
@@ -390,7 +392,6 @@ fn update_interaction_matrix(
     let c4 = tuner.kalman.confidence(4);
     let c5 = tuner.kalman.confidence(5);
 
-    // Ma trận đạt trạng thái ấm khi toàn bộ hệ trục hóa học lẫn thủy lực nước đạt độ bão hòa phẳng tin cậy
     let is_now_warm = tuner.matrix_update_count >= 5
         && c0 > 0.75
         && c1 > 0.75
@@ -455,7 +456,6 @@ fn apply_decision(
             ctx.dosing
                 .start_matrix_cycle(now_ms, &control, target_ec, target_ph, pwm, config, sensors);
 
-            // 📝 TOÁN HỌC ĐỘNG: Định lượng thời gian khóa pha động tối đa thay cho các số cứng hard-code cũ
             let hardware_run_ms = (control
                 .water_in_sec
                 .max(control.water_out_sec)
@@ -464,7 +464,7 @@ fn apply_decision(
 
             ctx.phase = SystemPhase::DosingEC;
             ctx.phase_start_ms = Some(now_ms);
-            ctx.phase_finish_ms = Some(now_ms + hardware_run_ms + 5000); // Biên bảo vệ = Thời gian thiết bị chạy + 5s
+            ctx.phase_finish_ms = Some(now_ms + hardware_run_ms + 5000);
 
             ctx.safety.last_ec_before_dose = Some(sensors.ec as f32);
             ctx.safety.last_ph_before_dose = Some(sensors.ph as f32);
@@ -570,7 +570,6 @@ pub fn tick(
                     ctx.peripherals.pump_status.mist_valve = false;
                     ctx.peripherals.is_misting_active = false;
 
-                    // Chốt mốc thời gian chạy bơm nước thực tế trong chu kỳ này để nạp vào snapshot học tập
                     let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
                         config.max_refill_duration_sec as f32
                     } else {
@@ -582,7 +581,6 @@ pub fn tick(
                         0.0
                     };
 
-                    // ⚡ LUỒNG KHÉP KÍN: Khởi tạo chu kỳ lấy mẫu, đồng bộ mốc thời gian và lưu lượng trục nước cho Kalman
                     ctx.calibration.start_sample(PendingCalibrationSample {
                         cycle_id: format!("mimo-{now_ms}"),
                         trigger: "mimo_matrix_control".to_string(),
@@ -612,7 +610,7 @@ pub fn tick(
                     ctx.phase = SystemPhase::ActiveMixing;
                     ctx.phase_start_ms = Some(now_ms);
                     ctx.phase_finish_ms =
-                        Some(now_ms + ctx.diagnostic.adaptive_mixing_sec as u64 * 1000); // Tự học pha khuấy động
+                        Some(now_ms + ctx.diagnostic.adaptive_mixing_sec as u64 * 1000);
                     ctx.stabilizer_tracker.reset();
                 }
                 DosingEvent::Failed(code) => {
@@ -629,11 +627,9 @@ pub fn tick(
             let min_mixing_ms = 15_000;
             let max_mixing_timeout = now_ms >= ctx.phase_finish_ms.unwrap_or(0);
 
-            // 🧠 ADAPTIVE NGẮT SỚM: Nước tan đều sớm tự chuyển trạng thái bẻ lái chu kỳ lưu lượng tiết kiệm năng lượng
-            if (elapsed_ms >= min_mixing_ms && ctx.stabilizer_tracker.is_stable())
+            if (elapsed_ms >= min_mixing_ms && ctx.stabilizer_tracker.is_stable(config))
                 || max_mixing_timeout
             {
-                // Đóng dấu mốc thời gian động bắt đầu pha lắng tĩnh
                 if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
                     sample.stabilizing_start_ms = Some(now_ms);
                 }
@@ -641,7 +637,7 @@ pub fn tick(
                 ctx.phase = SystemPhase::Stabilizing;
                 ctx.phase_start_ms = Some(now_ms);
                 ctx.phase_finish_ms =
-                    Some(now_ms + ctx.diagnostic.adaptive_stabilize_sec as u64 * 1000); // Tự học pha ổn định cảm biến
+                    Some(now_ms + ctx.diagnostic.adaptive_stabilize_sec as u64 * 1000);
                 ctx.stabilizer_tracker.reset();
             }
         }
@@ -654,14 +650,12 @@ pub fn tick(
             let min_stabilize_ms = 10_000;
             let max_stabilize_timeout = now_ms >= ctx.phase_finish_ms.unwrap_or(0);
 
-            // 🎯 ADAPTIVE CHỐT MẪU SỚM: Cảm biến phân cực phẳng tĩnh đứng im -> Kết thúc chu kỳ đo đạc chốt học tập
-            if (elapsed_ms >= min_stabilize_ms && ctx.stabilizer_tracker.is_stable())
+            if (elapsed_ms >= min_stabilize_ms && ctx.stabilizer_tracker.is_stable(config))
                 || max_stabilize_timeout
             {
                 if let Some(mut sample) = ctx.calibration.finalize() {
                     ctx.dosing_cycle_count = ctx.dosing_cycle_count.saturating_add(1);
 
-                    // Đóng dấu mốc kết thúc chu kỳ ổn định và lưu giá trị đo thực tế đầu ra
                     sample.stabilizing_finish_ms = Some(now_ms);
                     let final_ec = sensors.ec as f32;
                     let final_ph = sensors.ph as f32;
@@ -675,7 +669,6 @@ pub fn tick(
                     let actual_delta_ph = final_ph - sample.start_ph;
                     let actual_delta_water = final_water - sample.start_water_level;
 
-                    // 🛡️ BỘ TỰ CHẨN ĐOÁN LỖI EDGE AI: Kiểm tra nghẹt ống, cạn thuốc, van một chiều kẹt hay e-khí rơ-le trục xuất Fault cứu máy
                     if let Err(hardware_fault_code) = ctx.diagnostic.diagnose_hardware_fault(
                         &sample,
                         actual_delta_ec,
@@ -687,7 +680,6 @@ pub fn tick(
                         return;
                     }
 
-                    // 🧠 TỰ HỌC CHẤT LƯU ĐỘNG: Phân tích độ trễ quán tính dòng chảy nạp bộ nhớ đệm bồn chứa chu kỳ sau
                     let total_spent_mixing_ms = now_ms.saturating_sub(
                         sample.active_mixing_finish_ms
                             - (ctx.diagnostic.adaptive_mixing_sec as u64 * 1000),
@@ -696,7 +688,6 @@ pub fn tick(
                     ctx.diagnostic
                         .learn_fluid_dynamics(total_spent_mixing_ms, total_spent_stabilize_ms);
 
-                    // 🛡️ CHỐT CHẶN BẢO VỆ TOÁN HỌC: Ngăn cấm lọc Kalman học mẫu lỗi chèn dòng hay nhiễu xung điện từ cực đoan
                     if !sample.invalid_by_noise && !sample.invalid_by_water_change {
                         update_interaction_matrix(
                             &mut ctx.tuner,
@@ -780,11 +771,18 @@ pub fn tick(
     }
 
     let now_sec = now_ms / 1000;
-    PeripheralController::tick_scheduled_mixing(&mut ctx.peripherals, now_sec, config);
+    // Chỉ cho phép chạy sục trộn định kỳ hoặc các tác vụ ngoại vi khi FSM rảnh rỗi (Monitoring)
+    // Tuyệt đối không cho phép chạy chèn dòng khi đang nằm trong pha khóa bảo vệ Cooldown hoặc đang châm hóa chất
+    if matches!(ctx.phase, SystemPhase::Monitoring) {
+        PeripheralController::tick_scheduled_mixing(&mut ctx.peripherals, now_sec, config);
+        let is_dosing_active = false;
+        PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
+    } else {
+        // Nếu đang trong Cooldown hoặc châm hóa chất, ép trạng thái sục tuần hoàn định kỳ về nghỉ an toàn
+        ctx.peripherals.is_scheduled_mixing_active = false;
+    }
+
+    // Giữ mạch phun sương giải nhiệt độc lập để bảo vệ sự sống cho cây trồng nếu nhiệt độ phòng vượt ngưỡng
     PeripheralController::tick_misting(&mut ctx.peripherals, pumps, sensors, now_ms, config);
-    let is_dosing_active = matches!(
-        ctx.phase,
-        SystemPhase::DosingEC | SystemPhase::DosingPH | SystemPhase::ActiveMixing
-    );
-    PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
 }
+

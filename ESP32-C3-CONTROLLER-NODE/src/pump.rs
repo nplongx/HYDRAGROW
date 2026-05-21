@@ -209,6 +209,7 @@ impl PumpController {
 
     pub fn set_osaka_pump_pwm(&mut self, duty_percent: u32) -> anyhow::Result<()> {
         if duty_percent == 0 {
+            // Chỉ gửi tín hiệu hủy khẩn cấp khi muốn tắt hoàn toàn thiết bị về 0
             self.cancel_soft_start.store(true, Ordering::SeqCst);
             self.osaka_en.set_low()?;
             let mut pump = self.osaka_rpwm.lock().unwrap();
@@ -216,7 +217,9 @@ impl PumpController {
         } else {
             let percent = duty_percent.min(100);
             self.osaka_en.set_high()?;
-            self.cancel_soft_start.store(true, Ordering::SeqCst);
+
+            // ❌ TRƯỚC ĐÂY GÂY LỖI: self.cancel_soft_start.store(true, Ordering::SeqCst);
+            // 💡 SỬA THÀNH: Không chèn cờ hủy khi tăng ga để luồng SoftStart chạy mượt mà không bị ngắt quãng
 
             let mut pump = self.osaka_rpwm.lock().unwrap();
             let max_duty = pump.get_max_duty();

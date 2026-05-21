@@ -680,6 +680,9 @@ pub fn tick(
                         return;
                     }
 
+                    ctx.dosing.retry_ec = 0;
+                    ctx.dosing.retry_ph = 0;
+
                     let total_spent_mixing_ms = now_ms.saturating_sub(
                         sample.active_mixing_finish_ms
                             - (ctx.diagnostic.adaptive_mixing_sec as u64 * 1000),
@@ -785,4 +788,3 @@ pub fn tick(
     // Giữ mạch phun sương giải nhiệt độc lập để bảo vệ sự sống cho cây trồng nếu nhiệt độ phòng vượt ngưỡng
     PeripheralController::tick_misting(&mut ctx.peripherals, pumps, sensors, now_ms, config);
 }
-

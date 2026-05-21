@@ -133,17 +133,19 @@ pub struct PeripheralState {
     pub last_continuous_level: bool,
     pub previous_ec: Option<f32>,
     pub previous_ph: Option<f32>,
+    pub misting_started_by_dosing: bool,
 }
 
 impl PeripheralState {
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self, now_sec: u64) {
         self.pump_status = PumpStatus::default();
         self.osaka_active = false;
         self.osaka_pwm = 0;
         self.is_misting_active = false;
         self.is_scheduled_mixing_active = false;
         self.last_mist_toggle_time = 0;
-        self.last_mixing_start_sec = 0;
+        self.misting_started_by_dosing = false;
+        self.last_mixing_start_sec = now_sec;
     }
 }
 
@@ -269,6 +271,7 @@ impl Default for PeripheralState {
             last_continuous_level: false,
             previous_ec: None,
             previous_ph: None,
+            misting_started_by_dosing: false,
         }
     }
 }

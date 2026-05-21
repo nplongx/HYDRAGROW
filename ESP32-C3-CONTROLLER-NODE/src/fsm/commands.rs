@@ -98,7 +98,7 @@ pub fn process_mqtt_commands(
             crate::fsm::mod_helpers::stop_all_pumps_from_system_ctx(ctx, pump_ctrl);
 
             // Xóa sạch cờ và mốc thời gian của mạch sục trộn Osaka định kỳ & Phun sương
-            ctx.peripherals.reset();
+            ctx.peripherals.reset(current_time_ms / 1000);
 
             // Xóa sạch bộ đếm tín hiệu phẳng (chống lỗi hàm is_stable bị kẹt false)
             ctx.stabilizer_tracker.reset();
@@ -338,4 +338,3 @@ fn apply_pump_command(
         _ => Ok(()),
     };
 }
-

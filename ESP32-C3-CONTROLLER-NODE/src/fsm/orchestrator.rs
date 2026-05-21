@@ -259,7 +259,10 @@ fn check_scheduled_water_change(
         let _ = flash.set_u64("last_w_change", now_sec);
     }
 
-    // 🛡️ CHỐT CHẶN AN TOÀN TOÁN HỌC: Đánh dấu hủy chu kỳ học ma trận hiện tại vì cấu trúc bồn nước sắp thay đổi hoàn toàn
+    ctx.peripherals.last_mixing_start_sec = now_sec;
+    ctx.peripherals.is_scheduled_mixing_active = false;
+
+    // CHỐT CHẶN AN TOÀN TOÁN HỌC: Đánh dấu hủy chu kỳ học ma trận hiện tại vì cấu trúc bồn nước sắp thay đổi hoàn toàn
     if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
         sample.invalid_by_water_change = true;
     }
@@ -548,6 +551,7 @@ fn apply_decision(
                 let _ = pumps.set_mist_valve(true);
                 ctx.peripherals.pump_status.mist_valve = true;
                 ctx.peripherals.is_misting_active = true;
+                ctx.peripherals.misting_started_by_dosing = true;
             }
 
             ctx.dosing
@@ -651,9 +655,12 @@ pub fn tick(
             if now_ms >= ctx.phase_finish_ms.unwrap_or(u64::MAX) + 5_000 {
                 warn!("⚠️ [FSM] Dosing phase timeout cứng! Chuyển về Monitoring để tránh kẹt.");
                 let _ = pumps.set_water_pump(WaterDirection::Stop);
-                let _ = pumps.set_mist_valve(false);
-                ctx.peripherals.pump_status.water_pump_in = false;
-                ctx.peripherals.pump_status.water_pump_out = false;
+                if ctx.peripherals.misting_started_by_dosing {
+                    let _ = pumps.set_mist_valve(false);
+                    ctx.peripherals.pump_status.mist_valve = false;
+                    ctx.peripherals.is_misting_active = false;
+                    ctx.peripherals.misting_started_by_dosing = false;
+                }
                 ctx.phase = SystemPhase::Cooldown;
                 ctx.phase_finish_ms = Some(now_ms + config.cooldown_sec.max(30) as u64 * 1000);
                 return; // thoát khỏi tick() ngay
@@ -669,8 +676,12 @@ pub fn tick(
                         let min_water_run_ms = 500_u64; // Tối thiểu 500ms để nước chạy vào/ra
                         if elapsed_ms >= min_water_run_ms {
                             let _ = pumps.set_water_pump(WaterDirection::Stop);
-                            let _ = pumps.set_mist_valve(false);
-
+                            if ctx.peripherals.misting_started_by_dosing {
+                                let _ = pumps.set_mist_valve(false);
+                                ctx.peripherals.pump_status.mist_valve = false;
+                                ctx.peripherals.is_misting_active = false;
+                                ctx.peripherals.misting_started_by_dosing = false;
+                            }
                             // Tạo sample với water data từ context
                             let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
                                 let ms =
@@ -689,8 +700,6 @@ pub fn tick(
 
                             ctx.peripherals.pump_status.water_pump_in = false;
                             ctx.peripherals.pump_status.water_pump_out = false;
-                            ctx.peripherals.pump_status.mist_valve = false;
-                            ctx.peripherals.is_misting_active = false;
 
                             ctx.calibration.start_sample(PendingCalibrationSample {
                                 cycle_id: format!("water-{now_ms}"),
@@ -1036,17 +1045,25 @@ pub fn tick(
     }
 
     let now_sec = now_ms / 1000;
-    // Chỉ cho phép chạy sục trộn định kỳ hoặc các tác vụ ngoại vi khi FSM rảnh rỗi (Monitoring)
-    // Tuyệt đối không cho phép chạy chèn dòng khi đang nằm trong pha khóa bảo vệ Cooldown hoặc đang châm hóa chất
-    if matches!(ctx.phase, SystemPhase::Monitoring) {
+
+    // Xác định trạng thái dosing thực sự để osaka biết cần chạy ở PWM nào
+    let is_dosing_active = matches!(
+        ctx.phase,
+        SystemPhase::DosingEC
+            | SystemPhase::DosingPH
+            | SystemPhase::ActiveMixing
+            | SystemPhase::Stabilizing
+    );
+
+    // Scheduled mixing chỉ chạy khi không đang dosing hóa chất (tránh xung đột bơm osaka)
+    // KHÔNG reset is_scheduled_mixing_active ở đây — để tick_scheduled_mixing tự quản lý
+    if !is_dosing_active {
         PeripheralController::tick_scheduled_mixing(&mut ctx.peripherals, now_sec, config);
-        let is_dosing_active = false;
-        PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
-    } else {
-        // Nếu đang trong Cooldown hoặc châm hóa chất, ép trạng thái sục tuần hoàn định kỳ về nghỉ an toàn
-        ctx.peripherals.is_scheduled_mixing_active = false;
     }
 
-    // Giữ mạch phun sương giải nhiệt độc lập để bảo vệ sự sống cho cây trồng nếu nhiệt độ phòng vượt ngưỡng
+    // Osaka luôn được tick để phản ánh đúng nhu cầu hiện tại
+    PeripheralController::tick_osaka(&mut ctx.peripherals, pumps, is_dosing_active, config);
+
+    // Mạch phun sương độc lập — không thay đổi
     PeripheralController::tick_misting(&mut ctx.peripherals, pumps, sensors, now_ms, config);
 }

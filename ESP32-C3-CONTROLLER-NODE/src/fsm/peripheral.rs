@@ -1,6 +1,6 @@
-use hydragrow_shared::{ControllerConfig, SensorData};
-
 use crate::pump::PumpController;
+use hydragrow_shared::{ControllerConfig, SensorData};
+use log::info;
 
 use super::system_context::PeripheralState;
 
@@ -25,6 +25,13 @@ impl PeripheralController {
             };
 
             if !peripherals.pump_status.osaka_pump {
+                info!(
+                    "🌀 [OSAKA] Bật bơm Osaka {}% (dosing={}, misting={}, mixing={})",
+                    target_pwm,
+                    is_dosing_active,
+                    peripherals.is_misting_active,
+                    peripherals.is_scheduled_mixing_active
+                );
                 let _ = pumps.start_osaka_pump_soft(target_pwm);
                 peripherals.pump_status.osaka_pump = true;
                 peripherals.pump_status.osaka_pwm = Some(target_pwm);
@@ -37,6 +44,7 @@ impl PeripheralController {
                 peripherals.osaka_active = true;
             }
         } else if peripherals.pump_status.osaka_pump {
+            info!("⏹️ [OSAKA] Tắt bơm Osaka — không còn nhu cầu nào.");
             let _ = pumps.set_osaka_pump_pwm(0);
             peripherals.pump_status.osaka_pump = false;
             peripherals.pump_status.osaka_pwm = Some(0);
@@ -86,17 +94,29 @@ impl PeripheralController {
     ) {
         if config.scheduled_mixing_interval_sec > 0 && config.scheduled_mixing_duration_sec > 0 {
             if peripherals.is_scheduled_mixing_active {
-                if now_sec
-                    >= peripherals.last_mixing_start_sec
-                        + config.scheduled_mixing_duration_sec as u64
-                {
+                let end_time =
+                    peripherals.last_mixing_start_sec + config.scheduled_mixing_duration_sec as u64;
+                if now_sec >= end_time {
+                    info!(
+                    "⏹️ [MIXING] Kết thúc chu kỳ sục trộn định kỳ. Đã chạy {}s. Next trong {}s.",
+                    config.scheduled_mixing_duration_sec,
+                    config.scheduled_mixing_interval_sec
+                );
                     peripherals.is_scheduled_mixing_active = false;
+                    peripherals.last_mixing_start_sec = now_sec; // (đã fix ở Task 2)
                 }
-            } else if now_sec
-                >= peripherals.last_mixing_start_sec + config.scheduled_mixing_interval_sec as u64
-            {
-                peripherals.is_scheduled_mixing_active = true;
-                peripherals.last_mixing_start_sec = now_sec;
+                // else: đang chạy, không cần log liên tục
+            } else {
+                let next_trigger =
+                    peripherals.last_mixing_start_sec + config.scheduled_mixing_interval_sec as u64;
+                if now_sec >= next_trigger {
+                    info!(
+                        "▶️ [MIXING] Bắt đầu chu kỳ sục trộn định kỳ. Sẽ chạy trong {}s.",
+                        config.scheduled_mixing_duration_sec
+                    );
+                    peripherals.is_scheduled_mixing_active = true;
+                    peripherals.last_mixing_start_sec = now_sec;
+                }
             }
         } else {
             peripherals.is_scheduled_mixing_active = false;

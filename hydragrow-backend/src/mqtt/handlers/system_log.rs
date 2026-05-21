@@ -17,12 +17,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     };
 
     let level_str = log_data.level.as_str().to_string();
-
     let category_str = log_data.category.as_str().to_string();
 
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog(meta) => {
-            // Log server-side warning khi firmware chủ động skip một chu kỳ
             if let Some(reason) = &meta.skip_reason {
                 tracing::warn!(
                     device_id = %log_data.device_id,
@@ -95,7 +93,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             .event_bus
             .send(AppEvent::SystemAlert(alert.clone()));
 
-        // Push FCM cho lỗi nghiêm trọng
         if is_critical || is_warning {
             let tokens = app_state.fcm_tokens.lock().unwrap().clone();
             if !tokens.is_empty() {
@@ -111,3 +108,4 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     }
 }
+

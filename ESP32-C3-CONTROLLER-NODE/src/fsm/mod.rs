@@ -4,6 +4,7 @@
 
 pub mod actors;
 pub mod commands;
+pub mod local_health_and_diagnostic;
 pub mod matrix;
 pub mod optimizer;
 pub mod orchestrator;
@@ -16,7 +17,8 @@ pub mod utils;
 #[cfg(test)]
 pub mod tests;
 
-pub use optimizer::{apply_deadband, confidence_from_error_ratio};
+// SỬA LỖI 1: Loại bỏ confidence_from_error_ratio không tồn tại, chỉ giữ lại apply_deadband
+pub use optimizer::apply_deadband;
 pub use phases::{FaultCode, SystemPhase};
 pub use system_context::SystemContext;
 pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData};
@@ -85,7 +87,6 @@ pub mod mod_helpers {
             }
             _ => Ok(()),
         };
-        // SỬA LỖI: Wrap bằng Some()
         ctx.peripherals.pump_status.dosing_pulse_active = Some(false);
         ctx.peripherals.pump_status.dosing_pulse_count = Some(0);
     }
@@ -114,12 +115,6 @@ pub mod mod_helpers {
     }
 }
 
-// ---------------------------------------------------------------------------
-// start_fsm_control_loop
-//
-// Hàm khởi động vòng lặp FSM chạy trên thread riêng.
-// Gọi một lần khi khởi động hệ thống.
-// ---------------------------------------------------------------------------
 #[allow(clippy::too_many_arguments)]
 pub fn start_fsm_control_loop(
     shared_config: SharedConfig,
@@ -138,11 +133,9 @@ pub fn start_fsm_control_loop(
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
     let current_time_on_boot = get_current_time_sec();
 
-    // Biến phụ để tracking timeout sensor dựa trên `time: String`
     let mut last_sensor_time_str = String::new();
     let mut sensor_last_update_ms = get_current_time_ms();
 
-    // Khôi phục thời điểm thay nước & bơm định kỳ từ NVS flash
     new_ctx.last_water_change_sec = nvs
         .as_mut()
         .and_then(|f| f.get_u64("last_w_change").unwrap_or(None))
@@ -191,9 +184,10 @@ pub fn start_fsm_control_loop(
                 };
                 new_ctx.tuner.gain_learner.ph_up.sample_count = ph_up_count;
                 new_ctx.tuner.gain_learner.ph_down.sample_count = ph_down_count;
-                new_ctx.tuner.gain_learner.ec.recalculate_confidence();
-                new_ctx.tuner.gain_learner.ph_up.recalculate_confidence();
-                new_ctx.tuner.gain_learner.ph_down.recalculate_confidence();
+
+                // SỬA LỖI 2: Loại bỏ 3 dòng gọi hàm .recalculate_confidence() không còn tồn tại trong cấu trúc mới
+                // Độ tự tin hiện tại đã được tính thích ứng tự động qua số lượng mẫu lưu trữ inline hoặc bộ lọc Kalman.
+
                 if snapshot.ec_variance_baseline.is_finite() && snapshot.ec_variance_baseline >= 0.0
                 {
                     new_ctx.tuner.ec_variance_baseline = snapshot.ec_variance_baseline;
@@ -208,8 +202,10 @@ pub fn start_fsm_control_loop(
                             && (*value >= INTERACTION_MATRIX_MIN)
                             && (*value <= INTERACTION_MATRIX_MAX)
                     });
+
+                    // SỬA ĐỔI: Đồng bộ kiểm tra ma trận 2x4 (đầu EC là index 0, đầu pH Up là index 6)
                     let matrix_diagonal_gain_is_valid =
-                        interaction_matrix[0] > 0.0 && interaction_matrix[5] > 0.0;
+                        interaction_matrix[0] > 0.0 && interaction_matrix[6] > 0.0;
                     let matrix_is_valid = matrix_values_are_valid && matrix_diagonal_gain_is_valid;
 
                     if matrix_is_valid {
@@ -228,7 +224,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                             matrix_values_are_valid,
                             matrix_diagonal_gain_is_valid,
                             interaction_matrix[0],
-                            interaction_matrix[5],
+                            interaction_matrix[6],
                             snapshot.matrix_update_count,
                             snapshot.matrix_is_warm
                         );
@@ -249,8 +245,13 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
     if !new_ctx.tuner.matrix_is_warm {
         let config = shared_config.read().unwrap().clone();
         if config.ec_gain_per_ml > 0.0 && config.ph_shift_up_per_ml > 0.0 {
-            new_ctx.tuner.interaction_matrix =
-                InteractionMatrix::from_scalar(config.ec_gain_per_ml, config.ph_shift_up_per_ml);
+            new_ctx.tuner.interaction_matrix = InteractionMatrix::from_scalar(
+                config.ec_gain_per_ml,
+                config.ph_shift_up_per_ml,
+                config.ph_shift_down_per_ml,
+                0.05,
+                0.04,
+            );
             info!(
                 "🧊 Cold matrix boot: re-seeded interaction matrix from shared_config (ec_gain_per_ml={}, ph_shift_up_per_ml={})",
                 config.ec_gain_per_ml,
@@ -283,7 +284,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         let current_time_ms = get_current_time_ms();
         let current_time_sec = current_time_ms / 1000;
 
-        // Xử lý kiểm tra timeout của sensor (Cập nhật thời điểm khi gói dữ liệu thay đổi)
         if sensors.time != last_sensor_time_str {
             last_sensor_time_str = sensors.time.clone();
             sensor_last_update_ms = current_time_ms;
@@ -298,7 +298,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             &fsm_mqtt_tx,
         );
 
-        // --- Xử lý timeout bơm thủ công (có thể tắt bơm) ---
         let expired: Vec<String> = new_ctx
             .safety
             .manual_timeouts
@@ -311,7 +310,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             info!("⏱️ HẾT GIỜ (SAFE TIMEOUT): Tự động tắt bơm {}!", pump);
             utils::send_system_log(
                 &fsm_mqtt_tx,
-                &config.device_id, // Đảm bảo config có chứa device_id
+                &config.device_id,
                 LogLevel::Warning,
                 LogCategory::UserAction,
                 "Tự động tắt bơm (Safety Timeout)",
@@ -328,26 +327,20 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
         }
 
-        // ✅ Cập nhật shared_sensors NGAY LẬP TỨC sau khi xử lý lệnh + timeout
         if let Ok(mut s) = shared_sensors.write() {
             s.pump_status = new_ctx.peripherals.pump_status.clone();
         }
 
-        // ✅ Nếu có force_sync, publish trạng thái ngay lập tức
         if force_sync {
-            // Gửi lệnh ép sensor task publish dữ liệu (bao gồm pump_status)
             let _ = sensor_cmd_tx
                 .send(r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string());
-            // Đồng thời publish trạng thái FSM để backend nhận ngay
             let _ = fsm_mqtt_tx.send(build_status_msg(&new_ctx, current_time_sec));
             last_reported_state.clear();
             info!("⚡ Đã ép publish trạng thái bơm mới nhất lên App!");
         }
 
-        // --- Phần còn lại giữ nguyên (kiểm tra safety, auto FSM...) ---
         let is_safety_overridden = current_time_ms < new_ctx.safety.safety_override_until;
         if !is_safety_overridden {
-            // SỬA LỖI: Sử dụng unwrap_or(false)
             let has_sensor_fault = (config.enable_water_level_sensor
                 && sensors.err_water.unwrap_or(false))
                 || (config.enable_ec_sensor && sensors.err_ec.unwrap_or(false))
@@ -355,7 +348,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 || (config.enable_temp_sensor && sensors.err_temp.unwrap_or(false));
 
             if !has_sensor_fault {
-                // SỬA LỖI: Thêm tham số sensor_last_update_ms
                 orchestrator::tick(
                     current_time_ms,
                     &config,
@@ -370,7 +362,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             }
         }
 
-        // --- Cập nhật chế độ đọc cảm biến liên tục khi đang bơm nước ---
         let needs_continuous = matches!(
             new_ctx.phase,
             SystemPhase::WaterRefilling | SystemPhase::WaterDraining
@@ -383,12 +374,10 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             new_ctx.peripherals.last_continuous_level = needs_continuous;
         }
 
-        // --- Đồng bộ pump_status ra shared_sensor (lần cuối sau khi FSM chạy) ---
         if let Ok(mut s) = shared_sensors.write() {
             s.pump_status = new_ctx.peripherals.pump_status.clone();
         }
 
-        // --- Publish trạng thái nếu state FSM thay đổi ---
         let state_changed = report_phase_if_changed(&new_ctx.phase, &mut last_reported_state);
         if state_changed {
             let _ = fsm_mqtt_tx.send(build_status_msg(&new_ctx, current_time_sec));
@@ -397,10 +386,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         std::thread::sleep(Duration::from_millis(100));
     }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers nhỏ dùng trong vòng lặp
-// ---------------------------------------------------------------------------
 
 fn report_phase_if_changed(current_phase: &SystemPhase, last_reported_state: &mut String) -> bool {
     let s = match current_phase {
@@ -417,9 +402,7 @@ fn report_phase_if_changed(current_phase: &SystemPhase, last_reported_state: &mu
     }
 }
 
-// Nhớ truyền thêm tham số now_sec vào hàm này
 fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
-    // Hàm closure tính tổng số ml đã bơm trong 1 giờ qua
     let sum_ml = |pump_name: &str| -> f32 {
         ctx.safety
             .hourly_doses()
@@ -433,7 +416,6 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
             .unwrap_or(0.0)
     };
 
-    // Đếm số lần bơm nước/xả nước trong 1 giờ
     let refill_count = ctx
         .safety
         .refill_history()
@@ -462,6 +444,8 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
             "drain_count": drain_count
         },
         "log_drop_count": crate::fsm::utils::get_log_drop_count(),
+
+        "diagnostics": ctx.diagnostic.to_telemetry_json()
     })
     .to_string()
 }

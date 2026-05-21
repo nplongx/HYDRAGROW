@@ -65,7 +65,6 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   Object.entries(rawPumpStatus).forEach(([key, value]) => {
     const normalizedKey = mapped[key] || mapped[key.toUpperCase()] || key.toLowerCase();
 
-    // 🟢 FIX 2: Giữ lại cả giá trị bool và pwm để chức năng slider thủ công không bị mất
     if (booleanKeys.includes(normalizedKey)) {
       normalized[normalizedKey] = Boolean(value);
     } else if (normalizedKey.includes('pwm')) {
@@ -157,7 +156,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     const setupConnection = async () => {
       setIsLoading(true);
 
-      // Lấy dữ liệu REST ban đầu
       try {
         const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/latest`;
         const response = await httpFetch(url, {
@@ -187,7 +185,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
       setIsLoading(false);
 
-      // Lấy lịch sử sự kiện (Event Logs)
       try {
         const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
           method: 'GET',
@@ -199,7 +196,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (err) { /* empty */ }
 
-      // Thiết lập WebSocket
       const connectWs = () => {
         const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
         const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${settings.api_key}`;
@@ -237,7 +233,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
               }
 
-              // 🟢 FIX 1: Cập nhật Pump Status cùng lúc FSM chuyển trạng thái (VD: Chuyển Manual tắt bơm)
               if (payload.pump_status && Object.keys(payload.pump_status).length > 0) {
                 applyPumpStatus(normalizePumpStatus(payload.pump_status));
               }
@@ -305,7 +300,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               if (alert.level === 'critical' || alert.level === 'warning') {
                 toast.error(`${alert.title}\n${alert.message}`, { id: alert.title, duration: 6000 });
               } else if (alert.level === 'success') {
-                toast.success(`${alert.title}\n${alert.message}`, { duration: 5000 });
+                toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 });
               } return;
             }
 
@@ -338,13 +333,16 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
 
+            // ── device_health ────────────────────────────────────────────────
             if (data.type === 'device_health') {
               const healthData = data.payload;
 
               setControllerHealth({
                 rssi: healthData.rssi,
                 free_heap: healthData.free_heap,
-                uptime: healthData.uptime_sec
+                uptime: healthData.uptime_sec,
+                // 🌟 TÍCH HỢP ĐỒNG BỘ: Mở khóa map gói dữ liệu diagnostics phục vụ UI Health Bar và Adaptive Timers
+                diagnostics: healthData.diagnostics || null
               });
 
               if (healthData.fsm_state) {
@@ -356,7 +354,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               }
 
               if (healthData.pump_status) {
-                // 🟢 FIX 3: Phải bọc normalizePumpStatus vào đây, nếu không nó ghi nhận key viết Hoa
                 applyPumpStatus(normalizePumpStatus(healthData.pump_status));
               }
 

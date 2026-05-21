@@ -1,19 +1,67 @@
 use hydragrow_shared::PumpStatus;
 use serde::{Deserialize, Serialize};
 
-use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
-
 use super::actors::{
     dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
 };
 use super::phases::SystemPhase;
 use super::types::PendingCalibrationSample;
+use crate::fsm::local_health_and_diagnostic::LocalHealthAndDiagnostic;
+use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
 
 pub type CronSchedule = String;
+
+// --- BỘ GIÁM SÁT ADAPTIVE TÍN HIỆU PHẲNG (MỚI) ---
+pub struct SensorStabilizerTracker {
+    pub history_ec: [f32; 5],
+    pub history_ph: [f32; 5],
+    pub count: usize,
+    pub head: usize,
+}
+
+impl Default for SensorStabilizerTracker {
+    fn default() -> Self {
+        Self {
+            history_ec: [0.0; 5],
+            history_ph: [0.0; 5],
+            count: 0,
+            head: 0,
+        }
+    }
+}
+
+impl SensorStabilizerTracker {
+    pub fn push(&mut self, ec: f32, ph: f32) {
+        self.history_ec[self.head] = ec;
+        self.history_ph[self.head] = ph;
+        self.head = (self.head + 1) % 5;
+        if self.count < 5 {
+            self.count += 1;
+        }
+    }
+
+    pub fn is_stable(&self) -> bool {
+        if self.count < 5 {
+            return false; // Chưa thu thập đủ 5 mẫu lịch sử gần nhất
+        }
+        let max_ec = self.history_ec.iter().fold(f32::MIN, |a, &b| a.max(b));
+        let min_ec = self.history_ec.iter().fold(f32::MAX, |a, &b| a.min(b));
+        let max_ph = self.history_ph.iter().fold(f32::MIN, |a, &b| a.max(b));
+        let min_ph = self.history_ph.iter().fold(f32::MAX, |a, &b| a.min(b));
+
+        // Điều kiện phẳng: dao động EC dưới 0.01 và pH dưới 0.02 trong 5 giây liên tục
+        (max_ec - min_ec) < 0.01 && (max_ph - min_ph) < 0.02
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
 
 pub struct SystemContext {
     pub dosing_cycle_count: u64,
     pub phase: SystemPhase,
+    pub phase_start_ms: Option<u64>,
     pub phase_finish_ms: Option<u64>,
     pub dosing: DosingActor,
     pub water: WaterActor,
@@ -21,11 +69,44 @@ pub struct SystemContext {
     pub calibration: CalibrationSampler,
     pub tuner: AutoTuner,
     pub peripherals: PeripheralState,
+    pub stabilizer_tracker: SensorStabilizerTracker,
+
+    // ⚡ ĐỒNG BỘ: Nhúng bộ tự chẩn đoán cục bộ
+    pub diagnostic: LocalHealthAndDiagnostic,
+
     pub water_change_cron: CronSchedule,
     pub scheduled_dosing_cron: CronSchedule,
     pub last_water_change_sec: u64,
     pub next_water_change_trigger_sec: Option<u64>,
     pub next_scheduled_dosing_trigger_sec: Option<u64>,
+}
+
+// Cập nhật hàm impl Default của SystemContext để tránh lỗi khởi tạo rỗng:
+impl Default for SystemContext {
+    fn default() -> Self {
+        Self {
+            phase: SystemPhase::Booting,
+            dosing_cycle_count: 0,
+            phase_start_ms: None,
+            phase_finish_ms: None,
+            dosing: DosingActor::new(),
+            water: WaterActor::new(),
+            safety: SafetyGuard::new(),
+            calibration: CalibrationSampler::default(),
+            tuner: AutoTuner::default(),
+            peripherals: PeripheralState::default(),
+            stabilizer_tracker: SensorStabilizerTracker::default(),
+
+            // ⚡ NẠP MẶC ĐỊNH
+            diagnostic: LocalHealthAndDiagnostic::default(),
+
+            water_change_cron: String::new(),
+            scheduled_dosing_cron: String::new(),
+            last_water_change_sec: 0,
+            next_water_change_trigger_sec: None,
+            next_scheduled_dosing_trigger_sec: None,
+        }
+    }
 }
 
 pub struct PeripheralState {
@@ -63,38 +144,6 @@ pub struct AutoTuner {
     pub matrix_is_warm: bool,
 }
 
-// pub struct InteractionMatrix {
-//     pub ec_to_ec: f32,
-//     pub ec_to_ph: f32,
-//     pub ph_to_ec: f32,
-//     pub ph_to_ph: f32,
-// }
-//
-// impl InteractionMatrix {
-//     pub fn from_scalar(value: f32) -> Self {
-//         Self {
-//             ec_to_ec: value,
-//             ec_to_ph: value,
-//             ph_to_ec: value,
-//             ph_to_ph: value,
-//         }
-//     }
-// }
-//
-// pub struct KalmanCovarianceDiag {
-//     pub ec_variance: f32,
-//     pub ph_variance: f32,
-// }
-//
-// impl KalmanCovarianceDiag {
-//     pub fn new() -> Self {
-//         Self {
-//             ec_variance: 1.0,
-//             ph_variance: 1.0,
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TunerState {
     Exploring = 0,
@@ -113,7 +162,6 @@ impl TunerState {
             _ => Self::Converging,
         }
     }
-
     pub fn as_u8(self) -> u8 {
         self as u8
     }
@@ -147,8 +195,11 @@ pub struct NvsSnapshot {
     pub ec_variance_baseline: f32,
     #[serde(default)]
     pub ph_variance_baseline: f32,
+
+    // SỬA Ở ĐÂY: Mở rộng từ Option<[f32; 8]> lên Option<[f32; 32]> để lưu toàn bộ ma trận 4x8
     #[serde(default)]
-    pub interaction_matrix: Option<[f32; 6]>,
+    pub interaction_matrix: Option<[f32; 32]>,
+
     #[serde(default)]
     pub matrix_update_count: u32,
     #[serde(default)]
@@ -178,29 +229,6 @@ pub struct GainLearner {
     pub ec: SingleGainLearner,
     pub ph_up: SingleGainLearner,
     pub ph_down: SingleGainLearner,
-}
-
-impl SystemContext {}
-
-impl Default for SystemContext {
-    fn default() -> Self {
-        Self {
-            phase: SystemPhase::Booting,
-            dosing_cycle_count: 0,
-            phase_finish_ms: None,
-            dosing: DosingActor::new(),
-            water: WaterActor::new(),
-            safety: SafetyGuard::new(),
-            calibration: CalibrationSampler::default(),
-            tuner: AutoTuner::default(),
-            peripherals: PeripheralState::default(),
-            water_change_cron: String::new(),
-            scheduled_dosing_cron: String::new(),
-            last_water_change_sec: 0,
-            next_water_change_trigger_sec: None,
-            next_scheduled_dosing_trigger_sec: None,
-        }
-    }
 }
 
 impl Default for PeripheralState {
@@ -242,31 +270,19 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            interaction_matrix: InteractionMatrix::from_scalar(0.015, 0.02),
-            kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1),
+            // SỬA Ở ĐÂY: Nạp đầy đủ các giá trị gain thực tế phần cứng lớp dưới vào hàm khởi tạo
+            interaction_matrix: InteractionMatrix::from_scalar(0.015, 0.02, 0.025, 0.05, 0.04),
+            kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1), // Tự động tạo mảng 8 trục bên trong driver mới
             matrix_update_count: 0,
             matrix_is_warm: false,
         }
     }
 }
-//
-// impl Default for KalmanState {
-//     fn default() -> Self {
-//         Self { g: [[0.0; 3]; 2] }
-//     }
-// }
-//
-// impl KalmanState {
-//     pub fn predict(&mut self) {
-//         // Placeholder for process-model prediction step.
-//     }
-// }
 
 impl CalibrationSampler {
     pub fn start_sample(&mut self, sample: PendingCalibrationSample) {
         self.pending_sample = Some(sample);
     }
-
     pub fn finalize(&mut self) -> Option<PendingCalibrationSample> {
         self.pending_sample.take()
     }
@@ -322,7 +338,6 @@ impl AutoTuner {
                 self.best_ph_ratio = self.best_ph_ratio.max(self.adaptive_ph_ratio);
             }
         }
-
         self.last_update_sec = now_sec;
         self.update_state(is_ec, is_ph_up);
     }
@@ -339,7 +354,6 @@ impl AutoTuner {
     pub fn is_locked(&self) -> bool {
         matches!(self.state, TunerState::Stable)
     }
-
     pub fn active_ec_ratio(&self) -> f32 {
         self.adaptive_ec_ratio
     }
@@ -350,7 +364,7 @@ impl AutoTuner {
         config: &hydragrow_shared::ControllerConfig,
         now_ms: u64,
     ) -> String {
-        let flat = self.interaction_matrix.as_flat();
+        let flat = self.interaction_matrix.as_flat(); // Bây giờ trả về [f32; 32]
 
         serde_json::json!({
             "type": "runtime_calibration_update",
@@ -367,10 +381,16 @@ impl AutoTuner {
                 "interaction_matrix": flat,
                 "matrix_update_count": self.matrix_update_count,
                 "matrix_is_warm": self.matrix_is_warm,
+                // ĐỒNG BỘ: Đẩy đủ cấu trúc mảng 8 trục Kalman tự tin lên MQTT Server
                 "kalman_confidence": [
-                    self.gain_learner.ec.confidence,
-                    self.gain_learner.ph_up.confidence,
-                    self.gain_learner.ph_down.confidence,
+                    self.kalman.confidence(0), // Nutrient A
+                    self.kalman.confidence(1), // Nutrient B
+                    self.kalman.confidence(2), // pH Up
+                    self.kalman.confidence(3), // pH Down
+                    self.kalman.confidence(4), // Water In
+                    self.kalman.confidence(5), // Water Out
+                    self.kalman.confidence(6), // Osaka Mixing
+                    self.kalman.confidence(7), // Misting
                 ],
             },
             "timestamp_ms": now_ms
@@ -386,9 +406,8 @@ impl NvsSnapshot {
             .hourly_doses()
             .iter()
             .filter(|(pump, _)| pump.as_str() == "NutrientA" || pump.as_str() == "NutrientB")
-            .map(|(_, history)| {
-                history
-                    .iter()
+            .map(|(_, h)| {
+                h.iter()
                     .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
                     .map(|(_, ml)| ml)
                     .sum::<f32>()
@@ -400,9 +419,8 @@ impl NvsSnapshot {
             .hourly_doses()
             .iter()
             .filter(|(pump, _)| pump.as_str() == "PhUp" || pump.as_str() == "PhDown")
-            .map(|(_, history)| {
-                history
-                    .iter()
+            .map(|(_, h)| {
+                h.iter()
                     .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
                     .map(|(_, ml)| ml)
                     .sum::<f32>()
@@ -459,7 +477,6 @@ impl Default for ConvergenceTracker {
         }
     }
 }
-
 impl Default for SingleGainLearner {
     fn default() -> Self {
         Self {
@@ -473,7 +490,6 @@ impl Default for SingleGainLearner {
         }
     }
 }
-
 impl Default for GainLearner {
     fn default() -> Self {
         Self {
@@ -483,14 +499,6 @@ impl Default for GainLearner {
         }
     }
 }
-
-// impl Default for InteractionMatrix {
-//     fn default() -> Self {
-//         Self {
-//             values: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0],
-//         }
-//     }
-// }
 
 impl GainLearner {
     pub fn update_ec_gain(
@@ -549,7 +557,6 @@ impl GainLearner {
             config_gain
         }
     }
-
     pub fn effective_ph_up_gain(&self, config_gain: f32) -> f32 {
         if self.ph_up.confidence >= 0.6
             && self.ph_up.sample_count >= self.ph_up.min_samples
@@ -561,7 +568,6 @@ impl GainLearner {
             config_gain
         }
     }
-
     pub fn effective_ph_down_gain(&self, config_gain: f32) -> f32 {
         if self.ph_down.confidence >= 0.6
             && self.ph_down.sample_count >= self.ph_down.min_samples
@@ -588,10 +594,6 @@ impl SingleGainLearner {
         self.sample_count = self.sample_count.saturating_add(1);
         self.confidence = (self.sample_count as f32 / self.min_samples as f32).min(1.0);
     }
-
-    pub fn recalculate_confidence(&mut self) {
-        self.confidence = (self.sample_count as f32 / self.min_samples as f32).min(1.0);
-    }
 }
 
 impl ConvergenceTracker {
@@ -609,11 +611,8 @@ impl ConvergenceTracker {
         if n < 2 {
             return;
         }
-        let mut first = 0.0;
-        let mut last = 0.0;
-        let mut prev_sign = 0_i8;
-        let mut sign_changes = 0_u8;
-        let mut abs_sum = 0.0;
+        let (mut first, mut last, mut prev_sign, mut sign_changes, mut abs_sum) =
+            (0.0, 0.0, 0_i8, 0_u8, 0.0);
         for i in 0..n {
             let idx = (self.head + self.error_history.len() - n + i) % self.error_history.len();
             let v = self.error_history[idx];
@@ -640,8 +639,7 @@ impl ConvergenceTracker {
         }
         self.trend = first.abs() - last.abs();
         self.oscillation = sign_changes as f32 / (n.saturating_sub(1) as f32);
-        let mean_abs = abs_sum / n as f32;
-        if mean_abs > 0.98 {
+        if (abs_sum / n as f32) > 0.98 {
             self.stagnant_cycles = self.stagnant_cycles.saturating_add(1);
         } else {
             self.stagnant_cycles = 0;
@@ -677,13 +675,13 @@ impl AutoTuner {
         };
         (p_term + d_term) * damp * scale
     }
+
     fn update_state(&mut self, is_ec: bool, is_ph_up: Option<bool>) {
         let (err, tracker_count) = if is_ec {
             (self.ec_tracker.current_error().abs(), self.ec_tracker.count)
         } else {
             (self.ph_tracker.current_error().abs(), self.ph_tracker.count)
         };
-
         let confidence = if is_ec {
             self.gain_learner.ec.confidence
         } else {
@@ -699,7 +697,6 @@ impl AutoTuner {
         };
 
         self.refresh_variance_baseline();
-
         if self.is_degraded() {
             self.state = TunerState::Degraded;
             return;
@@ -713,6 +710,7 @@ impl AutoTuner {
             state => state,
         };
     }
+
     pub fn on_water_change(&mut self) {
         self.adaptive_ec_ratio =
             self.adaptive_ec_ratio + (self.best_ec_ratio - self.adaptive_ec_ratio) * 0.5;
@@ -722,32 +720,35 @@ impl AutoTuner {
         self.ph_tracker.reset();
         self.state = TunerState::Converging;
     }
+
     pub fn on_manual_reset(&mut self) {
         self.ec_tracker.reset();
         self.ph_tracker.reset();
         self.state = TunerState::Converging;
     }
+
     fn refresh_variance_baseline(&mut self) {
-        let ec_ready = self.gain_learner.ec.sample_count >= self.gain_learner.ec.min_samples;
-        if ec_ready && self.ec_variance_baseline <= 0.0 {
+        if self.gain_learner.ec.sample_count >= self.gain_learner.ec.min_samples
+            && self.ec_variance_baseline <= 0.0
+        {
             self.ec_variance_baseline = self.gain_learner.ec.variance.max(1e-6);
         }
-        let ph_samples =
-            self.gain_learner.ph_up.sample_count + self.gain_learner.ph_down.sample_count;
-        let ph_ready = ph_samples >= self.gain_learner.ph_up.min_samples;
-        if ph_ready && self.ph_variance_baseline <= 0.0 {
-            let ph_var =
-                (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5;
-            self.ph_variance_baseline = ph_var.max(1e-6);
+        if (self.gain_learner.ph_up.sample_count + self.gain_learner.ph_down.sample_count)
+            >= self.gain_learner.ph_up.min_samples
+            && self.ph_variance_baseline <= 0.0
+        {
+            self.ph_variance_baseline =
+                ((self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5)
+                    .max(1e-6);
         }
-        // EMA readiness != matrix RLS readiness; matrix_is_warm is updated by RLS/restore flow.
     }
+
     fn is_degraded(&self) -> bool {
         let ec_degraded = self.ec_variance_baseline > 0.0
             && self.gain_learner.ec.variance > self.ec_variance_baseline * 1.5;
-        let ph_var = (self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5;
-        let ph_degraded =
-            self.ph_variance_baseline > 0.0 && ph_var > self.ph_variance_baseline * 1.5;
+        let ph_degraded = self.ph_variance_baseline > 0.0
+            && ((self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5)
+                > self.ph_variance_baseline * 1.5;
         ec_degraded || ph_degraded
     }
 }

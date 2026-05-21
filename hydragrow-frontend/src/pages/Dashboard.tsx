@@ -1,5 +1,9 @@
 import { useEffect } from 'react';
-import { Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu, Wifi, HardDrive, Clock, AlertTriangle, Server, RadioReceiver } from 'lucide-react';
+import {
+  Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
+  Wifi, HardDrive, Clock, AlertTriangle, Server, RadioReceiver,
+  ShieldCheck, ActivitySquare
+} from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
@@ -62,16 +66,10 @@ const HealthBar = ({ title, icon: Icon, data, isNodeOnline }: { title: string, i
   </div>
 );
 
-
-// interface SystemEvent { title: string; category: string; timestamp: number; }
 const Dashboard = () => {
+  // 🟢 VÁ LỖI CỐT LÕI: Thêm bóc tách biến isControllerStatusKnown tránh lỗi sập giao diện (undefined error)
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading, isSensorOnline, settings } = useDeviceContext();
-  console.log("Dữ liệu deviceStatus:", deviceStatus);
-  // const [recentEvents, setRecentEvents] = useState<SystemEvent[]>([]);
-  const {
-    enableNotifications,
-    permission
-  } = useFCM();
+  const { enableNotifications, permission } = useFCM();
 
   useEffect(() => {
     const run = async () => {
@@ -79,17 +77,10 @@ const Dashboard = () => {
       const app = await loadAppSettings();
       const cfg: any = settings || app;
       if (!cfg?.backend_url || !cfg?.api_key) return;
-      const res = await httpFetch(`${cfg.backend_url}/api/devices/${deviceId}/events?limit=200`, { headers: { 'X-API-Key': cfg.api_key } });
-      if (!res.ok) return;
-      // const data = await res.json();
-      // setRecentEvents(Array.isArray(data) ? data : data.events || []);
+      await httpFetch(`${cfg.backend_url}/api/devices/${deviceId}/events?limit=200`, { headers: { 'X-API-Key': cfg.api_key } });
     };
     run();
   }, [deviceId, settings]);
-  // const { isProcessing, togglePump } = useDeviceControl(deviceId || "");
-
-  // const nowSec = Math.floor(Date.now() / 1000);
-  // const oneHourEvents = useMemo(() => recentEvents.filter(e => nowSec - Number(e.timestamp || 0) <= 3600), [recentEvents, nowSec]);
 
   if (isLoading || !sensorData) {
     return <LoadingState message="Đang tải tổng quan thiết bị..." />;
@@ -114,17 +105,13 @@ const Dashboard = () => {
   const isOnline = deviceStatus?.is_online;
   const faultCode = extractFaultCode(fsmState || undefined);
   const faultGuide = getFaultGuide(faultCode || undefined);
-  // const ecDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ec/i.test(e.title || '')).length;
-  // const phDoseCount = oneHourEvents.filter(e => e.category === 'dosing' && /ph/i.test(e.title || '')).length;
-  // const waterOpsCount = oneHourEvents.filter(e => e.category === 'water').length;
   const pumps: any = isOnline && sensorData?.pump_status ? sensorData.pump_status : {};
 
-  // const handleToggle = async (pumpId: string, currentStatus: boolean | undefined) => {
-  //   const targetAction = currentStatus ? 'off' : 'on';
-  //   updatePumpStatusOptimistically(pumpId, targetAction === 'on');
-  //   const success = await togglePump(pumpId, targetAction);
-  //   if (!success) updatePumpStatusOptimistically(pumpId, !!currentStatus);
-  // };
+  // 🧠 TRÍCH XUẤT CÁC THÔNG SỐ CHẨN ĐOÁN TỰ TRỊ TỪ CONTEXT
+  const diag = controllerHealth?.diagnostics;
+  const healthScore = diag?.health_score_percent ?? 100;
+  const streaks = diag?.anomalies;
+  const timers = diag?.edge_learned_timers;
 
   return (
     <div className="p-4 md:p-8 space-y-6 pb-28 max-w-5xl mx-auto">
@@ -142,18 +129,77 @@ const Dashboard = () => {
             <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : (isControllerStatusKnown ? 'bg-red-500' : 'bg-amber-500')}`}></span>
             {isOnline ? 'Đang Hoạt Động' : (isControllerStatusKnown ? 'Mất Kết Nối' : 'Đang Kết Nối...')}
           </div>
-          {/* <span className="text-xs text-slate-500">{deviceId}</span> */}
         </div>
       </div>
 
-      {/* HEALTH BARS */}
+      {/* HEALTH BARS & EDGE AI HARDWARE DIAGNOSTICS */}
       {isOnline && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <HealthBar title="Nút điều khiển" icon={Server} data={controllerHealth} isNodeOnline={true} />
-          <HealthBar title="Nút cảm biến" icon={RadioReceiver} data={sensorData} isNodeOnline={isSensorOnline} />
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <HealthBar title="Nút điều khiển" icon={Server} data={controllerHealth} isNodeOnline={true} />
+            <HealthBar title="Nút cảm biến" icon={RadioReceiver} data={sensorData} isNodeOnline={isSensorOnline} />
+          </div>
+
+          {/* ⚡ KHỐI TỰ CHẨN ĐOÁN VẬT LÝ CAO CẤP TÍCH HỢP MỚI */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={18} className={healthScore > 80 ? "text-emerald-400" : "text-amber-400"} />
+                <span className="text-sm font-semibold text-slate-300">Edge AI Hardware Diagnostic</span>
+              </div>
+              <span className={`text-xs font-mono font-bold ${healthScore > 80 ? 'text-emerald-400' : healthScore > 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                Trạng thái: {healthScore}%
+              </span>
+            </div>
+
+            {/* Thanh Progress Sức Khỏe */}
+            <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800/60">
+              <div
+                className={`h-full transition-all duration-1000 ${healthScore > 80 ? 'bg-emerald-500' : healthScore > 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                style={{ width: `${healthScore}%` }}
+              ></div>
+            </div>
+
+            {/* Thống kê chuỗi bất thường tích lũy */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 flex flex-col gap-1">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold">Mạch phân EC</span>
+                <span className={`font-bold ${streaks?.ec_pump_streak > 0 ? 'text-red-400 animate-pulse' : 'text-slate-400'}`}>
+                  {streaks?.ec_pump_streak > 0 ? `Bất thường ×${streaks.ec_pump_streak}` : 'Chuẩn xác'}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 flex flex-col gap-1">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold">Mạch thuốc pH</span>
+                <span className={`font-bold ${streaks?.ph_pump_streak > 0 ? 'text-red-400 animate-pulse' : 'text-slate-400'}`}>
+                  {streaks?.ph_pump_streak > 0 ? `Bất thường ×${streaks.ph_pump_streak}` : 'Chuẩn xác'}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 flex flex-col gap-1 col-span-2 sm:col-span-1">
+                <span className="text-[10px] text-slate-500 uppercase font-semibold">Mạch Phao/Van Nước</span>
+                <span className={`font-bold ${streaks?.water_hydraulics_streak > 0 ? 'text-red-400 animate-pulse' : 'text-slate-400'}`}>
+                  {streaks?.water_hydraulics_streak > 0 ? `Sai lệch hành trình ×${streaks.water_hydraulics_streak}` : 'Chuẩn xác'}
+                </span>
+              </div>
+            </div>
+
+            {/* Mốc thời gian hòa trộn tự học động */}
+            {timers && (
+              <div className="flex items-center gap-4 pt-1.5 border-t border-slate-800 text-[11px] text-slate-500 font-mono">
+                <div className="flex items-center gap-1">
+                  <ActivitySquare size={14} className="text-indigo-400" />
+                  Khuấy thích ứng: <span className="text-slate-300 font-bold">{timers.active_mixing_duration_sec}s</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock size={14} className="text-cyan-400" />
+                  Lắng thích ứng: <span className="text-slate-300 font-bold">{timers.sensor_stabilize_duration_sec}s</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
+      {/* KHỐI HIỂN THỊ HƯỚNG DẪN XỬ LÝ LỖI (MÃ LỖI BIÊN) */}
       {faultCode && faultGuide && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
           <h4 className="text-sm font-semibold text-red-400">{faultGuide.short}</h4>
@@ -164,15 +210,13 @@ const Dashboard = () => {
       {permission !== 'granted' && (
         <button
           onClick={async () => {
-            // Cảnh báo nếu trình duyệt không hỗ trợ
             if (!('Notification' in window)) {
               alert("Trình duyệt hoặc môi trường này (không có HTTPS) không hỗ trợ Push Notification!");
               return;
             }
-
             try {
               alert(`Trạng thái quyền hiện tại: ${Notification.permission}`);
-              await enableNotifications(); // Hàm từ useFCM
+              await enableNotifications();
             } catch (err: any) {
               alert(`Lỗi xin quyền: ${err.message || err}`);
             }
@@ -183,19 +227,17 @@ const Dashboard = () => {
         </button>
       )}
 
-      {/* Trong component Dashboard, lấy ngân sách trực tiếp từ deviceStatus */}
+      {/* NGÂN SÁCH CHẠY 1 GIỜ */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-slate-300 mb-4">Ngân sách chạy 1 giờ</h3>
         <div className="space-y-3 text-xs">
           {(() => {
-            // Lấy thông số thực tế từ Backend (nếu chưa có thì mặc định là 0)
             const budgets = (deviceStatus as any)?.budgets || {};
             const ecUsedMl = Math.round(budgets.ec_ml || 0);
             const phUsedMl = Math.round(budgets.ph_ml || 0);
             const refillCount = budgets.refill_count || 0;
             const drainCount = budgets.drain_count || 0;
 
-            // Lấy giới hạn từ cấu hình cài đặt (Settings)
             const maxDoseMl = Number((settings as any)?.max_dose_per_hour || 50);
             const maxRefill = Number((settings as any)?.max_refill_cycles_per_hour || 3);
             const maxDrain = Number((settings as any)?.max_drain_cycles_per_hour || 3);
@@ -213,7 +255,7 @@ const Dashboard = () => {
                     <span>{row.label}</span>
                     <span>{row.value}/{row.max}</span>
                   </div>
-                  <div className="h-2 rounded bg-slate-800 overflow-hidden">
+                  <div className="w-full h-2 rounded bg-slate-800 overflow-hidden">
                     <div
                       className={`h-2 rounded transition-all duration-500 ${pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-blue-500'}`}
                       style={{ width: `${pct}%` }}
@@ -225,6 +267,7 @@ const Dashboard = () => {
           })()}
         </div>
       </div>
+
       {/* TIẾN TRÌNH FSM & HOẠT ĐỘNG BƠM */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-5">
@@ -256,9 +299,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* LƯỚI CẢM BIẾN */}
+      {/* LƯỚI CẢM BIẾN MÔI TRƯỜNG */}
       <div className="space-y-3">
-        {/* THÊM MỚI: Thanh thông báo trạng thái cảm biến */}
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-300">Thông số môi trường</h3>
           {!isSensorOnline && sensorData && (
@@ -271,27 +313,7 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* BAO BỌC GRID: Thêm logic làm mờ toàn bộ lưới nếu sensor offline */}
         <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 transition-all duration-700 ${!isSensorOnline ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
-
-          {/* Giữ nguyên các phần tử bên trong của bạn */}
-          {/* <div className="relative"> */}
-          {/*   {sensorData?.err_ec === true && ( */}
-          {/*     <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm"> */}
-          {/*       <AlertTriangle size={14} /> */}
-          {/*     </div> */}
-          {/*   )} */}
-          {/*   <div className={sensorData?.err_ec === true ? "opacity-60" : ""}> */}
-          {/*     <SensorBentoCard */}
-          {/*       title="EC" */}
-          {/*       value={sensorData?.err_ec === true ? -1 : sensorData?.ec} */}
-          {/*       unit="mS/cm" */}
-          {/*       icon={Activity} */}
-          {/*       theme={sensorData?.err_ec === true ? "rose" : "blue"} */}
-          {/*     /> */}
-          {/*   </div> */}
-          {/* </div> */}
-
           <div className="relative">
             {sensorData?.err_ec === true && (
               <div className="absolute -top-1.5 -right-1.5 z-10 bg-red-500 text-white p-1 rounded-md shadow-sm">
@@ -360,38 +382,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* ĐIỀU KHIỂN NHANH (NƯỚC) */}
-      {/* <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5"> */}
-      {/*   <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2"> */}
-      {/*     <Zap size={16} className="text-slate-500" /> Cưỡng chế bơm nước */}
-      {/*   </h3> */}
-      {/*   <div className="flex gap-3"> */}
-      {/*     <button */}
-      {/*       disabled={isProcessing || !isOnline} */}
-      {/*       onClick={() => handleToggle("WATER_PUMP_IN", pumps.water_pump_in)} */}
-      {/*       className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors border flex items-center justify-center gap-2 disabled:opacity-50 ${pumps.water_pump_in */}
-      {/*         ? 'bg-red-500/10 text-red-500 border-red-500/30' */}
-      {/*         : 'bg-slate-950 text-blue-400 border-slate-800 hover:border-blue-500/30 hover:bg-slate-800' */}
-      {/*         }`} */}
-      {/*     > */}
-      {/*       <Waves size={16} /> */}
-      {/*       {pumps.water_pump_in ? 'Ngừng Cấp' : 'Cấp Nước'} */}
-      {/*     </button> */}
-      {/**/}
-      {/*     <button */}
-      {/*       disabled={isProcessing || !isOnline} */}
-      {/*       onClick={() => handleToggle("WATER_PUMP_OUT", pumps.water_pump_out)} */}
-      {/*       className={`flex-1 py-3 rounded-xl font-medium text-sm transition-colors border flex items-center justify-center gap-2 disabled:opacity-50 ${pumps.water_pump_out */}
-      {/*         ? 'bg-red-500/10 text-red-500 border-red-500/30' */}
-      {/*         : 'bg-slate-950 text-cyan-400 border-slate-800 hover:border-cyan-500/30 hover:bg-slate-800' */}
-      {/*         }`} */}
-      {/*     > */}
-      {/*       <Waves size={16} className="rotate-180" /> */}
-      {/*       {pumps.water_pump_out ? 'Ngừng Xả' : 'Xả Nước'} */}
-      {/*     </button> */}
-      {/*   </div> */}
-      {/* </div> */}
 
     </div>
   );

@@ -40,6 +40,7 @@ pub enum FaultCode {
     EcDosingFailed,
     PhDosingFailed,
     WaterRefillFailed,
+    WaterDrainFailed,
     TooManyRefills,
     TooManyDrains,
     MaxHourlyDoseEc,
@@ -56,6 +57,7 @@ impl FaultCode {
             Self::EcDosingFailed => "EC_DOSING_FAILED",
             Self::PhDosingFailed => "PH_DOSING_FAILED",
             Self::WaterRefillFailed => "WATER_REFILL_FAILED",
+            Self::WaterDrainFailed => "WATER_DRAIN_FAILED",
             Self::TooManyRefills => "TOO_MANY_REFILLS",
             Self::TooManyDrains => "TOO_MANY_DRAINS",
             Self::MaxHourlyDoseEc => "MAX_HOURLY_DOSE_EC",
@@ -86,4 +88,3 @@ pub fn map_fault_code(reason: &str) -> FaultCode {
         FaultCode::MaxHourlyDoseEc
     }
 }
-

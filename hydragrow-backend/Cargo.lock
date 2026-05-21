@@ -2137,6 +2137,7 @@ dependencies = [
  "rumqttc",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sha2 0.10.9",
  "solana-client",
  "solana-sdk",

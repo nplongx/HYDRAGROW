@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Settings2, Droplets, Wind, Power, AlertTriangle, Timer, Activity, RefreshCw,
-  Lock, ChevronDown,
-  FlaskConical
+  Lock, ChevronDown, FlaskConical, Sparkles, ShieldAlert
 } from 'lucide-react';
 import { useDeviceContext } from '../context/DeviceContext';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -13,9 +12,9 @@ import { Switch } from '../components/ui/Switch';
 import { extractFaultCode } from '../components/ui/FsmStatusBadge';
 import { getFaultGuide } from '../components/ui/FaultExplanation';
 
-// --- Component: Khối Điều Khiển Từng Thiết Bị (ĐÃ SỬA LỖI FLICKER & AUTO MODE DISABLE) ---
+// ─── COMPONENT CARD THIẾT BỊ NGOẠI VI SMART HOME CẤP CAO ──────────────────────
 const AdvancedDeviceControl = ({
-  deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, isOnline, isEmergency, isAutoMode
+  deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, isOnline, isEmergency, isAutoMode, colorTheme
 }: any) => {
   const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId);
   const { pwmPreferences, savePwmPreference } = useDeviceContext();
@@ -24,19 +23,24 @@ const AdvancedDeviceControl = ({
   const [duration, setDuration] = useState<number | ''>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // State để disable nút toggle khi đang chờ phản hồi từ backend
   const [isToggling, setIsToggling] = useState(false);
   const pendingTargetRef = useRef<boolean | null>(null);
 
-  // isLocked dùng để khóa nút Switch:
-  // Khóa nếu đang ở Auto Mode HOẶC đang lỗi (trừ khi đang bật thì cho phép tắt)
   const isLocked = isAutoMode || (isEmergency && !currentStatus);
+
+  // Khởi tạo các mã màu sắc phát quang (Glow effects) theo danh mục thiết bị
+  const themeClasses: Record<string, { activeIcon: string; glow: string; border: string }> = {
+    orange: { activeIcon: 'bg-orange-500 text-white shadow-orange-500/30', glow: 'shadow-[0_0_15px_rgba(249,115,22,0.05)] border-orange-500/40 bg-orange-950/5', border: 'border-orange-500/40' },
+    fuchsia: { activeIcon: 'bg-fuchsia-500 text-white shadow-fuchsia-500/30', glow: 'shadow-[0_0_15px_rgba(217,70,239,0.05)] border-fuchsia-500/40 bg-fuchsia-950/5', border: 'border-fuchsia-500/40' },
+    blue: { activeIcon: 'bg-blue-500 text-white shadow-blue-500/30', glow: 'shadow-[0_0_15px_rgba(59,130,246,0.05)] border-blue-500/40 bg-blue-950/5', border: 'border-blue-500/40' },
+    indigo: { activeIcon: 'bg-indigo-500 text-white shadow-indigo-500/30', glow: 'shadow-[0_0_15px_rgba(99,102,241,0.05)] border-indigo-500/40 bg-indigo-950/5', border: 'border-indigo-500/40' },
+    sky: { activeIcon: 'bg-sky-500 text-white shadow-sky-500/30', glow: 'shadow-[0_0_15px_rgba(14,165,233,0.05)] border-sky-500/40 bg-sky-950/5', border: 'border-sky-500/40' },
+  };
+  const activeTheme = themeClasses[colorTheme] || themeClasses.blue;
 
   useEffect(() => {
     if (pwmPreferences[pumpId] !== undefined) setPwmValue(pwmPreferences[pumpId]);
   }, [pwmPreferences, pumpId]);
-
 
   useEffect(() => {
     if (pendingTargetRef.current === null) return;
@@ -46,14 +50,13 @@ const AdvancedDeviceControl = ({
     }
   }, [currentStatus]);
 
-  // Nút Switch Bật/Tắt
   const handleToggle = async () => {
     if (isAutoMode) {
-      toast.error("Hệ thống đang ở chế độ Tự động, không thể điều khiển thủ công");
+      toast.error("Hệ thống đang tự trị thông minh, không thể can thiệp thủ công");
       return;
     }
     if (isEmergency && !currentStatus) {
-      toast.error(`Hệ thống đang báo lỗi. Vui lòng mở rộng và dùng "Chạy Cưỡng Bức".`);
+      toast.error(`Hệ thống đang khóa bảo vệ. Vui lòng mở rộng mục nâng cao để Ép Chạy.`);
       setShowAdvanced(true);
       return;
     }
@@ -61,7 +64,6 @@ const AdvancedDeviceControl = ({
 
     setIsToggling(true);
     setDuration('');
-
     const targetAction = currentStatus ? 'off' : 'on';
     try {
       pendingTargetRef.current = targetAction === 'on';
@@ -69,66 +71,48 @@ const AdvancedDeviceControl = ({
       if (!success) {
         pendingTargetRef.current = null;
         setIsToggling(false);
-        toast.error(`Không thể ${targetAction === 'on' ? 'bật' : 'tắt'} ${title}`);
       }
     } catch (error) {
       pendingTargetRef.current = null;
       setIsToggling(false);
-      console.error(error);
-      toast.error(`Lỗi điều khiển ${title}`);
+      toast.error(`Lỗi đường truyền tín hiệu tới thiết bị.`);
     }
   };
 
-  // Xử lý Hẹn giờ + Công suất kết hợp
   const handleAdvancedRun = async () => {
-    if (isAutoMode) {
-      toast.error("Hệ thống đang ở chế độ Tự động");
-      return;
-    }
-    if (isEmergency) {
-      toast.error("Không thể chạy nâng cao khi đang có lỗi, hãy dùng 'Chạy Cưỡng Bức'");
-      return;
-    }
     setIsProcessing(true);
     const time = Number(duration);
-
     try {
       if (allowPwm) {
         await setPwm(pumpId, pwmValue, time > 0 ? time : undefined);
         savePwmPreference(pumpId, pwmValue);
-        toast.success(`Đã gửi lệnh chạy ${title} với công suất ${pwmValue}%${time > 0 ? ` trong ${time}s` : ''}`);
+        toast.success(`Đã đồng bộ công suất ${pwmValue}% lên thiết bị.`);
+      } else if (time > 0) {
+        await forceOn(pumpId, time);
       } else {
-        if (time > 0) {
-          await forceOn(pumpId, time);
-          toast.success(`Đã gửi lệnh cưỡng bức ${title} trong ${time}s`);
-        } else {
-          await togglePump(pumpId, 'on');
-          toast.success(`Đã bật ${title}`);
-        }
+        await togglePump(pumpId, 'on');
       }
     } catch (error) {
-      toast.error(`Lỗi khi chạy ${title}`);
+      toast.error(`Không thể lưu cấu hình.`);
     } finally {
       setIsProcessing(false);
       if (time > 0) setDuration('');
     }
   };
 
-  // Xử lý Cưỡng bức khẩn cấp
   const handleEmergencyForceOn = async () => {
     const time = Number(duration);
     if (!time || time <= 0) {
-      toast.error("Vui lòng nhập số giây (Bắt buộc khi cưỡng bức).");
+      toast.error("Vui lòng nhập số giây muốn kích hoạt cưỡng chế.");
       return;
     }
-    if (!window.confirm(`NGUY HIỂM: Bỏ qua cảm biến để chạy ${title} trong ${time} giây?`)) return;
+    if (!window.confirm(`CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị ép chạy thiết bị và bỏ qua tất cả rào chắn bảo vệ của AI. Xác nhận kích hoạt?`)) return;
 
     setIsProcessing(true);
     try {
       await forceOn(pumpId, time);
-      toast.success(`Đã kích hoạt cưỡng bức ${title} trong ${time}s`);
     } catch (error) {
-      toast.error(`Lỗi cưỡng bức ${title}`);
+      toast.error(`Lỗi thực thi lệnh cưỡng chế.`);
     } finally {
       setIsProcessing(false);
       setDuration('');
@@ -136,101 +120,99 @@ const AdvancedDeviceControl = ({
   };
 
   return (
-    <div className={`bg-slate-900 border rounded-xl overflow-hidden transition-colors duration-300 ${currentStatus ? 'border-blue-500/50 bg-slate-800/40' : 'border-slate-800'}`}>
-      <div className="p-4 flex flex-col gap-4">
-
-        {/* Header */}
+    <div className={`border rounded-2xl overflow-hidden transition-all duration-300 shadow-sm ${currentStatus ? activeTheme.glow : 'border-slate-800/80 bg-slate-900/40'}`}>
+      <div className="p-4 flex flex-col gap-3.5">
+        {/* Hàng điều khiển chính */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg transition-colors ${currentStatus ? 'bg-blue-500 text-white' : 'bg-slate-950 text-slate-500 border border-slate-800'}`}>
-              <Icon size={18} />
+            <div className={`p-2 rounded-xl transition-all duration-300 shadow-md ${currentStatus ? activeTheme.activeIcon : 'bg-slate-950 text-slate-500 border border-slate-800/60'}`}>
+              <Icon size={16} />
             </div>
             <div>
-              <h3 className={`text-sm font-semibold ${currentStatus ? 'text-slate-100' : 'text-slate-300'}`}>{title}</h3>
-              <p className="text-[10px] text-slate-500 font-medium">{currentStatus ? 'Đang hoạt động' : 'Đang tắt'}</p>
+              <h3 className={`text-xs font-bold ${currentStatus ? 'text-slate-100' : 'text-slate-300'}`}>{title}</h3>
+              <p className="text-[10px] text-slate-500 font-semibold tracking-wide">{currentStatus ? 'Đang hoạt động' : 'Tạm dừng'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isLocked && !currentStatus && <Lock size={14} className="text-slate-500" />}
+            {isLocked && !currentStatus && <Lock size={12} className="text-slate-600 mr-0.5" />}
             <Switch
               isOn={currentStatus}
               disabled={!isOnline || isToggling || isProcessing || isLocked}
               onClick={handleToggle}
-              colorClass="bg-blue-500"
+              colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-500' : 'bg-blue-500') : 'bg-slate-700'}
             />
           </div>
         </div>
 
-        {/* Cấu hình nâng cao */}
-        <div className="border-t border-slate-800 pt-3">
-          <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-200">
-            <ChevronDown size={14} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-            {isAutoMode ? 'Thông số hiện tại (Đã khóa vì đang ở chế độ Auto)' : (isEmergency ? 'Mở khóa điều khiển khẩn cấp' : 'Tùy chỉnh thông số')}
+        {/* Ngăn chứa bảng thông số ẩn (Progressive Disclosure) */}
+        <div className="border-t border-slate-800/60 pt-2.5">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-400 transition-colors"
+          >
+            <ChevronDown size={12} className={`transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} />
+            <span>{isEmergency ? 'Thiết lập khẩn cấp' : 'Tùy chỉnh kỹ thuật'}</span>
           </button>
 
           {showAdvanced && (
-            <div className="mt-4 animate-in slide-in-from-top-2 duration-200 bg-slate-950/50 p-3 rounded-lg border border-slate-800/80">
-
-              {/* TRƯỜNG HỢP 1: ĐANG CẤP CỨU / LỖI */}
+            <div className="mt-3 animate-in slide-in-from-top-2 duration-200 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 space-y-3.5">
               {isEmergency ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-amber-500 text-xs font-medium">
-                    <AlertTriangle size={14} />
-                    <span>Chạy Cưỡng Bức (Bỏ qua an toàn)</span>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-rose-400 text-[10px] font-bold uppercase tracking-wide">
+                    <ShieldAlert size={12} />
+                    <span>Cưỡng chế phần cứng (Bỏ qua AI)</span>
                   </div>
                   <div className="flex gap-2">
                     <input
-                      type="number" placeholder="Bắt buộc nhập số giây..."
+                      type="number" placeholder="Nhập số giây muốn ép chạy..."
                       value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                      disabled={isAutoMode || isProcessing}
-                      className="flex-1 bg-slate-900 border border-red-900/50 text-slate-200 text-xs rounded-lg px-3 py-2 outline-none focus:border-red-500 placeholder:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isProcessing}
+                      className="flex-1 bg-slate-900 border border-rose-950 text-slate-200 text-xs rounded-xl px-3 py-1.5 outline-none focus:border-rose-500 placeholder:text-slate-600 font-medium"
                     />
                     <button
-                      onClick={handleEmergencyForceOn} disabled={isAutoMode || isProcessing || !duration}
-                      className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 text-xs font-semibold rounded-lg hover:bg-red-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      onClick={handleEmergencyForceOn} disabled={isProcessing || !duration}
+                      className="px-3.5 py-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold rounded-xl hover:bg-rose-500 hover:text-white transition-all whitespace-nowrap active:scale-95"
                     >
-                      Ép chạy
+                      Kích hoạt
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Thanh Slider PWM */}
+                <div className="space-y-3.5">
                   {allowPwm && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                        <span>Công suất bơm (PWM)</span>
-                        <span className="text-blue-400">{pwmValue}%</span>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        <span>Cường độ dòng chảy (PWM)</span>
+                        <span className="text-blue-400 font-mono font-bold">{pwmValue}%</span>
                       </div>
                       <input
-                        type="range" min="10" max="100" step="1"
+                        type="range" min="20" max="100" step="5"
                         value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
-                        disabled={isAutoMode || isProcessing}
-                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isProcessing}
+                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                       />
                     </div>
                   )}
 
-                  {/* Ô nhập thời gian & Nút hành động */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                      <span>Thời gian chạy (Tùy chọn)</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      <span>Thời gian hẹn giờ (Giây)</span>
                     </div>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <input
-                          type="number" placeholder="Để trống để chạy liên tục..."
+                          type="number" placeholder="Để trống để mở vô hạn..."
                           value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                          disabled={isAutoMode || isProcessing}
-                          className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-500 placeholder:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isProcessing}
+                          className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl pl-8 pr-3 py-1.5 outline-none focus:border-blue-500 placeholder:text-slate-600 font-medium"
                         />
-                        <Timer size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <Timer size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
                       </div>
                       <button
-                        onClick={handleAdvancedRun} disabled={isAutoMode || isProcessing}
-                        className="px-4 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 whitespace-nowrap"
+                        onClick={handleAdvancedRun} disabled={isProcessing}
+                        className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 transition-all whitespace-nowrap active:scale-95"
                       >
-                        Lưu & Chạy
+                        Áp dụng
                       </button>
                     </div>
                   </div>
@@ -244,12 +226,12 @@ const AdvancedDeviceControl = ({
   );
 };
 
-// --- Bảng Điều Khiển Chính ---
+// ─── BẢNG ĐIỀU KHIỂN ĐỒ HỌA TRANG CHÍNH ───────────────────────────────────────
 const ControlPanel = () => {
   const { deviceId, sensorData, deviceStatus, isControllerStatusKnown, isLoading, fsmState, settings } = useDeviceContext();
   const { isProcessing, resetFault } = useDeviceControl(deviceId || "");
 
-  if (isLoading || !sensorData) return <LoadingState message="Đang tải dữ liệu..." />;
+  if (isLoading || !sensorData) return <LoadingState message="Đang kết nối trung tâm điều khiển phần cứng..." />;
 
   const isOnline = deviceStatus?.is_online || false;
   const showDisconnected = isControllerStatusKnown && !isOnline;
@@ -266,117 +248,131 @@ const ControlPanel = () => {
   const faultGuide = getFaultGuide(faultCode || undefined);
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-28">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6 pb-28 text-slate-200">
 
-      {/* Header */}
-      <div className="flex items-start justify-between">
+      {/* Header khu vực */}
+      <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-slate-100 flex items-center gap-2">
-            <Settings2 size={22} className="text-slate-500" /> Điều khiển
+          <h1 className="text-xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
+            <Settings2 size={20} className="text-slate-500" />
+            <span>Bảng vận hành thiết bị</span>
           </h1>
         </div>
 
         <button
           disabled={!isOnline || isProcessing}
           onClick={async () => {
-            if (window.confirm("Đặt lại lỗi và khởi động lại chu trình FSM?")) await resetFault();
+            if (window.confirm("Bác nông dân có chắc chắn muốn xóa lịch sử cảnh báo lỗi và khôi phục chu trình chạy tự động không?")) await resetFault();
           }}
-          className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-slate-300 border border-slate-800 rounded-lg text-xs font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-slate-300 border border-slate-800/80 rounded-xl text-xs font-bold hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-40"
         >
-          <RefreshCw size={14} className={isProcessing ? "animate-spin" : ""} /> Đặt lại lỗi
+          <RefreshCw size={12} className={isProcessing ? "animate-spin" : "text-emerald-400"} />
+          <span>Khôi phục lỗi</span>
         </button>
       </div>
 
-      {/* Cảnh Báo Trạng Thái */}
-      {showDisconnected && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex gap-3 text-red-400">
-          <AlertTriangle size={20} className="shrink-0" />
-          <div>
-            <h4 className="font-semibold text-sm">Mất kết nối trạm</h4>
-            <p className="text-xs opacity-80 mt-0.5">Không thể gửi lệnh. Vui lòng kiểm tra lại kết nối.</p>
-          </div>
-        </div>
-      )}
-
-      {isAutoMode && isOnline && (
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3 text-blue-400">
-          <Activity size={20} className="shrink-0" />
-          <div>
-            <h4 className="font-semibold text-sm">Chế độ Tự Động (Auto) đang bật</h4>
-            <p className="text-xs opacity-80 mt-0.5">Hệ thống FSM đang làm chủ. Các lệnh điều khiển thủ công bị khóa để đảm bảo an toàn.</p>
-          </div>
-        </div>
-      )}
-
-      {isEmergency && isOnline && !isAutoMode && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-3 text-amber-400">
-          <AlertTriangle size={20} className="shrink-0" />
-          <div>
-            <h4 className="font-semibold text-sm">Bảo vệ khẩn cấp</h4>
-            <p className="text-xs opacity-80 mt-0.5">{faultGuide?.short || 'Hệ thống đang lỗi. Phím bật thường bị khóa. Hãy dùng "Chạy Cưỡng Bức" nếu cần thiết.'}</p>
-            {faultGuide && <p className="text-xs opacity-70 mt-1">Hành động: {faultGuide.action}</p>}
-          </div>
-        </div>
-      )}
-
+      {/* THÔNG BÁO SỰ CỐ / THỜI TIẾT TỔNG HỢP */}
       <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Pha dinh dưỡng</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="PUMP_A" title="Bơm Phân A" icon={FlaskConical}
-            currentStatus={pumps.pump_a} allowPwm={true}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="PUMP_B" title="Bơm Phân B" icon={FlaskConical}
-            currentStatus={pumps.pump_b} allowPwm={true}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="PH_UP" title="Bơm Tăng pH" icon={Activity}
-            currentStatus={pumps.ph_up} allowPwm={true}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="PH_DOWN" title="Bơm Giảm pH" icon={Activity}
-            currentStatus={pumps.ph_down} allowPwm={true}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-        </div>
+        {showDisconnected && (
+          <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex gap-3 text-rose-400 animate-fadeIn">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <h4 className="font-bold text-sm">Hệ thống đang Ngoại tuyến</h4>
+              <p className="text-xs opacity-80 leading-relaxed">Không thể truyền phát lệnh điều khiển do mất tín hiệu Wifi của hộp tổng phần cứng.</p>
+            </div>
+          </div>
+        )}
+
+        {isEmergency && isOnline && !isAutoMode && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex gap-3 text-amber-400 animate-fadeIn">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm">Hệ thống đang tự khóa bảo vệ</h4>
+              <p className="text-xs opacity-80 leading-relaxed">{faultGuide?.short || 'Phím bật thông thường đã tạm dừng để cứu bồn. Hãy mở rộng từng ô thiết bị và dùng nút "Ép chạy" nếu cần cứu cây gấp.'}</p>
+              {faultGuide && <p className="text-[11px] opacity-70 font-medium bg-slate-950/40 px-2 py-1 rounded-lg border border-slate-800/40 mt-1 max-w-max">Chỉ dẫn: {faultGuide.action}</p>}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Bơm nước</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Cấp Nước" icon={Droplets}
-            currentStatus={pumps.water_pump_in} allowPwm={false}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Xả Nước" icon={Droplets}
-            currentStatus={pumps.water_pump_out} allowPwm={false}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-        </div>
-      </div>
+      {/* LƯỚI GRID ĐIỀU KHIỂN PHẦN CỨNG THỦ CÔNG */}
+      <div className="relative border border-slate-800/60 rounded-3xl p-5 md:p-6 bg-slate-900/10 backdrop-blur-sm space-y-6 overflow-hidden">
 
-      <div className="space-y-3">
-        <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider pl-1">Khí hậu</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="OSAKA" title="Bơm trộn" icon={Power}
-            currentStatus={pumps.osaka_pump} allowPwm={true}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-          <AdvancedDeviceControl
-            deviceId={deviceId} pumpId="MIST" title="Phun Sương" icon={Wind}
-            currentStatus={pumps.mist_valve} allowPwm={false}
-            isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
-          />
-        </div>
-      </div>
+        {/* 🌟 LỚP KÍNH FROSTED GLASS OVERLAY KHI Ở CHẾ ĐỘ AUTO (AI IS MANAGING) */}
+        {isAutoMode && isOnline && (
+          <div className="absolute inset-0 z-40 bg-slate-950/60 backdrop-blur-[4px] flex flex-col items-center justify-center p-6 text-center animate-fadeIn select-none">
+            <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-3 shadow-xl">
+              <Sparkles size={28} className="text-blue-400 animate-pulse" />
+            </div>
+            <h4 className="text-base font-bold text-slate-100 tracking-tight">Trí tuệ nhân tạo đang quản lý bồn</h4>
+            <p className="text-xs text-slate-400 max-w-xs leading-relaxed mt-1">
+              Hệ thống tự động MIMO đang điều tiết dinh dưỡng và vi khí hậu. Bảng điều khiển thủ công được khóa để chống nhấn nhầm làm sốc rễ cây.
+            </p>
+          </div>
+        )}
 
+        {/* Nhóm thiết bị 1: Châm hóa chất */}
+        <div className="space-y-3">
+          <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Mạch định lượng dinh dưỡng & pH</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="PUMP_A" title="Bơm vi chất phân A" icon={FlaskConical}
+              currentStatus={pumps.pump_a} allowPwm={true} colorTheme="orange"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="PUMP_B" title="Bơm vi chất phân B" icon={FlaskConical}
+              currentStatus={pumps.pump_b} allowPwm={true} colorTheme="orange"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="PH_UP" title="Bơm trung hòa kiềm (pH Up)" icon={Activity}
+              currentStatus={pumps.ph_up} allowPwm={true} colorTheme="purple"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="PH_DOWN" title="Bơm cân bằng axit (pH Down)" icon={Activity}
+              currentStatus={pumps.ph_down} allowPwm={true} colorTheme="fuchsia"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+          </div>
+        </div>
+
+        {/* Nhóm thiết bị 2: Thủy lực nước */}
+        <div className="space-y-3">
+          <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Hệ thống thủy lực nguồn nước</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Van mở cấp nước sạch" icon={Droplets}
+              currentStatus={pumps.water_pump_in} allowPwm={false} colorTheme="blue"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Bơm kích xả thoát nước" icon={Droplets}
+              currentStatus={pumps.water_pump_out} allowPwm={false} colorTheme="sky"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+          </div>
+        </div>
+
+        {/* Nhóm thiết bị 3: Khí hậu và hòa trộn */}
+        <div className="space-y-3">
+          <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Hệ thống điều hòa và trộn đều</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="OSAKA" title="Mô-tơ đảo nước tuần hoàn" icon={Power}
+              currentStatus={pumps.osaka_pump} allowPwm={true} colorTheme="indigo"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+            <AdvancedDeviceControl
+              deviceId={deviceId} pumpId="MIST" title="Hệ thống béc phun sương lá" icon={Wind}
+              currentStatus={pumps.mist_valve} allowPwm={false} colorTheme="sky"
+              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+            />
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 };

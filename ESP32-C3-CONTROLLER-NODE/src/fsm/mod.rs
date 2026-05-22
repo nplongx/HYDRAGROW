@@ -10,7 +10,6 @@ pub mod matrix;
 pub mod optimizer;
 pub mod orchestrator;
 pub mod peripheral;
-pub mod phases;
 pub mod system_context;
 pub mod types;
 pub mod utils;
@@ -22,10 +21,14 @@ pub use dispatcher::EventDispatcher;
 pub mod observer_set;
 pub mod observers;
 pub use observer_set::ObserverSet;
+pub mod phase_tick;
+pub use phase_tick::PhaseTick;
+pub mod solver;
+pub use solver::{select_solver, ColdPathSolver, SolveResult, SolverStrategy, WarmPathSolver};
+pub mod phase_impls;
 
 // SỬA LỖI 1: Loại bỏ confidence_from_error_ratio không tồn tại, chỉ giữ lại apply_deadband
 pub use optimizer::apply_deadband;
-pub use phases::{FaultCode, SystemPhase};
 pub use system_context::SystemContext;
 pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData};
 
@@ -40,6 +43,7 @@ use log::{info, warn};
 
 use crate::config::SharedConfig;
 use crate::fsm::matrix::InteractionMatrix;
+use crate::fsm::phase_impls::SystemPhase;
 use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
@@ -52,6 +56,7 @@ const INTERACTION_MATRIX_MAX: f32 = 10.0;
 pub mod mod_helpers {
     use hydragrow_shared::PumpStatus;
 
+    use crate::fsm::phase_impls::SystemPhase;
     use crate::fsm::SystemContext;
     use crate::pump::{PumpController, PumpType, WaterDirection};
     use std::sync::mpsc::Sender;
@@ -86,8 +91,8 @@ pub mod mod_helpers {
         serde_json::json!({
             "online": true,
             "current_state": match &ctx.phase {
-                super::SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
-                super::SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
+                SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
+                SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
                 _ => ctx.phase.as_str().to_string(),
             },
             "pump_status": ctx.peripherals.pump_status,
@@ -160,7 +165,7 @@ pub mod mod_helpers {
         _tx: &Sender<String>,
     ) {
         ctx.tuner.on_manual_reset();
-        ctx.phase = super::SystemPhase::Monitoring;
+        ctx.phase = SystemPhase::Monitoring;
         ctx.phase_finish_ms = None;
         ctx.dosing.retry_ec = 0;
         ctx.dosing.retry_ph = 0;
@@ -342,14 +347,10 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             sensor_last_update_ms = current_time_ms;
         }
 
-        // 🌟 VÁ LỖI TUPLE: Destructure kết quả trả về gồm (bool, Vec<OrchestratorEvent>)
-        let (force_sync, cmd_events) = process_mqtt_commands(
-            &cmd_rx,
-            &config,
-            &mut new_ctx,
-            current_time_ms,
-            &fsm_mqtt_tx,
-        );
+        let (cmd_delta, cmd_events) =
+            process_mqtt_commands(&cmd_rx, &config, &new_ctx, current_time_ms, &fsm_mqtt_tx);
+        let force_sync = cmd_delta.phase.is_some() || !cmd_events.is_empty();
+        new_ctx.apply_delta(cmd_delta);
 
         // Phát tán các command events phần cứng ngay lập tức để đáp ứng thời gian thực (Manual Mode)
         if !cmd_events.is_empty() {
@@ -395,7 +396,10 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                     cycle_id: None,
                 }),
             );
-            mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
+            // mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
+            let mut delta = ContextDelta::default();
+            let events = crate::fsm::commands::build_stop_pump_events(&pump, &mut delta);
+            new_ctx.apply_delta(delta);
         }
 
         if let Ok(mut s) = shared_sensors.write() {
@@ -535,4 +539,3 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
     })
     .to_string()
 }
-

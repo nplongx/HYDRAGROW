@@ -1,5 +1,4 @@
-use crate::fsm::phases::FaultCode;
-use crate::fsm::types::PendingCalibrationSample;
+use crate::fsm::{phase_impls::FaultCode, types::PendingCalibrationSample};
 use hydragrow_shared::ControllerConfig;
 use log::{error, info, warn};
 

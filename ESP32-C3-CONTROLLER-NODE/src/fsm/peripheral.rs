@@ -6,13 +6,18 @@ use super::system_context::PeripheralState;
 
 pub struct PeripheralController;
 
+// src/fsm/peripheral.rs
+use crate::fsm::tick_result::PeripheralDelta;
+
 impl PeripheralController {
     pub fn tick_osaka(
-        peripherals: &mut PeripheralState,
+        peripherals: &PeripheralState, // <-- không còn mut
         is_dosing_active: bool,
         config: &ControllerConfig,
-    ) -> Vec<OrchestratorEvent> {
+    ) -> (PeripheralDelta, Vec<OrchestratorEvent>) {
         let mut events = Vec::new();
+        let mut delta = PeripheralDelta::default();
+
         let needs_osaka = is_dosing_active
             || peripherals.is_misting_active
             || peripherals.is_scheduled_mixing_active;
@@ -25,46 +30,37 @@ impl PeripheralController {
             };
 
             if !peripherals.pump_status.osaka_pump {
-                info!(
-                    "🌀 [OSAKA] Bật bơm Osaka {}% (dosing={}, misting={}, mixing={})",
-                    target_pwm,
-                    is_dosing_active,
-                    peripherals.is_misting_active,
-                    peripherals.is_scheduled_mixing_active
-                );
+                info!("🌀 [OSAKA] Bật bơm Osaka {}%", target_pwm);
                 events.push(OrchestratorEvent::StartOsakaSoft {
                     target_pwm_percent: target_pwm,
                 });
-                peripherals.pump_status.osaka_pump = true;
-                peripherals.pump_status.osaka_pwm = Some(target_pwm);
-                peripherals.osaka_pwm = target_pwm;
-                peripherals.osaka_active = true;
+                delta.osaka_pump = Some(true);
+                delta.osaka_pwm = Some(target_pwm);
             } else if peripherals.osaka_pwm != target_pwm {
                 events.push(OrchestratorEvent::SetOsakaPump {
                     pwm_percent: target_pwm,
                 });
-                peripherals.pump_status.osaka_pwm = Some(target_pwm);
-                peripherals.osaka_pwm = target_pwm;
-                peripherals.osaka_active = true;
+                delta.osaka_pwm = Some(target_pwm);
             }
         } else if peripherals.pump_status.osaka_pump {
-            info!("⏹️ [OSAKA] Tắt bơm Osaka — không còn nhu cầu nào.");
+            info!("⏹️ [OSAKA] Tắt bơm Osaka.");
             events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
-            peripherals.pump_status.osaka_pump = false;
-            peripherals.pump_status.osaka_pwm = Some(0);
-            peripherals.osaka_pwm = 0;
-            peripherals.osaka_active = false;
+            delta.osaka_pump = Some(false);
+            delta.osaka_pwm = Some(0);
         }
-        events
+
+        (delta, events)
     }
 
     pub fn tick_misting(
-        peripherals: &mut PeripheralState,
+        peripherals: &PeripheralState, // <-- không còn mut
         sensors: &SensorData,
         now_ms: u64,
         config: &ControllerConfig,
-    ) -> Vec<OrchestratorEvent> {
+    ) -> (PeripheralDelta, Vec<OrchestratorEvent>) {
         let mut events = Vec::new();
+        let mut delta = PeripheralDelta::default();
+
         let is_hot = config.enable_temp_sensor && sensors.temp >= config.misting_temp_threshold;
         let on_duration = if is_hot {
             config.high_temp_misting_on_duration_ms as u64
@@ -80,52 +76,49 @@ impl PeripheralController {
         if peripherals.is_misting_active {
             if now_ms >= peripherals.last_mist_toggle_time + on_duration {
                 events.push(OrchestratorEvent::SetMistValve { on: false });
-                peripherals.is_misting_active = false;
-                peripherals.last_mist_toggle_time = now_ms;
-                peripherals.pump_status.mist_valve = false;
+                delta.is_misting_active = Some(false);
+                delta.last_mist_toggle_time = Some(now_ms);
+                delta.mist_valve = Some(false);
             }
         } else if now_ms >= peripherals.last_mist_toggle_time + off_duration {
             events.push(OrchestratorEvent::SetMistValve { on: true });
-            peripherals.is_misting_active = true;
-            peripherals.last_mist_toggle_time = now_ms;
-            peripherals.pump_status.mist_valve = true;
+            delta.is_misting_active = Some(true);
+            delta.last_mist_toggle_time = Some(now_ms);
+            delta.mist_valve = Some(true);
         }
-        events
+
+        (delta, events)
     }
 
     pub fn tick_scheduled_mixing(
-        peripherals: &mut PeripheralState,
+        peripherals: &PeripheralState, // <-- không còn mut
         now_sec: u64,
         config: &ControllerConfig,
-    ) {
+    ) -> PeripheralDelta {
+        let mut delta = PeripheralDelta::default();
+
         if config.scheduled_mixing_interval_sec > 0 && config.scheduled_mixing_duration_sec > 0 {
             if peripherals.is_scheduled_mixing_active {
                 let end_time =
                     peripherals.last_mixing_start_sec + config.scheduled_mixing_duration_sec as u64;
                 if now_sec >= end_time {
-                    info!(
-                    "⏹️ [MIXING] Kết thúc chu kỳ sục trộn định kỳ. Đã chạy {}s. Next trong {}s.",
-                    config.scheduled_mixing_duration_sec,
-                    config.scheduled_mixing_interval_sec
-                );
-                    peripherals.is_scheduled_mixing_active = false;
-                    peripherals.last_mixing_start_sec = now_sec;
+                    info!("⏹️ [MIXING] Kết thúc chu kỳ sục trộn định kỳ.");
+                    delta.is_scheduled_mixing_active = Some(false);
+                    delta.last_mixing_start_sec = Some(now_sec);
                 }
             } else {
                 let next_trigger =
                     peripherals.last_mixing_start_sec + config.scheduled_mixing_interval_sec as u64;
                 if now_sec >= next_trigger {
-                    info!(
-                        "▶️ [MIXING] Bắt đầu chu kỳ sục trộn định kỳ. Sẽ chạy trong {}s.",
-                        config.scheduled_mixing_duration_sec
-                    );
-                    peripherals.is_scheduled_mixing_active = true;
-                    peripherals.last_mixing_start_sec = now_sec;
+                    info!("▶️ [MIXING] Bắt đầu chu kỳ sục trộn định kỳ.");
+                    delta.is_scheduled_mixing_active = Some(true);
+                    delta.last_mixing_start_sec = Some(now_sec);
                 }
             }
         } else {
-            peripherals.is_scheduled_mixing_active = false;
+            delta.is_scheduled_mixing_active = Some(false);
         }
+
+        delta
     }
 }
-

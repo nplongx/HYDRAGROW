@@ -1,8 +1,8 @@
 use hydragrow_shared::{ControllerConfig, SensorData};
 
-use super::super::phases::FaultCode;
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use crate::fsm::matrix::ControlVector;
+use crate::fsm::phase_impls::FaultCode;
 use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
 use crate::pump::PumpType; // Loại bỏ PumpController trực tiếp
 
@@ -561,4 +561,3 @@ fn pulse_params(
     };
     (pulse_on_ms, pulse_off_ms, max_pulse_count)
 }
-

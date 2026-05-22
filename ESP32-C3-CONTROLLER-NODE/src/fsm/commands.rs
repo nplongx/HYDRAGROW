@@ -5,25 +5,23 @@ use hydragrow_shared::{
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
-use super::phases::SystemPhase;
 use super::system_context::SystemContext;
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
+use crate::fsm::phase_impls::SystemPhase;
+use crate::fsm::ContextDelta;
 use crate::pump::WaterDirection;
 
 // ---------------------------------------------------------------------------
 // process_mqtt_commands
-//
-// Xử lý tất cả lệnh đến từ MQTT trong một tick FSM qua cơ chế sinh Event.
-// Trả về tuple `(bool, Vec<OrchestratorEvent>)`.
 // ---------------------------------------------------------------------------
 pub fn process_mqtt_commands(
     cmd_rx: &Receiver<MqttCommandIn>,
     config: &ControllerConfig,
-    ctx: &mut SystemContext,
+    ctx: &SystemContext,
     current_time_ms: u64,
-    fsm_mqtt_tx: &Sender<String>,
-) -> (bool, Vec<OrchestratorEvent>) {
-    let mut force_sync = false;
+    _fsm_mqtt_tx: &Sender<String>,
+) -> (ContextDelta, Vec<OrchestratorEvent>) {
+    let mut delta = ContextDelta::default();
     let mut all_events = Vec::new();
 
     let is_emergency_state = matches!(
@@ -36,11 +34,10 @@ pub fn process_mqtt_commands(
     while let Ok(cmd) = cmd_rx.try_recv() {
         let action_lower = cmd.action.to_lowercase();
 
-        // --- Lệnh hệ thống (không phụ thuộc mode) ---
+        // --- enter_calibration ---
         if action_lower == "enter_calibration" {
-            info!("🛠️ Bắt đầu chế độ Hiệu chuẩn Cảm biến! Khóa chéo an toàn.");
+            info!("🛠️ Bắt đầu chế độ Hiệu chuẩn Cảm biến!");
 
-            // Ép phần cứng hạ toàn bộ chân cờ điều khiển bơm vật lý
             all_events.push(OrchestratorEvent::SetWaterPump {
                 direction: WaterDirection::Stop,
             });
@@ -67,42 +64,48 @@ pub fn process_mqtt_commands(
                 pwm_percent: 0,
             });
 
-            // Cập nhật trạng thái Context tương ứng
-            ctx.peripherals.reset(current_time_ms / 1000);
             let step = cmd.target.clone().unwrap_or_else(|| "default".to_string());
-            ctx.phase = SystemPhase::SensorCalibration { step };
-            ctx.phase_finish_ms = Some(current_time_ms + 3_600_000);
-            force_sync = true;
+            delta.phase = Some(SystemPhase::SensorCalibration { step });
+            delta.phase_finish_ms = Some(Some(current_time_ms + 3_600_000));
+
+            let mut peri_delta = delta.peripherals.take().unwrap_or_default();
+            peri_delta.osaka_pump = Some(false);
+            peri_delta.osaka_pwm = Some(0);
+            peri_delta.is_misting_active = Some(false);
+            peri_delta.mist_valve = Some(false);
+            delta.peripherals = Some(peri_delta);
+
+            all_events.push(OrchestratorEvent::SaveNvsSnapshot);
             continue;
         }
 
+        // --- exit_calibration ---
         if action_lower == "exit_calibration" {
             if matches!(ctx.phase, SystemPhase::SensorCalibration { .. }) {
                 info!("✅ Thoát chế độ Hiệu chuẩn, quay về Monitoring.");
-                ctx.phase = SystemPhase::Monitoring;
-                ctx.phase_finish_ms = None;
-                force_sync = true;
+                delta.phase = Some(SystemPhase::Monitoring);
+                delta.phase_finish_ms = Some(None);
             }
             continue;
         }
 
+        // --- sync_status ---
         if action_lower == "sync_status" {
-            force_sync = true;
             all_events.push(OrchestratorEvent::PublishFsmState);
             continue;
         }
 
+        // --- ota_update ---
         if action_lower == "ota_update" {
             let ota_url = cmd
                 .params
                 .as_ref()
                 .and_then(|p| p.ota_url.as_deref())
                 .unwrap_or("");
-
             let log_payload = serde_json::json!(BasicSystemLogMetadata {
                 source: "fsm_command".to_string(),
                 message: format!(
-                    "Nhận lệnh OTA từ MQTT. URL: {}. Firmware sẽ chuyển giao cho OTA task.",
+                    "Nhận lệnh OTA từ MQTT. URL: {}.",
                     if ota_url.is_empty() {
                         "<missing>"
                     } else {
@@ -113,19 +116,15 @@ pub fn process_mqtt_commands(
                 cycle_id: None,
             })
             .to_string();
-
             all_events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });
-            info!("📦 OTA trigger received: {}", ota_url);
-            force_sync = true;
             continue;
         }
 
+        // --- reset_fault ---
         if action_lower == "reset_fault" {
             info!("🔄 Nhận lệnh Reset. Khôi phục hệ thống...");
-
-            // Phát dọn dẹp tắt hết bơm cứng phần cứng
             all_events.push(OrchestratorEvent::SetWaterPump {
                 direction: WaterDirection::Stop,
             });
@@ -152,26 +151,24 @@ pub fn process_mqtt_commands(
                 pwm_percent: 0,
             });
 
-            // Xóa sạch cờ trạng thái Context
-            ctx.peripherals.reset(current_time_ms / 1000);
-            ctx.stabilizer_tracker.reset();
+            delta.phase = Some(SystemPhase::Monitoring);
+            delta.phase_start_ms = Some(None);
+            delta.phase_finish_ms = Some(None);
+            delta.reset_stabilizer = true;
 
-            if let Some(sample) = ctx.calibration.pending_sample.as_mut() {
-                sample.invalid_by_noise = true;
-            }
+            let mut peri_delta = delta.peripherals.take().unwrap_or_default();
+            peri_delta.osaka_pump = Some(false);
+            peri_delta.osaka_pwm = Some(0);
+            peri_delta.is_misting_active = Some(false);
+            peri_delta.mist_valve = Some(false);
+            peri_delta.water_pump_in = Some(false);
+            peri_delta.water_pump_out = Some(false);
+            delta.peripherals = Some(peri_delta);
 
-            ctx.phase_start_ms = None;
-            ctx.phase_finish_ms = None;
-            ctx.phase = SystemPhase::Monitoring;
-
-            // Đồng bộ bộ nhớ flash
             all_events.push(OrchestratorEvent::SaveNvsSnapshot);
-
-            force_sync = true;
             continue;
         }
 
-        // --- Lệnh bơm thủ công chỉ cho phép khi ở MANUAL mode ---
         if config.control_mode == ControlMode::Auto {
             warn!("Bỏ qua lệnh thủ công vì đang ở AUTO.");
             continue;
@@ -192,7 +189,6 @@ pub fn process_mqtt_commands(
             .unwrap_or_else(|| "ALL".to_string());
 
         let is_force_on = action_lower == "force_on";
-        let is_set_pwm = action_lower == "set_pwm";
         let pwm = cmd.params.as_ref().and_then(|p| p.pwm).or(cmd.pwm);
         let duration_sec = cmd
             .params
@@ -203,7 +199,7 @@ pub fn process_mqtt_commands(
 
         let mut is_on = is_force_on
             || matches!(action_lower.as_str(), "pump_on" | "on" | "true" | "1")
-            || (is_set_pwm && pwm.unwrap_or(0) > 0);
+            || (action_lower == "set_pwm" && pwm.unwrap_or(0) > 0);
 
         if let Some(state) = explicit_state {
             is_on = state;
@@ -211,88 +207,63 @@ pub fn process_mqtt_commands(
 
         if is_emergency_state && is_on && !is_force_on {
             warn!(
-                "❌ BLOCKED: Không thể điều khiển {} bình thường vì hệ thống đang Lỗi / Hiệu chuẩn / EmergencyStop. Vui lòng dùng FORCE.",
+                "❌ BLOCKED: Không thể điều khiển {} bình thường trong trạng thái lỗi.",
                 pump_name
             );
             continue;
         }
 
         if is_force_on {
-            info!("⚠️ NGƯỜI DÙNG CƯỠNG CHẾ BẬT {}!", pump_name);
             let duration = duration_sec.unwrap_or(120);
-            ctx.safety.safety_override_until = current_time_ms + (duration as u64 * 1000);
+            delta.safety_override_until = Some(current_time_ms + (duration as u64 * 1000));
 
             let log_payload = serde_json::json!(BasicSystemLogMetadata {
                 source: "fsm_command".to_string(),
-                message: format!(
-                    "Người dùng đã dùng lệnh FORCE ON để ép bật {} trong {} giây, vượt qua các lớp bảo vệ an toàn.",
-                    pump_name, duration
-                ),
+                message: format!("Người dùng FORCE ON {} trong {} giây.", pump_name, duration),
                 skip_reason: None,
                 cycle_id: None,
             })
             .to_string();
-
-            all_events.push(OrchestratorEvent::PublishSystemLog {
-                payload_json: log_payload,
-            });
-        } else if is_on {
-            let log_payload = serde_json::json!(BasicSystemLogMetadata {
-                source: "fsm_command".to_string(),
-                message: format!("Người dùng đã bật bơm thủ công {}.", pump_name),
-                skip_reason: None,
-                cycle_id: None,
-            })
-            .to_string();
-
             all_events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });
         }
 
-        // Ghi timeout thủ công vào bộ nhớ Context
         if is_on {
-            match duration_sec {
-                Some(duration) if duration > 0 => {
-                    let finish_time = current_time_ms + (duration as u64 * 1000);
-                    ctx.safety
-                        .manual_timeouts
-                        .insert(pump_name.clone(), finish_time);
-                }
-                _ => {
-                    ctx.safety.manual_timeouts.remove(&pump_name);
+            if let Some(duration) = duration_sec {
+                if duration > 0 {
+                    delta.manual_pump_timeout = Some((
+                        pump_name.clone(),
+                        current_time_ms + (duration as u64 * 1000),
+                    ));
                 }
             }
         } else {
-            ctx.safety.manual_timeouts.remove(&pump_name);
+            delta.manual_pump_timeout_clear = Some(pump_name.clone());
         }
 
         let pwm_val = pwm.unwrap_or(if is_on { 100 } else { 0 });
-
-        let mut pump_events = apply_pump_command(ctx, &pump_name, is_on, pwm_val, current_time_ms);
+        let mut pump_events =
+            build_pump_events(&pump_name, is_on, pwm_val, current_time_ms, &mut delta);
         all_events.append(&mut pump_events);
-        force_sync = true;
     }
 
-    (force_sync, all_events)
+    (delta, all_events)
 }
 
-// ---------------------------------------------------------------------------
-// apply_pump_command – Trích xuất và xuất sinh Hardware Events tương ứng
-// ---------------------------------------------------------------------------
-fn apply_pump_command(
-    ctx: &mut SystemContext,
+fn build_pump_events(
     pump_name: &str,
     is_on: bool,
     pwm_val: u32,
-    current_time_ms: u64,
+    _current_time_ms: u64,
+    delta: &mut ContextDelta,
 ) -> Vec<OrchestratorEvent> {
     let mut events = Vec::new();
+    let mut peri_delta = delta.peripherals.take().unwrap_or_default();
 
     match pump_name {
         "A" | "PUMP_A" => {
-            ctx.peripherals.pump_status.pump_a = is_on;
-            ctx.peripherals.pump_status.pump_a_pwm = Some(if is_on { pwm_val } else { 0 });
+            peri_delta.pump_a = Some(is_on);
             events.push(OrchestratorEvent::SetDosingPump {
                 pump: DosingPumpTarget::NutrientA,
                 on: is_on,
@@ -300,8 +271,7 @@ fn apply_pump_command(
             });
         }
         "B" | "PUMP_B" => {
-            ctx.peripherals.pump_status.pump_b = is_on;
-            ctx.peripherals.pump_status.pump_b_pwm = Some(if is_on { pwm_val } else { 0 });
+            peri_delta.pump_b = Some(is_on);
             events.push(OrchestratorEvent::SetDosingPump {
                 pump: DosingPumpTarget::NutrientB,
                 on: is_on,
@@ -309,8 +279,7 @@ fn apply_pump_command(
             });
         }
         "PH_UP" | "PUMP_PH_UP" => {
-            ctx.peripherals.pump_status.ph_up = is_on;
-            ctx.peripherals.pump_status.ph_up_pwm = Some(if is_on { pwm_val } else { 0 });
+            peri_delta.ph_up = Some(is_on);
             events.push(OrchestratorEvent::SetDosingPump {
                 pump: DosingPumpTarget::PhUp,
                 on: is_on,
@@ -318,8 +287,7 @@ fn apply_pump_command(
             });
         }
         "PH_DOWN" | "PUMP_PH_DOWN" => {
-            ctx.peripherals.pump_status.ph_down = is_on;
-            ctx.peripherals.pump_status.ph_down_pwm = Some(if is_on { pwm_val } else { 0 });
+            peri_delta.ph_down = Some(is_on);
             events.push(OrchestratorEvent::SetDosingPump {
                 pump: DosingPumpTarget::PhDown,
                 on: is_on,
@@ -327,8 +295,8 @@ fn apply_pump_command(
             });
         }
         "OSAKA_PUMP" | "OSAKA" => {
-            ctx.peripherals.pump_status.osaka_pump = is_on;
-            ctx.peripherals.pump_status.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
+            peri_delta.osaka_pump = Some(is_on);
+            peri_delta.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
             if is_on {
                 events.push(OrchestratorEvent::StartOsakaSoft {
                     target_pwm_percent: pwm_val,
@@ -338,17 +306,14 @@ fn apply_pump_command(
             }
         }
         "MIST_VALVE" | "MIST" => {
-            ctx.peripherals.pump_status.mist_valve = is_on;
-            ctx.peripherals.is_misting_active = is_on;
-            if is_on {
-                ctx.peripherals.last_mist_toggle_time = current_time_ms;
-            }
+            peri_delta.mist_valve = Some(is_on);
+            peri_delta.is_misting_active = Some(is_on);
             events.push(OrchestratorEvent::SetMistValve { on: is_on });
         }
         "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
-            ctx.peripherals.pump_status.water_pump_in = is_on;
+            peri_delta.water_pump_in = Some(is_on);
             if is_on {
-                ctx.peripherals.pump_status.water_pump_out = false;
+                peri_delta.water_pump_out = Some(false);
             }
             events.push(OrchestratorEvent::SetWaterPump {
                 direction: if is_on {
@@ -359,9 +324,9 @@ fn apply_pump_command(
             });
         }
         "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
-            ctx.peripherals.pump_status.water_pump_out = is_on;
+            peri_delta.water_pump_out = Some(is_on);
             if is_on {
-                ctx.peripherals.pump_status.water_pump_in = false;
+                peri_delta.water_pump_in = Some(false);
             }
             events.push(OrchestratorEvent::SetWaterPump {
                 direction: if is_on {
@@ -374,6 +339,10 @@ fn apply_pump_command(
         _ => {}
     }
 
+    delta.peripherals = Some(peri_delta);
     events
 }
 
+pub fn build_stop_pump_events(pump_name: &str, delta: &mut ContextDelta) -> Vec<OrchestratorEvent> {
+    build_pump_events(pump_name, false, 0, 0, delta)
+}

@@ -4,7 +4,7 @@
 //! Output: JSON payload lên topic fsm_state và calibration
 
 use super::ObserverContext;
-use crate::fsm::events::OrchestratorEvent;
+use crate::fsm::{events::OrchestratorEvent, phase_impls::SystemPhase};
 use hydragrow_shared::topics::{topic_calibration, topic_fsm_state};
 use log::warn;
 
@@ -79,10 +79,10 @@ impl MqttTelemetryObserver {
         let payload = serde_json::json!({
             "online": true,
             "current_state": match &oc.ctx.phase {
-                crate::fsm::phases::SystemPhase::Fault(code) => {
+                SystemPhase::Fault(code) => {
                     format!("Fault:{}", code.as_str())
                 }
-                crate::fsm::phases::SystemPhase::EmergencyStop(reason) => {
+                SystemPhase::EmergencyStop(reason) => {
                     format!("EmergencyStop:{}", reason)
                 }
                 p => p.as_str().to_string(),

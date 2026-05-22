@@ -1,8 +1,9 @@
 //! TickResult — Output của một tick Pure Decision Engine.
 //! Tách biệt hoàn toàn "quyết định gì" khỏi "thực thi gì".
 
+use crate::fsm::phase_impls::SystemPhase;
+
 use super::events::OrchestratorEvent;
-use super::phases::SystemPhase;
 
 /// Những thay đổi state muốn áp dụng vào SystemContext sau một tick.
 /// Tất cả fields đều Optional — None nghĩa là "giữ nguyên".
@@ -35,6 +36,15 @@ pub struct ContextDelta {
 
     /// Cập nhật water_change_cron
     pub water_change_cron: Option<String>,
+
+    /// Cập nhật safety override timeout
+    pub safety_override_until: Option<u64>,
+
+    /// Set manual timeout cho một bơm cụ thể: (pump_name, finish_ms)
+    pub manual_pump_timeout: Option<(String, u64)>,
+
+    /// Xóa manual timeout cho một bơm
+    pub manual_pump_timeout_clear: Option<String>,
 }
 
 #[derive(Debug, Default)]

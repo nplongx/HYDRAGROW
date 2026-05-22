@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use super::actors::{
     dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
 };
-use super::phases::SystemPhase;
 use super::types::PendingCalibrationSample;
 use crate::fsm::local_health_and_diagnostic::LocalHealthAndDiagnostic;
 use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
+use crate::fsm::phase_impls::SystemPhase;
 
 pub type CronSchedule = String;
 
@@ -94,6 +94,36 @@ pub struct SystemContext {
     pub next_scheduled_dosing_trigger_sec: Option<u64>,
 }
 
+// src/fsm/system_context.rs
+impl SystemContext {
+    pub fn apply_peripheral_delta(&mut self, pd: crate::fsm::tick_result::PeripheralDelta) {
+        let p = &mut self.peripherals;
+        if let Some(v) = pd.osaka_pump {
+            p.pump_status.osaka_pump = v;
+            p.osaka_active = v;
+        }
+        if let Some(v) = pd.osaka_pwm {
+            p.pump_status.osaka_pwm = Some(v);
+            p.osaka_pwm = v;
+        }
+        if let Some(v) = pd.is_misting_active {
+            p.is_misting_active = v;
+        }
+        if let Some(v) = pd.last_mist_toggle_time {
+            p.last_mist_toggle_time = v;
+        }
+        if let Some(v) = pd.mist_valve {
+            p.pump_status.mist_valve = v;
+        }
+        if let Some(v) = pd.is_scheduled_mixing_active {
+            p.is_scheduled_mixing_active = v;
+        }
+        if let Some(v) = pd.last_mixing_start_sec {
+            p.last_mixing_start_sec = v;
+        }
+    }
+}
+
 impl SystemContext {
     /// Áp dụng ContextDelta vào context — điểm duy nhất được phép mutate ctx.
     /// Gọi sau khi Pure Decision Engine trả về TickResult.
@@ -130,6 +160,16 @@ impl SystemContext {
 
         if let Some(cron) = delta.water_change_cron {
             self.water_change_cron = cron;
+        }
+
+        if let Some(until) = delta.safety_override_until {
+            self.safety.safety_override_until = until;
+        }
+        if let Some((pump, finish_ms)) = delta.manual_pump_timeout {
+            self.safety.manual_timeouts.insert(pump, finish_ms);
+        }
+        if let Some(pump) = delta.manual_pump_timeout_clear {
+            self.safety.manual_timeouts.remove(&pump);
         }
 
         // --- Peripherals ---

@@ -110,6 +110,12 @@ impl MqttTelemetryObserver {
     }
 
     fn publish_calibration(&mut self, oc: &ObserverContext<'_>) {
+        log::debug!(
+            "📡 [TELEMETRY] Publishing calibration: matrix_warm={}, updates={}",
+            oc.ctx.tuner.matrix_is_warm,
+            oc.ctx.tuner.matrix_update_count
+        );
+
         let payload = oc
             .ctx
             .tuner

@@ -76,6 +76,8 @@ pub enum CalibrationDelta {
     Start(crate::fsm::types::PendingCalibrationSample),
     /// Xóa sample hiện tại (invalid)
     Invalidate,
+    /// Cập nhật post-mixing EC/pH khi chuyển từ ActiveMixing → Stabilizing
+    UpdatePostMixing { ec: f32, ph: f32, finish_ms: u64 },
 }
 
 /// Output của một tick Pure Decision Engine.

@@ -13,7 +13,7 @@ impl PhaseTick for ActiveMixingPhase {
         &self,
         now_ms: u64,
         config: &ControllerConfig,
-        _sensors: &SensorData,
+        sensors: &SensorData,
         ctx: &mut SystemContext,
     ) -> TickResult {
         let mut result = TickResult::default();
@@ -28,6 +28,14 @@ impl PhaseTick for ActiveMixingPhase {
                 now_ms + ctx.diagnostic.adaptive_stabilize_sec as u64 * 1000,
             ));
             result.delta.reset_stabilizer = true;
+            // Ghi lại EC/pH tại thời điểm mixing xong để update_matrix_adaptive có dữ liệu chính xác
+            result.delta.calibration = Some(
+                crate::fsm::tick_result::CalibrationDelta::UpdatePostMixing {
+                    ec: sensors.ec,
+                    ph: sensors.ph,
+                    finish_ms: now_ms,
+                },
+            );
         }
 
         result

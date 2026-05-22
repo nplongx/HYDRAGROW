@@ -247,6 +247,14 @@ impl SystemContext {
                         s.invalid_by_noise = true;
                     }
                 }
+                CalibrationDelta::UpdatePostMixing { ec, ph, finish_ms } => {
+                    if let Some(s) = self.calibration.pending_sample.as_mut() {
+                        s.post_mixing_ec = ec;
+                        s.post_mixing_ph = ph;
+                        s.stabilizing_start_ms = Some(finish_ms);
+                        s.active_mixing_finish_ms = finish_ms;
+                    }
+                }
             }
         }
     }
@@ -911,6 +919,99 @@ impl AutoTuner {
         self.ec_tracker.reset();
         self.ph_tracker.reset();
         self.state = TunerState::Converging;
+    }
+
+    /// Entry point duy nhất cho adaptive learning pipeline.
+    /// Gọi sau mỗi dosing cycle hoàn tất (cuối StabilizingPhase).
+    /// Điều phối: GainLearner → AutoTuner ACK → InteractionMatrix Kalman → warm tracking.
+    ///
+    /// Trả về true nếu learning đã được thực hiện (để caller quyết định có publish update không).
+    pub fn learn_from_cycle(
+        &mut self,
+        sample: &crate::fsm::types::PendingCalibrationSample,
+        post_ec: f32,
+        post_ph: f32,
+        post_water: f32,
+        post_temp: f32,
+        config: &hydragrow_shared::ControllerConfig,
+        now_sec: u64,
+    ) -> bool {
+        // Bỏ qua nếu sample bị đánh dấu invalid
+        if sample.invalid_by_noise || sample.invalid_by_water_change {
+            return false;
+        }
+
+        let actual_delta_ec = post_ec - sample.start_ec;
+        let actual_delta_ph = post_ph - sample.start_ph;
+        let total_nutrient_ml = sample.dose_a_ml + sample.dose_b_ml;
+        let ph_dose_ml = sample.dose_ph_up_ml + sample.dose_ph_down_ml;
+        let is_ph_up = sample.dose_ph_up_ml > sample.dose_ph_down_ml;
+
+        // Cập nhật GainLearner từ kết quả quan sát thực tế
+        if total_nutrient_ml > 0.5 && actual_delta_ec > 0.01 {
+            self.gain_learner
+                .update_ec_gain(total_nutrient_ml, actual_delta_ec, config);
+        }
+        if ph_dose_ml > 0.1 && actual_delta_ph.abs() > 0.01 {
+            self.gain_learner
+                .update_ph_gain(ph_dose_ml, actual_delta_ph.abs(), is_ph_up, config);
+        }
+
+        // AutoTuner ACK để cập nhật adaptive step ratio
+        // response = kết quả thực tế / kết quả kỳ vọng (theo gain hiện tại)
+        if total_nutrient_ml > 0.5 {
+            let expected_ec_delta = total_nutrient_ml * config.ec_gain_per_ml;
+            if expected_ec_delta > 1e-6 {
+                self.on_ec_dosing_ack(actual_delta_ec, expected_ec_delta, config, now_sec);
+            }
+        }
+        if ph_dose_ml > 0.1 {
+            let expected_ph_delta = if is_ph_up {
+                ph_dose_ml * config.ph_shift_up_per_ml
+            } else {
+                ph_dose_ml * config.ph_shift_down_per_ml
+            };
+            if expected_ph_delta > 1e-6 {
+                self.on_ph_dosing_ack(
+                    actual_delta_ph,
+                    expected_ph_delta,
+                    config,
+                    is_ph_up,
+                    now_sec,
+                );
+            }
+        }
+
+        // Cập nhật InteractionMatrix via Kalman filter
+        self.interaction_matrix.update_matrix_adaptive(
+            &mut self.kalman,
+            sample,
+            post_ec,
+            post_ph,
+            post_water,
+            post_temp,
+        );
+
+        // Cập nhật tracking độ ấm của matrix
+        self.matrix_update_count = self.matrix_update_count.saturating_add(1);
+        if !self.matrix_is_warm && self.matrix_update_count >= 10 {
+            self.matrix_is_warm = true;
+            log::info!(
+            "🔥 [ADAPTIVE] InteractionMatrix đã ĐỦ ẤM sau {} cycles! Chuyển sang WarmPathSolver.",
+            self.matrix_update_count
+        );
+        }
+
+        log::info!(
+            "🧠 [ADAPTIVE] Cycle học #{}: ΔEC={:.3}, ΔpH={:.3}, Matrix warm={}, Updates={}",
+            self.matrix_update_count,
+            actual_delta_ec,
+            actual_delta_ph,
+            self.matrix_is_warm,
+            self.matrix_update_count
+        );
+
+        true
     }
 
     fn refresh_variance_baseline(&mut self) {

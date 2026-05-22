@@ -34,6 +34,10 @@ impl PhaseTick for StabilizingPhase {
 
         result.delta.dosing_cycle_count_increment = true;
 
+        if let Some(s) = ctx.calibration.pending_sample.as_mut() {
+            s.stabilizing_finish_ms = Some(now_ms);
+        }
+
         if let Some(sample) = &ctx.calibration.pending_sample {
             let final_ec = sensors.ec;
             let final_ph = sensors.ph;
@@ -53,12 +57,39 @@ impl PhaseTick for StabilizingPhase {
                 return result;
             }
 
-            if !sample.invalid_by_noise && !sample.invalid_by_water_change {
+            // ADAPTIVE LEARNING PIPELINE — chỉ học khi hardware diagnostic đã pass
+            let did_learn = ctx.tuner.learn_from_cycle(
+                sample,
+                sensors.ec,
+                sensors.ph,
+                sensors.water_level,
+                sensors.temp,
+                config,
+                now_ms / 1000,
+            );
+
+            // Học fluid dynamics (thời gian mixing/stabilizing tối ưu)
+            if did_learn {
+                if let (Some(mixing_finish), Some(stab_start)) = (
+                    Some(sample.active_mixing_finish_ms),
+                    sample.stabilizing_start_ms,
+                ) {
+                    let actual_mixing_ms = mixing_finish.saturating_sub(sample.start_ms);
+                    let actual_stabilize_ms = now_ms.saturating_sub(stab_start);
+                    if actual_mixing_ms > 1000 && actual_stabilize_ms > 1000 {
+                        ctx.diagnostic
+                            .learn_fluid_dynamics(actual_mixing_ms, actual_stabilize_ms);
+                    }
+                }
+            }
+
+            if did_learn {
                 result
                     .events
                     .push(OrchestratorEvent::PublishCalibrationUpdate);
             } else {
-                warn!("⚠️ [GUARDRAIL] Bỏ qua cập nhật ma trận Kalman do dữ liệu bất thường.");
+                warn!("⚠️ [GUARDRAIL] Bỏ qua cập nhật ma trận Kalman do dữ liệu bất thường (invalid_by_noise={}, invalid_by_water_change={}).",
+        sample.invalid_by_noise, sample.invalid_by_water_change);
             }
 
             // Build human-readable message

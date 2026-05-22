@@ -134,10 +134,3 @@ impl EventDispatcher {
         }
     }
 }
-// Thêm vào cuối file dispatcher.rs
-impl super::system_context::AutoTuner {
-    // Placeholder — sẽ xóa ở Task 7
-    fn to_string_placeholder(&self) -> String {
-        "device_placeholder".to_string()
-    }
-}

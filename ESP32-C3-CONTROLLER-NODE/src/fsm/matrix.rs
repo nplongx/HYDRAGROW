@@ -135,6 +135,85 @@ impl InteractionMatrix {
         self.data[row][col] = (self.data[row][col] + step).clamp(-10_000.0, 10_000.0);
     }
 
+    pub fn update_matrix_adaptive(
+        &mut self,
+        kalman: &mut KalmanCovarianceDiag,
+        sample: &crate::fsm::types::PendingCalibrationSample,
+        post_ec: f32,
+        post_ph: f32,
+        post_water: f32,
+        post_temp: f32,
+    ) {
+        kalman.predict();
+
+        let delta_ec = post_ec - sample.start_ec;
+        let delta_ph = post_ph - sample.start_ph;
+        let delta_water = post_water - sample.start_water_level;
+        let delta_temp = post_temp - sample.start_temp;
+
+        // --- CỘT 0 & 1: Học đặc tính châm thuốc phân bón (Hàng 0: EC) ---
+        if sample.dose_a_ml > 0.0 {
+            let k0 = kalman.update_and_get_gain(0);
+            self.update_column(0, sample.dose_a_ml, delta_ec, 0, k0);
+        }
+        if sample.dose_b_ml > 0.0 {
+            let k1 = kalman.update_and_get_gain(1);
+            self.update_column(1, sample.dose_b_ml, delta_ec, 0, k1);
+        }
+
+        // --- CỘT 2 & 3: Học đặc tính axit/kiềm (Hàng 1: pH) ---
+        if sample.dose_ph_up_ml > 1e-3 {
+            let k2 = kalman.update_and_get_gain(2);
+            self.update_column(2, sample.dose_ph_up_ml, delta_ph, 1, k2);
+        }
+        if sample.dose_ph_down_ml > 1e-3 {
+            let k3 = kalman.update_and_get_gain(3);
+            self.update_column(3, sample.dose_ph_down_ml, delta_ph, 1, k3);
+        }
+
+        // --- CỘT 4: Học đặc tính Bơm cấp nước vào (Hàng 2: Mực nước, Hàng 0: EC & Hàng 1: pH) ---
+        if sample.water_in_sec > 0.1 {
+            let k4 = kalman.update_and_get_gain(4);
+            self.update_column(4, sample.water_in_sec, delta_water, 2, k4);
+            self.update_column(4, sample.water_in_sec, delta_ec, 0, k4);
+            self.update_column(4, sample.water_in_sec, delta_ph, 1, k4);
+        }
+
+        // --- CỘT 5: Học đặc tính Bơm xả nước ra ngoài (Hàng 2: Mực nước) ---
+        if sample.water_out_sec > 0.1 {
+            let k5 = kalman.update_and_get_gain(5);
+            self.update_column(5, sample.water_out_sec, delta_water, 2, k5);
+        }
+
+        // --- CỘT 6: Bơm trộn tuần hoàn Osaka ---
+        let actual_osaka_sec = (sample
+            .active_mixing_finish_ms
+            .saturating_sub(sample.start_ms) as f32
+            / 1000.0)
+            .clamp(0.0, 300.0);
+        if actual_osaka_sec > 1.0 {
+            let k6 = kalman.update_and_get_gain(6);
+            self.update_column(6, actual_osaka_sec, delta_water, 2, k6);
+            self.update_column(6, actual_osaka_sec, delta_ec * 0.1, 0, k6 * 0.1);
+            self.update_column(6, actual_osaka_sec, delta_ph * 0.1, 1, k6 * 0.1);
+        }
+
+        // --- CỘT 7: Van phun sương giải nhiệt ---
+        let actual_misting_sec = (sample
+            .stabilizing_finish_ms
+            .unwrap_or(sample.start_ms)
+            .saturating_sub(sample.start_ms) as f32
+            / 1000.0)
+            .min(30.0);
+        if actual_misting_sec > 0.1 {
+            let k7 = kalman.update_and_get_gain(7);
+            self.update_column(7, actual_misting_sec, delta_water, 2, k7);
+            self.update_column(7, actual_misting_sec, delta_temp, 3, k7);
+            self.update_column(7, actual_misting_sec, delta_ec * 0.1, 0, k7 * 0.1);
+            self.update_column(7, actual_misting_sec, delta_ph * 0.1, 1, k7 * 0.1);
+        }
+    }
+
     pub fn get(&self, row: usize, col: usize) -> f32 {
         if row < 4 && col < 8 {
             self.data[row][col]

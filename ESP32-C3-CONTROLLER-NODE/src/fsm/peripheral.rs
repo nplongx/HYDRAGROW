@@ -1,7 +1,7 @@
-use crate::pump::PumpController;
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::info;
 
+use super::events::OrchestratorEvent;
 use super::system_context::PeripheralState;
 
 pub struct PeripheralController;
@@ -9,10 +9,10 @@ pub struct PeripheralController;
 impl PeripheralController {
     pub fn tick_osaka(
         peripherals: &mut PeripheralState,
-        pumps: &mut PumpController,
         is_dosing_active: bool,
         config: &ControllerConfig,
-    ) {
+    ) -> Vec<OrchestratorEvent> {
+        let mut events = Vec::new();
         let needs_osaka = is_dosing_active
             || peripherals.is_misting_active
             || peripherals.is_scheduled_mixing_active;
@@ -32,34 +32,39 @@ impl PeripheralController {
                     peripherals.is_misting_active,
                     peripherals.is_scheduled_mixing_active
                 );
-                let _ = pumps.start_osaka_pump_soft(target_pwm);
+                events.push(OrchestratorEvent::StartOsakaSoft {
+                    target_pwm_percent: target_pwm,
+                });
                 peripherals.pump_status.osaka_pump = true;
                 peripherals.pump_status.osaka_pwm = Some(target_pwm);
                 peripherals.osaka_pwm = target_pwm;
                 peripherals.osaka_active = true;
             } else if peripherals.osaka_pwm != target_pwm {
-                let _ = pumps.set_osaka_pump_pwm(target_pwm);
+                events.push(OrchestratorEvent::SetOsakaPump {
+                    pwm_percent: target_pwm,
+                });
                 peripherals.pump_status.osaka_pwm = Some(target_pwm);
                 peripherals.osaka_pwm = target_pwm;
                 peripherals.osaka_active = true;
             }
         } else if peripherals.pump_status.osaka_pump {
             info!("⏹️ [OSAKA] Tắt bơm Osaka — không còn nhu cầu nào.");
-            let _ = pumps.set_osaka_pump_pwm(0);
+            events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
             peripherals.pump_status.osaka_pump = false;
             peripherals.pump_status.osaka_pwm = Some(0);
             peripherals.osaka_pwm = 0;
             peripherals.osaka_active = false;
         }
+        events
     }
 
     pub fn tick_misting(
         peripherals: &mut PeripheralState,
-        pumps: &mut PumpController,
         sensors: &SensorData,
         now_ms: u64,
         config: &ControllerConfig,
-    ) {
+    ) -> Vec<OrchestratorEvent> {
+        let mut events = Vec::new();
         let is_hot = config.enable_temp_sensor && sensors.temp >= config.misting_temp_threshold;
         let on_duration = if is_hot {
             config.high_temp_misting_on_duration_ms as u64
@@ -74,17 +79,18 @@ impl PeripheralController {
 
         if peripherals.is_misting_active {
             if now_ms >= peripherals.last_mist_toggle_time + on_duration {
-                let _ = pumps.set_mist_valve(false);
+                events.push(OrchestratorEvent::SetMistValve { on: false });
                 peripherals.is_misting_active = false;
                 peripherals.last_mist_toggle_time = now_ms;
                 peripherals.pump_status.mist_valve = false;
             }
         } else if now_ms >= peripherals.last_mist_toggle_time + off_duration {
-            let _ = pumps.set_mist_valve(true);
+            events.push(OrchestratorEvent::SetMistValve { on: true });
             peripherals.is_misting_active = true;
             peripherals.last_mist_toggle_time = now_ms;
             peripherals.pump_status.mist_valve = true;
         }
+        events
     }
 
     pub fn tick_scheduled_mixing(
@@ -103,9 +109,8 @@ impl PeripheralController {
                     config.scheduled_mixing_interval_sec
                 );
                     peripherals.is_scheduled_mixing_active = false;
-                    peripherals.last_mixing_start_sec = now_sec; // (đã fix ở Task 2)
+                    peripherals.last_mixing_start_sec = now_sec;
                 }
-                // else: đang chạy, không cần log liên tục
             } else {
                 let next_trigger =
                     peripherals.last_mixing_start_sec + config.scheduled_mixing_interval_sec as u64;
@@ -123,3 +128,4 @@ impl PeripheralController {
         }
     }
 }
+

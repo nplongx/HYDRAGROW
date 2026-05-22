@@ -30,11 +30,12 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
 
   if (faultCode) return <>{renderBadge('danger', `Lỗi: ${faultCode}`)}{showFaultSheet && faultGuide && <FaultExplanation code={faultCode} onClose={() => setShowFaultSheet(false)} />}</>;
   if (rawState.startsWith('EmergencyStop:')) return renderBadge('danger', `Ngắt khẩn cấp: ${rawState.replace('EmergencyStop:', '')}`);
-  if (rawState.startsWith('Cooldown:')) return renderBadge('warn', 'Đang làm mát');
+  if (rawState.startsWith('Cooldown:')) return renderBadge('warn', 'Pha khóa bảo vệ (Cooldown)');
   if (rawState.startsWith('SensorCalibration:')) return renderBadge('info', `Calib: ${rawState.replace('SensorCalibration:', '')}`);
 
   switch (rawState) {
-    case 'SystemBooting': return renderBadge('info', 'Đang khởi động...');
+    case 'SystemBooting':
+    case 'Booting': return renderBadge('info', 'Đang khởi động...');
     case 'ManualMode': return renderBadge('warn', 'Chế độ thủ công');
     case 'Monitoring': return renderBadge('default', 'Đang giám sát');
     case 'DosingCycleComplete': return renderBadge('success', 'Hoàn tất chu trình');
@@ -44,12 +45,11 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
     case 'WaterRefilling': return renderBadge('info', 'Đang cấp nước');
     case 'WaterDraining': return renderBadge('info', 'Đang xả nước');
     case 'StartingOsakaPump': return renderBadge('default', 'Khởi động máy trộn');
-    case 'DosingPumpA': return renderBadge('default', 'Đang châm Phân A');
-    case 'WaitingBetweenDose': return renderBadge('warn', 'Chờ hòa tan A → B');
-    case 'DosingPumpB': return renderBadge('default', 'Đang châm Phân B');
-    case 'DosingPH': return renderBadge('default', 'Đang chỉnh pH');
-    case 'ActiveMixing': return renderBadge('info', 'Đang sục trộn');
-    case 'Stabilizing': return renderBadge('warn', 'Chờ ổn định');
+
+    case 'MimoDosing': return renderBadge('mist', 'Đang châm MIMO (EC/pH)');
+
+    case 'ActiveMixing': return renderBadge('info', 'Đang sục trộn khuấy động');
+    case 'Stabilizing': return renderBadge('warn', 'Chờ ổn định cảm biến');
     case 'Misting': return renderBadge('mist', 'Đang phun sương');
     case 'enter_calibration': return renderBadge('info', 'Vào chế độ Calib');
     case 'exit_calibration': return renderBadge('success', 'Thoát Calib');

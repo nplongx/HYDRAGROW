@@ -94,6 +94,124 @@ pub struct SystemContext {
     pub next_scheduled_dosing_trigger_sec: Option<u64>,
 }
 
+impl SystemContext {
+    /// Áp dụng ContextDelta vào context — điểm duy nhất được phép mutate ctx.
+    /// Gọi sau khi Pure Decision Engine trả về TickResult.
+    pub fn apply_delta(&mut self, delta: crate::fsm::tick_result::ContextDelta) {
+        use crate::fsm::tick_result::CalibrationDelta;
+
+        if let Some(phase) = delta.phase {
+            self.phase = phase;
+        }
+
+        // phase_start_ms: Some(Some(t)) = set t, Some(None) = clear
+        if let Some(v) = delta.phase_start_ms {
+            self.phase_start_ms = v;
+        }
+        if let Some(v) = delta.phase_finish_ms {
+            self.phase_finish_ms = v;
+        }
+
+        if delta.dosing_cycle_count_increment {
+            self.dosing_cycle_count = self.dosing_cycle_count.saturating_add(1);
+        }
+
+        if delta.reset_stabilizer {
+            self.stabilizer_tracker.reset();
+        }
+
+        if let Some(sec) = delta.last_water_change_sec {
+            self.last_water_change_sec = sec;
+        }
+
+        if let Some(v) = delta.next_water_change_trigger_sec {
+            self.next_water_change_trigger_sec = v;
+        }
+
+        if let Some(cron) = delta.water_change_cron {
+            self.water_change_cron = cron;
+        }
+
+        // --- Peripherals ---
+        if let Some(pd) = delta.peripherals {
+            let p = &mut self.peripherals;
+
+            if let Some(v) = pd.pump_a {
+                p.pump_status.pump_a = v;
+            }
+            if let Some(v) = pd.pump_b {
+                p.pump_status.pump_b = v;
+            }
+            if let Some(v) = pd.ph_up {
+                p.pump_status.ph_up = v;
+            }
+            if let Some(v) = pd.ph_down {
+                p.pump_status.ph_down = v;
+            }
+            if let Some(v) = pd.water_pump_in {
+                p.pump_status.water_pump_in = v;
+            }
+            if let Some(v) = pd.water_pump_out {
+                p.pump_status.water_pump_out = v;
+            }
+            if let Some(v) = pd.mist_valve {
+                p.pump_status.mist_valve = v;
+            }
+            if let Some(v) = pd.osaka_pump {
+                p.pump_status.osaka_pump = v;
+            }
+            if let Some(v) = pd.osaka_pwm {
+                p.pump_status.osaka_pwm = Some(v);
+                p.osaka_pwm = v;
+            }
+            if let Some(v) = pd.is_misting_active {
+                p.is_misting_active = v;
+            }
+            if let Some(v) = pd.is_scheduled_mixing_active {
+                p.is_scheduled_mixing_active = v;
+            }
+            if let Some(v) = pd.misting_started_by_dosing {
+                p.misting_started_by_dosing = v;
+            }
+            if let Some(v) = pd.last_mist_toggle_time {
+                p.last_mist_toggle_time = v;
+            }
+            if let Some(v) = pd.last_mixing_start_sec {
+                p.last_mixing_start_sec = v;
+            }
+            if let Some(v) = pd.last_ec_before_dose {
+                self.safety.last_ec_before_dose = v;
+            }
+            if let Some(v) = pd.last_ph_before_dose {
+                self.safety.last_ph_before_dose = v;
+            }
+            if let Some(v) = pd.previous_ec {
+                p.previous_ec = v;
+            }
+            if let Some(v) = pd.previous_ph {
+                p.previous_ph = v;
+            }
+            if let Some(v) = pd.last_continuous_level {
+                p.last_continuous_level = v;
+            }
+        }
+
+        // --- Calibration ---
+        if let Some(cal) = delta.calibration {
+            match cal {
+                CalibrationDelta::Start(sample) => {
+                    self.calibration.start_sample(sample);
+                }
+                CalibrationDelta::Invalidate => {
+                    if let Some(s) = self.calibration.pending_sample.as_mut() {
+                        s.invalid_by_noise = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Cập nhật hàm impl Default của SystemContext để tránh lỗi khởi tạo rỗng:
 impl Default for SystemContext {
     fn default() -> Self {

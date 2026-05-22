@@ -11,9 +11,9 @@ use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNT
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
 use hydragrow_shared::{
     topics::{
-    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
-    topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
-    topic_status,
+        topic_calibration, topic_controller_command, topic_controller_config,
+        topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state,
+        topic_sensor_command, topic_sensors, topic_status,
     },
     UnifiedSystemLog,
 };
@@ -217,7 +217,7 @@ fn main() -> anyhow::Result<()> {
     let fsm_nvs = nvs.clone();
 
     std::thread::Builder::new()
-        .stack_size(12288)
+        .stack_size(60000)
         .name("fsm_thread".to_string())
         .spawn(move || {
             start_fsm_control_loop(
@@ -300,7 +300,11 @@ fn main() -> anyhow::Result<()> {
                 if let Some(client) = mqtt_client.as_mut() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
                         let topic = if serde_json::from_str::<UnifiedSystemLog>(&payload).is_ok() {
-                            format!("AGITECH/{}/{}", DEVICE_ID, UnifiedSystemLog::mqtt_topic_suffix())
+                            format!(
+                                "AGITECH/{}/{}",
+                                DEVICE_ID,
+                                UnifiedSystemLog::mqtt_topic_suffix()
+                            )
                         } else {
                             match v.get("type").and_then(|t| t.as_str()) {
                                 Some("water_event") | Some("system_alert")

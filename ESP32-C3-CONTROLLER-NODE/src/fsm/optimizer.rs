@@ -12,7 +12,6 @@ pub fn apply_deadband(delta: f32, tolerance: f32) -> f32 {
 //     (1.0 - ((target - predicted).abs() / denom)).clamp(0.0, 1.0)
 // }
 
-/// 🛡️ HỆ THỐNG LƯỚI AN TOÀN TRỌNG YẾU (PHANH BẢO VỆ GIAI ĐOẠN 5)
 /// Hàm này nhận đầu vào là ControlVector do Ma trận tính toán ra, duyệt qua các ranh giới
 /// sinh tồn vật lý của cây trồng và thiết bị để cắt tỉa (truncate) hoặc khóa (interlock) dòng lệnh.
 pub fn apply_safety_guardrails(

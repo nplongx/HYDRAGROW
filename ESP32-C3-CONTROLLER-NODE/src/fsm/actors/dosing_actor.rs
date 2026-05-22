@@ -1,10 +1,10 @@
 use hydragrow_shared::{ControllerConfig, SensorData};
 
+use super::super::phases::FaultCode;
+use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use crate::fsm::matrix::ControlVector;
 use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
-use crate::pump::{PumpController, PumpType}; // Import vector điều khiển đa biến từ Giai đoạn 1
-
-use super::super::phases::FaultCode;
+use crate::pump::PumpType; // Loại bỏ PumpController trực tiếp
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DosingSubState {
@@ -68,6 +68,7 @@ pub struct DosingCycleCtx {
 }
 
 #[must_use]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DosingEvent {
     Pending,
     SoftStartDone,
@@ -109,7 +110,6 @@ impl DosingActor {
         matches!(self.sub_state, DosingSubState::Idle)
     }
 
-    /// ⚡ ĐIỂM KẾT NỐI CHIẾN LƯỢC MỚI: Tiếp nhận ControlVector tổng hợp từ Ma trận
     pub fn start_matrix_cycle(
         &mut self,
         now_ms: u64,
@@ -120,7 +120,6 @@ impl DosingActor {
         config: &ControllerConfig,
         sensors: &SensorData,
     ) {
-        // 1. Tạo Context theo dõi chu kỳ hợp nhất cho Backend
         self.cycle_ctx = Some(DosingCycleCtx {
             cycle_id: format!("mimo-{now_ms}"),
             dose_a_delivered_ml: 0.0,
@@ -141,7 +140,6 @@ impl DosingActor {
         self.pending_ph_job = None;
         let safe_pwm = pwm.clamp(1, 100);
 
-        // 2. Biên dịch kênh pH từ Ma trận sang Driver lớp dưới
         let ph_up_active = control.ph_up_ml > 1e-3;
         let ph_down_active = control.ph_down_ml > 1e-3;
 
@@ -170,7 +168,6 @@ impl DosingActor {
             }
         }
 
-        // 3. Biên dịch kênh EC từ Ma trận sang Driver lớp dưới
         if control.nutrient_a_ml > 1e-3 {
             let (on_ms, off_ms, max_pulses) = pulse_params(
                 control.nutrient_a_ml,
@@ -198,7 +195,6 @@ impl DosingActor {
                 })),
             };
         } else if let Some(ph_job) = self.pending_ph_job.take() {
-            // Trường hợp ma trận tính toán chỉ cần chỉnh pH, không cần tăng EC
             self.sub_state = DosingSubState::SoftStarting {
                 finish_ms: now_ms + config.soft_start_duration as u64,
                 next_state: Box::new(DosingSubState::PumpingPH(ph_job)),
@@ -212,29 +208,28 @@ impl DosingActor {
         &mut self,
         now_ms: u64,
         config: &ControllerConfig,
-        pumps: &mut PumpController,
-    ) -> DosingEvent {
+    ) -> (DosingEvent, Vec<OrchestratorEvent>) {
         match &self.sub_state.clone() {
             DosingSubState::SoftStarting {
                 finish_ms,
                 next_state,
             } if now_ms >= *finish_ms => {
                 self.sub_state = *next_state.clone();
-                DosingEvent::SoftStartDone
+                (DosingEvent::SoftStartDone, vec![])
             }
             DosingSubState::PumpingA(job) if now_ms >= job.next_toggle_ms => {
-                self.tick_pump_a(now_ms, config, pumps)
+                self.tick_pump_a(now_ms, config)
             }
             DosingSubState::WaitingAtoB { finish_ms, b_job } if now_ms >= *finish_ms => {
-                self.begin_pump_b(b_job.clone(), now_ms, pumps)
+                self.begin_pump_b(b_job.clone(), now_ms)
             }
             DosingSubState::PumpingB(job) if now_ms >= job.next_toggle_ms => {
-                self.tick_pump_b(now_ms, pumps)
+                self.tick_pump_b(now_ms, config)
             }
             DosingSubState::PumpingPH(job) if now_ms >= job.next_toggle_ms => {
-                self.tick_pump_ph(now_ms, pumps)
+                self.tick_pump_ph(now_ms)
             }
-            _ => DosingEvent::Pending,
+            _ => (DosingEvent::Pending, vec![]),
         }
     }
 
@@ -242,25 +237,28 @@ impl DosingActor {
         &mut self,
         now_ms: u64,
         config: &ControllerConfig,
-        pumps: &mut PumpController,
-    ) -> DosingEvent {
+    ) -> (DosingEvent, Vec<OrchestratorEvent>) {
         let DosingSubState::PumpingA(mut job) = self.sub_state.clone() else {
-            return DosingEvent::Pending;
+            return (DosingEvent::Pending, vec![]);
         };
-        let pump = PumpType::NutrientA;
+        let mut hw_events = Vec::new();
 
         if job.pulse_on {
-            let _ = pumps.set_dosing_pump_pulse(pump, false, 0);
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: false,
+                pwm_percent: 0,
+            });
+
             if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
                 let PumpTarget::NutrientA { dose_b_ml } = job.pump else {
-                    return DosingEvent::Failed(FaultCode::EcDosingFailed);
+                    return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events);
                 };
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     ctx.dose_a_delivered_ml = job.delivered_ml;
                 }
 
                 if dose_b_ml <= 1e-3 {
-                    // Nếu không có dinh dưỡng B, chuyển tiếp sang xử lý chuỗi pH
                     return self.transition_to_ph_or_idle(job.delivered_ml, 0.0);
                 }
 
@@ -268,7 +266,7 @@ impl DosingActor {
                 let ml_per_sec =
                     match effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config) {
                         Some(v) => v,
-                        None => return DosingEvent::Failed(FaultCode::EcDosingFailed),
+                        None => return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events),
                     };
                 let (on_ms, off_ms, max_pulses) = pulse_params(dose_b_ml, ml_per_sec, config);
                 let b_job = PulseJob {
@@ -288,27 +286,38 @@ impl DosingActor {
                     finish_ms: now_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
                     b_job,
                 };
-                DosingEvent::PhaseTransition
+                (DosingEvent::PhaseTransition, hw_events)
             } else {
                 job.pulse_on = false;
                 job.next_toggle_ms = now_ms + job.off_ms;
                 self.sub_state = DosingSubState::PumpingA(job.clone());
-                DosingEvent::PulseToggle {
-                    pump: job.pump,
-                    pulse_on: false,
-                }
+                (
+                    DosingEvent::PulseToggle {
+                        pump: job.pump,
+                        pulse_on: false,
+                    },
+                    hw_events,
+                )
             }
         } else {
-            let _ = pumps.set_dosing_pump_pulse(pump, true, job.pwm);
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: true,
+                pwm_percent: job.pwm,
+            });
+
             job.pulse_on = true;
             job.pulse_count += 1;
             job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
             job.next_toggle_ms = now_ms + job.on_ms;
             self.sub_state = DosingSubState::PumpingA(job.clone());
-            DosingEvent::PulseToggle {
-                pump: job.pump,
-                pulse_on: true,
-            }
+            (
+                DosingEvent::PulseToggle {
+                    pump: job.pump,
+                    pulse_on: true,
+                },
+                hw_events,
+            )
         }
     }
 
@@ -316,22 +325,37 @@ impl DosingActor {
         &mut self,
         mut b_job: PulseJob,
         now_ms: u64,
-        pumps: &mut PumpController,
-    ) -> DosingEvent {
-        let _ = pumps.set_dosing_pump_pulse(PumpType::NutrientB, true, b_job.pwm);
+    ) -> (DosingEvent, Vec<OrchestratorEvent>) {
+        let mut hw_events = Vec::new();
+        hw_events.push(OrchestratorEvent::SetDosingPump {
+            pump: DosingPumpTarget::NutrientB,
+            on: true,
+            pwm_percent: b_job.pwm,
+        });
+
         b_job.pulse_on = true;
         b_job.next_toggle_ms = now_ms + b_job.on_ms;
-        self.sub_state = DosingSubState::PumpingB(b_job.clone());
-        DosingEvent::PhaseTransition
+        self.sub_state = DosingSubState::PumpingB(b_job);
+        (DosingEvent::PhaseTransition, hw_events)
     }
 
-    fn tick_pump_b(&mut self, now_ms: u64, pumps: &mut PumpController) -> DosingEvent {
+    fn tick_pump_b(
+        &mut self,
+        now_ms: u64,
+        config: &ControllerConfig,
+    ) -> (DosingEvent, Vec<OrchestratorEvent>) {
         let DosingSubState::PumpingB(mut job) = self.sub_state.clone() else {
-            return DosingEvent::Pending;
+            return (DosingEvent::Pending, vec![]);
         };
+        let mut hw_events = Vec::new();
 
         if job.pulse_on {
-            let _ = pumps.set_dosing_pump_pulse(PumpType::NutrientB, false, 0);
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientB,
+                on: false,
+                pwm_percent: 0,
+            });
+
             if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
                 let delivered_b = job.delivered_ml;
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
@@ -343,44 +367,63 @@ impl DosingActor {
                     .map(|c| c.dose_a_delivered_ml)
                     .unwrap_or(0.0);
 
-                // Kết thúc mạch EC phân bón, chuyển mạch chuỗi pH song song
-                self.transition_to_ph_or_idle(delivered_a, delivered_b)
+                let (ev, mut follow_events) =
+                    self.transition_to_ph_or_idle(delivered_a, delivered_b);
+                hw_events.append(&mut follow_events);
+                (ev, hw_events)
             } else {
                 job.pulse_on = false;
                 job.next_toggle_ms = now_ms + job.off_ms;
                 self.sub_state = DosingSubState::PumpingB(job.clone());
-                DosingEvent::PulseToggle {
-                    pump: job.pump,
-                    pulse_on: false,
-                }
+                (
+                    DosingEvent::PulseToggle {
+                        pump: job.pump,
+                        pulse_on: false,
+                    },
+                    hw_events,
+                )
             }
         } else {
-            let _ = pumps.set_dosing_pump_pulse(PumpType::NutrientB, true, job.pwm);
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientB,
+                on: true,
+                pwm_percent: job.pwm,
+            });
+
             job.pulse_on = true;
             job.pulse_count += 1;
             job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
             job.next_toggle_ms = now_ms + job.on_ms;
             self.sub_state = DosingSubState::PumpingB(job.clone());
-            DosingEvent::PulseToggle {
-                pump: job.pump,
-                pulse_on: true,
-            }
+            (
+                DosingEvent::PulseToggle {
+                    pump: job.pump,
+                    pulse_on: true,
+                },
+                hw_events,
+            )
         }
     }
 
-    fn tick_pump_ph(&mut self, now_ms: u64, pumps: &mut PumpController) -> DosingEvent {
+    fn tick_pump_ph(&mut self, now_ms: u64) -> (DosingEvent, Vec<OrchestratorEvent>) {
         let DosingSubState::PumpingPH(mut job) = self.sub_state.clone() else {
-            return DosingEvent::Pending;
+            return (DosingEvent::Pending, vec![]);
         };
+        let mut hw_events = Vec::new();
 
-        let pump_type = match job.pump {
-            PumpTarget::PhUp => PumpType::PhUp,
-            PumpTarget::PhDown => PumpType::PhDown,
-            _ => return DosingEvent::Failed(FaultCode::EcDosingFailed),
+        let target_pump = match job.pump {
+            PumpTarget::PhUp => DosingPumpTarget::PhUp,
+            PumpTarget::PhDown => DosingPumpTarget::PhDown,
+            _ => return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events),
         };
 
         if job.pulse_on {
-            let _ = pumps.set_dosing_pump_pulse(pump_type, false, 0);
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: target_pump,
+                on: false,
+                pwm_percent: 0,
+            });
+
             if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     if matches!(job.pump, PumpTarget::PhUp) {
@@ -412,48 +455,85 @@ impl DosingActor {
                     .unwrap_or(0.0);
 
                 self.sub_state = DosingSubState::Idle;
-                DosingEvent::CycleComplete {
-                    dose_a_ml: final_a,
-                    dose_b_ml: final_b,
-                    ph_up_ml: final_up,
-                    ph_down_ml: final_down,
-                }
+                (
+                    DosingEvent::CycleComplete {
+                        dose_a_ml: final_a,
+                        dose_b_ml: final_b,
+                        ph_up_ml: final_up,
+                        ph_down_ml: final_down,
+                    },
+                    hw_events,
+                )
             } else {
                 job.pulse_on = false;
                 job.next_toggle_ms = now_ms + job.off_ms;
                 self.sub_state = DosingSubState::PumpingPH(job.clone());
-                DosingEvent::PulseToggle {
-                    pump: job.pump,
-                    pulse_on: false,
-                }
+                (
+                    DosingEvent::PulseToggle {
+                        pump: job.pump,
+                        pulse_on: false,
+                    },
+                    hw_events,
+                )
             }
         } else {
-            let _ = pumps.set_dosing_pump_pulse(pump_type, true, job.pwm);
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: target_pump,
+                on: true,
+                pwm_percent: job.pwm,
+            });
+
             job.pulse_on = true;
             job.pulse_count += 1;
             job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
             job.next_toggle_ms = now_ms + job.on_ms;
             self.sub_state = DosingSubState::PumpingPH(job.clone());
-            DosingEvent::PulseToggle {
-                pump: job.pump,
-                pulse_on: true,
-            }
+            (
+                DosingEvent::PulseToggle {
+                    pump: job.pump,
+                    pulse_on: true,
+                },
+                hw_events,
+            )
         }
     }
 
-    /// Hàm xử lý chuyển tiếp thông minh: Kiểm tra xem có lệnh châm pH chạy kèm không
-    fn transition_to_ph_or_idle(&mut self, delivered_a: f32, delivered_b: f32) -> DosingEvent {
+    fn transition_to_ph_or_idle(
+        &mut self,
+        delivered_a: f32,
+        delivered_b: f32,
+    ) -> (DosingEvent, Vec<OrchestratorEvent>) {
+        let mut hw_events = Vec::new();
         if let Some(ph_job) = self.pending_ph_job.take() {
-            self.sub_state = DosingSubState::PumpingPH(ph_job);
-            DosingEvent::PhaseTransition
+            let target_pump = match ph_job.pump {
+                PumpTarget::PhUp => DosingPumpTarget::PhUp,
+                PumpTarget::PhDown => DosingPumpTarget::PhDown,
+                _ => return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events),
+            };
+
+            // Tạo Event kích hoạt bơm pH ngay khi chuyển trạng thái
+            hw_events.push(OrchestratorEvent::SetDosingPump {
+                pump: target_pump,
+                on: true,
+                pwm_percent: ph_job.pwm,
+            });
+
+            let mut updated_ph_job = ph_job;
+            updated_ph_job.pulse_on = true; // Bật pulse_on vì ta đã gửi lệnh chạy bơm
+
+            self.sub_state = DosingSubState::PumpingPH(updated_ph_job);
+            (DosingEvent::PhaseTransition, hw_events)
         } else {
             self.sub_state = DosingSubState::Idle;
-            DosingEvent::CycleComplete {
-                dose_a_ml: delivered_a,
-                dose_b_ml: delivered_b,
-                ph_up_ml: 0.0,
-                ph_down_ml: 0.0,
-            }
+            (
+                DosingEvent::CycleComplete {
+                    dose_a_ml: delivered_a,
+                    dose_b_ml: delivered_b,
+                    ph_up_ml: 0.0,
+                    ph_down_ml: 0.0,
+                },
+                hw_events,
+            )
         }
     }
 }
@@ -481,3 +561,4 @@ fn pulse_params(
     };
     (pulse_on_ms, pulse_off_ms, max_pulse_count)
 }
+

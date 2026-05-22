@@ -4,6 +4,7 @@
 
 pub mod actors;
 pub mod commands;
+pub mod events;
 pub mod local_health_and_diagnostic;
 pub mod matrix;
 pub mod optimizer;
@@ -13,6 +14,14 @@ pub mod phases;
 pub mod system_context;
 pub mod types;
 pub mod utils;
+pub use events::OrchestratorEvent;
+pub mod tick_result;
+pub use tick_result::{ContextDelta, TickResult};
+pub mod dispatcher;
+pub use dispatcher::EventDispatcher;
+pub mod observer_set;
+pub mod observers;
+pub use observer_set::ObserverSet;
 
 // SỬA LỖI 1: Loại bỏ confidence_from_error_ratio không tồn tại, chỉ giữ lại apply_deadband
 pub use optimizer::apply_deadband;
@@ -23,7 +32,7 @@ pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
+use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use hydragrow_shared::{
     BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, MqttCommandIn, SystemLogEvent,
 };
@@ -46,6 +55,53 @@ pub mod mod_helpers {
     use crate::fsm::SystemContext;
     use crate::pump::{PumpController, PumpType, WaterDirection};
     use std::sync::mpsc::Sender;
+
+    pub fn build_status_msg_from_ctx(ctx: &super::SystemContext, now_sec: u64) -> String {
+        let sum_ml = |pump_name: &str| -> f32 {
+            ctx.safety
+                .hourly_doses()
+                .get(pump_name)
+                .map(|hist| {
+                    hist.iter()
+                        .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                        .map(|(_, ml)| ml)
+                        .sum()
+                })
+                .unwrap_or(0.0)
+        };
+
+        let refill_count = ctx
+            .safety
+            .refill_history()
+            .iter()
+            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+            .count();
+        let drain_count = ctx
+            .safety
+            .drain_history()
+            .iter()
+            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+            .count();
+
+        serde_json::json!({
+            "online": true,
+            "current_state": match &ctx.phase {
+                super::SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
+                super::SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
+                _ => ctx.phase.as_str().to_string(),
+            },
+            "pump_status": ctx.peripherals.pump_status,
+            "budgets": {
+                "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
+                "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
+                "refill_count": refill_count,
+                "drain_count": drain_count
+            },
+            "log_drop_count": crate::fsm::utils::get_log_drop_count(),
+            "diagnostics": ctx.diagnostic.to_telemetry_json()
+        })
+        .to_string()
+    }
 
     pub fn turn_off_pump_from_system_ctx(
         ctx: &mut SystemContext,
@@ -122,9 +178,10 @@ pub fn start_fsm_control_loop(
     fsm_mqtt_tx: Sender<String>,
     dosing_report_tx: Sender<String>,
     sensor_cmd_tx: Sender<String>,
-    current_time_sec: u64,
+    _current_time_sec: u64,
 ) {
     let mut new_ctx = SystemContext::default();
+    log::debug!("FSM tick: phase={:?}", new_ctx.phase.as_str());
     let mut last_reported_state = String::new();
 
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
@@ -145,7 +202,7 @@ pub fn start_fsm_control_loop(
 
     new_ctx.peripherals.last_mixing_start_sec = current_time_on_boot;
     if let Some(flash) = nvs.as_mut() {
-        if let Ok(Some(raw)) = flash.get_str("runtime_snap", &mut [0; 1024]) {
+        if let Ok(Some(raw)) = flash.get_str("runtime_snap", &mut [0; 2048]) {
             if let Ok(snapshot) = serde_json::from_str::<NvsSnapshot>(raw) {
                 if snapshot.step_ratio_ec.is_finite() {
                     new_ctx.tuner.adaptive_ec_ratio = snapshot.step_ratio_ec.clamp(0.1, 2.0);
@@ -182,9 +239,6 @@ pub fn start_fsm_control_loop(
                 new_ctx.tuner.gain_learner.ph_up.sample_count = ph_up_count;
                 new_ctx.tuner.gain_learner.ph_down.sample_count = ph_down_count;
 
-                // SỬA LỖI 2: Loại bỏ 3 dòng gọi hàm .recalculate_confidence() không còn tồn tại trong cấu trúc mới
-                // Độ tự tin hiện tại đã được tính thích ứng tự động qua số lượng mẫu lưu trữ inline hoặc bộ lọc Kalman.
-
                 if snapshot.ec_variance_baseline.is_finite() && snapshot.ec_variance_baseline >= 0.0
                 {
                     new_ctx.tuner.ec_variance_baseline = snapshot.ec_variance_baseline;
@@ -200,7 +254,6 @@ pub fn start_fsm_control_loop(
                             && (*value <= INTERACTION_MATRIX_MAX)
                     });
 
-                    // SỬA ĐỔI: Đồng bộ kiểm tra ma trận 2x4 (đầu EC là index 0, đầu pH Up là index 6)
                     let matrix_diagonal_gain_is_valid =
                         interaction_matrix[0] > 0.0 && interaction_matrix[6] > 0.0;
                     let matrix_is_valid = matrix_values_are_valid && matrix_diagonal_gain_is_valid;
@@ -264,6 +317,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
     // Giai đoạn khởi động 3 giây
     let boot_start_ms = get_current_time_ms();
     loop {
+        let current_time_sec = get_current_time_sec();
         if get_current_time_ms() - boot_start_ms > 3000 {
             new_ctx.phase = SystemPhase::Monitoring;
             break;
@@ -273,6 +327,8 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         }
         std::thread::sleep(Duration::from_millis(100));
     }
+
+    let mut observer_set = crate::fsm::observer_set::ObserverSet::new();
 
     // Vòng lặp chính
     loop {
@@ -286,14 +342,32 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             sensor_last_update_ms = current_time_ms;
         }
 
-        let force_sync = process_mqtt_commands(
+        // 🌟 VÁ LỖI TUPLE: Destructure kết quả trả về gồm (bool, Vec<OrchestratorEvent>)
+        let (force_sync, cmd_events) = process_mqtt_commands(
             &cmd_rx,
             &config,
-            &mut pump_ctrl,
             &mut new_ctx,
             current_time_ms,
             &fsm_mqtt_tx,
         );
+
+        // Phát tán các command events phần cứng ngay lập tức để đáp ứng thời gian thực (Manual Mode)
+        if !cmd_events.is_empty() {
+            let mut manual_dc = crate::fsm::dispatcher::DispatchContext {
+                pumps: &mut pump_ctrl,
+                nvs: &mut nvs,
+                mqtt_tx: &fsm_mqtt_tx,
+                dosing_report_tx: &dosing_report_tx,
+                sensor_cmd_tx: &sensor_cmd_tx,
+                ctx: &new_ctx,
+                now_sec: current_time_sec,
+                device_id: &config.device_id,
+                config: &config,
+                sensors: &sensors,
+                observers: &mut observer_set,
+            };
+            crate::fsm::dispatcher::EventDispatcher::dispatch(cmd_events, &mut manual_dc);
+        }
 
         let expired: Vec<String> = new_ctx
             .safety
@@ -345,17 +419,32 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 || (config.enable_temp_sensor && sensors.err_temp.unwrap_or(false));
 
             if !has_sensor_fault {
-                orchestrator::tick(
+                let tick_result = orchestrator::tick(
                     current_time_ms,
                     &config,
                     &sensors,
                     sensor_last_update_ms,
                     &mut new_ctx,
-                    &mut pump_ctrl,
-                    &mut nvs,
-                    &dosing_report_tx,
-                    &fsm_mqtt_tx,
                 );
+
+                // Áp dụng những thay đổi state vào SystemContext thông qua ContextDelta
+                new_ctx.apply_delta(tick_result.delta);
+
+                // Phân phối chuỗi Event side effects tự động ra ngoại vi
+                let mut dc = crate::fsm::dispatcher::DispatchContext {
+                    pumps: &mut pump_ctrl,
+                    nvs: &mut nvs,
+                    mqtt_tx: &fsm_mqtt_tx,
+                    dosing_report_tx: &dosing_report_tx,
+                    sensor_cmd_tx: &sensor_cmd_tx,
+                    ctx: &new_ctx,
+                    now_sec: current_time_sec,
+                    device_id: &config.device_id,
+                    config: &config,
+                    sensors: &sensors,
+                    observers: &mut observer_set,
+                };
+                crate::fsm::dispatcher::EventDispatcher::dispatch(tick_result.events, &mut dc);
             }
         }
 
@@ -446,3 +535,4 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
     })
     .to_string()
 }
+

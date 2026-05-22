@@ -1,6 +1,9 @@
 use hydragrow_shared::{ControllerConfig, SensorData};
 
-use crate::pump::{PumpController, WaterDirection};
+use crate::{
+    fsm::OrchestratorEvent,
+    pump::{PumpController, WaterDirection},
+};
 
 #[derive(Debug, Clone)]
 pub enum WaterSubState {
@@ -67,8 +70,7 @@ impl WaterActor {
         now_ms: u64,
         sensors: &SensorData,
         config: &ControllerConfig,
-        pumps: &mut PumpController,
-    ) -> WaterEvent {
+    ) -> (WaterEvent, Vec<OrchestratorEvent>) {
         match &self.sub_state.clone() {
             WaterSubState::Filling { job } => {
                 let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
@@ -76,17 +78,24 @@ impl WaterActor {
                 let timeout = elapsed > config.max_refill_duration_sec as u64;
 
                 if reached || timeout {
-                    // Dừng bơm khi hoàn thành hoặc quá thời gian
-                    let _ = pumps.set_water_pump(WaterDirection::Stop);
                     self.sub_state = WaterSubState::Idle;
-                    return WaterEvent::Done {
-                        success: reached,
-                        duration_sec: elapsed,
-                    };
+                    return (
+                        WaterEvent::Done {
+                            success: reached,
+                            duration_sec: elapsed,
+                        },
+                        vec![OrchestratorEvent::SetWaterPump {
+                            direction: crate::pump::WaterDirection::Stop,
+                        }],
+                    );
                 }
 
-                let _ = pumps.set_water_pump(WaterDirection::In);
-                WaterEvent::Pending
+                (
+                    WaterEvent::Pending,
+                    vec![OrchestratorEvent::SetWaterPump {
+                        direction: crate::pump::WaterDirection::In,
+                    }],
+                )
             }
             WaterSubState::Draining { job } => {
                 let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
@@ -94,22 +103,31 @@ impl WaterActor {
                 let timeout = elapsed > config.max_drain_duration_sec as u64;
 
                 if reached || timeout {
-                    let _ = pumps.set_water_pump(WaterDirection::Stop);
                     self.sub_state = WaterSubState::Idle;
-                    return WaterEvent::Done {
-                        success: reached,
-                        duration_sec: elapsed,
-                    };
+                    return (
+                        WaterEvent::Done {
+                            success: reached,
+                            duration_sec: elapsed,
+                        },
+                        vec![OrchestratorEvent::SetWaterPump {
+                            direction: crate::pump::WaterDirection::Stop,
+                        }],
+                    );
                 }
 
-                let _ = pumps.set_water_pump(WaterDirection::Out);
-                WaterEvent::Pending
+                (
+                    WaterEvent::Pending,
+                    vec![OrchestratorEvent::SetWaterPump {
+                        direction: crate::pump::WaterDirection::Out,
+                    }],
+                )
             }
-            WaterSubState::Idle => {
-                // Đảm bảo bơm không hoạt động khi đang rảnh
-                let _ = pumps.set_water_pump(WaterDirection::Stop);
-                WaterEvent::Pending
-            }
+            WaterSubState::Idle => (
+                WaterEvent::Pending,
+                vec![OrchestratorEvent::SetWaterPump {
+                    direction: crate::pump::WaterDirection::Stop,
+                }],
+            ),
         }
     }
 }

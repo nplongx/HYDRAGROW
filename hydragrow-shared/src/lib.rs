@@ -613,6 +613,64 @@ impl UnifiedSystemLog {
             timestamp_ms,
         }
     }
+
+    pub fn build_basic_log_json(
+        device_id: impl Into<String>,
+        level: LogLevel,
+        category: LogCategory,
+        title: impl Into<String>,
+        message: impl Into<String>,
+        cycle_id: Option<&str>,
+        source: impl Into<String>,
+    ) -> String {
+        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            source: source.into(),
+            message: message.into(),
+            skip_reason: None,
+            cycle_id: cycle_id.map(|s| s.to_string()),
+        });
+
+        // Dùng current timestamp nếu không truyền vào.
+        // Trên embedded (no_std-lite) không có SystemTime, nên timestamp = 0 là chấp nhận được;
+        // backend sẽ ghi đè bằng NOW() khi insert DB.
+        // Firmware nên truyền now_ms vào — xem overload bên dưới.
+        let log = match level {
+            LogLevel::Info => Self::info(device_id, category, title, event, 0),
+            LogLevel::Warning => Self::warning(device_id, category, title, event, 0),
+            LogLevel::Critical => Self::critical(device_id, category, title, event, 0),
+            LogLevel::Success => Self::success(device_id, category, title, event, 0),
+        };
+
+        serde_json::to_string(&log).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Overload với timestamp_ms — dùng trong firmware có đồng hồ.
+    pub fn build_basic_log_json_with_ts(
+        device_id: impl Into<String>,
+        level: LogLevel,
+        category: LogCategory,
+        title: impl Into<String>,
+        message: impl Into<String>,
+        cycle_id: Option<&str>,
+        source: impl Into<String>,
+        timestamp_ms: u64,
+    ) -> String {
+        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            source: source.into(),
+            message: message.into(),
+            skip_reason: None,
+            cycle_id: cycle_id.map(|s| s.to_string()),
+        });
+
+        let log = match level {
+            LogLevel::Info => Self::info(device_id, category, title, event, timestamp_ms),
+            LogLevel::Warning => Self::warning(device_id, category, title, event, timestamp_ms),
+            LogLevel::Critical => Self::critical(device_id, category, title, event, timestamp_ms),
+            LogLevel::Success => Self::success(device_id, category, title, event, timestamp_ms),
+        };
+
+        serde_json::to_string(&log).unwrap_or_else(|_| "{}".to_string())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

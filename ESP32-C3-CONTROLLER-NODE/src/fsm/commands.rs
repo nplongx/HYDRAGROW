@@ -100,9 +100,12 @@ pub fn process_mqtt_commands(
                 .as_ref()
                 .and_then(|p| p.ota_url.as_deref())
                 .unwrap_or("");
-            let log_payload = serde_json::json!(BasicSystemLogMetadata {
-                source: "fsm_command".to_string(),
-                message: format!(
+            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+                &config.device_id,
+                hydragrow_shared::LogLevel::Info,
+                hydragrow_shared::LogCategory::System,
+                "Nhận lệnh OTA",
+                format!(
                     "Nhận lệnh OTA từ MQTT. URL: {}.",
                     if ota_url.is_empty() {
                         "<missing>"
@@ -110,10 +113,10 @@ pub fn process_mqtt_commands(
                         ota_url
                     }
                 ),
-                skip_reason: None,
-                cycle_id: None,
-            })
-            .to_string();
+                None,
+                "fsm_command",
+                current_time_ms,
+            );
             all_events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });
@@ -219,13 +222,16 @@ pub fn process_mqtt_commands(
             let duration = duration_sec.unwrap_or(120);
             delta.safety_override_until = Some(current_time_ms + (duration as u64 * 1000));
 
-            let log_payload = serde_json::json!(BasicSystemLogMetadata {
-                source: "fsm_command".to_string(),
-                message: format!("Người dùng FORCE ON {} trong {} giây.", pump_name, duration),
-                skip_reason: None,
-                cycle_id: None,
-            })
-            .to_string();
+            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+                &config.device_id,
+                hydragrow_shared::LogLevel::Warning,
+                hydragrow_shared::LogCategory::UserAction,
+                "Can thiệp thủ công cưỡng chế",
+                format!("Người dùng FORCE ON {} trong {} giây.", pump_name, duration),
+                None,
+                "fsm_command",
+                current_time_ms,
+            );
             all_events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });

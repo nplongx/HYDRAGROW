@@ -229,19 +229,22 @@ fn apply_decision(
             peri_delta.last_ph_before_dose = Some(Some(sensors.ph));
             result.delta.reset_stabilizer = true;
 
-            let log_payload = serde_json::json!(BasicSystemLogMetadata {
-                source: "monitoring_phase".to_string(),
-                message: format!(
+            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+                &config.device_id,
+                hydragrow_shared::LogLevel::Info,
+                hydragrow_shared::LogCategory::Dosing,
+                "Bắt đầu chu kỳ MIMO",
+                format!(
                     "A/B: {:.1}ml | pH_Up/Down: {:.1}/{:.1}ml | Water_In: {:.1}s",
                     control.nutrient_a_ml,
                     control.ph_up_ml,
                     control.ph_down_ml,
                     control.water_in_sec
                 ),
-                skip_reason: None,
-                cycle_id: Some(format!("mimo-{now_ms}")),
-            })
-            .to_string();
+                Some(&format!("mimo-{now_ms}")),
+                "monitoring_phase",
+                now_ms,
+            );
 
             result.events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,

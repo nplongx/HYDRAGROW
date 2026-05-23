@@ -1,0 +1,17 @@
+---
+source: tests/schema_roundtrip_and_snapshots.rs
+expression: decoded
+---
+{
+  "device_id": "device-001",
+  "level": "info",
+  "category": "dosing",
+  "title": "Bắt đầu chu kỳ MIMO",
+  "event": {
+    "event_type": "BasicSystemLog",
+    "cycle_id": "mimo-1748000000000",
+    "source": "monitoring_phase",
+    "message": "A/B: 5.0ml | pH_Up/Down: 1.0/0.0ml | Water_In: 0.0s"
+  },
+  "timestamp_ms": 1748000000000
+}

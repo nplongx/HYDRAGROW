@@ -16,14 +16,7 @@ expression: sensor
     "osaka_pump": false,
     "mist_valve": false,
     "water_pump_in": false,
-    "water_pump_out": false,
-    "pump_a_pwm": null,
-    "pump_b_pwm": null,
-    "ph_up_pwm": null,
-    "ph_down_pwm": null,
-    "osaka_pwm": null,
-    "dosing_pulse_active": null,
-    "dosing_pulse_count": null
+    "water_pump_out": false
   },
   "time": "2026-05-19T12:00:00Z",
   "rssi": -59,

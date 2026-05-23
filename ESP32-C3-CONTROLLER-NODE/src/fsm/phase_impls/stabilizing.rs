@@ -140,13 +140,16 @@ impl PhaseTick for StabilizingPhase {
                     .push(OrchestratorEvent::PublishDosingReport { report_json: json });
             }
 
-            let log_payload = serde_json::json!(BasicSystemLogMetadata {
-                source: "stabilizing_phase".to_string(),
-                message: human_message.trim().to_string(),
-                skip_reason: None,
-                cycle_id: Some(sample.cycle_id.clone()),
-            })
-            .to_string();
+            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+                &config.device_id,
+                hydragrow_shared::LogLevel::Success,
+                hydragrow_shared::LogCategory::Dosing,
+                "Chu kỳ MIMO hoàn tất",
+                human_message.trim().to_string(),
+                Some(&sample.cycle_id),
+                "stabilizing_phase",
+                now_ms,
+            );
 
             result.events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,

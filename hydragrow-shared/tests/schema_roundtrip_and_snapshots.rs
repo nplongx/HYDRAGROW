@@ -284,3 +284,25 @@ fn golden_basic_system_log_with_cycle_id() {
 
     insta::assert_json_snapshot!("basic_system_log_with_cycle_id_golden", log);
 }
+
+#[test]
+fn golden_build_basic_log_json_with_ts_snapshot() {
+    use hydragrow_shared::{LogCategory, LogLevel, UnifiedSystemLog};
+
+    let json_str = UnifiedSystemLog::build_basic_log_json_with_ts(
+        "device-001",
+        LogLevel::Info,
+        LogCategory::Dosing,
+        "Bắt đầu chu kỳ MIMO",
+        "A/B: 5.0ml | pH_Up/Down: 1.0/0.0ml | Water_In: 0.0s",
+        Some("mimo-1748000000000"),
+        "monitoring_phase",
+        1_748_000_000_000,
+    );
+
+    // Parse lại để verify struct
+    let decoded: UnifiedSystemLog = serde_json::from_str(&json_str)
+        .expect("build_basic_log_json_with_ts phải tạo JSON parse được bởi backend");
+
+    insta::assert_json_snapshot!("build_basic_log_json_with_ts_golden", decoded);
+}

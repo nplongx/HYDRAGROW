@@ -35,13 +35,21 @@ impl PhaseTick for MonitoringPhase {
         if let Some(water_change_result) =
             check_scheduled_water_change(ctx, config, now_sec, &mut result.delta)
         {
-            return apply_decision(water_change_result, ctx, config, sensors, now_ms, result);
+            return apply_decision(
+                water_change_result,
+                ctx,
+                config,
+                sensors,
+                now_ms,
+                result,
+                true,
+            );
         }
 
         // Solve MIMO
         let solver = select_solver(ctx);
         let decision = solver.solve(sensors, config, ctx);
-        apply_decision(decision, ctx, config, sensors, now_ms, result)
+        apply_decision(decision, ctx, config, sensors, now_ms, result, false)
     }
 }
 
@@ -110,6 +118,7 @@ fn apply_decision(
     sensors: &SensorData,
     now_ms: u64,
     mut result: TickResult,
+    is_water_change: bool,
 ) -> TickResult {
     match decision {
         SolveResult::Execute {
@@ -119,7 +128,10 @@ fn apply_decision(
             pwm,
         } => {
             let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
-
+            if is_water_change {
+                ctx.tuner.on_water_change();
+                log::info!("🔄 [MONITORING] Scheduled water change: AutoTuner trackers reset.");
+            }
             // Safety budget checks
             if control.nutrient_a_ml > 0.0
                 && !ctx.safety.check_hourly_dose(

@@ -153,15 +153,27 @@ pub fn init_mqtt_client(
 
                 // CONFIG UPDATE
                 if topic_str == topic_config_cb {
-                    debug!("⚙️ Processing CONFIG update");
                     match serde_json::from_slice::<ControllerConfig>(data) {
                         Ok(new_config) => {
-                            info!("📦 New config received: {:?}", new_config);
-                            if let Ok(mut config) = shared_config.write() {
-                                *config = new_config;
-                                info!("✅ Device config updated");
+                            // Validate trước khi apply — reject config không hợp lệ
+                            if let Err(errors) = new_config.validate() {
+                                error!(
+                                    "❌ Config validation failed ({} errors): {:?}",
+                                    errors.len(),
+                                    errors
+                                );
+                                // Không apply config lỗi
                             } else {
-                                error!("❌ Failed to acquire config write lock");
+                                info!(
+                                    "📦 New config received and validated: device_id={}",
+                                    new_config.device_id
+                                );
+                                if let Ok(mut config) = shared_config.write() {
+                                    *config = new_config;
+                                    info!("✅ Device config updated");
+                                } else {
+                                    error!("❌ Failed to acquire config write lock");
+                                }
                             }
                         }
                         Err(e) => error!("❌ Config JSON parse error: {:?}", e),

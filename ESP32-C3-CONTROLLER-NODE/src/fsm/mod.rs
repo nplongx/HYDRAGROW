@@ -15,6 +15,7 @@ pub mod types;
 pub mod utils;
 pub use events::OrchestratorEvent;
 pub mod tick_result;
+use hydragrow_shared::fsm::SystemPhase;
 pub use tick_result::{ContextDelta, TickResult};
 pub mod dispatcher;
 pub use dispatcher::EventDispatcher;
@@ -43,7 +44,6 @@ use log::{info, warn};
 
 use crate::config::SharedConfig;
 use crate::fsm::matrix::InteractionMatrix;
-use crate::fsm::phase_impls::SystemPhase;
 use crate::pump::PumpController;
 
 use commands::process_mqtt_commands;
@@ -52,126 +52,6 @@ use utils::{get_current_time_ms, get_current_time_sec};
 
 const INTERACTION_MATRIX_MIN: f32 = -10.0;
 const INTERACTION_MATRIX_MAX: f32 = 10.0;
-
-pub mod mod_helpers {
-    use hydragrow_shared::PumpStatus;
-
-    use crate::fsm::phase_impls::SystemPhase;
-    use crate::fsm::SystemContext;
-    use crate::pump::{PumpController, PumpType, WaterDirection};
-    use std::sync::mpsc::Sender;
-
-    pub fn build_status_msg_from_ctx(ctx: &super::SystemContext, now_sec: u64) -> String {
-        let sum_ml = |pump_name: &str| -> f32 {
-            ctx.safety
-                .hourly_doses()
-                .get(pump_name)
-                .map(|hist| {
-                    hist.iter()
-                        .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
-                        .map(|(_, ml)| ml)
-                        .sum()
-                })
-                .unwrap_or(0.0)
-        };
-
-        let refill_count = ctx
-            .safety
-            .refill_history()
-            .iter()
-            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
-            .count();
-        let drain_count = ctx
-            .safety
-            .drain_history()
-            .iter()
-            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
-            .count();
-
-        serde_json::json!({
-            "online": true,
-            "current_state": match &ctx.phase {
-                SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
-                SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
-                _ => ctx.phase.as_str().to_string(),
-            },
-            "pump_status": ctx.peripherals.pump_status,
-            "budgets": {
-                "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
-                "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
-                "refill_count": refill_count,
-                "drain_count": drain_count
-            },
-            "log_drop_count": crate::fsm::utils::get_log_drop_count(),
-            "diagnostics": ctx.diagnostic.to_telemetry_json()
-        })
-        .to_string()
-    }
-
-    pub fn turn_off_pump_from_system_ctx(
-        ctx: &mut SystemContext,
-        pump_name: &str,
-        pump_ctrl: &mut PumpController,
-    ) {
-        let _ = match pump_name {
-            "A" | "PUMP_A" => {
-                ctx.peripherals.pump_status.pump_a = false;
-                pump_ctrl.set_pump_state(PumpType::NutrientA, false)
-            }
-            "B" | "PUMP_B" => {
-                ctx.peripherals.pump_status.pump_b = false;
-                pump_ctrl.set_pump_state(PumpType::NutrientB, false)
-            }
-            "PH_UP" | "PUMP_PH_UP" => {
-                ctx.peripherals.pump_status.ph_up = false;
-                pump_ctrl.set_pump_state(PumpType::PhUp, false)
-            }
-            "PH_DOWN" | "PUMP_PH_DOWN" => {
-                ctx.peripherals.pump_status.ph_down = false;
-                pump_ctrl.set_pump_state(PumpType::PhDown, false)
-            }
-            "MIST" | "MIST_VALVE" => {
-                ctx.peripherals.pump_status.mist_valve = false;
-                ctx.peripherals.is_misting_active = false;
-                pump_ctrl.set_mist_valve(false)
-            }
-            "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
-                ctx.peripherals.pump_status.water_pump_in = false;
-                pump_ctrl.set_water_pump(WaterDirection::Stop)
-            }
-            "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
-                ctx.peripherals.pump_status.water_pump_out = false;
-                pump_ctrl.set_water_pump(WaterDirection::Stop)
-            }
-            _ => Ok(()),
-        };
-        ctx.peripherals.pump_status.dosing_pulse_active = Some(false);
-        ctx.peripherals.pump_status.dosing_pulse_count = Some(0);
-    }
-
-    pub fn stop_all_pumps_from_system_ctx(ctx: &mut SystemContext, pump_ctrl: &mut PumpController) {
-        let _ = pump_ctrl.stop_all();
-        ctx.peripherals.pump_status = PumpStatus::default();
-        ctx.peripherals.is_misting_active = false;
-        ctx.peripherals.is_scheduled_mixing_active = false;
-        ctx.peripherals.osaka_active = false;
-        ctx.peripherals.osaka_pwm = 0;
-        ctx.safety.manual_timeouts.clear();
-    }
-
-    pub fn reset_faults_from_system_ctx(
-        ctx: &mut SystemContext,
-        _device_id: &str,
-        _tx: &Sender<String>,
-    ) {
-        ctx.tuner.on_manual_reset();
-        ctx.phase = SystemPhase::Monitoring;
-        ctx.phase_finish_ms = None;
-        ctx.dosing.retry_ec = 0;
-        ctx.dosing.retry_ph = 0;
-        ctx.safety.flush_for_reset();
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 pub fn start_fsm_control_loop(
@@ -396,10 +276,28 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                     cycle_id: None,
                 }),
             );
-            // mod_helpers::turn_off_pump_from_system_ctx(&mut new_ctx, &pump, &mut pump_ctrl);
+
             let mut delta = ContextDelta::default();
-            let events = crate::fsm::commands::build_stop_pump_events(&pump, &mut delta);
+            let timeout_events = crate::fsm::commands::build_stop_pump_events(&pump, &mut delta);
             new_ctx.apply_delta(delta);
+
+            // Dispatch phần cứng ngay lập tức — giống manual command handling ở trên
+            if !timeout_events.is_empty() {
+                let mut timeout_dc = crate::fsm::dispatcher::DispatchContext {
+                    pumps: &mut pump_ctrl,
+                    nvs: &mut nvs,
+                    mqtt_tx: &fsm_mqtt_tx,
+                    dosing_report_tx: &dosing_report_tx,
+                    sensor_cmd_tx: &sensor_cmd_tx,
+                    ctx: &new_ctx,
+                    now_sec: current_time_sec,
+                    device_id: &config.device_id,
+                    config: &config,
+                    sensors: &sensors,
+                    observers: &mut observer_set,
+                };
+                crate::fsm::dispatcher::EventDispatcher::dispatch(timeout_events, &mut timeout_dc);
+            }
         }
 
         if let Ok(mut s) = shared_sensors.write() {
@@ -520,6 +418,7 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
         .count();
 
     serde_json::json!({
+        "type": "fsm_status",
         "online": true,
         "current_state": match &ctx.phase {
             SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),

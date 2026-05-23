@@ -1,3 +1,4 @@
+use hydragrow_shared::fsm::SystemPhase;
 // src/fsm/phase_impls/stabilizing.rs
 use hydragrow_shared::{
     BasicSystemLogMetadata, ControllerConfig, DoseData, DosingReportPayload, LogCategory, LogLevel,
@@ -6,7 +7,6 @@ use hydragrow_shared::{
 use log::warn;
 
 use crate::fsm::events::OrchestratorEvent;
-use crate::fsm::phase_impls::SystemPhase;
 use crate::fsm::phase_tick::PhaseTick;
 use crate::fsm::system_context::{NvsSnapshot, SystemContext};
 use crate::fsm::tick_result::TickResult;

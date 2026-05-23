@@ -1,3 +1,4 @@
+use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::{
     BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel, MqttCommandIn,
     SystemLogEvent,
@@ -7,7 +8,6 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use super::system_context::SystemContext;
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
-use crate::fsm::phase_impls::SystemPhase;
 use crate::fsm::ContextDelta;
 use crate::pump::WaterDirection;
 
@@ -26,9 +26,7 @@ pub fn process_mqtt_commands(
 
     let is_emergency_state = matches!(
         ctx.phase,
-        SystemPhase::EmergencyStop(_)
-            | SystemPhase::Fault(_)
-            | SystemPhase::SensorCalibration { .. }
+        SystemPhase::EmergencyStop(_) | SystemPhase::Fault(_) | SystemPhase::SensorCalibration
     );
 
     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -63,9 +61,9 @@ pub fn process_mqtt_commands(
                 on: false,
                 pwm_percent: 0,
             });
-
-            let step = cmd.target.clone().unwrap_or_else(|| "default".to_string());
-            delta.phase = Some(SystemPhase::SensorCalibration { step });
+            //
+            // let step = cmd.target.clone().unwrap_or_else(|| "default".to_string());
+            delta.phase = Some(SystemPhase::SensorCalibration);
             delta.phase_finish_ms = Some(Some(current_time_ms + 3_600_000));
 
             let mut peri_delta = delta.peripherals.take().unwrap_or_default();
@@ -81,7 +79,7 @@ pub fn process_mqtt_commands(
 
         // --- exit_calibration ---
         if action_lower == "exit_calibration" {
-            if matches!(ctx.phase, SystemPhase::SensorCalibration { .. }) {
+            if matches!(ctx.phase, SystemPhase::SensorCalibration) {
                 info!("✅ Thoát chế độ Hiệu chuẩn, quay về Monitoring.");
                 delta.phase = Some(SystemPhase::Monitoring);
                 delta.phase_finish_ms = Some(None);
@@ -174,9 +172,13 @@ pub fn process_mqtt_commands(
             continue;
         }
 
-        let target_lower = cmd.target.as_deref().unwrap_or("pump").to_lowercase();
-        if target_lower != "pump" && target_lower != "all" {
-            continue;
+        match cmd.target.as_deref() {
+            Some(target_lower) => {
+                if target_lower != "all" {
+                    continue;
+                }
+            }
+            _ => continue,
         }
 
         let pump_name = cmd

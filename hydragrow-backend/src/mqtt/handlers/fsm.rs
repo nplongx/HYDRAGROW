@@ -167,7 +167,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
 
     // 3. Gửi thông tin trạng thái qua kênh Health/LiveStatus cho WebSocket/UI
     let fsm_status_payload = json!({
-        "_msg_type": "fsm_status",
+        "type": "fsm_status",
         "device_id": device_id.clone(),
         "fsm_state": state.clone(),
         "budgets": budgets,

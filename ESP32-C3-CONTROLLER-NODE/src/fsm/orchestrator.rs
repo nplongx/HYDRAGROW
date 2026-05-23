@@ -2,12 +2,13 @@
 //! Orchestrator — Pure router, không chứa logic phase.
 //! Nhận input → chọn PhaseTick impl → delegate → trả TickResult.
 
+use hydragrow_shared::fsm::{FaultCode, SystemPhase};
 use hydragrow_shared::{ControllerConfig, SensorData};
 
 use crate::fsm::events::OrchestratorEvent;
 use crate::fsm::phase_impls::{
-    ActiveMixingPhase, CooldownPhase, FaultCode, MimoDosingPhase, MonitoringPhase,
-    StabilizingPhase, SystemPhase, WaterDrainingPhase, WaterRefillingPhase,
+    ActiveMixingPhase, CooldownPhase, MimoDosingPhase, MonitoringPhase, StabilizingPhase,
+    WaterDrainingPhase, WaterRefillingPhase,
 };
 use crate::fsm::phase_tick::PhaseTick;
 use crate::fsm::system_context::SystemContext;
@@ -23,7 +24,7 @@ pub fn tick(
 ) -> TickResult {
     let mut result = TickResult::default();
 
-    // 1. Sensor timeout check
+    // Kiểm tra Sensor timeout
     if now_ms.saturating_sub(sensor_last_update_ms) > 90_000 {
         if !matches!(ctx.phase, SystemPhase::Fault(_)) {
             log::error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
@@ -142,7 +143,7 @@ fn tick_peripheral_systems(
         PeripheralController::tick_osaka(&ctx.peripherals, is_dosing_active, config);
     result.events.extend(osaka_events);
 
-    // Misting chỉ tick khi không đang trong dosing cycle tự kích hoạt misting
+    // Misting chỉ tick khi không đang trong dosing cycle
     if !ctx.peripherals.misting_started_by_dosing {
         let (mist_delta, mist_events) =
             PeripheralController::tick_misting(&ctx.peripherals, sensors, now_ms, config);
@@ -228,6 +229,9 @@ fn merge_peripheral_deltas(
     base
 }
 
+/// Kiểm tra nhiễu pH và EC có vược qua dung sai thiết lập
+/// Ghi đè ContextDelta
+/// Cập nhật lại previous_ph/ec nếu xảy ra nhiễu
 fn check_sensor_noise(
     ctx: &SystemContext,
     sensors: &SensorData,

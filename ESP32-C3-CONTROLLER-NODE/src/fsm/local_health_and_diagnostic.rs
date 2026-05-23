@@ -1,6 +1,7 @@
-use crate::fsm::{phase_impls::FaultCode, types::PendingCalibrationSample};
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{fsm::FaultCode, ControllerConfig};
 use log::{error, info, warn};
+
+use crate::fsm::PendingCalibrationSample;
 
 #[derive(Debug, Clone)]
 pub struct LocalHealthAndDiagnostic {

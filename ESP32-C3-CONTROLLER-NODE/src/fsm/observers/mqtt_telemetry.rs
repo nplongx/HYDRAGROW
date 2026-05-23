@@ -4,7 +4,7 @@
 //! Output: JSON payload lên topic fsm_state và calibration
 
 use super::ObserverContext;
-use crate::fsm::{events::OrchestratorEvent, phase_impls::SystemPhase};
+use crate::fsm::{build_status_msg, events::OrchestratorEvent};
 use hydragrow_shared::topics::{topic_calibration, topic_fsm_state};
 use log::warn;
 
@@ -46,58 +46,60 @@ impl MqttTelemetryObserver {
 
         let now_sec = oc.now_ms / 1000;
 
-        let sum_ml = |pump_name: &str| -> f32 {
-            oc.ctx
-                .safety
-                .hourly_doses()
-                .get(pump_name)
-                .map(|hist| {
-                    hist.iter()
-                        .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
-                        .map(|(_, ml)| *ml)
-                        .sum()
-                })
-                .unwrap_or(0.0)
-        };
+        let payload = build_status_msg(oc.ctx, now_sec);
 
-        let refill_count = oc
-            .ctx
-            .safety
-            .refill_history()
-            .iter()
-            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
-            .count();
-
-        let drain_count = oc
-            .ctx
-            .safety
-            .drain_history()
-            .iter()
-            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
-            .count();
-
-        let payload = serde_json::json!({
-            "online": true,
-            "current_state": match &oc.ctx.phase {
-                SystemPhase::Fault(code) => {
-                    format!("Fault:{}", code.as_str())
-                }
-                SystemPhase::EmergencyStop(reason) => {
-                    format!("EmergencyStop:{}", reason)
-                }
-                p => p.as_str().to_string(),
-            },
-            "pump_status": oc.ctx.peripherals.pump_status,
-            "budgets": {
-                "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
-                "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
-                "refill_count": refill_count,
-                "drain_count": drain_count,
-            },
-            "log_drop_count": crate::fsm::utils::get_log_drop_count(),
-            "diagnostics": oc.ctx.diagnostic.to_telemetry_json(),
-        })
-        .to_string();
+        // let sum_ml = |pump_name: &str| -> f32 {
+        //     oc.ctx
+        //         .safety
+        //         .hourly_doses()
+        //         .get(pump_name)
+        //         .map(|hist| {
+        //             hist.iter()
+        //                 .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+        //                 .map(|(_, ml)| *ml)
+        //                 .sum()
+        //         })
+        //         .unwrap_or(0.0)
+        // };
+        //
+        // let refill_count = oc
+        //     .ctx
+        //     .safety
+        //     .refill_history()
+        //     .iter()
+        //     .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+        //     .count();
+        //
+        // let drain_count = oc
+        //     .ctx
+        //     .safety
+        //     .drain_history()
+        //     .iter()
+        //     .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+        //     .count();
+        //
+        // let payload = serde_json::json!({
+        //     "online": true,
+        //     "current_state": match &oc.ctx.phase {
+        //         SystemPhase::Fault(code) => {
+        //             format!("Fault:{}", code.as_str())
+        //         }
+        //         SystemPhase::EmergencyStop(reason) => {
+        //             format!("EmergencyStop:{}", reason)
+        //         }
+        //         p => p.as_str().to_string(),
+        //     },
+        //     "pump_status": oc.ctx.peripherals.pump_status,
+        //     "budgets": {
+        //         "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
+        //         "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
+        //         "refill_count": refill_count,
+        //         "drain_count": drain_count,
+        //     },
+        //     "log_drop_count": crate::fsm::utils::get_log_drop_count(),
+        //     "diagnostics": oc.ctx.diagnostic.to_telemetry_json(),
+        // })
+        // .to_string();
 
         let topic = topic_fsm_state(&oc.config.device_id);
         if oc.mqtt_tx.send(payload).is_err() {

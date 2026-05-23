@@ -293,7 +293,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
 
-              let newState = payload.fsm_state || payload.current_state;
+              let newState = payload.current_state;
               if (newState) {
                 setFsmState(typeof newState === 'object' ? JSON.stringify(newState) : String(newState));
               }

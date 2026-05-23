@@ -11,7 +11,7 @@ use crate::fsm::tick_result::PeripheralDelta;
 
 impl PeripheralController {
     pub fn tick_osaka(
-        peripherals: &PeripheralState, // <-- không còn mut
+        peripherals: &PeripheralState,
         is_dosing_active: bool,
         config: &ControllerConfig,
     ) -> (PeripheralDelta, Vec<OrchestratorEvent>) {

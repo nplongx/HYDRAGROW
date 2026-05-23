@@ -1,7 +1,7 @@
 //! TickResult — Output của một tick Pure Decision Engine.
 //! Tách biệt hoàn toàn "quyết định gì" khỏi "thực thi gì".
 
-use crate::fsm::phase_impls::SystemPhase;
+use hydragrow_shared::fsm::SystemPhase;
 
 use super::events::OrchestratorEvent;
 

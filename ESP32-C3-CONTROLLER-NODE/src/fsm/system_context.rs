@@ -1,3 +1,4 @@
+use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::PumpStatus;
 use serde::{Deserialize, Serialize};
 
@@ -7,11 +8,10 @@ use super::actors::{
 use super::types::PendingCalibrationSample;
 use crate::fsm::local_health_and_diagnostic::LocalHealthAndDiagnostic;
 use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
-use crate::fsm::phase_impls::SystemPhase;
 
 pub type CronSchedule = String;
 
-// --- BỘ GIÁM SÁT ADAPTIVE TÍN HIỆU PHẲNG (MỚI) ---
+// --- BỘ GIÁM SÁT ADAPTIVE TÍN HIỆU PHẲNG ---
 pub struct SensorStabilizerTracker {
     pub history_ec: [f32; 5],
     pub history_ph: [f32; 5],
@@ -49,7 +49,7 @@ impl SensorStabilizerTracker {
         let ec_is_stable = if config.enable_ec_sensor {
             let max_ec = self.history_ec.iter().fold(f32::MIN, |a, &b| a.max(b));
             let min_ec = self.history_ec.iter().fold(f32::MAX, |a, &b| a.min(b));
-            (max_ec - min_ec) < 0.01
+            (max_ec - min_ec) < 0.05
         } else {
             true // Nếu cảm biến tắt, mặc định trục này bỏ qua, coi như đã phẳng an toàn
         };
@@ -58,7 +58,7 @@ impl SensorStabilizerTracker {
         let ph_is_stable = if config.enable_ph_sensor {
             let max_ph = self.history_ph.iter().fold(f32::MIN, |a, &b| a.max(b));
             let min_ph = self.history_ph.iter().fold(f32::MAX, |a, &b| a.min(b));
-            (max_ph - min_ph) < 0.02
+            (max_ph - min_ph) < 0.05
         } else {
             true
         };
@@ -464,7 +464,6 @@ impl Default for AutoTuner {
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
-            // SỬA Ở ĐÂY: Nạp đầy đủ các giá trị gain thực tế phần cứng lớp dưới vào hàm khởi tạo
             interaction_matrix: InteractionMatrix::from_scalar(0.015, 0.02, 0.025, 0.05, 0.04),
             kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1), // Tự động tạo mảng 8 trục bên trong driver mới
             matrix_update_count: 0,

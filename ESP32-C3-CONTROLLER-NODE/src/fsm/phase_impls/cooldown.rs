@@ -1,7 +1,7 @@
+use hydragrow_shared::fsm::SystemPhase;
 // src/fsm/phases/cooldown.rs
 use hydragrow_shared::{ControllerConfig, SensorData};
 
-use crate::fsm::phase_impls::SystemPhase;
 use crate::fsm::phase_tick::PhaseTick;
 use crate::fsm::system_context::SystemContext;
 use crate::fsm::tick_result::TickResult;

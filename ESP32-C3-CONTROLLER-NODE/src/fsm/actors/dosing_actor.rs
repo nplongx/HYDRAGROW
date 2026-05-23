@@ -1,8 +1,8 @@
+use hydragrow_shared::fsm::FaultCode;
 use hydragrow_shared::{ControllerConfig, SensorData};
 
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use crate::fsm::matrix::ControlVector;
-use crate::fsm::phase_impls::FaultCode;
 use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
 use crate::pump::PumpType; // Loại bỏ PumpController trực tiếp
 

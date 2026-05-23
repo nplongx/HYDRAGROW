@@ -31,10 +31,10 @@ impl EventDispatcher {
     /// Thứ tự thực thi: hardware first, persistence second, messaging last.
     pub fn dispatch(events: Vec<OrchestratorEvent>, dc: &mut DispatchContext<'_>) {
         for event in events {
-            // 1. Execute hardware/persistence/messaging
+            // Execute hardware/persistence/messaging
             Self::handle_event(event.clone(), dc);
 
-            // 2. Fan-out tới observers (read-only view, không gọi hardware)
+            // Fan-out tới observers
             let oc = crate::fsm::observers::ObserverContext {
                 ctx: dc.ctx,
                 config: dc.config,

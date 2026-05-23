@@ -7,81 +7,12 @@ pub mod stabilizing;
 
 pub use active_mixing::ActiveMixingPhase;
 pub use cooldown::CooldownPhase;
+use hydragrow_shared::fsm::FaultCode;
 pub use mimo_dosing::MimoDosingPhase;
 pub use monitoring::MonitoringPhase;
 pub use stabilizing::StabilizingPhase;
 pub mod water_phases;
 pub use water_phases::{WaterDrainingPhase, WaterRefillingPhase};
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SystemPhase {
-    Booting,
-    Monitoring,
-    ManualMode,
-    WaterRefilling,
-    WaterDraining,
-    MimoDosing,
-    ActiveMixing,
-    Stabilizing,
-    Cooldown,
-    SensorCalibration { step: String },
-    Fault(FaultCode),
-    EmergencyStop(String),
-}
-
-impl SystemPhase {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            SystemPhase::Booting => "Booting",
-            SystemPhase::Monitoring => "Monitoring",
-            SystemPhase::ManualMode => "ManualMode",
-            SystemPhase::WaterRefilling => "WaterRefilling",
-            SystemPhase::WaterDraining => "WaterDraining",
-            SystemPhase::MimoDosing => "MimoDosing",
-            SystemPhase::ActiveMixing => "ActiveMixing",
-            SystemPhase::Stabilizing => "Stabilizing",
-            SystemPhase::Cooldown => "Cooldown",
-            SystemPhase::SensorCalibration { .. } => "SensorCalibration",
-            SystemPhase::Fault(_) => "Fault",
-            SystemPhase::EmergencyStop(_) => "EmergencyStop",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum FaultCode {
-    EcDosingFailed,
-    PhDosingFailed,
-    WaterRefillFailed,
-    WaterDrainFailed,
-    TooManyRefills,
-    TooManyDrains,
-    MaxHourlyDoseEc,
-    MaxHourlyDosePh,
-    SensorTimeout,
-    EcStagnant,
-    PhOscillating,
-    WaterLevelCritical,
-}
-
-impl FaultCode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::EcDosingFailed => "EC_DOSING_FAILED",
-            Self::PhDosingFailed => "PH_DOSING_FAILED",
-            Self::WaterRefillFailed => "WATER_REFILL_FAILED",
-            Self::WaterDrainFailed => "WATER_DRAIN_FAILED",
-            Self::TooManyRefills => "TOO_MANY_REFILLS",
-            Self::TooManyDrains => "TOO_MANY_DRAINS",
-            Self::MaxHourlyDoseEc => "MAX_HOURLY_DOSE_EC",
-            Self::MaxHourlyDosePh => "MAX_HOURLY_DOSE_PH",
-            Self::SensorTimeout => "SENSOR_TIMEOUT",
-            Self::EcStagnant => "EC_STAGNANT",
-            Self::PhOscillating => "PH_OSCILLATING",
-            Self::WaterLevelCritical => "WATER_LEVEL_CRITICAL",
-        }
-    }
-}
 
 #[allow(dead_code)]
 pub fn map_fault_code(reason: &str) -> FaultCode {

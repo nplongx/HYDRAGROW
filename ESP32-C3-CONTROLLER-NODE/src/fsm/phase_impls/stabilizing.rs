@@ -1,10 +1,9 @@
-use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::fsm::SystemPhase; // <-- Bổ sung import SystemPhase
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
 use hydragrow_shared::telemetry::cycle::{
     CycleOutcome, DosingDoseRecord, DosingPhaseSnapshot, KalmanLearningData,
 };
 use hydragrow_shared::telemetry::DosingCycleEvent;
-// src/fsm/phase_impls/stabilizing.rs
 use hydragrow_shared::{ControllerConfig, DoseData, DosingReportPayload, PhaseData, SensorData};
 use log::warn;
 
@@ -48,12 +47,16 @@ impl PhaseTick for StabilizingPhase {
             let actual_delta_ph = final_ph - sample.start_ph;
             let actual_delta_water = final_water - sample.start_water_level;
 
+            // SỬA LỖI: Truyền đủ 8 arguments để đáp ứng hàm decouple bên hydragrow_shared
             if let Err(fault_code) = ctx.diagnostic.diagnose_hardware_fault(
-                sample,
-                actual_delta_ec,
-                actual_delta_ph,
-                actual_delta_water,
-                config,
+                sample.dose_a_ml + sample.dose_b_ml, // total_nutrient_ml
+                sample.dose_ph_up_ml + sample.dose_ph_down_ml, // total_ph_agent_ml
+                sample.water_in_sec,                 // water_in_sec
+                sample.water_out_sec,                // water_out_sec
+                actual_delta_ec,                     // actual_delta_ec
+                actual_delta_ph,                     // actual_delta_ph
+                actual_delta_water,                  // actual_delta_water
+                config,                              // config
             ) {
                 result.delta.phase = Some(SystemPhase::Fault(fault_code));
                 return result;
@@ -312,3 +315,4 @@ fn build_human_message(
     }
     msg
 }
+

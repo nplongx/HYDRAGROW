@@ -142,7 +142,7 @@ impl FsmTransitionEventBuilder {
     pub fn build(self) -> FsmTransitionEvent {
         FsmTransitionEvent {
             device_id: self.device_id.expect("device_id is required"),
-            from_phase: self.from_phase.expect("from_phase is required"),
+            from_phase: self.from_phase,
             to_phase: self.to_phase.expect("to_phase is required"),
             reason: self.reason.expect("reason is required"),
             timestamp_ms: self.timestamp_ms.expect("timestamp_ms is required"),
@@ -154,7 +154,7 @@ impl FsmTransitionEventBuilder {
     pub fn try_build(self) -> Result<FsmTransitionEvent, &'static str> {
         Ok(FsmTransitionEvent {
             device_id: self.device_id.ok_or("device_id is required")?,
-            from_phase: self.from_phase.ok_or("from_phase is required")?,
+            from_phase: self.from_phase,
             to_phase: self.to_phase.ok_or("to_phase is required")?,
             reason: self.reason.ok_or("reason is required")?,
             timestamp_ms: self.timestamp_ms.ok_or("timestamp_ms is required")?,

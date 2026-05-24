@@ -24,7 +24,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
 
     let level_str = log_data.level.as_str().to_string();
     let category_str = log_data.category.as_str().to_string();
-
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog(meta) => {
             if let Some(reason) = &meta.skip_reason {

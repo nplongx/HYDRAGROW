@@ -15,10 +15,10 @@ pub mod types;
 pub mod utils;
 pub use events::OrchestratorEvent;
 pub mod tick_result;
-use hydragrow_shared::fsm::{FsmSnapshot, SystemPhase};
+use hydragrow_shared::fsm::{FsmBudgets, FsmSnapshot, SystemPhase};
 use hydragrow_shared::log::{BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent};
 use hydragrow_shared::telemetry::transition::TransitionReason;
-use hydragrow_shared::{FsmBudgets, FsmStatusPayload, MqttCommandIn};
+use hydragrow_shared::MqttCommandIn;
 pub use tick_result::{ContextDelta, TickResult};
 pub mod dispatcher;
 pub use dispatcher::EventDispatcher;
@@ -340,10 +340,10 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                         .map(|start| current_time_ms.saturating_sub(start));
 
                     let reason = infer_transition_reason(
-                        &prev_phase,
+                        Some(&prev_phase),
                         &new_ctx.phase,
                         &new_ctx,
-                        &tick_result.delta,
+                        duration_ms.unwrap_or(0),
                     );
 
                     let transition_event = OrchestratorEvent::PublishFsmTransition {
@@ -444,44 +444,40 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
 
     let payload = FsmSnapshot {
         online: true,
-        current_phase: ctx.phase,
-        previous_phase: ctx.previous_phase,
+        current_phase: ctx.phase.clone(),
+        previous_phase: ctx.previous_phase.clone(),
         pump_status: ctx.peripherals.pump_status.clone(),
         budgets: FsmBudgets {
             ec_ml: sum_ml("NutrientA") + sum_ml("NutrientB"),
             ph_ml: sum_ml("PhUp") + sum_ml("PhDown"),
-            refill_count,
-            drain_count,
+            refill_count: refill_count as u32,
+            drain_count: drain_count as u32,
         },
-        diagnostics: Some(ctx.diagnostic),
+        diagnostics: Some(ctx.diagnostic.clone()),
     };
 
     serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string())
 }
 
 fn infer_transition_reason(
-    from: &SystemPhase,
+    from: Option<&SystemPhase>,
     to: &SystemPhase,
     ctx: &SystemContext,
-    delta: &ContextDelta,
+    duration_rs: u64,
 ) -> TransitionReason {
     use hydragrow_shared::fsm::FaultCode;
     use hydragrow_shared::telemetry::transition::TransitionReason;
 
-    // duration của phase ĐÃ KẾT THÚC TRƯỚC ĐÓ
-    let duration_ms = delta
-        .phase_start_before
-        .map(|start| get_current_time_ms().saturating_sub(start))
-        .unwrap_or(0);
-
     match (from, to) {
         // --- 1. Chuỗi Khởi động ---
-        (SystemPhase::Booting, SystemPhase::Monitoring) => TransitionReason::BootComplete,
+        (Some(SystemPhase::Booting), SystemPhase::Monitoring) => TransitionReason::BootComplete,
 
         // --- 2. Chuỗi Châm phân & Hòa trộn (Dosing Pipeline) ---
-        (SystemPhase::Monitoring, SystemPhase::MimoDosing) => TransitionReason::DosingTriggered,
+        (Some(SystemPhase::Monitoring), SystemPhase::MimoDosing) => TransitionReason::Manual {
+            description: "Bắt đầu châm phân".to_string(),
+        },
 
-        (SystemPhase::MimoDosing, SystemPhase::ActiveMixing) => {
+        (Some(SystemPhase::MimoDosing), SystemPhase::ActiveMixing) => {
             let cycle = ctx.dosing.cycle_ctx.as_ref();
             TransitionReason::DosingComplete {
                 dose_a_ml: cycle.map_or(0.0, |c| c.dose_a_delivered_ml),
@@ -491,37 +487,63 @@ fn infer_transition_reason(
             }
         }
 
-        (SystemPhase::ActiveMixing, SystemPhase::Stabilizing) => TransitionReason::MixingComplete {
-            actual_mixing_ms: duration_ms,
-        },
+        (Some(SystemPhase::ActiveMixing), SystemPhase::Stabilizing) => {
+            TransitionReason::MixingComplete {
+                actual_mixing_ms: duration_rs,
+            }
+        }
 
-        (SystemPhase::Stabilizing, SystemPhase::Cooldown) => TransitionReason::StabilizingComplete,
+        (Some(SystemPhase::Stabilizing), SystemPhase::Cooldown) => {
+            TransitionReason::StabilizingComplete {
+                final_ec: 0.0,
+                final_ph: 0.0,
+                actual_stabilize_ms: duration_rs,
+            }
+        }
 
-        (SystemPhase::Cooldown, SystemPhase::Monitoring) => TransitionReason::CooldownExpired,
+        (Some(SystemPhase::Cooldown), SystemPhase::Monitoring) => TransitionReason::CooldownExpired,
 
         // --- 3. Chuỗi Bơm/Xả Nước (Water Hydraulics) ---
-        (SystemPhase::Monitoring, SystemPhase::WaterRefilling) => TransitionReason::RefillTriggered,
+        (Some(SystemPhase::Monitoring), SystemPhase::WaterRefilling) => TransitionReason::Manual {
+            description: "Bắt đầu cấp nước".to_string(),
+        },
 
-        (SystemPhase::WaterRefilling, SystemPhase::Monitoring)
-        | (SystemPhase::WaterRefilling, SystemPhase::ActiveMixing) => {
-            TransitionReason::RefillComplete
+        (Some(SystemPhase::WaterRefilling), SystemPhase::Monitoring)
+        | (Some(SystemPhase::WaterRefilling), SystemPhase::ActiveMixing) => {
+            TransitionReason::WaterRefillComplete {
+                success: true,
+                duration_sec: duration_rs / 1000,
+                final_level: 0.0,
+            }
         }
 
-        (SystemPhase::Monitoring, SystemPhase::WaterDraining) => TransitionReason::DrainTriggered,
+        (Some(SystemPhase::Monitoring), SystemPhase::WaterDraining) => TransitionReason::Manual {
+            description: "Bắt đầu xả nước".to_string(),
+        },
 
-        (SystemPhase::WaterDraining, SystemPhase::Monitoring) => TransitionReason::DrainComplete,
+        (Some(SystemPhase::WaterDraining), SystemPhase::Monitoring) => {
+            TransitionReason::WaterDrainComplete {
+                success: true,
+                duration_sec: duration_rs / 1000,
+                final_level: 0.0,
+            }
+        }
 
         // --- 4. Chuỗi Hiệu chuẩn Cảm biến (Sensor Calibration) ---
-        (SystemPhase::Monitoring, SystemPhase::SensorCalibration) => {
-            TransitionReason::CalibrationStarted
+        (Some(SystemPhase::Monitoring), SystemPhase::SensorCalibration) => {
+            TransitionReason::EnterCalibration
         }
-        (SystemPhase::SensorCalibration, SystemPhase::Monitoring) => {
-            TransitionReason::CalibrationComplete
+        (Some(SystemPhase::SensorCalibration), SystemPhase::Monitoring) => {
+            TransitionReason::ExitCalibration
         }
 
         // --- 5. Chế độ Thủ công (Manual Mode) ---
-        (_, SystemPhase::ManualMode) => TransitionReason::ManualOverrideStarted,
-        (SystemPhase::ManualMode, SystemPhase::Monitoring) => TransitionReason::ManualOverrideEnded,
+        (_, SystemPhase::ManualMode) => TransitionReason::Manual {
+            description: "Vào chế độ thủ công".to_string(),
+        },
+        (Some(SystemPhase::ManualMode), SystemPhase::Monitoring) => TransitionReason::Manual {
+            description: "Thoát chế độ thủ công".to_string(),
+        },
 
         // --- 6. Chuỗi Lỗi & Khẩn cấp (Faults & Emergency) ---
         (_, SystemPhase::Fault(code)) => {
@@ -541,18 +563,22 @@ fn infer_transition_reason(
             }
         }
 
-        (_, SystemPhase::EmergencyStop(reason)) => TransitionReason::EmergencyStop {
-            reason: reason.clone(),
+        (_, SystemPhase::EmergencyStop(reason)) => TransitionReason::Manual {
+            description: format!("Dừng khẩn cấp: {}", reason),
         },
 
-        (SystemPhase::Fault(_), SystemPhase::Monitoring)
-        | (SystemPhase::EmergencyStop(_), SystemPhase::Monitoring) => {
-            TransitionReason::FaultCleared
+        (Some(SystemPhase::Fault(_)), SystemPhase::Monitoring)
+        | (Some(SystemPhase::EmergencyStop(_)), SystemPhase::Monitoring) => {
+            TransitionReason::FaultReset
         }
 
         // --- 7. Fallback cho các ngoại lệ chưa lường trước ---
         _ => TransitionReason::Manual {
-            description: format!("Chuyển trạng thái: {} -> {}", from.as_str(), to.as_str()),
+            description: format!(
+                "Chuyển trạng thái: {} -> {}",
+                from.map(|p| p.as_str()).unwrap_or("None"),
+                to.as_str()
+            ),
         },
     }
 }

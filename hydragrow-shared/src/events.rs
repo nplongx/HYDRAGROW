@@ -1,3 +1,4 @@
+use crate::fsm::FsmSnapshot;
 // hydragrow-shared/src/events.rs — version mới
 use crate::telemetry::cycle::{DosingCycleEvent, WaterCycleEvent};
 use crate::telemetry::health::DeviceHealthSnapshot;
@@ -52,6 +53,7 @@ pub enum AppEvent {
     CalibrationUpdate(CalibrationUpdatePayload),
     //
     // --- New typed variants ---
+    FsmStateUpdate(FsmSnapshot),
     /// FSM phase transition với đầy đủ context
     FsmTransition(FsmTransitionEvent),
     /// Chu kỳ MIMO hoàn chỉnh

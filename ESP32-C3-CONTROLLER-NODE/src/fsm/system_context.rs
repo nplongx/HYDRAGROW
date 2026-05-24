@@ -84,16 +84,13 @@ pub struct SystemContext {
     pub tuner: AutoTuner,
     pub peripherals: PeripheralState,
     pub stabilizer_tracker: SensorStabilizerTracker,
-
     pub diagnostic: FsmDiagnostics,
-
     pub water_change_cron: CronSchedule,
     pub scheduled_dosing_cron: CronSchedule,
     pub last_water_change_sec: u64,
     pub next_water_change_trigger_sec: Option<u64>,
     pub next_scheduled_dosing_trigger_sec: Option<u64>,
 }
-// src/fsm/system_context.rs
 
 impl SystemContext {
     pub fn apply_peripheral_delta(&mut self, pd: crate::fsm::tick_result::PeripheralDelta) {
@@ -284,10 +281,7 @@ impl Default for SystemContext {
             tuner: AutoTuner::default(),
             peripherals: PeripheralState::default(),
             stabilizer_tracker: SensorStabilizerTracker::default(),
-
-            // ⚡ NẠP MẶC ĐỊNH
             diagnostic: FsmDiagnostics::default(),
-
             water_change_cron: String::new(),
             scheduled_dosing_cron: String::new(),
             last_water_change_sec: 0,

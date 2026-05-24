@@ -140,6 +140,179 @@ pub struct FsmDiagnostics {
     /// Số lần log bị drop do channel đầy
     #[serde(default)]
     pub log_drop_count: u32,
+
+    // --- Các trường dữ liệu phục vụ tính toán nội bộ (Không gửi qua MQTT) ---
+    #[serde(skip)]
+    pub mixing_time_history_sec: [u32; 4],
+    #[serde(skip)]
+    pub stabilize_time_history_sec: [u32; 4],
+    #[serde(skip)]
+    pub history_head: usize,
+    #[serde(skip)]
+    pub history_count: usize,
+}
+
+impl Default for FsmDiagnostics {
+    fn default() -> Self {
+        Self {
+            health_score_percent: 100,
+            ec_pump_streak: 0,
+            ph_pump_streak: 0,
+            water_hydraulics_streak: 0,
+            // Giá trị an toàn khởi tạo mặc định ban đầu
+            adaptive_mixing_sec: 15,
+            adaptive_stabilize_sec: 10,
+            log_drop_count: 0,
+
+            mixing_time_history_sec: [15; 4],
+            stabilize_time_history_sec: [10; 4],
+            history_head: 0,
+            history_count: 0,
+        }
+    }
+}
+
+impl FsmDiagnostics {
+    /// TỰ CHẨN ĐOÁN LỖI PHẦN CỨNG VẬT LÝ TOÀN DIỆN (RESIDUAL DIAGNOSTIC)
+    pub fn diagnose_hardware_fault(
+        &mut self,
+        total_nutrient_ml: f32, // Dose A + Dose B
+        total_ph_agent_ml: f32, // pH Up + pH Down
+        water_in_sec: f32,
+        water_out_sec: f32,
+        actual_delta_ec: f32,
+        actual_delta_ph: f32,
+        actual_delta_water: f32,
+        config: &crate::ControllerConfig,
+    ) -> Result<(), FaultCode> {
+        // --- 1. KIỂM TRA MẠCH CHÂM PHÂN EC ---
+        if total_nutrient_ml > 1.0 {
+            if actual_delta_ec < config.ec_ack_threshold {
+                self.ec_pump_streak += 1;
+                log::warn!(
+                    "⚠️ [DIAGNOSTIC] Bất thường mạch dinh dưỡng lần {}! Bơm chạy {:.1}ml nhưng EC không nhích.",
+                    self.ec_pump_streak,
+                    total_nutrient_ml
+                );
+
+                if self.ec_pump_streak >= 3 {
+                    log::error!(
+                        "🚨 [HARDWARE FAULT] Khóa máy! Xác nhận nghẹt ống phân bón hoặc hết bình chứa thuốc."
+                    );
+                    return Err(FaultCode::EcDosingFailed);
+                }
+            } else {
+                self.ec_pump_streak = 0; // Đạt mục tiêu -> Xóa trắng bộ đếm lỗi
+            }
+        }
+
+        // --- 2. KIỂM TRA MẠCH HÓA CHẤT HIỆU CHỈNH pH ---
+        if total_ph_agent_ml > 0.5 {
+            if actual_delta_ph.abs() < config.ph_ack_threshold {
+                self.ph_pump_streak += 1;
+                log::warn!(
+                    "⚠️ [DIAGNOSTIC] Bất thường mạch pH lần {}! Bơm chạy {:.1}ml nhưng pH đứng im.",
+                    self.ph_pump_streak,
+                    total_ph_agent_ml
+                );
+
+                if self.ph_pump_streak >= 3 {
+                    log::error!(
+                        "🚨 [HARDWARE FAULT] Khóa máy! Xác nhận bơm pH bị tụt áp, e-khí hoặc hết dung dịch axit/kiềm."
+                    );
+                    return Err(FaultCode::PhDosingFailed);
+                }
+            } else {
+                self.ph_pump_streak = 0;
+            }
+        }
+
+        // --- 3. KIỂM TRA MẠCH THỦY LỰC NƯỚC (WATER LEVEL UP/DOWN) ---
+        if water_in_sec > 1.0 {
+            if actual_delta_water < config.water_ack_threshold {
+                self.water_hydraulics_streak += 1;
+                log::warn!(
+                    "⚠️ [DIAGNOSTIC] Bất thường cấp nước lần {}! Bơm chạy {:.1}s nhưng mực nước không tăng.",
+                    self.water_hydraulics_streak,
+                    water_in_sec
+                );
+
+                if self.water_hydraulics_streak >= 3 {
+                    log::error!(
+                        "🚨 [HARDWARE FAULT] Khóa máy! Xác nhận mất nước nguồn cấp hoặc cháy bơm cấp nước."
+                    );
+                    return Err(FaultCode::WaterRefillFailed);
+                }
+            } else {
+                self.water_hydraulics_streak = 0;
+            }
+        } else if water_out_sec > 1.0 {
+            if actual_delta_water > -config.water_ack_threshold {
+                self.water_hydraulics_streak += 1;
+                log::warn!(
+                    "⚠️ [DIAGNOSTIC] Bất thường xả nước lần {}! Bơm xả chạy {:.1}s nhưng mực nước giữ nguyên.",
+                    self.water_hydraulics_streak,
+                    water_out_sec
+                );
+
+                if self.water_hydraulics_streak >= 3 {
+                    log::error!(
+                        "🚨 [HARDWARE FAULT] Khóa máy! Xác nhận tắc đường ống xả hoặc hỏng bơm thoát nước."
+                    );
+                    return Err(FaultCode::WaterDrainFailed);
+                }
+            } else {
+                self.water_hydraulics_streak = 0;
+            }
+        }
+
+        // Cập nhật lại Health Score sau mỗi lần chẩn đoán
+        self.update_health_score();
+        Ok(())
+    }
+
+    /// 🎯 CƠ CHẾ 2: TỰ HỌC THỂ TÍCH BỒN NƯỚC ĐỂ ĐIỀU CHỈNH THỜI GIAN KHUẤY/ĐỢI ĐỘNG
+    pub fn learn_fluid_dynamics(&mut self, actual_mixing_ms: u64, actual_stabilize_ms: u64) {
+        let mix_sec = (actual_mixing_ms / 1000) as u32;
+        let stabilize_sec = (actual_stabilize_ms / 1000) as u32;
+
+        self.mixing_time_history_sec[self.history_head] = mix_sec;
+        self.stabilize_time_history_sec[self.history_head] = stabilize_sec;
+
+        self.history_head = (self.history_head + 1) % 4;
+
+        if self.history_count < 4 {
+            self.history_count += 1;
+        }
+
+        let sum_mix: u32 = self.mixing_time_history_sec[0..self.history_count]
+            .iter()
+            .sum();
+        let sum_stab: u32 = self.stabilize_time_history_sec[0..self.history_count]
+            .iter()
+            .sum();
+
+        let avg_mix = sum_mix / self.history_count as u32;
+        let avg_stab = sum_stab / self.history_count as u32;
+
+        self.adaptive_mixing_sec = avg_mix.clamp(15, 120);
+        self.adaptive_stabilize_sec = avg_stab.clamp(10, 90);
+
+        log::info!(
+            "🧠 [EDGE AI] Fluid-dynamics update: ActiveMixing = {}s, Stabilizing = {}s",
+            self.adaptive_mixing_sec,
+            self.adaptive_stabilize_sec
+        );
+    }
+
+    /// TÍNH TOÁN VÀ LƯU LẠI ĐIỂM SỨC KHỎE
+    pub fn update_health_score(&mut self) {
+        let penalties = (self.ec_pump_streak * 33)
+            + (self.ph_pump_streak * 33)
+            + (self.water_hydraulics_streak * 33);
+
+        self.health_score_percent = 100_u32.saturating_sub(penalties);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

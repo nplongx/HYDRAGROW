@@ -19,13 +19,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
         }
     };
 
-    // FIX: tách ra thành handle riêng
-    // if json.get("type").and_then(|t| t.as_str()) == Some("runtime_calibration_update") {
-    //     handle_calibration_update(&device_id, &json, app_state).await;
-    //     return;
-    // }
-
-    // Update cache
+    // 1. Cập nhật cache (Redis hoặc In-memory) để API GET /state lấy được ngay
     update_device_state_cache(
         &device_id,
         &snapshot.current_phase.as_str(),
@@ -34,15 +28,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     )
     .await;
 
-    // Fan-out to event_bus
-    let _ = app_state
-        .event_bus
-        .send(AppEvent::FsmTransition(FsmTransitionEvent {
-            device_id,
-            from_phase: snapshot.previous_phase,
-            to_phase: snapshot.current_phase,
-            reason: snapshot.
-        }));
+    let _ = app_state.event_bus.send(AppEvent::FsmStateUpdate(snapshot));
 }
 
 async fn handle_calibration_update(

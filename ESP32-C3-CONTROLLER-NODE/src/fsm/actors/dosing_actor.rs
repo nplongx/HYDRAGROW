@@ -258,6 +258,7 @@ impl DosingActor {
                     ctx.dose_a_delivered_ml = job.delivered_ml;
                 }
 
+                // Chi cham A
                 if dose_b_ml <= 1e-3 {
                     return self.transition_to_ph_or_idle(job.delivered_ml, 0.0);
                 }

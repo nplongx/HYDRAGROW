@@ -83,21 +83,38 @@ pub struct DosingDynamicState {
 }
 
 pub struct AppState {
+    // Persistence
     pub pg_pool: sqlx::PgPool,
     pub influx_client: InfluxClient,
     pub influx_bucket: String,
+
+    // Messaging
     pub mqtt_client: AsyncClient,
+
+    // Auth
     pub api_key: String,
-    pub alert_sender: broadcast::Sender<AlertMessage>,
-    pub device_states: std::sync::Arc<RwLock<HashMap<String, String>>>,
-    pub solana_traceability: SolanaTraceability,
-    pub sensor_sender: broadcast::Sender<SensorData>,
-    pub health_sender: broadcast::Sender<serde_json::Value>,
+
+    // Event bus — tất cả side-effect đi qua đây
     pub event_bus: broadcast::Sender<AppEvent>,
-    pub fcm_tokens: Mutex<Vec<String>>,
-    pub ph_calibration_sessions: std::sync::Arc<RwLock<HashMap<String, PhCalibrationSession>>>,
-    pub ph_voltage_samples: std::sync::Arc<RwLock<HashMap<String, VecDeque<PhVoltageSample>>>>,
-    pub dosing_dynamic_states: std::sync::Arc<RwLock<HashMap<String, DosingDynamicState>>>,
+
+    // FCM alerts — chỉ critical/warning từ system_log handler
+    pub alert_sender: broadcast::Sender<AlertMessage>,
+
+    // Device state cache — in-memory, keyed by device_id
+    pub device_states: Arc<RwLock<HashMap<String, String>>>,
+
+    // Solana
+    pub solana_traceability: SolanaTraceability,
+
+    // FCM tokens
+    pub fcm_tokens: Arc<Mutex<Vec<String>>>,
+
+    // pH Calibration session state
+    pub ph_calibration_sessions: Arc<RwLock<HashMap<String, PhCalibrationSession>>>,
+    pub ph_voltage_samples: Arc<RwLock<HashMap<String, VecDeque<PhVoltageSample>>>>,
+
+    // Dosing dynamic learning (in-memory)
+    pub dosing_dynamic_states: Arc<RwLock<HashMap<String, DosingDynamicState>>>,
 }
 
 #[tokio::main]
@@ -150,38 +167,6 @@ async fn main() -> anyhow::Result<()> {
     let solana_service = SolanaTraceability::new("https://api.devnet.solana.com", &private_key);
 
     let (alert_sender, _) = broadcast::channel(100);
-    let mut alert_rx_for_db: Receiver<AlertMessage> = alert_sender.subscribe();
-
-    let (health_tx, _) = broadcast::channel(100);
-
-    let db_pool_clone = pg_pool.clone();
-
-    tokio::spawn(async move {
-        while let Ok(alert) = alert_rx_for_db.recv().await {
-            // Bỏ qua FSM_UPDATE thuần (chỉ dùng để đồng bộ badge trên FE)
-            if alert.level == "FSM_UPDATE" {
-                continue;
-            }
-
-            let record = crate::db::postgres::NewSystemEventRecord {
-                category: alert.category.clone(),
-                device_id: alert.device_id.clone(),
-                level: alert.level.clone(),
-                title: alert.title.clone(),
-                message: alert.message.clone(),
-                timestamp: alert.timestamp as i64,
-                reason: alert.reason.clone(),
-                metadata: alert.metadata.clone(),
-            };
-
-            if let Err(e) = crate::db::postgres::insert_system_event(&db_pool_clone, &record).await
-            {
-                tracing::error!("Lỗi ghi System Event vào DB: {:?}", e);
-            }
-        }
-    });
-
-    let (sensor_sender, _) = broadcast::channel(100);
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let device_states = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
@@ -189,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
     // Spawn retention task: xóa system_events cũ hơn 90 ngày, mỗi 24h
     crate::services::retention::spawn(pg_pool.clone());
 
+    let mut fcm_rx = alert_sender.subscribe();
     let app_state = web::Data::new(AppState {
         pg_pool,
         influx_client,
@@ -198,19 +184,26 @@ async fn main() -> anyhow::Result<()> {
         api_key,
         device_states,
         solana_traceability: solana_service,
-        sensor_sender,
-        fcm_tokens: Mutex::new(Vec::new()),
-        health_sender: health_tx,
+        fcm_tokens: Arc::new(Mutex::new(Vec::new())),
         event_bus: event_bus.clone(),
         ph_calibration_sessions: Arc::new(RwLock::new(HashMap::new())),
         ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
         dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
     });
 
-    tokio::spawn(crate::services::event_dispatcher::run(
-        event_bus.subscribe(),
-        app_state.clone(),
-    ));
+    let fcm_tokens_clone = app_state.fcm_tokens.clone();
+    tokio::spawn(async move {
+        while let Ok(alert) = fcm_rx.recv().await {
+            if alert.level != "critical" && alert.level != "warning" {
+                continue;
+            }
+            let tokens = fcm_tokens_clone.lock().unwrap().clone();
+            if !tokens.is_empty() {
+                crate::services::fcm::send_push_notification(&alert.title, &alert.message, tokens)
+                    .await;
+            }
+        }
+    });
 
     mqtt_client
         .subscribe(
@@ -264,13 +257,6 @@ async fn main() -> anyhow::Result<()> {
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "controller/status"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub");
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "dosing_report"),
             QoS::AtLeastOnce,
         )
         .await

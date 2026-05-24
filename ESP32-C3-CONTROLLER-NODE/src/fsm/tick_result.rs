@@ -14,7 +14,7 @@ pub struct ContextDelta {
 
     /// Cập nhật mốc thời gian phase
     pub phase_start_ms: Option<Option<u64>>, // Some(Some(t)) = set, Some(None) = clear
-    pub phase_finish_ms: Option<Option<u64>>,
+    pub phase_finish_ms: Option<Option<u64>>, // Thời gian hoàn thành phase lý thuyết
 
     /// Thay đổi trạng thái ngoại vi
     pub peripherals: Option<PeripheralDelta>,
@@ -47,7 +47,9 @@ pub struct ContextDelta {
     pub manual_pump_timeout_clear: Option<String>,
 
     pub previous_phase: Option<hydragrow_shared::fsm::SystemPhase>,
-    pub phase_start_before: Option<u64>, // Để tính duration
+
+    // Để tính duration THỰC TẾ
+    pub phase_start_before: Option<u64>,
 }
 
 #[derive(Debug, Default, Clone)]

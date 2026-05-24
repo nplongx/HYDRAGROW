@@ -37,10 +37,11 @@ pub async fn ws_handler(
                                 AppEvent::SystemAlert(alert_msg) => serde_json::json!({"type":"alert","payload":alert_msg}),
                                 AppEvent::SensorUpdate(sensor_data) => serde_json::json!({"type":"sensor_update","payload":sensor_data}),
                                 AppEvent::DeviceStatus(status) => serde_json::json!({"type":"device_status","payload":{"is_online":status.is_online,"last_seen":chrono::Utc::now().to_rfc3339()}}),
-                                AppEvent::FsmTransition(fsm) => serde_json::json!({"type":"device_health","payload":{"_msg_type":"fsm_status","device_id":fsm.device_id,"fsm_state":fsm.state,"pump_status":fsm.pump_status.unwrap_or_default()}}),
-                                AppEvent::DosingReport(report) => serde_json::json!({"type":"dosing_report","payload":report}),
-                                AppEvent::WaterEvent(payload) => serde_json::json!({"type":"water_event","payload":payload}),
+                                AppEvent::FsmTransition(fsm) => serde_json::json!({"type":"fsm_transition","payload":fsm}),
+                                AppEvent::DosingCycle(report) => serde_json::json!({"type":"dosing_report","payload":report}),
                                 AppEvent::CalibrationUpdate(payload) => serde_json::json!({"type":"calibration_update","payload":payload}),
+                                AppEvent::WaterCycle(payload) => serde_json::json!({"type":"water_cycle", "payload":payload}),
+                                AppEvent::HealthSnapshot(snapshot) => serde_json::json!({"type":"health_snapshot", "payload":snapshot}),
                             };
 
                             if let Ok(json_str) = serde_json::to_string(&ws_msg) {

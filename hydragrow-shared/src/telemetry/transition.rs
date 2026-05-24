@@ -1,6 +1,6 @@
 // hydragrow-shared/src/telemetry/transition.rs
-use serde::{Deserialize, Serialize};
 use crate::fsm::{FaultCode, SystemPhase};
+use serde::{Deserialize, Serialize};
 
 /// Lý do FSM chuyển phase — typed, không phải string tự do
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -48,9 +48,7 @@ pub enum TransitionReason {
     },
 
     /// Sensor timeout — không nhận được data > 90s
-    SensorTimeout {
-        last_seen_ms_ago: u64,
-    },
+    SensorTimeout { last_seen_ms_ago: u64 },
 
     /// Phát hiện lỗi phần cứng, chuyển vào Fault
     FaultDetected {
@@ -76,7 +74,7 @@ pub enum TransitionReason {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FsmTransitionEvent {
     pub device_id: String,
-    pub from_phase: SystemPhase,
+    pub from_phase: Option<SystemPhase>,
     pub to_phase: SystemPhase,
     pub reason: TransitionReason,
     /// Timestamp epoch milliseconds — phải được truyền từ firmware (không tự tính trong shared)

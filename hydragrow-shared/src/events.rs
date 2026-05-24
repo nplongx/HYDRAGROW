@@ -43,14 +43,14 @@ pub enum AppEvent {
     // --- Legacy variants (giữ lại để không break existing handler) ---
     SensorUpdate(SensorData),
     DeviceStatus(DeviceStatusPayload),
-    /// Legacy — dùng FsmTransition (typed) cho code mới
-    FsmTransitionLegacy(FsmTransitionPayload),
-    /// Legacy dosing report — dùng DosingCycle cho code mới
-    DosingReport(DosingReportPayload),
+    // /// Legacy — dùng FsmTransition (typed) cho code mới
+    // // FsmTransitionLegacy(FsmTransitionPayload),
+    // /// Legacy dosing report — dùng DosingCycle cho code mới
+    // DosingReport(DosingReportPayload),
     SystemAlert(AlertMessage),
-    WaterEvent(WaterEventPayload),
+    // WaterEvent(WaterEventPayload),
     CalibrationUpdate(CalibrationUpdatePayload),
-
+    //
     // --- New typed variants ---
     /// FSM phase transition với đầy đủ context
     FsmTransition(FsmTransitionEvent),
@@ -61,4 +61,3 @@ pub enum AppEvent {
     /// Snapshot sức khỏe thiết bị
     HealthSnapshot(DeviceHealthSnapshot),
 }
-

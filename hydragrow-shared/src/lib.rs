@@ -419,7 +419,25 @@ pub struct ControllerHealthPayload {
     pub rssi: i8,
     pub pump_status: PumpStatus,
 }
-
+//
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct FsmBudgets {
+//     pub ec_ml: f32,
+//     pub ph_ml: f32,
+//     pub refill_count: usize,
+//     pub drain_count: usize,
+// }
+//
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct FsmStatusPayload {
+//     pub online: bool,
+//     pub current_state: String,
+//     pub pump_status: PumpStatus, // Tái sử dụng PumpStatus đã có
+//     pub budgets: FsmBudgets,
+//     pub log_drop_count: u32,
+//     pub diagnostics: serde_json::Value,
+// }
+//
 impl ControllerConfig {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();

@@ -4,8 +4,8 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
-use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
 use crate::models::alert::AlertMessage;
+use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct DeviceStatusPayload {
@@ -59,7 +59,12 @@ pub async fn handle_device(
     };
     let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert));
 
-    let _ = app_state.event_bus.send(AppEvent::DeviceStatus(SharedDeviceStatusPayload { device_id: device_id.clone(), is_online }));
+    let _ = app_state
+        .event_bus
+        .send(AppEvent::DeviceStatus(SharedDeviceStatusPayload {
+            device_id: device_id.clone(),
+            is_online,
+        }));
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
@@ -121,10 +126,7 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
         if let Ok(updated_str) = serde_json::to_string(&merged) {
             states.insert(device_id.clone(), updated_str);
         }
-
-        let _ = app_state.health_sender.send(payload_json);
     } else {
         warn!("Lỗi parse JSON Health Data từ {}", device_id);
     }
 }
-

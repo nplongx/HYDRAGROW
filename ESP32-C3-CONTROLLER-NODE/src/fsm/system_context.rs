@@ -1,4 +1,4 @@
-use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::fsm::{FsmDiagnostics, SystemPhase};
 use hydragrow_shared::PumpStatus;
 use serde::{Deserialize, Serialize};
 
@@ -74,6 +74,7 @@ impl SensorStabilizerTracker {
 pub struct SystemContext {
     pub dosing_cycle_count: u64,
     pub phase: SystemPhase,
+    pub previous_phase: Option<SystemPhase>,
     pub phase_start_ms: Option<u64>,
     pub phase_finish_ms: Option<u64>,
     pub dosing: DosingActor,
@@ -84,8 +85,7 @@ pub struct SystemContext {
     pub peripherals: PeripheralState,
     pub stabilizer_tracker: SensorStabilizerTracker,
 
-    // ⚡ ĐỒNG BỘ: Nhúng bộ tự chẩn đoán cục bộ
-    pub diagnostic: LocalHealthAndDiagnostic,
+    pub diagnostic: FsmDiagnostics,
 
     pub water_change_cron: CronSchedule,
     pub scheduled_dosing_cron: CronSchedule,
@@ -93,8 +93,8 @@ pub struct SystemContext {
     pub next_water_change_trigger_sec: Option<u64>,
     pub next_scheduled_dosing_trigger_sec: Option<u64>,
 }
-
 // src/fsm/system_context.rs
+
 impl SystemContext {
     pub fn apply_peripheral_delta(&mut self, pd: crate::fsm::tick_result::PeripheralDelta) {
         let p = &mut self.peripherals;
@@ -134,6 +134,7 @@ impl SystemContext {
             if *new_phase != self.phase {
                 // Phase đang thay đổi — lưu lại để observer có thể emit transition event
                 delta.previous_phase = Some(self.phase.clone());
+                delta.phase_start_before = self.phase_start_ms; // THIẾU DÒNG NÀY
             }
         }
 
@@ -272,6 +273,7 @@ impl Default for SystemContext {
     fn default() -> Self {
         Self {
             phase: SystemPhase::Booting,
+            previous_phase: None,
             dosing_cycle_count: 0,
             phase_start_ms: None,
             phase_finish_ms: None,
@@ -284,7 +286,7 @@ impl Default for SystemContext {
             stabilizer_tracker: SensorStabilizerTracker::default(),
 
             // ⚡ NẠP MẶC ĐỊNH
-            diagnostic: LocalHealthAndDiagnostic::default(),
+            diagnostic: FsmDiagnostics::default(),
 
             water_change_cron: String::new(),
             scheduled_dosing_cron: String::new(),

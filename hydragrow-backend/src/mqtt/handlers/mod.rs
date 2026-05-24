@@ -1,4 +1,3 @@
-pub mod dosing;
 pub mod dosing_cycle;
 pub mod fsm;
 pub mod sensors;

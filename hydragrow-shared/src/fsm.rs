@@ -38,7 +38,7 @@ impl SystemPhase {
         }
     }
 
-    /// Trả về true nếu là phase hoạt động cần Osaka pump chạy
+    /// Trả về true nếu phase hoạt động cần Osaka pump chạy
     pub fn requires_mixing(&self) -> bool {
         matches!(
             self,
@@ -150,13 +150,13 @@ pub struct FsmBudgets {
     pub drain_count: u32,
 }
 
-/// Legacy struct — giữ lại để backward compat với code backend cũ
-/// Dùng `FsmSnapshot` cho code mới
-#[deprecated(note = "Use FsmSnapshot instead — current_state is now typed as SystemPhase")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FsmStatePayload {
-    pub online: bool,
-    pub current_state: String,
-    pub pump_status: PumpStatus,
-    pub budgets: FsmBudgets,
-}
+// /// Legacy struct — giữ lại để backward compat với code backend cũ
+// /// Dùng `FsmSnapshot` cho code mới
+// #[deprecated(note = "Use FsmSnapshot instead — current_state is now typed as SystemPhase")]
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct FsmStatePayload {
+//     pub online: bool,
+//     pub current_state: String,
+//     pub pump_status: PumpStatus,
+//     pub budgets: FsmBudgets,
+// }

@@ -36,9 +36,6 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handlers::status::handle_controller(device_id, &payload_bytes, app_state).await
         }
         "/fsm/state" => handlers::fsm::handle_state(device_id, &payload_bytes, app_state).await,
-        "/dosing_report" => {
-            handlers::dosing::handle_report(device_id, &payload_bytes, app_state).await
-        }
 
         "/system_log" => handlers::system_log::handle(device_id, &payload_bytes, app_state).await,
 

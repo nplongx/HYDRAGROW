@@ -158,7 +158,7 @@ impl LocalHealthAndDiagnostic {
         );
     }
 
-    /// 📊 CƠ CHẾ 3: TÍNH TOÁN ĐIỂM SỨC KHỎE HỆ THỐNG ĐỂ TRUYỀN THÔNG (EDGE HEALTH SCORE)
+    /// TÍNH TOÁN ĐIỂM SỨC KHỎE HỆ THỐNG ĐỂ TRUYỀN THÔNG (EDGE HEALTH SCORE)
     /// Xuất ra phần trăm sống sót từ 0% đến 100% của thiết bị dựa trên các bất thường tích lũy.
     pub fn calculate_health_score(&self) -> u32 {
         let penalties = (self.consecutive_ec_anomalies * 33)
@@ -168,7 +168,7 @@ impl LocalHealthAndDiagnostic {
         100_u32.saturating_sub(penalties)
     }
 
-    /// 🚀 TELEMETRY JSON OVERRIDE: Đóng gói nhanh trạng thái chẩn đoán để nhúng vào MQTT Payload chính
+    /// Đóng gói nhanh trạng thái chẩn đoán để nhúng vào MQTT Payload chính
     pub fn to_telemetry_json(&self) -> serde_json::Value {
         serde_json::json!({
             "health_score_percent": self.calculate_health_score(),

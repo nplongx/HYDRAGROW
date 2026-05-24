@@ -15,10 +15,10 @@ pub mod types;
 pub mod utils;
 pub use events::OrchestratorEvent;
 pub mod tick_result;
-use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::fsm::{FsmSnapshot, SystemPhase};
 use hydragrow_shared::log::{BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent};
 use hydragrow_shared::telemetry::transition::TransitionReason;
-use hydragrow_shared::MqttCommandIn;
+use hydragrow_shared::{FsmBudgets, FsmStatusPayload, MqttCommandIn};
 pub use tick_result::{ContextDelta, TickResult};
 pub mod dispatcher;
 pub use dispatcher::EventDispatcher;
@@ -339,8 +339,12 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                         .phase_start_before
                         .map(|start| current_time_ms.saturating_sub(start));
 
-                    let reason =
-                        infer_transition_reason(&prev_phase, &new_ctx.phase, &tick_result.delta);
+                    let reason = infer_transition_reason(
+                        &prev_phase,
+                        &new_ctx.phase,
+                        &new_ctx,
+                        &tick_result.delta,
+                    );
 
                     let transition_event = OrchestratorEvent::PublishFsmTransition {
                         from_phase: prev_phase,
@@ -438,53 +442,117 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
         .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
         .count();
 
-    serde_json::json!({
-        "type": "fsm_status",
-        "online": true,
-        "current_state": match &ctx.phase {
-            SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
-            SystemPhase::EmergencyStop(reason) => format!("EmergencyStop:{}", reason),
-            _ => ctx.phase.as_str().to_string(),
+    let payload = FsmSnapshot {
+        online: true,
+        current_phase: ctx.phase,
+        previous_phase: ctx.previous_phase,
+        pump_status: ctx.peripherals.pump_status.clone(),
+        budgets: FsmBudgets {
+            ec_ml: sum_ml("NutrientA") + sum_ml("NutrientB"),
+            ph_ml: sum_ml("PhUp") + sum_ml("PhDown"),
+            refill_count,
+            drain_count,
         },
-        "pump_status": ctx.peripherals.pump_status,
-        "budgets": {
-            "ec_ml": sum_ml("NutrientA") + sum_ml("NutrientB"),
-            "ph_ml": sum_ml("PhUp") + sum_ml("PhDown"),
-            "refill_count": refill_count,
-            "drain_count": drain_count
-        },
-        "log_drop_count": crate::fsm::utils::get_log_drop_count(),
+        diagnostics: Some(ctx.diagnostic),
+    };
 
-        "diagnostics": ctx.diagnostic.to_telemetry_json()
-    })
-    .to_string()
+    serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string())
 }
 
 fn infer_transition_reason(
     from: &SystemPhase,
     to: &SystemPhase,
+    ctx: &SystemContext,
     delta: &ContextDelta,
 ) -> TransitionReason {
+    use hydragrow_shared::fsm::FaultCode;
     use hydragrow_shared::telemetry::transition::TransitionReason;
+
+    // duration của phase ĐÃ KẾT THÚC TRƯỚC ĐÓ
+    let duration_ms = delta
+        .phase_start_before
+        .map(|start| get_current_time_ms().saturating_sub(start))
+        .unwrap_or(0);
+
     match (from, to) {
-        (SystemPhase::MimoDosing, SystemPhase::ActiveMixing) => TransitionReason::DosingComplete {
-            dose_a_ml: 0.0,
-            dose_b_ml: 0.0,
-            ph_up_ml: 0.0,
-            ph_down_ml: 0.0,
-            // TODO: lấy từ dosing cycle context
-        },
-        (SystemPhase::ActiveMixing, SystemPhase::Stabilizing) => TransitionReason::MixingComplete {
-            actual_mixing_ms: 0,
-        },
-        (_, SystemPhase::Fault(_)) => TransitionReason::FaultDetected {
-            fault_code: to.fault_code().unwrap().clone(),
-            consecutive_failures: 3,
-        },
-        (SystemPhase::Cooldown, SystemPhase::Monitoring) => TransitionReason::CooldownExpired,
+        // --- 1. Chuỗi Khởi động ---
         (SystemPhase::Booting, SystemPhase::Monitoring) => TransitionReason::BootComplete,
+
+        // --- 2. Chuỗi Châm phân & Hòa trộn (Dosing Pipeline) ---
+        (SystemPhase::Monitoring, SystemPhase::MimoDosing) => TransitionReason::DosingTriggered,
+
+        (SystemPhase::MimoDosing, SystemPhase::ActiveMixing) => {
+            let cycle = ctx.dosing.cycle_ctx.as_ref();
+            TransitionReason::DosingComplete {
+                dose_a_ml: cycle.map_or(0.0, |c| c.dose_a_delivered_ml),
+                dose_b_ml: cycle.map_or(0.0, |c| c.dose_b_delivered_ml),
+                ph_up_ml: cycle.map_or(0.0, |c| c.ph_up_delivered_ml),
+                ph_down_ml: cycle.map_or(0.0, |c| c.ph_down_delivered_ml),
+            }
+        }
+
+        (SystemPhase::ActiveMixing, SystemPhase::Stabilizing) => TransitionReason::MixingComplete {
+            actual_mixing_ms: duration_ms,
+        },
+
+        (SystemPhase::Stabilizing, SystemPhase::Cooldown) => TransitionReason::StabilizingComplete,
+
+        (SystemPhase::Cooldown, SystemPhase::Monitoring) => TransitionReason::CooldownExpired,
+
+        // --- 3. Chuỗi Bơm/Xả Nước (Water Hydraulics) ---
+        (SystemPhase::Monitoring, SystemPhase::WaterRefilling) => TransitionReason::RefillTriggered,
+
+        (SystemPhase::WaterRefilling, SystemPhase::Monitoring)
+        | (SystemPhase::WaterRefilling, SystemPhase::ActiveMixing) => {
+            TransitionReason::RefillComplete
+        }
+
+        (SystemPhase::Monitoring, SystemPhase::WaterDraining) => TransitionReason::DrainTriggered,
+
+        (SystemPhase::WaterDraining, SystemPhase::Monitoring) => TransitionReason::DrainComplete,
+
+        // --- 4. Chuỗi Hiệu chuẩn Cảm biến (Sensor Calibration) ---
+        (SystemPhase::Monitoring, SystemPhase::SensorCalibration) => {
+            TransitionReason::CalibrationStarted
+        }
+        (SystemPhase::SensorCalibration, SystemPhase::Monitoring) => {
+            TransitionReason::CalibrationComplete
+        }
+
+        // --- 5. Chế độ Thủ công (Manual Mode) ---
+        (_, SystemPhase::ManualMode) => TransitionReason::ManualOverrideStarted,
+        (SystemPhase::ManualMode, SystemPhase::Monitoring) => TransitionReason::ManualOverrideEnded,
+
+        // --- 6. Chuỗi Lỗi & Khẩn cấp (Faults & Emergency) ---
+        (_, SystemPhase::Fault(code)) => {
+            // Map linh hoạt số lần thất bại liên tiếp (retry/failures) tùy theo FaultCode
+            let consecutive_failures = match code {
+                FaultCode::EcDosingFailed => ctx.dosing.retry_ec as u32,
+                FaultCode::PhDosingFailed => ctx.dosing.retry_ph as u32,
+                FaultCode::WaterRefillFailed | FaultCode::TooManyRefills => ctx.water.retry_refill,
+                // Các lỗi mang tính tức thời hoặc an toàn (MaxHourlyDose, SensorTimeout, v.v.)
+                // mặc định là 1 lần vì chúng kích hoạt Fault ngay lập tức.
+                _ => 1,
+            };
+
+            TransitionReason::FaultDetected {
+                fault_code: code.clone(),
+                consecutive_failures,
+            }
+        }
+
+        (_, SystemPhase::EmergencyStop(reason)) => TransitionReason::EmergencyStop {
+            reason: reason.clone(),
+        },
+
+        (SystemPhase::Fault(_), SystemPhase::Monitoring)
+        | (SystemPhase::EmergencyStop(_), SystemPhase::Monitoring) => {
+            TransitionReason::FaultCleared
+        }
+
+        // --- 7. Fallback cho các ngoại lệ chưa lường trước ---
         _ => TransitionReason::Manual {
-            description: format!("{} -> {}", from, to),
+            description: format!("Chuyển trạng thái: {} -> {}", from.as_str(), to.as_str()),
         },
     }
 }

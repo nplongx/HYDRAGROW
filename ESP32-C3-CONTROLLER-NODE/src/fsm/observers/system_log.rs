@@ -5,7 +5,7 @@
 
 use super::ObserverContext;
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
-use hydragrow_shared::{
+use hydragrow_shared::log::{
     BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog,
 };
 use log::warn;

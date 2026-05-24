@@ -131,6 +131,49 @@ impl EventDispatcher {
                     enabled
                 ));
             }
+            OrchestratorEvent::PublishFsmTransition {
+                from_phase,
+                to_phase,
+                reason,
+                phase_duration_ms,
+            } => {
+                use hydragrow_shared::telemetry::transition::FsmTransitionEvent;
+                use hydragrow_shared::topics::topic_fsm_transition;
+
+                let mut builder = FsmTransitionEvent::builder()
+                    .device_id(dc.device_id)
+                    .from(from_phase)
+                    .to(to_phase)
+                    .reason(reason)
+                    .timestamp_ms(dc.now_sec * 1000);
+
+                if let Some(dur) = phase_duration_ms {
+                    builder = builder.phase_duration_ms(dur);
+                }
+
+                match builder.try_build() {
+                    Ok(transition_event) => {
+                        if let Ok(json) = serde_json::to_string(&transition_event) {
+                            // let topic = topic_fsm_transition(dc.device_id);
+                            // let _ = dc.mqtt_tx.send(json);
+                            let wrapper = serde_json::json!({
+                                "_mqtt_topic_override": topic_fsm_transition(dc.device_id),
+                                "_payload": serde_json::to_value(&transition_event).unwrap_or_default()
+                            });
+                            let _ = dc.mqtt_tx.send(wrapper.to_string());
+                        }
+                    }
+                    Err(e) => warn!("⚠️ [DISPATCHER] Không thể build FsmTransitionEvent: {}", e),
+                }
+            }
+            OrchestratorEvent::PublishDosingCycle { cycle_json } => {
+                // Gửi lên dosing_report channel (reuse) với topic override
+                let wrapper = serde_json::json!({
+                    "_mqtt_topic_override": hydragrow_shared::topics::topic_dosing_cycle(dc.device_id),
+                    "_payload": serde_json::from_str::<serde_json::Value>(&cycle_json).unwrap_or_default()
+                });
+                let _ = dc.dosing_report_tx.send(wrapper.to_string());
+            }
         }
     }
 }

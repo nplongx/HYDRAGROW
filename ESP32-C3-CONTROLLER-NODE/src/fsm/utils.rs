@@ -1,4 +1,7 @@
-use hydragrow_shared::{ControllerConfig, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
+use hydragrow_shared::{
+    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog},
+    ControllerConfig,
+};
 use std::{
     sync::{
         atomic::{AtomicU32, Ordering},

@@ -1,9 +1,11 @@
 use hydragrow_shared::fsm::SystemPhase;
-// src/fsm/phase_impls/stabilizing.rs
-use hydragrow_shared::{
-    BasicSystemLogMetadata, ControllerConfig, DoseData, DosingReportPayload, LogCategory, LogLevel,
-    PhaseData, SensorData,
+use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+use hydragrow_shared::telemetry::cycle::{
+    CycleOutcome, DosingDoseRecord, DosingPhaseSnapshot, KalmanLearningData,
 };
+use hydragrow_shared::telemetry::DosingCycleEvent;
+// src/fsm/phase_impls/stabilizing.rs
+use hydragrow_shared::{ControllerConfig, DoseData, DosingReportPayload, PhaseData, SensorData};
 use log::warn;
 
 use crate::fsm::events::OrchestratorEvent;
@@ -92,6 +94,93 @@ impl PhaseTick for StabilizingPhase {
         sample.invalid_by_noise, sample.invalid_by_water_change);
             }
 
+            let outcome = if (sample.target_ec - final_ec).abs() <= config.ec_tolerance
+                && (sample.target_ph - final_ph).abs() <= config.ph_tolerance
+            {
+                CycleOutcome::Success
+            } else {
+                CycleOutcome::PartialSuccess {
+                    ec_reached: (sample.target_ec - final_ec).abs() <= config.ec_tolerance,
+                    ph_reached: (sample.target_ph - final_ph).abs() <= config.ph_tolerance,
+                }
+            };
+
+            let kalman_data = if did_learn {
+                Some(KalmanLearningData {
+                    ec_gain_before: config.ec_gain_per_ml,
+                    ec_gain_after: ctx
+                        .tuner
+                        .gain_learner
+                        .effective_ec_gain(config.ec_gain_per_ml),
+                    ph_up_gain_before: config.ph_shift_up_per_ml,
+                    ph_up_gain_after: ctx
+                        .tuner
+                        .gain_learner
+                        .effective_ph_up_gain(config.ph_shift_up_per_ml),
+                    ph_down_gain_before: config.ph_shift_down_per_ml,
+                    ph_down_gain_after: ctx
+                        .tuner
+                        .gain_learner
+                        .effective_ph_down_gain(config.ph_shift_down_per_ml),
+                    matrix_update_count: ctx.tuner.matrix_update_count,
+                    matrix_is_warm: ctx.tuner.matrix_is_warm,
+                    adaptive_mixing_sec: ctx.diagnostic.adaptive_mixing_sec,
+                    adaptive_stabilize_sec: ctx.diagnostic.adaptive_stabilize_sec,
+                })
+            } else {
+                None
+            };
+
+            let cycle_event = DosingCycleEvent {
+                cycle_id: sample.cycle_id.clone(),
+                device_id: config.device_id.clone(),
+                trigger: sample.trigger.clone(),
+                pre: DosingPhaseSnapshot {
+                    ec: sample.start_ec,
+                    ph: sample.start_ph,
+                    water_level: sample.start_water_level,
+                    temp: Some(sample.start_temp),
+                },
+                post_mixing: DosingPhaseSnapshot {
+                    ec: sample.post_mixing_ec,
+                    ph: sample.post_mixing_ph,
+                    water_level: final_water,
+                    temp: None,
+                },
+                post_stable: DosingPhaseSnapshot {
+                    ec: final_ec,
+                    ph: final_ph,
+                    water_level: final_water,
+                    temp: None,
+                },
+                target_ec: sample.target_ec,
+                target_ph: sample.target_ph,
+                dose: DosingDoseRecord {
+                    pump_a_ml: sample.dose_a_ml,
+                    pump_b_ml: sample.dose_b_ml,
+                    ph_up_ml: sample.dose_ph_up_ml,
+                    ph_down_ml: sample.dose_ph_down_ml,
+                    water_in_sec: sample.water_in_sec,
+                    water_out_sec: sample.water_out_sec,
+                },
+                outcome,
+                duration_ms: now_ms.saturating_sub(sample.start_ms),
+                mixing_duration_ms: sample
+                    .active_mixing_finish_ms
+                    .saturating_sub(sample.start_ms),
+                stabilize_duration_ms: now_ms
+                    .saturating_sub(sample.stabilizing_start_ms.unwrap_or(now_ms)),
+                timestamp_ms: now_ms,
+                kalman: kalman_data,
+                season_id: None, // backend sẽ lookup từ DB
+            };
+
+            if let Ok(json) = serde_json::to_string(&cycle_event) {
+                result
+                    .events
+                    .push(OrchestratorEvent::PublishDosingCycle { cycle_json: json });
+            }
+
             // Build human-readable message
             let human_message =
                 build_human_message(sample, final_ec, final_ph, final_water, config);
@@ -140,10 +229,10 @@ impl PhaseTick for StabilizingPhase {
                     .push(OrchestratorEvent::PublishDosingReport { report_json: json });
             }
 
-            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+            let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
-                hydragrow_shared::LogLevel::Success,
-                hydragrow_shared::LogCategory::Dosing,
+                LogLevel::Success,
+                LogCategory::Dosing,
                 "Chu kỳ MIMO hoàn tất",
                 human_message.trim().to_string(),
                 Some(&sample.cycle_id),

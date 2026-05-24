@@ -5,8 +5,8 @@
 
 use super::ObserverContext;
 use crate::fsm::events::OrchestratorEvent;
-use hydragrow_shared::{
-    AlertMetadata, BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog,
+use hydragrow_shared::log::{
+    BasicSystemLogMetadata, LogCategory, SystemLogEvent, UnifiedSystemLog,
 };
 use log::warn;
 

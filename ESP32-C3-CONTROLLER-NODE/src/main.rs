@@ -9,13 +9,10 @@ use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
-use hydragrow_shared::{
-    topics::{
-        topic_calibration, topic_controller_command, topic_controller_config,
-        topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state,
-        topic_sensor_command, topic_sensors, topic_status,
-    },
-    UnifiedSystemLog,
+use hydragrow_shared::topics::{
+    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
+    topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
+    topic_status,
 };
 use log::{error, info, warn, LevelFilter};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -299,12 +296,19 @@ fn main() -> anyhow::Result<()> {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        let topic = if serde_json::from_str::<UnifiedSystemLog>(&payload).is_ok() {
-                            format!(
-                                "AGITECH/{}/{}",
-                                DEVICE_ID,
-                                UnifiedSystemLog::mqtt_topic_suffix()
-                            )
+                        let topic = if let Some(override_topic) =
+                            v.get("_mqtt_topic_override").and_then(|t| t.as_str())
+                        {
+                            let actual_payload = v.get("_payload").cloned().unwrap_or(v.clone());
+                            let actual_payload_str =
+                                serde_json::to_string(&actual_payload).unwrap_or(payload.clone());
+                            let _ = client.publish(
+                                override_topic,
+                                QoS::AtLeastOnce,
+                                false,
+                                actual_payload_str.as_bytes(),
+                            );
+                            continue; // skip normal routing
                         } else {
                             match v.get("type").and_then(|t| t.as_str()) {
                                 Some("water_event") | Some("system_alert")
@@ -378,3 +382,4 @@ fn main() -> anyhow::Result<()> {
         thread::sleep(Duration::from_millis(50));
     }
 }
+

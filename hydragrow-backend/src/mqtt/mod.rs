@@ -42,6 +42,17 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
 
         "/system_log" => handlers::system_log::handle(device_id, &payload_bytes, app_state).await,
 
+        "/dosing_cycle" => {
+            handlers::dosing_cycle::handle_dosing_cycle(device_id, &payload_bytes, app_state).await
+        }
+        "/water_cycle" => {
+            // Placeholder — log và bỏ qua, implement sau
+            tracing::debug!("water_cycle event nhận được, chưa xử lý");
+        }
+        "/fsm/transition" => {
+            handlers::fsm::handle_fsm_transition(device_id, &payload_bytes, app_state).await
+        }
+
         _ => debug!("Nhận được topic không quản lý: {}", topic),
     }
 }

@@ -127,11 +127,18 @@ impl SystemContext {
 impl SystemContext {
     /// Áp dụng ContextDelta vào context — điểm duy nhất được phép mutate ctx.
     /// Gọi sau khi Pure Decision Engine trả về TickResult.
-    pub fn apply_delta(&mut self, delta: crate::fsm::tick_result::ContextDelta) {
+    pub fn apply_delta(&mut self, delta: &mut crate::fsm::tick_result::ContextDelta) {
         use crate::fsm::tick_result::CalibrationDelta;
 
-        if let Some(phase) = delta.phase {
-            self.phase = phase;
+        if let Some(ref new_phase) = delta.phase {
+            if *new_phase != self.phase {
+                // Phase đang thay đổi — lưu lại để observer có thể emit transition event
+                delta.previous_phase = Some(self.phase.clone());
+            }
+        }
+
+        if let Some(phase) = delta.phase.as_ref() {
+            self.phase = phase.clone();
         }
 
         // phase_start_ms: Some(Some(t)) = set t, Some(None) = clear
@@ -158,22 +165,22 @@ impl SystemContext {
             self.next_water_change_trigger_sec = v;
         }
 
-        if let Some(cron) = delta.water_change_cron {
+        if let Some(cron) = delta.water_change_cron.clone() {
             self.water_change_cron = cron;
         }
 
         if let Some(until) = delta.safety_override_until {
             self.safety.safety_override_until = until;
         }
-        if let Some((pump, finish_ms)) = delta.manual_pump_timeout {
+        if let Some((pump, finish_ms)) = delta.manual_pump_timeout.clone() {
             self.safety.manual_timeouts.insert(pump, finish_ms);
         }
-        if let Some(pump) = delta.manual_pump_timeout_clear {
+        if let Some(pump) = delta.manual_pump_timeout_clear.clone() {
             self.safety.manual_timeouts.remove(&pump);
         }
 
         // --- Peripherals ---
-        if let Some(pd) = delta.peripherals {
+        if let Some(pd) = delta.peripherals.clone() {
             let p = &mut self.peripherals;
 
             if let Some(v) = pd.pump_a {
@@ -237,7 +244,7 @@ impl SystemContext {
         }
 
         // --- Calibration ---
-        if let Some(cal) = delta.calibration {
+        if let Some(cal) = delta.calibration.clone() {
             match cal {
                 CalibrationDelta::Start(sample) => {
                     self.calibration.start_sample(sample);

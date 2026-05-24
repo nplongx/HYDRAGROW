@@ -1,7 +1,9 @@
 use hydragrow_shared::{
-    AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
-    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData, SystemLogEvent, UnifiedSystemLog,
-    WaterMetadata,
+    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
+    log::{
+        AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
+        SystemLogEvent, UnifiedSystemLog, WaterMetadata,
+    },
 };
 
 fn sample_system_log(event: SystemLogEvent) -> UnifiedSystemLog {
@@ -217,8 +219,6 @@ fn golden_payload_snapshots() {
 
 #[test]
 fn basic_system_log_metadata_cycle_id_round_trips() {
-    use hydragrow_shared::{BasicSystemLogMetadata, SystemLogEvent};
-
     let with_cycle = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
         source: "orchestrator".into(),
         message: "Bắt đầu châm EC".into(),
@@ -244,8 +244,6 @@ fn basic_system_log_metadata_cycle_id_round_trips() {
 
 #[test]
 fn basic_system_log_metadata_without_cycle_id_omits_field() {
-    use hydragrow_shared::{BasicSystemLogMetadata, SystemLogEvent};
-
     let without_cycle = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
         source: "system".into(),
         message: "Khởi động".into(),
@@ -264,10 +262,6 @@ fn basic_system_log_metadata_without_cycle_id_omits_field() {
 
 #[test]
 fn golden_basic_system_log_with_cycle_id() {
-    use hydragrow_shared::{
-        BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog,
-    };
-
     let log = UnifiedSystemLog {
         device_id: "device-001".into(),
         level: LogLevel::Info,
@@ -287,8 +281,6 @@ fn golden_basic_system_log_with_cycle_id() {
 
 #[test]
 fn golden_build_basic_log_json_with_ts_snapshot() {
-    use hydragrow_shared::{LogCategory, LogLevel, UnifiedSystemLog};
-
     let json_str = UnifiedSystemLog::build_basic_log_json_with_ts(
         "device-001",
         LogLevel::Info,

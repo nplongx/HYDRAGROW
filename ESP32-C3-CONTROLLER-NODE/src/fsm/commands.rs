@@ -1,8 +1,6 @@
 use hydragrow_shared::fsm::SystemPhase;
-use hydragrow_shared::{
-    BasicSystemLogMetadata, ControlMode, ControllerConfig, LogCategory, LogLevel, MqttCommandIn,
-    SystemLogEvent,
-};
+use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+use hydragrow_shared::{ControlMode, ControllerConfig, MqttCommandIn};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -100,10 +98,10 @@ pub fn process_mqtt_commands(
                 .as_ref()
                 .and_then(|p| p.ota_url.as_deref())
                 .unwrap_or("");
-            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+            let log_payload = hydragrow_shared::log::UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
-                hydragrow_shared::LogLevel::Info,
-                hydragrow_shared::LogCategory::System,
+                hydragrow_shared::log::LogLevel::Info,
+                hydragrow_shared::log::LogCategory::System,
                 "Nhận lệnh OTA",
                 format!(
                     "Nhận lệnh OTA từ MQTT. URL: {}.",
@@ -222,10 +220,10 @@ pub fn process_mqtt_commands(
             let duration = duration_sec.unwrap_or(120);
             delta.safety_override_until = Some(current_time_ms + (duration as u64 * 1000));
 
-            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+            let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
-                hydragrow_shared::LogLevel::Warning,
-                hydragrow_shared::LogCategory::UserAction,
+                LogLevel::Warning,
+                LogCategory::UserAction,
                 "Can thiệp thủ công cưỡng chế",
                 format!("Người dùng FORCE ON {} trong {} giây.", pump_name, duration),
                 None,

@@ -7,7 +7,7 @@ use super::events::OrchestratorEvent;
 
 /// Những thay đổi state muốn áp dụng vào SystemContext sau một tick.
 /// Tất cả fields đều Optional — None nghĩa là "giữ nguyên".
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ContextDelta {
     /// Chuyển phase FSM
     pub phase: Option<SystemPhase>,
@@ -45,9 +45,12 @@ pub struct ContextDelta {
 
     /// Xóa manual timeout cho một bơm
     pub manual_pump_timeout_clear: Option<String>,
+
+    pub previous_phase: Option<hydragrow_shared::fsm::SystemPhase>,
+    pub phase_start_before: Option<u64>, // Để tính duration
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PeripheralDelta {
     pub pump_a: Option<bool>,
     pub pump_b: Option<bool>,
@@ -70,7 +73,7 @@ pub struct PeripheralDelta {
     pub last_continuous_level: Option<bool>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CalibrationDelta {
     /// Bắt đầu thu thập sample mới
     Start(crate::fsm::types::PendingCalibrationSample),

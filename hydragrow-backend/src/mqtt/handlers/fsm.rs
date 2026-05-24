@@ -6,6 +6,7 @@ use crate::AppState;
 use hydragrow_shared::{
     events::{AppEvent, FsmTransitionPayload},
     fsm::{FsmStatePayload, SystemPhase},
+    telemetry::FsmTransitionEvent,
 };
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
@@ -176,7 +177,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
 
     let _ = app_state
         .event_bus
-        .send(AppEvent::FsmTransition(FsmTransitionPayload {
+        .send(AppEvent::FsmTransition(FsmTransitionEvent {
             device_id: device_id.clone(),
             state: state.clone(),
             pump_status: serde_json::from_value(pump_status.clone()).ok(),
@@ -196,6 +197,43 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     } else {
         states.insert(device_id.clone(), json!({"fsm_state": state}).to_string());
     }
+}
+
+pub async fn handle_fsm_transition(
+    device_id: String,
+    payload: &[u8],
+    app_state: web::Data<AppState>,
+) {
+    let event: FsmTransitionEvent = match serde_json::from_slice(payload) {
+        Ok(e) => e,
+        Err(err) => {
+            tracing::error!(error = ?err, "Lỗi parse FsmTransitionEvent");
+            return;
+        }
+    };
+
+    // Cập nhật fsm_state trong device_states cache (dùng Display string để backward compat)
+    let state_str = event.to_phase.to_string();
+    let mut states = app_state.device_states.write().await;
+    if let Some(existing_str) = states.get(&device_id) {
+        if let Ok(mut cached) = serde_json::from_str::<serde_json::Value>(existing_str) {
+            if let Some(obj) = cached.as_object_mut() {
+                obj.insert("fsm_state".into(), serde_json::json!(state_str));
+                if let Ok(s) = serde_json::to_string(&obj) {
+                    states.insert(device_id.clone(), s);
+                }
+            }
+        }
+    } else {
+        states.insert(
+            device_id.clone(),
+            serde_json::json!({"fsm_state": state_str}).to_string(),
+        );
+    }
+    drop(states);
+
+    // Fan-out
+    let _ = app_state.event_bus.send(AppEvent::FsmTransition(event));
 }
 
 #[cfg(test)]

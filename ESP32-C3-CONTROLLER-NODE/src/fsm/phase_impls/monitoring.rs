@@ -1,4 +1,5 @@
 use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
 // src/fsm/phases/monitoring.rs
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::warn;
@@ -12,7 +13,6 @@ use crate::fsm::system_context::SystemContext;
 use crate::fsm::tick_result::{CalibrationDelta, ContextDelta, PeripheralDelta, TickResult};
 use crate::fsm::types::PendingCalibrationSample;
 use crate::pump::WaterDirection;
-use hydragrow_shared::BasicSystemLogMetadata;
 
 use chrono::Local;
 use cron::Schedule;
@@ -229,10 +229,10 @@ fn apply_decision(
             peri_delta.last_ph_before_dose = Some(Some(sensors.ph));
             result.delta.reset_stabilizer = true;
 
-            let log_payload = hydragrow_shared::UnifiedSystemLog::build_basic_log_json_with_ts(
+            let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
-                hydragrow_shared::LogLevel::Info,
-                hydragrow_shared::LogCategory::Dosing,
+                LogLevel::Info,
+                LogCategory::Dosing,
                 "Bắt đầu chu kỳ MIMO",
                 format!(
                     "A/B: {:.1}ml | pH_Up/Down: {:.1}/{:.1}ml | Water_In: {:.1}s",

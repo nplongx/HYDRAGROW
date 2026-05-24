@@ -1,5 +1,5 @@
 use actix_web::web;
-use hydragrow_shared::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
+use hydragrow_shared::log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
 use tracing::{error, info, warn};
 
 use crate::AppState;
@@ -11,7 +11,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     let log_data: UnifiedSystemLog = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
-            // Log payload thô để debug — giúp phát hiện firmware gửi format sai
             let raw_preview = std::str::from_utf8(payload)
                 .map(|s| &s[..s.len().min(200)])
                 .unwrap_or("<invalid utf8>");
@@ -19,7 +18,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 "❌ [SYSTEM LOG] Parse UnifiedSystemLog thất bại từ {}. Error: {:?}. Payload preview: {}",
                 device_id, e, raw_preview
             );
-            // Sau khi Tasks 1-4 hoàn tất, nếu vẫn còn lỗi ở đây thì có firmware khác đang gửi format cũ.
             return;
         }
     };

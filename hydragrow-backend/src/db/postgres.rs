@@ -511,9 +511,10 @@ pub async fn get_events_by_cycle_id(
 
 #[cfg(test)]
 mod tests {
+    use hydragrow_shared::log::{BasicSystemLogMetadata, SystemLogEvent};
+
     #[test]
     fn basic_system_log_metadata_cycle_id_is_at_top_level_of_serialized_event() {
-        use hydragrow_shared::{BasicSystemLogMetadata, SystemLogEvent};
 
         let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
             source: "test".into(),

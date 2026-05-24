@@ -54,6 +54,15 @@ pub enum OrchestratorEvent {
     SetSensorContinuousMode {
         enabled: bool,
     },
+    PublishFsmTransition {
+        from_phase: hydragrow_shared::fsm::SystemPhase,
+        to_phase: hydragrow_shared::fsm::SystemPhase,
+        reason: hydragrow_shared::telemetry::transition::TransitionReason,
+        phase_duration_ms: Option<u64>,
+    },
+    PublishDosingCycle {
+        cycle_json: String,
+    },
 }
 
 /// Target bơm định lượng (tách riêng để tránh dùng PumpType từ pump.rs ở layer này)

@@ -275,6 +275,30 @@ async fn main() -> anyhow::Result<()> {
         )
         .await
         .expect("Lỗi sub");
+    // Trong hydragrow-backend/src/main.rs, thêm sau các subscribe hiện tại:
+    mqtt_client
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "fsm/transition"),
+            QoS::AtLeastOnce,
+        )
+        .await
+        .expect("Lỗi sub fsm/transition");
+
+    mqtt_client
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "dosing_cycle"),
+            QoS::AtLeastOnce,
+        )
+        .await
+        .expect("Lỗi sub dosing_cycle");
+
+    mqtt_client
+        .subscribe(
+            &format!("{}/+/{}", AGITECH_PREFIX, "water_cycle"),
+            QoS::AtLeastOnce,
+        )
+        .await
+        .expect("Lỗi sub water_cycle");
 
     let app_state_for_mqtt = app_state.clone();
     tokio::spawn(async move {

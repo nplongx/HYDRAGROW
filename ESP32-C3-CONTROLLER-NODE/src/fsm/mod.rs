@@ -16,6 +16,9 @@ pub mod utils;
 pub use events::OrchestratorEvent;
 pub mod tick_result;
 use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::log::{BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent};
+use hydragrow_shared::telemetry::transition::TransitionReason;
+use hydragrow_shared::MqttCommandIn;
 pub use tick_result::{ContextDelta, TickResult};
 pub mod dispatcher;
 pub use dispatcher::EventDispatcher;
@@ -37,9 +40,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
-use hydragrow_shared::{
-    BasicSystemLogMetadata, ControlMode, LogCategory, LogLevel, MqttCommandIn, SystemLogEvent,
-};
 use log::{info, warn};
 
 use crate::config::SharedConfig;
@@ -227,10 +227,11 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             sensor_last_update_ms = current_time_ms;
         }
 
-        let (cmd_delta, cmd_events) =
+        let (mut cmd_delta, cmd_events) =
             process_mqtt_commands(&cmd_rx, &config, &new_ctx, current_time_ms, &fsm_mqtt_tx);
         let force_sync = cmd_delta.phase.is_some() || !cmd_events.is_empty();
-        new_ctx.apply_delta(cmd_delta);
+
+        new_ctx.apply_delta(&mut cmd_delta);
 
         // Phát tán các command events phần cứng ngay lập tức để đáp ứng thời gian thực (Manual Mode)
         if !cmd_events.is_empty() {
@@ -279,7 +280,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
 
             let mut delta = ContextDelta::default();
             let timeout_events = crate::fsm::commands::build_stop_pump_events(&pump, &mut delta);
-            new_ctx.apply_delta(delta);
+            new_ctx.apply_delta(&mut delta);
 
             // Dispatch phần cứng ngay lập tức — giống manual command handling ở trên
             if !timeout_events.is_empty() {
@@ -321,7 +322,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 || (config.enable_temp_sensor && sensors.err_temp.unwrap_or(false));
 
             if !has_sensor_fault {
-                let tick_result = orchestrator::tick(
+                let mut tick_result = orchestrator::tick(
                     current_time_ms,
                     &config,
                     &sensors,
@@ -330,23 +331,43 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 );
 
                 // Áp dụng những thay đổi state vào SystemContext thông qua ContextDelta
-                new_ctx.apply_delta(tick_result.delta);
+                new_ctx.apply_delta(&mut tick_result.delta.clone());
 
-                // Phân phối chuỗi Event side effects tự động ra ngoại vi
-                let mut dc = crate::fsm::dispatcher::DispatchContext {
-                    pumps: &mut pump_ctrl,
-                    nvs: &mut nvs,
-                    mqtt_tx: &fsm_mqtt_tx,
-                    dosing_report_tx: &dosing_report_tx,
-                    sensor_cmd_tx: &sensor_cmd_tx,
-                    ctx: &new_ctx,
-                    now_sec: current_time_sec,
-                    device_id: &config.device_id,
-                    config: &config,
-                    sensors: &sensors,
-                    observers: &mut observer_set,
-                };
-                crate::fsm::dispatcher::EventDispatcher::dispatch(tick_result.events, &mut dc);
+                if let Some(prev_phase) = tick_result.delta.previous_phase.clone() {
+                    let duration_ms = tick_result
+                        .delta
+                        .phase_start_before
+                        .map(|start| current_time_ms.saturating_sub(start));
+
+                    let reason =
+                        infer_transition_reason(&prev_phase, &new_ctx.phase, &tick_result.delta);
+
+                    let transition_event = OrchestratorEvent::PublishFsmTransition {
+                        from_phase: prev_phase,
+                        to_phase: new_ctx.phase.clone(),
+                        reason,
+                        phase_duration_ms: duration_ms,
+                    };
+
+                    // Phân phối chuỗi Event side effects tự động ra ngoại vi
+                    let mut dc = crate::fsm::dispatcher::DispatchContext {
+                        pumps: &mut pump_ctrl,
+                        nvs: &mut nvs,
+                        mqtt_tx: &fsm_mqtt_tx,
+                        dosing_report_tx: &dosing_report_tx,
+                        sensor_cmd_tx: &sensor_cmd_tx,
+                        ctx: &new_ctx,
+                        now_sec: current_time_sec,
+                        device_id: &config.device_id,
+                        config: &config,
+                        sensors: &sensors,
+                        observers: &mut observer_set,
+                    };
+                    crate::fsm::dispatcher::EventDispatcher::dispatch(
+                        vec![transition_event],
+                        &mut dc,
+                    );
+                }
             }
         }
 
@@ -437,4 +458,33 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
         "diagnostics": ctx.diagnostic.to_telemetry_json()
     })
     .to_string()
+}
+
+fn infer_transition_reason(
+    from: &SystemPhase,
+    to: &SystemPhase,
+    delta: &ContextDelta,
+) -> TransitionReason {
+    use hydragrow_shared::telemetry::transition::TransitionReason;
+    match (from, to) {
+        (SystemPhase::MimoDosing, SystemPhase::ActiveMixing) => TransitionReason::DosingComplete {
+            dose_a_ml: 0.0,
+            dose_b_ml: 0.0,
+            ph_up_ml: 0.0,
+            ph_down_ml: 0.0,
+            // TODO: lấy từ dosing cycle context
+        },
+        (SystemPhase::ActiveMixing, SystemPhase::Stabilizing) => TransitionReason::MixingComplete {
+            actual_mixing_ms: 0,
+        },
+        (_, SystemPhase::Fault(_)) => TransitionReason::FaultDetected {
+            fault_code: to.fault_code().unwrap().clone(),
+            consecutive_failures: 3,
+        },
+        (SystemPhase::Cooldown, SystemPhase::Monitoring) => TransitionReason::CooldownExpired,
+        (SystemPhase::Booting, SystemPhase::Monitoring) => TransitionReason::BootComplete,
+        _ => TransitionReason::Manual {
+            description: format!("{} -> {}", from, to),
+        },
+    }
 }

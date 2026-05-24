@@ -328,6 +328,22 @@ fn main() -> anyhow::Result<()> {
         if let Ok(report_json) = dosing_report_rx.try_recv() {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&report_json) {
+                        if let Some(override_topic) =
+                            v.get("_mqtt_topic_override").and_then(|t| t.as_str())
+                        {
+                            let actual_payload = v.get("_payload").cloned().unwrap_or(v.clone());
+                            let actual_str = serde_json::to_string(&actual_payload)
+                                .unwrap_or_else(|_| report_json.clone());
+                            let _ = client.publish(
+                                override_topic,
+                                QoS::AtLeastOnce,
+                                false,
+                                actual_str.as_bytes(),
+                            );
+                            continue;
+                        }
+                    }
                     let topic = topic_dosing_report(DEVICE_ID);
                     let _ = client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
                 }
@@ -382,4 +398,3 @@ fn main() -> anyhow::Result<()> {
         thread::sleep(Duration::from_millis(50));
     }
 }
-

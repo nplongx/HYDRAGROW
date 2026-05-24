@@ -260,7 +260,7 @@ impl DosingActor {
 
                 // Chi cham A
                 if dose_b_ml <= 1e-3 {
-                    return self.transition_to_ph_or_idle(job.delivered_ml, 0.0);
+                    return self.transition_to_ph_or_idle(job.delivered_ml, 0.0, now_ms);
                 }
 
                 let safe_pwm = job.pwm.clamp(1, 100);
@@ -369,7 +369,7 @@ impl DosingActor {
                     .unwrap_or(0.0);
 
                 let (ev, mut follow_events) =
-                    self.transition_to_ph_or_idle(delivered_a, delivered_b);
+                    self.transition_to_ph_or_idle(delivered_a, delivered_b, now_ms);
                 hw_events.append(&mut follow_events);
                 (ev, hw_events)
             } else {
@@ -503,27 +503,18 @@ impl DosingActor {
         &mut self,
         delivered_a: f32,
         delivered_b: f32,
+        now_ms: u64,
     ) -> (DosingEvent, Vec<OrchestratorEvent>) {
-        let mut hw_events = Vec::new();
-        if let Some(ph_job) = self.pending_ph_job.take() {
-            let target_pump = match ph_job.pump {
-                PumpTarget::PhUp => DosingPumpTarget::PhUp,
-                PumpTarget::PhDown => DosingPumpTarget::PhDown,
-                _ => return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events),
-            };
+        if let Some(mut ph_job) = self.pending_ph_job.take() {
+            // Reset timing to NOW so the first pulse starts cleanly from current time
+            ph_job.next_toggle_ms = now_ms;
+            ph_job.pulse_on = false; // start in OFF state — tick_pump_ph will send ON
+            ph_job.delivered_ml = 0.0;
+            ph_job.pulse_count = 0;
 
-            // Tạo Event kích hoạt bơm pH ngay khi chuyển trạng thái
-            hw_events.push(OrchestratorEvent::SetDosingPump {
-                pump: target_pump,
-                on: true,
-                pwm_percent: ph_job.pwm,
-            });
-
-            let mut updated_ph_job = ph_job;
-            updated_ph_job.pulse_on = true; // Bật pulse_on vì ta đã gửi lệnh chạy bơm
-
-            self.sub_state = DosingSubState::PumpingPH(updated_ph_job);
-            (DosingEvent::PhaseTransition, hw_events)
+            // Do NOT push a hardware event here — let tick_pump_ph handle it next tick
+            self.sub_state = DosingSubState::PumpingPH(ph_job);
+            (DosingEvent::PhaseTransition, vec![])
         } else {
             self.sub_state = DosingSubState::Idle;
             (
@@ -533,7 +524,7 @@ impl DosingActor {
                     ph_up_ml: 0.0,
                     ph_down_ml: 0.0,
                 },
-                hw_events,
+                vec![],
             )
         }
     }

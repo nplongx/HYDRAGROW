@@ -8,6 +8,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum WaterSubState {
     Idle,
+    Starting,
     Filling { job: WaterJob },
     Draining { job: WaterJob },
 }
@@ -72,6 +73,16 @@ impl WaterActor {
         config: &ControllerConfig,
     ) -> (WaterEvent, Vec<OrchestratorEvent>) {
         match &self.sub_state.clone() {
+            WaterSubState::Starting => {
+                // Should never reach here since start_fill transitions immediately to Filling
+                // Return Pending with Stop to be safe
+                (
+                    WaterEvent::Pending,
+                    vec![OrchestratorEvent::SetWaterPump {
+                        direction: crate::pump::WaterDirection::Stop,
+                    }],
+                )
+            }
             WaterSubState::Filling { job } => {
                 let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
                 let reached = sensors.water_level >= job.target_level;

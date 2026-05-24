@@ -21,17 +21,23 @@ impl PhaseTick for WaterRefillingPhase {
         let mut result = TickResult::default();
 
         // Khởi động WaterActor nếu chưa bắt đầu (chỉ gọi một lần khi vào phase)
-        if matches!(ctx.water.sub_state, WaterSubState::Idle) {
-            ctx.water.start_fill(
-                now_ms,
-                config.water_level_target,
-                sensors,
-                "water_refill_phase",
-            );
-            log::info!(
-                "💧 [WATER REFILL] Bắt đầu cấp nước → target {:.1}cm",
-                config.water_level_target
-            );
+        match ctx.water.sub_state {
+            WaterSubState::Idle => {
+                // Mark as starting before calling start_fill to prevent re-entry
+                ctx.water.sub_state = WaterSubState::Starting;
+                ctx.water.start_fill(
+                    now_ms,
+                    config.water_level_target,
+                    sensors,
+                    "water_refill_phase",
+                );
+            }
+            WaterSubState::Starting => {
+                // start_fill sets sub_state to Filling immediately, so this should never be reached
+                // but guard against it anyway
+                log::warn!("[WATER] Unexpected Starting state — start_fill was not called?");
+            }
+            _ => {} // Filling or Draining — normal tick below
         }
 
         let (event, hw_events) = ctx.water.tick(now_ms, sensors, config);
@@ -67,15 +73,23 @@ impl PhaseTick for WaterDrainingPhase {
     ) -> TickResult {
         let mut result = TickResult::default();
 
-        // Khởi động WaterActor nếu chưa bắt đầu
-        if matches!(ctx.water.sub_state, WaterSubState::Idle) {
-            // Drain target: water_level_min (xả xuống ngưỡng tối thiểu an toàn)
-            ctx.water
-                .start_drain(now_ms, config.water_level_min, sensors, "water_drain_phase");
-            log::info!(
-                "🚰 [WATER DRAIN] Bắt đầu xả nước → target {:.1}cm",
-                config.water_level_min
-            );
+        match ctx.water.sub_state {
+            WaterSubState::Idle => {
+                // Mark as starting before calling start_fill to prevent re-entry
+                ctx.water.sub_state = WaterSubState::Starting;
+                ctx.water.start_drain(
+                    now_ms,
+                    config.water_level_target,
+                    sensors,
+                    "water_drain_phase",
+                );
+            }
+            WaterSubState::Starting => {
+                // start_fill sets sub_state to Filling immediately, so this should never be reached
+                // but guard against it anyway
+                log::warn!("[WATER] Unexpected Starting state — start_drain was not called?");
+            }
+            _ => {} // Filling or Draining — normal tick below
         }
 
         let (event, hw_events) = ctx.water.tick(now_ms, sensors, config);

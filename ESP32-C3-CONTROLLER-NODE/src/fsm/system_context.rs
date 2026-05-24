@@ -6,7 +6,6 @@ use super::actors::{
     dosing_actor::DosingActor, safety_guard::SafetyGuard, water_actor::WaterActor,
 };
 use super::types::PendingCalibrationSample;
-use crate::fsm::local_health_and_diagnostic::LocalHealthAndDiagnostic;
 use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
 
 pub type CronSchedule = String;
@@ -97,7 +96,7 @@ impl SystemContext {
         let p = &mut self.peripherals;
         if let Some(v) = pd.osaka_pump {
             p.pump_status.osaka_pump = v;
-            p.osaka_active = v;
+            // Đã xóa p.osaka_active = v; (Task 2)
         }
         if let Some(v) = pd.osaka_pwm {
             p.pump_status.osaka_pwm = Some(v);
@@ -131,8 +130,14 @@ impl SystemContext {
             if *new_phase != self.phase {
                 // Phase đang thay đổi — lưu lại để observer có thể emit transition event
                 delta.previous_phase = Some(self.phase.clone());
-                delta.phase_start_before = self.phase_start_ms; // THIẾU DÒNG NÀY
+                delta.phase_start_before = self.phase_start_ms;
             }
+        }
+
+        // --- TASK 1 FIX ---
+        // Ghi lại previous_phase vào context để MQTT payload build_status_msg có thể lấy được
+        if let Some(ref prev) = delta.previous_phase {
+            self.previous_phase = Some(prev.clone());
         }
 
         if let Some(phase) = delta.phase.as_ref() {
@@ -293,7 +298,6 @@ impl Default for SystemContext {
 
 pub struct PeripheralState {
     pub pump_status: PumpStatus,
-    pub osaka_active: bool,
     pub osaka_pwm: u32,
     pub is_misting_active: bool,
     pub last_mist_toggle_time: u64,
@@ -308,7 +312,6 @@ pub struct PeripheralState {
 impl PeripheralState {
     pub fn reset(&mut self, now_sec: u64) {
         self.pump_status = PumpStatus::default();
-        self.osaka_active = false;
         self.osaka_pwm = 0;
         self.is_misting_active = false;
         self.is_scheduled_mixing_active = false;
@@ -392,7 +395,6 @@ pub struct NvsSnapshot {
     #[serde(default)]
     pub ph_variance_baseline: f32,
 
-    // SỬA Ở ĐÂY: Mở rộng từ Option<[f32; 8]> lên Option<[f32; 32]> để lưu toàn bộ ma trận 4x8
     #[serde(default)]
     pub interaction_matrix: Option<[f32; 32]>,
 
@@ -431,7 +433,6 @@ impl Default for PeripheralState {
     fn default() -> Self {
         Self {
             pump_status: PumpStatus::default(),
-            osaka_active: false,
             osaka_pwm: 0,
             is_misting_active: false,
             last_mist_toggle_time: 0,
@@ -468,7 +469,7 @@ impl Default for AutoTuner {
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
             interaction_matrix: InteractionMatrix::from_scalar(0.015, 0.02, 0.025, 0.05, 0.04),
-            kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1), // Tự động tạo mảng 8 trục bên trong driver mới
+            kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1),
             matrix_update_count: 0,
             matrix_is_warm: false,
         }
@@ -560,7 +561,7 @@ impl AutoTuner {
         config: &hydragrow_shared::ControllerConfig,
         now_ms: u64,
     ) -> String {
-        let flat = self.interaction_matrix.as_flat(); // Bây giờ trả về [f32; 32]
+        let flat = self.interaction_matrix.as_flat();
 
         serde_json::json!({
             "type": "runtime_calibration_update",
@@ -577,7 +578,6 @@ impl AutoTuner {
                 "interaction_matrix": flat,
                 "matrix_update_count": self.matrix_update_count,
                 "matrix_is_warm": self.matrix_is_warm,
-                // ĐỒNG BỘ: Đẩy đủ cấu trúc mảng 8 trục Kalman tự tin lên MQTT Server
                 "kalman_confidence": [
                     self.kalman.confidence(0), // Nutrient A
                     self.kalman.confidence(1), // Nutrient B
@@ -686,6 +686,7 @@ impl Default for SingleGainLearner {
         }
     }
 }
+
 impl Default for GainLearner {
     fn default() -> Self {
         Self {
@@ -1041,3 +1042,41 @@ impl AutoTuner {
         ec_degraded || ph_degraded
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::fsm::tick_result::ContextDelta;
+//     use hydragrow_shared::fsm::SystemPhase;
+//
+//     #[test]
+//     fn apply_delta_sets_previous_phase_on_transition() {
+//         let mut ctx = SystemContext::default();
+//         assert_eq!(ctx.phase, SystemPhase::Booting);
+//         assert!(ctx.previous_phase.is_none());
+//
+//         let mut delta = ContextDelta::default();
+//         delta.phase = Some(SystemPhase::Monitoring);
+//         ctx.apply_delta(&mut delta);
+//
+//         assert_eq!(ctx.phase, SystemPhase::Monitoring);
+//         assert_eq!(ctx.previous_phase, Some(SystemPhase::Booting));
+//     }
+//
+//     #[test]
+//     fn apply_delta_does_not_overwrite_previous_phase_when_phase_unchanged() {
+//         let mut ctx = SystemContext::default();
+//
+//         // First transition: Booting → Monitoring
+//         let mut delta1 = ContextDelta::default();
+//         delta1.phase = Some(SystemPhase::Monitoring);
+//         ctx.apply_delta(&mut delta1);
+//
+//         // Second delta: no phase change
+//         let mut delta2 = ContextDelta::default();
+//         ctx.apply_delta(&mut delta2);
+//
+//         // previous_phase should still be Booting, not overwritten by Monitoring
+//         assert_eq!(ctx.previous_phase, Some(SystemPhase::Booting));
+//     }
+// }

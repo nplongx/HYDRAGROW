@@ -442,6 +442,10 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
         .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
         .count();
 
+    // Populate log_drop_count from the global atomic counter
+    let mut diagnostics_snapshot = ctx.diagnostic.clone();
+    diagnostics_snapshot.log_drop_count = crate::fsm::utils::get_log_drop_count();
+
     let payload = FsmSnapshot {
         online: true,
         current_phase: ctx.phase.clone(),
@@ -453,7 +457,7 @@ fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
             refill_count: refill_count as u32,
             drain_count: drain_count as u32,
         },
-        diagnostics: Some(ctx.diagnostic.clone()),
+        diagnostics: Some(diagnostics_snapshot),
     };
 
     serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string())

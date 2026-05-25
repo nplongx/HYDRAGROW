@@ -103,9 +103,6 @@ pub struct BasicSystemLogMetadata {
     pub skip_reason: Option<String>,
 }
 
-// Đối với Dosing, bạn đã có sẵn `DosingReportPayload` ở Backend,
-// ta có thể tái sử dụng nó hoặc bọc lại bằng một struct thống nhất.
-
 /// Giao thức chung giao tiếp giữa Firmware và Backend cho System Log
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event_type")] // Tự động chèn field "event_type": "WaterEvent" vào JSON

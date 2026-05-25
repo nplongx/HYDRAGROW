@@ -40,7 +40,7 @@ impl PhaseTick for WaterRefillingPhase {
             _ => {} // Filling or Draining — normal tick below
         }
 
-        let (event, hw_events) = ctx.water.tick(now_ms, sensors, config);
+        let (event, hw_events, sys_log) = ctx.water.tick(now_ms, sensors, config);
         result.events.extend(hw_events);
 
         if let WaterEvent::Done {
@@ -92,7 +92,7 @@ impl PhaseTick for WaterDrainingPhase {
             _ => {} // Filling or Draining — normal tick below
         }
 
-        let (event, hw_events) = ctx.water.tick(now_ms, sensors, config);
+        let (event, hw_events, sys_log) = ctx.water.tick(now_ms, sensors, config);
         result.events.extend(hw_events);
 
         if let WaterEvent::Done {

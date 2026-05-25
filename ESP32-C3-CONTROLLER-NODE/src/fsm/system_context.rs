@@ -8,6 +8,8 @@ use super::actors::{
 use super::types::PendingCalibrationSample;
 use crate::fsm::matrix::{InteractionMatrix, KalmanCovarianceDiag};
 
+const DEVICE_ID: &'static str = "device_001";
+
 pub type CronSchedule = String;
 
 // --- BỘ GIÁM SÁT ADAPTIVE TÍN HIỆU PHẲNG ---
@@ -280,7 +282,7 @@ impl Default for SystemContext {
             phase_start_ms: None,
             phase_finish_ms: None,
             dosing: DosingActor::new(),
-            water: WaterActor::new(),
+            water: WaterActor::new(DEVICE_ID),
             safety: SafetyGuard::new(),
             calibration: CalibrationSampler::default(),
             tuner: AutoTuner::default(),

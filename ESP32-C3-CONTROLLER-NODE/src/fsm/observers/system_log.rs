@@ -5,10 +5,8 @@
 
 use super::ObserverContext;
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
-use hydragrow_shared::log::{
-    BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog,
-};
-use log::warn;
+use hydragrow_shared::log::{LogCategory, LogLevel, SystemLogPublisher, SystemLogRecord};
+use tracing::warn;
 
 pub struct SystemLogObserver {
     /// Đếm số pump-on events kể từ boot (dùng để correlate log)
@@ -106,33 +104,16 @@ impl SystemLogObserver {
         title: &str,
         message: String,
     ) {
-        let ts = oc.now_ms;
-        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
-            source: "system_log_observer".to_string(),
-            message,
-            skip_reason: None,
+        let publisher = SystemLogPublisher::new(oc.mqtt_tx, crate::fsm::utils::log_drop_counter());
+        publisher.publish_basic(SystemLogRecord {
+            device_id: &oc.config.device_id,
+            level,
+            category,
+            title,
+            source: "system_log_observer",
+            message: &message,
             cycle_id: None,
+            timestamp_ms: oc.now_ms,
         });
-
-        let log = match level {
-            LogLevel::Info => {
-                UnifiedSystemLog::info(&oc.config.device_id, category, title, event, ts)
-            }
-            LogLevel::Warning => {
-                UnifiedSystemLog::warning(&oc.config.device_id, category, title, event, ts)
-            }
-            LogLevel::Critical => {
-                UnifiedSystemLog::critical(&oc.config.device_id, category, title, event, ts)
-            }
-            LogLevel::Success => {
-                UnifiedSystemLog::success(&oc.config.device_id, category, title, event, ts)
-            }
-        };
-
-        if let Ok(json) = serde_json::to_string(&log) {
-            if oc.mqtt_tx.send(json).is_err() {
-                warn!("⚠️ [SYSLOG] MQTT channel full in observer");
-            }
-        }
     }
 }

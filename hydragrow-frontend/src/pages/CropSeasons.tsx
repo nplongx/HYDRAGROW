@@ -64,23 +64,23 @@ export const CropSeasons = () => {
       />
 
       {/* --- PHẦN 1: MÙA VỤ ĐANG CHẠY HOẶC FORM TẠO MỚI --- */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mb-6">
+      <div className="bg-white border border-emerald-100 rounded-xl overflow-hidden mb-6">
         {activeSeason ? (
           <div className="p-5 md:p-6 flex flex-col gap-5">
             {/* Header Thẻ Đang chạy */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-2 text-slate-100">
+            <div className="flex items-center justify-between border-b border-emerald-100 pb-4">
+              <div className="flex items-center gap-2 text-emerald-950">
                 <Play size={18} className="text-emerald-500 fill-emerald-500/20" />
                 <h2 className="text-base font-semibold">Mùa vụ hiện tại</h2>
               </div>
 
               <div className="flex items-center gap-2">
                 {isEditing ? (
-                  <button onClick={() => setIsEditing(false)} className="p-1.5 bg-slate-800 text-slate-400 rounded-lg hover:text-white transition-colors">
+                  <button onClick={() => setIsEditing(false)} className="p-1.5 bg-emerald-100 text-emerald-800/80 rounded-lg hover:text-white transition-colors">
                     <X size={16} />
                   </button>
                 ) : (
-                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 hover:text-white text-xs font-medium transition-colors border border-slate-700">
+                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-900 rounded-lg hover:bg-emerald-200 hover:text-white text-xs font-medium transition-colors border border-emerald-200">
                     <Edit3 size={14} /> Sửa
                   </button>
                 )}
@@ -98,13 +98,13 @@ export const CropSeasons = () => {
                   <InputGroup label="Giống cây trồng" type="text" value={editPlant} onChange={(e: any) => setEditPlant(e.target.value)} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-300">Ghi chú (Nhật ký sinh trưởng)</label>
+                  <label className="text-sm font-medium text-emerald-900">Ghi chú (Nhật ký sinh trưởng)</label>
                   <textarea
                     rows={3}
                     value={editDesc}
                     onChange={(e) => setEditDesc(e.target.value)}
                     placeholder="Ví dụ: cập nhật liều phân, thay đổi EC, ghi chú sâu bệnh..."
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 hover:border-slate-700 resize-none transition-colors"
+                    className="w-full bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 hover:border-emerald-200 resize-none transition-colors"
                   ></textarea>
                 </div>
                 <button
@@ -116,29 +116,29 @@ export const CropSeasons = () => {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/50 p-4 rounded-xl border border-slate-800/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-50/80 p-4 rounded-xl border border-emerald-100">
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-slate-500">Tên mùa vụ</p>
-                  <p className="text-base font-semibold text-slate-100">{activeSeason.name}</p>
+                  <p className="text-xs font-medium text-emerald-700/75">Tên mùa vụ</p>
+                  <p className="text-base font-semibold text-emerald-950">{activeSeason.name}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-slate-500">Thời gian bắt đầu</p>
-                  <p className="text-sm font-medium text-slate-200 flex items-center gap-1.5">
-                    <Calendar size={14} className="text-slate-400" />
+                  <p className="text-xs font-medium text-emerald-700/75">Thời gian bắt đầu</p>
+                  <p className="text-sm font-medium text-emerald-950 flex items-center gap-1.5">
+                    <Calendar size={14} className="text-emerald-800/80" />
                     {new Date(activeSeason.start_time).toLocaleString('vi-VN')}
                   </p>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-slate-500">Giống cây trồng</p>
-                  <p className="text-sm font-medium text-slate-200 flex items-center gap-1.5">
-                    <Leaf size={14} className="text-slate-400" />
+                  <p className="text-xs font-medium text-emerald-700/75">Giống cây trồng</p>
+                  <p className="text-sm font-medium text-emerald-950 flex items-center gap-1.5">
+                    <Leaf size={14} className="text-emerald-800/80" />
                     {activeSeason.plant_type || 'Chưa cập nhật'}
                   </p>
                 </div>
-                <div className="space-y-1 md:col-span-2 pt-2 border-t border-slate-800/50">
-                  <p className="text-xs font-medium text-slate-500 mb-1.5">Ghi chú</p>
-                  <div className="text-sm text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-start gap-2">
-                    <FileText size={16} className="text-slate-500 shrink-0 mt-0.5" />
+                <div className="space-y-1 md:col-span-2 pt-2 border-t border-emerald-100">
+                  <p className="text-xs font-medium text-emerald-700/75 mb-1.5">Ghi chú</p>
+                  <div className="text-sm text-emerald-900 bg-white p-3 rounded-lg border border-emerald-100 flex items-start gap-2">
+                    <FileText size={16} className="text-emerald-700/75 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">{activeSeason.description || 'Chưa có ghi chú cho mùa vụ này.'}</p>
                   </div>
                 </div>
@@ -160,7 +160,7 @@ export const CropSeasons = () => {
           </div>
         ) : (
           <form onSubmit={handleCreate} className="p-5 md:p-6 flex flex-col gap-5">
-            <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-4">
+            <h2 className="text-base font-semibold text-emerald-950 flex items-center gap-2 border-b border-emerald-100 pb-4">
               <Sprout size={20} className="text-emerald-500" /> Tạo mùa vụ mới
             </h2>
 
@@ -169,13 +169,13 @@ export const CropSeasons = () => {
               <InputGroup label="Giống cây trồng" type="text" value={newPlant} onChange={(e: any) => setNewPlant(e.target.value)} />
 
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-slate-300">Ghi chú ban đầu</label>
+                <label className="text-sm font-medium text-emerald-900">Ghi chú ban đầu</label>
                 <textarea
                   rows={2}
                   placeholder="Nguồn gốc hạt giống, EC mục tiêu khởi điểm..."
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-blue-500 hover:border-slate-700 resize-none transition-colors"
+                  className="w-full bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 hover:border-emerald-200 resize-none transition-colors"
                 />
               </div>
             </div>
@@ -192,10 +192,10 @@ export const CropSeasons = () => {
       </div>
 
       {/* --- PHẦN 2: LỊCH SỬ MÙA VỤ --- */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="p-4 md:p-5 border-b border-slate-800 bg-slate-800/20">
-          <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <History size={18} className="text-slate-400" />
+      <div className="bg-white border border-emerald-100 rounded-xl overflow-hidden">
+        <div className="p-4 md:p-5 border-b border-emerald-100 bg-emerald-50/70">
+          <h2 className="text-sm font-semibold text-emerald-950 flex items-center gap-2">
+            <History size={18} className="text-emerald-800/80" />
             Lịch sử mùa vụ
           </h2>
         </div>
@@ -207,27 +207,27 @@ export const CropSeasons = () => {
             </div>
           ) : (
             filteredHistory.map((season) => (
-              <div key={season.id} className="p-4 md:p-5 hover:bg-slate-800/30 transition-colors">
+              <div key={season.id} className="p-4 md:p-5 hover:bg-emerald-100/30 transition-colors">
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-medium text-slate-200">{season.name}</h3>
+                  <h3 className="font-medium text-emerald-950">{season.name}</h3>
                   {season.status === 'active' ? (
-                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[10px] font-medium flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 rounded text-[10px] font-medium flex items-center gap-1.5">
                       <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span> Đang chạy
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 bg-slate-800 text-slate-400 border border-slate-700 rounded text-[10px] font-medium flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800/80 border border-emerald-200 rounded text-[10px] font-medium flex items-center gap-1.5">
                       <CheckCircle2 size={10} /> Đã đóng
                     </span>
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs font-medium text-slate-500">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs font-medium text-emerald-700/75">
                   <span className="flex items-center gap-1.5">
-                    <Leaf size={14} className="text-slate-400" />
+                    <Leaf size={14} className="text-emerald-800/80" />
                     {season.plant_type || 'Chưa cập nhật'}
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <Calendar size={14} className="text-slate-400" />
+                    <Calendar size={14} className="text-emerald-800/80" />
                     {new Date(season.start_time).toLocaleDateString('vi-VN')}
                     {season.end_time ? ` → ${new Date(season.end_time).toLocaleDateString('vi-VN')}` : ' → Nay'}
                   </span>

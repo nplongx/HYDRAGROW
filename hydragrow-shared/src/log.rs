@@ -1,4 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    mpsc::Sender,
+};
 
 /// Cấp độ nghiêm trọng của Log
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -126,6 +130,141 @@ pub struct UnifiedSystemLog {
     pub title: String,
     pub event: SystemLogEvent, // Chứa cả event_type và metadata chi tiết
     pub timestamp_ms: u64,
+}
+
+pub struct SystemLogRecord<'a> {
+    pub device_id: &'a str,
+    pub level: LogLevel,
+    pub category: LogCategory,
+    pub title: &'a str,
+    pub source: &'a str,
+    pub message: &'a str,
+    pub cycle_id: Option<&'a str>,
+    pub timestamp_ms: u64,
+}
+
+pub struct SystemLogPublisher<'a> {
+    tx: &'a Sender<String>,
+    drop_count: &'a AtomicU32,
+}
+
+impl<'a> SystemLogPublisher<'a> {
+    pub fn new(tx: &'a Sender<String>, drop_count: &'a AtomicU32) -> Self {
+        Self { tx, drop_count }
+    }
+
+    pub fn publish_basic(&self, record: SystemLogRecord<'_>) {
+        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            source: record.source.to_string(),
+            message: record.message.to_string(),
+            skip_reason: None,
+            cycle_id: record.cycle_id.map(ToString::to_string),
+        });
+
+        self.publish_event(
+            record.device_id,
+            record.level,
+            record.category,
+            record.title,
+            event,
+            record.timestamp_ms,
+        );
+    }
+
+    pub fn publish_event(
+        &self,
+        device_id: &str,
+        level: LogLevel,
+        category: LogCategory,
+        title: &str,
+        event: SystemLogEvent,
+        timestamp_ms: u64,
+    ) {
+        trace_system_log_event(device_id, &level, &category, title, &event, timestamp_ms);
+
+        let log = match level {
+            LogLevel::Info => {
+                UnifiedSystemLog::info(device_id, category, title, event, timestamp_ms)
+            }
+            LogLevel::Warning => {
+                UnifiedSystemLog::warning(device_id, category, title, event, timestamp_ms)
+            }
+            LogLevel::Critical => {
+                UnifiedSystemLog::critical(device_id, category, title, event, timestamp_ms)
+            }
+            LogLevel::Success => {
+                UnifiedSystemLog::success(device_id, category, title, event, timestamp_ms)
+            }
+        };
+
+        match serde_json::to_string(&log) {
+            Ok(json) => self.publish_json(json),
+            Err(error) => {
+                tracing::error!(target: "hydragrow.system_log", %device_id, %title, ?error, "failed to serialize system log");
+            }
+        }
+    }
+
+    fn publish_json(&self, json: String) {
+        if self.tx.send(json).is_err() {
+            let previous = self.drop_count.fetch_add(1, Ordering::Relaxed);
+            if previous % 10 == 0 {
+                tracing::warn!(
+                    target: "hydragrow.system_log",
+                    dropped_logs = previous + 1,
+                    "MQTT system log channel is full or closed"
+                );
+            }
+        }
+    }
+}
+
+fn trace_system_log_event(
+    device_id: &str,
+    level: &LogLevel,
+    category: &LogCategory,
+    title: &str,
+    event: &SystemLogEvent,
+    timestamp_ms: u64,
+) {
+    match level {
+        LogLevel::Info | LogLevel::Success => {
+            tracing::info!(
+                target: "hydragrow.system_log",
+                %device_id,
+                level = level.as_str(),
+                category = category.as_str(),
+                %title,
+                ?event,
+                timestamp_ms,
+                "system log"
+            );
+        }
+        LogLevel::Warning => {
+            tracing::warn!(
+                target: "hydragrow.system_log",
+                %device_id,
+                level = level.as_str(),
+                category = category.as_str(),
+                %title,
+                ?event,
+                timestamp_ms,
+                "system log"
+            );
+        }
+        LogLevel::Critical => {
+            tracing::error!(
+                target: "hydragrow.system_log",
+                %device_id,
+                level = level.as_str(),
+                category = category.as_str(),
+                %title,
+                ?event,
+                timestamp_ms,
+                "system log"
+            );
+        }
+    }
 }
 
 impl UnifiedSystemLog {
@@ -257,5 +396,68 @@ impl UnifiedSystemLog {
         };
 
         serde_json::to_string(&log).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+#[cfg(test)]
+mod publisher_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::mpsc;
+
+    #[test]
+    fn publisher_builds_basic_system_log_payload() {
+        let (tx, rx) = mpsc::channel();
+        let drop_count = AtomicU32::new(0);
+        let publisher = SystemLogPublisher::new(&tx, &drop_count);
+
+        publisher.publish_basic(SystemLogRecord {
+            device_id: "device-1",
+            level: LogLevel::Warning,
+            category: LogCategory::UserAction,
+            title: "Safety Timeout",
+            source: "fsm_command",
+            message: "Pump stopped",
+            cycle_id: Some("cycle-7"),
+            timestamp_ms: 1234,
+        });
+
+        let payload = rx.recv().expect("system log payload");
+        let decoded: UnifiedSystemLog = serde_json::from_str(&payload).expect("valid json");
+        assert_eq!(decoded.device_id, "device-1");
+        assert_eq!(decoded.level, LogLevel::Warning);
+        assert_eq!(decoded.category, LogCategory::UserAction);
+        assert_eq!(decoded.title, "Safety Timeout");
+        assert_eq!(decoded.timestamp_ms, 1234);
+        match decoded.event {
+            SystemLogEvent::BasicSystemLog(metadata) => {
+                assert_eq!(metadata.source, "fsm_command");
+                assert_eq!(metadata.message, "Pump stopped");
+                assert_eq!(metadata.cycle_id.as_deref(), Some("cycle-7"));
+            }
+            _ => panic!("expected basic system log"),
+        }
+        assert_eq!(drop_count.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn publisher_increments_drop_count_when_channel_is_closed() {
+        let (tx, rx) = mpsc::channel::<String>();
+        drop(rx);
+        let drop_count = AtomicU32::new(0);
+        let publisher = SystemLogPublisher::new(&tx, &drop_count);
+
+        publisher.publish_basic(SystemLogRecord {
+            device_id: "device-1",
+            level: LogLevel::Info,
+            category: LogCategory::System,
+            title: "Dropped",
+            source: "test",
+            message: "closed",
+            cycle_id: None,
+            timestamp_ms: 1,
+        });
+
+        assert_eq!(drop_count.load(Ordering::Relaxed), 1);
     }
 }

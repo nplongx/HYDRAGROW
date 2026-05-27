@@ -13,12 +13,12 @@ import { StateView } from '../components/ui/StateView';
 import { loadAppSettings } from '../platform/settings';
 import { UnifiedDeviceConfig } from '../types/models';
 
-// Màu sắc Minimalist
+// Màu sắc biểu đồ trên nền sáng
 const CHART_THEMES: Record<string, any> = {
-  cyan: { stroke: '#06b6d4', fill1: '#06b6d4', fill2: '#083344', text: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-  fuchsia: { stroke: '#d946ef', fill1: '#d946ef', fill2: '#4a044e', text: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10' },
-  orange: { stroke: '#f97316', fill1: '#f97316', fill2: '#431407', text: 'text-orange-400', bg: 'bg-orange-500/10' },
-  blue: { stroke: '#3b82f6', fill1: '#3b82f6', fill2: '#172554', text: 'text-blue-400', bg: 'bg-blue-500/10' }
+  cyan: { stroke: '#0284c7', fill1: '#0284c7', fill2: '#e0f2fe', text: 'text-cyan-700', bg: 'bg-cyan-50' },
+  fuchsia: { stroke: '#c026d3', fill1: '#c026d3', fill2: '#fae8ff', text: 'text-fuchsia-700', bg: 'bg-fuchsia-50' },
+  orange: { stroke: '#ea580c', fill1: '#ea580c', fill2: '#ffedd5', text: 'text-orange-700', bg: 'bg-orange-50' },
+  blue: { stroke: '#2563eb', fill1: '#2563eb', fill2: '#dbeafe', text: 'text-blue-700', bg: 'bg-blue-50' }
 };
 
 // --- FlatChartCard ---
@@ -41,8 +41,8 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-900 border border-slate-700 px-3 py-2 rounded-lg shadow-xl">
-          <p className="text-slate-400 text-[11px] mb-1 font-medium">
+        <div className="bg-white border border-emerald-200 px-3 py-2 rounded-lg shadow-xl">
+          <p className="text-emerald-800/80 text-[11px] mb-1 font-medium">
             {payload[0].payload.fullTime}
           </p>
           <p className={`text-base font-semibold ${theme.text}`}>
@@ -55,19 +55,19 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 transition-colors hover:border-slate-700">
+    <div className="bg-white border border-emerald-100 rounded-xl p-5 transition-colors hover:border-emerald-300 shadow-sm shadow-emerald-950/5">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${theme.bg}`}>
             <Icon size={18} className={theme.text} strokeWidth={2.5} />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
-            <div className="flex flex-wrap gap-x-3 mt-1 text-[11px] font-medium text-slate-500">
-              <p>Hiện tại: <span className="text-slate-200">{stats.current}</span></p>
-              <p>TB: <span className="text-slate-200">{stats.avg}</span></p>
-              <p>Min: <span className="text-slate-200">{stats.min}</span></p>
-              <p>Max: <span className="text-slate-200">{stats.max}</span></p>
+            <h3 className="text-sm font-semibold text-emerald-950">{title}</h3>
+            <div className="flex flex-wrap gap-x-3 mt-1 text-[11px] font-medium text-emerald-700/75">
+              <p>Hiện tại: <span className="text-emerald-950">{stats.current}</span></p>
+              <p>TB: <span className="text-emerald-950">{stats.avg}</span></p>
+              <p>Min: <span className="text-emerald-950">{stats.min}</span></p>
+              <p>Max: <span className="text-emerald-950">{stats.max}</span></p>
             </div>
           </div>
         </div>
@@ -81,18 +81,18 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
                 <stop offset="95%" stopColor={theme.fill2} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-            <XAxis dataKey="time" stroke="rgba(255,255,255,0.1)" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} minTickGap={15} tickMargin={10} />
-            <YAxis stroke="rgba(255,255,255,0.1)" tick={{ fill: '#64748b', fontSize: 10 }} tickLine={false} axisLine={false} width={40}
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(21,128,61,0.12)" vertical={false} />
+            <XAxis dataKey="time" stroke="rgba(21,128,61,0.18)" tick={{ fill: '#4b6354', fontSize: 10 }} tickLine={false} minTickGap={15} tickMargin={10} />
+            <YAxis stroke="rgba(21,128,61,0.18)" tick={{ fill: '#4b6354', fontSize: 10 }} tickLine={false} axisLine={false} width={40}
               domain={[
                 (dataMin: number) => Math.max(0, Math.floor(Number(dataMin) * 0.9)),
                 (dataMax: number) => Math.ceil(Number(dataMax) * 1.1)
               ]}
               allowDecimals={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(21,128,61,0.18)', strokeWidth: 1 }} />
             <Area type="monotone" dataKey={dataKey} stroke={theme.stroke} fill={`url(#gradient-${dataKey})`}
-              strokeWidth={2} activeDot={{ r: 5, fill: theme.stroke, stroke: '#0f172a', strokeWidth: 2 }}
+              strokeWidth={2} activeDot={{ r: 5, fill: theme.stroke, stroke: '#ffffff', strokeWidth: 2 }}
               isAnimationActive={data.length < 150} animationDuration={1000}
             />
           </AreaChart>
@@ -351,7 +351,7 @@ const Analytics = () => {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 size={32} className="text-blue-500 animate-spin" />
-        <p className="text-sm font-medium text-slate-500">Đang tải cấu hình...</p>
+        <p className="text-sm font-medium text-emerald-700/75">Đang tải cấu hình...</p>
       </div>
     );
   }
@@ -364,17 +364,17 @@ const Analytics = () => {
       // subtitle="Theo dõi biến động và khai thác dữ liệu chuỗi thời gian"
       />
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-5">
+      <div className="bg-white border border-emerald-100 rounded-xl p-4 md:p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Lọc Mùa Vụ */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
+            <label className="text-xs font-medium text-emerald-800/80 flex items-center gap-1.5 pl-1">
               <Filter size={14} className="text-emerald-500" /> Mùa vụ
             </label>
             <select
               value={selectedSeasonId}
               onChange={(e) => setSelectedSeasonId(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-500"
+              className="bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-500"
             >
               <option value="realtime">Mùa hiện tại</option>
               {allSeasons.map((s) => (
@@ -387,13 +387,13 @@ const Analytics = () => {
 
           {/* Khung Thời Gian */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
+            <label className="text-xs font-medium text-emerald-800/80 flex items-center gap-1.5 pl-1">
               <Clock size={14} className="text-blue-500" /> Thời gian
             </label>
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-blue-500"
+              className="bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600"
             >
               {selectedSeasonId !== 'realtime' && <option value="all">Toàn bộ mùa vụ</option>}
               <option value="24h">24 Giờ {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
@@ -404,14 +404,14 @@ const Analytics = () => {
 
           {/* Tần Suất Lọc */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5 pl-1">
+            <label className="text-xs font-medium text-emerald-800/80 flex items-center gap-1.5 pl-1">
               <Timer size={14} className="text-purple-500" /> Tần suất điểm
             </label>
             <div className="flex gap-2">
               <select
                 value={intervalMode}
                 onChange={(e) => setIntervalMode(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-purple-500"
+                className="flex-1 bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-purple-500"
               >
                 <option value="default">Không Lọc (Mặc định)</option>
                 <option value="60">1 Phút / Điểm</option>
@@ -427,7 +427,7 @@ const Analytics = () => {
                     min={defaultIntervalSec}
                     value={customIntervalValue}
                     onChange={(e) => setCustomIntervalValue(Number(e.target.value))}
-                    className="w-full h-full bg-slate-950 border border-purple-500/50 text-purple-300 text-sm rounded-lg px-2 text-center outline-none focus:border-purple-500"
+                    className="w-full h-full bg-white border border-purple-500/50 text-purple-300 text-sm rounded-lg px-2 text-center outline-none focus:border-purple-500"
                     placeholder="giây"
                   />
                 </div>
@@ -441,13 +441,13 @@ const Analytics = () => {
         {isFetching ? (
           <div className="h-[40vh] flex flex-col items-center justify-center gap-4">
             <Loader2 size={32} className="text-blue-500 animate-spin" />
-            <p className="text-sm font-medium text-slate-500">Đang trích xuất dữ liệu chuỗi thời gian...</p>
+            <p className="text-sm font-medium text-emerald-700/75">Đang trích xuất dữ liệu chuỗi thời gian...</p>
           </div>
         ) : fetchError ? (
           <div className="h-[40vh] flex flex-col items-center justify-center gap-4 text-center">
             <AlertTriangle size={32} className="text-amber-500" />
-            <p className="text-sm font-medium text-slate-300">Lỗi tải dữ liệu</p>
-            <p className="text-xs text-slate-500 max-w-md">{fetchError}</p>
+            <p className="text-sm font-medium text-emerald-900">Lỗi tải dữ liệu</p>
+            <p className="text-xs text-emerald-700/75 max-w-md">{fetchError}</p>
             <button
               onClick={() => loadHistory()}
               className="mt-2 px-4 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600"

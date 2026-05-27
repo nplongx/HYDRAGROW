@@ -135,4 +135,3 @@ pub struct WaterCycleEvent {
     pub trigger: String,
     pub timestamp_ms: u64,
 }
-

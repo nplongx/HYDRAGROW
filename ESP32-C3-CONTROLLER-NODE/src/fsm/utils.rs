@@ -1,5 +1,5 @@
 use hydragrow_shared::{
-    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog},
+    log::{LogCategory, LogLevel, SystemLogEvent, SystemLogPublisher},
     ControllerConfig,
 };
 use std::{
@@ -88,29 +88,14 @@ pub fn send_system_log(
     event: SystemLogEvent,
 ) {
     let ts = get_current_time_ms();
-    let log = match level {
-        LogLevel::Info => UnifiedSystemLog::info(device_id, category, title, event, ts),
-        LogLevel::Warning => UnifiedSystemLog::warning(device_id, category, title, event, ts),
-        LogLevel::Critical => UnifiedSystemLog::critical(device_id, category, title, event, ts),
-        LogLevel::Success => UnifiedSystemLog::success(device_id, category, title, event, ts),
-    };
-
-    if let Ok(json_str) = serde_json::to_string(&log) {
-        if tx.send(json_str).is_err() {
-            let prev = LOG_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
-            // Log cảnh báo mỗi 10 drops để tránh vòng lặp vô hạn
-            if prev % 10 == 0 {
-                log::warn!(
-                    "⚠️ MQTT log channel đầy! Đã drop {} log kể từ boot.",
-                    prev + 1
-                );
-            }
-        }
-    } else {
-        log::error!("Lỗi Serialize SystemLogEvent!");
-    }
+    let publisher = SystemLogPublisher::new(tx, &LOG_DROP_COUNT);
+    publisher.publish_event(device_id, level, category, title, event, ts);
 }
 
 pub fn get_log_drop_count() -> u32 {
     LOG_DROP_COUNT.load(Ordering::Relaxed)
+}
+
+pub fn log_drop_counter() -> &'static AtomicU32 {
+    &LOG_DROP_COUNT
 }

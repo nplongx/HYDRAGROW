@@ -6,4 +6,3 @@ pub mod transition;
 pub use cycle::{DosingCycleEvent, WaterCycleEvent};
 pub use health::DeviceHealthSnapshot;
 pub use transition::FsmTransitionEvent;
-

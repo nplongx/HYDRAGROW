@@ -14,6 +14,7 @@ use crate::fsm::phase_tick::PhaseTick;
 use crate::fsm::system_context::SystemContext;
 use crate::fsm::tick_result::{PeripheralDelta, TickResult};
 use crate::pump::WaterDirection;
+use tracing::error;
 
 pub fn tick(
     now_ms: u64,
@@ -27,7 +28,7 @@ pub fn tick(
     // Kiểm tra Sensor timeout
     if now_ms.saturating_sub(sensor_last_update_ms) > 90_000 {
         if !matches!(ctx.phase, SystemPhase::Fault(_)) {
-            log::error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
+            error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
             result.delta.phase = Some(SystemPhase::Fault(FaultCode::SensorTimeout));
             result.events.push(OrchestratorEvent::SetWaterPump {
                 direction: WaterDirection::Stop,

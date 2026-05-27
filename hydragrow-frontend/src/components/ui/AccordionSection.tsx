@@ -20,21 +20,21 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   onToggle
 }) => {
   return (
-    <section className={`bg-slate-900 rounded-xl overflow-hidden transition-colors border ${isOpen ? 'border-slate-700' : 'border-slate-800 hover:border-slate-700'}`}>
+    <section className={`bg-white rounded-xl overflow-hidden transition-colors border shadow-sm shadow-emerald-950/5 ${isOpen ? 'border-emerald-300' : 'border-emerald-100 hover:border-emerald-300'}`}>
 
       {/* Header Button */}
       <button
         onClick={onToggle}
-        className={`w-full flex items-center justify-between p-4 transition-colors ${isOpen ? 'bg-slate-800/40' : 'hover:bg-slate-800/20'}`}
+        className={`w-full flex items-center justify-between p-4 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/25 ${isOpen ? 'bg-emerald-50' : 'hover:bg-emerald-50/70'}`}
       >
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg bg-slate-950 border border-slate-800/50 ${color}`}>
+          <div className={`p-2 rounded-lg bg-emerald-50 border border-emerald-100 ${color}`}>
             <Icon size={18} strokeWidth={2} />
           </div>
-          <h2 className="text-sm font-medium text-slate-100">{title}</h2>
+          <h2 className="text-sm font-semibold text-emerald-950">{title}</h2>
         </div>
         <div className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
-          <ChevronDown size={18} className="text-slate-500" />
+          <ChevronDown size={18} className="text-emerald-700" />
         </div>
       </button>
 
@@ -44,7 +44,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
           }`}
       >
         <div className="overflow-hidden">
-          <div className="p-4 sm:p-5 border-t border-slate-800">
+          <div className="p-4 sm:p-5 border-t border-emerald-100 bg-white">
             {children}
           </div>
         </div>

@@ -19,10 +19,11 @@ function App() {
           position="top-center"
           toastOptions={{
             style: {
-              background: '#1e293b',
-              color: '#fff',
-              borderRadius: '16px',
-              border: '1px solid #334155',
+              background: '#ffffff',
+              color: '#14532d',
+              borderRadius: '14px',
+              border: '1px solid #bbf7d0',
+              boxShadow: '0 16px 40px rgba(20, 83, 45, 0.12)',
             }
           }}
         />

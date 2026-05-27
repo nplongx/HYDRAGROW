@@ -78,14 +78,14 @@ export const FaultExplanation: React.FC<{ code: string; onClose: () => void }> =
 
   return (
     <>
-      <button className="fixed inset-0 bg-black/50 z-40" onClick={onClose} aria-label="close" />
-      <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
-        <h4 className="text-sm font-semibold text-red-400">{guide.code}</h4>
-        <p className="text-xs text-slate-400 mt-1">{guide.short}</p>
+      <button className="fixed inset-0 bg-emerald-950/40 z-40" onClick={onClose} aria-label="close" />
+      <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-red-200 bg-white p-5 shadow-2xl">
+        <h4 className="text-sm font-semibold text-red-700">{guide.code}</h4>
+        <p className="text-xs text-emerald-800/75 mt-1">{guide.short}</p>
         <div className="mt-4 space-y-3 text-sm">
-          <div><p className="text-slate-500 text-xs">Nguyên nhân</p><p className="text-slate-200">{guide.reason}</p></div>
-          <div><p className="text-slate-500 text-xs">Hành động ngay</p><p className="text-slate-200">{guide.action}</p></div>
-          <div><p className="text-slate-500 text-xs">Tự phục hồi</p><p className="text-slate-200">{guide.recovery}</p></div>
+          <div><p className="text-emerald-700/75 text-xs">Nguyên nhân</p><p className="text-emerald-950">{guide.reason}</p></div>
+          <div><p className="text-emerald-700/75 text-xs">Hành động ngay</p><p className="text-emerald-950">{guide.action}</p></div>
+          <div><p className="text-emerald-700/75 text-xs">Tự phục hồi</p><p className="text-emerald-950">{guide.recovery}</p></div>
         </div>
       </div>
     </>

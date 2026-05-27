@@ -99,21 +99,21 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
   ];
 
   return (
-    <div className="space-y-4 bg-slate-900/50 border border-slate-800 p-5 rounded-xl w-full">
+    <div className="space-y-4 bg-white/85 border border-emerald-100 p-5 rounded-xl w-full">
       <div>
-        <label className="text-sm font-medium text-slate-200 flex items-center gap-2">
-          <CalendarClock size={16} className="text-slate-400" /> {label}
+        <label className="text-sm font-medium text-emerald-950 flex items-center gap-2">
+          <CalendarClock size={16} className="text-emerald-800/80" /> {label}
         </label>
-        {desc && <p className="text-xs text-slate-500 mt-1">{desc}</p>}
+        {desc && <p className="text-xs text-emerald-700/75 mt-1">{desc}</p>}
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center gap-6">
-        <div className="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 flex-shrink-0">
+        <div className="bg-white px-4 py-2 rounded-lg border border-emerald-100 flex-shrink-0">
           <input
             type="time"
             value={timeStr}
             onChange={handleTimeChange}
-            className="bg-transparent text-slate-100 text-xl font-medium outline-none text-center cursor-pointer [color-scheme:dark]"
+            className="bg-transparent text-emerald-950 text-xl font-medium outline-none text-center cursor-pointer [color-scheme:dark]"
           />
         </div>
 
@@ -121,11 +121,11 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
           <div className="flex items-center gap-3">
             <button
               onClick={setEveryDay}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isEveryDay ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isEveryDay ? 'bg-blue-600 text-white' : 'bg-emerald-100 text-emerald-800/80 hover:bg-emerald-200'}`}
             >
               Hàng ngày
             </button>
-            <span className="text-xs text-slate-500">hoặc chọn ngày:</span>
+            <span className="text-xs text-emerald-700/75">hoặc chọn ngày:</span>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -135,7 +135,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
                 <button
                   key={day.val}
                   onClick={() => toggleDay(day.val)}
-                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-blue-500/20 border-blue-500 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800/80 hover:border-emerald-400 hover:text-emerald-950'
                     }`}
                 >
                   {day.label}
@@ -406,31 +406,31 @@ const Settings = () => {
 
   // ------------------------- RENDER GIAO DIỆN -------------------------
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto pb-36 min-h-screen font-sans">
+    <div className="app-page max-w-5xl pb-36">
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex flex-col space-y-1">
-          <h1 className="text-2xl font-semibold text-slate-100 flex items-center gap-2">
-            Cài đặt hệ thống
-            <Settings2 size={22} className="text-slate-500" />
+          <h1 className="text-2xl font-bold text-emerald-950 flex items-center gap-2">
+            Cài đặt vườn khí canh
+            <Settings2 size={22} className="text-emerald-700/75" />
           </h1>
-          <p className="text-sm text-slate-500">
-            Tùy chỉnh các thông số vận hành của tủ điện
+          <p className="text-sm text-emerald-800/75 max-w-2xl">
+            Điều chỉnh mục tiêu EC, pH, nước và phun sương. Các thông số nguy hiểm được đặt trong chế độ kỹ thuật.
           </p>
         </div>
 
-        {/* Nút bật chế độ Kỹ thuật viên */}
-        <div className="flex items-center justify-between gap-4 bg-slate-900/60 md:bg-slate-900/40 p-3 rounded-xl border border-slate-800 flex-shrink-0">
+        <div className={`flex items-center justify-between gap-4 p-3 rounded-xl border flex-shrink-0 ${isAdvancedMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-emerald-100'}`}>
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg transition-colors ${isAdvancedMode ? 'bg-red-500/15 text-red-400' : 'bg-slate-800 text-slate-400'}`}>
+            <div className={`p-2 rounded-lg transition-colors ${isAdvancedMode ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800/80'}`}>
               <LockKeyhole size={16} />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-200">Chế độ nâng cao</p>
+              <p className="text-sm font-semibold text-emerald-950">Chế độ kỹ thuật</p>
+              <p className="text-[11px] text-emerald-700/75">Mở thông số bơm, ngưỡng an toàn và hiệu chuẩn sâu</p>
             </div>
           </div>
-          <Switch isOn={isAdvancedMode} onClick={setIsAdvancedMode} colorClass="bg-red-500" />
+          <Switch isOn={isAdvancedMode} onClick={setIsAdvancedMode} colorClass="bg-amber-600" />
         </div>
       </div>
 
@@ -447,24 +447,24 @@ const Settings = () => {
         {/* GENERAL */}
         <AccordionSection id="general" title="Tổng quan" icon={Power} isOpen={openSection === 'general'} onToggle={() => handleToggleSection('general')}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.is_enabled ? 'bg-blue-500/10 border-blue-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
-              <p className={`text-sm font-medium ${config.is_enabled ? 'text-blue-400' : 'text-slate-300'}`}>Kích hoạt tự động</p>
+            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.is_enabled ? 'bg-blue-50 border-blue-500/30' : 'bg-white/85 border-emerald-100'}`}>
+              <p className={`text-sm font-medium ${config.is_enabled ? 'text-blue-700' : 'text-emerald-900'}`}>Kích hoạt tự động</p>
               <Switch isOn={config.is_enabled} onClick={(val) => setConfig({ ...config, is_enabled: val })} colorClass="bg-blue-500" />
             </div>
 
-            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.emergency_shutdown ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
+            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.emergency_shutdown ? 'bg-red-500/10 border-red-500/30' : 'bg-white/85 border-emerald-100'}`}>
               <div className="flex items-center gap-3">
-                <ShieldAlert className={config.emergency_shutdown ? 'text-red-400' : 'text-slate-500'} size={20} />
-                <p className={`text-sm font-medium ${config.emergency_shutdown ? 'text-red-400' : 'text-slate-300'}`}>Dừng khẩn cấp</p>
+                <ShieldAlert className={config.emergency_shutdown ? 'text-red-400' : 'text-emerald-700/75'} size={20} />
+                <p className={`text-sm font-medium ${config.emergency_shutdown ? 'text-red-400' : 'text-emerald-900'}`}>Dừng khẩn cấp</p>
               </div>
               <Switch isOn={config.emergency_shutdown} onClick={(val) => setConfig({ ...config, emergency_shutdown: val })} colorClass="bg-red-500" />
             </div>
 
-            <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800 flex flex-col justify-center">
-              <label className="text-xs font-medium text-slate-400 mb-2 flex items-center gap-2"><Zap size={14} /> Chế độ vận hành</label>
+            <div className="p-3 bg-white/80 rounded-xl border border-emerald-100 flex flex-col justify-center">
+              <label className="text-xs font-medium text-emerald-800/80 mb-2 flex items-center gap-2"><Zap size={14} /> Chế độ vận hành</label>
               <div className="flex gap-2">
-                <button onClick={() => setConfig({ ...config, control_mode: 'auto' })} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${config.control_mode === 'auto' ? 'bg-slate-700 text-white shadow-sm' : 'bg-slate-900/80 text-slate-500 border border-slate-800 hover:bg-slate-800'}`}>Tự động</button>
-                <button onClick={() => setConfig({ ...config, control_mode: 'manual' })} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${config.control_mode === 'manual' ? 'bg-slate-700 text-white shadow-sm' : 'bg-slate-900/80 text-slate-500 border border-slate-800 hover:bg-slate-800'}`}>Thủ công</button>
+                <button onClick={() => setConfig({ ...config, control_mode: 'auto' })} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${config.control_mode === 'auto' ? 'bg-emerald-700 text-white shadow-sm' : 'bg-white/90 text-emerald-700/75 border border-emerald-100 hover:bg-emerald-100'}`}>Tự động</button>
+                <button onClick={() => setConfig({ ...config, control_mode: 'manual' })} className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${config.control_mode === 'manual' ? 'bg-emerald-700 text-white shadow-sm' : 'bg-white/90 text-emerald-700/75 border border-emerald-100 hover:bg-emerald-100'}`}>Thủ công</button>
               </div>
             </div>
           </div>
@@ -487,12 +487,12 @@ const Settings = () => {
                 <InputGroup label="Kích hoạt làm mát nhanh khi > (°C)" step="0.5" value={config.misting_temp_threshold} onChange={(e: InputEvent) => setConfig({ ...config, misting_temp_threshold: e.target.value })} />
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trời mát (Mặc định)</span></div>
+              <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-emerald-100"><span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Trời mát (Mặc định)</span></div>
               <InputGroup label="Phun sương (ms)" step="1000" value={config.misting_on_duration_ms} onChange={(e: InputEvent) => setConfig({ ...config, misting_on_duration_ms: e.target.value })} />
               <InputGroup label="Nghỉ (ms)" step="1000" value={config.misting_off_duration_ms} onChange={(e: InputEvent) => setConfig({ ...config, misting_off_duration_ms: e.target.value })} />
               <div className="hidden lg:block lg:col-span-2"></div>
 
-              <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trời nóng</span></div>
+              <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-emerald-100"><span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Trời nóng</span></div>
               <InputGroup label="Phun sương (ms)" step="1000" value={config.high_temp_misting_on_duration_ms} onChange={(e: InputEvent) => setConfig({ ...config, high_temp_misting_on_duration_ms: e.target.value })} />
               <InputGroup label="Nghỉ (ms)" step="1000" value={config.high_temp_misting_off_duration_ms} onChange={(e: InputEvent) => setConfig({ ...config, high_temp_misting_off_duration_ms: e.target.value })} />
             </div>
@@ -515,11 +515,11 @@ const Settings = () => {
             <SubCard title="Bơm cấp/xả nước" className="h-full">
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-3 bg-slate-900/40 rounded-lg border border-slate-800"><span className="text-sm text-slate-300 font-medium">Tự động bù nước</span><Switch isOn={config.auto_refill_enabled} onClick={(val) => setConfig({ ...config, auto_refill_enabled: val })} /></div>
-                  <div className="flex items-center justify-between p-3 bg-slate-900/40 rounded-lg border border-slate-800"><span className="text-sm text-slate-300 font-medium">Tự động xả tràn</span><Switch isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} /></div>
+                  <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900 font-medium">Tự động bù nước</span><Switch isOn={config.auto_refill_enabled} onClick={(val) => setConfig({ ...config, auto_refill_enabled: val })} /></div>
+                  <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900 font-medium">Tự động xả tràn</span><Switch isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} /></div>
                 </div>
-                <div className="pt-3 border-t border-slate-800/50">
-                  <div className="flex items-center justify-between mb-3"><span className="text-sm text-slate-300 font-medium">Tự xả loãng khi quá EC</span><Switch isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} /></div>
+                <div className="pt-3 border-t border-emerald-100">
+                  <div className="flex items-center justify-between mb-3"><span className="text-sm text-emerald-900 font-medium">Tự xả loãng khi quá EC</span><Switch isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} /></div>
                   {config.auto_dilute_enabled && (
                     <InputGroup label="Mức nước xả đi (cm)" step="0.5" value={config.dilute_drain_amount_cm} onChange={(e: InputEvent) => setConfig({ ...config, dilute_drain_amount_cm: e.target.value })} />
                   )}
@@ -528,7 +528,7 @@ const Settings = () => {
             </SubCard>
 
             <SubCard title="Thay Nước Định Kỳ" className="h-full">
-              <div className="flex items-center justify-between mb-4 p-3 bg-slate-900/40 rounded-lg border border-slate-800"><span className="text-sm text-slate-300 font-medium">Bật lịch xả nước cũ</span><Switch isOn={config.scheduled_water_change_enabled} onClick={(val) => setConfig({ ...config, scheduled_water_change_enabled: val })} /></div>
+              <div className="flex items-center justify-between mb-4 p-3 bg-white/80 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900 font-medium">Bật lịch xả nước cũ</span><Switch isOn={config.scheduled_water_change_enabled} onClick={(val) => setConfig({ ...config, scheduled_water_change_enabled: val })} /></div>
               {config.scheduled_water_change_enabled && (
                 <div className="space-y-4">
                   <VisualCronPicker label="Lịch tự động" value={config.water_change_cron} onChange={(val) => setConfig({ ...config, water_change_cron: val })} />
@@ -556,7 +556,7 @@ const Settings = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InputGroup label="PWM tối thiểu (%)" value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
                   <InputGroup label="Mức kích hoạt nhịp (ml)" value={config.dosing_min_dose_ml} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_dose_ml: e.target.value })} />
-                  <div className="sm:col-span-2 pt-2 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-500 uppercase">Thời gian nhịp</span></div>
+                  <div className="sm:col-span-2 pt-2 pb-1 border-t border-emerald-100"><span className="text-xs font-semibold text-emerald-700/75 uppercase">Thời gian nhịp</span></div>
                   <InputGroup label="MỞ (ms)" value={config.dosing_pulse_on_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_on_ms: e.target.value })} />
                   <InputGroup label="TẮT (ms)" value={config.dosing_pulse_off_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_off_ms: e.target.value })} />
                   <div className="sm:col-span-2"><InputGroup label="Max xung/chu kỳ" value={config.dosing_max_pulse_count_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, dosing_max_pulse_count_per_cycle: e.target.value })} /></div>
@@ -579,13 +579,13 @@ const Settings = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="sm:col-span-2 lg:col-span-4 mb-1"><InputGroup label="Chờ nghỉ giữa bơm A & B (s)" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} /></div>
 
-                <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-b border-slate-800/50"><span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Lưu lượng (ml/s)</span></div>
+                <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-b border-emerald-100"><span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Lưu lượng (ml/s)</span></div>
                 <InputGroup label="Bơm A" value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_a_capacity_ml_per_sec} />
                 <InputGroup label="Bơm B" value={config.pump_b_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_b_capacity_ml_per_sec} />
                 <InputGroup label="Bơm pH+" value={config.pump_ph_up_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_up_capacity_ml_per_sec} />
                 <InputGroup label="Bơm pH-" value={config.pump_ph_down_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_down_capacity_ml_per_sec} />
 
-                <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-b border-slate-800/50"><span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hệ số đậm đặc</span></div>
+                <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-b border-emerald-100"><span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Hệ số đậm đặc</span></div>
                 <InputGroup label="EC / ml" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
                 <InputGroup label="Rải phân EC (0-1)" value={config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_step_ratio: e.target.value })} />
                 <InputGroup label="pH+ / ml" value={config.ph_shift_up_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_up_per_ml: e.target.value })} />
@@ -618,7 +618,7 @@ const Settings = () => {
                   <InputGroup label="Max dung dịch/giờ (ml)" value={config.max_dose_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_hour: e.target.value })} />
                   <div className="sm:col-span-2"><InputGroup label="Nghỉ tản nhiệt bơm (s)" value={config.cooldown_sec} onChange={(e: InputEvent) => setConfig({ ...config, cooldown_sec: e.target.value })} /></div>
 
-                  <div className="sm:col-span-2 pt-3 pb-1 border-t border-slate-800/50"><span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Mạch lọc chống nhiễu</span></div>
+                  <div className="sm:col-span-2 pt-3 pb-1 border-t border-emerald-100"><span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Mạch lọc chống nhiễu</span></div>
                   <InputGroup label="Bỏ qua nếu EC >" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
                   <InputGroup label="Bỏ qua nếu pH >" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
                   <InputGroup label="Đổi min EC sau châm >" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
@@ -647,19 +647,19 @@ const Settings = () => {
                 <SubCard title="Truyền thông">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-medium text-slate-300 block mb-2">Cập nhật (ms)</label>
-                      <select className="w-full bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg p-2 outline-none focus:border-blue-500/50 transition-all" value={config.publish_interval} onChange={(e: InputEvent) => setConfig({ ...config, publish_interval: parseInt(e.target.value) })}>
+                      <label className="text-xs font-medium text-emerald-900 block mb-2">Cập nhật (ms)</label>
+                      <select className="w-full bg-white border border-emerald-100 text-emerald-900 text-sm rounded-lg p-2 outline-none focus:border-emerald-600/50 transition-all" value={config.publish_interval} onChange={(e: InputEvent) => setConfig({ ...config, publish_interval: parseInt(e.target.value) })}>
                         <option value={1000}>Nhanh (1s)</option>
                         <option value={5000}>Chuẩn (5s)</option>
                         <option value={10000}>Chậm (10s)</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-slate-300 block mb-2">Độ mượt (Window)</label>
+                      <label className="text-xs font-medium text-emerald-900 block mb-2">Độ mượt (Window)</label>
                       <div className="flex gap-1.5">
-                        <button onClick={() => setConfig({ ...config, moving_average_window: 5 })} className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-colors ${config.moving_average_window <= 5 ? 'bg-slate-700 text-white' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800'}`}>Thô(5)</button>
-                        <button onClick={() => setConfig({ ...config, moving_average_window: 15 })} className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-colors ${config.moving_average_window > 5 && config.moving_average_window <= 20 ? 'bg-slate-700 text-white' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800'}`}>Chuẩn(15)</button>
-                        <button onClick={() => setConfig({ ...config, moving_average_window: 50 })} className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-colors ${config.moving_average_window > 20 ? 'bg-slate-700 text-white' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800'}`}>Mượt(50)</button>
+                        <button onClick={() => setConfig({ ...config, moving_average_window: 5 })} className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-colors ${config.moving_average_window <= 5 ? 'bg-emerald-700 text-white' : 'bg-white border border-emerald-100 text-emerald-800/80 hover:bg-emerald-100'}`}>Thô(5)</button>
+                        <button onClick={() => setConfig({ ...config, moving_average_window: 15 })} className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-colors ${config.moving_average_window > 5 && config.moving_average_window <= 20 ? 'bg-emerald-700 text-white' : 'bg-white border border-emerald-100 text-emerald-800/80 hover:bg-emerald-100'}`}>Chuẩn(15)</button>
+                        <button onClick={() => setConfig({ ...config, moving_average_window: 50 })} className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-colors ${config.moving_average_window > 20 ? 'bg-emerald-700 text-white' : 'bg-white border border-emerald-100 text-emerald-800/80 hover:bg-emerald-100'}`}>Mượt(50)</button>
                       </div>
                     </div>
                   </div>
@@ -667,10 +667,10 @@ const Settings = () => {
 
                 <SubCard title="Bật/Tắt Cảm Biến">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                    <div className="flex items-center justify-between p-2.5 bg-slate-900/30 rounded-lg border border-slate-800/50"><span className="text-sm text-slate-300">pH</span><Switch isOn={config.enable_ph_sensor} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} /></div>
-                    <div className="flex items-center justify-between p-2.5 bg-slate-900/30 rounded-lg border border-slate-800/50"><span className="text-sm text-slate-300">EC</span><Switch isOn={config.enable_ec_sensor} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} /></div>
-                    <div className="flex items-center justify-between p-2.5 bg-slate-900/30 rounded-lg border border-slate-800/50"><span className="text-sm text-slate-300">Nhiệt độ</span><Switch isOn={config.enable_temp_sensor} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} /></div>
-                    <div className="flex items-center justify-between p-2.5 bg-slate-900/30 rounded-lg border border-slate-800/50"><span className="text-sm text-slate-300">Siêu âm</span><Switch isOn={config.enable_water_level_sensor} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} /></div>
+                    <div className="flex items-center justify-between p-2.5 bg-white/75 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900">pH</span><Switch isOn={config.enable_ph_sensor} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} /></div>
+                    <div className="flex items-center justify-between p-2.5 bg-white/75 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900">EC</span><Switch isOn={config.enable_ec_sensor} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} /></div>
+                    <div className="flex items-center justify-between p-2.5 bg-white/75 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900">Nhiệt độ</span><Switch isOn={config.enable_temp_sensor} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} /></div>
+                    <div className="flex items-center justify-between p-2.5 bg-white/75 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900">Siêu âm</span><Switch isOn={config.enable_water_level_sensor} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} /></div>
                   </div>
                 </SubCard>
 
@@ -693,25 +693,25 @@ const Settings = () => {
                 )}
 
                 {wizardStep < calibrationPoints.length ? (
-                  <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 shadow-inner">
-                    <p className="text-xs text-blue-400 font-bold tracking-wider mb-1">BƯỚC {wizardStep + 1}/{calibrationPoints.length}</p>
-                    <p className="text-sm text-slate-200 mb-4">Nhúng đầu dò vào dung dịch <span className="font-bold text-white">pH {activePoint}</span></p>
+                  <div className="p-5 rounded-xl bg-white border border-emerald-100 shadow-inner">
+                    <p className="text-xs text-blue-700 font-bold tracking-wider mb-1">BƯỚC {wizardStep + 1}/{calibrationPoints.length}</p>
+                    <p className="text-sm text-emerald-950 mb-4">Nhúng đầu dò vào dung dịch <span className="font-bold text-white">pH {activePoint}</span></p>
                     <div className="flex items-center gap-3">
                       <button onClick={handleCapturePoint} disabled={isCalibrationBlocked || isCapturingPoint} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50 transition-all">
                         {isCapturingPoint ? 'ĐANG ĐO...' : 'BẮT ĐẦU'}
                       </button>
-                      {isCapturingPoint && <span className="text-sm font-mono text-slate-300 bg-slate-950 px-3 py-1.5 rounded-md">{countdown}s</span>}
+                      {isCapturingPoint && <span className="text-sm font-mono text-emerald-900 bg-white px-3 py-1.5 rounded-md">{countdown}s</span>}
                       {capturedPoints[activePoint] && !isCapturingPoint && (
-                        <button onClick={goToNextPoint} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-medium transition-all">TIẾP TỤC</button>
+                        <button onClick={goToNextPoint} className="px-4 py-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-950 text-sm font-medium transition-all">TIẾP TỤC</button>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 shadow-inner space-y-4">
+                  <div className="p-5 rounded-xl bg-white border border-emerald-100 shadow-inner space-y-4">
                     <div className="grid grid-cols-2 gap-2 text-center">
-                      <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">v7</p><p className="text-sm font-mono text-slate-200">{calibrationSummary.ph_v7}V</p></div>
-                      <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">v4</p><p className="text-sm font-mono text-slate-200">{calibrationSummary.ph_v4}V</p></div>
-                      <div className="col-span-2 p-2 bg-slate-950 rounded-lg border border-slate-800"><p className="text-[10px] text-slate-500 mb-0.5">Tin cậy</p><p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-green-400' : 'text-yellow-400'}`}>{calibrationSummary.reliability}%</p></div>
+                      <div className="p-2 bg-white rounded-lg border border-emerald-100"><p className="text-[10px] text-emerald-700/75 mb-0.5">v7</p><p className="text-sm font-mono text-emerald-950">{calibrationSummary.ph_v7}V</p></div>
+                      <div className="p-2 bg-white rounded-lg border border-emerald-100"><p className="text-[10px] text-emerald-700/75 mb-0.5">v4</p><p className="text-sm font-mono text-emerald-950">{calibrationSummary.ph_v4}V</p></div>
+                      <div className="col-span-2 p-2 bg-white rounded-lg border border-emerald-100"><p className="text-[10px] text-emerald-700/75 mb-0.5">Tin cậy</p><p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-green-400' : 'text-yellow-400'}`}>{calibrationSummary.reliability}%</p></div>
                     </div>
 
                     <button onClick={handleFinishAndSaveCalibration} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-all text-sm">

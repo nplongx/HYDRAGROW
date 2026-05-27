@@ -65,10 +65,10 @@ const MainLayout: React.FC = () => {
 
   if (isMissingConfig) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-emerald-50 text-emerald-950 flex items-center justify-center p-6">
         <div className="max-w-md w-full ui-card text-center space-y-3">
           <h2 className="text-xl font-semibold">Thiếu cấu hình ứng dụng</h2>
-          <p className="text-slate-400 text-sm">
+          <p className="text-emerald-800/75 text-sm">
             Ứng dụng web chưa có <b>backend URL</b> hoặc <b>API key</b>. Hãy cung cấp qua
             <code className="mx-1">window.__APP_CONFIG__</code>, localStorage hoặc <code>/config.json</code>.
           </p>
@@ -77,23 +77,23 @@ const MainLayout: React.FC = () => {
     );
   }
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-emerald-50 text-emerald-950 font-sans overflow-hidden">
 
       {/* 🟢 Top Header (Trạng thái thiết bị) */}
-      <header className="flex items-center justify-between px-5 py-3 bg-slate-900 border-b border-slate-800 z-30 pt-[calc(env(safe-area-inset-top)+12px)]">
+      <header className="flex items-center justify-between px-5 py-3 bg-white border-b border-emerald-100 z-30 pt-[calc(env(safe-area-inset-top)+12px)] shadow-sm shadow-emerald-950/5">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-blue-600 rounded flex items-center justify-center">
+          <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
             <Sprout size={16} className="text-white" />
           </div>
           <div>
-            <h1 className="text-sm font-semibold tracking-tight leading-none">Hệ thống tưới tự động</h1>
-            {/* <p className="text-[10px] text-slate-400 font-medium">Tủ điện thông minh</p> */}
+            <h1 className="text-sm font-bold tracking-tight leading-none text-emerald-950">HydraGrow Khí Canh</h1>
+            <p className="text-[10px] text-emerald-700/75 font-semibold mt-0.5">Trung tâm vận hành vườn</p>
           </div>
         </div>
 
-        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium border ${isSensorOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+        <div className={`farm-status-pill ${isSensorOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           <Activity size={12} />
-          {isSensorOnline ? 'Online' : 'Offline'}
+          {isSensorOnline ? 'Đang kết nối' : 'Mất tín hiệu'}
         </div>
       </header>
 
@@ -104,7 +104,7 @@ const MainLayout: React.FC = () => {
 
       {/* 🟢 Overlay mờ khi mở Menu "Thêm" */}
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-emerald-950/35 backdrop-blur-sm z-40 transition-opacity duration-300 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsMenuOpen(false)}
       />
 
@@ -113,7 +113,7 @@ const MainLayout: React.FC = () => {
         ref={menuRef}
         className={`fixed bottom-[84px] left-4 right-4 z-50 transition-all duration-300 ease-out ${isMenuOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}
       >
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div className="bg-white border border-emerald-100 rounded-xl overflow-hidden shadow-xl shadow-emerald-950/10">
           <div className="flex flex-col">
             {moreMenuItems.map((item, index) => {
               const isActive = location.pathname === item.path;
@@ -121,8 +121,8 @@ const MainLayout: React.FC = () => {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${index !== moreMenuItems.length - 1 ? 'border-b border-slate-800/50' : ''
-                    } ${isActive ? 'bg-slate-800/80 text-blue-400' : 'text-slate-300 hover:bg-slate-800/50'}`}
+                  className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${index !== moreMenuItems.length - 1 ? 'border-b border-emerald-100' : ''
+                    } ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-emerald-900 hover:bg-emerald-50'}`}
                 >
                   <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} />
                   <span className="text-sm font-medium">{item.label}</span>
@@ -134,7 +134,7 @@ const MainLayout: React.FC = () => {
       </div>
 
       {/* 🟢 Bottom Navigation Bar (Minimalist Flat Design) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900 border-t border-slate-800 pb-[env(safe-area-inset-bottom)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-emerald-100 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_rgba(20,83,45,0.08)]">
         <div className="flex items-center justify-around h-16 px-2">
           {mainNavItems.map((item) => {
             const isActive = location.pathname === item.path;
@@ -144,19 +144,19 @@ const MainLayout: React.FC = () => {
                 onClick={() => navigate(item.path)}
                 className="relative flex flex-col items-center justify-center w-full h-full group"
               >
-                <div className={`transition-colors duration-200 ${isActive ? 'text-blue-500' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                <div className={`transition-colors duration-200 ${isActive ? 'text-emerald-700' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
                   <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                   {item.hasBadge && (
-                    <span className="absolute top-2 right-1/4 translate-x-2 -translate-y-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-900"></span>
+                    <span className="absolute top-2 right-1/4 translate-x-2 -translate-y-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white"></span>
                   )}
                 </div>
-                <span className={`text-[10px] mt-1 font-medium tracking-wide ${isActive ? 'text-blue-500' : 'text-slate-500 group-hover:text-slate-400'}`}>
+                <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActive ? 'text-emerald-800' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
                   {item.label}
                 </span>
 
                 {/* Dấu chấm active thay thế cho gạch chân rườm rà */}
                 {isActive && (
-                  <div className="absolute top-1 w-1 h-1 bg-blue-500 rounded-full" />
+                  <div className="absolute top-1 w-1 h-1 bg-emerald-700 rounded-full" />
                 )}
               </button>
             );
@@ -168,20 +168,20 @@ const MainLayout: React.FC = () => {
             className="relative flex flex-col items-center justify-center w-full h-full group"
           >
             <div className={`transition-all duration-300 ${isMenuOpen
-              ? 'bg-slate-200 text-slate-900 p-1 rounded-full rotate-90'
+              ? 'bg-emerald-700 text-white p-1 rounded-full rotate-90'
               : isActiveMore
-                ? 'text-blue-500'
-                : 'text-slate-400 group-hover:text-slate-300'
+                ? 'text-emerald-700'
+                : 'text-emerald-700/55 group-hover:text-emerald-800'
               }`}>
               {isMenuOpen ? <X size={18} strokeWidth={2.5} /> : <MoreHorizontal size={22} strokeWidth={isActiveMore ? 2.5 : 2} />}
             </div>
             {!isMenuOpen && (
-              <span className={`text-[10px] mt-1 font-medium tracking-wide ${isActiveMore ? 'text-blue-500' : 'text-slate-500 group-hover:text-slate-400'}`}>
+              <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActiveMore ? 'text-emerald-800' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
                 Thêm
               </span>
             )}
             {isActiveMore && !isMenuOpen && (
-              <div className="absolute top-1 w-1 h-1 bg-blue-500 rounded-full" />
+              <div className="absolute top-1 w-1 h-1 bg-emerald-700 rounded-full" />
             )}
           </button>
         </div>

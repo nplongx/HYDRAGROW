@@ -33,7 +33,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
-use log::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::SharedConfig;
 use crate::fsm::matrix::InteractionMatrix;
@@ -59,7 +59,7 @@ pub fn start_fsm_control_loop(
     _current_time_sec: u64,
 ) {
     let mut new_ctx = SystemContext::default();
-    log::debug!("FSM tick: phase={:?}", new_ctx.phase.as_str());
+    debug!("FSM tick: phase={:?}", new_ctx.phase.as_str());
     let mut last_reported_state = String::new();
 
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();

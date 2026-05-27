@@ -14,12 +14,12 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
 
   const renderBadge = (tone: 'default' | 'warn' | 'danger' | 'success' | 'info' | 'mist', content: string) => {
     const toneClass =
-      tone === 'danger' ? 'bg-red-500/10 border-red-500/30 text-red-400'
-        : tone === 'warn' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-          : tone === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-            : tone === 'info' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-              : tone === 'mist' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
-                : 'bg-slate-800 border-slate-700 text-slate-300';
+      tone === 'danger' ? 'bg-red-50 border-red-200 text-red-700'
+        : tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800'
+          : tone === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : tone === 'info' ? 'bg-blue-50 border-blue-200 text-blue-700'
+              : tone === 'mist' ? 'bg-cyan-50 border-cyan-200 text-cyan-700'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800';
 
     const baseClass = `px-2.5 py-0.5 rounded-md text-xs font-medium border ${toneClass}`;
     if (faultCode) {

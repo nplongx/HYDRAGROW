@@ -40,32 +40,32 @@ export const ControlCard: React.FC<ControlCardProps> = ({
   return (
     <div
       onClick={handleClick}
-      className={`relative bg-slate-900 rounded-xl p-4 flex flex-col transition-colors duration-200 select-none border
-        ${isOn ? `border-${borderClass.split('-')[1]}-500 bg-slate-800/50` : 'border-slate-800 hover:border-slate-700'} 
+      className={`relative bg-white rounded-xl p-4 flex flex-col transition-colors duration-200 select-none border shadow-sm shadow-emerald-950/5
+        ${isOn ? `border-${borderClass.split('-')[1]}-500 bg-emerald-50` : 'border-emerald-100 hover:border-emerald-300'}
         ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
       `}
     >
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className={`p-2 rounded-lg transition-colors ${isOn ? `bg-${colorClass.split('-')[1]}-500/10 ${colorClass}` : 'bg-slate-800 text-slate-500'}`}>
+          <div className={`p-2 rounded-lg transition-colors ${isOn ? `bg-${colorClass.split('-')[1]}-500/10 ${colorClass}` : 'bg-emerald-50 text-emerald-700/75'}`}>
             <Icon size={20} />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className={`text-sm font-semibold truncate ${isOn ? 'text-slate-100' : 'text-slate-300'}`}>
+            <span className={`text-sm font-semibold truncate ${isOn ? 'text-emerald-950' : 'text-emerald-900'}`}>
               {title}
             </span>
             {supportsPwm && isOn ? (
               <span className={`text-xs font-medium mt-0.5 ${colorClass}`}>Công suất: {currentPwm}%</span>
             ) : (
-              <span className="text-xs font-medium text-slate-500 mt-0.5">{isOn ? 'Đang chạy' : 'Đã tắt'}</span>
+              <span className="text-xs font-medium text-emerald-700/75 mt-0.5">{isOn ? 'Đang chạy' : 'Đã tắt'}</span>
             )}
           </div>
         </div>
 
         <div className="shrink-0 ml-2">
           {isLocked ? (
-            <div className="h-6 w-11 flex items-center justify-center bg-slate-800 rounded-full border border-slate-700">
-              <Lock size={12} className="text-slate-500" />
+            <div className="h-6 w-11 flex items-center justify-center bg-emerald-100 rounded-full border border-emerald-200">
+              <Lock size={12} className="text-emerald-700/75" />
             </div>
           ) : (
             <Switch isOn={isOn} disabled={isProcessing || !isOnline} />
@@ -74,7 +74,7 @@ export const ControlCard: React.FC<ControlCardProps> = ({
       </div>
 
       {isLocked && (
-        <div className="mt-3 text-xs text-red-400 font-medium flex items-center gap-1.5 bg-red-500/10 p-2 rounded-lg border border-red-500/20">
+        <div className="mt-3 text-xs text-red-700 font-medium flex items-center gap-1.5 bg-red-50 p-2 rounded-lg border border-red-200">
           <Lock size={12} className="shrink-0" /> {lockedMessage}
         </div>
       )}
@@ -88,9 +88,9 @@ export const ControlCard: React.FC<ControlCardProps> = ({
               onChange={(e) => onPwmChange(pumpId, parseInt(e.target.value))}
               onMouseUp={() => onPwmCommit(pumpId, currentPwm, title)}
               onTouchEnd={() => onPwmCommit(pumpId, currentPwm, title)}
-              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+              className="w-full h-1.5 bg-emerald-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
             />
-            <div className="flex justify-between text-[10px] text-slate-500 font-medium mt-2">
+            <div className="flex justify-between text-[10px] text-emerald-700/75 font-medium mt-2">
               <span>Yếu</span><span>Vừa</span><span>Mạnh</span>
             </div>
           </div>

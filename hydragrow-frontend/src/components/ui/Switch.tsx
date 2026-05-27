@@ -16,12 +16,23 @@ export const Switch: React.FC<SwitchProps> = ({
   return (
     <div
       onClick={() => !disabled && onClick && onClick(!isOn)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out
-      ${isOn ? colorClass : 'bg-slate-700'} 
-      ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      role="switch"
+      aria-checked={isOn}
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+      onKeyDown={(event) => {
+        if (disabled || !onClick) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick(!isOn);
+        }
+      }}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/30
+      ${isOn ? colorClass : 'bg-emerald-200'}
+      ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white transition duration-200 ease-in-out
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out
         ${isOn ? 'translate-x-5' : 'translate-x-0'}`}
       />
     </div>

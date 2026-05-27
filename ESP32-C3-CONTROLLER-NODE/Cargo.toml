@@ -27,6 +27,7 @@ esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git" }
 
 [dependencies]
 log = "0.4"
+tracing = { version = "0.1", features = ["log"] }
 serde = "1.0.228"
 anyhow = "1.0.102"
 serde_json = "1.0.149"

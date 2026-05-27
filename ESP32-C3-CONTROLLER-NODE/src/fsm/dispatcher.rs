@@ -8,7 +8,7 @@ use super::system_context::{NvsSnapshot, SystemContext};
 use crate::pump::{PumpController, PumpType};
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_shared::{self, ControllerConfig};
-use log::warn;
+use tracing::warn;
 
 pub struct DispatchContext<'a> {
     pub pumps: &'a mut PumpController,

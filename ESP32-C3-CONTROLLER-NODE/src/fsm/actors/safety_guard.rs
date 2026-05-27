@@ -34,6 +34,7 @@ impl SafetyGuard {
         dose_ml: f32,
         max_ml: f32,
     ) -> bool {
+        // Lay lich su bom (thoi gian bat, luong cham) va loai bor nhung lich su ngoai pham vi 1 gio
         let history = self.hourly_doses.entry(pump.to_string()).or_default();
         history.retain(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600);
         let total = history.iter().map(|(_, ml)| *ml).sum::<f32>();
@@ -64,6 +65,7 @@ impl SafetyGuard {
         true
     }
 
+    // FIX: what is this funtion?
     pub fn replace_hourly_histories(
         &mut self,
         doses: HashMap<String, Vec<(u64, f32)>>,
@@ -87,6 +89,7 @@ impl SafetyGuard {
         &self.drain_history
     }
 
+    // TODO: CALL IT
     pub fn flush_for_reset(&mut self) {
         self.hourly_doses.clear();
         self.refill_history.clear();

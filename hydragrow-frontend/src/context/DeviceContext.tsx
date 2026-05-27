@@ -178,7 +178,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   // 🌟 CƠ CHẾ UX MỚI 2: Đơn giản hóa bảng chẩn đoán lỗi thành thanh Sức khỏe người dùng (Consumer UI)
   const computedHealth = useMemo<ComputedHealth>(() => {
-    const rawScore = controllerHealth?.diagnostics?.health_score_percent;
+    const rawScore = controllerHealth?.health_score_percent ?? controllerHealth?.diagnostics?.health_score_percent;
     const score = typeof rawScore === 'number' ? rawScore : 100;
 
     if (!deviceStatus.is_online) {
@@ -402,18 +402,25 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               return;
             }
 
-            if (data.type === 'device_health') {
+            if (data.type === 'device_health' || data.type === 'health_snapshot') {
               const healthData = data.payload;
 
               setControllerHealth({
                 rssi: healthData.rssi,
                 free_heap: healthData.free_heap,
                 uptime: healthData.uptime_sec,
+                health_score_percent: healthData.health_score_percent,
+                fsm_state_display: healthData.fsm_state_display,
+                log_drop_count: healthData.log_drop_count,
+                kalman_confidence: healthData.kalman_confidence || null,
+                matrix_update_count: healthData.matrix_update_count,
+                matrix_is_warm: healthData.matrix_is_warm,
                 diagnostics: healthData.diagnostics || null
               });
 
-              if (healthData.fsm_state) {
-                setFsmState(typeof healthData.fsm_state === 'object' ? JSON.stringify(healthData.fsm_state) : String(healthData.fsm_state));
+              const healthState = healthData.fsm_state_display ?? healthData.fsm_state;
+              if (healthState) {
+                setFsmState(typeof healthState === 'object' ? JSON.stringify(healthState) : String(healthState));
               }
 
               if (healthData.budgets && Object.keys(healthData.budgets).length > 0) {

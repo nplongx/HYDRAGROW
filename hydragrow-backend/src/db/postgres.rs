@@ -515,7 +515,6 @@ mod tests {
 
     #[test]
     fn basic_system_log_metadata_cycle_id_is_at_top_level_of_serialized_event() {
-
         let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
             source: "test".into(),
             message: "msg".into(),

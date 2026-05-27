@@ -1,13 +1,10 @@
 use actix_web::web;
-use serde_json::{Value, json};
-use tracing::{error, info, instrument, warn};
+use serde_json::json;
+use tracing::{error, info, warn};
 
 use crate::AppState;
 use hydragrow_shared::{
-    PumpStatus,
-    events::{AppEvent, FsmTransitionPayload},
-    fsm::{FsmSnapshot, SystemPhase},
-    telemetry::FsmTransitionEvent,
+    PumpStatus, events::AppEvent, fsm::FsmSnapshot, telemetry::FsmTransitionEvent,
 };
 
 pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
@@ -31,7 +28,50 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     let _ = app_state.event_bus.send(AppEvent::FsmStateUpdate(snapshot));
 }
 
-async fn handle_calibration_update(
+pub fn validated_runtime_interaction_matrix(
+    raw_matrix: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let items = raw_matrix.as_array()?;
+    if items.len() != 32 {
+        return None;
+    }
+    let all_valid = items
+        .iter()
+        .all(|item| item.as_f64().map(|f| f.is_finite()).unwrap_or(false));
+    if all_valid {
+        Some(serde_json::Value::Array(items.clone()))
+    } else {
+        None
+    }
+}
+
+fn validated_kalman_confidence(raw: &serde_json::Value) -> Option<serde_json::Value> {
+    match raw {
+        serde_json::Value::Array(items) if items.len() == 8 => {
+            if items
+                .iter()
+                .all(|item| item.as_f64().map(|f| f.is_finite()).unwrap_or(false))
+            {
+                Some(raw.clone())
+            } else {
+                None
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            if obj
+                .values()
+                .all(|item| item.as_f64().map(|f| f.is_finite()).unwrap_or(false))
+            {
+                Some(raw.clone())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+pub async fn handle_calibration_update(
     device_id: &str,
     json: &serde_json::Value,
     app_state: web::Data<AppState>,
@@ -49,47 +89,30 @@ async fn handle_calibration_update(
         let step_ec = coeffs.get("step_ratio_ec").and_then(|v| v.as_f64());
         let step_ph = coeffs.get("step_ratio_ph").and_then(|v| v.as_f64());
 
-        // Parse và validate interaction_matrix (giữ nguyên validation hiện tại)
         let interaction_matrix_json: Option<serde_json::Value> = match coeffs
             .get("interaction_matrix")
         {
-            Some(raw_matrix) => match raw_matrix.as_array() {
-                Some(items) if items.len() == 6 => {
-                    let all_valid = items
-                        .iter()
-                        .all(|item| item.as_f64().map(|f| f.is_finite()).unwrap_or(false));
-                    if all_valid {
-                        // Giữ nguyên dạng JSON array cho JSONB column
-                        Some(serde_json::Value::Array(items.clone()))
-                    } else {
-                        warn!(
-                            "⚠️ [MQTT-FSM] interaction_matrix của {} có phần tử không hợp lệ, bỏ qua",
-                            device_id
-                        );
-                        None
-                    }
-                }
-                Some(items) => {
+            Some(raw_matrix) => {
+                let validated = validated_runtime_interaction_matrix(raw_matrix);
+                if validated.is_none() {
                     warn!(
-                        "⚠️ [MQTT-FSM] interaction_matrix của {} sai shape ({} phần tử, cần 6), bỏ qua",
-                        device_id,
-                        items.len()
-                    );
-                    None
-                }
-                None => {
-                    warn!(
-                        "⚠️ [MQTT-FSM] interaction_matrix của {} không phải mảng JSON, bỏ qua",
+                        "⚠️ [MQTT-FSM] interaction_matrix của {} không đúng shape 4x8 phẳng hoặc có phần tử không hợp lệ, bỏ qua",
                         device_id
                     );
-                    None
                 }
-            },
+                validated
+            }
             None => None,
         };
 
         let matrix_update_count = coeffs.get("matrix_update_count").and_then(|v| v.as_i64());
         let matrix_is_warm = coeffs.get("matrix_is_warm").and_then(|v| v.as_bool());
+        let best_ec_ratio = coeffs.get("best_ec_ratio").and_then(|v| v.as_f64());
+        let best_ph_ratio = coeffs.get("best_ph_ratio").and_then(|v| v.as_f64());
+        let tuner_state = coeffs.get("state").and_then(|v| v.as_i64());
+        let kalman_confidence = coeffs
+            .get("kalman_confidence")
+            .and_then(validated_kalman_confidence);
 
         let query = r#"
                 UPDATE dosing_calibration
@@ -102,8 +125,12 @@ async fn handle_calibration_update(
                     interaction_matrix = COALESCE($6, interaction_matrix),
                     matrix_update_count = COALESCE($7, matrix_update_count),
                     matrix_is_warm = COALESCE($8, matrix_is_warm),
+                    best_ec_ratio = COALESCE($9, best_ec_ratio),
+                    best_ph_ratio = COALESCE($10, best_ph_ratio),
+                    tuner_state = COALESCE($11, tuner_state),
+                    kalman_confidence = COALESCE($12, kalman_confidence),
                     last_calibrated = NOW()
-                WHERE device_id = $9
+                WHERE device_id = $13
             "#;
 
         match sqlx::query(query)
@@ -115,6 +142,10 @@ async fn handle_calibration_update(
             .bind(interaction_matrix_json)
             .bind(matrix_update_count)
             .bind(matrix_is_warm)
+            .bind(best_ec_ratio)
+            .bind(best_ph_ratio)
+            .bind(tuner_state)
+            .bind(kalman_confidence)
             .bind(&device_id)
             .execute(&app_state.pg_pool)
             .await
@@ -199,23 +230,23 @@ async fn update_device_state_cache(
 
 #[cfg(test)]
 mod tests {
+    use super::validated_runtime_interaction_matrix;
+
     #[test]
-    fn interaction_matrix_serializes_to_jsonb_value() {
-        let raw: Vec<f64> = vec![0.015, 0.015, 0.0, 0.0, 0.0, 0.02];
+    fn runtime_interaction_matrix_accepts_controller_4x8_flat_shape() {
+        let raw: Vec<f64> = (0..32).map(|i| i as f64 * 0.01).collect();
         let as_json: serde_json::Value = serde_json::to_value(&raw).unwrap();
-        assert!(as_json.is_array());
-        assert_eq!(as_json.as_array().unwrap().len(), 6);
+        let validated = validated_runtime_interaction_matrix(&as_json).unwrap();
+
+        assert!(validated.is_array());
+        assert_eq!(validated.as_array().unwrap().len(), 32);
     }
 
     #[test]
-    fn invalid_matrix_with_nan_is_rejected() {
-        let items = vec![
-            serde_json::json!(0.015),
-            serde_json::json!(f64::NAN), // invalid
-        ];
-        let has_invalid = items
-            .iter()
-            .any(|v| v.as_f64().map(|f| !f.is_finite()).unwrap_or(true));
-        assert!(has_invalid);
+    fn runtime_interaction_matrix_rejects_legacy_6_value_shape() {
+        let raw: Vec<f64> = vec![0.015, 0.015, 0.0, 0.0, 0.0, 0.02];
+        let as_json: serde_json::Value = serde_json::to_value(&raw).unwrap();
+
+        assert!(validated_runtime_interaction_matrix(&as_json).is_none());
     }
 }

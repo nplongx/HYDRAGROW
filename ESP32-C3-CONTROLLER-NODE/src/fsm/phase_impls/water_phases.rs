@@ -42,6 +42,11 @@ impl PhaseTick for WaterRefillingPhase {
 
         let (event, hw_events, sys_log) = ctx.water.tick(now_ms, sensors, config);
         result.events.extend(hw_events);
+        result.events.extend(sys_log.into_iter().filter_map(|log| {
+            serde_json::to_string(&log)
+                .ok()
+                .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
+        }));
 
         if let WaterEvent::Done {
             success,
@@ -94,6 +99,11 @@ impl PhaseTick for WaterDrainingPhase {
 
         let (event, hw_events, sys_log) = ctx.water.tick(now_ms, sensors, config);
         result.events.extend(hw_events);
+        result.events.extend(sys_log.into_iter().filter_map(|log| {
+            serde_json::to_string(&log)
+                .ok()
+                .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
+        }));
 
         if let WaterEvent::Done {
             success,

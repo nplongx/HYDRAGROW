@@ -10,8 +10,7 @@ use crate::fsm::phase_tick::PhaseTick;
 use crate::fsm::solver::select_solver;
 use crate::fsm::solver::SolveResult;
 use crate::fsm::system_context::SystemContext;
-use crate::fsm::tick_result::{CalibrationDelta, ContextDelta, PeripheralDelta, TickResult};
-use crate::fsm::types::PendingCalibrationSample;
+use crate::fsm::tick_result::{CalibrationDelta, ContextDelta, TickResult};
 use crate::pump::WaterDirection;
 
 use chrono::Local;
@@ -131,6 +130,9 @@ fn apply_decision(
             if is_water_change {
                 ctx.tuner.on_water_change();
                 log::info!("🔄 [MONITORING] Scheduled water change: AutoTuner trackers reset.");
+                result.events.push(OrchestratorEvent::SaveLastWaterChange {
+                    timestamp_sec: now_ms / 1000,
+                });
             }
             // Safety budget checks
             if control.nutrient_a_ml > 0.0

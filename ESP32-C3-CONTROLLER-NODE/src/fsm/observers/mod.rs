@@ -20,7 +20,6 @@ pub use system_log::SystemLogObserver;
 pub struct ObserverContext<'a> {
     pub ctx: &'a crate::fsm::system_context::SystemContext,
     pub config: &'a hydragrow_shared::ControllerConfig,
-    pub sensors: &'a hydragrow_shared::SensorData,
     pub now_ms: u64,
     pub mqtt_tx: &'a std::sync::mpsc::Sender<String>,
     pub dosing_report_tx: &'a std::sync::mpsc::Sender<String>,

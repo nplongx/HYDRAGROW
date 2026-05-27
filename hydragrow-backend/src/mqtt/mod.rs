@@ -38,6 +38,16 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
         "/fsm/state" => handlers::fsm::handle_state(device_id, &payload_bytes, app_state).await,
 
         "/system_log" => handlers::system_log::handle(device_id, &payload_bytes, app_state).await,
+        "/calibration" => {
+            let payload_json = match serde_json::from_slice::<serde_json::Value>(&payload_bytes) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(error = ?e, "Lỗi parse calibration payload");
+                    return;
+                }
+            };
+            handlers::fsm::handle_calibration_update(&device_id, &payload_json, app_state).await;
+        }
 
         "/dosing_cycle" => {
             handlers::dosing_cycle::handle_dosing_cycle(device_id, &payload_bytes, app_state).await

@@ -5,24 +5,6 @@ use hydragrow_shared::SensorData;
 pub type SharedSensorData = Arc<RwLock<SensorData>>;
 
 // ---------------------------------------------------------------------------
-// PendingDose – mô tả hành động bơm sẽ thực hiện sau khi Osaka khởi động xong
-// ---------------------------------------------------------------------------
-#[derive(Debug, Clone, PartialEq)]
-pub enum PendingDose {
-    EC {
-        dose_ml: f32,
-        target_ec: f32,
-        pwm_percent: u32,
-    },
-    PH {
-        is_up: bool,
-        dose_ml: f32,
-        target_ph: f32,
-        pwm_percent: u32,
-    },
-}
-
-// ---------------------------------------------------------------------------
 // PendingCalibrationSample – dữ liệu chờ cập nhật EMA sau mỗi chu kỳ bơm
 // ---------------------------------------------------------------------------
 #[derive(Debug, Clone)]

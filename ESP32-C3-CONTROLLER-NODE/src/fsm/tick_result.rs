@@ -37,6 +37,9 @@ pub struct ContextDelta {
     /// Cập nhật water_change_cron
     pub water_change_cron: Option<String>,
 
+    /// Xóa các budget/history an toàn khi reset lỗi thủ công
+    pub reset_safety_budget: bool,
+
     /// Cập nhật safety override timeout
     pub safety_override_until: Option<u64>,
 
@@ -93,20 +96,4 @@ pub struct TickResult {
 
     /// Các side effect cần thực thi (hardware, MQTT, NVS...)
     pub events: Vec<OrchestratorEvent>,
-}
-
-impl TickResult {
-    pub fn idle() -> Self {
-        Self::default()
-    }
-
-    pub fn with_event(mut self, event: OrchestratorEvent) -> Self {
-        self.events.push(event);
-        self
-    }
-
-    pub fn with_phase(mut self, phase: SystemPhase) -> Self {
-        self.delta.phase = Some(phase);
-        self
-    }
 }

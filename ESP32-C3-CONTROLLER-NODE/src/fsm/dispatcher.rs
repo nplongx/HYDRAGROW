@@ -5,7 +5,7 @@ use std::sync::mpsc::Sender;
 
 use super::events::OrchestratorEvent;
 use super::system_context::{NvsSnapshot, SystemContext};
-use crate::pump::{PumpController, PumpType, WaterDirection};
+use crate::pump::{PumpController, PumpType};
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_shared::{self, ControllerConfig};
 use log::warn;
@@ -20,7 +20,6 @@ pub struct DispatchContext<'a> {
     pub now_sec: u64,
     pub device_id: &'a str,
     pub config: &'a ControllerConfig,
-    pub sensors: &'a hydragrow_shared::SensorData,
     pub observers: &'a mut crate::fsm::observer_set::ObserverSet,
 }
 
@@ -38,7 +37,6 @@ impl EventDispatcher {
             let oc = crate::fsm::observers::ObserverContext {
                 ctx: dc.ctx,
                 config: dc.config,
-                sensors: dc.sensors,
                 now_ms: dc.now_sec * 1000,
                 mqtt_tx: dc.mqtt_tx,
                 dosing_report_tx: dc.dosing_report_tx,
@@ -112,12 +110,11 @@ impl EventDispatcher {
 
             // --- MESSAGING: MQTT ---
             OrchestratorEvent::PublishFsmState => {}
-
             OrchestratorEvent::PublishCalibrationUpdate => {}
             OrchestratorEvent::PublishDosingReport { report_json } => {
                 let _ = dc.dosing_report_tx.send(report_json);
             }
-            OrchestratorEvent::PublishSystemLog { payload_json } => {}
+            OrchestratorEvent::PublishSystemLog { .. } => {}
 
             // --- CONTROL FLOW: Sensor node ---
             OrchestratorEvent::RequestSensorForcePublish => {
@@ -153,15 +150,11 @@ impl EventDispatcher {
 
                 match builder.try_build() {
                     Ok(transition_event) => {
-                        if let Ok(json) = serde_json::to_string(&transition_event) {
-                            // let topic = topic_fsm_transition(dc.device_id);
-                            // let _ = dc.mqtt_tx.send(json);
-                            let wrapper = serde_json::json!({
-                                "_mqtt_topic_override": topic_fsm_transition(dc.device_id),
-                                "_payload": serde_json::to_value(&transition_event).unwrap_or_default()
-                            });
-                            let _ = dc.mqtt_tx.send(wrapper.to_string());
-                        }
+                        let wrapper = serde_json::json!({
+                            "_mqtt_topic_override": topic_fsm_transition(dc.device_id),
+                            "_payload": serde_json::to_value(&transition_event).unwrap_or_default()
+                        });
+                        let _ = dc.mqtt_tx.send(wrapper.to_string());
                     }
                     Err(e) => warn!("⚠️ [DISPATCHER] Không thể build FsmTransitionEvent: {}", e),
                 }

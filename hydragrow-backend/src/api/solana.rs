@@ -5,8 +5,7 @@ use tracing::{error, info, instrument};
 
 use crate::AppState;
 use crate::db::postgres::{
-    get_device_dosing_reports as fetch_dosing_reports_from_db,
-    insert_blockchain_tx,
+    get_device_dosing_reports as fetch_dosing_reports_from_db, insert_blockchain_tx,
 };
 
 #[derive(Deserialize, Serialize, Debug)]

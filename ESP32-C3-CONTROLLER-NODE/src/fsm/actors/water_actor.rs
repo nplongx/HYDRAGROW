@@ -3,10 +3,7 @@ use hydragrow_shared::{
     ControllerConfig, SensorData,
 };
 
-use crate::{
-    fsm::OrchestratorEvent,
-    pump::{PumpController, WaterDirection},
-};
+use crate::{fsm::OrchestratorEvent, pump::WaterDirection};
 
 #[derive(Debug, Clone)]
 pub enum WaterSubState {
@@ -21,7 +18,6 @@ pub struct WaterJob {
     pub trigger: String,
     pub target_level: f32,
     pub start_level: f32,
-    pub start_ec: f32,
     pub start_ms: u64,
 }
 
@@ -59,7 +55,6 @@ impl WaterActor {
                 trigger: trigger.into(),
                 target_level: target,
                 start_level: sensors.water_level,
-                start_ec: sensors.ec,
                 start_ms: now_ms,
             },
         };
@@ -100,7 +95,6 @@ impl WaterActor {
                 trigger: trigger.into(),
                 target_level: target,
                 start_level: sensors.water_level,
-                start_ec: sensors.ec,
                 start_ms: now_ms,
             },
         };

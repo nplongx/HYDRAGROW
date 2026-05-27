@@ -57,6 +57,27 @@ pub async fn handle_dosing_cycle(
         error!("Lỗi lưu DosingCycleEvent vào DB: {:?}", e);
     }
 
+    let event_record = NewSystemEventRecord {
+        device_id: device_id.clone(),
+        level: "success".to_string(),
+        category: "dosing".to_string(),
+        title: format!("Chu kỳ {} hoàn tất", event.trigger),
+        message: format!(
+            "A: {:.1}ml | B: {:.1}ml | pH: {:.1}ml | ΔEC: {:.3} | ΔpH: {:.3}",
+            event.dose.pump_a_ml,
+            event.dose.pump_b_ml,
+            event.total_ph_ml(),
+            event.delta_ec(),
+            event.delta_ph(),
+        ),
+        reason: None,
+        metadata: Some(report_payload.clone()),
+        timestamp: event.timestamp_ms as i64,
+    };
+    if let Err(e) = insert_system_event(&app_state.pg_pool, &event_record).await {
+        error!("Lỗi lưu DosingCycleEvent vào system_events: {:?}", e);
+    }
+
     // 3. Fan-out lên event bus
     let alert = AlertMessage {
         level: "success".to_string(),

@@ -74,6 +74,10 @@ const DosingMetadata = ({ meta }: { meta: any }) => {
   if (targetPh != null && targetPh > 0) targetRows.push({ label: 'Ngưỡng đặt pH mục tiêu:', value: targetPh.toFixed(2), accent: 'text-fuchsia-300 font-bold' });
   if (cycleMeta.step_ratio_ec != null) targetRows.push({ label: 'AI Kalman Step EC:', value: `${(cycleMeta.step_ratio_ec * 100).toFixed(0)}%`, accent: 'text-teal-400 font-bold' });
   if (cycleMeta.stabilized_window_sec != null) targetRows.push({ label: 'Độ trễ tĩnh bồn tự học:', value: `${cycleMeta.stabilized_window_sec} giây`, accent: 'text-indigo-400 font-bold' });
+  if (cycleMeta.kalman?.matrix_update_count != null) targetRows.push({ label: 'Lượt cập nhật ma trận:', value: `${cycleMeta.kalman.matrix_update_count}`, accent: 'text-emerald-400 font-bold' });
+  if (cycleMeta.kalman?.matrix_is_warm != null) targetRows.push({ label: 'Độ chín ma trận:', value: cycleMeta.kalman.matrix_is_warm ? 'Ổn định' : 'Đang học', accent: 'text-emerald-300 font-bold' });
+  if (cycleMeta.kalman?.adaptive_mixing_sec != null) targetRows.push({ label: 'Trộn tự học:', value: `${cycleMeta.kalman.adaptive_mixing_sec} giây`, accent: 'text-indigo-300 font-bold' });
+  if (cycleMeta.kalman?.adaptive_stabilize_sec != null) targetRows.push({ label: 'Bão hòa tự học:', value: `${cycleMeta.kalman.adaptive_stabilize_sec} giây`, accent: 'text-indigo-300 font-bold' });
   if (targetRows.length) sections.push({ title: 'Trí tuệ nhân tạo & Điểm đặt toán học', rows: targetRows });
 
   if (sections.length === 0) return null;

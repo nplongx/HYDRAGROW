@@ -154,6 +154,7 @@ pub fn process_mqtt_commands(
             delta.phase_start_ms = Some(None);
             delta.phase_finish_ms = Some(None);
             delta.reset_stabilizer = true;
+            delta.reset_safety_budget = true;
 
             let mut peri_delta = delta.peripherals.take().unwrap_or_default();
             peri_delta.osaka_pump = Some(false);

@@ -39,7 +39,7 @@ impl PhaseTick for StabilizingPhase {
             s.stabilizing_finish_ms = Some(now_ms);
         }
 
-        if let Some(sample) = &ctx.calibration.pending_sample {
+        if let Some(sample) = ctx.calibration.finalize() {
             let final_ec = sensors.ec;
             let final_ph = sensors.ph;
             let final_water = sensors.water_level;
@@ -64,7 +64,7 @@ impl PhaseTick for StabilizingPhase {
 
             // ADAPTIVE LEARNING PIPELINE — chỉ học khi hardware diagnostic đã pass
             let did_learn = ctx.tuner.learn_from_cycle(
-                sample,
+                &sample,
                 sensors.ec,
                 sensors.ph,
                 sensors.water_level,
@@ -186,7 +186,7 @@ impl PhaseTick for StabilizingPhase {
 
             // Build human-readable message
             let human_message =
-                build_human_message(sample, final_ec, final_ph, final_water, config);
+                build_human_message(&sample, final_ec, final_ph, final_water, config);
 
             let report = DosingReportPayload {
                 cycle_id: sample.cycle_id.clone(),
@@ -315,4 +315,3 @@ fn build_human_message(
     }
     msg
 }
-

@@ -5,7 +5,6 @@
 pub mod actors;
 pub mod commands;
 pub mod events;
-pub mod local_health_and_diagnostic;
 pub mod matrix;
 pub mod optimizer;
 pub mod orchestrator;
@@ -19,22 +18,16 @@ use hydragrow_shared::fsm::{FsmBudgets, FsmSnapshot, SystemPhase};
 use hydragrow_shared::log::{BasicSystemLogMetadata, LogCategory, LogLevel, SystemLogEvent};
 use hydragrow_shared::telemetry::transition::TransitionReason;
 use hydragrow_shared::MqttCommandIn;
-pub use tick_result::{ContextDelta, TickResult};
+pub use tick_result::ContextDelta;
 pub mod dispatcher;
-pub use dispatcher::EventDispatcher;
 pub mod observer_set;
 pub mod observers;
-pub use observer_set::ObserverSet;
-pub mod phase_tick;
-pub use phase_tick::PhaseTick;
-pub mod solver;
-pub use solver::{select_solver, ColdPathSolver, SolveResult, SolverStrategy, WarmPathSolver};
 pub mod phase_impls;
+pub mod phase_tick;
+pub mod solver;
 
-// SỬA LỖI 1: Loại bỏ confidence_from_error_ratio không tồn tại, chỉ giữ lại apply_deadband
-pub use optimizer::apply_deadband;
 pub use system_context::SystemContext;
-pub use types::{PendingCalibrationSample, PendingDose, SharedSensorData};
+pub use types::SharedSensorData;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -245,7 +238,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 now_sec: current_time_sec,
                 device_id: &config.device_id,
                 config: &config,
-                sensors: &sensors,
                 observers: &mut observer_set,
             };
             crate::fsm::dispatcher::EventDispatcher::dispatch(cmd_events, &mut manual_dc);
@@ -294,7 +286,6 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                     now_sec: current_time_sec,
                     device_id: &config.device_id,
                     config: &config,
-                    sensors: &sensors,
                     observers: &mut observer_set,
                 };
                 crate::fsm::dispatcher::EventDispatcher::dispatch(timeout_events, &mut timeout_dc);
@@ -306,8 +297,22 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         }
 
         if force_sync {
-            let _ = sensor_cmd_tx
-                .send(r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string());
+            let mut sync_dc = crate::fsm::dispatcher::DispatchContext {
+                pumps: &mut pump_ctrl,
+                nvs: &mut nvs,
+                mqtt_tx: &fsm_mqtt_tx,
+                dosing_report_tx: &dosing_report_tx,
+                sensor_cmd_tx: &sensor_cmd_tx,
+                ctx: &new_ctx,
+                now_sec: current_time_sec,
+                device_id: &config.device_id,
+                config: &config,
+                observers: &mut observer_set,
+            };
+            crate::fsm::dispatcher::EventDispatcher::dispatch(
+                vec![OrchestratorEvent::RequestSensorForcePublish],
+                &mut sync_dc,
+            );
             let _ = fsm_mqtt_tx.send(build_status_msg(&new_ctx, current_time_sec));
             last_reported_state.clear();
             info!("⚡ Đã ép publish trạng thái bơm mới nhất lên App!");
@@ -331,29 +336,11 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                 );
 
                 // Áp dụng những thay đổi state vào SystemContext thông qua ContextDelta
-                new_ctx.apply_delta(&mut tick_result.delta.clone());
+                new_ctx.apply_delta(&mut tick_result.delta);
 
-                if let Some(prev_phase) = tick_result.delta.previous_phase.clone() {
-                    let duration_ms = tick_result
-                        .delta
-                        .phase_start_before
-                        .map(|start| current_time_ms.saturating_sub(start));
-
-                    let reason = infer_transition_reason(
-                        Some(&prev_phase),
-                        &new_ctx.phase,
-                        &new_ctx,
-                        duration_ms.unwrap_or(0),
-                    );
-
-                    let transition_event = OrchestratorEvent::PublishFsmTransition {
-                        from_phase: prev_phase,
-                        to_phase: new_ctx.phase.clone(),
-                        reason,
-                        phase_duration_ms: duration_ms,
-                    };
-
-                    // Phân phối chuỗi Event side effects tự động ra ngoại vi
+                let dispatch_events =
+                    build_tick_dispatch_events(tick_result, &new_ctx, current_time_ms);
+                if !dispatch_events.is_empty() {
                     let mut dc = crate::fsm::dispatcher::DispatchContext {
                         pumps: &mut pump_ctrl,
                         nvs: &mut nvs,
@@ -364,13 +351,9 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
                         now_sec: current_time_sec,
                         device_id: &config.device_id,
                         config: &config,
-                        sensors: &sensors,
                         observers: &mut observer_set,
                     };
-                    crate::fsm::dispatcher::EventDispatcher::dispatch(
-                        vec![transition_event],
-                        &mut dc,
-                    );
+                    crate::fsm::dispatcher::EventDispatcher::dispatch(dispatch_events, &mut dc);
                 }
             }
         }
@@ -380,10 +363,24 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
             SystemPhase::WaterRefilling | SystemPhase::WaterDraining
         );
         if needs_continuous != new_ctx.peripherals.last_continuous_level {
-            let _ = sensor_cmd_tx.send(format!(
-                r#"{{"target":"sensor","action":"set_continuous","params":{{"state":{}}}}}"#,
-                needs_continuous
-            ));
+            let mut sensor_mode_dc = crate::fsm::dispatcher::DispatchContext {
+                pumps: &mut pump_ctrl,
+                nvs: &mut nvs,
+                mqtt_tx: &fsm_mqtt_tx,
+                dosing_report_tx: &dosing_report_tx,
+                sensor_cmd_tx: &sensor_cmd_tx,
+                ctx: &new_ctx,
+                now_sec: current_time_sec,
+                device_id: &config.device_id,
+                config: &config,
+                observers: &mut observer_set,
+            };
+            crate::fsm::dispatcher::EventDispatcher::dispatch(
+                vec![OrchestratorEvent::SetSensorContinuousMode {
+                    enabled: needs_continuous,
+                }],
+                &mut sensor_mode_dc,
+            );
             new_ctx.peripherals.last_continuous_level = needs_continuous;
         }
 
@@ -413,6 +410,33 @@ fn report_phase_if_changed(current_phase: &SystemPhase, last_reported_state: &mu
     } else {
         false
     }
+}
+
+fn build_tick_dispatch_events(
+    tick_result: tick_result::TickResult,
+    ctx: &SystemContext,
+    current_time_ms: u64,
+) -> Vec<OrchestratorEvent> {
+    let mut events = tick_result.events;
+
+    if let Some(prev_phase) = tick_result.delta.previous_phase {
+        let duration_ms = tick_result
+            .delta
+            .phase_start_before
+            .map(|start| current_time_ms.saturating_sub(start));
+
+        let reason =
+            infer_transition_reason(Some(&prev_phase), &ctx.phase, ctx, duration_ms.unwrap_or(0));
+
+        events.push(OrchestratorEvent::PublishFsmTransition {
+            from_phase: prev_phase,
+            to_phase: ctx.phase.clone(),
+            reason,
+            phase_duration_ms: duration_ms,
+        });
+    }
+
+    events
 }
 
 fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {

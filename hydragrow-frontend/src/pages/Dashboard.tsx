@@ -179,6 +179,13 @@ const Dashboard = () => {
                 <div className="flex items-center gap-1.5"><Cpu size={13} /> Bộ nhớ trống: <span className="text-slate-300 font-bold">{controllerHealth?.free_heap ? `${(controllerHealth.free_heap / 1024).toFixed(0)} KB` : '--'}</span></div>
                 <div className="flex items-center gap-1.5"><Clock size={13} /> Thời gian chạy: <span className="text-slate-300 font-bold">{controllerHealth?.uptime ? `${Math.floor(controllerHealth.uptime / 3600)} giờ` : '--'}</span></div>
               </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] font-mono text-slate-500 pt-1">
+                <div className="flex items-center gap-1.5"><LineChart size={13} /> Lượt học: <span className="text-slate-300 font-bold">{controllerHealth?.matrix_update_count ?? '--'}</span></div>
+                <div className="flex items-center gap-1.5"><ShieldCheck size={13} /> Ma trận: <span className="text-slate-300 font-bold">{controllerHealth?.matrix_is_warm ? 'Ổn định' : 'Đang học'}</span></div>
+                <div className="flex items-center gap-1.5"><Activity size={13} /> Tin rơi: <span className="text-slate-300 font-bold">{controllerHealth?.log_drop_count ?? '--'}</span></div>
+                <div className="flex items-center gap-1.5"><Zap size={13} /> Tin cậy EC: <span className="text-slate-300 font-bold">{controllerHealth?.kalman_confidence?.nutrient_a != null ? `${Math.round(controllerHealth.kalman_confidence.nutrient_a * 100)}%` : '--'}</span></div>
+              </div>
             </div>
           )}
         </div>

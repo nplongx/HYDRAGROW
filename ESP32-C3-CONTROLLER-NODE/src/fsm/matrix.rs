@@ -11,20 +11,6 @@ pub struct ControlVector {
 }
 
 impl ControlVector {
-    /// Chuyển đổi vector cấu trúc sang mảng phẳng 8 phần tử để phục vụ phép toán ma trận
-    pub fn as_array(&self) -> [f32; 8] {
-        [
-            self.nutrient_a_ml,
-            self.nutrient_b_ml,
-            self.ph_up_ml,
-            self.ph_down_ml,
-            self.water_in_sec,
-            self.water_out_sec,
-            self.mixing_sec,
-            self.misting_sec,
-        ]
-    }
-
     /// Khôi phục cấu trúc vector từ một mảng phẳng 8 phần tử
     pub fn from_array(arr: [f32; 8]) -> Self {
         Self {
@@ -92,27 +78,6 @@ impl InteractionMatrix {
         m.data[3][7] = -0.02; // Phun sương bay hơi làm giảm nhiệt độ nước/môi trường (-)
 
         m
-    }
-
-    /// Phép nhân ma trận: StateDeltaVector (4x1) = InteractionMatrix (4x8) * ControlVector (8x1)
-    pub fn predict(&self, control: &ControlVector) -> StateDeltaVector {
-        let u = control.as_array();
-        let mut y = [0.0; 4];
-
-        for row in 0..4 {
-            let mut sum = 0.0;
-            for col in 0..8 {
-                sum += self.data[row][col] * u[col];
-            }
-            y[row] = sum;
-        }
-
-        StateDeltaVector {
-            ec_delta: y[0],
-            ph_delta: y[1],
-            water_level_delta: y[2],
-            temp_delta: y[3],
-        }
     }
 
     pub fn update_column(
@@ -211,14 +176,6 @@ impl InteractionMatrix {
             self.update_column(7, actual_misting_sec, delta_temp, 3, k7);
             self.update_column(7, actual_misting_sec, delta_ec * 0.1, 0, k7 * 0.1);
             self.update_column(7, actual_misting_sec, delta_ph * 0.1, 1, k7 * 0.1);
-        }
-    }
-
-    pub fn get(&self, row: usize, col: usize) -> f32 {
-        if row < 4 && col < 8 {
-            self.data[row][col]
-        } else {
-            0.0
         }
     }
 

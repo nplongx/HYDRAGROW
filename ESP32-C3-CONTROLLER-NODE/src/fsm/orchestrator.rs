@@ -126,6 +126,18 @@ fn merge_tick_results(mut base: TickResult, addition: TickResult) -> TickResult 
     if addition.delta.water_change_cron.is_some() {
         base.delta.water_change_cron = addition.delta.water_change_cron;
     }
+    if addition.delta.reset_safety_budget {
+        base.delta.reset_safety_budget = true;
+    }
+    if addition.delta.safety_override_until.is_some() {
+        base.delta.safety_override_until = addition.delta.safety_override_until;
+    }
+    if addition.delta.manual_pump_timeout.is_some() {
+        base.delta.manual_pump_timeout = addition.delta.manual_pump_timeout;
+    }
+    if addition.delta.manual_pump_timeout_clear.is_some() {
+        base.delta.manual_pump_timeout_clear = addition.delta.manual_pump_timeout_clear;
+    }
     base
 }
 

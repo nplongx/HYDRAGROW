@@ -89,6 +89,10 @@ const AdvancedSpecsGrid = ({ dosing }: { dosing: any }) => {
   if (dosing.ema_ph_shift_used != null) rows.push({ label: 'Hệ số dịch chuyển pH', value: Number(dosing.ema_ph_shift_used).toFixed(5), accent: 'text-orange-400 font-mono' });
   if (dosing.step_ratio_ec != null) rows.push({ label: 'Bước nhảy Kalman EC', value: `${(Number(dosing.step_ratio_ec) * 100).toFixed(0)}%`, accent: 'text-yellow-400' });
   if (dosing.step_ratio_ph != null) rows.push({ label: 'Bước nhảy Kalman pH', value: `${(Number(dosing.step_ratio_ph) * 100).toFixed(0)}%`, accent: 'text-yellow-400' });
+  if (dosing.kalman?.matrix_update_count != null) rows.push({ label: 'Số lần cập nhật ma trận', value: String(dosing.kalman.matrix_update_count), accent: 'text-emerald-400 font-mono' });
+  if (dosing.kalman?.matrix_is_warm != null) rows.push({ label: 'Trạng thái ma trận', value: dosing.kalman.matrix_is_warm ? 'Đã ổn định' : 'Đang học', accent: 'text-emerald-300' });
+  if (dosing.kalman?.adaptive_mixing_sec != null) rows.push({ label: 'Thời gian trộn tự học', value: `${dosing.kalman.adaptive_mixing_sec} giây`, accent: 'text-indigo-300' });
+  if (dosing.kalman?.adaptive_stabilize_sec != null) rows.push({ label: 'Thời gian bão hòa tự học', value: `${dosing.kalman.adaptive_stabilize_sec} giây`, accent: 'text-indigo-300' });
 
   if (rows.length === 0) return null;
 
@@ -113,7 +117,7 @@ const AdvancedSpecsGrid = ({ dosing }: { dosing: any }) => {
 // ─── Component Thẻ Chu Kỳ Thông Minh ───────────────────────────────────────
 const DosingReportCard = ({ record, index }: { record: DosingReportRecord; index: number }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const dosing = record.payload?.dosing_data;
+  const dosing = record.payload?.dosing_data ?? record.payload;
   if (!dosing) return null;
 
   // Tính toán câu tóm tắt tự động
@@ -257,7 +261,7 @@ const DosingHistory = () => {
       ];
 
       const csvRows = history.map(row => {
-        const d = row.payload?.dosing_data ?? {};
+        const d = row.payload?.dosing_data ?? row.payload ?? {};
         const prePh = d.pre?.ph?.toFixed(2) ?? ''; const postPh = d.post_stable?.ph?.toFixed(2) ?? '';
         const preEc = d.pre?.ec?.toFixed(2) ?? ''; const postEc = d.post_stable?.ec?.toFixed(2) ?? '';
 

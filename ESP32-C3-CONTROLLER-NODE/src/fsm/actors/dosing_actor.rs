@@ -4,7 +4,6 @@ use hydragrow_shared::{ControllerConfig, SensorData};
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use crate::fsm::matrix::ControlVector;
 use crate::fsm::utils::{effective_flow_ml_per_sec, DosePumpKind};
-use crate::pump::PumpType; // Loại bỏ PumpController trực tiếp
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DosingSubState {
@@ -51,20 +50,10 @@ pub enum PumpTarget {
 
 #[derive(Debug, Clone)]
 pub struct DosingCycleCtx {
-    pub cycle_id: String,
     pub dose_a_delivered_ml: f32,
     pub dose_b_delivered_ml: f32,
     pub ph_up_delivered_ml: f32,
     pub ph_down_delivered_ml: f32,
-    pub trigger: String,
-    pub start_ec: f32,
-    pub start_ph: f32,
-    pub target_ec: f32,
-    pub target_ph: f32,
-    pub start_water_level: f32,
-    pub start_ms: u64,
-    pub post_mixing_ec: f32,
-    pub post_mixing_ph: f32,
 }
 
 #[must_use]
@@ -114,27 +103,17 @@ impl DosingActor {
         &mut self,
         now_ms: u64,
         control: &ControlVector,
-        target_ec: f32,
-        target_ph: f32,
+        _target_ec: f32,
+        _target_ph: f32,
         pwm: u32,
         config: &ControllerConfig,
-        sensors: &SensorData,
+        _sensors: &SensorData,
     ) {
         self.cycle_ctx = Some(DosingCycleCtx {
-            cycle_id: format!("mimo-{now_ms}"),
             dose_a_delivered_ml: 0.0,
             dose_b_delivered_ml: 0.0,
             ph_up_delivered_ml: 0.0,
             ph_down_delivered_ml: 0.0,
-            trigger: "mimo_matrix_control".to_string(),
-            start_ec: sensors.ec as f32,
-            start_ph: sensors.ph as f32,
-            target_ec,
-            target_ph,
-            start_water_level: sensors.water_level as f32,
-            start_ms: now_ms,
-            post_mixing_ec: 0.0,
-            post_mixing_ph: 0.0,
         });
 
         self.pending_ph_job = None;
@@ -343,7 +322,7 @@ impl DosingActor {
     fn tick_pump_b(
         &mut self,
         now_ms: u64,
-        config: &ControllerConfig,
+        _config: &ControllerConfig,
     ) -> (DosingEvent, Vec<OrchestratorEvent>) {
         let DosingSubState::PumpingB(mut job) = self.sub_state.clone() else {
             return (DosingEvent::Pending, vec![]);

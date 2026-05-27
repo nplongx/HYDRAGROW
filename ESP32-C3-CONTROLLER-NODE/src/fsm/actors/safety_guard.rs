@@ -8,8 +8,6 @@ pub struct SafetyGuard {
     pub safety_override_until: u64,
     pub last_ec_before_dose: Option<f32>,
     pub last_ph_before_dose: Option<f32>,
-    pub last_ph_dose_up: Option<bool>,
-    pub last_water_before_refill: Option<f32>,
 }
 
 impl SafetyGuard {
@@ -22,8 +20,6 @@ impl SafetyGuard {
             safety_override_until: 0,
             last_ec_before_dose: None,
             last_ph_before_dose: None,
-            last_ph_dose_up: None,
-            last_water_before_refill: None,
         }
     }
 
@@ -65,18 +61,6 @@ impl SafetyGuard {
         true
     }
 
-    // FIX: what is this funtion?
-    pub fn replace_hourly_histories(
-        &mut self,
-        doses: HashMap<String, Vec<(u64, f32)>>,
-        refill: Vec<u64>,
-        drain: Vec<u64>,
-    ) {
-        self.hourly_doses = doses;
-        self.refill_history = refill;
-        self.drain_history = drain;
-    }
-
     pub fn hourly_doses(&self) -> &HashMap<String, Vec<(u64, f32)>> {
         &self.hourly_doses
     }
@@ -89,13 +73,11 @@ impl SafetyGuard {
         &self.drain_history
     }
 
-    // TODO: CALL IT
     pub fn flush_for_reset(&mut self) {
         self.hourly_doses.clear();
         self.refill_history.clear();
         self.drain_history.clear();
         self.last_ec_before_dose = None;
         self.last_ph_before_dose = None;
-        self.last_water_before_refill = None;
     }
 }

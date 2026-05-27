@@ -6,10 +6,29 @@ use tracing::{error, info, instrument, warn};
 use crate::AppState;
 use crate::models::alert::AlertMessage;
 use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
+use hydragrow_shared::telemetry::DeviceHealthSnapshot;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct DeviceStatusPayload {
     pub online: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParsedControllerStatus {
+    pub raw_json: serde_json::Value,
+    pub health_snapshot: Option<DeviceHealthSnapshot>,
+}
+
+pub fn parse_controller_status_payload(
+    payload: &[u8],
+) -> Result<ParsedControllerStatus, serde_json::Error> {
+    let raw_json = serde_json::from_slice::<serde_json::Value>(payload)?;
+    let health_snapshot = serde_json::from_value::<DeviceHealthSnapshot>(raw_json.clone()).ok();
+
+    Ok(ParsedControllerStatus {
+        raw_json,
+        health_snapshot,
+    })
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id, node_type = %node_type))]
@@ -69,7 +88,8 @@ pub async fn handle_device(
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    if let Ok(payload_json) = serde_json::from_slice::<serde_json::Value>(payload) {
+    if let Ok(parsed) = parse_controller_status_payload(payload) {
+        let payload_json = parsed.raw_json;
         let mut states = app_state.device_states.write().await;
 
         let mut merged = states
@@ -126,7 +146,75 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
         if let Ok(updated_str) = serde_json::to_string(&merged) {
             states.insert(device_id.clone(), updated_str);
         }
+
+        drop(states);
+
+        if let Some(snapshot) = parsed.health_snapshot {
+            let _ = app_state.event_bus.send(AppEvent::HealthSnapshot(snapshot));
+        }
     } else {
         warn!("Lỗi parse JSON Health Data từ {}", device_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_controller_status_payload;
+
+    #[test]
+    fn parses_new_device_health_snapshot_payload() {
+        let raw = br#"{
+            "device_id": "device_001",
+            "free_heap": 120000,
+            "uptime_sec": 3600,
+            "rssi": -48,
+            "health_score_percent": 91,
+            "fsm_state_display": "Monitoring",
+            "log_drop_count": 2,
+            "kalman_confidence": {
+                "nutrient_a": 0.9,
+                "nutrient_b": 0.8,
+                "ph_up": 0.7,
+                "ph_down": 0.6,
+                "water_in": 0.5,
+                "water_out": 0.4,
+                "osaka_mixing": 0.3,
+                "misting": 0.2
+            },
+            "matrix_update_count": 12,
+            "matrix_is_warm": true,
+            "timestamp_ms": 1748000000000
+        }"#;
+
+        let parsed = parse_controller_status_payload(raw).unwrap();
+
+        assert_eq!(
+            parsed
+                .health_snapshot
+                .as_ref()
+                .unwrap()
+                .health_score_percent,
+            91
+        );
+        assert_eq!(
+            parsed.health_snapshot.as_ref().unwrap().fsm_state_display,
+            "Monitoring"
+        );
+        assert_eq!(parsed.raw_json["matrix_update_count"], 12);
+    }
+
+    #[test]
+    fn parses_legacy_controller_health_payload() {
+        let raw = br#"{
+            "free_heap": 64000,
+            "uptime_sec": 20,
+            "rssi": -62,
+            "pump_status": {"pump_a": true}
+        }"#;
+
+        let parsed = parse_controller_status_payload(raw).unwrap();
+
+        assert!(parsed.health_snapshot.is_none());
+        assert_eq!(parsed.raw_json["pump_status"]["pump_a"], true);
     }
 }

@@ -1,4 +1,4 @@
-use esp_idf_hal::gpio::{AnyOutputPin, Output, PinDriver};
+use esp_idf_hal::gpio::{Output, PinDriver};
 use esp_idf_hal::ledc::LedcDriver;
 use log::{info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -217,33 +217,6 @@ impl PumpController {
             let target_duty = ((max_duty as f32 * percent as f32) / 100.0) as u32;
             pump.set_duty(target_duty)?;
         }
-        Ok(())
-    }
-
-    pub fn set_osaka_pump(&mut self, state: bool) -> anyhow::Result<()> {
-        if state {
-            self.set_osaka_pump_pwm(100)
-        } else {
-            self.set_osaka_pump_pwm(0)
-        }
-    }
-
-    pub fn stop_all(&mut self) -> anyhow::Result<()> {
-        warn!("🚨 CẢNH BÁO: Kích hoạt ngắt khẩn cấp toàn bộ hệ thống!");
-        self.cancel_soft_start.store(true, Ordering::SeqCst);
-
-        self.pump_a.set_duty(0)?;
-        self.pump_b.set_duty(0)?;
-        self.pump_ph_up.set_duty(0)?;
-        self.pump_ph_down.set_duty(0)?;
-        self.valve_mist.set_low()?;
-
-        self.osaka_en.set_low()?;
-        if let Ok(mut rpwm) = self.osaka_rpwm.lock() {
-            let _ = rpwm.set_duty(0);
-        }
-
-        self.set_water_pump(WaterDirection::Stop)?;
         Ok(())
     }
 }

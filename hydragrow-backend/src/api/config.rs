@@ -332,7 +332,7 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
         return Err("pump_ph_down_capacity_ml_per_sec must be > 0".to_string());
     }
     if dose.dosing_min_pwm_percent > dose.dosing_pwm_percent {
-       return Err("dosing_min_pwm_percent must be <= dosing_pwm_percent".to_string());
+        return Err("dosing_min_pwm_percent must be <= dosing_pwm_percent".to_string());
     }
 
     Ok(())

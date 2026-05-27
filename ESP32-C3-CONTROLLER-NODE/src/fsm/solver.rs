@@ -3,10 +3,10 @@
 //! Cold path dùng hằng số config tĩnh.
 //! Warm path dùng Moore-Penrose giả nghịch đảo.
 
-use hydragrow_shared::{ControllerConfig, SensorData};
 use crate::fsm::matrix::{ControlVector, StateDeltaVector};
 use crate::fsm::optimizer::apply_safety_guardrails;
 use crate::fsm::system_context::SystemContext;
+use hydragrow_shared::{ControllerConfig, SensorData};
 
 /// Kết quả từ solver: control vector và target để pass vào DosingActor.
 #[derive(Debug, Clone)]
@@ -121,8 +121,8 @@ impl SolverStrategy for ColdPathSolver {
             && safe_water_delta < 0.0
             && config.auto_drain_overflow
         {
-            control.water_out_sec = (safe_water_delta.abs() / 0.1)
-                .clamp(0.0, config.max_drain_duration_sec as f32);
+            control.water_out_sec =
+                (safe_water_delta.abs() / 0.1).clamp(0.0, config.max_drain_duration_sec as f32);
         }
 
         SolveResult::Execute {

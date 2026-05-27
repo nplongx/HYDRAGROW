@@ -87,39 +87,8 @@ pub struct SystemContext {
     pub stabilizer_tracker: SensorStabilizerTracker,
     pub diagnostic: FsmDiagnostics,
     pub water_change_cron: CronSchedule,
-    pub scheduled_dosing_cron: CronSchedule,
     pub last_water_change_sec: u64,
     pub next_water_change_trigger_sec: Option<u64>,
-    pub next_scheduled_dosing_trigger_sec: Option<u64>,
-}
-
-impl SystemContext {
-    pub fn apply_peripheral_delta(&mut self, pd: crate::fsm::tick_result::PeripheralDelta) {
-        let p = &mut self.peripherals;
-        if let Some(v) = pd.osaka_pump {
-            p.pump_status.osaka_pump = v;
-            // Đã xóa p.osaka_active = v; (Task 2)
-        }
-        if let Some(v) = pd.osaka_pwm {
-            p.pump_status.osaka_pwm = Some(v);
-            p.osaka_pwm = v;
-        }
-        if let Some(v) = pd.is_misting_active {
-            p.is_misting_active = v;
-        }
-        if let Some(v) = pd.last_mist_toggle_time {
-            p.last_mist_toggle_time = v;
-        }
-        if let Some(v) = pd.mist_valve {
-            p.pump_status.mist_valve = v;
-        }
-        if let Some(v) = pd.is_scheduled_mixing_active {
-            p.is_scheduled_mixing_active = v;
-        }
-        if let Some(v) = pd.last_mixing_start_sec {
-            p.last_mixing_start_sec = v;
-        }
-    }
 }
 
 impl SystemContext {
@@ -172,6 +141,11 @@ impl SystemContext {
 
         if let Some(cron) = delta.water_change_cron.clone() {
             self.water_change_cron = cron;
+        }
+
+        if delta.reset_safety_budget {
+            self.safety.flush_for_reset();
+            self.tuner.on_manual_reset();
         }
 
         if let Some(until) = delta.safety_override_until {
@@ -290,10 +264,8 @@ impl Default for SystemContext {
             stabilizer_tracker: SensorStabilizerTracker::default(),
             diagnostic: FsmDiagnostics::default(),
             water_change_cron: String::new(),
-            scheduled_dosing_cron: String::new(),
             last_water_change_sec: 0,
             next_water_change_trigger_sec: None,
-            next_scheduled_dosing_trigger_sec: None,
         }
     }
 }
@@ -309,18 +281,6 @@ pub struct PeripheralState {
     pub previous_ec: Option<f32>,
     pub previous_ph: Option<f32>,
     pub misting_started_by_dosing: bool,
-}
-
-impl PeripheralState {
-    pub fn reset(&mut self, now_sec: u64) {
-        self.pump_status = PumpStatus::default();
-        self.osaka_pwm = 0;
-        self.is_misting_active = false;
-        self.is_scheduled_mixing_active = false;
-        self.last_mist_toggle_time = 0;
-        self.misting_started_by_dosing = false;
-        self.last_mixing_start_sec = now_sec;
-    }
 }
 
 pub struct CalibrationSampler {

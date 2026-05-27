@@ -5,11 +5,9 @@ use esp_idf_svc::mqtt::client::{
 use hydragrow_shared::topics::{
     topic_controller_command, topic_controller_config, topic_sensors, topic_status,
 };
-use hydragrow_shared::{
-    ControllerConfig, ControllerHealthPayload, MqttCommandIn, PumpStatus, SensorData,
-};
+use hydragrow_shared::{ControllerConfig, MqttCommandIn, PumpStatus, SensorData};
 use log::{debug, error, info, warn};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use esp_idf_sys::{

@@ -9,13 +9,13 @@ use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
+use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence};
 use hydragrow_shared::topics::{
     topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
     topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
     topic_status,
 };
-use log::{error, info, warn, LevelFilter};
-use std::sync::atomic::{AtomicBool, Ordering};
+use log::{error, info, warn};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
@@ -30,7 +30,7 @@ use mqtt::{create_shared_sensor_data, ConnectionState};
 use pump::PumpController;
 
 use crate::fsm::start_fsm_control_loop;
-use crate::fsm::utils::{get_current_time_ms, get_current_time_sec};
+use crate::fsm::utils::get_current_time_sec;
 
 const WIFI_SSID: &str = "Huynh Hong";
 const WIFI_PASS: &str = "123443215";
@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
     let shared_config = create_shared_config();
     let shared_sensor_data = create_shared_sensor_data(DEVICE_ID);
     if let Ok(mut cfg) = shared_config.write() {
-        if let Ok(mut agitech_nvs) = EspNvs::new(nvs.clone(), "agitech", true) {
+        if let Ok(agitech_nvs) = EspNvs::new(nvs.clone(), "agitech", true) {
             if let Ok(Some(saved_id)) = agitech_nvs.get_str("device_id", &mut [0; 64]) {
                 cfg.device_id = saved_id.to_string();
             } else {
@@ -238,6 +238,8 @@ fn main() -> anyhow::Result<()> {
 
     let mut force_publish_next = false;
     let mut last_health_publish = std::time::Instant::now();
+    let mut latest_fsm_snapshot: Option<serde_json::Value> = None;
+    let mut latest_runtime_calibration: Option<serde_json::Value> = None;
 
     loop {
         // XỬ LÝ TRẠNG THÁI KẾT NỐI
@@ -296,6 +298,15 @@ fn main() -> anyhow::Result<()> {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
+                        if v.get("current_phase").is_some() {
+                            latest_fsm_snapshot = Some(v.clone());
+                        }
+                        if v.get("type").and_then(|t| t.as_str())
+                            == Some("runtime_calibration_update")
+                        {
+                            latest_runtime_calibration = Some(v.clone());
+                        }
+
                         let topic = if let Some(override_topic) =
                             v.get("_mqtt_topic_override").and_then(|t| t.as_str())
                         {
@@ -313,7 +324,9 @@ fn main() -> anyhow::Result<()> {
                             match v.get("type").and_then(|t| t.as_str()) {
                                 Some("water_event") | Some("system_alert")
                                 | Some("dosing_cycle") => topic_fsm_events(DEVICE_ID),
-                                Some("ema_update") | Some("auto_tune") => {
+                                Some("ema_update")
+                                | Some("auto_tune")
+                                | Some("runtime_calibration_update") => {
                                     topic_calibration(DEVICE_ID)
                                 }
                                 _ => topic_fsm_state(DEVICE_ID),
@@ -373,13 +386,66 @@ fn main() -> anyhow::Result<()> {
             force_publish_next = false; // Xóa cờ sau khi gửi
 
             if let Some(client) = mqtt_client.as_mut() {
-                let current_pump_status = shared_sensor_data.read().unwrap().pump_status.clone();
+                let diagnostics = latest_fsm_snapshot
+                    .as_ref()
+                    .and_then(|v| v.get("diagnostics"));
+                let health_score_percent = diagnostics
+                    .and_then(|v| v.get("health_score_percent"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as u32;
+                let log_drop_count = diagnostics
+                    .and_then(|v| v.get("log_drop_count"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let fsm_state_display = latest_fsm_snapshot
+                    .as_ref()
+                    .and_then(|v| v.get("current_phase"))
+                    .map(|phase| {
+                        phase
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| phase.to_string().trim_matches('"').to_string())
+                    })
+                    .unwrap_or_else(|| "Unknown".to_string());
 
-                let health_payload = hydragrow_shared::ControllerHealthPayload {
+                let runtime_coefficients = latest_runtime_calibration
+                    .as_ref()
+                    .and_then(|v| v.get("runtime_coefficients"));
+                let matrix_update_count = runtime_coefficients
+                    .and_then(|v| v.get("matrix_update_count"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as u32;
+                let matrix_is_warm = runtime_coefficients
+                    .and_then(|v| v.get("matrix_is_warm"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let kalman_confidence = runtime_coefficients
+                    .and_then(|v| v.get("kalman_confidence"))
+                    .and_then(|v| v.as_array())
+                    .filter(|items| items.len() == 8)
+                    .map(|items| KalmanConfidence {
+                        nutrient_a: items[0].as_f64().unwrap_or(0.0) as f32,
+                        nutrient_b: items[1].as_f64().unwrap_or(0.0) as f32,
+                        ph_up: items[2].as_f64().unwrap_or(0.0) as f32,
+                        ph_down: items[3].as_f64().unwrap_or(0.0) as f32,
+                        water_in: items[4].as_f64().unwrap_or(0.0) as f32,
+                        water_out: items[5].as_f64().unwrap_or(0.0) as f32,
+                        osaka_mixing: items[6].as_f64().unwrap_or(0.0) as f32,
+                        misting: items[7].as_f64().unwrap_or(0.0) as f32,
+                    });
+
+                let health_payload = DeviceHealthSnapshot {
+                    device_id: DEVICE_ID.to_string(),
                     free_heap: crate::mqtt::get_free_heap(),
                     uptime_sec: crate::mqtt::get_uptime_sec(),
                     rssi: crate::mqtt::get_wifi_rssi(),
-                    pump_status: current_pump_status,
+                    health_score_percent,
+                    fsm_state_display,
+                    log_drop_count,
+                    kalman_confidence,
+                    matrix_update_count,
+                    matrix_is_warm,
+                    timestamp_ms: get_current_time_sec() * 1000,
                 };
 
                 if let Ok(json_string) = serde_json::to_string(&health_payload) {

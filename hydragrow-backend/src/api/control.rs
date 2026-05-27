@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
-use hydragrow_shared::{MqttCommandParams, MqttCommandOut};
+use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

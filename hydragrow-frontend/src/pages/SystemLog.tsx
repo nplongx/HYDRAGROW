@@ -170,14 +170,66 @@ const CalibrationMetadata = ({ meta }: { meta: any }) => {
   );
 };
 
+const formatMetadataLabel = (key: string) => {
+  const labels: Record<string, string> = {
+    event_type: 'Loại sự kiện',
+    source: 'Nguồn phát sinh',
+    message: 'Thông điệp chi tiết',
+    skip_reason: 'Lý do bỏ qua',
+    cycle_id: 'Mã chu kỳ',
+    alert_type: 'Mã cảnh báo',
+    retry_count: 'Số lần thử lại',
+    limit_value: 'Ngưỡng giới hạn',
+    threshold_before: 'Ngưỡng trước',
+    threshold_after: 'Ngưỡng sau',
+    parameter: 'Tham số',
+    old_value: 'Giá trị cũ',
+    new_value: 'Giá trị mới',
+  };
+  return labels[key] ?? key.replace(/_/g, ' ');
+};
+
+const formatMetadataValue = (value: any): string => {
+  if (value == null) return '';
+  if (typeof value === 'boolean') return value ? 'Có' : 'Không';
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(4);
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
+};
+
+const GenericMetadata = ({ meta, title = 'Thông số kỹ thuật' }: { meta: any; title?: string }) => {
+  if (!meta) return null;
+  const rows = Object.entries(meta)
+    .filter(([, value]) => value != null && value !== '')
+    .map(([key, value]) => ({
+      label: formatMetadataLabel(key),
+      value: formatMetadataValue(value),
+      accent: key === 'event_type' || key === 'cycle_id' ? 'text-indigo-700 font-mono font-bold' : undefined,
+    }));
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-1.5 text-xs font-medium bg-emerald-50/80 border border-emerald-100 rounded-xl px-3 py-2.5">
+      <div className="text-[9px] font-black text-emerald-700/75 mb-0.5 uppercase tracking-wider">{title}</div>
+      {rows.map(r => (
+        <div key={r.label} className="flex items-center justify-between gap-3 border-b border-white/5 last:border-transparent pb-1 last:pb-0">
+          <span className="text-emerald-800/80 text-[11px] capitalize">{r.label}</span>
+          <span className={`${r.accent ?? 'text-emerald-900'} text-[11px] text-right break-all`}>{r.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const MetadataRenderer = ({ metadata }: { metadata?: Record<string, any> }) => {
   if (!metadata) return null;
   switch (metadata.event_type) {
     case 'WaterEvent': return <WaterMetadata meta={metadata} />;
     case 'SystemAlert': return <AlertMetadata meta={metadata} />;
     case 'CalibrationUpdate': return <CalibrationMetadata meta={metadata} />;
+    case 'BasicSystemLog': return <GenericMetadata meta={metadata} title="Thông số nhật ký hệ thống" />;
     case 'DosingCycleComplete': return <DosingMetadata meta={metadata} />;
-    default: return null;
+    default: return <GenericMetadata meta={metadata} />;
   }
 };
 

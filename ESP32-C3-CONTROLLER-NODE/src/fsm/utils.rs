@@ -1,5 +1,5 @@
 use hydragrow_shared::{
-    log::{LogCategory, LogLevel, SystemLogEvent, SystemLogPublisher},
+    log::{emit_system_log_event, LogCategory, LogLevel, SystemLogEvent},
     ControllerConfig,
 };
 use std::{
@@ -88,8 +88,8 @@ pub fn send_system_log(
     event: SystemLogEvent,
 ) {
     let ts = get_current_time_ms();
-    let publisher = SystemLogPublisher::new(tx, &LOG_DROP_COUNT);
-    publisher.publish_event(device_id, level, category, title, event, ts);
+    let _ = tx;
+    emit_system_log_event(device_id, level, category, title, event, ts);
 }
 
 pub fn get_log_drop_count() -> u32 {

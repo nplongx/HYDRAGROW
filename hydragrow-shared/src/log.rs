@@ -3,6 +3,9 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
     mpsc::Sender,
 };
+use tracing::field::{Field, Visit};
+use tracing::{Event, Subscriber};
+use tracing_subscriber::Layer;
 
 /// Cấp độ nghiêm trọng của Log
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,6 +39,16 @@ impl LogLevel {
             Self::Critical => "critical",
         }
     }
+
+    fn from_field(value: &str) -> Option<Self> {
+        match value.trim_matches('"').to_ascii_lowercase().as_str() {
+            "info" => Some(Self::Info),
+            "success" => Some(Self::Success),
+            "warning" | "warn" => Some(Self::Warning),
+            "critical" | "error" => Some(Self::Critical),
+            _ => None,
+        }
+    }
 }
 
 impl LogCategory {
@@ -48,6 +61,19 @@ impl LogCategory {
             Self::Sensor => "sensor",
             Self::Alert => "alert",
             Self::UserAction => "user_action",
+        }
+    }
+
+    fn from_field(value: &str) -> Option<Self> {
+        match value.trim_matches('"').to_ascii_lowercase().as_str() {
+            "system" => Some(Self::System),
+            "dosing" => Some(Self::Dosing),
+            "water" => Some(Self::Water),
+            "calibration" => Some(Self::Calibration),
+            "sensor" => Some(Self::Sensor),
+            "alert" => Some(Self::Alert),
+            "user_action" => Some(Self::UserAction),
+            _ => None,
         }
     }
 }
@@ -143,66 +169,27 @@ pub struct SystemLogRecord<'a> {
     pub timestamp_ms: u64,
 }
 
-pub struct SystemLogPublisher<'a> {
-    tx: &'a Sender<String>,
-    drop_count: &'a AtomicU32,
+pub struct SystemLogLayer {
+    tx: Sender<String>,
+    drop_count: &'static AtomicU32,
 }
 
-impl<'a> SystemLogPublisher<'a> {
-    pub fn new(tx: &'a Sender<String>, drop_count: &'a AtomicU32) -> Self {
+#[derive(Default)]
+struct SystemLogVisitor {
+    device_id: Option<String>,
+    level: Option<String>,
+    category: Option<String>,
+    title: Option<String>,
+    source: Option<String>,
+    message: Option<String>,
+    cycle_id: Option<String>,
+    timestamp_ms: Option<u64>,
+    payload_json: Option<String>,
+}
+
+impl SystemLogLayer {
+    pub fn new(tx: Sender<String>, drop_count: &'static AtomicU32) -> Self {
         Self { tx, drop_count }
-    }
-
-    pub fn publish_basic(&self, record: SystemLogRecord<'_>) {
-        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
-            source: record.source.to_string(),
-            message: record.message.to_string(),
-            skip_reason: None,
-            cycle_id: record.cycle_id.map(ToString::to_string),
-        });
-
-        self.publish_event(
-            record.device_id,
-            record.level,
-            record.category,
-            record.title,
-            event,
-            record.timestamp_ms,
-        );
-    }
-
-    pub fn publish_event(
-        &self,
-        device_id: &str,
-        level: LogLevel,
-        category: LogCategory,
-        title: &str,
-        event: SystemLogEvent,
-        timestamp_ms: u64,
-    ) {
-        trace_system_log_event(device_id, &level, &category, title, &event, timestamp_ms);
-
-        let log = match level {
-            LogLevel::Info => {
-                UnifiedSystemLog::info(device_id, category, title, event, timestamp_ms)
-            }
-            LogLevel::Warning => {
-                UnifiedSystemLog::warning(device_id, category, title, event, timestamp_ms)
-            }
-            LogLevel::Critical => {
-                UnifiedSystemLog::critical(device_id, category, title, event, timestamp_ms)
-            }
-            LogLevel::Success => {
-                UnifiedSystemLog::success(device_id, category, title, event, timestamp_ms)
-            }
-        };
-
-        match serde_json::to_string(&log) {
-            Ok(json) => self.publish_json(json),
-            Err(error) => {
-                tracing::error!(target: "hydragrow.system_log", %device_id, %title, ?error, "failed to serialize system log");
-            }
-        }
     }
 
     fn publish_json(&self, json: String) {
@@ -210,59 +197,210 @@ impl<'a> SystemLogPublisher<'a> {
             let previous = self.drop_count.fetch_add(1, Ordering::Relaxed);
             if previous % 10 == 0 {
                 tracing::warn!(
-                    target: "hydragrow.system_log",
+                    target: "hydragrow.system_log.layer",
                     dropped_logs = previous + 1,
                     "MQTT system log channel is full or closed"
                 );
             }
         }
     }
+
+    fn publish_visitor(&self, visitor: SystemLogVisitor) {
+        if let Some(payload_json) = visitor.payload_json {
+            self.publish_json(payload_json);
+            return;
+        }
+
+        let Some(device_id) = visitor.device_id else {
+            tracing::debug!(target: "hydragrow.system_log.layer", "missing device_id field");
+            return;
+        };
+        let Some(level) = visitor.level.and_then(|value| LogLevel::from_field(&value)) else {
+            tracing::debug!(target: "hydragrow.system_log.layer", "missing or invalid log_level field");
+            return;
+        };
+        let Some(category) = visitor
+            .category
+            .and_then(|value| LogCategory::from_field(&value))
+        else {
+            tracing::debug!(target: "hydragrow.system_log.layer", "missing or invalid category field");
+            return;
+        };
+        let Some(title) = visitor.title else {
+            tracing::debug!(target: "hydragrow.system_log.layer", "missing title field");
+            return;
+        };
+        let Some(source) = visitor.source else {
+            tracing::debug!(target: "hydragrow.system_log.layer", "missing source field");
+            return;
+        };
+        let Some(message) = visitor.message else {
+            tracing::debug!(target: "hydragrow.system_log.layer", "missing message field");
+            return;
+        };
+
+        let event = SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            cycle_id: visitor.cycle_id,
+            source,
+            message,
+            skip_reason: None,
+        });
+        let timestamp_ms = visitor.timestamp_ms.unwrap_or(0);
+        let log = build_unified_system_log(device_id, level, category, title, event, timestamp_ms);
+
+        match serde_json::to_string(&log) {
+            Ok(json) => self.publish_json(json),
+            Err(error) => tracing::error!(
+                target: "hydragrow.system_log.layer",
+                ?error,
+                "failed to serialize system log"
+            ),
+        }
+    }
 }
 
-fn trace_system_log_event(
+impl<S> Layer<S> for SystemLogLayer
+where
+    S: Subscriber,
+{
+    fn on_event(&self, event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if event.metadata().target() != "hydragrow.system_log" {
+            return;
+        }
+
+        let mut visitor = SystemLogVisitor::default();
+        event.record(&mut visitor);
+        self.publish_visitor(visitor);
+    }
+}
+
+impl Visit for SystemLogVisitor {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.record_field(field.name(), value.to_string());
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        let mut rendered = format!("{value:?}");
+        if rendered.len() >= 2 && rendered.starts_with('"') && rendered.ends_with('"') {
+            rendered = rendered[1..rendered.len() - 1].to_string();
+        }
+        self.record_field(field.name(), rendered);
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        if field.name() == "timestamp_ms" && value >= 0 {
+            self.timestamp_ms = Some(value as u64);
+        }
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        if field.name() == "timestamp_ms" {
+            self.timestamp_ms = Some(value);
+        }
+    }
+}
+
+impl SystemLogVisitor {
+    fn record_field(&mut self, name: &str, value: String) {
+        match name {
+            "device_id" => self.device_id = Some(value),
+            "log_level" | "level" => self.level = Some(value),
+            "category" => self.category = Some(value),
+            "title" => self.title = Some(value),
+            "source" => self.source = Some(value),
+            "message" => self.message = Some(value),
+            "cycle_id" if !value.is_empty() => self.cycle_id = Some(value),
+            "payload_json" => self.payload_json = Some(value),
+            _ => {}
+        }
+    }
+}
+
+pub fn emit_basic_system_log(record: SystemLogRecord<'_>) {
+    tracing::event!(
+        target: "hydragrow.system_log",
+        tracing::Level::INFO,
+        device_id = record.device_id,
+        log_level = record.level.as_str(),
+        category = record.category.as_str(),
+        title = record.title,
+        source = record.source,
+        message = record.message,
+        cycle_id = record.cycle_id.unwrap_or(""),
+        timestamp_ms = record.timestamp_ms,
+        "system log"
+    );
+}
+
+pub fn emit_system_log_event(
     device_id: &str,
-    level: &LogLevel,
-    category: &LogCategory,
+    level: LogLevel,
+    category: LogCategory,
     title: &str,
-    event: &SystemLogEvent,
+    event: SystemLogEvent,
     timestamp_ms: u64,
 ) {
-    match level {
-        LogLevel::Info | LogLevel::Success => {
-            tracing::info!(
-                target: "hydragrow.system_log",
-                %device_id,
-                level = level.as_str(),
-                category = category.as_str(),
-                %title,
-                ?event,
+    match event {
+        SystemLogEvent::BasicSystemLog(metadata) => {
+            emit_basic_system_log(SystemLogRecord {
+                device_id,
+                level,
+                category,
+                title,
+                source: &metadata.source,
+                message: &metadata.message,
+                cycle_id: metadata.cycle_id.as_deref(),
                 timestamp_ms,
-                "system log"
-            );
+            });
         }
-        LogLevel::Warning => {
-            tracing::warn!(
-                target: "hydragrow.system_log",
-                %device_id,
-                level = level.as_str(),
-                category = category.as_str(),
-                %title,
-                ?event,
+        event => {
+            let log = build_unified_system_log(
+                device_id.to_string(),
+                level,
+                category,
+                title.to_string(),
+                event,
                 timestamp_ms,
-                "system log"
             );
+            match serde_json::to_string(&log) {
+                Ok(payload_json) => emit_system_log_json(&payload_json),
+                Err(error) => tracing::error!(
+                    target: "hydragrow.system_log.layer",
+                    ?error,
+                    "failed to serialize system log event before tracing"
+                ),
+            }
+        }
+    }
+}
+
+pub fn emit_system_log_json(payload_json: &str) {
+    tracing::event!(
+        target: "hydragrow.system_log",
+        tracing::Level::INFO,
+        payload_json,
+        "system log payload"
+    );
+}
+
+fn build_unified_system_log(
+    device_id: String,
+    level: LogLevel,
+    category: LogCategory,
+    title: String,
+    event: SystemLogEvent,
+    timestamp_ms: u64,
+) -> UnifiedSystemLog {
+    match level {
+        LogLevel::Info => UnifiedSystemLog::info(device_id, category, title, event, timestamp_ms),
+        LogLevel::Warning => {
+            UnifiedSystemLog::warning(device_id, category, title, event, timestamp_ms)
         }
         LogLevel::Critical => {
-            tracing::error!(
-                target: "hydragrow.system_log",
-                %device_id,
-                level = level.as_str(),
-                category = category.as_str(),
-                %title,
-                ?event,
-                timestamp_ms,
-                "system log"
-            );
+            UnifiedSystemLog::critical(device_id, category, title, event, timestamp_ms)
+        }
+        LogLevel::Success => {
+            UnifiedSystemLog::success(device_id, category, title, event, timestamp_ms)
         }
     }
 }
@@ -400,26 +538,29 @@ impl UnifiedSystemLog {
 }
 
 #[cfg(test)]
-mod publisher_tests {
+mod system_log_layer_tests {
     use super::*;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::mpsc;
+    use tracing_subscriber::prelude::*;
 
     #[test]
-    fn publisher_builds_basic_system_log_payload() {
+    fn system_log_layer_publishes_basic_event_from_tracing_fields() {
         let (tx, rx) = mpsc::channel();
-        let drop_count = AtomicU32::new(0);
-        let publisher = SystemLogPublisher::new(&tx, &drop_count);
+        let drop_count = Box::leak(Box::new(AtomicU32::new(0)));
+        let subscriber = tracing_subscriber::registry().with(SystemLogLayer::new(tx, drop_count));
 
-        publisher.publish_basic(SystemLogRecord {
-            device_id: "device-1",
-            level: LogLevel::Warning,
-            category: LogCategory::UserAction,
-            title: "Safety Timeout",
-            source: "fsm_command",
-            message: "Pump stopped",
-            cycle_id: Some("cycle-7"),
-            timestamp_ms: 1234,
+        tracing::subscriber::with_default(subscriber, || {
+            emit_basic_system_log(SystemLogRecord {
+                device_id: "device-1",
+                level: LogLevel::Warning,
+                category: LogCategory::UserAction,
+                title: "Safety Timeout",
+                source: "fsm_command",
+                message: "Pump stopped",
+                cycle_id: Some("cycle-7"),
+                timestamp_ms: 1234,
+            });
         });
 
         let payload = rx.recv().expect("system log payload");
@@ -437,25 +578,50 @@ mod publisher_tests {
             }
             _ => panic!("expected basic system log"),
         }
+    }
+
+    #[test]
+    fn system_log_layer_ignores_unrelated_targets() {
+        let (tx, rx) = mpsc::channel();
+        let drop_count = Box::leak(Box::new(AtomicU32::new(0)));
+        let subscriber = tracing_subscriber::registry().with(SystemLogLayer::new(tx, drop_count));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(
+                target: "hydragrow.other",
+                device_id = "device-1",
+                log_level = "warning",
+                category = "user_action",
+                title = "Safety Timeout",
+                source = "fsm_command",
+                message = "Pump stopped",
+                timestamp_ms = 1234_u64,
+                "system log"
+            );
+        });
+
+        assert!(rx.try_recv().is_err());
         assert_eq!(drop_count.load(Ordering::Relaxed), 0);
     }
 
     #[test]
-    fn publisher_increments_drop_count_when_channel_is_closed() {
+    fn system_log_layer_increments_drop_count_when_channel_is_closed() {
         let (tx, rx) = mpsc::channel::<String>();
         drop(rx);
-        let drop_count = AtomicU32::new(0);
-        let publisher = SystemLogPublisher::new(&tx, &drop_count);
+        let drop_count = Box::leak(Box::new(AtomicU32::new(0)));
+        let subscriber = tracing_subscriber::registry().with(SystemLogLayer::new(tx, drop_count));
 
-        publisher.publish_basic(SystemLogRecord {
-            device_id: "device-1",
-            level: LogLevel::Info,
-            category: LogCategory::System,
-            title: "Dropped",
-            source: "test",
-            message: "closed",
-            cycle_id: None,
-            timestamp_ms: 1,
+        tracing::subscriber::with_default(subscriber, || {
+            emit_basic_system_log(SystemLogRecord {
+                device_id: "device-1",
+                level: LogLevel::Info,
+                category: LogCategory::System,
+                title: "Dropped",
+                source: "test",
+                message: "closed",
+                cycle_id: None,
+                timestamp_ms: 1,
+            });
         });
 
         assert_eq!(drop_count.load(Ordering::Relaxed), 1);

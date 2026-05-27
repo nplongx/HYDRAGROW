@@ -33,7 +33,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
+use hydragrow_shared::log::SystemLogLayer;
 use tracing::{debug, info, warn};
+use tracing_subscriber::prelude::*;
 
 use crate::config::SharedConfig;
 use crate::fsm::matrix::InteractionMatrix;
@@ -57,6 +59,36 @@ pub fn start_fsm_control_loop(
     dosing_report_tx: Sender<String>,
     sensor_cmd_tx: Sender<String>,
     _current_time_sec: u64,
+) {
+    let subscriber = tracing_subscriber::registry().with(SystemLogLayer::new(
+        fsm_mqtt_tx.clone(),
+        utils::log_drop_counter(),
+    ));
+
+    tracing::subscriber::with_default(subscriber, move || {
+        start_fsm_control_loop_inner(
+            shared_config,
+            shared_sensors,
+            pump_ctrl,
+            nvs_partition,
+            cmd_rx,
+            fsm_mqtt_tx,
+            dosing_report_tx,
+            sensor_cmd_tx,
+        )
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start_fsm_control_loop_inner(
+    shared_config: SharedConfig,
+    shared_sensors: SharedSensorData,
+    mut pump_ctrl: PumpController,
+    nvs_partition: EspDefaultNvsPartition,
+    cmd_rx: Receiver<MqttCommandIn>,
+    fsm_mqtt_tx: Sender<String>,
+    dosing_report_tx: Sender<String>,
+    sensor_cmd_tx: Sender<String>,
 ) {
     let mut new_ctx = SystemContext::default();
     debug!("FSM tick: phase={:?}", new_ctx.phase.as_str());

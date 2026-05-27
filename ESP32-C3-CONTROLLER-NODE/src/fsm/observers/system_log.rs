@@ -5,8 +5,9 @@
 
 use super::ObserverContext;
 use crate::fsm::events::{DosingPumpTarget, OrchestratorEvent};
-use hydragrow_shared::log::{LogCategory, LogLevel, SystemLogPublisher, SystemLogRecord};
-use tracing::warn;
+use hydragrow_shared::log::{
+    emit_basic_system_log, emit_system_log_json, LogCategory, LogLevel, SystemLogRecord,
+};
 
 pub struct SystemLogObserver {
     /// Đếm số pump-on events kể từ boot (dùng để correlate log)
@@ -22,9 +23,8 @@ impl SystemLogObserver {
         match event {
             // Pass-through: orchestrator đã build log payload đầy đủ
             OrchestratorEvent::PublishSystemLog { payload_json } => {
-                if oc.mqtt_tx.send(payload_json.clone()).is_err() {
-                    warn!("⚠️ [SYSLOG] MQTT channel full, dropped system log");
-                }
+                let _ = oc.mqtt_tx;
+                emit_system_log_json(payload_json);
             }
 
             // Implicit log: bơm dosing bật → ghi log tự động
@@ -104,8 +104,8 @@ impl SystemLogObserver {
         title: &str,
         message: String,
     ) {
-        let publisher = SystemLogPublisher::new(oc.mqtt_tx, crate::fsm::utils::log_drop_counter());
-        publisher.publish_basic(SystemLogRecord {
+        let _ = oc.mqtt_tx;
+        emit_basic_system_log(SystemLogRecord {
             device_id: &oc.config.device_id,
             level,
             category,

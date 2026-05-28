@@ -62,4 +62,6 @@ pub enum AppEvent {
     WaterCycle(WaterCycleEvent),
     /// Snapshot sức khỏe thiết bị
     HealthSnapshot(DeviceHealthSnapshot),
+    /// Raw controller status payload, giữ các field mở rộng như pump_status/budgets nếu firmware gửi kèm.
+    ControllerStatus(serde_json::Value),
 }

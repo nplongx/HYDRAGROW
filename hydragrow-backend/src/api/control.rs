@@ -2,14 +2,16 @@ use actix_web::{HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
 use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
 use rumqttc::QoS;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
 use crate::api::mqtt_utils::publish_command;
+use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::config::{DosingCalibration, SafetyConfig};
+use hydragrow_shared::events::AppEvent;
 
 #[derive(Debug, Deserialize)]
 pub struct PumpControlReq {
@@ -97,10 +99,8 @@ pub async fn control_pump(
         .and_then(|p| p.pwm)
         .or(req_data.pwm);
     let explicit_state = req_data.params.as_ref().and_then(|p| p.state);
-    let target = req_data
-        .target
-        .clone()
-        .unwrap_or_else(|| "pump".to_string());
+    let target = req_data.target.clone();
+    let target = resolve_control_target(target);
 
     if !valid_pumps.contains(&pump_name.as_str()) {
         warn!("Từ chối lệnh: Tên bơm/van không hợp lệ ({})", pump_name);
@@ -176,9 +176,17 @@ pub async fn control_pump(
         _ => "ĐIỀU KHIỂN",
     };
 
+    let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+    let metadata = json!({
+        "event_type": "manual_control",
+        "action": req_data.action.clone(),
+        "pump": pump_name.clone(),
+        "duration_sec": duration_sec,
+        "pwm": pwm,
+    });
     let alert_msg = crate::models::alert::AlertMessage {
         level: "warning".to_string(),
-        category: "alert".to_string(),
+        category: "user_action".to_string(),
         title: "Can Thiệp Thủ Công".to_string(),
         message: format!(
             "Lệnh: {} thiết bị [{}]\nBởi: Người dùng / Ứng dụng",
@@ -186,15 +194,25 @@ pub async fn control_pump(
         ),
         device_id: device_id.clone(),
         reason: None,
-        metadata: Some(json!({
-            "event_type": "manual_control",
-            "action": req_data.action,
-            "pump": pump_name,
-        })),
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        metadata: Some(metadata.clone()),
+        timestamp,
     };
 
-    let _ = app_state.alert_sender.send(alert_msg);
+    let _ = insert_system_event(
+        &app_state.pg_pool,
+        &NewSystemEventRecord {
+            device_id: device_id.clone(),
+            level: alert_msg.level.clone(),
+            category: alert_msg.category.clone(),
+            title: alert_msg.title.clone(),
+            message: alert_msg.message.clone(),
+            reason: alert_msg.reason.clone(),
+            metadata: Some(metadata),
+            timestamp: timestamp as i64,
+        },
+    )
+    .await;
+    let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert_msg));
 
     HttpResponse::Ok().json(json!({"status": "success", "message": "Command sent"}))
 }
@@ -335,7 +353,60 @@ pub async fn request_device_sync(
     }
 }
 
+pub async fn get_control_state(
+    path: web::Path<String>,
+    app_state: web::Data<crate::AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let states = app_state.device_states.read().await;
+    let cached = states
+        .get(&device_id)
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok());
+
+    let data = cached.unwrap_or_else(|| {
+        json!({
+            "device_id": device_id,
+            "fsm_state": "Unknown",
+            "pump_status": {
+                "pump_a": false,
+                "pump_b": false,
+                "ph_up": false,
+                "ph_down": false,
+                "osaka_pump": false,
+                "mist_valve": false,
+                "water_pump_in": false,
+                "water_pump_out": false
+            }
+        })
+    });
+
+    HttpResponse::Ok().json(json!({ "status": "success", "data": data }))
+}
+
+fn resolve_control_target(target: Option<String>) -> String {
+    target
+        .unwrap_or_else(|| "all".to_string())
+        .trim()
+        .to_ascii_lowercase()
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/control", web::post().to(control_pump))
-        .route("/control/sync", web::post().to(request_device_sync));
+        .route("/control/sync", web::post().to(request_device_sync))
+        .route("/control/state", web::get().to(get_control_state));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_control_target;
+
+    #[test]
+    fn control_target_defaults_to_all_for_controller_commands() {
+        assert_eq!(resolve_control_target(None), "all");
+    }
+
+    #[test]
+    fn control_target_normalizes_explicit_all() {
+        assert_eq!(resolve_control_target(Some("ALL".to_string())), "all");
+    }
 }

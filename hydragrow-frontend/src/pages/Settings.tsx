@@ -13,7 +13,7 @@ import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
-import { isTauriRuntime, loadAppSettings } from '../platform/settings';
+import { isTauriRuntime, loadAppSettings, saveAppSettings } from '../platform/settings';
 
 // --- LOGIC & TYPES ---
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -151,7 +151,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
 
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
-  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId } = useDeviceContext();
+  const { sensorData, isSensorOnline, settings: runtimeSettings, deviceId: ctxDeviceId, refreshSettings } = useDeviceContext();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>('general');
@@ -335,6 +335,8 @@ const Settings = () => {
           const { invoke } = await import('@tauri-apps/api/core');
           await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId });
         } catch (e) { }
+      } else {
+        await saveAppSettings(appSettings);
       }
       const ts = new Date().toISOString();
 
@@ -397,6 +399,8 @@ const Settings = () => {
       };
 
       await callApi(`/api/devices/${devId}/config/unified`, 'PUT', unifiedPayload);
+      await refreshSettings();
+      window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã lưu cấu hình.', { id: toastId });
     } catch (error: any) { toast.error(`Lỗi: ${error?.message}`, { id: toastId }); }
     finally { setIsSaving(false); }

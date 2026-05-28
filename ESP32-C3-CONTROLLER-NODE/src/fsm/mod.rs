@@ -257,6 +257,9 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         let force_sync = cmd_delta.phase.is_some() || !cmd_events.is_empty();
 
         new_ctx.apply_delta(&mut cmd_delta);
+        if should_refresh_sensor_deadline_after_command(&cmd_delta) {
+            sensor_last_update_ms = current_time_ms;
+        }
 
         // Phát tán các command events phần cứng ngay lập tức để đáp ứng thời gian thực (Manual Mode)
         if !cmd_events.is_empty() {
@@ -441,6 +444,30 @@ fn report_phase_if_changed(current_phase: &SystemPhase, last_reported_state: &mu
         true
     } else {
         false
+    }
+}
+
+fn should_refresh_sensor_deadline_after_command(delta: &ContextDelta) -> bool {
+    delta.reset_safety_budget && matches!(delta.phase, Some(SystemPhase::Monitoring))
+}
+
+#[cfg(test)]
+mod tests {
+    use hydragrow_shared::fsm::SystemPhase;
+
+    use crate::fsm::tick_result::ContextDelta;
+
+    use super::should_refresh_sensor_deadline_after_command;
+
+    #[test]
+    fn reset_fault_command_refreshes_sensor_deadline_grace() {
+        let delta = ContextDelta {
+            phase: Some(SystemPhase::Monitoring),
+            reset_safety_budget: true,
+            ..Default::default()
+        };
+
+        assert!(should_refresh_sensor_deadline_after_command(&delta));
     }
 }
 

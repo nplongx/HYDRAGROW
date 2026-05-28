@@ -149,6 +149,10 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
 
         drop(states);
 
+        let _ = app_state
+            .event_bus
+            .send(AppEvent::ControllerStatus(payload_json));
+
         if let Some(snapshot) = parsed.health_snapshot {
             let _ = app_state.event_bus.send(AppEvent::HealthSnapshot(snapshot));
         }

@@ -14,7 +14,7 @@ import { getFaultGuide } from '../components/ui/FaultExplanation';
 
 // ─── COMPONENT CARD THIẾT BỊ NGOẠI VI SMART HOME CẤP CAO ──────────────────────
 const AdvancedDeviceControl = ({
-  deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, isOnline, isEmergency, isAutoMode, colorTheme
+  deviceId, pumpId, title, icon: Icon, currentStatus, allowPwm = false, canSendCommands, isEmergency, isAutoMode, colorTheme
 }: any) => {
   const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId);
   const { pwmPreferences, savePwmPreference } = useDeviceContext();
@@ -36,8 +36,8 @@ const AdvancedDeviceControl = ({
     sky: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
   };
   const activeTheme = themeClasses[colorTheme] || themeClasses.blue;
-  const disabledReason = !isOnline
-    ? 'Trạm đang mất kết nối'
+  const disabledReason = !canSendCommands
+    ? 'Chưa cấu hình máy chủ điều khiển'
     : isToggling || isProcessing
       ? 'Đang gửi lệnh tới thiết bị'
       : isAutoMode
@@ -79,6 +79,13 @@ const AdvancedDeviceControl = ({
       if (!success) {
         pendingTargetRef.current = null;
         setIsToggling(false);
+      } else {
+        setTimeout(() => {
+          if (pendingTargetRef.current !== null) {
+            pendingTargetRef.current = null;
+            setIsToggling(false);
+          }
+        }, 8000);
       }
     } catch (error) {
       pendingTargetRef.current = null;
@@ -92,7 +99,11 @@ const AdvancedDeviceControl = ({
     const time = Number(duration);
     try {
       if (allowPwm) {
-        await setPwm(pumpId, pwmValue, time > 0 ? time : undefined);
+        if (time > 0) {
+          await forceOn(pumpId, time, pwmValue);
+        } else {
+          await setPwm(pumpId, pwmValue);
+        }
         savePwmPreference(pumpId, pwmValue);
         toast.success(`Đã đồng bộ công suất ${pwmValue}% lên thiết bị.`);
       } else if (time > 0) {
@@ -118,7 +129,8 @@ const AdvancedDeviceControl = ({
 
     setIsProcessing(true);
     try {
-      await forceOn(pumpId, time);
+      await forceOn(pumpId, time, allowPwm ? pwmValue : undefined);
+      if (allowPwm) savePwmPreference(pumpId, pwmValue);
     } catch (error) {
       toast.error(`Lỗi thực thi lệnh cưỡng chế.`);
     } finally {
@@ -145,7 +157,7 @@ const AdvancedDeviceControl = ({
             {isLocked && !currentStatus && <Lock size={12} className="text-emerald-700/60 mr-0.5" />}
             <Switch
               isOn={currentStatus}
-              disabled={!isOnline || isToggling || isProcessing || isLocked}
+              disabled={!canSendCommands || isToggling || isProcessing || isLocked}
               onClick={handleToggle}
               colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-600' : 'bg-emerald-600') : 'bg-emerald-200'}
             />
@@ -170,15 +182,29 @@ const AdvancedDeviceControl = ({
                     <ShieldAlert size={12} />
                     <span>Cưỡng chế phần cứng (Bỏ qua AI)</span>
                   </div>
+                  {allowPwm && (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px] text-emerald-800/80 font-bold uppercase tracking-wider">
+                        <span>Cường độ cưỡng chế (PWM)</span>
+                        <span className="text-emerald-700 font-mono font-bold">{pwmValue}%</span>
+                      </div>
+                      <input
+                        type="range" min="20" max="100" step="5"
+                        value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
+                        disabled={isProcessing || !canSendCommands}
+                        className="w-full h-1 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-600"
+                      />
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <input
                       type="number" placeholder="Nhập số giây muốn ép chạy..."
                       value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                      disabled={isProcessing}
+                      disabled={isProcessing || !canSendCommands}
                       className="flex-1 bg-white border border-red-200 text-emerald-950 text-xs rounded-xl px-3 py-1.5 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 placeholder:text-emerald-700/60 font-medium"
                     />
                     <button
-                      onClick={handleEmergencyForceOn} disabled={isProcessing || !duration}
+                      onClick={handleEmergencyForceOn} disabled={isProcessing || !duration || !canSendCommands}
                       className="px-3.5 py-1.5 bg-red-50 text-red-700 border border-red-200 text-xs font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Kích hoạt
@@ -196,7 +222,7 @@ const AdvancedDeviceControl = ({
                       <input
                         type="range" min="20" max="100" step="5"
                         value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
-                        disabled={isProcessing}
+                        disabled={isProcessing || !canSendCommands}
                         className="w-full h-1 bg-emerald-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                       />
                     </div>
@@ -211,13 +237,13 @@ const AdvancedDeviceControl = ({
                         <input
                           type="number" placeholder="Để trống để mở vô hạn..."
                           value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                          disabled={isProcessing}
+                          disabled={isProcessing || !canSendCommands}
                           className="w-full bg-white border border-emerald-100 text-emerald-950 text-xs rounded-xl pl-8 pr-3 py-1.5 outline-none focus:border-emerald-600 placeholder:text-emerald-700/60 font-medium"
                         />
                         <Timer size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-700/75" />
                       </div>
                       <button
-                        onClick={handleAdvancedRun} disabled={isProcessing}
+                        onClick={handleAdvancedRun} disabled={isProcessing || !canSendCommands}
                         className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl border border-emerald-600 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Áp dụng
@@ -243,7 +269,7 @@ const ControlPanel = () => {
 
   const isOnline = deviceStatus?.is_online || false;
   const showDisconnected = isControllerStatusKnown && !isOnline;
-  const pumps: Partial<PumpStatus> = isOnline ? (sensorData.pump_status || {}) : {};
+  const pumps: Partial<PumpStatus> = sensorData.pump_status || {};
 
   const isEmergency = Boolean(
     fsmState?.toUpperCase().includes('EMERGENCY') ||
@@ -252,6 +278,7 @@ const ControlPanel = () => {
   );
 
   const isAutoMode = settings?.control_mode === 'auto';
+  const canSendCommands = Boolean(deviceId && settings?.backend_url);
   const faultCode = extractFaultCode(fsmState || undefined);
   const faultGuide = getFaultGuide(faultCode || undefined);
 
@@ -269,7 +296,7 @@ const ControlPanel = () => {
         </div>
 
         <button
-          disabled={!isOnline || isProcessing}
+          disabled={!canSendCommands || isProcessing}
           onClick={async () => {
             if (window.confirm("Bác nông dân có chắc chắn muốn xóa lịch sử cảnh báo lỗi và khôi phục chu trình chạy tự động không?")) await resetFault();
           }}
@@ -326,23 +353,23 @@ const ControlPanel = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="PUMP_A" title="Bơm vi chất phân A" icon={FlaskConical}
-              currentStatus={pumps.pump_a} allowPwm={true} colorTheme="orange"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.pump_a)} allowPwm={true} colorTheme="orange"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="PUMP_B" title="Bơm vi chất phân B" icon={FlaskConical}
-              currentStatus={pumps.pump_b} allowPwm={true} colorTheme="orange"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.pump_b)} allowPwm={true} colorTheme="orange"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="PH_UP" title="Bơm trung hòa kiềm (pH Up)" icon={Activity}
-              currentStatus={pumps.ph_up} allowPwm={true} colorTheme="purple"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.ph_up)} allowPwm={true} colorTheme="purple"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="PH_DOWN" title="Bơm cân bằng axit (pH Down)" icon={Activity}
-              currentStatus={pumps.ph_down} allowPwm={true} colorTheme="fuchsia"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.ph_down)} allowPwm={true} colorTheme="fuchsia"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
           </div>
         </div>
@@ -353,13 +380,13 @@ const ControlPanel = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Van mở cấp nước sạch" icon={Droplets}
-              currentStatus={pumps.water_pump_in} allowPwm={false} colorTheme="blue"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.water_pump_in)} allowPwm={false} colorTheme="blue"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Bơm kích xả thoát nước" icon={Droplets}
-              currentStatus={pumps.water_pump_out} allowPwm={false} colorTheme="sky"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.water_pump_out)} allowPwm={false} colorTheme="sky"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
           </div>
         </div>
@@ -370,13 +397,13 @@ const ControlPanel = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="OSAKA" title="Mô-tơ đảo nước tuần hoàn" icon={Power}
-              currentStatus={pumps.osaka_pump} allowPwm={true} colorTheme="indigo"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.osaka_pump)} allowPwm={true} colorTheme="indigo"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
             <AdvancedDeviceControl
               deviceId={deviceId} pumpId="MIST" title="Hệ thống béc phun sương lá" icon={Wind}
-              currentStatus={pumps.mist_valve} allowPwm={false} colorTheme="sky"
-              isOnline={isOnline} isEmergency={isEmergency} isAutoMode={isAutoMode}
+              currentStatus={Boolean(pumps.mist_valve)} allowPwm={false} colorTheme="sky"
+              canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode}
             />
           </div>
         </div>

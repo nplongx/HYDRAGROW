@@ -41,6 +41,9 @@ pub async fn get_latest(path: web::Path<String>, app_state: web::Data<AppState>)
                     if let Some(fsm_state) = cached_json.get("fsm_state") {
                         json_data["fsm_state"] = fsm_state.clone();
                     }
+                    if let Some(budgets) = cached_json.get("budgets") {
+                        json_data["budgets"] = budgets.clone();
+                    }
                 }
             }
 

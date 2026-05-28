@@ -273,6 +273,16 @@ const FILTERS = [
   { id: 'system', label: 'Lõi hệ thống', icon: Cpu },
 ];
 
+const isUserActionEvent = (event: SystemEvent) => {
+  const category = String(event.category || '').toLowerCase();
+  const eventType = String(event.metadata?.event_type || '').toLowerCase();
+  const title = String(event.title || '').toLowerCase();
+
+  return category === 'user_action'
+    || eventType === 'manual_control'
+    || title.includes('can thiệp thủ công');
+};
+
 // 🌟 THẾ HỆ 5 CHỈNH SỬA: Chuẩn hóa nhãn pha MIMO đồng bộ phần mềm
 const FsmBadge = ({ message }: { message: string }) => {
   const stateMap: Record<string, { label: string; color: string }> = {
@@ -410,12 +420,14 @@ const SystemLog = () => {
       try {
         let url = `${appConfig.backend_url}/api/devices/${deviceId}/events?limit=200`;
         if (filter !== 'all') {
-          url += `&category=${encodeURIComponent(filter)}`;
+          const category = filter === 'user_action' ? 'user_action,alert' : filter;
+          url += `&category=${encodeURIComponent(category)}`;
         }
         const res = await httpFetch(url, { headers: { 'X-API-Key': appConfig.api_key || '' } });
         if (res.ok) {
           const data = await res.json();
-          setSystemEvents(data.data ?? []);
+          const events = data.data ?? [];
+          setSystemEvents(filter === 'user_action' ? events.filter(isUserActionEvent) : events);
         }
       } catch (e) {
         console.error(e);

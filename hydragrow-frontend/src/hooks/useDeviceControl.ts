@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 
 export const useDeviceControl = (deviceId: string) => {
-  const { settings } = useDeviceContext();
+  const { settings, refreshDeviceSnapshot } = useDeviceContext();
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Hàm gửi command chung (Đảm bảo cấu trúc chuẩn với Backend Rust)
@@ -24,7 +24,7 @@ export const useDeviceControl = (deviceId: string) => {
     try {
       // Body chuẩn khớp với MqttCommandPayload của ESP32
       const payload = {
-        target: 'pump',
+        target: 'all',
         action: action,
         params: {
           pump_id: pumpId,
@@ -45,15 +45,17 @@ export const useDeviceControl = (deviceId: string) => {
       if (res.ok) {
         toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pumpId}`);
 
-        // --- BỔ SUNG GỌI API SYNC Ở ĐÂY ---
-        // Gọi chạy ngầm, không cần await để tránh làm chậm UI
-        httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
+        await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
           method: 'POST',
           headers: {
             'X-API-Key': settings.api_key || ''
           }
         }).catch(err => console.error("Lỗi khi yêu cầu sync trạng thái:", err));
-        // ----------------------------------
+
+        await refreshDeviceSnapshot();
+        setTimeout(() => {
+          refreshDeviceSnapshot().catch(err => console.error("Lỗi refresh trạng thái sau lệnh:", err));
+        }, 1200);
 
         return true;
       } else {
@@ -69,7 +71,7 @@ export const useDeviceControl = (deviceId: string) => {
     } finally {
       setIsProcessing(false);
     }
-  }, [deviceId, settings]);
+  }, [deviceId, settings, refreshDeviceSnapshot]);
 
   // 1. Lệnh Bật/Tắt bình thường
   const togglePump = (pumpId: string, action: 'on' | 'off') => {
@@ -77,8 +79,8 @@ export const useDeviceControl = (deviceId: string) => {
   };
 
   // 2. Lệnh Cưỡng chế an toàn (Kèm thời gian đếm ngược)
-  const forceOn = (pumpId: string, durationSec: number) => {
-    return sendCommand(pumpId, 'force_on', durationSec);
+  const forceOn = (pumpId: string, durationSec: number, pwmValue?: number) => {
+    return sendCommand(pumpId, 'force_on', durationSec, pwmValue);
   };
 
   // 3. Lệnh Cài đặt Công suất (PWM)

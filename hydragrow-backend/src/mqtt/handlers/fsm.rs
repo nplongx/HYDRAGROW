@@ -17,13 +17,7 @@ pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Dat
     };
 
     // 1. Cập nhật cache (Redis hoặc In-memory) để API GET /state lấy được ngay
-    update_device_state_cache(
-        &device_id,
-        &snapshot.current_phase.as_str(),
-        &snapshot.pump_status,
-        &app_state,
-    )
-    .await;
+    update_device_state_cache(&device_id, &snapshot, &app_state).await;
 
     let _ = app_state.event_bus.send(AppEvent::FsmStateUpdate(snapshot));
 }
@@ -210,8 +204,7 @@ pub async fn handle_fsm_transition(
 
 async fn update_device_state_cache(
     device_id: &str,
-    state: &str,
-    pump_status: &PumpStatus,
+    snapshot: &FsmSnapshot,
     app_state: &web::Data<AppState>,
 ) {
     let mut states = app_state.device_states.write().await;
@@ -220,8 +213,14 @@ async fn update_device_state_cache(
         .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
         .unwrap_or_else(|| serde_json::json!({ "device_id": device_id }));
     if let Some(obj) = cached.as_object_mut() {
-        obj.insert("fsm_phase".into(), serde_json::json!(state));
-        obj.insert("pump_status".into(), json!(pump_status.clone()));
+        let state = snapshot.current_phase.to_string();
+        obj.insert(
+            "fsm_phase".into(),
+            serde_json::json!(snapshot.current_phase.as_str()),
+        );
+        obj.insert("fsm_state".into(), serde_json::json!(state));
+        obj.insert("pump_status".into(), json!(snapshot.pump_status.clone()));
+        obj.insert("budgets".into(), json!(snapshot.budgets.clone()));
     }
     if let Ok(s) = serde_json::to_string(&cached) {
         states.insert(device_id.to_string(), s);

@@ -1,6 +1,6 @@
 // src/hooks/useFCM.ts
 import { useEffect, useState } from 'react';
-import { requestForWebToken, onWebMessageListener } from '../lib/firebase';
+import { requestForWebToken, subscribeWebMessages } from '../lib/firebase';
 import { useDeviceContext } from '../context/DeviceContext';
 import { httpFetch } from '../platform/http';
 import toast from 'react-hot-toast';
@@ -75,28 +75,17 @@ export function useFCM() {
 
     if (!isWeb) return;
 
-    const listenForMessages = async () => {
-      try {
-        const payload: any = await onWebMessageListener();
-
-        console.log('Foreground message:', payload);
-
-        if (payload?.notification) {
-          toast(
-            `${payload.notification.title}\n${payload.notification.body}`,
-            { icon: '🔔' }
-          );
-        }
-
-        listenForMessages();
-
-      } catch (err) {
-        console.error(err);
+    const unsubscribe = subscribeWebMessages((payload: any) => {
+      console.log('Foreground message:', payload);
+      if (payload?.notification) {
+        const title = payload.notification.title || '';
+        const body = payload.notification.body || '';
+        const id = payload.messageId || `${title}:${body}`;
+        toast(`${title}\n${body}`, { icon: '🔔', id });
       }
-    };
+    });
 
-    listenForMessages();
-
+    return unsubscribe;
   }, []);
 
   return {

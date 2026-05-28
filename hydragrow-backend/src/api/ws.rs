@@ -43,6 +43,7 @@ pub async fn ws_handler(
                                 AppEvent::WaterCycle(payload) => serde_json::json!({"type":"water_cycle", "payload":payload}),
                                 AppEvent::HealthSnapshot(snapshot) => serde_json::json!({"type":"health_snapshot", "payload":snapshot}),
                                 AppEvent::FsmStateUpdate(snapshot) => serde_json::json!({"type":"fsm_state_update", "payload":snapshot}),
+                                AppEvent::ControllerStatus(payload) => serde_json::json!({"type":"controller_status", "payload":payload}),
                             };
 
                             if let Ok(json_str) = serde_json::to_string(&ws_msg) {

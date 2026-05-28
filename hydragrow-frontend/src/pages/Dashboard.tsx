@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
   Wifi, Clock, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp,
@@ -71,15 +71,56 @@ const budgetPercent = (used: any, limit: any) => {
   return Math.min(100, Math.round((usedNumber / limitNumber) * 100));
 };
 
+const getDosingDose = (event: any) => {
+  const meta = event?.metadata || event?.payload || {};
+  const dose = meta.dose ?? meta.dosing_report?.dose ?? meta.dosing_data?.dose ?? meta.dosing_report ?? meta.dosing_data ?? meta;
+  return {
+    ec_ml: Number(dose.pump_a_ml || 0) + Number(dose.pump_b_ml || 0),
+    ph_ml: Number(dose.ph_up_ml || 0) + Number(dose.ph_down_ml || 0),
+  };
+};
+
+const deriveHourlyBudgets = (events: any[]) => {
+  const now = Date.now();
+  return events.reduce((acc, event) => {
+    const ts = Number(event?.timestamp || event?.timestamp_ms || 0);
+    const eventMs = ts > 1e12 ? ts : ts * 1000;
+    if (!Number.isFinite(eventMs) || now - eventMs > 3_600_000) return acc;
+    const dose = getDosingDose(event);
+    return {
+      ec_ml: acc.ec_ml + dose.ec_ml,
+      ph_ml: acc.ph_ml + dose.ph_ml,
+    };
+  }, { ec_ml: 0, ph_ml: 0 });
+};
+
+const mergeUniqueEvents = (...groups: any[][]) => {
+  const seen = new Set<string>();
+  const merged: any[] = [];
+  groups.flat().forEach((event) => {
+    if (!event) return;
+    const key = String(event.id ?? `${event.timestamp || event.timestamp_ms}-${event.category || ''}-${event.title || ''}-${event.message || ''}`);
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(event);
+  });
+  return merged;
+};
+
 const Dashboard = () => {
   const {
     deviceId, sensorData, deviceStatus,
     controllerHealth, fsmState, friendlyState, computedHealth,
-    isLoading, isSensorOnline, settings
+    isLoading, isSensorOnline, settings, systemEvents
   } = useDeviceContext();
 
   const { enableNotifications, permission } = useFCM();
   const [showAdvancedDiag, setShowAdvancedDiag] = useState(false);
+  const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const eventBudgets = useMemo(
+    () => deriveHourlyBudgets(mergeUniqueEvents(recentEvents, systemEvents || [])),
+    [recentEvents, systemEvents]
+  );
 
   useEffect(() => {
     const run = async () => {
@@ -87,9 +128,13 @@ const Dashboard = () => {
       const app = await loadAppSettings();
       const cfg: any = settings || app;
       if (!cfg?.backend_url || !cfg?.api_key) return;
-      await httpFetch(`${cfg.backend_url}/api/devices/${deviceId}/events?limit=200`, {
+      const res = await httpFetch(`${cfg.backend_url}/api/devices/${deviceId}/events?limit=200`, {
         headers: { 'X-API-Key': cfg.api_key }
       });
+      if (res.ok) {
+        const json = await res.json();
+        setRecentEvents(Array.isArray(json.data) ? json.data : []);
+      }
     };
     run();
   }, [deviceId, settings]);
@@ -117,8 +162,12 @@ const Dashboard = () => {
   const isOnline = deviceStatus?.is_online;
   const faultCode = extractFaultCode(fsmState || undefined);
   const faultGuide = getFaultGuide(faultCode || undefined);
-  const pumps: any = isOnline && sensorData?.pump_status ? sensorData.pump_status : {};
-  const budgets = (deviceStatus as any)?.budgets || {};
+  const pumps: any = sensorData?.pump_status || {};
+  const rawBudgets = (deviceStatus as any)?.budgets || {};
+  const budgets = {
+    ec_ml: Number(rawBudgets.ec_ml || 0) > 0 ? rawBudgets.ec_ml : eventBudgets.ec_ml,
+    ph_ml: Number(rawBudgets.ph_ml || 0) > 0 ? rawBudgets.ph_ml : eventBudgets.ph_ml,
+  };
   const doseLimit = Number((settings as any)?.max_dose_per_hour || 300);
   const modeLabel = settings?.control_mode === 'auto' ? 'Tự động chăm sóc' : 'Thủ công';
   const ecStatus = sensorStatus(sensorData?.err_ec, sensorData?.ec, (settings as any)?.min_ec_limit, (settings as any)?.max_ec_limit);

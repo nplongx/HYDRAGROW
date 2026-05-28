@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { FaultExplanation, getFaultGuide } from './FaultExplanation';
 
 export const extractFaultCode = (state?: string): string | null => {
-  if (!state?.startsWith('SystemFault:')) return null;
-  return state.replace('SystemFault:', '').trim();
+  if (state?.startsWith('SystemFault:')) return state.replace('SystemFault:', '').trim();
+  if (state?.startsWith('Fault:')) return state.replace('Fault:', '').trim();
+  return null;
 };
 
 export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {

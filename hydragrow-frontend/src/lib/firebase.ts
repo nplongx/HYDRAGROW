@@ -50,3 +50,7 @@ export const onWebMessageListener = () =>
       resolve(payload);
     });
   });
+
+export const subscribeWebMessages = (handler: (payload: MessagePayload) => void) => {
+  return onMessage(messaging, handler);
+};

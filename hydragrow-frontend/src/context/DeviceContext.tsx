@@ -34,6 +34,8 @@ interface DeviceContextType {
   isSensorOnline: boolean;
   pwmPreferences: Record<string, number>;
   savePwmPreference: (pumpId: string, pwm: number) => void;
+  refreshSettings: () => Promise<void>;
+  refreshDeviceSnapshot: () => Promise<void>;
 }
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
@@ -111,6 +113,30 @@ const loadPwmPrefsFromStore = async (): Promise<Record<string, number> | null> =
   } catch (e) { return null; }
 };
 
+const flattenUnifiedConfig = (raw: any) => {
+  if (!raw || typeof raw !== 'object') return {};
+  return {
+    ...(raw.device_config || {}),
+    ...(raw.water_config || {}),
+    ...(raw.safety_config || {}),
+    ...(raw.sensor_calibration || {}),
+    ...(raw.dosing_calibration || {})
+  };
+};
+
+const phaseToString = (phase: any): string | null => {
+  if (phase == null) return null;
+  if (typeof phase === 'string') return phase;
+  if (typeof phase === 'object') {
+    const key = Object.keys(phase)[0];
+    const value = key ? phase[key] : null;
+    if (key === 'Fault') return `SystemFault:${value || ''}`.trim();
+    if (key === 'EmergencyStop') return `EmergencyStop:${value || ''}`.trim();
+    return key || JSON.stringify(phase);
+  }
+  return String(phase);
+};
+
 export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -130,6 +156,35 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const refreshSettings = useCallback(async () => {
+    const s: any = await loadAppSettings();
+    if (s && s.device_id && s.backend_url) {
+      let mergedSettings = s;
+      if (s.api_key) {
+        try {
+          const configRes = await httpFetch(`${s.backend_url}/api/devices/${s.device_id}/config/unified`, {
+            method: 'GET',
+            headers: { 'X-API-Key': s.api_key || '' }
+          });
+          if (configRes.ok) {
+            const unifiedConfig = await configRes.json();
+            mergedSettings = { ...s, ...flattenUnifiedConfig(unifiedConfig) };
+          }
+        } catch (_) { }
+      }
+
+      setSettings(mergedSettings);
+      setDeviceId(s.device_id || null);
+      if (!isTauriRuntime() && !hasRequiredRemoteConfig(s)) {
+        setIsMissingConfig(true);
+      } else {
+        setIsMissingConfig(false);
+      }
+    } else if (!isTauriRuntime()) {
+      setIsMissingConfig(true);
+    }
+  }, []);
+
   const resetSensorTimeout = useCallback(() => {
     if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
 
@@ -138,6 +193,104 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
       toast.error("Mất tín hiệu từ bồn chứa. Đang hiển thị dữ liệu lưu lần cuối.");
     }, 65000);
   }, []);
+
+  const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
+    setPwmPreferences(prev => {
+      const updated = { ...prev, [pumpId]: pwm };
+      setItem(PWM_PREFS_STORE_KEY, updated).catch(() => { });
+      return updated;
+    });
+  }, []);
+
+  const applyPumpStatus = useCallback((pumpStatus: PumpStatus) => {
+    savePumpStatusToStore(pumpStatus);
+    setSensorData(prev => ({
+      ...((prev || {}) as SensorData),
+      device_id: prev?.device_id || deviceId || '',
+      ec: prev?.ec ?? 0,
+      ph: prev?.ph ?? 0,
+      temp: prev?.temp ?? 0,
+      water_level: prev?.water_level ?? 0,
+      time: prev?.time || new Date().toISOString(),
+      pump_status: pumpStatus
+    }));
+    if (pumpStatus.pump_a_pwm) savePwmPreference('PUMP_A', pumpStatus.pump_a_pwm);
+    if (pumpStatus.pump_b_pwm) savePwmPreference('PUMP_B', pumpStatus.pump_b_pwm);
+    if (pumpStatus.osaka_pwm) savePwmPreference('OSAKA', pumpStatus.osaka_pwm);
+    if (pumpStatus.ph_down_pwm) savePwmPreference('PH_DOWN', pumpStatus.ph_down_pwm);
+    if (pumpStatus.ph_up_pwm) savePwmPreference('PH_UP', pumpStatus.ph_up_pwm);
+  }, [deviceId, savePwmPreference]);
+
+  const applyDeviceSnapshot = useCallback((snapshot: any) => {
+    if (!snapshot || typeof snapshot !== 'object') return;
+
+    const state = snapshot.fsm_state || snapshot.fsm_phase || snapshot.current_phase || snapshot.current_state;
+    if (state) {
+      setFsmState(phaseToString(state) || 'Monitoring');
+    }
+    if (snapshot.budgets) {
+      setDeviceStatus(prev => ({ ...prev, budgets: snapshot.budgets }));
+    }
+    if (snapshot.diagnostics) {
+      setControllerHealth((prev: any) => ({ ...(prev || {}), diagnostics: snapshot.diagnostics, ...snapshot.diagnostics }));
+    }
+    if (snapshot.pump_status) {
+      applyPumpStatus(normalizePumpStatus(snapshot.pump_status));
+    }
+
+    if (
+      snapshot.ec !== undefined ||
+      snapshot.ph !== undefined ||
+      snapshot.temp !== undefined ||
+      snapshot.water_level !== undefined ||
+      snapshot.time !== undefined
+    ) {
+      const incomingPumpStatus = snapshot.pump_status ? normalizePumpStatus(snapshot.pump_status) : null;
+      setSensorData(prev => ({
+        ...((prev || {}) as SensorData),
+        ...snapshot,
+        device_id: snapshot.device_id || prev?.device_id || deviceId || '',
+        ec: snapshot.ec !== undefined ? snapshot.ec : (prev?.ec ?? 0),
+        ph: snapshot.ph !== undefined ? snapshot.ph : (prev?.ph ?? 0),
+        temp: snapshot.temp !== undefined ? snapshot.temp : (prev?.temp ?? 0),
+        water_level: snapshot.water_level !== undefined ? snapshot.water_level : (prev?.water_level ?? 0),
+        time: snapshot.time || prev?.time || new Date().toISOString(),
+        pump_status: incomingPumpStatus || prev?.pump_status || defaultPumpStatus
+      }));
+      if (incomingPumpStatus) savePumpStatusToStore(incomingPumpStatus);
+    }
+  }, [applyPumpStatus, deviceId]);
+
+  const refreshDeviceSnapshot = useCallback(async () => {
+    if (!deviceId || !settings?.backend_url) return;
+
+    const cachedPwmPrefs = await loadPwmPrefsFromStore();
+    if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
+
+    const headers = { 'Content-Type': 'application/json', 'X-API-Key': settings.api_key || '' };
+
+    try {
+      const response = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/sensors/latest`, {
+        method: 'GET',
+        headers
+      });
+      if (response.ok) {
+        const resData = await response.json();
+        applyDeviceSnapshot(resData.data || resData);
+      }
+    } catch (_) { }
+
+    try {
+      const response = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/state`, {
+        method: 'GET',
+        headers
+      });
+      if (response.ok) {
+        const resData = await response.json();
+        applyDeviceSnapshot(resData.data || resData);
+      }
+    } catch (_) { }
+  }, [applyDeviceSnapshot, deviceId, settings]);
 
   // 🌟 CƠ CHẾ UX MỚI 1: Trừu tượng hóa FSM Core cứng nhắc thành câu thoại ngôn ngữ tự nhiên
   const friendlyState = useMemo<FriendlyState>(() => {
@@ -196,16 +349,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const s: any = await loadAppSettings();
-        if (s && s.device_id && s.backend_url) {
-          setSettings(s);
-          setDeviceId(s.device_id || null);
-          if (!isTauriRuntime() && !hasRequiredRemoteConfig(s)) {
-            setIsMissingConfig(true);
-          }
-        } else if (!isTauriRuntime()) {
-          setIsMissingConfig(true);
-        }
+        await refreshSettings();
         setIsLoading(false);
       } catch (error) {
         console.error("Lỗi load settings:", error);
@@ -213,7 +357,19 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     loadSettings();
-  }, []);
+  }, [refreshSettings]);
+
+  useEffect(() => {
+    const onSettingsUpdated = () => {
+      refreshSettings().catch(() => { });
+    };
+    window.addEventListener('hydragrow:settings-updated', onSettingsUpdated);
+    window.addEventListener('focus', onSettingsUpdated);
+    return () => {
+      window.removeEventListener('hydragrow:settings-updated', onSettingsUpdated);
+      window.removeEventListener('focus', onSettingsUpdated);
+    };
+  }, [refreshSettings]);
 
   useEffect(() => {
     if (!deviceId || !settings) return;
@@ -225,32 +381,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     const setupConnection = async () => {
       setIsLoading(true);
 
-      try {
-        const url = `${settings.backend_url}/api/devices/${deviceId}/sensors/latest`;
-        const response = await httpFetch(url, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': settings.api_key }
-        });
-        if (response.ok) {
-          const resData = await response.json();
-          const initialData = resData.data || resData;
-
-          const cachedPumpStatus = await loadPumpStatusFromStore();
-          const cachedPwmPrefs = await loadPwmPrefsFromStore();
-          if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
-
-          if (initialData?.fsm_state) {
-            setFsmState(initialData.fsm_state);
-          }
-
-          setSensorData({
-            ...initialData,
-            pump_status: cachedPumpStatus
-              ? cachedPumpStatus
-              : normalizePumpStatus(initialData?.pump_status)
-          });
-        }
-      } catch (err) { /* empty */ }
+      const cachedPumpStatus = await loadPumpStatusFromStore();
+      if (cachedPumpStatus) applyPumpStatus(cachedPumpStatus);
+      await refreshDeviceSnapshot();
 
       setIsLoading(false);
 
@@ -279,6 +412,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
           }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));
+          refreshDeviceSnapshot().catch(() => { });
 
           pingInterval = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) ws.send('ping');
@@ -293,9 +427,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
 
-              let newState = payload.current_state;
+              let newState = payload.current_state || payload.current_phase;
               if (newState) {
-                setFsmState(typeof newState === 'object' ? JSON.stringify(newState) : String(newState));
+                setFsmState(phaseToString(newState) || 'Monitoring');
               }
 
               if (payload.budgets) {
@@ -303,6 +437,34 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               }
 
               if (payload.pump_status && Object.keys(payload.pump_status).length > 0) {
+                applyPumpStatus(normalizePumpStatus(payload.pump_status));
+              }
+
+              return;
+            }
+
+            if (data.type === 'fsm_state_update') {
+              const payload = data.payload || {};
+              const newState = payload.current_phase || payload.current_state || payload.fsm_state;
+
+              if (newState) {
+                setFsmState(phaseToString(newState) || 'Monitoring');
+              }
+              if (typeof payload.online === 'boolean') {
+                setDeviceStatus(prev => ({
+                  ...prev,
+                  is_online: payload.online,
+                  last_seen: new Date().toISOString()
+                }));
+                setIsControllerStatusKnown(true);
+              }
+              if (payload.budgets) {
+                setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
+              }
+              if (payload.diagnostics) {
+                setControllerHealth((prev: any) => ({ ...(prev || {}), diagnostics: payload.diagnostics, ...payload.diagnostics }));
+              }
+              if (payload.pump_status) {
                 applyPumpStatus(normalizePumpStatus(payload.pump_status));
               }
 
@@ -375,12 +537,20 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
             if (data.type === 'sensor_update') {
               const incomingPayload = data.payload.data || data.payload;
+              const incomingPumpStatus = incomingPayload?.pump_status
+                ? normalizePumpStatus(incomingPayload.pump_status)
+                : null;
 
               setSensorData(prev => {
-                if (!prev) return incomingPayload;
+                if (!prev) {
+                  return {
+                    ...incomingPayload,
+                    pump_status: incomingPumpStatus || normalizePumpStatus(incomingPayload?.pump_status)
+                  };
+                }
                 return {
                   ...prev,
-                  pump_status: prev.pump_status,
+                  pump_status: incomingPumpStatus || prev.pump_status,
                   temp: incomingPayload.temp !== undefined ? incomingPayload.temp : prev.temp,
                   ec: incomingPayload.ec !== undefined ? incomingPayload.ec : prev.ec,
                   ph: incomingPayload.ph !== undefined ? incomingPayload.ph : prev.ph,
@@ -397,8 +567,30 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 };
               });
 
+              if (incomingPumpStatus) savePumpStatusToStore(incomingPumpStatus);
+
               setIsSensorOnline(true);
               resetSensorTimeout();
+              return;
+            }
+
+            if (data.type === 'controller_status') {
+              const payload = data.payload || {};
+              const healthState = payload.fsm_state_display ?? payload.fsm_state ?? payload.current_phase;
+              if (healthState) {
+                setFsmState(phaseToString(healthState) || 'Monitoring');
+              }
+              if (payload.budgets) {
+                setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
+              }
+              if (payload.pump_status) {
+                applyPumpStatus(normalizePumpStatus(payload.pump_status));
+              }
+              if (payload.online !== undefined || payload.is_online !== undefined) {
+                const isOnline = payload.is_online ?? payload.online;
+                setDeviceStatus(prev => ({ ...prev, is_online: Boolean(isOnline), last_seen: new Date().toISOString() }));
+                setIsControllerStatusKnown(true);
+              }
               return;
             }
 
@@ -469,32 +661,14 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         ws.close();
       }
     };
-  }, [deviceId, settings, resetSensorTimeout]);
-
-  const savePwmPreference = useCallback(async (pumpId: string, pwm: number) => {
-    setPwmPreferences(prev => {
-      const updated = { ...prev, [pumpId]: pwm };
-      setItem(PWM_PREFS_STORE_KEY, updated).catch(() => { });
-      return updated;
-    });
-  }, []);
-
-  function applyPumpStatus(pumpStatus: PumpStatus) {
-    savePumpStatusToStore(pumpStatus);
-    setSensorData(prev => prev ? { ...prev, pump_status: pumpStatus } : prev);
-    if (pumpStatus.pump_a_pwm) savePwmPreference('PUMP_A', pumpStatus.pump_a_pwm);
-    if (pumpStatus.pump_b_pwm) savePwmPreference('PUMP_B', pumpStatus.pump_b_pwm);
-    if (pumpStatus.osaka_pwm) savePwmPreference('OSAKA', pumpStatus.osaka_pwm);
-    if (pumpStatus.ph_down_pwm) savePwmPreference('PH_DOWN', pumpStatus.ph_down_pwm);
-    if (pumpStatus.ph_up_pwm) savePwmPreference('PH_UP', pumpStatus.ph_up_pwm);
-  }
+  }, [deviceId, settings, resetSensorTimeout, applyPumpStatus, refreshDeviceSnapshot]);
 
   return (
     <DeviceContext.Provider value={{
       deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
       friendlyState, computedHealth, // 🌟 Khai thông mạch ống dữ liệu hướng người dùng cuối lên các trang UI
       settings, systemEvents, isSensorOnline, isMissingConfig,
-      pwmPreferences, savePwmPreference
+      pwmPreferences, savePwmPreference, refreshSettings, refreshDeviceSnapshot
     }}>
       {children}
     </DeviceContext.Provider>

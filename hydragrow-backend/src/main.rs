@@ -1,4 +1,4 @@
-use actix_web::{App, HttpServer, web};
+use actix_web::{web, App, HttpServer};
 use anyhow::Context;
 use dotenvy::dotenv;
 use hydragrow_shared::{events::AppEvent, topics::AGITECH_PREFIX};
@@ -13,10 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{
-    RwLock,
     broadcast::{self, Receiver},
+    RwLock,
 };
-use tracing::{Level, error, info};
+use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 use crate::{
@@ -205,6 +205,23 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let app_state_for_mqtt = app_state.clone();
+    tokio::spawn(async move {
+        info!("Bắt đầu vòng lặp sự kiện MQTT dưới nền...");
+        loop {
+            match eventloop.poll().await {
+                Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(publish))) => {
+                    process_message(publish, app_state_for_mqtt.clone()).await;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Mất kết nối MQTT, thử lại sau 5 giây... Lỗi: {:?}", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+        }
+    });
+
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "sensors"),
@@ -285,23 +302,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .await
         .expect("Lỗi sub water_cycle");
-
-    let app_state_for_mqtt = app_state.clone();
-    tokio::spawn(async move {
-        info!("Bắt đầu vòng lặp sự kiện MQTT dưới nền...");
-        loop {
-            match eventloop.poll().await {
-                Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(publish))) => {
-                    process_message(publish, app_state_for_mqtt.clone()).await;
-                }
-                Ok(_) => {}
-                Err(e) => {
-                    error!("Mất kết nối MQTT, thử lại sau 5 giây... Lỗi: {:?}", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
-            }
-        }
-    });
 
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let server_port: u16 = env::var("SERVER_PORT")

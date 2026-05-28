@@ -202,8 +202,9 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         }
     }
 
+    let config = shared_config.read().unwrap().clone();
+    seed_tuner_from_config(&mut new_ctx, &config);
     if !new_ctx.tuner.matrix_is_warm {
-        let config = shared_config.read().unwrap().clone();
         if config.ec_gain_per_ml > 0.0 && config.ph_shift_up_per_ml > 0.0 {
             new_ctx.tuner.interaction_matrix = InteractionMatrix::from_scalar(
                 config.ec_gain_per_ml,
@@ -432,6 +433,62 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
     }
 }
 
+fn seed_tuner_from_config(ctx: &mut SystemContext, config: &hydragrow_shared::ControllerConfig) {
+    if ctx.tuner.matrix_update_count == 0 {
+        if config.ec_step_ratio.is_finite() {
+            ctx.tuner.adaptive_ec_ratio = config.ec_step_ratio.clamp(0.1, 2.0);
+        }
+        if config.ph_step_ratio.is_finite() {
+            ctx.tuner.adaptive_ph_ratio = config.ph_step_ratio.clamp(0.1, 2.0);
+        }
+    }
+
+    let config_runtime_is_newer = config.matrix_update_count > ctx.tuner.matrix_update_count
+        || ctx.tuner.matrix_update_count == 0;
+
+    if config_runtime_is_newer {
+        if config.best_ec_ratio.is_finite() {
+            ctx.tuner.best_ec_ratio = config.best_ec_ratio.clamp(0.1, 2.0);
+        }
+        if config.best_ph_ratio.is_finite() {
+            ctx.tuner.best_ph_ratio = config.best_ph_ratio.clamp(0.1, 2.0);
+        }
+        ctx.tuner.state = TunerState::from_u8(config.tuner_state);
+    }
+
+    if config_runtime_is_newer {
+        if let Some(matrix) = config
+            .interaction_matrix
+            .as_ref()
+            .and_then(|matrix| valid_interaction_matrix(matrix))
+        {
+            ctx.tuner.interaction_matrix = InteractionMatrix::from_flat(matrix);
+            ctx.tuner.matrix_update_count = config.matrix_update_count;
+            ctx.tuner.matrix_is_warm = config.matrix_is_warm || config.matrix_update_count >= 10;
+        }
+    }
+}
+
+fn valid_interaction_matrix(values: &[f32]) -> Option<[f32; 32]> {
+    if values.len() != 32 {
+        return None;
+    }
+
+    let mut flat = [0.0_f32; 32];
+    for (idx, value) in values.iter().copied().enumerate() {
+        if !value.is_finite() || value < INTERACTION_MATRIX_MIN || value > INTERACTION_MATRIX_MAX {
+            return None;
+        }
+        flat[idx] = value;
+    }
+
+    if flat[0] <= 0.0 || flat[6] <= 0.0 {
+        return None;
+    }
+
+    Some(flat)
+}
+
 fn report_phase_if_changed(current_phase: &SystemPhase, last_reported_state: &mut String) -> bool {
     let s = match current_phase {
         SystemPhase::Fault(code) => format!("Fault:{}", code.as_str()),
@@ -457,7 +514,10 @@ mod tests {
 
     use crate::fsm::tick_result::ContextDelta;
 
-    use super::should_refresh_sensor_deadline_after_command;
+    use super::{
+        seed_tuner_from_config, should_refresh_sensor_deadline_after_command,
+        valid_interaction_matrix,
+    };
 
     #[test]
     fn reset_fault_command_refreshes_sensor_deadline_grace() {
@@ -468,6 +528,54 @@ mod tests {
         };
 
         assert!(should_refresh_sensor_deadline_after_command(&delta));
+    }
+
+    #[test]
+    fn seed_tuner_from_config_restores_runtime_learning_state() {
+        let mut ctx = crate::fsm::system_context::SystemContext::default();
+        let mut config = hydragrow_shared::ControllerConfig::default();
+        let mut matrix = vec![0.0_f32; 32];
+        matrix[0] = 0.02;
+        matrix[6] = 0.03;
+
+        config.ec_step_ratio = 0.66;
+        config.ph_step_ratio = 0.44;
+        config.best_ec_ratio = 0.88;
+        config.best_ph_ratio = 0.55;
+        config.tuner_state = 2;
+        config.interaction_matrix = Some(matrix);
+        config.matrix_update_count = 12;
+        config.matrix_is_warm = true;
+
+        seed_tuner_from_config(&mut ctx, &config);
+
+        assert_eq!(ctx.tuner.adaptive_ec_ratio, 0.66);
+        assert_eq!(ctx.tuner.adaptive_ph_ratio, 0.44);
+        assert_eq!(ctx.tuner.best_ec_ratio, 0.88);
+        assert_eq!(ctx.tuner.best_ph_ratio, 0.55);
+        assert_eq!(
+            ctx.tuner.state,
+            crate::fsm::system_context::TunerState::Stable
+        );
+        assert_eq!(ctx.tuner.matrix_update_count, 12);
+        assert!(ctx.tuner.matrix_is_warm);
+        assert_eq!(ctx.tuner.interaction_matrix.data[0][0], 0.02);
+        assert_eq!(ctx.tuner.interaction_matrix.data[0][6], 0.03);
+    }
+
+    #[test]
+    fn valid_interaction_matrix_rejects_wrong_shape_and_bad_values() {
+        assert!(valid_interaction_matrix(&[0.0; 31]).is_none());
+
+        let mut invalid = vec![0.0_f32; 32];
+        invalid[0] = f32::NAN;
+        invalid[6] = 0.03;
+        assert!(valid_interaction_matrix(&invalid).is_none());
+
+        let mut bad_diagonal = vec![0.0_f32; 32];
+        bad_diagonal[0] = 0.02;
+        bad_diagonal[6] = 0.0;
+        assert!(valid_interaction_matrix(&bad_diagonal).is_none());
     }
 }
 

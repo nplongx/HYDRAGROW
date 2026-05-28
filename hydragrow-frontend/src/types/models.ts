@@ -135,6 +135,13 @@ export interface UnifiedDeviceConfig {
   sensor_stabilize_sec: number;
   ec_step_ratio: number;
   ph_step_ratio: number;
+  best_ec_ratio?: number;
+  best_ph_ratio?: number;
+  tuner_state?: number;
+  interaction_matrix?: number[];
+  matrix_update_count?: number;
+  matrix_is_warm?: boolean;
+  kalman_confidence?: number[];
   dosing_pump_capacity_ml_per_sec: number;
   soft_start_duration: number;
   scheduled_mixing_interval_sec: number;

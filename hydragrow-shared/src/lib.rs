@@ -216,6 +216,20 @@ pub struct ControllerConfig {
     pub sensor_stabilize_sec: i32,
     pub ec_step_ratio: f32,
     pub ph_step_ratio: f32,
+    #[serde(default)]
+    pub best_ec_ratio: f32,
+    #[serde(default)]
+    pub best_ph_ratio: f32,
+    #[serde(default)]
+    pub tuner_state: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interaction_matrix: Option<Vec<f32>>,
+    #[serde(default)]
+    pub matrix_update_count: u32,
+    #[serde(default)]
+    pub matrix_is_warm: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kalman_confidence: Option<Vec<f32>>,
 
     pub pump_a_capacity_ml_per_sec: f32,
     pub pump_b_capacity_ml_per_sec: f32,
@@ -323,6 +337,13 @@ impl Default for ControllerConfig {
             sensor_stabilize_sec: 5,
             ec_step_ratio: 0.4,
             ph_step_ratio: 0.2,
+            best_ec_ratio: 0.4,
+            best_ph_ratio: 0.2,
+            tuner_state: 0,
+            interaction_matrix: None,
+            matrix_update_count: 0,
+            matrix_is_warm: false,
+            kalman_confidence: None,
 
             pump_a_capacity_ml_per_sec: 1.2,
             pump_b_capacity_ml_per_sec: 1.15,

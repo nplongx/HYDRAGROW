@@ -607,6 +607,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 kalman_confidence: healthData.kalman_confidence || null,
                 matrix_update_count: healthData.matrix_update_count,
                 matrix_is_warm: healthData.matrix_is_warm,
+                hestia: healthData.hestia || null,
                 diagnostics: healthData.diagnostics || null
               });
 

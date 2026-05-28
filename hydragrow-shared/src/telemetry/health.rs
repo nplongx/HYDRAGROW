@@ -1,4 +1,5 @@
 // hydragrow-shared/src/telemetry/health.rs
+use crate::hestia::HestiaAssessment;
 use serde::{Deserialize, Serialize};
 
 /// Độ tự tin của từng trục Kalman (0.0 - 1.0)
@@ -33,5 +34,7 @@ pub struct DeviceHealthSnapshot {
     pub kalman_confidence: Option<KalmanConfidence>,
     pub matrix_update_count: u32,
     pub matrix_is_warm: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hestia: Option<HestiaAssessment>,
     pub timestamp_ms: u64,
 }

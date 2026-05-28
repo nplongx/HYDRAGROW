@@ -9,6 +9,7 @@ use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
+use hydragrow_shared::hestia::{HestiaAction, HestiaContext, HestiaEngine};
 use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence};
 use hydragrow_shared::topics::{
     topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
@@ -240,6 +241,10 @@ fn main() -> anyhow::Result<()> {
     let mut last_health_publish = std::time::Instant::now();
     let mut latest_fsm_snapshot: Option<serde_json::Value> = None;
     let mut latest_runtime_calibration: Option<serde_json::Value> = None;
+    let mut previous_hestia_sensor: Option<hydragrow_shared::SensorData> = None;
+    let mut previous_hestia_sensor_sec: Option<u64> = None;
+    let mut last_hestia_action = HestiaAction::None;
+    let mut last_hestia_intervention_sec: Option<u64> = None;
 
     loop {
         // XỬ LÝ TRẠNG THÁI KẾT NỐI
@@ -433,6 +438,46 @@ fn main() -> anyhow::Result<()> {
                         osaka_mixing: items[6].as_f64().unwrap_or(0.0) as f32,
                         misting: items[7].as_f64().unwrap_or(0.0) as f32,
                     });
+                let mean_kalman_confidence = kalman_confidence.as_ref().map(|confidence| {
+                    (confidence.nutrient_a
+                        + confidence.nutrient_b
+                        + confidence.ph_up
+                        + confidence.ph_down
+                        + confidence.water_in
+                        + confidence.water_out
+                        + confidence.osaka_mixing
+                        + confidence.misting)
+                        / 8.0
+                });
+
+                let now_sec = get_current_time_sec();
+                let current_hestia_action = hestia_action_from_phase(&fsm_state_display);
+                if current_hestia_action != HestiaAction::None {
+                    last_hestia_action = current_hestia_action;
+                    last_hestia_intervention_sec = Some(now_sec);
+                }
+                let current_sensor = shared_sensor_data.read().ok().map(|sensor| sensor.clone());
+                let current_config = shared_config.read().ok().map(|config| config.clone());
+                let hestia = match (current_sensor, current_config) {
+                    (Some(sensor), Some(config)) => {
+                        let context = HestiaContext {
+                            previous: previous_hestia_sensor.clone(),
+                            minutes_since_previous: previous_hestia_sensor_sec
+                                .map(|ts| now_sec.saturating_sub(ts) as f32 / 60.0),
+                            minutes_since_last_intervention: last_hestia_intervention_sec
+                                .map(|ts| now_sec.saturating_sub(ts) as f32 / 60.0),
+                            last_action: last_hestia_action,
+                            matrix_is_warm,
+                            mean_kalman_confidence,
+                            phase: Some(fsm_state_display.clone()),
+                        };
+                        let assessment = HestiaEngine::evaluate(&sensor, &config, &context);
+                        previous_hestia_sensor = Some(sensor);
+                        previous_hestia_sensor_sec = Some(now_sec);
+                        Some(assessment)
+                    }
+                    _ => None,
+                };
 
                 let health_payload = DeviceHealthSnapshot {
                     device_id: DEVICE_ID.to_string(),
@@ -445,7 +490,8 @@ fn main() -> anyhow::Result<()> {
                     kalman_confidence,
                     matrix_update_count,
                     matrix_is_warm,
-                    timestamp_ms: get_current_time_sec() * 1000,
+                    hestia,
+                    timestamp_ms: now_sec * 1000,
                 };
 
                 if let Ok(json_string) = serde_json::to_string(&health_payload) {
@@ -462,5 +508,16 @@ fn main() -> anyhow::Result<()> {
 
         // Nghỉ 50ms để nhường CPU cho các tác vụ khác (RTOS Task)
         thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn hestia_action_from_phase(phase: &str) -> HestiaAction {
+    match phase {
+        "MimoDosing" => HestiaAction::EcDosing,
+        "WaterRefilling" => HestiaAction::WaterRefill,
+        "WaterDraining" => HestiaAction::WaterDrain,
+        "ActiveMixing" => HestiaAction::Mixing,
+        "Stabilizing" | "Cooldown" => HestiaAction::Manual,
+        _ => HestiaAction::None,
     }
 }

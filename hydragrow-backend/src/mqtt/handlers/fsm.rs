@@ -3,6 +3,7 @@ use serde_json::json;
 use tracing::{error, info, warn};
 
 use crate::AppState;
+use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use hydragrow_shared::{
     PumpStatus, events::AppEvent, fsm::FsmSnapshot, telemetry::FsmTransitionEvent,
 };
@@ -198,8 +199,55 @@ pub async fn handle_fsm_transition(
     }
     drop(states);
 
+    if let Some(record) = transition_system_event_record(&event) {
+        if let Err(err) = insert_system_event(&app_state.pg_pool, &record).await {
+            tracing::error!(error = ?err, "Không thể lưu FSM fault transition vào system_events");
+        }
+    }
+
     // Fan-out
     let _ = app_state.event_bus.send(AppEvent::FsmTransition(event));
+}
+
+fn transition_system_event_record(event: &FsmTransitionEvent) -> Option<NewSystemEventRecord> {
+    match &event.to_phase {
+        hydragrow_shared::fsm::SystemPhase::Fault(code) => {
+            let fault_code = code.as_str();
+            Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: "critical".to_string(),
+                category: "alert".to_string(),
+                title: format!("Lỗi hệ thống: {}", fault_code),
+                message: format!("FSM chuyển vào Fault do {}.", fault_code),
+                reason: Some(fault_code.to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_fault_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+            })
+        }
+        hydragrow_shared::fsm::SystemPhase::EmergencyStop(reason) => Some(NewSystemEventRecord {
+            device_id: event.device_id.clone(),
+            level: "critical".to_string(),
+            category: "alert".to_string(),
+            title: "Dừng khẩn cấp hệ thống".to_string(),
+            message: format!("FSM chuyển vào EmergencyStop: {}.", reason),
+            reason: Some(reason.clone()),
+            metadata: Some(serde_json::json!({
+                "event_type": "fsm_emergency_transition",
+                "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                "to_phase": event.to_phase.to_string(),
+                "reason": event.reason,
+                "phase_duration_ms": event.phase_duration_ms,
+            })),
+            timestamp: event.timestamp_ms as i64,
+        }),
+        _ => None,
+    }
 }
 
 async fn update_device_state_cache(
@@ -229,7 +277,9 @@ async fn update_device_state_cache(
 
 #[cfg(test)]
 mod tests {
-    use super::validated_runtime_interaction_matrix;
+    use super::{transition_system_event_record, validated_runtime_interaction_matrix};
+    use hydragrow_shared::fsm::{FaultCode, SystemPhase};
+    use hydragrow_shared::telemetry::transition::{FsmTransitionEvent, TransitionReason};
 
     #[test]
     fn runtime_interaction_matrix_accepts_controller_4x8_flat_shape() {
@@ -247,5 +297,43 @@ mod tests {
         let as_json: serde_json::Value = serde_json::to_value(&raw).unwrap();
 
         assert!(validated_runtime_interaction_matrix(&as_json).is_none());
+    }
+
+    #[test]
+    fn fault_transition_becomes_critical_system_event_record() {
+        let event = FsmTransitionEvent {
+            device_id: "controller-1".to_string(),
+            from_phase: Some(SystemPhase::Monitoring),
+            to_phase: SystemPhase::Fault(FaultCode::EcDosingFailed),
+            reason: TransitionReason::FaultDetected {
+                fault_code: FaultCode::EcDosingFailed,
+                consecutive_failures: 3,
+            },
+            timestamp_ms: 123_456,
+            phase_duration_ms: Some(12_000),
+        };
+
+        let record = transition_system_event_record(&event).expect("fault should be logged");
+
+        assert_eq!(record.device_id, "controller-1");
+        assert_eq!(record.level, "critical");
+        assert_eq!(record.category, "alert");
+        assert_eq!(record.title, "Lỗi hệ thống: EC_DOSING_FAILED");
+        assert_eq!(record.reason.as_deref(), Some("EC_DOSING_FAILED"));
+        assert_eq!(record.timestamp, 123_456);
+    }
+
+    #[test]
+    fn normal_transition_does_not_create_system_event_record() {
+        let event = FsmTransitionEvent {
+            device_id: "controller-1".to_string(),
+            from_phase: Some(SystemPhase::Booting),
+            to_phase: SystemPhase::Monitoring,
+            reason: TransitionReason::BootComplete,
+            timestamp_ms: 123_456,
+            phase_duration_ms: Some(3_000),
+        };
+
+        assert!(transition_system_event_record(&event).is_none());
     }
 }

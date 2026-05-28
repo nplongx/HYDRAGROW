@@ -185,7 +185,7 @@ pub async fn control_pump(
         "pwm": pwm,
     });
     let alert_msg = crate::models::alert::AlertMessage {
-        level: "warning".to_string(),
+        level: control_event_level(&req_data.action).to_string(),
         category: "user_action".to_string(),
         title: "Can Thiệp Thủ Công".to_string(),
         message: format!(
@@ -400,6 +400,14 @@ fn resolve_control_target(target: Option<String>) -> String {
         .to_ascii_lowercase()
 }
 
+fn control_event_level(action: &str) -> &'static str {
+    match action {
+        "force_on" => "warning",
+        "reset_fault" => "success",
+        _ => "info",
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/control", web::post().to(control_pump))
         .route("/control/sync", web::post().to(request_device_sync))
@@ -408,7 +416,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_control_target;
+    use super::{control_event_level, resolve_control_target};
 
     #[test]
     fn control_target_defaults_to_all_for_controller_commands() {
@@ -418,5 +426,18 @@ mod tests {
     #[test]
     fn control_target_normalizes_explicit_all() {
         assert_eq!(resolve_control_target(Some("ALL".to_string())), "all");
+    }
+
+    #[test]
+    fn normal_manual_pump_actions_are_logged_as_info() {
+        assert_eq!(control_event_level("on"), "info");
+        assert_eq!(control_event_level("off"), "info");
+        assert_eq!(control_event_level("set_pwm"), "info");
+    }
+
+    #[test]
+    fn force_and_fault_reset_actions_keep_attention_levels() {
+        assert_eq!(control_event_level("force_on"), "warning");
+        assert_eq!(control_event_level("reset_fault"), "success");
     }
 }

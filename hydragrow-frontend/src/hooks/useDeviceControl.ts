@@ -43,7 +43,10 @@ export const useDeviceControl = (deviceId: string) => {
       });
 
       if (res.ok) {
-        toast.success(`Đã gửi lệnh ${action.toUpperCase()} đến ${pumpId}`);
+        const result = await res.json().catch(() => null);
+        const publishedAction = result?.action || action;
+        const target = result?.target || 'all';
+        toast.success(`Backend đã publish MQTT: ${publishedAction} -> ${pumpId} (${target})`);
 
         await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
           method: 'POST',

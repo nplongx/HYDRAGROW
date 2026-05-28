@@ -214,7 +214,17 @@ pub async fn control_pump(
     .await;
     let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert_msg));
 
-    HttpResponse::Ok().json(json!({"status": "success", "message": "Command sent"}))
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "message": "Command published to MQTT",
+        "device_id": device_id,
+        "target": command.target,
+        "action": command.action,
+        "pump": pump_name,
+        "duration_sec": duration_sec,
+        "pwm": pwm,
+        "published_at": timestamp
+    }))
 }
 
 async fn validate_manual_dose_safety(

@@ -63,6 +63,14 @@ pub struct DosingCalibration {
     pub best_ph_ratio: f32,
     #[serde(default)]
     pub tuner_state: i32,
+    #[serde(default = "default_adaptive_mixing_sec")]
+    pub adaptive_mixing_sec: i32,
+    #[serde(default = "default_adaptive_stabilize_sec")]
+    pub adaptive_stabilize_sec: i32,
+    #[serde(default = "default_effective_ec_tolerance")]
+    pub effective_ec_tolerance: f32,
+    #[serde(default = "default_effective_ph_tolerance")]
+    pub effective_ph_tolerance: f32,
     #[serde(default)]
     pub interaction_matrix: Option<serde_json::Value>,
     #[serde(default)]
@@ -118,6 +126,10 @@ impl Default for DosingCalibration {
             best_ec_ratio: 0.4,
             best_ph_ratio: 0.2,
             tuner_state: 0,
+            adaptive_mixing_sec: default_adaptive_mixing_sec(),
+            adaptive_stabilize_sec: default_adaptive_stabilize_sec(),
+            effective_ec_tolerance: default_effective_ec_tolerance(),
+            effective_ph_tolerance: default_effective_ph_tolerance(),
             interaction_matrix: None,
             matrix_update_count: 0,
             matrix_is_warm: false,
@@ -164,6 +176,22 @@ fn default_best_ec_ratio() -> f32 {
 
 fn default_best_ph_ratio() -> f32 {
     0.2
+}
+
+fn default_adaptive_mixing_sec() -> i32 {
+    15
+}
+
+fn default_adaptive_stabilize_sec() -> i32 {
+    10
+}
+
+fn default_effective_ec_tolerance() -> f32 {
+    0.05
+}
+
+fn default_effective_ph_tolerance() -> f32 {
+    0.1
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -346,6 +374,10 @@ pub fn from_db_rows(
         best_ec_ratio: dose.best_ec_ratio,
         best_ph_ratio: dose.best_ph_ratio,
         tuner_state: dose.tuner_state.clamp(0, u8::MAX as i32) as u8,
+        adaptive_mixing_sec: dose.adaptive_mixing_sec.clamp(15, 120) as u32,
+        adaptive_stabilize_sec: dose.adaptive_stabilize_sec.clamp(10, 90) as u32,
+        effective_ec_tolerance: dose.effective_ec_tolerance,
+        effective_ph_tolerance: dose.effective_ph_tolerance,
         interaction_matrix: dose
             .interaction_matrix
             .as_ref()
@@ -441,6 +473,10 @@ mod tests {
                 best_ec_ratio: 0.77,
                 best_ph_ratio: 0.33,
                 tuner_state: 2,
+                adaptive_mixing_sec: 42,
+                adaptive_stabilize_sec: 24,
+                effective_ec_tolerance: 0.08,
+                effective_ph_tolerance: 0.16,
                 interaction_matrix: Some(serde_json::json!(
                     (0..32).map(|i| i as f32 * 0.01).collect::<Vec<_>>()
                 )),
@@ -481,6 +517,10 @@ mod tests {
         assert_eq!(config.best_ec_ratio, 0.77);
         assert_eq!(config.best_ph_ratio, 0.33);
         assert_eq!(config.tuner_state, 2);
+        assert_eq!(config.adaptive_mixing_sec, 42);
+        assert_eq!(config.adaptive_stabilize_sec, 24);
+        assert_eq!(config.effective_ec_tolerance, 0.08);
+        assert_eq!(config.effective_ph_tolerance, 0.16);
         assert_eq!(config.matrix_update_count, 12);
         assert!(config.matrix_is_warm);
         assert_eq!(config.interaction_matrix.as_ref().unwrap().len(), 32);
@@ -521,6 +561,10 @@ mod tests {
         assert_eq!(decoded.best_ec_ratio, 0.4);
         assert_eq!(decoded.best_ph_ratio, 0.2);
         assert_eq!(decoded.tuner_state, 0);
+        assert_eq!(decoded.adaptive_mixing_sec, 15);
+        assert_eq!(decoded.adaptive_stabilize_sec, 10);
+        assert_eq!(decoded.effective_ec_tolerance, 0.05);
+        assert_eq!(decoded.effective_ph_tolerance, 0.1);
         assert!(decoded.interaction_matrix.is_none());
         assert_eq!(decoded.matrix_update_count, 0);
         assert!(!decoded.matrix_is_warm);

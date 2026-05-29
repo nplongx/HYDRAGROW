@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use anyhow::Context;
 use dotenvy::dotenv;
 use hydragrow_shared::{events::AppEvent, topics::AGITECH_PREFIX};
@@ -13,10 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::{
-    broadcast::{self, Receiver},
     RwLock,
+    broadcast::{self, Receiver},
 };
-use tracing::{error, info, Level};
+use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
 use crate::{

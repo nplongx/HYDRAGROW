@@ -517,10 +517,20 @@ impl AutoTuner {
         self.adaptive_ec_ratio
     }
 
+    pub fn effective_ec_tolerance(&self, base: f32) -> f32 {
+        adaptive_solver_tolerance(base, self.state, self.ec_tracker.oscillation)
+    }
+
+    pub fn effective_ph_tolerance(&self, base: f32) -> f32 {
+        adaptive_solver_tolerance(base, self.state, self.ph_tracker.oscillation)
+    }
+
     pub fn to_mqtt_payload(
         &self,
         device_id: &str,
         config: &hydragrow_shared::ControllerConfig,
+        adaptive_mixing_sec: u32,
+        adaptive_stabilize_sec: u32,
         now_ms: u64,
     ) -> String {
         let flat = self.interaction_matrix.as_flat();
@@ -534,6 +544,10 @@ impl AutoTuner {
                 "best_ec_ratio": self.best_ec_ratio,
                 "best_ph_ratio": self.best_ph_ratio,
                 "state": self.state as u8,
+                "adaptive_mixing_sec": adaptive_mixing_sec,
+                "adaptive_stabilize_sec": adaptive_stabilize_sec,
+                "effective_ec_tolerance": self.effective_ec_tolerance(config.ec_tolerance),
+                "effective_ph_tolerance": self.effective_ph_tolerance(config.ph_tolerance),
                 "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
                 "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
                 "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
@@ -1003,6 +1017,23 @@ impl AutoTuner {
                 > self.ph_variance_baseline * 1.5;
         ec_degraded || ph_degraded
     }
+}
+
+pub fn adaptive_solver_tolerance(base: f32, state: TunerState, oscillation: f32) -> f32 {
+    if !base.is_finite() || base <= 0.0 {
+        return 0.0;
+    }
+
+    let state_multiplier = match state {
+        TunerState::Stable => 1.0,
+        TunerState::Converging => 1.25,
+        TunerState::Exploring => 1.5,
+        TunerState::Degraded => 1.75,
+    };
+    let oscillation_multiplier = 1.0 + oscillation.clamp(0.0, 1.0) * 0.75;
+    let multiplier = (state_multiplier * oscillation_multiplier).clamp(1.0, 2.5);
+
+    base * multiplier
 }
 
 // #[cfg(test)]

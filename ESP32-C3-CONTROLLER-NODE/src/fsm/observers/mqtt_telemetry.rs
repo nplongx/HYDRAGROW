@@ -65,10 +65,13 @@ impl MqttTelemetryObserver {
             oc.ctx.tuner.matrix_update_count
         );
 
-        let payload = oc
-            .ctx
-            .tuner
-            .to_mqtt_payload(&oc.config.device_id, oc.config, oc.now_ms);
+        let payload = oc.ctx.tuner.to_mqtt_payload(
+            &oc.config.device_id,
+            oc.config,
+            oc.ctx.diagnostic.adaptive_mixing_sec,
+            oc.ctx.diagnostic.adaptive_stabilize_sec,
+            oc.now_ms,
+        );
 
         let topic = topic_calibration(&oc.config.device_id);
         if oc.mqtt_tx.send(payload).is_err() {

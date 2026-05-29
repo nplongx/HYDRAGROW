@@ -194,24 +194,24 @@ async fn upsert_water_db(
             water_level_drain, water_level_tolerance, auto_refill_enabled,
             auto_drain_overflow, auto_dilute_enabled, dilute_drain_amount_cm,
             scheduled_water_change_enabled, water_change_cron, scheduled_drain_amount_cm,
-            misting_on_duration_ms, misting_off_duration_ms, 
-            misting_temp_threshold, high_temp_misting_on_duration_ms, high_temp_misting_off_duration_ms, 
+            misting_on_duration_ms, misting_off_duration_ms,
+            misting_temp_threshold, high_temp_misting_on_duration_ms, high_temp_misting_off_duration_ms,
             last_updated
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         ON CONFLICT(device_id) DO UPDATE SET
             tank_height = EXCLUDED.tank_height,
-            water_level_min = EXCLUDED.water_level_min, 
+            water_level_min = EXCLUDED.water_level_min,
             water_level_target = EXCLUDED.water_level_target,
-            water_level_max = EXCLUDED.water_level_max, 
+            water_level_max = EXCLUDED.water_level_max,
             water_level_drain = EXCLUDED.water_level_drain,
             water_level_tolerance = EXCLUDED.water_level_tolerance,
-            auto_refill_enabled = EXCLUDED.auto_refill_enabled, 
+            auto_refill_enabled = EXCLUDED.auto_refill_enabled,
             auto_drain_overflow = EXCLUDED.auto_drain_overflow,
-            auto_dilute_enabled = EXCLUDED.auto_dilute_enabled, 
+            auto_dilute_enabled = EXCLUDED.auto_dilute_enabled,
             dilute_drain_amount_cm = EXCLUDED.dilute_drain_amount_cm,
             scheduled_water_change_enabled = EXCLUDED.scheduled_water_change_enabled,
             water_change_cron = EXCLUDED.water_change_cron,
-            scheduled_drain_amount_cm = EXCLUDED.scheduled_drain_amount_cm, 
+            scheduled_drain_amount_cm = EXCLUDED.scheduled_drain_amount_cm,
             misting_on_duration_ms = EXCLUDED.misting_on_duration_ms,
             misting_off_duration_ms = EXCLUDED.misting_off_duration_ms,
             misting_temp_threshold = EXCLUDED.misting_temp_threshold,
@@ -347,10 +347,10 @@ async fn upsert_dosing_db(
         r#"
         INSERT INTO dosing_calibration (
             device_id, ec_gain_per_ml, ph_shift_up_per_ml,
-            ph_shift_down_per_ml, active_mixing_sec, sensor_stabilize_sec, ec_step_ratio, ph_step_ratio, 
+            ph_shift_down_per_ml, active_mixing_sec, sensor_stabilize_sec, ec_step_ratio, ph_step_ratio,
             pump_a_capacity_ml_per_sec, pump_b_capacity_ml_per_sec,
             pump_ph_up_capacity_ml_per_sec, pump_ph_down_capacity_ml_per_sec,
-            soft_start_duration, last_calibrated, 
+            soft_start_duration, last_calibrated,
             scheduled_mixing_interval_sec, scheduled_mixing_duration_sec,
             dosing_pwm_percent, osaka_mixing_pwm_percent, osaka_misting_pwm_percent,
             dosing_min_pwm_percent, pump_a_min_pwm_percent, pump_b_min_pwm_percent,
@@ -361,7 +361,7 @@ async fn upsert_dosing_db(
             ec_gain_per_ml = EXCLUDED.ec_gain_per_ml,
             ph_shift_up_per_ml = EXCLUDED.ph_shift_up_per_ml, ph_shift_down_per_ml = EXCLUDED.ph_shift_down_per_ml,
             active_mixing_sec = EXCLUDED.active_mixing_sec, sensor_stabilize_sec = EXCLUDED.sensor_stabilize_sec,
-            ec_step_ratio = EXCLUDED.ec_step_ratio, ph_step_ratio = EXCLUDED.ph_step_ratio, 
+            ec_step_ratio = EXCLUDED.ec_step_ratio, ph_step_ratio = EXCLUDED.ph_step_ratio,
             pump_a_capacity_ml_per_sec = EXCLUDED.pump_a_capacity_ml_per_sec,
             pump_b_capacity_ml_per_sec = EXCLUDED.pump_b_capacity_ml_per_sec,
             pump_ph_up_capacity_ml_per_sec = EXCLUDED.pump_ph_up_capacity_ml_per_sec,
@@ -381,34 +381,34 @@ async fn upsert_dosing_db(
             last_calibrated = EXCLUDED.last_calibrated
         "#
     )
-    .bind(&cal.device_id) 
-    .bind(cal.ec_gain_per_ml) 
-    .bind(cal.ph_shift_up_per_ml) 
-    .bind(cal.ph_shift_down_per_ml) 
-    .bind(cal.active_mixing_sec) 
-    .bind(cal.sensor_stabilize_sec) 
-    .bind(cal.ec_step_ratio) 
-    .bind(cal.ph_step_ratio) 
-    .bind(cal.pump_a_capacity_ml_per_sec) 
-    .bind(cal.pump_b_capacity_ml_per_sec) 
-    .bind(cal.pump_ph_up_capacity_ml_per_sec) 
-    .bind(cal.pump_ph_down_capacity_ml_per_sec) 
-    .bind(cal.soft_start_duration) 
-    .bind(now) 
-    .bind(cal.scheduled_mixing_interval_sec) 
-    .bind(cal.scheduled_mixing_duration_sec) 
-    .bind(cal.dosing_pwm_percent) 
-    .bind(cal.osaka_mixing_pwm_percent) 
-    .bind(cal.osaka_misting_pwm_percent) 
-    .bind(cal.dosing_min_pwm_percent) 
-    .bind(cal.pump_a_min_pwm_percent) 
-    .bind(cal.pump_b_min_pwm_percent) 
-    .bind(cal.pump_ph_up_min_pwm_percent) 
-    .bind(cal.pump_ph_down_min_pwm_percent) 
-    .bind(cal.dosing_pulse_on_ms) 
-    .bind(cal.dosing_pulse_off_ms) 
-    .bind(cal.dosing_min_dose_ml) 
-    .bind(cal.dosing_max_pulse_count_per_cycle) 
+    .bind(&cal.device_id)
+    .bind(cal.ec_gain_per_ml)
+    .bind(cal.ph_shift_up_per_ml)
+    .bind(cal.ph_shift_down_per_ml)
+    .bind(cal.active_mixing_sec)
+    .bind(cal.sensor_stabilize_sec)
+    .bind(cal.ec_step_ratio)
+    .bind(cal.ph_step_ratio)
+    .bind(cal.pump_a_capacity_ml_per_sec)
+    .bind(cal.pump_b_capacity_ml_per_sec)
+    .bind(cal.pump_ph_up_capacity_ml_per_sec)
+    .bind(cal.pump_ph_down_capacity_ml_per_sec)
+    .bind(cal.soft_start_duration)
+    .bind(now)
+    .bind(cal.scheduled_mixing_interval_sec)
+    .bind(cal.scheduled_mixing_duration_sec)
+    .bind(cal.dosing_pwm_percent)
+    .bind(cal.osaka_mixing_pwm_percent)
+    .bind(cal.osaka_misting_pwm_percent)
+    .bind(cal.dosing_min_pwm_percent)
+    .bind(cal.pump_a_min_pwm_percent)
+    .bind(cal.pump_b_min_pwm_percent)
+    .bind(cal.pump_ph_up_min_pwm_percent)
+    .bind(cal.pump_ph_down_min_pwm_percent)
+    .bind(cal.dosing_pulse_on_ms)
+    .bind(cal.dosing_pulse_off_ms)
+    .bind(cal.dosing_min_dose_ml)
+    .bind(cal.dosing_max_pulse_count_per_cycle)
     .execute(pool).await?;
 
     Ok(())

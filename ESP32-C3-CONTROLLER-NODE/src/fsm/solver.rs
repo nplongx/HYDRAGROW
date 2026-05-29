@@ -5,7 +5,7 @@
 
 use crate::fsm::matrix::{ControlVector, StateDeltaVector};
 use crate::fsm::optimizer::apply_safety_guardrails;
-use crate::fsm::system_context::SystemContext;
+use crate::fsm::system_context::{adaptive_solver_tolerance, SystemContext, TunerState};
 use hydragrow_shared::{ControllerConfig, SensorData};
 
 /// Kết quả từ solver: control vector và target để pass vào DosingActor.
@@ -48,12 +48,15 @@ impl SolverStrategy for ColdPathSolver {
         let ph_delta = config.ph_target - ph_val;
         let water_delta = config.water_level_target - w_level;
 
-        let safe_ec_delta = if config.enable_ec_sensor && ec_delta.abs() > config.ec_tolerance {
+        let ec_tolerance = effective_ec_tolerance(config, ctx);
+        let ph_tolerance = effective_ph_tolerance(config, ctx);
+
+        let safe_ec_delta = if config.enable_ec_sensor && ec_delta.abs() > ec_tolerance {
             ec_delta
         } else {
             0.0
         };
-        let safe_ph_delta = if config.enable_ph_sensor && ph_delta.abs() > config.ph_tolerance {
+        let safe_ph_delta = if config.enable_ph_sensor && ph_delta.abs() > ph_tolerance {
             ph_delta
         } else {
             0.0
@@ -154,12 +157,15 @@ impl SolverStrategy for WarmPathSolver {
         let water_delta = config.water_level_target - w_level;
         let temp_delta = config.misting_temp_threshold - temp_val;
 
-        let safe_ec_delta = if config.enable_ec_sensor && ec_delta.abs() > config.ec_tolerance {
+        let ec_tolerance = effective_ec_tolerance(config, ctx);
+        let ph_tolerance = effective_ph_tolerance(config, ctx);
+
+        let safe_ec_delta = if config.enable_ec_sensor && ec_delta.abs() > ec_tolerance {
             ec_delta
         } else {
             0.0
         };
-        let safe_ph_delta = if config.enable_ph_sensor && ph_delta.abs() > config.ph_tolerance {
+        let safe_ph_delta = if config.enable_ph_sensor && ph_delta.abs() > ph_tolerance {
             ph_delta
         } else {
             0.0
@@ -264,5 +270,71 @@ pub fn select_solver(ctx: &SystemContext) -> &'static dyn SolverStrategy {
         &WarmPathSolver
     } else {
         &ColdPathSolver
+    }
+}
+
+fn effective_ec_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32 {
+    ctx.tuner.effective_ec_tolerance(config.ec_tolerance)
+}
+
+fn effective_ph_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32 {
+    ctx.tuner.effective_ph_tolerance(config.ph_tolerance)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{adaptive_solver_tolerance, ColdPathSolver, SolveResult, SolverStrategy};
+    use crate::fsm::system_context::{SystemContext, TunerState};
+    use hydragrow_shared::{ControllerConfig, PumpStatus, SensorData};
+
+    fn sensor(ec: f32, ph: f32, water_level: f32) -> SensorData {
+        SensorData {
+            device_id: "device_001".to_string(),
+            ec,
+            ph,
+            temp: 25.0,
+            water_level,
+            pump_status: PumpStatus::default(),
+            time: "2026-05-29T00:00:00Z".to_string(),
+            controller_received_ms: Some(1_000),
+            rssi: None,
+            free_heap: None,
+            uptime: None,
+            err_water: None,
+            err_temp: None,
+            err_ph: None,
+            err_ec: None,
+            is_continuous: None,
+            ph_voltage_mv: None,
+        }
+    }
+
+    #[test]
+    fn cold_solver_uses_adaptive_ec_tolerance_to_skip_small_chatter_dose() {
+        let mut config = ControllerConfig {
+            enable_ec_sensor: true,
+            enable_ph_sensor: false,
+            enable_water_level_sensor: false,
+            ec_target: 1.20,
+            ec_tolerance: 0.05,
+            ..ControllerConfig::default()
+        };
+        config.control_mode = hydragrow_shared::ControlMode::Auto;
+
+        let sensors = sensor(1.13, 6.0, 20.0);
+        let mut ctx = SystemContext::default();
+        ctx.tuner.state = TunerState::Exploring;
+        ctx.tuner.ec_tracker.oscillation = 1.0;
+
+        let result = ColdPathSolver.solve(&sensors, &config, &ctx);
+
+        assert!(matches!(result, SolveResult::Idle));
+    }
+
+    #[test]
+    fn adaptive_solver_tolerance_keeps_configured_tolerance_when_stable() {
+        let tolerance = adaptive_solver_tolerance(0.05, TunerState::Stable, 0.0);
+
+        assert!((tolerance - 0.05).abs() < f32::EPSILON);
     }
 }

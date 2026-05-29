@@ -455,6 +455,9 @@ fn seed_tuner_from_config(ctx: &mut SystemContext, config: &hydragrow_shared::Co
         ctx.tuner.state = TunerState::from_u8(config.tuner_state);
     }
 
+    ctx.diagnostic.adaptive_mixing_sec = config.adaptive_mixing_sec.clamp(15, 120);
+    ctx.diagnostic.adaptive_stabilize_sec = config.adaptive_stabilize_sec.clamp(10, 90);
+
     if config_runtime_is_newer {
         if let Some(matrix) = config
             .interaction_matrix

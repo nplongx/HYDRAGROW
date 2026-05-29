@@ -27,6 +27,7 @@ impl From<SensorDataRow> for SensorData {
             pump_status: PumpStatus::default(),
 
             time: row.time.to_rfc3339(),
+            controller_received_ms: None,
             rssi: None,
             free_heap: None,
             is_continuous: None,

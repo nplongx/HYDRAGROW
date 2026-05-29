@@ -53,6 +53,7 @@ pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
         water_level: 20.0,
         pump_status: PumpStatus::default(),
         time: String::new(),
+        controller_received_ms: None,
         rssi: None,
         free_heap: None,
         uptime: None,
@@ -71,6 +72,10 @@ pub fn get_free_heap() -> u32 {
 
 pub fn get_uptime_sec() -> u64 {
     (unsafe { esp_timer_get_time() } / 1_000_000) as u64
+}
+
+pub fn get_uptime_ms() -> u64 {
+    (unsafe { esp_timer_get_time() } / 1_000) as u64
 }
 
 pub fn get_wifi_rssi() -> i8 {
@@ -196,6 +201,7 @@ pub fn init_mqtt_client(
                     match serde_json::from_slice::<IncomingSensorPayload>(data) {
                         Ok(payload) => {
                             if let Ok(mut sensors) = shared_sensor_data.write() {
+                                sensors.controller_received_ms = Some(get_uptime_ms());
                                 if let Some(t) = payload.temp {
                                     sensors.temp = t;
                                 }

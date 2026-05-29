@@ -52,6 +52,8 @@ pub struct SensorData {
     #[serde(default)]
     pub pump_status: PumpStatus,
     pub time: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller_received_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rssi: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]

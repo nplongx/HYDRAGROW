@@ -97,7 +97,7 @@ fn start_fsm_control_loop_inner(
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
     let current_time_on_boot = get_current_time_sec();
 
-    let mut last_sensor_time_str = String::new();
+    let mut sensor_freshness = SensorFreshnessMarker::default();
     let mut sensor_last_update_ms = get_current_time_ms();
 
     new_ctx.last_water_change_sec = nvs
@@ -248,8 +248,7 @@ values_valid={}, diagonal_valid={}, m00={}, m12={}, update_count={}, snapshot_wa
         let current_time_ms = get_current_time_ms();
         let current_time_sec = current_time_ms / 1000;
 
-        if sensors.time != last_sensor_time_str {
-            last_sensor_time_str = sensors.time.clone();
+        if sensor_freshness.observe(&sensors) {
             sensor_last_update_ms = current_time_ms;
         }
 
@@ -508,16 +507,64 @@ fn should_refresh_sensor_deadline_after_command(delta: &ContextDelta) -> bool {
     delta.reset_safety_budget && matches!(delta.phase, Some(SystemPhase::Monitoring))
 }
 
+#[derive(Debug, Default)]
+struct SensorFreshnessMarker {
+    controller_received_ms: Option<u64>,
+    legacy_time: String,
+}
+
+impl SensorFreshnessMarker {
+    fn observe(&mut self, sensors: &hydragrow_shared::SensorData) -> bool {
+        if let Some(received_ms) = sensors.controller_received_ms {
+            if self.controller_received_ms != Some(received_ms) {
+                self.controller_received_ms = Some(received_ms);
+                self.legacy_time = sensors.time.clone();
+                return true;
+            }
+            return false;
+        }
+
+        if sensors.time != self.legacy_time {
+            self.legacy_time = sensors.time.clone();
+            return true;
+        }
+
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use hydragrow_shared::fsm::SystemPhase;
+    use hydragrow_shared::{fsm::SystemPhase, PumpStatus, SensorData};
 
     use crate::fsm::tick_result::ContextDelta;
 
     use super::{
         seed_tuner_from_config, should_refresh_sensor_deadline_after_command,
-        valid_interaction_matrix,
+        valid_interaction_matrix, SensorFreshnessMarker,
     };
+
+    fn sensor(time: &str, controller_received_ms: Option<u64>) -> SensorData {
+        SensorData {
+            device_id: "device_001".to_string(),
+            ec: 1.2,
+            ph: 6.1,
+            temp: 25.0,
+            water_level: 20.0,
+            pump_status: PumpStatus::default(),
+            time: time.to_string(),
+            controller_received_ms,
+            rssi: None,
+            free_heap: None,
+            uptime: None,
+            err_water: None,
+            err_temp: None,
+            err_ph: None,
+            err_ec: None,
+            is_continuous: None,
+            ph_voltage_mv: None,
+        }
+    }
 
     #[test]
     fn reset_fault_command_refreshes_sensor_deadline_grace() {
@@ -528,6 +575,24 @@ mod tests {
         };
 
         assert!(should_refresh_sensor_deadline_after_command(&delta));
+    }
+
+    #[test]
+    fn sensor_freshness_tracks_each_received_packet_even_when_sensor_time_is_static() {
+        let mut marker = SensorFreshnessMarker::default();
+
+        assert!(marker.observe(&sensor("2026-05-29T00:00:00Z", Some(1_000))));
+        assert!(marker.observe(&sensor("2026-05-29T00:00:00Z", Some(2_000))));
+        assert!(!marker.observe(&sensor("2026-05-29T00:00:00Z", Some(2_000))));
+    }
+
+    #[test]
+    fn sensor_freshness_keeps_legacy_time_fallback_for_old_payloads() {
+        let mut marker = SensorFreshnessMarker::default();
+
+        assert!(marker.observe(&sensor("2026-05-29T00:00:00Z", None)));
+        assert!(!marker.observe(&sensor("2026-05-29T00:00:00Z", None)));
+        assert!(marker.observe(&sensor("2026-05-29T00:00:01Z", None)));
     }
 
     #[test]

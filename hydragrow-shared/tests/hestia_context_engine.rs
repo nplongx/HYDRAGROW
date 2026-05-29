@@ -12,6 +12,7 @@ fn sensor(ec: f32, ph: f32, water_level: f32, temp: f32) -> SensorData {
         temp,
         pump_status: PumpStatus::default(),
         time: "2026-05-28T00:00:00Z".to_string(),
+        controller_received_ms: None,
         rssi: None,
         free_heap: None,
         uptime: None,

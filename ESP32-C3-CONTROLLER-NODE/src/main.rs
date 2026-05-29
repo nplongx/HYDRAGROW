@@ -38,6 +38,15 @@ const WIFI_PASS: &str = "123443215";
 const MQTT_URL: &str = "mqtt://viaduct.proxy.rlwy.net:45131";
 const DEVICE_ID: &str = "device_001";
 
+fn current_device_id(shared_config: &config::SharedConfig) -> String {
+    shared_config
+        .read()
+        .ok()
+        .map(|cfg| cfg.device_id.clone())
+        .filter(|device_id| !device_id.is_empty())
+        .unwrap_or_else(|| DEVICE_ID.to_string())
+}
+
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     EspLogger::initialize_default();
@@ -91,6 +100,9 @@ fn main() -> anyhow::Result<()> {
         } else {
             cfg.device_id = DEVICE_ID.to_string();
         }
+    }
+    if let (Ok(cfg), Ok(mut sensors)) = (shared_config.read(), shared_sensor_data.write()) {
+        sensors.device_id = cfg.device_id.clone();
     }
 
     let (conn_tx, conn_rx) = mpsc::channel::<ConnectionState>();
@@ -275,10 +287,11 @@ fn main() -> anyhow::Result<()> {
                     is_mqtt_connected = true;
 
                     if let Some(client) = mqtt_client.as_mut() {
-                        let topic_config = topic_controller_config(DEVICE_ID);
-                        let topic_command = topic_controller_command(DEVICE_ID);
-                        let topic_status = topic_status(DEVICE_ID);
-                        let topic_sensors = topic_sensors(DEVICE_ID);
+                        let device_id = current_device_id(&shared_config);
+                        let topic_config = topic_controller_config(&device_id);
+                        let topic_command = topic_controller_command(&device_id);
+                        let topic_status = topic_status(&device_id);
+                        let topic_sensors = topic_sensors(&device_id);
 
                         let _ = client.publish(
                             &topic_status,
@@ -328,13 +341,15 @@ fn main() -> anyhow::Result<()> {
                         } else {
                             match v.get("type").and_then(|t| t.as_str()) {
                                 Some("water_event") | Some("system_alert")
-                                | Some("dosing_cycle") => topic_fsm_events(DEVICE_ID),
+                                | Some("dosing_cycle") => {
+                                    topic_fsm_events(&current_device_id(&shared_config))
+                                }
                                 Some("ema_update")
                                 | Some("auto_tune")
                                 | Some("runtime_calibration_update") => {
-                                    topic_calibration(DEVICE_ID)
+                                    topic_calibration(&current_device_id(&shared_config))
                                 }
-                                _ => topic_fsm_state(DEVICE_ID),
+                                _ => topic_fsm_state(&current_device_id(&shared_config)),
                             }
                         };
                         let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
@@ -362,7 +377,8 @@ fn main() -> anyhow::Result<()> {
                             continue;
                         }
                     }
-                    let topic = topic_dosing_report(DEVICE_ID);
+                    let device_id = current_device_id(&shared_config);
+                    let topic = topic_dosing_report(&device_id);
                     let _ = client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
                 }
             }
@@ -373,7 +389,8 @@ fn main() -> anyhow::Result<()> {
                 force_publish_next = true;
             } else if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    let topic_sensor_cmd = topic_sensor_command(DEVICE_ID);
+                    let device_id = current_device_id(&shared_config);
+                    let topic_sensor_cmd = topic_sensor_command(&device_id);
                     let _ = client.publish(
                         &topic_sensor_cmd,
                         QoS::AtLeastOnce,
@@ -479,8 +496,9 @@ fn main() -> anyhow::Result<()> {
                     _ => None,
                 };
 
+                let device_id = current_device_id(&shared_config);
                 let health_payload = DeviceHealthSnapshot {
-                    device_id: DEVICE_ID.to_string(),
+                    device_id: device_id.clone(),
                     free_heap: crate::mqtt::get_free_heap(),
                     uptime_sec: crate::mqtt::get_uptime_sec(),
                     rssi: crate::mqtt::get_wifi_rssi(),
@@ -495,7 +513,7 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 if let Ok(json_string) = serde_json::to_string(&health_payload) {
-                    let topic_health = topic_controller_status(DEVICE_ID);
+                    let topic_health = topic_controller_status(&device_id);
                     let _ = client.publish(
                         &topic_health,
                         QoS::AtMostOnce, // Đổi thành AtMostOnce cho bản tin health liên tục

@@ -138,6 +138,10 @@ export interface UnifiedDeviceConfig {
   best_ec_ratio?: number;
   best_ph_ratio?: number;
   tuner_state?: number;
+  adaptive_mixing_sec?: number;
+  adaptive_stabilize_sec?: number;
+  effective_ec_tolerance?: number;
+  effective_ph_tolerance?: number;
   interaction_matrix?: number[];
   matrix_update_count?: number;
   matrix_is_warm?: boolean;

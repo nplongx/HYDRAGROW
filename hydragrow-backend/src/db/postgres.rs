@@ -358,7 +358,7 @@ pub async fn create_crop_season(
     .bind(device_id)
     .bind(&req.name)
     .bind(&req.plant_type)
-    .bind(&req.description) 
+    .bind(&req.description)
     .execute(pool)
     .await?;
 
@@ -433,7 +433,7 @@ pub async fn insert_system_event(
     let query = r#"
         INSERT INTO system_events (
             device_id, level, category, title, message, reason, metadata, timestamp
-        ) 
+        )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     "#;
 

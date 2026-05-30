@@ -66,6 +66,73 @@ fn validated_kalman_confidence(raw: &serde_json::Value) -> Option<serde_json::Va
     }
 }
 
+#[derive(Debug, Default)]
+struct RuntimeCalibrationUpdate {
+    ec_gain: Option<f64>,
+    ph_up: Option<f64>,
+    ph_down: Option<f64>,
+    step_ec: Option<f64>,
+    step_ph: Option<f64>,
+    interaction_matrix_json: Option<serde_json::Value>,
+    matrix_update_count: Option<i64>,
+    matrix_is_warm: Option<bool>,
+    best_ec_ratio: Option<f64>,
+    best_ph_ratio: Option<f64>,
+    tuner_state: Option<i64>,
+    kalman_confidence: Option<serde_json::Value>,
+    adaptive_mixing_sec: Option<i64>,
+    adaptive_stabilize_sec: Option<i64>,
+    effective_ec_tolerance: Option<f64>,
+    effective_ph_tolerance: Option<f64>,
+}
+
+fn runtime_calibration_update_from_coeffs(
+    device_id: &str,
+    coeffs: &serde_json::Value,
+) -> RuntimeCalibrationUpdate {
+    let interaction_matrix_json: Option<serde_json::Value> = match coeffs.get("interaction_matrix")
+    {
+        Some(raw_matrix) => {
+            let validated = validated_runtime_interaction_matrix(raw_matrix);
+            if validated.is_none() {
+                warn!(
+                    "⚠️ [MQTT-FSM] interaction_matrix của {} không đúng shape 4x8 phẳng hoặc có phần tử không hợp lệ, bỏ qua",
+                    device_id
+                );
+            }
+            validated
+        }
+        None => None,
+    };
+
+    RuntimeCalibrationUpdate {
+        ec_gain: coeffs.get("ec_gain_per_ml").and_then(|v| v.as_f64()),
+        ph_up: coeffs.get("ph_shift_up_per_ml").and_then(|v| v.as_f64()),
+        ph_down: coeffs.get("ph_shift_down_per_ml").and_then(|v| v.as_f64()),
+        step_ec: coeffs.get("step_ratio_ec").and_then(|v| v.as_f64()),
+        step_ph: coeffs.get("step_ratio_ph").and_then(|v| v.as_f64()),
+        interaction_matrix_json,
+        matrix_update_count: coeffs.get("matrix_update_count").and_then(|v| v.as_i64()),
+        matrix_is_warm: coeffs.get("matrix_is_warm").and_then(|v| v.as_bool()),
+        best_ec_ratio: coeffs.get("best_ec_ratio").and_then(|v| v.as_f64()),
+        best_ph_ratio: coeffs.get("best_ph_ratio").and_then(|v| v.as_f64()),
+        tuner_state: coeffs.get("state").and_then(|v| v.as_i64()),
+        kalman_confidence: coeffs
+            .get("kalman_confidence")
+            .and_then(validated_kalman_confidence),
+        adaptive_mixing_sec: coeffs.get("adaptive_mixing_sec").and_then(|v| v.as_i64()),
+        adaptive_stabilize_sec: coeffs
+            .get("adaptive_stabilize_sec")
+            .and_then(|v| v.as_i64()),
+        effective_ec_tolerance: coeffs
+            .get("effective_ec_tolerance")
+            .and_then(|v| v.as_f64()),
+        effective_ph_tolerance: coeffs
+            .get("effective_ph_tolerance")
+            .and_then(|v| v.as_f64()),
+    }
+}
+
 pub async fn handle_calibration_update(
     device_id: &str,
     json: &serde_json::Value,
@@ -77,37 +144,7 @@ pub async fn handle_calibration_update(
     );
 
     if let Some(coeffs) = json.get("runtime_coefficients") {
-        // Lấy các hệ số mới
-        let ec_gain = coeffs.get("ec_gain_per_ml").and_then(|v| v.as_f64());
-        let ph_up = coeffs.get("ph_shift_up_per_ml").and_then(|v| v.as_f64());
-        let ph_down = coeffs.get("ph_shift_down_per_ml").and_then(|v| v.as_f64());
-        let step_ec = coeffs.get("step_ratio_ec").and_then(|v| v.as_f64());
-        let step_ph = coeffs.get("step_ratio_ph").and_then(|v| v.as_f64());
-
-        let interaction_matrix_json: Option<serde_json::Value> = match coeffs
-            .get("interaction_matrix")
-        {
-            Some(raw_matrix) => {
-                let validated = validated_runtime_interaction_matrix(raw_matrix);
-                if validated.is_none() {
-                    warn!(
-                        "⚠️ [MQTT-FSM] interaction_matrix của {} không đúng shape 4x8 phẳng hoặc có phần tử không hợp lệ, bỏ qua",
-                        device_id
-                    );
-                }
-                validated
-            }
-            None => None,
-        };
-
-        let matrix_update_count = coeffs.get("matrix_update_count").and_then(|v| v.as_i64());
-        let matrix_is_warm = coeffs.get("matrix_is_warm").and_then(|v| v.as_bool());
-        let best_ec_ratio = coeffs.get("best_ec_ratio").and_then(|v| v.as_f64());
-        let best_ph_ratio = coeffs.get("best_ph_ratio").and_then(|v| v.as_f64());
-        let tuner_state = coeffs.get("state").and_then(|v| v.as_i64());
-        let kalman_confidence = coeffs
-            .get("kalman_confidence")
-            .and_then(validated_kalman_confidence);
+        let update = runtime_calibration_update_from_coeffs(device_id, coeffs);
 
         let query = r#"
                 UPDATE dosing_calibration
@@ -124,23 +161,31 @@ pub async fn handle_calibration_update(
                     best_ph_ratio = COALESCE($10, best_ph_ratio),
                     tuner_state = COALESCE($11, tuner_state),
                     kalman_confidence = COALESCE($12, kalman_confidence),
+                    adaptive_mixing_sec = COALESCE($13, adaptive_mixing_sec),
+                    adaptive_stabilize_sec = COALESCE($14, adaptive_stabilize_sec),
+                    effective_ec_tolerance = COALESCE($15, effective_ec_tolerance),
+                    effective_ph_tolerance = COALESCE($16, effective_ph_tolerance),
                     last_calibrated = NOW()
-                WHERE device_id = $13
+                WHERE device_id = $17
             "#;
 
         match sqlx::query(query)
-            .bind(ec_gain)
-            .bind(ph_up)
-            .bind(ph_down)
-            .bind(step_ec)
-            .bind(step_ph)
-            .bind(interaction_matrix_json)
-            .bind(matrix_update_count)
-            .bind(matrix_is_warm)
-            .bind(best_ec_ratio)
-            .bind(best_ph_ratio)
-            .bind(tuner_state)
-            .bind(kalman_confidence)
+            .bind(update.ec_gain)
+            .bind(update.ph_up)
+            .bind(update.ph_down)
+            .bind(update.step_ec)
+            .bind(update.step_ph)
+            .bind(update.interaction_matrix_json)
+            .bind(update.matrix_update_count)
+            .bind(update.matrix_is_warm)
+            .bind(update.best_ec_ratio)
+            .bind(update.best_ph_ratio)
+            .bind(update.tuner_state)
+            .bind(update.kalman_confidence)
+            .bind(update.adaptive_mixing_sec)
+            .bind(update.adaptive_stabilize_sec)
+            .bind(update.effective_ec_tolerance)
+            .bind(update.effective_ph_tolerance)
             .bind(&device_id)
             .execute(&app_state.pg_pool)
             .await
@@ -277,7 +322,10 @@ async fn update_device_state_cache(
 
 #[cfg(test)]
 mod tests {
-    use super::{transition_system_event_record, validated_runtime_interaction_matrix};
+    use super::{
+        runtime_calibration_update_from_coeffs, transition_system_event_record,
+        validated_runtime_interaction_matrix,
+    };
     use hydragrow_shared::fsm::{FaultCode, SystemPhase};
     use hydragrow_shared::telemetry::transition::{FsmTransitionEvent, TransitionReason};
 
@@ -297,6 +345,23 @@ mod tests {
         let as_json: serde_json::Value = serde_json::to_value(&raw).unwrap();
 
         assert!(validated_runtime_interaction_matrix(&as_json).is_none());
+    }
+
+    #[test]
+    fn runtime_calibration_update_extracts_adaptive_runtime_fields() {
+        let coeffs = serde_json::json!({
+            "adaptive_mixing_sec": 42,
+            "adaptive_stabilize_sec": 24,
+            "effective_ec_tolerance": 0.08,
+            "effective_ph_tolerance": 0.16
+        });
+
+        let update = runtime_calibration_update_from_coeffs("device-1", &coeffs);
+
+        assert_eq!(update.adaptive_mixing_sec, Some(42));
+        assert_eq!(update.adaptive_stabilize_sec, Some(24));
+        assert_eq!(update.effective_ec_tolerance, Some(0.08));
+        assert_eq!(update.effective_ph_tolerance, Some(0.16));
     }
 
     #[test]

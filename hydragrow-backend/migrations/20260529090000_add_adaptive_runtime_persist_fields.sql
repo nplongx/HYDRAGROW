@@ -1,0 +1,5 @@
+ALTER TABLE IF EXISTS dosing_calibration
+    ADD COLUMN IF NOT EXISTS adaptive_mixing_sec INTEGER NOT NULL DEFAULT 15,
+    ADD COLUMN IF NOT EXISTS adaptive_stabilize_sec INTEGER NOT NULL DEFAULT 10,
+    ADD COLUMN IF NOT EXISTS effective_ec_tolerance REAL NOT NULL DEFAULT 0.05,
+    ADD COLUMN IF NOT EXISTS effective_ph_tolerance REAL NOT NULL DEFAULT 0.1;

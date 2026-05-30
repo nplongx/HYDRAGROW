@@ -224,6 +224,14 @@ pub struct ControllerConfig {
     pub best_ph_ratio: f32,
     #[serde(default)]
     pub tuner_state: u8,
+    #[serde(default = "default_adaptive_mixing_sec")]
+    pub adaptive_mixing_sec: u32,
+    #[serde(default = "default_adaptive_stabilize_sec")]
+    pub adaptive_stabilize_sec: u32,
+    #[serde(default = "default_effective_ec_tolerance")]
+    pub effective_ec_tolerance: f32,
+    #[serde(default = "default_effective_ph_tolerance")]
+    pub effective_ph_tolerance: f32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interaction_matrix: Option<Vec<f32>>,
     #[serde(default)]
@@ -342,6 +350,10 @@ impl Default for ControllerConfig {
             best_ec_ratio: 0.4,
             best_ph_ratio: 0.2,
             tuner_state: 0,
+            adaptive_mixing_sec: default_adaptive_mixing_sec(),
+            adaptive_stabilize_sec: default_adaptive_stabilize_sec(),
+            effective_ec_tolerance: default_effective_ec_tolerance(),
+            effective_ph_tolerance: default_effective_ph_tolerance(),
             interaction_matrix: None,
             matrix_update_count: 0,
             matrix_is_warm: false,
@@ -389,6 +401,22 @@ impl Default for ControllerConfig {
             high_temp_misting_off_duration_ms: 60000,
         }
     }
+}
+
+fn default_adaptive_mixing_sec() -> u32 {
+    15
+}
+
+fn default_adaptive_stabilize_sec() -> u32 {
+    10
+}
+
+fn default_effective_ec_tolerance() -> f32 {
+    0.05
+}
+
+fn default_effective_ph_tolerance() -> f32 {
+    0.1
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

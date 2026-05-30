@@ -3,7 +3,7 @@
 //! Nhận input → chọn PhaseTick impl → delegate → trả TickResult.
 
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
-use hydragrow_shared::{ControllerConfig, SensorData};
+use hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
 
 use crate::fsm::events::OrchestratorEvent;
 use crate::fsm::phase_impls::{
@@ -52,6 +52,10 @@ pub fn tick(
     // 2. Sensor noise check
     if check_sensor_noise(ctx, sensors, config, &mut result.delta) {
         return result;
+    }
+
+    if config.control_mode != ControlMode::Auto || !config.is_enabled {
+        return stop_automation_if_needed(result, ctx);
     }
 
     // 3. Stabilizer tracker push (chỉ trong các phase cần theo dõi)
@@ -187,6 +191,77 @@ fn tick_peripheral_systems(
     result
 }
 
+fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> TickResult {
+    if matches!(
+        ctx.phase,
+        SystemPhase::ManualMode | SystemPhase::Fault(_) | SystemPhase::EmergencyStop(_)
+    ) {
+        return result;
+    }
+
+    let automation_was_active = matches!(
+        ctx.phase,
+        SystemPhase::MimoDosing
+            | SystemPhase::ActiveMixing
+            | SystemPhase::Stabilizing
+            | SystemPhase::Cooldown
+            | SystemPhase::WaterRefilling
+            | SystemPhase::WaterDraining
+    );
+
+    if automation_was_active {
+        result.events.push(OrchestratorEvent::SetWaterPump {
+            direction: WaterDirection::Stop,
+        });
+        result
+            .events
+            .push(OrchestratorEvent::SetMistValve { on: false });
+        result
+            .events
+            .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+        result.events.push(OrchestratorEvent::SetDosingPump {
+            pump: crate::fsm::events::DosingPumpTarget::NutrientA,
+            on: false,
+            pwm_percent: 0,
+        });
+        result.events.push(OrchestratorEvent::SetDosingPump {
+            pump: crate::fsm::events::DosingPumpTarget::NutrientB,
+            on: false,
+            pwm_percent: 0,
+        });
+        result.events.push(OrchestratorEvent::SetDosingPump {
+            pump: crate::fsm::events::DosingPumpTarget::PhUp,
+            on: false,
+            pwm_percent: 0,
+        });
+        result.events.push(OrchestratorEvent::SetDosingPump {
+            pump: crate::fsm::events::DosingPumpTarget::PhDown,
+            on: false,
+            pwm_percent: 0,
+        });
+
+        let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
+        peri_delta.water_pump_in = Some(false);
+        peri_delta.water_pump_out = Some(false);
+        peri_delta.mist_valve = Some(false);
+        peri_delta.is_misting_active = Some(false);
+        peri_delta.is_scheduled_mixing_active = Some(false);
+        peri_delta.misting_started_by_dosing = Some(false);
+        peri_delta.osaka_pump = Some(false);
+        peri_delta.osaka_pwm = Some(0);
+        peri_delta.pump_a = Some(false);
+        peri_delta.pump_b = Some(false);
+        peri_delta.ph_up = Some(false);
+        peri_delta.ph_down = Some(false);
+        result.delta.peripherals = Some(peri_delta);
+    }
+
+    result.delta.phase = Some(SystemPhase::ManualMode);
+    result.delta.phase_start_ms = Some(None);
+    result.delta.phase_finish_ms = Some(None);
+    result
+}
+
 fn merge_peripheral_deltas(
     mut base: PeripheralDelta,
     addition: PeripheralDelta,
@@ -273,4 +348,79 @@ fn check_sensor_noise(
 
     delta.peripherals = Some(peri_delta);
     is_noisy
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hydragrow_shared::PumpStatus;
+
+    fn sensor_sample() -> SensorData {
+        SensorData {
+            device_id: "device_001".to_string(),
+            ec: 0.2,
+            ph: 7.8,
+            temp: 24.0,
+            water_level: 20.0,
+            pump_status: PumpStatus::default(),
+            time: "2026-05-30T00:00:00Z".to_string(),
+            controller_received_ms: Some(1_000),
+            rssi: None,
+            free_heap: None,
+            uptime: None,
+            err_water: Some(false),
+            err_temp: Some(false),
+            err_ph: Some(false),
+            err_ec: Some(false),
+            is_continuous: None,
+            ph_voltage_mv: None,
+        }
+    }
+
+    #[test]
+    fn manual_mode_does_not_start_automatic_dosing_from_monitoring() {
+        let mut config = ControllerConfig::default();
+        config.control_mode = ControlMode::Manual;
+        config.is_enabled = true;
+        config.ec_target = 1.5;
+        config.ph_target = 6.0;
+        config.ec_tolerance = 0.05;
+        config.ph_tolerance = 0.1;
+
+        let mut ctx = SystemContext::default();
+        ctx.phase = SystemPhase::Monitoring;
+
+        let result = tick(10_000, &config, &sensor_sample(), 9_000, &mut ctx);
+
+        assert_ne!(result.delta.phase, Some(SystemPhase::MimoDosing));
+        assert!(result.events.is_empty());
+    }
+
+    #[test]
+    fn switching_to_manual_stops_active_automation_once() {
+        let mut config = ControllerConfig::default();
+        config.control_mode = ControlMode::Manual;
+        config.is_enabled = true;
+
+        let mut ctx = SystemContext::default();
+        ctx.phase = SystemPhase::MimoDosing;
+
+        let result = tick(10_000, &config, &sensor_sample(), 9_000, &mut ctx);
+
+        assert_eq!(result.delta.phase, Some(SystemPhase::ManualMode));
+        assert!(result.events.iter().any(|event| matches!(
+            event,
+            OrchestratorEvent::SetDosingPump {
+                on: false,
+                pwm_percent: 0,
+                ..
+            }
+        )));
+        assert!(result.events.iter().any(|event| matches!(
+            event,
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop
+            }
+        )));
+    }
 }

@@ -51,6 +51,20 @@ const defaultPumpStatus: PumpStatus = {
   water_pump_out: false
 };
 
+const createOfflineSensorSnapshot = (deviceId: string): SensorData => ({
+  device_id: deviceId,
+  ec: 0,
+  ph: 0,
+  temp: 0,
+  water_level: 0,
+  time: new Date().toISOString(),
+  pump_status: defaultPumpStatus,
+  err_water: true,
+  err_temp: true,
+  err_ph: true,
+  err_ec: true,
+});
+
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus as any;
 
@@ -383,9 +397,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
       const cachedPumpStatus = await loadPumpStatusFromStore();
       if (cachedPumpStatus) applyPumpStatus(cachedPumpStatus);
-      await refreshDeviceSnapshot();
-
+      setSensorData(prev => prev || createOfflineSensorSnapshot(deviceId));
       setIsLoading(false);
+      refreshDeviceSnapshot().catch(() => { });
 
       try {
         const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {

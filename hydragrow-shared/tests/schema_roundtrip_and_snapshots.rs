@@ -131,6 +131,9 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 state: Some(true),
                 ota_url: None,
             }),
+            ts: Some(1_771_000_000),
+            nonce: Some("nonce-test".into()),
+            signature: Some("sig-test".into()),
         },
         MqttCommandOut {
             target: "pump_a".into(),
@@ -142,6 +145,9 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 state: Some(false),
                 ota_url: None,
             }),
+            ts: Some(1_771_000_000),
+            nonce: Some("nonce-test".into()),
+            signature: Some("sig-test".into()),
         },
         MqttCommandOut {
             target: "controller".into(),
@@ -153,11 +159,17 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 state: None,
                 ota_url: None,
             }),
+            ts: Some(1_771_000_000),
+            nonce: Some("nonce-test".into()),
+            signature: Some("sig-test".into()),
         },
         MqttCommandOut {
             target: "controller".into(),
             action: "set_mode".into(),
             params: None,
+            ts: Some(1_771_000_000),
+            nonce: Some("nonce-test".into()),
+            signature: Some("sig-test".into()),
         },
     ];
 
@@ -213,6 +225,9 @@ fn golden_payload_snapshots() {
             state: Some(true),
             ota_url: None,
         }),
+        ts: Some(1_771_000_000),
+        nonce: Some("nonce-golden".into()),
+        signature: Some("sig-golden".into()),
     };
 
     insta::assert_json_snapshot!("unified_system_log_golden", unified);

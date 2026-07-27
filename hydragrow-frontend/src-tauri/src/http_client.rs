@@ -1,4 +1,5 @@
 use crate::models::AppSettings;
+use crate::secret_store;
 use serde::{de::DeserializeOwned, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
@@ -14,11 +15,18 @@ pub fn get_settings(app: &AppHandle) -> Result<AppSettings, String> {
         .trim_end_matches('/')
         .to_string();
 
-    let api_key = store
+    let legacy_api_key = store
         .get("api_key")
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or("".to_string())
-        .to_string();
+        .and_then(|v| v.as_str().map(|s| s.trim().to_string()))
+        .unwrap_or_default();
+
+    if !legacy_api_key.is_empty() {
+        secret_store::save_api_key(&legacy_api_key)?;
+        store.delete("api_key");
+        let _ = store.save();
+    }
+
+    let api_key = secret_store::load_api_key()?;
 
     let device_id = store
         .get("device_id")

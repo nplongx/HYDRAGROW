@@ -1,27 +1,80 @@
 #include <Arduino.h>
+#include <cstring>
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <mbedtls/md.h>
+#include <time.h>
+#include <WiFiClientSecure.h>
+#include "secrets.h"
 
 // ==========================================
 // THÔNG TIN MẠNG & MQTT
 // ==========================================
-const char *ssid = "Huynh Hong";
-const char *password = "123443215";
-const char *mqtt_server = "viaduct.proxy.rlwy.net";
-const int mqtt_port = 45131;
-const char *device_id = "device_001";
-const char *mqtt_user = "long";
-const char *mqtt_pass = "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i";
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
+const char *mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
+const char *device_id = DEVICE_ID;
+const char *mqtt_user = MQTT_USER;
+const char *mqtt_pass = MQTT_PASSWORD;
+
+// CA root/intermediate certificate của MQTT broker. Thay nội dung PEM bên dưới
+// bằng CA certificate thật của broker đang dùng trước khi triển khai production.
+const char *mqtt_ca_cert = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+)EOF";
+
+struct DeviceMqttCredential {
+  const char *device_id;
+  const char *username;
+  const char *password;
+};
+
+// Mỗi device_id phải có credential riêng và ACL riêng trên broker/backend.
+// Ví dụ ACL cho device_001: chỉ publish/subscribe AGITECH/device_001/...
+const DeviceMqttCredential device_credentials[] = {
+    {"device_001", "device_001", "CHANGE_ME_DEVICE_001_PASSWORD"},
+};
 
 String topic_sensors = String("AGITECH/") + device_id + "/sensors";
 String topic_config = String("AGITECH/") + device_id + "/sensors/config";
 String topic_cmd = String("AGITECH/") + device_id + "/sensor/command";
 String topic_status = String("AGITECH/") + device_id + "/sensor/status";
 
-WiFiClient espClient;
+WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
 // ==========================================
@@ -73,6 +126,94 @@ bool enable_ph_tc = true;
 float temp_compensation_beta = 0.02;
 
 extern unsigned long last_publish_time;
+
+String jsonValueToCanonical(JsonVariant v) {
+  if (v.isNull()) return "null";
+  if (v.is<bool>()) return v.as<bool>() ? "true" : "false";
+  if (v.is<long>() || v.is<int>()) return String(v.as<long>());
+  if (v.is<double>() || v.is<float>()) return String(v.as<double>(), 6);
+  if (v.is<const char *>() || v.is<String>()) {
+    String out;
+    serializeJson(v, out);
+    return out;
+  }
+  String out;
+  serializeJson(v, out);
+  return out;
+}
+
+String canonicalCommandPayload(JsonDocument &doc) {
+  String canonical = "{";
+  canonical += "\"action\":" + jsonValueToCanonical(doc["action"]);
+  canonical += ",\"nonce\":" + jsonValueToCanonical(doc["nonce"]);
+  if (doc.containsKey("params")) {
+    canonical += ",\"params\":";
+    String params;
+    serializeJson(doc["params"], params);
+    canonical += params;
+  }
+  if (doc.containsKey("target")) {
+    canonical += ",\"target\":" + jsonValueToCanonical(doc["target"]);
+  }
+  canonical += ",\"ts\":" + jsonValueToCanonical(doc["ts"]);
+  canonical += "}";
+  return canonical;
+}
+
+String hmacSha256Hex(const String &payload, const char *secret) {
+  byte hmac[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  mbedtls_md_setup(&ctx, info, 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char *)secret, strlen(secret));
+  mbedtls_md_hmac_update(&ctx, (const unsigned char *)payload.c_str(), payload.length());
+  mbedtls_md_hmac_finish(&ctx, hmac);
+  mbedtls_md_free(&ctx);
+  char hex[65];
+  for (int i = 0; i < 32; i++) sprintf(hex + (i * 2), "%02x", hmac[i]);
+  hex[64] = '\0';
+  return String(hex);
+}
+
+bool nonceSeen(const String &nonce) {
+  for (size_t i = 0; i < NONCE_CACHE_SIZE; i++) {
+    if (used_nonces[i] == nonce) return true;
+  }
+  return false;
+}
+
+void rememberNonce(const String &nonce) {
+  used_nonces[used_nonce_index] = nonce;
+  used_nonce_index = (used_nonce_index + 1) % NONCE_CACHE_SIZE;
+}
+
+bool verifyCommand(JsonDocument &doc) {
+  if (!doc.containsKey("ts") || !doc.containsKey("nonce") || !doc.containsKey("signature")) {
+    Serial.println("🚫 [SECURITY] Command thiếu ts/nonce/signature");
+    return false;
+  }
+  time_t now = time(nullptr);
+  long ts = doc["ts"].as<long>();
+  if (now < 1700000000 || labs(now - ts) > COMMAND_TS_WINDOW_SEC) {
+    Serial.printf("🚫 [SECURITY] Timestamp không hợp lệ: now=%ld ts=%ld\n", (long)now, ts);
+    return false;
+  }
+  String nonce = doc["nonce"].as<String>();
+  if (nonce.length() == 0 || nonceSeen(nonce)) {
+    Serial.printf("🚫 [SECURITY] Nonce đã dùng/không hợp lệ: %s\n", nonce.c_str());
+    return false;
+  }
+  String expected = hmacSha256Hex(canonicalCommandPayload(doc), command_secret);
+  String signature = doc["signature"].as<String>();
+  if (!signature.equalsIgnoreCase(expected)) {
+    Serial.println("🚫 [SECURITY] Signature command không khớp");
+    return false;
+  }
+  rememberNonce(nonce);
+  return true;
+}
+
 
 // =====================================================================
 // CLASS: BỘ LỌC TÍN HIỆU LAI (HYBRID FILTER) - O(1) Memory Complexity
@@ -454,21 +595,24 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Xử lý Command
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
-    if (deserializeJson(doc, message)) {
-      publishStatusError("CMD", "Invalid JSON command payload");
-      return;
-    }
-
-    String action = doc.containsKey("action") ? doc["action"].as<String>()
-                                              : doc["command"].as<String>();
-    Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
-
-    if (action == "set_continuous" || action == "continuous_level") {
-      JsonVariant state = doc.containsKey("params") ? doc["params"]["state"]
-                                                    : doc["state"];
-      if (!state.is<bool>()) {
-        publishStatusError("CMD", "Invalid or missing boolean state");
+    if (!deserializeJson(doc, message)) {
+      if (!verifyCommand(doc)) {
+        Serial.println("🚫 [SECURITY] Bỏ qua command MQTT xác minh thất bại");
         return;
+      }
+      String action = doc.containsKey("action") ? doc["action"].as<String>()
+                                                : doc["command"].as<String>();
+      Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
+
+      if (action == "set_continuous" || action == "continuous_level") {
+        continuous_level = doc.containsKey("params")
+                               ? doc["params"]["state"].as<bool>()
+                               : doc["state"].as<bool>();
+        Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
+                      continuous_level);
+      } else if (action == "force_publish") {
+        last_publish_time = 0;
+        Serial.println("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
       }
       continuous_level = state.as<bool>();
       Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
@@ -531,8 +675,19 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   client.setBufferSize(1024);
+  espClient.setCACert(mqtt_ca_cert);
   client.setServer(mqtt_server, mqtt_port);
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   client.setCallback(mqttCallback);
+}
+
+const DeviceMqttCredential *getDeviceCredential(const char *id) {
+  for (const auto &credential : device_credentials) {
+    if (strcmp(credential.device_id, id) == 0) {
+      return &credential;
+    }
+  }
+  return nullptr;
 }
 
 void reconnect() {
@@ -541,7 +696,15 @@ void reconnect() {
     Serial.printf("🔄 [DEBUG-MQTT] Đang thử kết nối MQTT... ClientID: %s\n",
                   clientId.c_str());
 
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass,
+    const DeviceMqttCredential *credential = getDeviceCredential(device_id);
+    if (credential == nullptr) {
+      Serial.printf("❌ [DEBUG-MQTT] Không tìm thấy credential riêng cho device_id: %s\n",
+                    device_id);
+      delay(5000);
+      continue;
+    }
+
+    if (client.connect(clientId.c_str(), credential->username, credential->password,
                        topic_status.c_str(), 1, true, "{\"online\": false}")) {
       Serial.println("✅ [DEBUG-MQTT] Kết nối MQTT thành công!");
       client.publish(topic_status.c_str(), "{\"online\": true}", true);

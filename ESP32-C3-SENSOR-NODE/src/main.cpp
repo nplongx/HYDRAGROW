@@ -6,15 +6,18 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include "secrets.h"
 
 // ==========================================
 // THÔNG TIN MẠNG & MQTT
 // ==========================================
-const char *ssid = "Huynh Hong";
-const char *password = "123443215";
-const char *mqtt_server = "viaduct.proxy.rlwy.net";
-const int mqtt_port = 8883;
-const char *device_id = "device_001";
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
+const char *mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
+const char *device_id = DEVICE_ID;
+const char *mqtt_user = MQTT_USER;
+const char *mqtt_pass = MQTT_PASSWORD;
 
 // CA root/intermediate certificate của MQTT broker. Thay nội dung PEM bên dưới
 // bằng CA certificate thật của broker đang dùng trước khi triển khai production.

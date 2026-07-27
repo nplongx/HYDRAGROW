@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
 use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
 use rumqttc::QoS;
@@ -8,6 +8,7 @@ use sqlx::PgPool;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
+use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::config::{DosingCalibration, SafetyConfig};
@@ -23,6 +24,17 @@ pub struct PumpControlReq {
     pub params: Option<PumpControlParams>,
     #[serde(default, alias = "max_allowed_ml", alias = "manual_max_dose_per_cycle")]
     pub manual_max_allowed_ml: Option<f32>,
+    pub command_metadata: Option<ControlCommandMetadata>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ControlCommandMetadata {
+    pub action: String,
+    pub pump_id: Option<String>,
+    pub duration_sec: Option<u64>,
+    pub pwm: Option<u32>,
+    #[serde(default)]
+    pub dangerous: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +70,7 @@ pub async fn control_pump(
     path: web::Path<String>,
     req: web::Json<PumpControlReq>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
     let device_id = path.into_inner();
     let req_data = req.into_inner();
@@ -114,6 +127,53 @@ pub async fn control_pump(
             .json(json!({"error": "Action must be 'on', 'off', 'reset_fault', or 'set_pwm'"}));
     }
 
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    let required_scope = required_control_scope(&req_data.action, pwm, &pump_name);
+    if !auth.has_scope(required_scope) {
+        audit_control_command(
+            &app_state,
+            &device_id,
+            &auth,
+            &req_data.action,
+            &pump_name,
+            "denied_missing_scope",
+            Some(required_scope),
+            duration_sec,
+            pwm,
+        )
+        .await;
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": required_scope
+        }));
+    }
+
+    if is_dangerous_control(&req_data.action, pwm, &pump_name)
+        && !has_dangerous_confirmation(&http_req)
+    {
+        audit_control_command(
+            &app_state,
+            &device_id,
+            &auth,
+            &req_data.action,
+            &pump_name,
+            "denied_confirmation_required",
+            None,
+            duration_sec,
+            pwm,
+        )
+        .await;
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Dangerous command requires user confirmation or elevated token",
+            "required_confirmation": "X-User-Confirmed: true",
+            "alternative": "X-Elevated-Token with a short-lived backend-issued token"
+        }));
+    }
+
     if let (Some(pwm), Some(duration_sec)) = (pwm, duration_sec) {
         if let Err(resp) = validate_manual_dose_safety(
             &app_state.pg_pool,
@@ -125,6 +185,18 @@ pub async fn control_pump(
         )
         .await
         {
+            audit_control_command(
+                &app_state,
+                &device_id,
+                &auth,
+                &req_data.action,
+                &pump_name,
+                "denied_safety_limit",
+                None,
+                Some(duration_sec),
+                Some(pwm),
+            )
+            .await;
             return resp;
         }
     }
@@ -158,6 +230,18 @@ pub async fn control_pump(
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {
         error!("Lỗi gửi lệnh qua MQTT: {:?}", e);
+        audit_control_command(
+            &app_state,
+            &device_id,
+            &auth,
+            &req_data.action,
+            &pump_name,
+            "publish_failed",
+            None,
+            duration_sec,
+            pwm,
+        )
+        .await;
         return HttpResponse::InternalServerError()
             .json(json!({"error": "Không thể gửi lệnh xuống thiết bị"}));
     }
@@ -175,6 +259,19 @@ pub async fn control_pump(
         "reset_fault" => "RESET LỖI",
         _ => "ĐIỀU KHIỂN",
     };
+
+    audit_control_command(
+        &app_state,
+        &device_id,
+        &auth,
+        &req_data.action,
+        &pump_name,
+        "published",
+        None,
+        duration_sec,
+        pwm,
+    )
+    .await;
 
     let timestamp = chrono::Utc::now().timestamp_millis() as u64;
     let metadata = json!({
@@ -225,6 +322,101 @@ pub async fn control_pump(
         "pwm": pwm,
         "published_at": timestamp
     }))
+}
+
+async fn audit_control_command(
+    app_state: &web::Data<AppState>,
+    device_id: &str,
+    auth: &AuthContext,
+    action: &str,
+    pump: &str,
+    result: &str,
+    required_scope: Option<&str>,
+    duration_sec: Option<u64>,
+    pwm: Option<u32>,
+) {
+    let timestamp = chrono::Utc::now().timestamp_millis();
+    let metadata = json!({
+        "event_type": "control_audit",
+        "user": auth.user_id.as_deref().unwrap_or("unknown"),
+        "session": auth.session_id.as_deref().unwrap_or("unknown"),
+        "device": device_id,
+        "action": action,
+        "pump_id": pump,
+        "duration_sec": duration_sec,
+        "pwm": pwm,
+        "result": result,
+        "required_scope": required_scope,
+        "scopes": auth.scopes,
+    });
+
+    let _ = insert_system_event(
+        &app_state.pg_pool,
+        &NewSystemEventRecord {
+            device_id: device_id.to_string(),
+            level: if result == "published" {
+                "info"
+            } else {
+                "warning"
+            }
+            .to_string(),
+            category: "audit".to_string(),
+            title: "Control Command Audit".to_string(),
+            message: format!(
+                "user={} session={} device={} action={} result={}",
+                auth.user_id.as_deref().unwrap_or("unknown"),
+                auth.session_id.as_deref().unwrap_or("unknown"),
+                device_id,
+                action,
+                result
+            ),
+            reason: required_scope.map(ToString::to_string),
+            metadata: Some(metadata),
+            timestamp,
+        },
+    )
+    .await;
+}
+
+fn required_control_scope(action: &str, pwm: Option<u32>, pump: &str) -> &'static str {
+    if action == "reset_fault" || action == "force_on" {
+        return "control:emergency";
+    }
+
+    if action == "set_pwm" || pwm.is_some() || normalize_dosing_pump_name(pump).is_some() {
+        return "control:pump";
+    }
+
+    "control:pump"
+}
+
+fn is_dangerous_control(action: &str, pwm: Option<u32>, pump: &str) -> bool {
+    action == "force_on"
+        || action == "reset_fault"
+        || action == "set_pwm"
+        || pwm.is_some()
+        || normalize_dosing_pump_name(pump).is_some()
+}
+
+fn has_dangerous_confirmation(req: &HttpRequest) -> bool {
+    let confirmed = req
+        .headers()
+        .get("X-User-Confirmed")
+        .and_then(|hv| hv.to_str().ok())
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
+
+    let elevated = std::env::var("ELEVATED_CONTROL_TOKEN")
+        .ok()
+        .and_then(|expected| {
+            req.headers()
+                .get("X-Elevated-Token")
+                .and_then(|hv| hv.to_str().ok())
+                .map(|actual| actual == expected)
+        })
+        .unwrap_or(false);
+
+    confirmed || elevated
 }
 
 async fn validate_manual_dose_safety(
@@ -416,7 +608,9 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 
 #[cfg(test)]
 mod tests {
-    use super::{control_event_level, resolve_control_target};
+    use super::{
+        control_event_level, is_dangerous_control, required_control_scope, resolve_control_target,
+    };
 
     #[test]
     fn control_target_defaults_to_all_for_controller_commands() {
@@ -439,5 +633,24 @@ mod tests {
     fn force_and_fault_reset_actions_keep_attention_levels() {
         assert_eq!(control_event_level("force_on"), "warning");
         assert_eq!(control_event_level("reset_fault"), "success");
+    }
+
+    #[test]
+    fn emergency_commands_require_emergency_scope() {
+        assert_eq!(
+            required_control_scope("force_on", None, "OSAKA"),
+            "control:emergency"
+        );
+        assert_eq!(
+            required_control_scope("reset_fault", None, "ALL"),
+            "control:emergency"
+        );
+    }
+
+    #[test]
+    fn pwm_and_dosing_commands_are_dangerous() {
+        assert!(is_dangerous_control("set_pwm", Some(40), "OSAKA"));
+        assert!(is_dangerous_control("on", Some(80), "PUMP_A"));
+        assert!(is_dangerous_control("on", None, "PH_UP"));
     }
 }

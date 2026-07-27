@@ -4,7 +4,9 @@ use serde_json::json;
 use tracing::{error, info, warn};
 use yup_oauth2::{ServiceAccountAuthenticator, read_service_account_key};
 
-const PROJECT_ID: &str = "hydragrow-iot";
+fn firebase_project_id() -> String {
+    std::env::var("FIREBASE_PROJECT_ID").unwrap_or_else(|_| "YOUR_FIREBASE_PROJECT_ID".to_string())
+}
 
 async fn get_oauth_token() -> Result<String, Box<dyn std::error::Error>> {
     let secret = read_service_account_key("firebase-service-account.json").await?;
@@ -31,7 +33,7 @@ pub async fn send_push_notification(title: &str, body: &str, tokens: Vec<String>
     let client = Client::new();
     let url = format!(
         "https://fcm.googleapis.com/v1/projects/{}/messages:send",
-        PROJECT_ID
+        firebase_project_id()
     );
 
     for token in tokens {

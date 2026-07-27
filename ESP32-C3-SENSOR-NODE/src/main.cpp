@@ -4,17 +4,22 @@
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include "secrets.h"
 
 // ==========================================
 // THÔNG TIN MẠNG & MQTT
 // ==========================================
-const char *ssid = "Huynh Hong";
-const char *password = "123443215";
-const char *mqtt_server = "viaduct.proxy.rlwy.net";
-const int mqtt_port = 45131;
-const char *device_id = "device_001";
-const char *mqtt_user = "long";
-const char *mqtt_pass = "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i";
+// Copy ESP32-C3-SENSOR-NODE/include/secrets.example.h to
+// ESP32-C3-SENSOR-NODE/include/secrets.h and fill these values locally.
+// secrets.h is intentionally ignored by git; rotate any credentials that were
+// previously committed before deploying.
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
+const char *mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
+const char *device_id = DEVICE_ID;
+const char *mqtt_user = MQTT_USER;
+const char *mqtt_pass = MQTT_PASSWORD;
 
 String topic_sensors = String("AGITECH/") + device_id + "/sensors";
 String topic_config = String("AGITECH/") + device_id + "/sensors/config";

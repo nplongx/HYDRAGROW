@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
 import { hasRequiredRemoteConfig, isTauriRuntime, loadAppSettings } from '../platform/settings';
+import { debugLog } from '../lib/redact';
 
 interface FriendlyState {
   label: string;
@@ -414,18 +415,19 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
       const connectWs = () => {
         const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
-        const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${settings.api_key}`;
+        const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws`;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
           console.log('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
+          ws.send(JSON.stringify({ type: 'auth', api_key: settings.api_key }));
           setIsControllerStatusKnown(false);
           resetSensorTimeout();
 
           httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
-          }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));
+          }).catch(() => debugLog("Lỗi gửi lệnh Sync ban đầu"));
           refreshDeviceSnapshot().catch(() => { });
 
           pingInterval = setInterval(() => {
@@ -436,7 +438,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("📥 RAW WS MESSAGE:", data.type || data._msg_type, data);
+            console.log("📥 RAW WS MESSAGE:", data.type || data._msg_type);
 
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
@@ -649,7 +651,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         };
 
         ws.onclose = () => {
-          console.log('🔴 [GlobalContext] Mất kết nối WebSocket. Đang tự động cấu hình lại...');
+          debugLog('🔴 [GlobalContext] Mất kết nối WebSocket. Đang tự động cấu hình lại...');
           setDeviceStatus({ is_online: false, last_seen: '' });
           setIsControllerStatusKnown(true);
           setIsSensorOnline(false);

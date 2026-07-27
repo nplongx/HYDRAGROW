@@ -4,6 +4,7 @@ import { requestForWebToken, subscribeWebMessages } from '../lib/firebase';
 import { useDeviceContext } from '../context/DeviceContext';
 import { httpFetch } from '../platform/http';
 import toast from 'react-hot-toast';
+import { debugLog, redactSecret } from '../lib/redact';
 
 export function useFCM() {
   const { settings } = useDeviceContext();
@@ -21,7 +22,7 @@ export function useFCM() {
       const isWeb = !('__TAURI__' in window);
 
       if (!isWeb) {
-        console.log("Tauri Native");
+        debugLog("Tauri Native");
         return;
       }
 
@@ -30,7 +31,7 @@ export function useFCM() {
       setPermission(result);
 
       if (result !== 'granted') {
-        console.log('User từ chối notification');
+        debugLog('User từ chối notification');
         return;
       }
 
@@ -40,7 +41,7 @@ export function useFCM() {
 
       setFcmToken(token);
 
-      console.log("FCM Token:", token);
+      debugLog("FCM Token:", redactSecret(token));
 
       const res = await httpFetch(
         `${settings.backend_url}/api/notifications/register`,
@@ -57,7 +58,7 @@ export function useFCM() {
       );
 
       if (res.ok) {
-        console.log("Đăng ký FCM token thành công");
+        debugLog("Đăng ký FCM token thành công");
       } else {
         console.error(await res.text());
       }
@@ -76,7 +77,7 @@ export function useFCM() {
     if (!isWeb) return;
 
     const unsubscribe = subscribeWebMessages((payload: any) => {
-      console.log('Foreground message:', payload);
+      debugLog('Foreground message:', payload);
       if (payload?.notification) {
         const title = payload.notification.title || '';
         const body = payload.notification.body || '';

@@ -13,7 +13,7 @@ import { AccordionSection } from '../components/ui/AccordionSection';
 import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
-import { isTauriRuntime, loadAppSettings, saveAppSettings } from '../platform/settings';
+import { forgetStoredApiKey, loadAppSettings, saveAppSettings } from '../platform/settings';
 
 // --- LOGIC & TYPES ---
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -330,14 +330,7 @@ const Settings = () => {
       if (Object.keys(validateDosingConfig(savingConfig)).length > 0) { toast.error('Dữ liệu không hợp lệ.'); return; }
       const devId = appSettings.device_id;
       const toNumberOr = (value: any, fallback: number) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; };
-      if (isTauriRuntime()) {
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('save_settings', { apiKey: appSettings.api_key, backendUrl: appSettings.backend_url, deviceId: devId });
-        } catch (e) { }
-      } else {
-        await saveAppSettings(appSettings);
-      }
+      await saveAppSettings({ ...appSettings, device_id: devId });
       const ts = new Date().toISOString();
 
       const unifiedPayload = {
@@ -406,6 +399,17 @@ const Settings = () => {
     finally { setIsSaving(false); }
   };
 
+  const handleForgetApiKey = async () => {
+    try {
+      await forgetStoredApiKey();
+      setAppSettings((current) => ({ ...current, api_key: '' }));
+      window.dispatchEvent(new Event('hydragrow:settings-updated'));
+      toast.success('Đã quên thiết bị và xóa API key khỏi bộ nhớ an toàn.');
+    } catch (error: any) {
+      toast.error(`Không thể xóa API key: ${error?.message || error}`);
+    }
+  };
+
   if (isLoading) return <LoadingState message="Đang tải..." />;
 
   // ------------------------- RENDER GIAO DIỆN -------------------------
@@ -444,7 +448,15 @@ const Settings = () => {
         <AccordionSection id="network" title="Thiết bị" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
             <InputGroup label="Device ID" type="text" value={appSettings.device_id} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, device_id: e.target.value })} />
-            <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
+            <div className="space-y-2">
+              <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                Web build chỉ giữ API key trong phiên hiện tại; Tauri lưu khóa trong OS credential vault. Không chia sẻ thiết bị nếu API key còn được nhập.
+              </div>
+              <button type="button" onClick={handleForgetApiKey} className="w-full rounded-xl border border-red-200 bg-white/90 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50">
+                Quên thiết bị / xóa khóa
+              </button>
+            </div>
           </div>
         </AccordionSection>
 

@@ -4,6 +4,16 @@ import { useDeviceContext } from '../context/DeviceContext';
 import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 
+const isDangerousCommand = (pumpId: string, action: string, pwm?: number) => {
+  const dosingPumps = ['A', 'PUMP_A', 'B', 'PUMP_B', 'PH_UP', 'PH_DOWN'];
+  return action === 'force_on'
+    || action === 'reset_fault'
+    || action === 'set_pwm'
+    || typeof pwm === 'number'
+    || dosingPumps.includes(pumpId.toUpperCase());
+};
+
+
 export const useDeviceControl = (deviceId: string) => {
   const { settings, refreshDeviceSnapshot } = useDeviceContext();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -30,9 +40,12 @@ export const useDeviceControl = (deviceId: string) => {
       return false;
     }
 
-    if (processingPumpIds[pumpId]) {
-      toast.error(`Lệnh ${pumpId} đang chờ cooldown, vui lòng thử lại sau.`);
-      return false;
+    const dangerous = isDangerousCommand(pumpId, action, pwm);
+    if (dangerous) {
+      const confirmed = window.confirm(
+        `Lệnh nguy hiểm: ${action} cho ${pumpId}. Xác nhận bạn muốn gửi lệnh điều khiển này?`
+      );
+      if (!confirmed) return false;
     }
 
     setIsProcessing(true);
@@ -45,7 +58,14 @@ export const useDeviceControl = (deviceId: string) => {
         params: {
           pump_id: pumpId,
           duration_sec: duration_sec || null,
-          pwm: pwm || null
+          pwm: pwm ?? null
+        },
+        command_metadata: {
+          action,
+          pump_id: pumpId,
+          duration_sec: duration_sec ?? null,
+          pwm: pwm ?? null,
+          dangerous
         }
       };
 
@@ -53,7 +73,8 @@ export const useDeviceControl = (deviceId: string) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': settings.api_key || ''
+          'X-API-Key': settings.api_key || '',
+          ...(dangerous ? { 'X-User-Confirmed': 'true' } : {})
         },
         body: JSON.stringify(payload)
       });

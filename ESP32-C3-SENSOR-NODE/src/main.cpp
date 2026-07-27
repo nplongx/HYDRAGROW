@@ -143,6 +143,209 @@ HybridFilter waterFilter(20.0, 0.125);
 HybridFilter phFilter(1.5, 0.125);
 HybridFilter ecFilter(1.0, 0.125);
 
+
+// ==========================================
+// GIỚI HẠN AN TOÀN CẤU HÌNH
+// ==========================================
+const int MIN_PUBLISH_INTERVAL_MS = 1000;
+const int MAX_PUBLISH_INTERVAL_MS = 300000;
+const float MIN_TANK_HEIGHT_CM = 1.0;
+const float MAX_TANK_HEIGHT_CM = 500.0;
+const float MIN_CALIBRATION_VOLTAGE_MV = 0.0;
+const float MAX_CALIBRATION_VOLTAGE_MV = 5000.0;
+const float MIN_EC_FACTOR = 0.0;
+const float MAX_EC_FACTOR = 10.0;
+const float MIN_EC_OFFSET = -10.0;
+const float MAX_EC_OFFSET = 10.0;
+const float MIN_TEMP_OFFSET = -20.0;
+const float MAX_TEMP_OFFSET = 20.0;
+const int MIN_MOVING_AVERAGE_WINDOW = 1;
+const int MAX_MOVING_AVERAGE_WINDOW = 100;
+
+void publishStatusError(const char *source, const String &reason) {
+  DynamicJsonDocument statusDoc(256);
+  statusDoc["ok"] = false;
+  statusDoc["source"] = source;
+  statusDoc["error"] = reason;
+
+  String payload;
+  serializeJson(statusDoc, payload);
+
+  Serial.printf("❌ [FAULT-%s] %s\n", source, reason.c_str());
+  if (client.connected()) {
+    client.publish(topic_status.c_str(), payload.c_str(), false);
+  }
+}
+
+bool isValidNumber(JsonVariantConst value) {
+  return value.is<float>() && isfinite(value.as<float>());
+}
+
+bool isValidInteger(JsonVariantConst value) {
+  return value.is<int>();
+}
+
+float readClampedFloat(JsonDocument &doc, const char *key, float currentValue,
+                       float minValue, float maxValue) {
+  if (!doc.containsKey(key)) {
+    return currentValue;
+  }
+  return constrain(doc[key].as<float>(), minValue, maxValue);
+}
+
+bool validateConfig(JsonDocument &doc, String &error) {
+  const char *floatKeys[] = {"ph_v7",      "ph_v4",      "ph_v10",
+                             "ph_v918",    "ec_factor",  "ec_offset",
+                             "temp_offset", "tank_height"};
+
+  for (const char *key : floatKeys) {
+    if (doc.containsKey(key) && !isValidNumber(doc[key])) {
+      error = String("Invalid numeric config field: ") + key;
+      return false;
+    }
+  }
+
+  if (doc.containsKey("publish_interval") &&
+      !isValidInteger(doc["publish_interval"])) {
+    error = "Invalid integer config field: publish_interval";
+    return false;
+  }
+
+  if (doc.containsKey("moving_average_window") &&
+      !isValidInteger(doc["moving_average_window"])) {
+    error = "Invalid integer config field: moving_average_window";
+    return false;
+  }
+
+  const char *boolKeys[] = {"enable_ph_sensor", "enable_ec_sensor",
+                            "enable_temp_sensor",
+                            "enable_water_level_sensor"};
+  for (const char *key : boolKeys) {
+    if (doc.containsKey(key) && !doc[key].is<bool>()) {
+      error = String("Invalid boolean config field: ") + key;
+      return false;
+    }
+  }
+
+  if (doc.containsKey("ph_calibration_mode")) {
+    if (!doc["ph_calibration_mode"].is<const char *>()) {
+      error = "Invalid string config field: ph_calibration_mode";
+      return false;
+    }
+    String mode = doc["ph_calibration_mode"].as<String>();
+    if (mode != "2-point" && mode != "3-point") {
+      error = "Unsupported ph_calibration_mode";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool applyConfig(JsonDocument &doc) {
+  String error;
+  if (!validateConfig(doc, error)) {
+    publishStatusError("CONFIG", error);
+    return false;
+  }
+
+  String next_ph_calibration_mode = ph_calibration_mode;
+  float next_ph_v686 = ph_v686;
+  float next_ph_v4 = ph_v4;
+  float next_ph_v918 = ph_v918;
+  float next_ec_factor = ec_factor;
+  float next_ec_offset = ec_offset;
+  float next_temp_offset = temp_offset;
+  float next_tank_height = tank_height;
+  int next_publish_interval = publish_interval;
+  int next_moving_average_window = -1;
+  bool next_enable_ph = enable_ph;
+  bool next_enable_ec = enable_ec;
+  bool next_enable_temp = enable_temp;
+  bool next_enable_water = enable_water;
+
+  if (doc.containsKey("ph_calibration_mode")) {
+    next_ph_calibration_mode = doc["ph_calibration_mode"].as<String>();
+  }
+
+  if (doc.containsKey("ph_v7")) {
+    next_ph_v686 = constrain(doc["ph_v7"].as<float>() * 1000.0,
+                             MIN_CALIBRATION_VOLTAGE_MV,
+                             MAX_CALIBRATION_VOLTAGE_MV);
+  }
+  if (doc.containsKey("ph_v4")) {
+    next_ph_v4 = constrain(doc["ph_v4"].as<float>() * 1000.0,
+                           MIN_CALIBRATION_VOLTAGE_MV,
+                           MAX_CALIBRATION_VOLTAGE_MV);
+  }
+  if (doc.containsKey("ph_v10")) {
+    next_ph_v918 = constrain(doc["ph_v10"].as<float>() * 1000.0,
+                             MIN_CALIBRATION_VOLTAGE_MV,
+                             MAX_CALIBRATION_VOLTAGE_MV);
+  } else if (doc.containsKey("ph_v918")) {
+    next_ph_v918 = constrain(doc["ph_v918"].as<float>() * 1000.0,
+                             MIN_CALIBRATION_VOLTAGE_MV,
+                             MAX_CALIBRATION_VOLTAGE_MV);
+  }
+
+  next_ec_factor = readClampedFloat(doc, "ec_factor", next_ec_factor,
+                                    MIN_EC_FACTOR, MAX_EC_FACTOR);
+  next_ec_offset = readClampedFloat(doc, "ec_offset", next_ec_offset,
+                                    MIN_EC_OFFSET, MAX_EC_OFFSET);
+  next_temp_offset = readClampedFloat(doc, "temp_offset", next_temp_offset,
+                                      MIN_TEMP_OFFSET, MAX_TEMP_OFFSET);
+  next_tank_height = readClampedFloat(doc, "tank_height", next_tank_height,
+                                      MIN_TANK_HEIGHT_CM, MAX_TANK_HEIGHT_CM);
+
+  if (doc.containsKey("moving_average_window")) {
+    next_moving_average_window = constrain(doc["moving_average_window"].as<int>(),
+                                           MIN_MOVING_AVERAGE_WINDOW,
+                                           MAX_MOVING_AVERAGE_WINDOW);
+  }
+
+  if (doc.containsKey("publish_interval")) {
+    next_publish_interval = constrain(doc["publish_interval"].as<int>(),
+                                      MIN_PUBLISH_INTERVAL_MS,
+                                      MAX_PUBLISH_INTERVAL_MS);
+  }
+
+  if (doc.containsKey("enable_ph_sensor"))
+    next_enable_ph = doc["enable_ph_sensor"].as<bool>();
+  if (doc.containsKey("enable_ec_sensor"))
+    next_enable_ec = doc["enable_ec_sensor"].as<bool>();
+  if (doc.containsKey("enable_temp_sensor"))
+    next_enable_temp = doc["enable_temp_sensor"].as<bool>();
+  if (doc.containsKey("enable_water_level_sensor"))
+    next_enable_water = doc["enable_water_level_sensor"].as<bool>();
+
+  ph_calibration_mode = next_ph_calibration_mode;
+  ph_v686 = next_ph_v686;
+  ph_v4 = next_ph_v4;
+  ph_v918 = next_ph_v918;
+  ec_factor = next_ec_factor;
+  ec_offset = next_ec_offset;
+  temp_offset = next_temp_offset;
+  tank_height = next_tank_height;
+  publish_interval = next_publish_interval;
+  enable_ph = next_enable_ph;
+  enable_ec = next_enable_ec;
+  enable_temp = next_enable_temp;
+  enable_water = next_enable_water;
+
+  if (next_moving_average_window > 0) {
+    float new_alpha = 2.0 / (next_moving_average_window + 1.0);
+    tempFilter.setAlpha(new_alpha);
+    waterFilter.setAlpha(new_alpha);
+    phFilter.setAlpha(new_alpha);
+    ecFilter.setAlpha(new_alpha);
+    Serial.printf(
+        "⚙️ [DEBUG-CONFIG] Cập nhật Filter Alpha: %.4f (Window: %d)\n",
+        new_alpha, next_moving_average_window);
+  }
+
+  return true;
+}
+
 // ==========================================
 // HÀM XỬ LÝ CẢM BIẾN
 // ==========================================
@@ -251,23 +454,30 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Xử lý Command
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
-    if (!deserializeJson(doc, message)) {
-      String action = doc.containsKey("action") ? doc["action"].as<String>()
-                                                : doc["command"].as<String>();
-      Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
+    if (deserializeJson(doc, message)) {
+      publishStatusError("CMD", "Invalid JSON command payload");
+      return;
+    }
 
-      if (action == "set_continuous" || action == "continuous_level") {
-        continuous_level = doc.containsKey("params")
-                               ? doc["params"]["state"].as<bool>()
-                               : doc["state"].as<bool>();
-        Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
-                      continuous_level);
-      } else if (action == "force_publish") {
-        last_publish_time = 0;
-        Serial.println("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
+    String action = doc.containsKey("action") ? doc["action"].as<String>()
+                                              : doc["command"].as<String>();
+    Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
+
+    if (action == "set_continuous" || action == "continuous_level") {
+      JsonVariant state = doc.containsKey("params") ? doc["params"]["state"]
+                                                    : doc["state"];
+      if (!state.is<bool>()) {
+        publishStatusError("CMD", "Invalid or missing boolean state");
+        return;
       }
+      continuous_level = state.as<bool>();
+      Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
+                    continuous_level);
+    } else if (action == "force_publish") {
+      last_publish_time = 0;
+      Serial.println("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
     } else {
-      Serial.println("❌ [DEBUG-CMD] Lỗi parse JSON command");
+      publishStatusError("CMD", String("Unsupported action: ") + action);
     }
     return;
   }
@@ -276,62 +486,22 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (topicStr == topic_config) {
     DynamicJsonDocument doc(1024);
     if (deserializeJson(doc, message)) {
-      Serial.println("❌ [DEBUG-CONFIG] Lỗi parse JSON config");
+      publishStatusError("CONFIG", "Invalid JSON config payload");
       return;
     }
 
-    if (doc.containsKey("ph_calibration_mode"))
-      ph_calibration_mode = doc["ph_calibration_mode"].as<String>();
-
-    if (doc.containsKey("ph_v7"))
-      ph_v686 = doc["ph_v7"].as<float>() * 1000;
-    if (doc.containsKey("ph_v4"))
-      ph_v4 = doc["ph_v4"].as<float>() * 1000;
-
-    if (doc.containsKey("ph_v10"))
-      ph_v918 = doc["ph_v10"].as<float>() * 1000;
-    else if (doc.containsKey("ph_v918"))
-      ph_v918 = doc["ph_v918"].as<float>() * 1000;
-
-    if (doc.containsKey("ec_factor"))
-      ec_factor = doc["ec_factor"].as<float>();
-    if (doc.containsKey("ec_offset"))
-      ec_offset = doc["ec_offset"].as<float>();
-    if (doc.containsKey("temp_offset"))
-      temp_offset = doc["temp_offset"].as<float>();
-    if (doc.containsKey("tank_height"))
-      tank_height = doc["tank_height"].as<float>();
-
-    if (doc.containsKey("moving_average_window")) {
-      int window = constrain(doc["moving_average_window"].as<int>(), 1, 100);
-      float new_alpha = 2.0 / (window + 1.0);
-      tempFilter.setAlpha(new_alpha);
-      waterFilter.setAlpha(new_alpha);
-      phFilter.setAlpha(new_alpha);
-      ecFilter.setAlpha(new_alpha);
-      Serial.printf(
-          "⚙️ [DEBUG-CONFIG] Cập nhật Filter Alpha: %.4f (Window: %d)\n",
-          new_alpha, window);
+    if (!applyConfig(doc)) {
+      return;
     }
-
-    if (doc.containsKey("publish_interval"))
-      publish_interval = doc["publish_interval"].as<int>();
-    if (doc.containsKey("enable_ph_sensor"))
-      enable_ph = doc["enable_ph_sensor"].as<bool>();
-    if (doc.containsKey("enable_ec_sensor"))
-      enable_ec = doc["enable_ec_sensor"].as<bool>();
-    if (doc.containsKey("enable_temp_sensor"))
-      enable_temp = doc["enable_temp_sensor"].as<bool>();
-    if (doc.containsKey("enable_water_level_sensor"))
-      enable_water = doc["enable_water_level_sensor"].as<bool>();
 
     Serial.println("🔄 Đã nạp cấu hình Lõi mới từ Server thành công!");
     Serial.printf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
                   "V918: %.1f\n",
                   ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
     Serial.printf("📋 [DEBUG-CONFIG-VARS] EC Fac: %.3f, EC Off: %.3f, Temp "
-                  "Off: %.2f, Tank: %.2f\n",
-                  ec_factor, ec_offset, temp_offset, tank_height);
+                  "Off: %.2f, Tank: %.2f, Publish: %dms\n",
+                  ec_factor, ec_offset, temp_offset, tank_height,
+                  publish_interval);
   }
 }
 

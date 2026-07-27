@@ -1,28 +1,81 @@
 #include <Arduino.h>
+#include <cstring>
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <stdarg.h>
+#include <mbedtls/md.h>
+#include <time.h>
+#include <WiFiClientSecure.h>
+#include "secrets.h"
 
 // ==========================================
 // THÔNG TIN MẠNG & MQTT
 // ==========================================
-const char *ssid = "Huynh Hong";
-const char *password = "123443215";
-const char *mqtt_server = "viaduct.proxy.rlwy.net";
-const int mqtt_port = 45131;
-const char *device_id = "device_001";
-const char *mqtt_user = "long";
-const char *mqtt_pass = "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i";
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
+const char *mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
+const char *device_id = DEVICE_ID;
+const char *mqtt_user = MQTT_USER;
+const char *mqtt_pass = MQTT_PASSWORD;
+
+// CA root/intermediate certificate của MQTT broker. Thay nội dung PEM bên dưới
+// bằng CA certificate thật của broker đang dùng trước khi triển khai production.
+const char *mqtt_ca_cert = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+)EOF";
+
+struct DeviceMqttCredential {
+  const char *device_id;
+  const char *username;
+  const char *password;
+};
+
+// Mỗi device_id phải có credential riêng và ACL riêng trên broker/backend.
+// Ví dụ ACL cho device_001: chỉ publish/subscribe AGITECH/device_001/...
+const DeviceMqttCredential device_credentials[] = {
+    {"device_001", "device_001", "CHANGE_ME_DEVICE_001_PASSWORD"},
+};
 
 String topic_sensors = String("AGITECH/") + device_id + "/sensors";
 String topic_config = String("AGITECH/") + device_id + "/sensors/config";
 String topic_cmd = String("AGITECH/") + device_id + "/sensor/command";
 String topic_status = String("AGITECH/") + device_id + "/sensor/status";
 
-WiFiClient espClient;
+WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
 #ifndef HYDRAGROW_DEBUG_LOG
@@ -107,6 +160,94 @@ float temp_compensation_beta = 0.02;
 
 extern unsigned long last_publish_time;
 
+String jsonValueToCanonical(JsonVariant v) {
+  if (v.isNull()) return "null";
+  if (v.is<bool>()) return v.as<bool>() ? "true" : "false";
+  if (v.is<long>() || v.is<int>()) return String(v.as<long>());
+  if (v.is<double>() || v.is<float>()) return String(v.as<double>(), 6);
+  if (v.is<const char *>() || v.is<String>()) {
+    String out;
+    serializeJson(v, out);
+    return out;
+  }
+  String out;
+  serializeJson(v, out);
+  return out;
+}
+
+String canonicalCommandPayload(JsonDocument &doc) {
+  String canonical = "{";
+  canonical += "\"action\":" + jsonValueToCanonical(doc["action"]);
+  canonical += ",\"nonce\":" + jsonValueToCanonical(doc["nonce"]);
+  if (doc.containsKey("params")) {
+    canonical += ",\"params\":";
+    String params;
+    serializeJson(doc["params"], params);
+    canonical += params;
+  }
+  if (doc.containsKey("target")) {
+    canonical += ",\"target\":" + jsonValueToCanonical(doc["target"]);
+  }
+  canonical += ",\"ts\":" + jsonValueToCanonical(doc["ts"]);
+  canonical += "}";
+  return canonical;
+}
+
+String hmacSha256Hex(const String &payload, const char *secret) {
+  byte hmac[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  mbedtls_md_setup(&ctx, info, 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char *)secret, strlen(secret));
+  mbedtls_md_hmac_update(&ctx, (const unsigned char *)payload.c_str(), payload.length());
+  mbedtls_md_hmac_finish(&ctx, hmac);
+  mbedtls_md_free(&ctx);
+  char hex[65];
+  for (int i = 0; i < 32; i++) sprintf(hex + (i * 2), "%02x", hmac[i]);
+  hex[64] = '\0';
+  return String(hex);
+}
+
+bool nonceSeen(const String &nonce) {
+  for (size_t i = 0; i < NONCE_CACHE_SIZE; i++) {
+    if (used_nonces[i] == nonce) return true;
+  }
+  return false;
+}
+
+void rememberNonce(const String &nonce) {
+  used_nonces[used_nonce_index] = nonce;
+  used_nonce_index = (used_nonce_index + 1) % NONCE_CACHE_SIZE;
+}
+
+bool verifyCommand(JsonDocument &doc) {
+  if (!doc.containsKey("ts") || !doc.containsKey("nonce") || !doc.containsKey("signature")) {
+    Serial.println("🚫 [SECURITY] Command thiếu ts/nonce/signature");
+    return false;
+  }
+  time_t now = time(nullptr);
+  long ts = doc["ts"].as<long>();
+  if (now < 1700000000 || labs(now - ts) > COMMAND_TS_WINDOW_SEC) {
+    Serial.printf("🚫 [SECURITY] Timestamp không hợp lệ: now=%ld ts=%ld\n", (long)now, ts);
+    return false;
+  }
+  String nonce = doc["nonce"].as<String>();
+  if (nonce.length() == 0 || nonceSeen(nonce)) {
+    Serial.printf("🚫 [SECURITY] Nonce đã dùng/không hợp lệ: %s\n", nonce.c_str());
+    return false;
+  }
+  String expected = hmacSha256Hex(canonicalCommandPayload(doc), command_secret);
+  String signature = doc["signature"].as<String>();
+  if (!signature.equalsIgnoreCase(expected)) {
+    Serial.println("🚫 [SECURITY] Signature command không khớp");
+    return false;
+  }
+  rememberNonce(nonce);
+  return true;
+}
+
+
 // =====================================================================
 // CLASS: BỘ LỌC TÍN HIỆU LAI (HYBRID FILTER) - O(1) Memory Complexity
 // =====================================================================
@@ -175,6 +316,209 @@ HybridFilter tempFilter(5.0, 0.125);
 HybridFilter waterFilter(20.0, 0.125);
 HybridFilter phFilter(1.5, 0.125);
 HybridFilter ecFilter(1.0, 0.125);
+
+
+// ==========================================
+// GIỚI HẠN AN TOÀN CẤU HÌNH
+// ==========================================
+const int MIN_PUBLISH_INTERVAL_MS = 1000;
+const int MAX_PUBLISH_INTERVAL_MS = 300000;
+const float MIN_TANK_HEIGHT_CM = 1.0;
+const float MAX_TANK_HEIGHT_CM = 500.0;
+const float MIN_CALIBRATION_VOLTAGE_MV = 0.0;
+const float MAX_CALIBRATION_VOLTAGE_MV = 5000.0;
+const float MIN_EC_FACTOR = 0.0;
+const float MAX_EC_FACTOR = 10.0;
+const float MIN_EC_OFFSET = -10.0;
+const float MAX_EC_OFFSET = 10.0;
+const float MIN_TEMP_OFFSET = -20.0;
+const float MAX_TEMP_OFFSET = 20.0;
+const int MIN_MOVING_AVERAGE_WINDOW = 1;
+const int MAX_MOVING_AVERAGE_WINDOW = 100;
+
+void publishStatusError(const char *source, const String &reason) {
+  DynamicJsonDocument statusDoc(256);
+  statusDoc["ok"] = false;
+  statusDoc["source"] = source;
+  statusDoc["error"] = reason;
+
+  String payload;
+  serializeJson(statusDoc, payload);
+
+  Serial.printf("❌ [FAULT-%s] %s\n", source, reason.c_str());
+  if (client.connected()) {
+    client.publish(topic_status.c_str(), payload.c_str(), false);
+  }
+}
+
+bool isValidNumber(JsonVariantConst value) {
+  return value.is<float>() && isfinite(value.as<float>());
+}
+
+bool isValidInteger(JsonVariantConst value) {
+  return value.is<int>();
+}
+
+float readClampedFloat(JsonDocument &doc, const char *key, float currentValue,
+                       float minValue, float maxValue) {
+  if (!doc.containsKey(key)) {
+    return currentValue;
+  }
+  return constrain(doc[key].as<float>(), minValue, maxValue);
+}
+
+bool validateConfig(JsonDocument &doc, String &error) {
+  const char *floatKeys[] = {"ph_v7",      "ph_v4",      "ph_v10",
+                             "ph_v918",    "ec_factor",  "ec_offset",
+                             "temp_offset", "tank_height"};
+
+  for (const char *key : floatKeys) {
+    if (doc.containsKey(key) && !isValidNumber(doc[key])) {
+      error = String("Invalid numeric config field: ") + key;
+      return false;
+    }
+  }
+
+  if (doc.containsKey("publish_interval") &&
+      !isValidInteger(doc["publish_interval"])) {
+    error = "Invalid integer config field: publish_interval";
+    return false;
+  }
+
+  if (doc.containsKey("moving_average_window") &&
+      !isValidInteger(doc["moving_average_window"])) {
+    error = "Invalid integer config field: moving_average_window";
+    return false;
+  }
+
+  const char *boolKeys[] = {"enable_ph_sensor", "enable_ec_sensor",
+                            "enable_temp_sensor",
+                            "enable_water_level_sensor"};
+  for (const char *key : boolKeys) {
+    if (doc.containsKey(key) && !doc[key].is<bool>()) {
+      error = String("Invalid boolean config field: ") + key;
+      return false;
+    }
+  }
+
+  if (doc.containsKey("ph_calibration_mode")) {
+    if (!doc["ph_calibration_mode"].is<const char *>()) {
+      error = "Invalid string config field: ph_calibration_mode";
+      return false;
+    }
+    String mode = doc["ph_calibration_mode"].as<String>();
+    if (mode != "2-point" && mode != "3-point") {
+      error = "Unsupported ph_calibration_mode";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool applyConfig(JsonDocument &doc) {
+  String error;
+  if (!validateConfig(doc, error)) {
+    publishStatusError("CONFIG", error);
+    return false;
+  }
+
+  String next_ph_calibration_mode = ph_calibration_mode;
+  float next_ph_v686 = ph_v686;
+  float next_ph_v4 = ph_v4;
+  float next_ph_v918 = ph_v918;
+  float next_ec_factor = ec_factor;
+  float next_ec_offset = ec_offset;
+  float next_temp_offset = temp_offset;
+  float next_tank_height = tank_height;
+  int next_publish_interval = publish_interval;
+  int next_moving_average_window = -1;
+  bool next_enable_ph = enable_ph;
+  bool next_enable_ec = enable_ec;
+  bool next_enable_temp = enable_temp;
+  bool next_enable_water = enable_water;
+
+  if (doc.containsKey("ph_calibration_mode")) {
+    next_ph_calibration_mode = doc["ph_calibration_mode"].as<String>();
+  }
+
+  if (doc.containsKey("ph_v7")) {
+    next_ph_v686 = constrain(doc["ph_v7"].as<float>() * 1000.0,
+                             MIN_CALIBRATION_VOLTAGE_MV,
+                             MAX_CALIBRATION_VOLTAGE_MV);
+  }
+  if (doc.containsKey("ph_v4")) {
+    next_ph_v4 = constrain(doc["ph_v4"].as<float>() * 1000.0,
+                           MIN_CALIBRATION_VOLTAGE_MV,
+                           MAX_CALIBRATION_VOLTAGE_MV);
+  }
+  if (doc.containsKey("ph_v10")) {
+    next_ph_v918 = constrain(doc["ph_v10"].as<float>() * 1000.0,
+                             MIN_CALIBRATION_VOLTAGE_MV,
+                             MAX_CALIBRATION_VOLTAGE_MV);
+  } else if (doc.containsKey("ph_v918")) {
+    next_ph_v918 = constrain(doc["ph_v918"].as<float>() * 1000.0,
+                             MIN_CALIBRATION_VOLTAGE_MV,
+                             MAX_CALIBRATION_VOLTAGE_MV);
+  }
+
+  next_ec_factor = readClampedFloat(doc, "ec_factor", next_ec_factor,
+                                    MIN_EC_FACTOR, MAX_EC_FACTOR);
+  next_ec_offset = readClampedFloat(doc, "ec_offset", next_ec_offset,
+                                    MIN_EC_OFFSET, MAX_EC_OFFSET);
+  next_temp_offset = readClampedFloat(doc, "temp_offset", next_temp_offset,
+                                      MIN_TEMP_OFFSET, MAX_TEMP_OFFSET);
+  next_tank_height = readClampedFloat(doc, "tank_height", next_tank_height,
+                                      MIN_TANK_HEIGHT_CM, MAX_TANK_HEIGHT_CM);
+
+  if (doc.containsKey("moving_average_window")) {
+    next_moving_average_window = constrain(doc["moving_average_window"].as<int>(),
+                                           MIN_MOVING_AVERAGE_WINDOW,
+                                           MAX_MOVING_AVERAGE_WINDOW);
+  }
+
+  if (doc.containsKey("publish_interval")) {
+    next_publish_interval = constrain(doc["publish_interval"].as<int>(),
+                                      MIN_PUBLISH_INTERVAL_MS,
+                                      MAX_PUBLISH_INTERVAL_MS);
+  }
+
+  if (doc.containsKey("enable_ph_sensor"))
+    next_enable_ph = doc["enable_ph_sensor"].as<bool>();
+  if (doc.containsKey("enable_ec_sensor"))
+    next_enable_ec = doc["enable_ec_sensor"].as<bool>();
+  if (doc.containsKey("enable_temp_sensor"))
+    next_enable_temp = doc["enable_temp_sensor"].as<bool>();
+  if (doc.containsKey("enable_water_level_sensor"))
+    next_enable_water = doc["enable_water_level_sensor"].as<bool>();
+
+  ph_calibration_mode = next_ph_calibration_mode;
+  ph_v686 = next_ph_v686;
+  ph_v4 = next_ph_v4;
+  ph_v918 = next_ph_v918;
+  ec_factor = next_ec_factor;
+  ec_offset = next_ec_offset;
+  temp_offset = next_temp_offset;
+  tank_height = next_tank_height;
+  publish_interval = next_publish_interval;
+  enable_ph = next_enable_ph;
+  enable_ec = next_enable_ec;
+  enable_temp = next_enable_temp;
+  enable_water = next_enable_water;
+
+  if (next_moving_average_window > 0) {
+    float new_alpha = 2.0 / (next_moving_average_window + 1.0);
+    tempFilter.setAlpha(new_alpha);
+    waterFilter.setAlpha(new_alpha);
+    phFilter.setAlpha(new_alpha);
+    ecFilter.setAlpha(new_alpha);
+    Serial.printf(
+        "⚙️ [DEBUG-CONFIG] Cập nhật Filter Alpha: %.4f (Window: %d)\n",
+        new_alpha, next_moving_average_window);
+  }
+
+  return true;
+}
 
 // ==========================================
 // HÀM XỬ LÝ CẢM BIẾN
@@ -285,6 +629,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
     if (!deserializeJson(doc, message)) {
+      if (!verifyCommand(doc)) {
+        Serial.println("🚫 [SECURITY] Bỏ qua command MQTT xác minh thất bại");
+        return;
+      }
       String action = doc.containsKey("action") ? doc["action"].as<String>()
                                                 : doc["command"].as<String>();
       debugLogPrintf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
@@ -299,8 +647,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         last_publish_time = 0;
         debugLogPrintln("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
       }
+      continuous_level = state.as<bool>();
+      Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
+                    continuous_level);
+    } else if (action == "force_publish") {
+      last_publish_time = 0;
+      Serial.println("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
     } else {
-      debugLogPrintln("❌ [DEBUG-CMD] Lỗi parse JSON command");
+      publishStatusError("CMD", String("Unsupported action: ") + action);
     }
     return;
   }
@@ -309,62 +663,22 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (topicStr == topic_config) {
     DynamicJsonDocument doc(1024);
     if (deserializeJson(doc, message)) {
-      debugLogPrintln("❌ [DEBUG-CONFIG] Lỗi parse JSON config");
+      publishStatusError("CONFIG", "Invalid JSON config payload");
       return;
     }
 
-    if (doc.containsKey("ph_calibration_mode"))
-      ph_calibration_mode = doc["ph_calibration_mode"].as<String>();
-
-    if (doc.containsKey("ph_v7"))
-      ph_v686 = doc["ph_v7"].as<float>() * 1000;
-    if (doc.containsKey("ph_v4"))
-      ph_v4 = doc["ph_v4"].as<float>() * 1000;
-
-    if (doc.containsKey("ph_v10"))
-      ph_v918 = doc["ph_v10"].as<float>() * 1000;
-    else if (doc.containsKey("ph_v918"))
-      ph_v918 = doc["ph_v918"].as<float>() * 1000;
-
-    if (doc.containsKey("ec_factor"))
-      ec_factor = doc["ec_factor"].as<float>();
-    if (doc.containsKey("ec_offset"))
-      ec_offset = doc["ec_offset"].as<float>();
-    if (doc.containsKey("temp_offset"))
-      temp_offset = doc["temp_offset"].as<float>();
-    if (doc.containsKey("tank_height"))
-      tank_height = doc["tank_height"].as<float>();
-
-    if (doc.containsKey("moving_average_window")) {
-      int window = constrain(doc["moving_average_window"].as<int>(), 1, 100);
-      float new_alpha = 2.0 / (window + 1.0);
-      tempFilter.setAlpha(new_alpha);
-      waterFilter.setAlpha(new_alpha);
-      phFilter.setAlpha(new_alpha);
-      ecFilter.setAlpha(new_alpha);
-      debugLogPrintf(
-          "⚙️ [DEBUG-CONFIG] Cập nhật Filter Alpha: %.4f (Window: %d)\n",
-          new_alpha, window);
+    if (!applyConfig(doc)) {
+      return;
     }
 
-    if (doc.containsKey("publish_interval"))
-      publish_interval = doc["publish_interval"].as<int>();
-    if (doc.containsKey("enable_ph_sensor"))
-      enable_ph = doc["enable_ph_sensor"].as<bool>();
-    if (doc.containsKey("enable_ec_sensor"))
-      enable_ec = doc["enable_ec_sensor"].as<bool>();
-    if (doc.containsKey("enable_temp_sensor"))
-      enable_temp = doc["enable_temp_sensor"].as<bool>();
-    if (doc.containsKey("enable_water_level_sensor"))
-      enable_water = doc["enable_water_level_sensor"].as<bool>();
-
     Serial.println("🔄 Đã nạp cấu hình Lõi mới từ Server thành công!");
-    debugLogPrintf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
-                   "V918: %.1f\n",
-                   ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
-    debugLogPrintf("📋 [DEBUG-CONFIG-VARS] EC Fac: %.3f, EC Off: %.3f, Temp "
-                   "Off: %.2f, Tank: %.2f\n",
-                   ec_factor, ec_offset, temp_offset, tank_height);
+    Serial.printf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
+                  "V918: %.1f\n",
+                  ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
+    Serial.printf("📋 [DEBUG-CONFIG-VARS] EC Fac: %.3f, EC Off: %.3f, Temp "
+                  "Off: %.2f, Tank: %.2f, Publish: %dms\n",
+                  ec_factor, ec_offset, temp_offset, tank_height,
+                  publish_interval);
   }
 }
 
@@ -394,8 +708,19 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   client.setBufferSize(1024);
+  espClient.setCACert(mqtt_ca_cert);
   client.setServer(mqtt_server, mqtt_port);
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   client.setCallback(mqttCallback);
+}
+
+const DeviceMqttCredential *getDeviceCredential(const char *id) {
+  for (const auto &credential : device_credentials) {
+    if (strcmp(credential.device_id, id) == 0) {
+      return &credential;
+    }
+  }
+  return nullptr;
 }
 
 void reconnect() {
@@ -404,7 +729,15 @@ void reconnect() {
     Serial.printf("🔄 [DEBUG-MQTT] Đang thử kết nối MQTT... ClientID: %s\n",
                   clientId.c_str());
 
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass,
+    const DeviceMqttCredential *credential = getDeviceCredential(device_id);
+    if (credential == nullptr) {
+      Serial.printf("❌ [DEBUG-MQTT] Không tìm thấy credential riêng cho device_id: %s\n",
+                    device_id);
+      delay(5000);
+      continue;
+    }
+
+    if (client.connect(clientId.c_str(), credential->username, credential->password,
                        topic_status.c_str(), 1, true, "{\"online\": false}")) {
       Serial.println("✅ [DEBUG-MQTT] Kết nối MQTT thành công!");
       client.publish(topic_status.c_str(), "{\"online\": true}", true);

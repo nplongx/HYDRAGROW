@@ -415,11 +415,12 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
       const connectWs = () => {
         const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
-        const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${settings.api_key}`;
+        const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws`;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-          debugLog('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
+          console.log('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
+          ws.send(JSON.stringify({ type: 'auth', api_key: settings.api_key }));
           setIsControllerStatusKnown(false);
           resetSensorTimeout();
 
@@ -437,7 +438,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            debugLog("📥 RAW WS MESSAGE:", data.type || data._msg_type, data);
+            console.log("📥 RAW WS MESSAGE:", data.type || data._msg_type);
 
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;

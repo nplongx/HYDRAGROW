@@ -90,6 +90,8 @@ pub fn get_wifi_rssi() -> i8 {
 
 pub fn init_mqtt_client(
     broker_url: &str,
+    mqtt_user: &str,
+    mqtt_password: &str,
     shared_config: SharedConfig,
     shared_sensor_data: SharedSensorData,
     cmd_tx: Sender<MqttCommandIn>,
@@ -125,8 +127,8 @@ pub fn init_mqtt_client(
     let mqtt_config = MqttClientConfiguration {
         buffer_size: 4096,
         keep_alive_interval: Some(std::time::Duration::from_secs(15)),
-        password: Some("s7cjsq7bmxd7v4hlrf9idtwv6983rf3i"),
-        username: Some("long"),
+        password: Some(mqtt_password),
+        username: Some(mqtt_user),
         lwt: Some(lwt_config),
         ..Default::default()
     };

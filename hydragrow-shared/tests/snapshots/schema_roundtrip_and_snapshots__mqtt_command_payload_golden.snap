@@ -1,5 +1,6 @@
 ---
 source: tests/schema_roundtrip_and_snapshots.rs
+assertion_line: 235
 expression: command
 ---
 {
@@ -10,5 +11,8 @@ expression: command
     "duration_sec": 12,
     "pwm": 65,
     "state": true
-  }
+  },
+  "ts": 1771000000,
+  "nonce": "nonce-golden",
+  "signature": "sig-golden"
 }

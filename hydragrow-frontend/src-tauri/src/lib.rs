@@ -2,6 +2,7 @@ mod commands;
 mod http_client;
 mod models;
 mod notification;
+mod secret_store;
 mod valve_guard;
 mod water_sequence;
 mod ws_client;
@@ -19,6 +20,7 @@ pub fn run() {
             commands::save_settings,
             commands::load_settings,
             commands::start_ws_listener,
+            commands::forget_api_key,
             // Tiện ích (Thông báo)
             notification::trigger_os_notification,
         ])

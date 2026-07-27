@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
 import { hasRequiredRemoteConfig, isTauriRuntime, loadAppSettings } from '../platform/settings';
+import { debugLog } from '../lib/redact';
 
 interface FriendlyState {
   label: string;
@@ -426,7 +427,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
-          }).catch(() => console.log("Lỗi gửi lệnh Sync ban đầu"));
+          }).catch(() => debugLog("Lỗi gửi lệnh Sync ban đầu"));
           refreshDeviceSnapshot().catch(() => { });
 
           pingInterval = setInterval(() => {
@@ -650,7 +651,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         };
 
         ws.onclose = () => {
-          console.log('🔴 [GlobalContext] Mất kết nối WebSocket. Đang tự động cấu hình lại...');
+          debugLog('🔴 [GlobalContext] Mất kết nối WebSocket. Đang tự động cấu hình lại...');
           setDeviceStatus({ is_online: false, last_seen: '' });
           setIsControllerStatusKnown(true);
           setIsSensorOnline(false);

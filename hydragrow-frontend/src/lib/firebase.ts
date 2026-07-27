@@ -3,6 +3,7 @@
 import { initializeApp } from "firebase/app";
 // SỬA: Import toàn bộ từ firebase/messaging thay vì rải rác
 import { getMessaging, getToken, onMessage, MessagePayload } from "firebase/messaging";
+import { debugLog, redactSecret } from "./redact";
 
 // Configure Firebase with Vite environment variables from a local .env file.
 // See README.md for the required VITE_FIREBASE_* and VITE_FIREBASE_VAPID_KEY values.
@@ -34,10 +35,10 @@ export const requestForWebToken = async () => {
     });
 
     if (currentToken) {
-      console.log('Web FCM Token:', currentToken);
+      debugLog('Web FCM Token:', redactSecret(currentToken));
       return currentToken;
     }
-    console.log('Không thể lấy FCM token.');
+    debugLog('Không thể lấy FCM token.');
     return null;
   } catch (err) {
     console.error('Lỗi khi lấy token:', err);

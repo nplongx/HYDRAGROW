@@ -142,6 +142,9 @@ pub async fn start_ph_calibration(
         target: format!("PH_{}", mode_text),
         action: "enter_calibration".to_string(),
         params: None,
+        ts: None,
+        nonce: None,
+        signature: None,
     };
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {
@@ -372,6 +375,9 @@ pub async fn finish_ph_calibration(
         target: String::new(),
         action: "exit_calibration".to_string(),
         params: None,
+        ts: None,
+        nonce: None,
+        signature: None,
     };
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {

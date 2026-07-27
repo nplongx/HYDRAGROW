@@ -1,6 +1,6 @@
 use crate::AppState;
 use actix_web::{
-    Error, HttpMessage, HttpResponse,
+    Error, HttpResponse,
     body::EitherBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
 };
@@ -81,6 +81,14 @@ where
         }
         // ------------------------------------------
 
+        if req.path().ends_with("/ws") {
+            let srv = Rc::clone(&self.service);
+            return Box::pin(async move {
+                let res = srv.call(req).await?;
+                Ok(res.map_into_left_body())
+            });
+        }
+
         let app_state = req.app_data::<actix_web::web::Data<AppState>>().unwrap();
         let expected_api_key = &app_state.api_key;
 
@@ -90,37 +98,7 @@ where
             .get("X-API-Key") // Nếu bạn dùng Bearer Token, hãy đổi thành "Authorization"
             .and_then(|hv| hv.to_str().ok());
 
-        // Cấu trúc phụ để bóc tách query string nhanh gọn
-        #[derive(serde::Deserialize)]
-        struct QueryAuth {
-            api_key: Option<String>,
-        }
-
-        let mut auth_context = AuthContext::default();
-        let mut is_authorized = false;
-
-        // Kiểm tra Header trước
-        if let Some(key) = header_key {
-            // Giả định bạn truyền header đúng như mong đợi.
-            // Nếu bạn dùng chuỗi "Bearer <token>" thì phải cắt chuỗi ra nhé.
-            if key == expected_api_key {
-                is_authorized = true;
-                auth_context.scopes = parse_scopes(std::env::var("API_KEY_SCOPES").ok().as_deref())
-                    .unwrap_or_else(default_legacy_scopes);
-            }
-        }
-        // 3. Nếu Header không có, thử tìm trong Query String (Dành cho WebSocket)
-        else if let Ok(query) = actix_web::web::Query::<QueryAuth>::from_query(req.query_string())
-        {
-            if let Some(key) = &query.api_key {
-                if key == expected_api_key {
-                    is_authorized = true;
-                    auth_context.scopes =
-                        parse_scopes(std::env::var("API_KEY_SCOPES").ok().as_deref())
-                            .unwrap_or_else(default_legacy_scopes);
-                }
-            }
-        }
+        let is_authorized = header_key.is_some_and(|key| key == expected_api_key);
 
         // Nếu cả 2 cách đều thất bại -> Trả về 401
         if !is_authorized {

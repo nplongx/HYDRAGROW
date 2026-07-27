@@ -74,6 +74,61 @@ float temp_compensation_beta = 0.02;
 
 extern unsigned long last_publish_time;
 
+const unsigned long COMMAND_DEDUP_WINDOW_MS = 1500;
+const unsigned long FORCE_ON_MAX_DURATION_SEC = 300;
+String last_command_action = "";
+unsigned long last_command_at = 0;
+String active_force_action = "";
+unsigned long active_force_until = 0;
+
+void publishCommandRejected(const String &action, const String &reason) {
+  DynamicJsonDocument status(192);
+  status["status"] = "command rejected: " + reason;
+  status["action"] = action;
+  status["reason"] = reason;
+  char buffer[192];
+  serializeJson(status, buffer);
+  client.publish(topic_status.c_str(), buffer, false);
+}
+
+bool isOppositeCommand(const String &currentAction, const String &nextAction) {
+  return (currentAction == "force_on" && (nextAction == "pump_off" || nextAction == "off")) ||
+         ((currentAction == "pump_off" || currentAction == "off") && nextAction == "force_on");
+}
+
+bool acceptCommand(const String &action, JsonVariant params) {
+  unsigned long now = millis();
+  if (action == last_command_action && now - last_command_at < COMMAND_DEDUP_WINDOW_MS) {
+    Serial.printf("⏱️ [DEBUG-CMD] command rejected: rate_limited action=%s\n", action.c_str());
+    publishCommandRejected(action, "rate_limited");
+    return false;
+  }
+
+  if (active_force_action.length() > 0 && now < active_force_until &&
+      isOppositeCommand(active_force_action, action)) {
+    Serial.printf("🛑 [DEBUG-CMD] command rejected: conflicting_command active=%s next=%s\n",
+                  active_force_action.c_str(), action.c_str());
+    publishCommandRejected(action, "conflicting_command");
+    return false;
+  }
+
+  if (action == "force_on") {
+    unsigned long durationSec = params["duration_sec"] | 0;
+    if (durationSec == 0 || durationSec > FORCE_ON_MAX_DURATION_SEC) {
+      Serial.printf("🛑 [DEBUG-CMD] command rejected: invalid_duration duration=%lus\n", durationSec);
+      publishCommandRejected(action, "invalid_duration");
+      return false;
+    }
+    active_force_action = action;
+    active_force_until = now + (durationSec * 1000UL);
+  }
+
+  last_command_action = action;
+  last_command_at = now;
+  return true;
+}
+
+
 // =====================================================================
 // CLASS: BỘ LỌC TÍN HIỆU LAI (HYBRID FILTER) - O(1) Memory Complexity
 // =====================================================================
@@ -255,6 +310,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       String action = doc.containsKey("action") ? doc["action"].as<String>()
                                                 : doc["command"].as<String>();
       Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
+      JsonVariant params = doc.containsKey("params") ? doc["params"].as<JsonVariant>() : doc.as<JsonVariant>();
+      if (!acceptCommand(action, params)) {
+        return;
+      }
 
       if (action == "set_continuous" || action == "continuous_level") {
         continuous_level = doc.containsKey("params")
@@ -410,6 +469,10 @@ void loop() {
   static bool err_temp_flag = false;
   static bool err_ph_flag = false;
   static bool err_ec_flag = false;
+  if (active_force_action.length() > 0 && current_millis >= active_force_until) {
+    active_force_action = "";
+    active_force_until = 0;
+  }
 
   // --------------------------------------------------------
   // LUỒNG 1: LẤY MẪU VÀ LỌC NHIỄU (Mỗi 200ms)

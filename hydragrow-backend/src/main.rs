@@ -73,6 +73,11 @@ pub struct DosingLearningSample {
 }
 
 #[derive(Debug, Clone)]
+pub struct CommandRateEntry {
+    pub count: u32,
+    pub window_start: Instant,
+}
+
 pub struct DosingDynamicState {
     pub base_ec_gain_per_ml: f32,
     pub dynamic_ec_gain_per_ml: f32,
@@ -115,6 +120,9 @@ pub struct AppState {
 
     // Dosing dynamic learning (in-memory)
     pub dosing_dynamic_states: Arc<RwLock<HashMap<String, DosingDynamicState>>>,
+
+    // Manual command rate limits keyed by api_key + device_id + action.
+    pub command_rate_limits: Arc<Mutex<HashMap<String, CommandRateEntry>>>,
 }
 
 #[tokio::main]
@@ -189,6 +197,7 @@ async fn main() -> anyhow::Result<()> {
         ph_calibration_sessions: Arc::new(RwLock::new(HashMap::new())),
         ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
         dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
+        command_rate_limits: Arc::new(Mutex::new(HashMap::new())),
     });
 
     let fcm_tokens_clone = app_state.fcm_tokens.clone();

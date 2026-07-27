@@ -1,16 +1,17 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
 use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
 use rumqttc::QoS;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+use std::time::{Duration, Instant};
 use tracing::{error, info, instrument, warn};
 
-use crate::AppState;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::config::{DosingCalibration, SafetyConfig};
+use crate::{AppState, CommandRateEntry};
 use hydragrow_shared::events::AppEvent;
 
 #[derive(Debug, Deserialize)]
@@ -56,6 +57,7 @@ pub struct PumpControlParams {
 #[instrument(skip(app_state, req))]
 pub async fn control_pump(
     path: web::Path<String>,
+    http_req: HttpRequest,
     req: web::Json<PumpControlReq>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
@@ -112,6 +114,18 @@ pub async fn control_pump(
         warn!("Từ chối lệnh: Hành động không hợp lệ ({})", req_data.action);
         return HttpResponse::BadRequest()
             .json(json!({"error": "Action must be 'on', 'off', 'reset_fault', or 'set_pwm'"}));
+    }
+
+    if let Err(resp) =
+        enforce_command_rate_limit(&app_state, &http_req, &device_id, &req_data.action)
+    {
+        return resp;
+    }
+
+    if req_data.action == "force_on" {
+        if let Err(resp) = validate_force_on_safety(&device_id, &pump_name, duration_sec) {
+            return resp;
+        }
     }
 
     if let (Some(pwm), Some(duration_sec)) = (pwm, duration_sec) {
@@ -225,6 +239,93 @@ pub async fn control_pump(
         "pwm": pwm,
         "published_at": timestamp
     }))
+}
+
+fn enforce_command_rate_limit(
+    app_state: &web::Data<AppState>,
+    http_req: &HttpRequest,
+    device_id: &str,
+    action: &str,
+) -> Result<(), HttpResponse> {
+    const MAX_COMMANDS_PER_WINDOW: u32 = 3;
+    const COMMAND_WINDOW: Duration = Duration::from_secs(10);
+
+    let api_key = http_req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("missing_api_key");
+    let key = format!("{}:{}:{}", api_key, device_id, action);
+    let now = Instant::now();
+    let mut state = app_state.command_rate_limits.lock().unwrap();
+
+    if state.len() > 10_000 {
+        state.retain(|_, entry| now.duration_since(entry.window_start) < COMMAND_WINDOW);
+    }
+
+    let entry = state.entry(key).or_insert(CommandRateEntry {
+        count: 0,
+        window_start: now,
+    });
+
+    if now.duration_since(entry.window_start) >= COMMAND_WINDOW {
+        entry.count = 1;
+        entry.window_start = now;
+        return Ok(());
+    }
+
+    entry.count += 1;
+    if entry.count > MAX_COMMANDS_PER_WINDOW {
+        warn!(
+            "command rejected: rate_limited api_key=device:{} action={} count={} window={}s",
+            device_id,
+            action,
+            entry.count,
+            COMMAND_WINDOW.as_secs()
+        );
+        return Err(HttpResponse::TooManyRequests().json(json!({
+            "status": "command rejected: rate_limited",
+            "error": "rate_limited",
+            "message": "Too many duplicate commands for this API key, device_id and action.",
+            "device_id": device_id,
+            "action": action,
+            "retry_after_sec": COMMAND_WINDOW.as_secs()
+        })));
+    }
+
+    Ok(())
+}
+
+fn validate_force_on_safety(
+    device_id: &str,
+    pump: &str,
+    duration_sec: Option<u64>,
+) -> Result<(), HttpResponse> {
+    const MIN_FORCE_ON_DURATION_SEC: u64 = 1;
+    const MAX_FORCE_ON_DURATION_SEC: u64 = 300;
+
+    let Some(duration_sec) = duration_sec else {
+        return Err(HttpResponse::BadRequest().json(json!({
+            "status": "command rejected: invalid_duration",
+            "error": "force_on requires duration_sec"
+        })));
+    };
+
+    if !(MIN_FORCE_ON_DURATION_SEC..=MAX_FORCE_ON_DURATION_SEC).contains(&duration_sec) {
+        warn!(
+            "Chặn force_on duration ngoài giới hạn: device={} pump={} duration={}s",
+            device_id, pump, duration_sec
+        );
+        return Err(HttpResponse::BadRequest().json(json!({
+            "status": "command rejected: invalid_duration",
+            "error": "force_on duration_sec outside safe range",
+            "min_duration_sec": MIN_FORCE_ON_DURATION_SEC,
+            "max_duration_sec": MAX_FORCE_ON_DURATION_SEC,
+            "duration_sec": duration_sec
+        })));
+    }
+
+    Ok(())
 }
 
 async fn validate_manual_dose_safety(

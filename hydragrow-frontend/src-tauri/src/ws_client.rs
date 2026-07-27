@@ -1,6 +1,6 @@
 // src-tauri/src/ws_client.rs
 
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{sleep, Duration};
@@ -41,18 +41,29 @@ pub async fn start_ws_listener(app: AppHandle, device_id: String) {
                 .backend_url
                 .replace("http://", "ws://")
                 .replace("https://", "wss://");
-            // Gắn API Key và Device ID vào URL hoặc Header tùy thiết kế backend của bạn
-            let ws_url = format!(
-                "{}/ws?device_id={}&api_key={}",
-                ws_base, device_id, settings.api_key
-            );
+            let ws_url = format!("{}/ws?device_id={}", ws_base, device_id);
 
-            println!("[WebSocket] Đang cố gắng kết nối tới: {}", ws_url);
+            println!("[WebSocket] Đang cố gắng kết nối tới WebSocket backend.");
 
             match connect_async(&ws_url).await {
                 Ok((ws_stream, _)) => {
                     println!("[WebSocket] Kết nối thành công!");
-                    let (_, mut read) = ws_stream.split();
+                    let (mut write, mut read) = ws_stream.split();
+                    let auth_message = serde_json::json!({
+                        "type": "auth",
+                        "api_key": settings.api_key,
+                    })
+                    .to_string();
+
+                    if write
+                        .send(Message::Text(auth_message.into()))
+                        .await
+                        .is_err()
+                    {
+                        println!("[WebSocket] Không thể gửi thông điệp xác thực.");
+                        sleep(Duration::from_secs(5)).await;
+                        continue;
+                    }
 
                     // Báo cho React biết thiết bị đã online
                     let _ = app.emit(

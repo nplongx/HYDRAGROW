@@ -154,6 +154,9 @@ pub async fn control_pump(
             state: explicit_state,
             ota_url: None,
         }),
+        ts: None,
+        nonce: None,
+        signature: None,
     };
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {
@@ -345,6 +348,11 @@ pub async fn request_device_sync(
         "action": "SYNC_STATUS",
         "value": 0
     });
+
+    let payload = match crate::api::mqtt_utils::sign_command_value(&device_id, payload) {
+        Ok(payload) => payload,
+        Err(_) => return HttpResponse::InternalServerError().json(json!({"error": "Sign failed"})),
+    };
 
     match serde_json::to_vec(&payload) {
         Ok(mqtt_bytes) => {

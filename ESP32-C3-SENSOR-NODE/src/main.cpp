@@ -4,6 +4,7 @@
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <stdarg.h>
 
 // ==========================================
 // THÔNG TIN MẠNG & MQTT
@@ -23,6 +24,38 @@ String topic_status = String("AGITECH/") + device_id + "/sensor/status";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+#ifndef HYDRAGROW_DEBUG_LOG
+#define HYDRAGROW_DEBUG_LOG 0
+#endif
+
+String redactSecret(const String &value, int visibleSuffixLength = 4) {
+  if (value.length() == 0) {
+    return "[redacted]";
+  }
+
+  int suffixLength = min(visibleSuffixLength, static_cast<int>(value.length()));
+  return String("[redacted]...") + value.substring(value.length() - suffixLength);
+}
+
+bool isDebugLogEnabled() { return HYDRAGROW_DEBUG_LOG == 1; }
+
+void debugLogPrintf(const char *format, ...) {
+  if (!isDebugLogEnabled()) {
+    return;
+  }
+
+  va_list args;
+  va_start(args, format);
+  Serial.vprintf(format, args);
+  va_end(args);
+}
+
+void debugLogPrintln(const char *message) {
+  if (isDebugLogEnabled()) {
+    Serial.println(message);
+  }
+}
 
 // ==========================================
 // CẤU HÌNH CHÂN KẾT NỐI (PIN)
@@ -245,8 +278,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
   String topicStr = String(topic);
 
-  Serial.printf("📥 [DEBUG-MQTT] Nhận Topic: %s\n", topicStr.c_str());
-  Serial.printf("📦 [DEBUG-MQTT] Payload: %s\n", message.c_str());
+  debugLogPrintf("📥 [DEBUG-MQTT] Nhận Topic: %s\n", topicStr.c_str());
+  debugLogPrintf("📦 [DEBUG-MQTT] Payload: %s\n", redactSecret(message).c_str());
 
   // Xử lý Command
   if (topicStr == topic_cmd) {
@@ -254,20 +287,20 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (!deserializeJson(doc, message)) {
       String action = doc.containsKey("action") ? doc["action"].as<String>()
                                                 : doc["command"].as<String>();
-      Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
+      debugLogPrintf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
 
       if (action == "set_continuous" || action == "continuous_level") {
         continuous_level = doc.containsKey("params")
                                ? doc["params"]["state"].as<bool>()
                                : doc["state"].as<bool>();
-        Serial.printf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
-                      continuous_level);
+        debugLogPrintf("⚙️ [DEBUG-CMD] Set continuous_level = %d\n",
+                       continuous_level);
       } else if (action == "force_publish") {
         last_publish_time = 0;
-        Serial.println("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
+        debugLogPrintln("⚙️ [DEBUG-CMD] Force publish kích hoạt!");
       }
     } else {
-      Serial.println("❌ [DEBUG-CMD] Lỗi parse JSON command");
+      debugLogPrintln("❌ [DEBUG-CMD] Lỗi parse JSON command");
     }
     return;
   }
@@ -276,7 +309,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (topicStr == topic_config) {
     DynamicJsonDocument doc(1024);
     if (deserializeJson(doc, message)) {
-      Serial.println("❌ [DEBUG-CONFIG] Lỗi parse JSON config");
+      debugLogPrintln("❌ [DEBUG-CONFIG] Lỗi parse JSON config");
       return;
     }
 
@@ -309,7 +342,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       waterFilter.setAlpha(new_alpha);
       phFilter.setAlpha(new_alpha);
       ecFilter.setAlpha(new_alpha);
-      Serial.printf(
+      debugLogPrintf(
           "⚙️ [DEBUG-CONFIG] Cập nhật Filter Alpha: %.4f (Window: %d)\n",
           new_alpha, window);
     }
@@ -326,12 +359,12 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       enable_water = doc["enable_water_level_sensor"].as<bool>();
 
     Serial.println("🔄 Đã nạp cấu hình Lõi mới từ Server thành công!");
-    Serial.printf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
-                  "V918: %.1f\n",
-                  ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
-    Serial.printf("📋 [DEBUG-CONFIG-VARS] EC Fac: %.3f, EC Off: %.3f, Temp "
-                  "Off: %.2f, Tank: %.2f\n",
-                  ec_factor, ec_offset, temp_offset, tank_height);
+    debugLogPrintf("📋 [DEBUG-CONFIG-VARS] pH Mode: %s, V686: %.1f, V4: %.1f, "
+                   "V918: %.1f\n",
+                   ph_calibration_mode.c_str(), ph_v686, ph_v4, ph_v918);
+    debugLogPrintf("📋 [DEBUG-CONFIG-VARS] EC Fac: %.3f, EC Off: %.3f, Temp "
+                   "Off: %.2f, Tank: %.2f\n",
+                   ec_factor, ec_offset, temp_offset, tank_height);
   }
 }
 
@@ -460,9 +493,9 @@ void loop() {
         current_avg_ph = phFilter.update(ph_val);
 
         // [THÊM MỚI CẬP NHẬT]: In log so sánh rõ ràng giữa RAW và EMA mỗi 200ms
-        Serial.printf("🧪 [DEBUG-pH-Filter] V_mv: %.2f mV | pH Raw (ko EMA): "
-                      "%.2f | pH Filtered (EMA): %.2f\n",
-                      ph_mv, latest_raw_ph, current_avg_ph);
+        debugLogPrintf("🧪 [DEBUG-pH-Filter] V_mv: %.2f mV | pH Raw (ko EMA): "
+                       "%.2f | pH Filtered (EMA): %.2f\n",
+                       ph_mv, latest_raw_ph, current_avg_ph);
       }
     }
 
@@ -526,8 +559,8 @@ void loop() {
     client.publish(topic_sensors.c_str(), payload.c_str());
 
     Serial.println("\n-----------------------------------------");
-    Serial.printf("📤 [DEBUG-PUB] Topic: %s\n", topic_sensors.c_str());
-    Serial.printf("📤 [DEBUG-PUB] Payload: %s\n", payload.c_str());
+    debugLogPrintf("📤 [DEBUG-PUB] Topic: %s\n", topic_sensors.c_str());
+    debugLogPrintf("📤 [DEBUG-PUB] Payload: %s\n", redactSecret(payload).c_str());
 
     // [ĐÃ SỬA]: Cập nhật log Serial để hiển thị "OFF" thay vì in giá trị cũ khi
     // cảm biến tắt

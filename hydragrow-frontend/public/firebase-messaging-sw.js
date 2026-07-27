@@ -18,7 +18,9 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  console.log('Đã nhận thông báo ngầm:', payload);
+  if (self.location.hostname === 'localhost') {
+    console.log('Đã nhận thông báo ngầm:', payload);
+  }
 
   const notificationTitle = payload?.notification?.title || 'HydraGrow';
   const notificationOptions = {

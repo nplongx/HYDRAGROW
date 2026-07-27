@@ -10,6 +10,11 @@ import java.net.URL
 import kotlin.concurrent.thread
 
 class MainActivity : TauriActivity() {
+    private fun redactSecret(value: String?, visibleSuffixLength: Int = 4): String {
+        if (value.isNullOrEmpty()) return "[redacted]"
+        return "[redacted]...${value.takeLast(visibleSuffixLength)}"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -24,7 +29,9 @@ class MainActivity : TauriActivity() {
             }
 
             val token = task.result ?: return@addOnCompleteListener
-            Log.d("FCM_NATIVE", "📱 Đã lấy được Token: $token")
+            if (BuildConfig.DEBUG) {
+                Log.d("FCM_NATIVE", "📱 Đã lấy được Token: ${redactSecret(token)}")
+            }
 
             // 2. Gửi thẳng Token lên Backend Actix bằng Kotlin (Chạy luồng ngầm)
             thread {
@@ -47,7 +54,9 @@ class MainActivity : TauriActivity() {
                         os.write(input, 0, input.size)
                     }
 
-                    Log.d("FCM_NATIVE", "✅ Đã đăng ký Token! HTTP Status: ${conn.responseCode}")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("FCM_NATIVE", "✅ Đã đăng ký Token! HTTP Status: ${conn.responseCode}")
+                    }
                     conn.disconnect()
                 } catch (e: Exception) {
                     Log.e("FCM_NATIVE", "❌ Lỗi gửi token lên Backend", e)

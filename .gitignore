@@ -1,1 +1,11 @@
 .aider*
+# Local deployment secrets (never commit real credentials)
+ESP32-C3-SENSOR-NODE/include/secrets.h
+ESP32-C3-CONTROLLER-NODE/.env
+hydragrow-frontend/.env
+hydragrow-frontend/.env.*
+!hydragrow-frontend/.env.example
+hydragrow-frontend/public/config.local.json
+hydragrow-frontend/src-tauri/gen/android/app/google-services.local.json
+hydragrow-backend/firebase-service-account.json
+hydragrow-backend/.env

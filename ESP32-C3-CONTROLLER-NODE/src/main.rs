@@ -33,10 +33,12 @@ use pump::PumpController;
 use crate::fsm::start_fsm_control_loop;
 use crate::fsm::utils::get_current_time_sec;
 
-const WIFI_SSID: &str = "Huynh Hong";
-const WIFI_PASS: &str = "123443215";
-const MQTT_URL: &str = "mqtt://viaduct.proxy.rlwy.net:45131";
-const DEVICE_ID: &str = "device_001";
+const WIFI_SSID: &str = option_env!("HYDRAGROW_WIFI_SSID").unwrap_or("YOUR_WIFI_SSID");
+const WIFI_PASS: &str = option_env!("HYDRAGROW_WIFI_PASSWORD").unwrap_or("YOUR_WIFI_PASSWORD");
+const MQTT_URL: &str = option_env!("HYDRAGROW_MQTT_URL").unwrap_or("mqtt://YOUR_MQTT_HOST:1883");
+const MQTT_USER: &str = option_env!("HYDRAGROW_MQTT_USER").unwrap_or("YOUR_MQTT_USERNAME");
+const MQTT_PASSWORD: &str = option_env!("HYDRAGROW_MQTT_PASSWORD").unwrap_or("YOUR_MQTT_PASSWORD");
+const DEVICE_ID: &str = option_env!("HYDRAGROW_DEVICE_ID").unwrap_or("YOUR_DEVICE_ID");
 
 fn current_device_id(shared_config: &config::SharedConfig) -> String {
     shared_config
@@ -267,6 +269,8 @@ fn main() -> anyhow::Result<()> {
                     if mqtt_client.is_none() {
                         match mqtt::init_mqtt_client(
                             MQTT_URL,
+                            MQTT_USER,
+                            MQTT_PASSWORD,
                             shared_config.clone(),
                             shared_sensor_data.clone(),
                             cmd_tx.clone(),

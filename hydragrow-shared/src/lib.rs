@@ -92,6 +92,12 @@ pub struct MqttCommandOut {
     pub action: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<MqttCommandParams>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ts: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

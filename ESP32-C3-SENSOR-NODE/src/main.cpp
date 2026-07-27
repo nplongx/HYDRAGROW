@@ -5,6 +5,8 @@
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <mbedtls/md.h>
+#include <time.h>
 #include <WiFiClientSecure.h>
 #include "secrets.h"
 
@@ -124,6 +126,94 @@ bool enable_ph_tc = true;
 float temp_compensation_beta = 0.02;
 
 extern unsigned long last_publish_time;
+
+String jsonValueToCanonical(JsonVariant v) {
+  if (v.isNull()) return "null";
+  if (v.is<bool>()) return v.as<bool>() ? "true" : "false";
+  if (v.is<long>() || v.is<int>()) return String(v.as<long>());
+  if (v.is<double>() || v.is<float>()) return String(v.as<double>(), 6);
+  if (v.is<const char *>() || v.is<String>()) {
+    String out;
+    serializeJson(v, out);
+    return out;
+  }
+  String out;
+  serializeJson(v, out);
+  return out;
+}
+
+String canonicalCommandPayload(JsonDocument &doc) {
+  String canonical = "{";
+  canonical += "\"action\":" + jsonValueToCanonical(doc["action"]);
+  canonical += ",\"nonce\":" + jsonValueToCanonical(doc["nonce"]);
+  if (doc.containsKey("params")) {
+    canonical += ",\"params\":";
+    String params;
+    serializeJson(doc["params"], params);
+    canonical += params;
+  }
+  if (doc.containsKey("target")) {
+    canonical += ",\"target\":" + jsonValueToCanonical(doc["target"]);
+  }
+  canonical += ",\"ts\":" + jsonValueToCanonical(doc["ts"]);
+  canonical += "}";
+  return canonical;
+}
+
+String hmacSha256Hex(const String &payload, const char *secret) {
+  byte hmac[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  mbedtls_md_setup(&ctx, info, 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char *)secret, strlen(secret));
+  mbedtls_md_hmac_update(&ctx, (const unsigned char *)payload.c_str(), payload.length());
+  mbedtls_md_hmac_finish(&ctx, hmac);
+  mbedtls_md_free(&ctx);
+  char hex[65];
+  for (int i = 0; i < 32; i++) sprintf(hex + (i * 2), "%02x", hmac[i]);
+  hex[64] = '\0';
+  return String(hex);
+}
+
+bool nonceSeen(const String &nonce) {
+  for (size_t i = 0; i < NONCE_CACHE_SIZE; i++) {
+    if (used_nonces[i] == nonce) return true;
+  }
+  return false;
+}
+
+void rememberNonce(const String &nonce) {
+  used_nonces[used_nonce_index] = nonce;
+  used_nonce_index = (used_nonce_index + 1) % NONCE_CACHE_SIZE;
+}
+
+bool verifyCommand(JsonDocument &doc) {
+  if (!doc.containsKey("ts") || !doc.containsKey("nonce") || !doc.containsKey("signature")) {
+    Serial.println("🚫 [SECURITY] Command thiếu ts/nonce/signature");
+    return false;
+  }
+  time_t now = time(nullptr);
+  long ts = doc["ts"].as<long>();
+  if (now < 1700000000 || labs(now - ts) > COMMAND_TS_WINDOW_SEC) {
+    Serial.printf("🚫 [SECURITY] Timestamp không hợp lệ: now=%ld ts=%ld\n", (long)now, ts);
+    return false;
+  }
+  String nonce = doc["nonce"].as<String>();
+  if (nonce.length() == 0 || nonceSeen(nonce)) {
+    Serial.printf("🚫 [SECURITY] Nonce đã dùng/không hợp lệ: %s\n", nonce.c_str());
+    return false;
+  }
+  String expected = hmacSha256Hex(canonicalCommandPayload(doc), command_secret);
+  String signature = doc["signature"].as<String>();
+  if (!signature.equalsIgnoreCase(expected)) {
+    Serial.println("🚫 [SECURITY] Signature command không khớp");
+    return false;
+  }
+  rememberNonce(nonce);
+  return true;
+}
+
 
 // =====================================================================
 // CLASS: BỘ LỌC TÍN HIỆU LAI (HYBRID FILTER) - O(1) Memory Complexity
@@ -303,6 +393,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (topicStr == topic_cmd) {
     DynamicJsonDocument doc(384);
     if (!deserializeJson(doc, message)) {
+      if (!verifyCommand(doc)) {
+        Serial.println("🚫 [SECURITY] Bỏ qua command MQTT xác minh thất bại");
+        return;
+      }
       String action = doc.containsKey("action") ? doc["action"].as<String>()
                                                 : doc["command"].as<String>();
       Serial.printf("⚙️ [DEBUG-CMD] Action: %s\n", action.c_str());
@@ -414,6 +508,7 @@ void setup() {
   client.setBufferSize(1024);
   espClient.setCACert(mqtt_ca_cert);
   client.setServer(mqtt_server, mqtt_port);
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   client.setCallback(mqttCallback);
 }
 

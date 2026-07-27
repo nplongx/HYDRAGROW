@@ -21,7 +21,8 @@ pub async fn send_command(
     payload: &CommandPayload,
 ) -> Result<()> {
     let topic = topic_controller_command(device_id);
-    let payload_bytes = serde_json::to_vec(payload)?;
+    let signed_payload = crate::api::mqtt_utils::sign_command(device_id, payload)?;
+    let payload_bytes = serde_json::to_vec(&signed_payload)?;
 
     app_state
         .mqtt_client

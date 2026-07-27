@@ -6,6 +6,19 @@ use actix_web::{
 };
 use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::rc::Rc;
+
+#[derive(Clone, Debug, Default)]
+pub struct AuthContext {
+    pub scopes: Vec<String>,
+    pub user_id: Option<String>,
+    pub session_id: Option<String>,
+}
+
+impl AuthContext {
+    pub fn has_scope(&self, scope: &str) -> bool {
+        self.scopes.iter().any(|s| s == scope || s == "*")
+    }
+}
 // use std::sync::Arc; // Bỏ comment nếu bạn thực sự dùng Arc ở đâu đó
 
 pub struct ApiKeyAuth {
@@ -96,6 +109,18 @@ where
             return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
         }
 
+        auth_context.user_id = req
+            .headers()
+            .get("X-User-Id")
+            .and_then(|hv| hv.to_str().ok())
+            .map(ToString::to_string);
+        auth_context.session_id = req
+            .headers()
+            .get("X-Session-Id")
+            .and_then(|hv| hv.to_str().ok())
+            .map(ToString::to_string);
+        req.extensions_mut().insert(auth_context);
+
         // Cho phép request đi tiếp tới route handlers
         let srv = Rc::clone(&self.service);
         Box::pin(async move {
@@ -103,4 +128,27 @@ where
             Ok(res.map_into_left_body())
         })
     }
+}
+
+fn parse_scopes(raw: Option<&str>) -> Option<Vec<String>> {
+    let scopes: Vec<String> = raw?
+        .split(|c| c == ',' || c == ' ')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    if scopes.is_empty() {
+        None
+    } else {
+        Some(scopes)
+    }
+}
+
+fn default_legacy_scopes() -> Vec<String> {
+    vec![
+        "read:telemetry".to_string(),
+        "write:config".to_string(),
+        "control:pump".to_string(),
+        "control:emergency".to_string(),
+    ]
 }

@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use hydragrow_shared::ControllerConfig;
 use hydragrow_shared::topics::{topic_controller_config, topic_sensors};
@@ -7,10 +7,28 @@ use serde_json::json;
 use tracing::{error, info, instrument};
 
 use crate::AppState;
+use crate::api::middleware::auth::AuthContext;
 use crate::db::postgres::{NewSystemEventRecord, SystemEventRecord, insert_system_event};
 use crate::models::config::{
     DeviceConfig, DosingCalibration, SafetyConfig, SensorCalibration, WaterConfig, from_db_rows,
 };
+
+fn require_write_config_scope(req: &HttpRequest) -> Result<(), HttpResponse> {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+
+    if auth.has_scope("write:config") {
+        Ok(())
+    } else {
+        Err(HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "write:config"
+        })))
+    }
+}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct UnifiedConfigRequest {
@@ -419,7 +437,11 @@ pub async fn update_unified_config(
     path: web::Path<String>,
     req: web::Json<UnifiedConfigRequest>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_write_config_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let mut payload = req.into_inner();
     let now = Utc::now();
@@ -574,7 +596,11 @@ pub async fn update_config(
     path: web::Path<String>,
     payload: web::Json<DeviceConfig>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_write_config_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let mut config = payload.into_inner();
     config.device_id = device_id.clone();
@@ -611,7 +637,11 @@ pub async fn update_water_config(
     path: web::Path<String>,
     req: web::Json<WaterConfig>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_write_config_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let config = req.into_inner();
     let now = Utc::now();
@@ -645,7 +675,11 @@ pub async fn update_safety_config(
     path: web::Path<String>,
     req: web::Json<SafetyConfig>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_write_config_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let mut config = req.into_inner();
     config.device_id = device_id.clone();
@@ -681,7 +715,11 @@ pub async fn update_sensor_calibration(
     path: web::Path<String>,
     req: web::Json<SensorCalibration>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_write_config_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let config = req.into_inner();
     let now = Utc::now();
@@ -874,7 +912,11 @@ pub async fn update_dosing_calibration(
     path: web::Path<String>,
     req: web::Json<DosingCalibration>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_write_config_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let mut config = req.into_inner();
     config.device_id = device_id.clone();

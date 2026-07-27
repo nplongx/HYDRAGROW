@@ -18,7 +18,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://hydragrow.onrender.com wss://hydragrow.onrender.com https://hydragrow-iot.firebaseapp.com https://hydragrow-iot.firebasestorage.app https://*.googleapis.com https://*.firebaseio.com https://*.firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     }
   },
   "bundle": {

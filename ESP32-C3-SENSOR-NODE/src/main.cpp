@@ -776,6 +776,10 @@ void loop() {
   static bool err_temp_flag = false;
   static bool err_ph_flag = false;
   static bool err_ec_flag = false;
+  if (active_force_action.length() > 0 && current_millis >= active_force_until) {
+    active_force_action = "";
+    active_force_until = 0;
+  }
 
   // --------------------------------------------------------
   // LUỒNG 1: LẤY MẪU VÀ LỌC NHIỄU (Mỗi 200ms)

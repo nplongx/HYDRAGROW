@@ -1,3 +1,4 @@
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
 use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
@@ -5,6 +6,7 @@ use rumqttc::QoS;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+use std::time::{Duration, Instant};
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
@@ -12,6 +14,7 @@ use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::config::{DosingCalibration, SafetyConfig};
+use crate::{AppState, CommandRateEntry};
 use hydragrow_shared::events::AppEvent;
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +71,7 @@ pub struct PumpControlParams {
 #[instrument(skip(app_state, req))]
 pub async fn control_pump(
     path: web::Path<String>,
+    http_req: HttpRequest,
     req: web::Json<PumpControlReq>,
     app_state: web::Data<AppState>,
     http_req: HttpRequest,

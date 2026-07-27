@@ -2,10 +2,20 @@ use actix_web::{Error, HttpRequest, HttpResponse, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
 use hydragrow_shared::events::AppEvent;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::{
+    sync::broadcast::error::RecvError,
+    time::{Duration, timeout},
+};
 use tracing::{info, warn};
 
 use crate::AppState;
+
+#[derive(serde::Deserialize)]
+struct WsAuthMessage {
+    #[serde(rename = "type")]
+    message_type: String,
+    api_key: String,
+}
 
 pub async fn ws_handler(
     req: HttpRequest,
@@ -13,8 +23,6 @@ pub async fn ws_handler(
     app_state: web::Data<AppState>,
 ) -> Result<HttpResponse, Error> {
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
-
-    let mut event_rx = app_state.event_bus.subscribe();
 
     let client_ip = req
         .connection_info()
@@ -27,7 +35,32 @@ pub async fn ws_handler(
         client_ip
     );
 
+    let expected_api_key = app_state.api_key.clone();
+    let event_bus = app_state.event_bus.clone();
+
     actix_web::rt::spawn(async move {
+        let auth_result = timeout(Duration::from_secs(10), msg_stream.next()).await;
+        let is_authorized = match auth_result {
+            Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<WsAuthMessage>(&text)
+                .map(|auth| auth.message_type == "auth" && auth.api_key == expected_api_key)
+                .unwrap_or(false),
+            Ok(Some(Ok(Message::Close(reason)))) => {
+                let _ = session.close(reason).await;
+                return;
+            }
+            _ => false,
+        };
+
+        if !is_authorized {
+            warn!(
+                "Rejected unauthenticated WebSocket connection from IP: {}",
+                client_ip
+            );
+            let _ = session.close(None).await;
+            return;
+        }
+
+        let mut event_rx = event_bus.subscribe();
         loop {
             tokio::select! {
                 event_result = event_rx.recv() => {

@@ -1,9 +1,11 @@
 #include <Arduino.h>
+#include <cstring>
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 // ==========================================
 // THÔNG TIN MẠNG & MQTT
@@ -11,17 +13,63 @@
 const char *ssid = "Huynh Hong";
 const char *password = "123443215";
 const char *mqtt_server = "viaduct.proxy.rlwy.net";
-const int mqtt_port = 45131;
+const int mqtt_port = 8883;
 const char *device_id = "device_001";
-const char *mqtt_user = "long";
-const char *mqtt_pass = "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i";
+
+// CA root/intermediate certificate của MQTT broker. Thay nội dung PEM bên dưới
+// bằng CA certificate thật của broker đang dùng trước khi triển khai production.
+const char *mqtt_ca_cert = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+)EOF";
+
+struct DeviceMqttCredential {
+  const char *device_id;
+  const char *username;
+  const char *password;
+};
+
+// Mỗi device_id phải có credential riêng và ACL riêng trên broker/backend.
+// Ví dụ ACL cho device_001: chỉ publish/subscribe AGITECH/device_001/...
+const DeviceMqttCredential device_credentials[] = {
+    {"device_001", "device_001", "CHANGE_ME_DEVICE_001_PASSWORD"},
+};
 
 String topic_sensors = String("AGITECH/") + device_id + "/sensors";
 String topic_config = String("AGITECH/") + device_id + "/sensors/config";
 String topic_cmd = String("AGITECH/") + device_id + "/sensor/command";
 String topic_status = String("AGITECH/") + device_id + "/sensor/status";
 
-WiFiClient espClient;
+WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
 // ==========================================
@@ -361,8 +409,18 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   client.setBufferSize(1024);
+  espClient.setCACert(mqtt_ca_cert);
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(mqttCallback);
+}
+
+const DeviceMqttCredential *getDeviceCredential(const char *id) {
+  for (const auto &credential : device_credentials) {
+    if (strcmp(credential.device_id, id) == 0) {
+      return &credential;
+    }
+  }
+  return nullptr;
 }
 
 void reconnect() {
@@ -371,7 +429,15 @@ void reconnect() {
     Serial.printf("🔄 [DEBUG-MQTT] Đang thử kết nối MQTT... ClientID: %s\n",
                   clientId.c_str());
 
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass,
+    const DeviceMqttCredential *credential = getDeviceCredential(device_id);
+    if (credential == nullptr) {
+      Serial.printf("❌ [DEBUG-MQTT] Không tìm thấy credential riêng cho device_id: %s\n",
+                    device_id);
+      delay(5000);
+      continue;
+    }
+
+    if (client.connect(clientId.c_str(), credential->username, credential->password,
                        topic_status.c_str(), 1, true, "{\"online\": false}")) {
       Serial.println("✅ [DEBUG-MQTT] Kết nối MQTT thành công!");
       client.publish(topic_status.c_str(), "{\"online\": true}", true);

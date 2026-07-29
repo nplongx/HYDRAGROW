@@ -545,9 +545,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
               setSystemEvents(prev => [alert, ...prev].slice(0, 50));
               if (alert.level === 'critical' || alert.level === 'warning') {
-                toast.error(`${alert.title}\n${alert.message}`, { id: alert.title, duration: 6000 });
+                toast.error(`${alert.title}\n${alert.message}`, { id: 'sys-alert', duration: 4000 });
               } else if (alert.level === 'success') {
-                toast.success(`✅ ${alert.title}\n${alert.message}`, { duration: 5000 });
+                toast.success(`✅ ${alert.title}\n${alert.message}`, { id: 'sys-success', duration: 3000 });
               } return;
             }
 
@@ -652,8 +652,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
         ws.onclose = () => {
           debugLog('🔴 [GlobalContext] Mất kết nối WebSocket. Đang tự động cấu hình lại...');
-          setDeviceStatus({ is_online: false, last_seen: '' });
-          setIsControllerStatusKnown(true);
+          // setDeviceStatus({ is_online: false, last_seen: '' });
+          // setIsControllerStatusKnown(true);
           setIsSensorOnline(false);
           clearInterval(pingInterval);
           if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);

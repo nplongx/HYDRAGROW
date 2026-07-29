@@ -1,5 +1,5 @@
 {
-  "backend_url": "https://YOUR_BACKEND_HOST",
-  "api_key": "YOUR_RUNTIME_API_KEY",
-  "device_id": "YOUR_DEVICE_ID"
+  "backend_url": "https://hydragrow.onrender.com",
+  "api_key": "long",
+  "device_id": "device_001"
 }

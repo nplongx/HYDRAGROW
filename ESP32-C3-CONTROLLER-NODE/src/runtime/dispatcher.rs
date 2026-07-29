@@ -1,0 +1,138 @@
+// src/runtime/dispatcher.rs
+//! EventDispatcher — Thực thi toàn bộ side-effects (Hardware, Flash, MQTT).
+
+use std::sync::mpsc::Sender;
+use esp_idf_svc::nvs::EspDefaultNvs;
+use hydragrow_shared::ControllerConfig;
+use tracing::warn;
+
+use crate::core::fsm::context::{NvsSnapshot, SystemContext};
+use crate::core::fsm::events::OrchestratorEvent;
+use crate::hw::pump_controller::{PumpController, PumpType};
+use crate::runtime::observers::{ObserverContext, ObserverSet};
+
+pub struct DispatchContext<'a> {
+    pub pumps: &'a mut PumpController,
+    pub nvs: &'a mut Option<EspDefaultNvs>,
+    pub mqtt_tx: &'a Sender<String>,
+    pub dosing_report_tx: &'a Sender<String>,
+    pub sensor_cmd_tx: &'a Sender<String>,
+    pub ctx: &'a SystemContext,
+    pub now_sec: u64,
+    pub device_id: &'a str,
+    pub config: &'a ControllerConfig,
+    pub observers: &'a mut ObserverSet,
+}
+
+pub struct EventDispatcher;
+
+impl EventDispatcher {
+    pub fn dispatch(events: Vec<OrchestratorEvent>, dc: &mut DispatchContext<'_>) {
+        for event in events {
+            Self::handle_event(event.clone(), dc);
+
+            let oc = ObserverContext {
+                ctx: dc.ctx,
+                config: dc.config,
+                now_ms: dc.now_sec * 1000,
+                mqtt_tx: dc.mqtt_tx,
+                dosing_report_tx: dc.dosing_report_tx,
+            };
+            dc.observers.notify_all(&event, &oc);
+        }
+    }
+
+    fn handle_event(event: OrchestratorEvent, dc: &mut DispatchContext<'_>) {
+        match event {
+            OrchestratorEvent::SetDosingPump { pump, on, pwm_percent } => {
+                let pump_type: PumpType = pump.into();
+                let res = if pwm_percent == 100 {
+                    dc.pumps.set_pump_state(pump_type, on)
+                } else {
+                    dc.pumps.set_dosing_pump_pwm(pump_type, on, pwm_percent)
+                };
+                if let Err(e) = res {
+                    warn!("⚠️ [DISPATCHER] SetDosingPump error: {:?}", e);
+                }
+            }
+            OrchestratorEvent::SetWaterPump { direction } => {
+                if let Err(e) = dc.pumps.set_water_pump(direction) {
+                    warn!("⚠️ [DISPATCHER] SetWaterPump error: {:?}", e);
+                }
+            }
+            OrchestratorEvent::SetMistValve { on } => {
+                if let Err(e) = dc.pumps.set_mist_valve(on) {
+                    warn!("⚠️ [DISPATCHER] SetMistValve error: {:?}", e);
+                }
+            }
+            OrchestratorEvent::SetOsakaPump { pwm_percent } => {
+                if let Err(e) = dc.pumps.set_osaka_pump_pwm(pwm_percent) {
+                    warn!("⚠️ [DISPATCHER] SetOsakaPump error: {:?}", e);
+                }
+            }
+            OrchestratorEvent::StartOsakaSoft { target_pwm_percent } => {
+                if let Err(e) = dc.pumps.start_osaka_pump_soft(target_pwm_percent) {
+                    warn!("⚠️ [DISPATCHER] StartOsakaSoft error: {:?}", e);
+                }
+            }
+            OrchestratorEvent::SaveNvsSnapshot => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    let snapshot = NvsSnapshot::from_context(dc.ctx, dc.now_sec);
+                    if let Ok(serialized) = serde_json::to_string(&snapshot) {
+                        let _ = flash.set_str("runtime_snap", &serialized);
+                    }
+                }
+            }
+            OrchestratorEvent::SaveLastWaterChange { timestamp_sec } => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    let _ = flash.set_u64("last_w_change", timestamp_sec);
+                }
+            }
+            OrchestratorEvent::PublishDosingReport { report_json } => {
+                let _ = dc.dosing_report_tx.send(report_json);
+            }
+            OrchestratorEvent::RequestSensorForcePublish => {
+                let _ = dc.sensor_cmd_tx.send(
+                    r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string(),
+                );
+            }
+            OrchestratorEvent::SetSensorContinuousMode { enabled } => {
+                let _ = dc.sensor_cmd_tx.send(format!(
+                    r#"{{"target":"sensor","action":"set_continuous","params":{{"state":{}}}}}"#,
+                    enabled
+                ));
+            }
+            OrchestratorEvent::PublishFsmTransition { from_phase, to_phase, reason, phase_duration_ms } => {
+                use hydragrow_shared::telemetry::transition::FsmTransitionEvent;
+                use hydragrow_shared::topics::topic_fsm_transition;
+
+                let mut builder = FsmTransitionEvent::builder()
+                    .device_id(dc.device_id)
+                    .from(from_phase)
+                    .to(to_phase)
+                    .reason(reason)
+                    .timestamp_ms(dc.now_sec * 1000);
+
+                if let Some(dur) = phase_duration_ms {
+                    builder = builder.phase_duration_ms(dur);
+                }
+
+                if let Ok(transition_event) = builder.try_build() {
+                    let wrapper = serde_json::json!({
+                        "_mqtt_topic_override": topic_fsm_transition(dc.device_id),
+                        "_payload": serde_json::to_value(&transition_event).unwrap_or_default()
+                    });
+                    let _ = dc.mqtt_tx.send(wrapper.to_string());
+                }
+            }
+            OrchestratorEvent::PublishDosingCycle { cycle_json } => {
+                let wrapper = serde_json::json!({
+                    "_mqtt_topic_override": hydragrow_shared::topics::topic_dosing_cycle(dc.device_id),
+                    "_payload": serde_json::from_str::<serde_json::Value>(&cycle_json).unwrap_or_default()
+                });
+                let _ = dc.dosing_report_tx.send(wrapper.to_string());
+            }
+            _ => {}
+        }
+    }
+}

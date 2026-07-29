@@ -1,4 +1,3 @@
-use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
 use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
@@ -9,7 +8,6 @@ use sqlx::PgPool;
 use std::time::{Duration, Instant};
 use tracing::{error, info, instrument, warn};
 
-use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
@@ -74,7 +72,6 @@ pub async fn control_pump(
     http_req: HttpRequest,
     req: web::Json<PumpControlReq>,
     app_state: web::Data<AppState>,
-    http_req: HttpRequest,
 ) -> impl Responder {
     let device_id = path.into_inner();
     let req_data = req.into_inner();

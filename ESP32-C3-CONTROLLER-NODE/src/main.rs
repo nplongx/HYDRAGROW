@@ -1,3 +1,4 @@
+// src/main.rs
 use esp_idf_hal::gpio::PinDriver;
 use esp_idf_hal::ledc::config::TimerConfig;
 use esp_idf_hal::ledc::{LedcDriver, LedcTimerDriver};
@@ -5,238 +6,106 @@ use esp_idf_hal::peripherals::Peripherals;
 use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::log::EspLogger;
-use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
-use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
-use esp_idf_svc::sntp::{EspSntp, SntpConf, SyncStatus}; // Thêm thư viện SNTP
-use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
-use hydragrow_shared::hestia::{HestiaAction, HestiaContext, HestiaEngine};
-use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence};
-use hydragrow_shared::topics::{
-    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
-    topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
-    topic_status,
-};
-use log::{error, info, warn};
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use log::info;
 use std::sync::{mpsc, Arc};
-use std::thread;
-use std::time::Duration;
 
 mod config;
-mod fsm;
-mod mqtt;
-mod pump;
+mod core;
+mod hw;
+mod runtime;
+mod utils;
 
 use config::create_shared_config;
-use mqtt::{create_shared_sensor_data, ConnectionState};
-use pump::PumpController;
+use hw::{connect_wifi, create_shared_sensor_data, sync_sntp_time, NvsStore, PumpController};
+use runtime::fsm_loop::start_fsm_control_loop;
+use runtime::health::run_main_health_loop;
+use utils::get_current_time_sec;
 
-use crate::fsm::start_fsm_control_loop;
-use crate::fsm::utils::get_current_time_sec;
-
-const WIFI_SSID: &str = option_env!("HYDRAGROW_WIFI_SSID").unwrap_or("YOUR_WIFI_SSID");
-const WIFI_PASS: &str = option_env!("HYDRAGROW_WIFI_PASSWORD").unwrap_or("YOUR_WIFI_PASSWORD");
-const MQTT_URL: &str = option_env!("HYDRAGROW_MQTT_URL").unwrap_or("mqtt://YOUR_MQTT_HOST:1883");
-const MQTT_USER: &str = option_env!("HYDRAGROW_MQTT_USER").unwrap_or("YOUR_MQTT_USERNAME");
-const MQTT_PASSWORD: &str = option_env!("HYDRAGROW_MQTT_PASSWORD").unwrap_or("YOUR_MQTT_PASSWORD");
-const DEVICE_ID: &str = option_env!("HYDRAGROW_DEVICE_ID").unwrap_or("YOUR_DEVICE_ID");
-
-fn current_device_id(shared_config: &config::SharedConfig) -> String {
-    shared_config
-        .read()
-        .ok()
-        .map(|cfg| cfg.device_id.clone())
-        .filter(|device_id| !device_id.is_empty())
-        .unwrap_or_else(|| DEVICE_ID.to_string())
-}
+const WIFI_SSID: &str = match option_env!("HYDRAGROW_WIFI_SSID") {
+    Some(val) => val,
+    None => "YOUR_WIFI_SSID",
+};
+const WIFI_PASS: &str = match option_env!("HYDRAGROW_WIFI_PASSWORD") {
+    Some(val) => val,
+    None => "YOUR_WIFI_PASSWORD",
+};
+const MQTT_URL: &str = match option_env!("HYDRAGROW_MQTT_URL") {
+    Some(val) => val,
+    None => "mqtt://YOUR_MQTT_HOST:1883",
+};
+const MQTT_USER: &str = match option_env!("HYDRAGROW_MQTT_USER") {
+    Some(val) => val,
+    None => "YOUR_MQTT_USERNAME",
+};
+const MQTT_PASSWORD: &str = match option_env!("HYDRAGROW_MQTT_PASSWORD") {
+    Some(val) => val,
+    None => "YOUR_MQTT_PASSWORD",
+};
+const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
+    Some(val) => val,
+    None => "YOUR_DEVICE_ID",
+};
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     EspLogger::initialize_default();
 
-    // Gọi trực tiếp API C của ESP-IDF để set log level cho tag cụ thể
-    unsafe {
-        // Thay thế chuỗi này bằng đúng tên tag hoặc tên file/module bạn muốn hiển thị debug.
-        // Dấu sao "*" áp dụng cho mọi thứ, nhưng ta chỉ muốn cấp Debug cho phần code của ta.
-        // Bạn có thể phải thử nghiệm tag name, thường Rust wrapper dùng đường dẫn module làm tag.
-
-        // Ví dụ: Set tất cả hệ thống về INFO
-        esp_idf_svc::sys::esp_log_level_set(
-            b"*\0".as_ptr() as *const _,
-            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_INFO,
-        );
-
-        // Bật DEBUG cho tất cả các file liên quan đến ứng dụng của bạn (ví dụ dùng tag "esp32_c3_mist_weaver_os")
-        esp_idf_svc::sys::esp_log_level_set(
-            b"esp32_c3_mist_weaver_os\0".as_ptr() as *const _,
-            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
-        );
-        esp_idf_svc::sys::esp_log_level_set(
-            b"esp32_c3_mist_weaver_os::fsm::auto_fsm\0".as_ptr() as *const _,
-            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
-        );
-        esp_idf_svc::sys::esp_log_level_set(
-            b"esp32_c3_mist_weaver_os::pump\0".as_ptr() as *const _,
-            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
-        );
-        esp_idf_svc::sys::esp_log_level_set(
-            b"esp32_c3_mist_weaver_os::mqtt\0".as_ptr() as *const _,
-            esp_idf_svc::sys::esp_log_level_t_ESP_LOG_DEBUG,
-        );
-    }
-    info!("🚀 Khởi động hệ thống FSM Thủy canh Agitech (Phiên bản ESP32-C3)...");
+    info!("🚀 Khởi động hệ thống FSM Thủy canh Agitech (ESP32-C3)...");
 
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take()?;
-    let nvs = EspDefaultNvsPartition::take()?;
+    let nvs_partition = EspDefaultNvsPartition::take()?;
 
     let shared_config = create_shared_config();
-    let shared_sensor_data = create_shared_sensor_data(DEVICE_ID);
-    if let Ok(mut cfg) = shared_config.write() {
-        if let Ok(agitech_nvs) = EspNvs::new(nvs.clone(), "agitech", true) {
-            if let Ok(Some(saved_id)) = agitech_nvs.get_str("device_id", &mut [0; 64]) {
-                cfg.device_id = saved_id.to_string();
-            } else {
-                cfg.device_id = DEVICE_ID.to_string();
-                let _ = agitech_nvs.set_str("device_id", DEVICE_ID);
-            }
-        } else {
-            cfg.device_id = DEVICE_ID.to_string();
-        }
-    }
-    if let (Ok(cfg), Ok(mut sensors)) = (shared_config.read(), shared_sensor_data.write()) {
-        sensors.device_id = cfg.device_id.clone();
-    }
+    let mut nvs_store = NvsStore::new(nvs_partition.clone());
+    let device_id = nvs_store.load_or_init_device_id(DEVICE_ID);
 
-    let (conn_tx, conn_rx) = mpsc::channel::<ConnectionState>();
+    let shared_sensors = create_shared_sensor_data(&device_id);
+
+    // Channels
+    let (conn_tx, conn_rx) = mpsc::channel();
     let (cmd_tx, cmd_rx) = mpsc::channel();
-    let (fsm_tx, fsm_rx) = mpsc::channel::<String>();
-    let (dosing_report_tx, dosing_report_rx) = mpsc::channel::<String>();
-    let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel::<String>();
+    let (fsm_tx, fsm_rx) = mpsc::channel();
+    let (dosing_report_tx, dosing_report_rx) = mpsc::channel();
+    let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel();
 
+    // 1. Hardware Drivers
     let timer_driver = Arc::new(LedcTimerDriver::new(
         peripherals.ledc.timer0,
-        &TimerConfig::new().frequency(20000.Hz()),
+        &TimerConfig::new().frequency(esp_idf_hal::units::Hertz(20000)),
     )?);
 
-    // 1. KHỞI TẠO BƠM VÀ VAN
-    let valve_mist = PinDriver::output(peripherals.pins.gpio10)?;
-    let osaka_en = PinDriver::output(peripherals.pins.gpio0)?;
-
-    let water_pump_in = PinDriver::output(peripherals.pins.gpio1)?;
-    let water_pump_out = PinDriver::output(peripherals.pins.gpio2)?;
-
-    let osaka_rpwm = LedcDriver::new(
-        peripherals.ledc.channel0,
-        timer_driver.clone(),
-        peripherals.pins.gpio3,
-    )?;
-    let pump_a = LedcDriver::new(
-        peripherals.ledc.channel1,
-        timer_driver.clone(),
-        peripherals.pins.gpio6,
-    )?;
-    let pump_b = LedcDriver::new(
-        peripherals.ledc.channel2,
-        timer_driver.clone(),
-        peripherals.pins.gpio7,
-    )?;
-    let pump_ph_up = LedcDriver::new(
-        peripherals.ledc.channel3,
-        timer_driver.clone(),
-        peripherals.pins.gpio8,
-    )?;
-    let pump_ph_down = LedcDriver::new(
-        peripherals.ledc.channel4,
-        timer_driver.clone(),
-        peripherals.pins.gpio21,
-    )?;
-
     let pump_controller = PumpController::new(
-        pump_a,
-        pump_b,
-        pump_ph_up,
-        pump_ph_down,
-        valve_mist,
-        water_pump_in,
-        water_pump_out,
-        osaka_en,
-        osaka_rpwm,
+        LedcDriver::new(peripherals.ledc.channel1, timer_driver.clone(), peripherals.pins.gpio6)?,
+        LedcDriver::new(peripherals.ledc.channel2, timer_driver.clone(), peripherals.pins.gpio7)?,
+        LedcDriver::new(peripherals.ledc.channel3, timer_driver.clone(), peripherals.pins.gpio8)?,
+        LedcDriver::new(peripherals.ledc.channel4, timer_driver.clone(), peripherals.pins.gpio21)?,
+        PinDriver::output(peripherals.pins.gpio10)?,
+        PinDriver::output(peripherals.pins.gpio1)?,
+        PinDriver::output(peripherals.pins.gpio2)?,
+        PinDriver::output(peripherals.pins.gpio0)?,
+        LedcDriver::new(peripherals.ledc.channel0, timer_driver.clone(), peripherals.pins.gpio3)?,
     )?;
 
-    // 2. KẾT NỐI WIFI
-    info!("📡 Đang cấu hình kết nối WiFi...");
-    let mut wifi = EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs.clone()))?;
-    wifi.set_configuration(&Configuration::Client(ClientConfiguration {
-        ssid: WIFI_SSID.try_into().unwrap(),
-        password: WIFI_PASS.try_into().unwrap(),
-        auth_method: AuthMethod::WPA2Personal,
-        ..Default::default()
-    }))?;
+    // 2. Network & Time Sync
+    connect_wifi(peripherals.modem, sysloop, nvs_partition.clone(), WIFI_SSID, WIFI_PASS, conn_tx.clone())?;
+    let _sntp = sync_sntp_time()?;
 
-    wifi.start()?;
-    wifi.connect()?;
-
-    let conn_tx_wifi = conn_tx.clone();
-    thread::spawn(move || {
-        let mut was_connected = false;
-        loop {
-            let is_l2_connected = wifi.is_connected().unwrap_or(false);
-            let has_ip = wifi
-                .sta_netif()
-                .get_ip_info()
-                .map(|info| !info.ip.is_unspecified())
-                .unwrap_or(false);
-            let is_fully_connected = is_l2_connected && has_ip;
-
-            if is_fully_connected && !was_connected {
-                let _ = conn_tx_wifi.send(ConnectionState::WifiConnected);
-                was_connected = true;
-            } else if !is_fully_connected && was_connected {
-                let _ = conn_tx_wifi.send(ConnectionState::WifiDisconnected);
-                was_connected = false;
-                if !is_l2_connected {
-                    let _ = wifi.connect();
-                }
-            }
-            thread::sleep(Duration::from_secs(2));
-        }
-    });
-
-    // 3. ĐỒNG BỘ THỜI GIAN NTP (Chờ đến khi có thời gian thực)
-    info!("🕒 Khởi tạo SNTP và cấu hình múi giờ (UTC+7)...");
-    let _sntp = EspSntp::new(&SntpConf::default())?;
-    unsafe {
-        // Cấu hình múi giờ Việt Nam (UTC+7)
-        esp_idf_svc::sys::setenv(
-            b"TZ\0".as_ptr() as *const _,
-            b"ICT-7\0".as_ptr() as *const _,
-            1,
-        );
-        esp_idf_svc::sys::tzset();
-    }
-
-    info!("⏳ Đang chờ đồng bộ thời gian từ Internet...");
-    while _sntp.get_sync_status() != SyncStatus::Completed {
-        thread::sleep(Duration::from_millis(500));
-    }
-    info!("✅ Đồng bộ thời gian NTP thành công!");
-
-    // 4. KHỞI CHẠY BỘ ĐIỀU KHIỂN FSM
-    // Dời việc khởi tạo FSM xuống sau khi NTP đã đồng bộ để tránh lỗi Cron 1970
-    info!("⚙️ Khởi chạy luồng FSM...");
-    let fsm_config = shared_config.clone();
-    let fsm_sensor_data = shared_sensor_data.clone();
-    let fsm_nvs = nvs.clone();
+    // 3. Spawn FSM Thread
+    let fsm_cfg = shared_config.clone();
+    let fsm_sns = shared_sensors.clone();
+    let fsm_nvs_part = nvs_partition.clone();
 
     std::thread::Builder::new()
         .stack_size(60000)
         .name("fsm_thread".to_string())
         .spawn(move || {
             start_fsm_control_loop(
-                fsm_config,
-                fsm_sensor_data,
+                fsm_cfg,
+                fsm_sns,
                 pump_controller,
-                fsm_nvs,
+                fsm_nvs_part,
                 cmd_rx,
                 fsm_tx,
                 dosing_report_tx,
@@ -245,301 +114,18 @@ fn main() -> anyhow::Result<()> {
             );
         })?;
 
-    // 5. MAIN EVENT LOOP (MQTT & STATUS)
-    let mut mqtt_client: Option<EspMqttClient> = None;
-    let mut is_mqtt_connected = false;
-
-    info!("🔄 Đang chạy Main Event Loop...");
-
-    let mut force_publish_next = false;
-    let mut last_health_publish = std::time::Instant::now();
-    let mut latest_fsm_snapshot: Option<serde_json::Value> = None;
-    let mut latest_runtime_calibration: Option<serde_json::Value> = None;
-    let mut previous_hestia_sensor: Option<hydragrow_shared::SensorData> = None;
-    let mut previous_hestia_sensor_sec: Option<u64> = None;
-    let mut last_hestia_action = HestiaAction::None;
-    let mut last_hestia_intervention_sec: Option<u64> = None;
-
-    loop {
-        // XỬ LÝ TRẠNG THÁI KẾT NỐI
-        if let Ok(state) = conn_rx.try_recv() {
-            match state {
-                ConnectionState::WifiConnected => {
-                    info!("🛜 Đã kết nối WiFi. Tiến hành khởi tạo MQTT...");
-                    if mqtt_client.is_none() {
-                        match mqtt::init_mqtt_client(
-                            MQTT_URL,
-                            MQTT_USER,
-                            MQTT_PASSWORD,
-                            shared_config.clone(),
-                            shared_sensor_data.clone(),
-                            cmd_tx.clone(),
-                            conn_tx.clone(),
-                        ) {
-                            Ok(client) => mqtt_client = Some(client),
-                            Err(e) => error!("❌ Lỗi khởi tạo MQTT: {:?}", e),
-                        }
-                    }
-                }
-                ConnectionState::WifiDisconnected => {
-                    warn!("⚠️ Rớt mạng WiFi!");
-                    is_mqtt_connected = false;
-                    mqtt_client = None;
-                }
-                ConnectionState::MqttConnected => {
-                    info!("📡 MQTT Client: ĐÃ KẾT NỐI THÀNH CÔNG");
-                    is_mqtt_connected = true;
-
-                    if let Some(client) = mqtt_client.as_mut() {
-                        let device_id = current_device_id(&shared_config);
-                        let topic_config = topic_controller_config(&device_id);
-                        let topic_command = topic_controller_command(&device_id);
-                        let topic_status = topic_status(&device_id);
-                        let topic_sensors = topic_sensors(&device_id);
-
-                        let _ = client.publish(
-                            &topic_status,
-                            QoS::AtLeastOnce,
-                            true,
-                            r#"{"online": true}"#.as_bytes(),
-                        );
-                        let _ = client.subscribe(&topic_config, QoS::AtLeastOnce);
-                        let _ = client.subscribe(&topic_command, QoS::AtLeastOnce);
-                        let _ = client.subscribe(&topic_sensors, QoS::AtLeastOnce);
-                    }
-                }
-                ConnectionState::MqttDisconnected => {
-                    warn!("📡 MQTT Client: MẤT KẾT NỐI");
-                    is_mqtt_connected = false;
-                }
-            }
-        }
-
-        // XỬ LÝ PAYLOAD TỪ FSM
-        if let Ok(payload) = fsm_rx.try_recv() {
-            if is_mqtt_connected {
-                if let Some(client) = mqtt_client.as_mut() {
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        if v.get("current_phase").is_some() {
-                            latest_fsm_snapshot = Some(v.clone());
-                        }
-                        if v.get("type").and_then(|t| t.as_str())
-                            == Some("runtime_calibration_update")
-                        {
-                            latest_runtime_calibration = Some(v.clone());
-                        }
-
-                        let topic = if let Some(override_topic) =
-                            v.get("_mqtt_topic_override").and_then(|t| t.as_str())
-                        {
-                            let actual_payload = v.get("_payload").cloned().unwrap_or(v.clone());
-                            let actual_payload_str =
-                                serde_json::to_string(&actual_payload).unwrap_or(payload.clone());
-                            let _ = client.publish(
-                                override_topic,
-                                QoS::AtLeastOnce,
-                                false,
-                                actual_payload_str.as_bytes(),
-                            );
-                            continue; // skip normal routing
-                        } else {
-                            match v.get("type").and_then(|t| t.as_str()) {
-                                Some("water_event") | Some("system_alert")
-                                | Some("dosing_cycle") => {
-                                    topic_fsm_events(&current_device_id(&shared_config))
-                                }
-                                Some("ema_update")
-                                | Some("auto_tune")
-                                | Some("runtime_calibration_update") => {
-                                    topic_calibration(&current_device_id(&shared_config))
-                                }
-                                _ => topic_fsm_state(&current_device_id(&shared_config)),
-                            }
-                        };
-                        let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
-                    }
-                }
-            }
-        }
-
-        if let Ok(report_json) = dosing_report_rx.try_recv() {
-            if is_mqtt_connected {
-                if let Some(client) = mqtt_client.as_mut() {
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&report_json) {
-                        if let Some(override_topic) =
-                            v.get("_mqtt_topic_override").and_then(|t| t.as_str())
-                        {
-                            let actual_payload = v.get("_payload").cloned().unwrap_or(v.clone());
-                            let actual_str = serde_json::to_string(&actual_payload)
-                                .unwrap_or_else(|_| report_json.clone());
-                            let _ = client.publish(
-                                override_topic,
-                                QoS::AtLeastOnce,
-                                false,
-                                actual_str.as_bytes(),
-                            );
-                            continue;
-                        }
-                    }
-                    let device_id = current_device_id(&shared_config);
-                    let topic = topic_dosing_report(&device_id);
-                    let _ = client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
-                }
-            }
-        }
-
-        if let Ok(sensor_cmd_json) = sensor_cmd_rx.try_recv() {
-            if sensor_cmd_json.contains("\"action\":\"force_publish\"") {
-                force_publish_next = true;
-            } else if is_mqtt_connected {
-                if let Some(client) = mqtt_client.as_mut() {
-                    let device_id = current_device_id(&shared_config);
-                    let topic_sensor_cmd = topic_sensor_command(&device_id);
-                    let _ = client.publish(
-                        &topic_sensor_cmd,
-                        QoS::AtLeastOnce,
-                        false,
-                        sensor_cmd_json.as_bytes(),
-                    );
-                }
-            }
-        }
-
-        if is_mqtt_connected
-            && (force_publish_next || last_health_publish.elapsed().as_secs() >= 10)
-        {
-            last_health_publish = std::time::Instant::now();
-            force_publish_next = false; // Xóa cờ sau khi gửi
-
-            if let Some(client) = mqtt_client.as_mut() {
-                let diagnostics = latest_fsm_snapshot
-                    .as_ref()
-                    .and_then(|v| v.get("diagnostics"));
-                let health_score_percent = diagnostics
-                    .and_then(|v| v.get("health_score_percent"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(100) as u32;
-                let log_drop_count = diagnostics
-                    .and_then(|v| v.get("log_drop_count"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let fsm_state_display = latest_fsm_snapshot
-                    .as_ref()
-                    .and_then(|v| v.get("current_phase"))
-                    .map(|phase| {
-                        phase
-                            .as_str()
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| phase.to_string().trim_matches('"').to_string())
-                    })
-                    .unwrap_or_else(|| "Unknown".to_string());
-
-                let runtime_coefficients = latest_runtime_calibration
-                    .as_ref()
-                    .and_then(|v| v.get("runtime_coefficients"));
-                let matrix_update_count = runtime_coefficients
-                    .and_then(|v| v.get("matrix_update_count"))
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
-                let matrix_is_warm = runtime_coefficients
-                    .and_then(|v| v.get("matrix_is_warm"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let kalman_confidence = runtime_coefficients
-                    .and_then(|v| v.get("kalman_confidence"))
-                    .and_then(|v| v.as_array())
-                    .filter(|items| items.len() == 8)
-                    .map(|items| KalmanConfidence {
-                        nutrient_a: items[0].as_f64().unwrap_or(0.0) as f32,
-                        nutrient_b: items[1].as_f64().unwrap_or(0.0) as f32,
-                        ph_up: items[2].as_f64().unwrap_or(0.0) as f32,
-                        ph_down: items[3].as_f64().unwrap_or(0.0) as f32,
-                        water_in: items[4].as_f64().unwrap_or(0.0) as f32,
-                        water_out: items[5].as_f64().unwrap_or(0.0) as f32,
-                        osaka_mixing: items[6].as_f64().unwrap_or(0.0) as f32,
-                        misting: items[7].as_f64().unwrap_or(0.0) as f32,
-                    });
-                let mean_kalman_confidence = kalman_confidence.as_ref().map(|confidence| {
-                    (confidence.nutrient_a
-                        + confidence.nutrient_b
-                        + confidence.ph_up
-                        + confidence.ph_down
-                        + confidence.water_in
-                        + confidence.water_out
-                        + confidence.osaka_mixing
-                        + confidence.misting)
-                        / 8.0
-                });
-
-                let now_sec = get_current_time_sec();
-                let current_hestia_action = hestia_action_from_phase(&fsm_state_display);
-                if current_hestia_action != HestiaAction::None {
-                    last_hestia_action = current_hestia_action;
-                    last_hestia_intervention_sec = Some(now_sec);
-                }
-                let current_sensor = shared_sensor_data.read().ok().map(|sensor| sensor.clone());
-                let current_config = shared_config.read().ok().map(|config| config.clone());
-                let hestia = match (current_sensor, current_config) {
-                    (Some(sensor), Some(config)) => {
-                        let context = HestiaContext {
-                            previous: previous_hestia_sensor.clone(),
-                            minutes_since_previous: previous_hestia_sensor_sec
-                                .map(|ts| now_sec.saturating_sub(ts) as f32 / 60.0),
-                            minutes_since_last_intervention: last_hestia_intervention_sec
-                                .map(|ts| now_sec.saturating_sub(ts) as f32 / 60.0),
-                            last_action: last_hestia_action,
-                            matrix_is_warm,
-                            mean_kalman_confidence,
-                            phase: Some(fsm_state_display.clone()),
-                        };
-                        let assessment = HestiaEngine::evaluate(&sensor, &config, &context);
-                        previous_hestia_sensor = Some(sensor);
-                        previous_hestia_sensor_sec = Some(now_sec);
-                        Some(assessment)
-                    }
-                    _ => None,
-                };
-
-                let device_id = current_device_id(&shared_config);
-                let health_payload = DeviceHealthSnapshot {
-                    device_id: device_id.clone(),
-                    free_heap: crate::mqtt::get_free_heap(),
-                    uptime_sec: crate::mqtt::get_uptime_sec(),
-                    rssi: crate::mqtt::get_wifi_rssi(),
-                    health_score_percent,
-                    fsm_state_display,
-                    log_drop_count,
-                    kalman_confidence,
-                    matrix_update_count,
-                    matrix_is_warm,
-                    hestia,
-                    timestamp_ms: now_sec * 1000,
-                };
-
-                if let Ok(json_string) = serde_json::to_string(&health_payload) {
-                    let topic_health = topic_controller_status(&device_id);
-                    let _ = client.publish(
-                        &topic_health,
-                        QoS::AtMostOnce, // Đổi thành AtMostOnce cho bản tin health liên tục
-                        false,
-                        json_string.as_bytes(),
-                    );
-                }
-            }
-        }
-
-        // Nghỉ 50ms để nhường CPU cho các tác vụ khác (RTOS Task)
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-fn hestia_action_from_phase(phase: &str) -> HestiaAction {
-    match phase {
-        "MimoDosing" => HestiaAction::EcDosing,
-        "WaterRefilling" => HestiaAction::WaterRefill,
-        "WaterDraining" => HestiaAction::WaterDrain,
-        "ActiveMixing" => HestiaAction::Mixing,
-        "Stabilizing" | "Cooldown" => HestiaAction::Manual,
-        _ => HestiaAction::None,
-    }
+    // 4. Main Event & Health Loop
+    run_main_health_loop(
+        MQTT_URL,
+        MQTT_USER,
+        MQTT_PASSWORD,
+        shared_config,
+        shared_sensors,
+        conn_rx,
+        conn_tx,
+        cmd_tx,
+        fsm_rx,
+        dosing_report_rx,
+        sensor_cmd_rx,
+    )
 }

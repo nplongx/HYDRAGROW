@@ -1,10 +1,10 @@
 use crate::AppState;
 use actix_web::{
-    Error, HttpResponse,
     body::EitherBody,
-    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
+    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    Error, HttpMessage, HttpResponse,
 };
-use futures_util::future::{LocalBoxFuture, Ready, ready};
+use futures_util::future::{ready, LocalBoxFuture, Ready};
 use std::rc::Rc;
 
 #[derive(Clone, Debug, Default)]
@@ -19,17 +19,18 @@ impl AuthContext {
         self.scopes.iter().any(|s| s == scope || s == "*")
     }
 }
-// use std::sync::Arc; // Bỏ comment nếu bạn thực sự dùng Arc ở đâu đó
 
-pub struct ApiKeyAuth {
-    // Không cần lưu api_key ở struct Transform nữa vì chúng ta đang lấy từ AppState
-    // api_key: String,
-}
+pub struct ApiKeyAuth;
 
 impl ApiKeyAuth {
-    // Cập nhật hàm new cho phù hợp
     pub fn new() -> Self {
         Self {}
+    }
+}
+
+impl Default for ApiKeyAuth {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -69,9 +70,7 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        // --- 1. BYPASS OPTIONS REQUEST CHO CORS ---
-        // Trình duyệt gửi preflight OPTIONS request và nó KHÔNG CÓ header auth
-        // Chúng ta phải cho phép nó đi qua để Actix-cors xử lý phần còn lại
+        // 1. Bypass cho OPTIONS request (CORS Preflight)
         if req.method() == actix_web::http::Method::OPTIONS {
             let srv = Rc::clone(&self.service);
             return Box::pin(async move {
@@ -79,8 +78,8 @@ where
                 Ok(res.map_into_left_body())
             });
         }
-        // ------------------------------------------
 
+        // Bypass cho WebSocket
         if req.path().ends_with("/ws") {
             let srv = Rc::clone(&self.service);
             return Box::pin(async move {
@@ -89,18 +88,17 @@ where
             });
         }
 
+        // 2. Kiếm tra API Key từ AppState
         let app_state = req.app_data::<actix_web::web::Data<AppState>>().unwrap();
         let expected_api_key = &app_state.api_key;
 
-        // 2. Thử lấy từ Header trước (Dành cho API bình thường)
         let header_key = req
             .headers()
-            .get("X-API-Key") // Nếu bạn dùng Bearer Token, hãy đổi thành "Authorization"
+            .get("X-API-Key")
             .and_then(|hv| hv.to_str().ok());
 
         let is_authorized = header_key.is_some_and(|key| key == expected_api_key);
 
-        // Nếu cả 2 cách đều thất bại -> Trả về 401
         if !is_authorized {
             let response = HttpResponse::Unauthorized()
                 .json(serde_json::json!({"error": "Unauthorized: Invalid or missing API Key"}))
@@ -109,19 +107,32 @@ where
             return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
         }
 
-        auth_context.user_id = req
+        // --- SỬA LỖI TẠI ĐÂY: Khởi tạo struct AuthContext ---
+        let raw_scopes = req
             .headers()
-            .get("X-User-Id")
-            .and_then(|hv| hv.to_str().ok())
-            .map(ToString::to_string);
-        auth_context.session_id = req
-            .headers()
-            .get("X-Session-Id")
-            .and_then(|hv| hv.to_str().ok())
-            .map(ToString::to_string);
+            .get("X-Scopes")
+            .and_then(|hv| hv.to_str().ok());
+
+        let scopes = parse_scopes(raw_scopes).unwrap_or_else(default_legacy_scopes);
+
+        let auth_context = AuthContext {
+            scopes,
+            user_id: req
+                .headers()
+                .get("X-User-Id")
+                .and_then(|hv| hv.to_str().ok())
+                .map(ToString::to_string),
+            session_id: req
+                .headers()
+                .get("X-Session-Id")
+                .and_then(|hv| hv.to_str().ok())
+                .map(ToString::to_string),
+        };
+
+        // Gắn context vào request extensions để các Route Handler sau có thể lấy dùng
         req.extensions_mut().insert(auth_context);
 
-        // Cho phép request đi tiếp tới route handlers
+        // Cho phép request tiếp tục
         let srv = Rc::clone(&self.service);
         Box::pin(async move {
             let res = srv.call(req).await?;

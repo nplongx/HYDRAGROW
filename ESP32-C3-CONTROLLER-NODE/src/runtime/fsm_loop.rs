@@ -12,6 +12,7 @@ use crate::config::SharedConfig;
 use crate::core::fsm::context::SystemContext;
 use crate::core::fsm::orchestrator;
 use crate::core::fsm::types::SharedSensorData;
+use crate::hw::mqtt_client::get_uptime_ms; // SỬA: Import đúng module chứa get_uptime_ms
 use crate::hw::pump_controller::PumpController;
 use crate::runtime::command_handler::process_mqtt_commands;
 use crate::runtime::dispatcher::{DispatchContext, EventDispatcher};
@@ -39,15 +40,26 @@ pub fn start_fsm_control_loop(
     let mut last_reported_state = String::new();
     let mut sensor_last_update_ms = get_current_time_ms();
 
+    let mut last_controller_recieved_ms = None;
+
     loop {
         let config = shared_config.read().unwrap().clone();
         let sensors = shared_sensors.read().unwrap().clone();
-        let current_time_ms = get_current_time_ms();
-        let current_time_sec = current_time_ms / 1000;
+        
+        // SỬA: Lấy cả 2 loại thời gian
+        let current_wall_time_ms = get_current_time_ms(); 
+        let current_uptime_ms = get_uptime_ms();
+
+        // Tracker mất tín hiệu cảm biến sử dụng Uptime để chống nhảy cóc
+        if sensors.controller_received_ms != last_controller_recieved_ms {
+            last_controller_recieved_ms = sensors.controller_received_ms;
+            sensor_last_update_ms = current_uptime_ms;
+        }
 
         // 1. Parse lệnh MQTT
+        // Truyền uptime để đếm thời gian cho chức năng Manual Pump (bật bơm thủ công) an toàn
         let (mut cmd_delta, cmd_events) =
-            process_mqtt_commands(&cmd_rx, &config, &ctx, current_time_ms, &fsm_mqtt_tx);
+            process_mqtt_commands(&cmd_rx, &config, &ctx, current_uptime_ms, &fsm_mqtt_tx);
         ctx.apply_delta(&mut cmd_delta);
 
         if !cmd_events.is_empty() {
@@ -58,7 +70,8 @@ pub fn start_fsm_control_loop(
                 dosing_report_tx: &dosing_report_tx,
                 sensor_cmd_tx: &sensor_cmd_tx,
                 ctx: &ctx,
-                now_sec: current_time_sec,
+                // SỬA: NVS và Log cần giờ thực tế chuẩn (wall_time), và phải chia 1000 để ra Giây
+                now_sec: current_wall_time_ms / 1000, 
                 device_id: &config.device_id,
                 config: &config,
                 observers: &mut observer_set,
@@ -67,8 +80,10 @@ pub fn start_fsm_control_loop(
         }
 
         // 2. Chạy FSM Tick Decision Engine
+        // SỬA: Cung cấp cả now_ms (để ghi log) và uptime_ms (để canh thời gian)
         let mut tick_result = orchestrator::tick(
-            current_time_ms,
+            current_wall_time_ms,
+            current_uptime_ms,
             &config,
             &sensors,
             sensor_last_update_ms,
@@ -86,7 +101,7 @@ pub fn start_fsm_control_loop(
                 dosing_report_tx: &dosing_report_tx,
                 sensor_cmd_tx: &sensor_cmd_tx,
                 ctx: &ctx,
-                now_sec: current_time_sec,
+                now_sec: current_wall_time_ms / 1000, // SỬA
                 device_id: &config.device_id,
                 config: &config,
                 observers: &mut observer_set,
@@ -99,7 +114,7 @@ pub fn start_fsm_control_loop(
         if state_str != last_reported_state {
             info!("🔄 [FSM] Phase thay đổi: [{}]", state_str);
             last_reported_state = state_str;
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_time_sec));
+            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_wall_time_ms / 1000));
         }
 
         std::thread::sleep(Duration::from_millis(100));

@@ -1,3 +1,5 @@
+use std::vec;
+
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::info;
 
@@ -10,15 +12,15 @@ pub struct PeripheralController;
 impl PeripheralController {
     pub fn tick_osaka(
         peripherals: &PeripheralState,
-        is_dosing_active: bool,
+        mist_valve_is_open: &Option<bool>, // Mở bơm ngay lập tức khi 1 trong 2 van điện tử được mở
+        mix_valve_is_open: &Option<bool>,
         config: &ControllerConfig,
     ) -> (PeripheralDelta, Vec<OrchestratorEvent>) {
         let mut events = Vec::new();
         let mut delta = PeripheralDelta::default();
 
-        let needs_osaka = is_dosing_active
-            || peripherals.is_misting_active
-            || peripherals.is_scheduled_mixing_active;
+        // bơm chỉ chạy khi và chỉ khi 1 trong 2 van điện từ được mở
+        let needs_osaka = mist_valve_is_open.is_some() || mix_valve_is_open.is_some();
 
         if needs_osaka {
             let target_pwm = if peripherals.is_misting_active {
@@ -27,14 +29,14 @@ impl PeripheralController {
                 config.osaka_mixing_pwm_percent as u32
             };
 
-            if !peripherals.pump_status.osaka_pump {
+            if !peripherals.pump_status.osaka_pump { // nếu bơm chưa được bật
                 info!("🌀 [OSAKA] Bật bơm Osaka {}%", target_pwm);
                 events.push(OrchestratorEvent::StartOsakaSoft {
                     target_pwm_percent: target_pwm,
                 });
-                delta.osaka_pump = Some(true);
-                delta.osaka_pwm = Some(target_pwm);
-            } else if peripherals.osaka_pwm != target_pwm {
+                delta.osaka_pump = Some(true); // bật bơm
+                delta.osaka_pwm = Some(target_pwm); // soft start đến target pwm
+            } else if peripherals.osaka_pwm != target_pwm { // bơm đã được bật (trường hợp đang trộn nhưng cần phun sương -> chỉnh pwm cao hơn)
                 events.push(OrchestratorEvent::SetOsakaPump {
                     pwm_percent: target_pwm,
                 });
@@ -92,7 +94,8 @@ impl PeripheralController {
         peripherals: &PeripheralState, // <-- không còn mut
         now_sec: u64,
         config: &ControllerConfig,
-    ) -> PeripheralDelta {
+    ) -> (PeripheralDelta, Vec<OrchestratorEvent>) {
+        let mut event = Vec::new();
         let mut delta = PeripheralDelta::default();
 
         if config.scheduled_mixing_interval_sec > 0 && config.scheduled_mixing_duration_sec > 0 {
@@ -101,22 +104,26 @@ impl PeripheralController {
                     peripherals.last_mixing_start_sec + config.scheduled_mixing_duration_sec as u64;
                 if now_sec >= end_time {
                     info!("⏹️ [MIXING] Kết thúc chu kỳ sục trộn định kỳ.");
+                    event.push(OrchestratorEvent::SetMixValve { on: false });
                     delta.is_scheduled_mixing_active = Some(false);
                     delta.last_mixing_start_sec = Some(now_sec);
+                    delta.mix_valve = Some(false);
                 }
             } else {
                 let next_trigger =
                     peripherals.last_mixing_start_sec + config.scheduled_mixing_interval_sec as u64;
                 if now_sec >= next_trigger {
                     info!("▶️ [MIXING] Bắt đầu chu kỳ sục trộn định kỳ.");
+                    event.push(OrchestratorEvent::SetMixValve { on: true });
                     delta.is_scheduled_mixing_active = Some(true);
                     delta.last_mixing_start_sec = Some(now_sec);
+                    delta.mix_valve = Some(true);
                 }
             }
         } else {
             delta.is_scheduled_mixing_active = Some(false);
         }
 
-        delta
+        (delta, event)
     }
 }

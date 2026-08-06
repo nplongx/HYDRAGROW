@@ -66,10 +66,14 @@ pub struct PeripheralDelta {
     pub water_pump_in: Option<bool>,
     pub water_pump_out: Option<bool>,
     pub mist_valve: Option<bool>,
+    pub mix_valve: Option<bool>,
     pub osaka_pump: Option<bool>,
     pub osaka_pwm: Option<u32>,
     pub is_misting_active: Option<bool>,
     pub is_scheduled_mixing_active: Option<bool>,
+    /// Do có 2 nguồn có thể kích hoạt phun sương (theo lịch trình, MIMO solver) \
+    /// trường này biểu thị cho việc van phun sương đang bị chiếm dụng bời MimoDosingPhase (bao gồm cả việc điều khiển phun sương để giảm nhiệt độ) \
+    /// TÓM LẠI: ĐANG DÙNG CHO CHẾ ĐỘ ĐẶT BIỆT, CẤM ĐỤNG!!!
     pub misting_started_by_dosing: Option<bool>,
     pub last_mist_toggle_time: Option<u64>,
     pub last_mixing_start_sec: Option<u64>,

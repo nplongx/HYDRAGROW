@@ -88,9 +88,9 @@ impl SensorStabilizerTracker {
 /// Trạng thái ngoại vi (Bơm, Van, Phun sương, Osaka)
 #[derive(Debug, Clone, Default)]
 pub struct PeripheralState {
-    pub pump_status: PumpStatus,
+    pub pump_status: PumpStatus, // Ý định phần cứng
     pub osaka_pwm: u32,
-    pub is_misting_active: bool,
+    pub is_misting_active: bool, // Ý định logic
     pub last_mist_toggle_time: u64,
     pub is_scheduled_mixing_active: bool,
     pub last_mixing_start_sec: u64,
@@ -238,28 +238,67 @@ impl SystemContext {
         // --- 4. Peripherals Update ---
         if let Some(pd) = delta.peripherals.clone() {
             let p = &mut self.peripherals;
-            if let Some(v) = pd.pump_a { p.pump_status.pump_a = v; }
-            if let Some(v) = pd.pump_b { p.pump_status.pump_b = v; }
-            if let Some(v) = pd.ph_up { p.pump_status.ph_up = v; }
-            if let Some(v) = pd.ph_down { p.pump_status.ph_down = v; }
-            if let Some(v) = pd.water_pump_in { p.pump_status.water_pump_in = v; }
-            if let Some(v) = pd.water_pump_out { p.pump_status.water_pump_out = v; }
-            if let Some(v) = pd.mist_valve { p.pump_status.mist_valve = v; }
-            if let Some(v) = pd.osaka_pump { p.pump_status.osaka_pump = v; }
+            if let Some(v) = pd.pump_a {
+                p.pump_status.pump_a = v;
+            }
+            if let Some(v) = pd.pump_b {
+                p.pump_status.pump_b = v;
+            }
+            if let Some(v) = pd.ph_up {
+                p.pump_status.ph_up = v;
+            }
+            if let Some(v) = pd.ph_down {
+                p.pump_status.ph_down = v;
+            }
+            if let Some(v) = pd.water_pump_in {
+                p.pump_status.water_pump_in = v;
+            }
+            if let Some(v) = pd.water_pump_out {
+                p.pump_status.water_pump_out = v;
+            }
+            if let Some(v) = pd.mist_valve {
+                p.pump_status.mist_valve = v;
+            }
+            if let Some(v) = pd.mix_valve {
+                p.pump_status.mix_valve = v;
+            }
+            if let Some(v) = pd.osaka_pump {
+                p.pump_status.osaka_pump = v;
+            }
             if let Some(v) = pd.osaka_pwm {
                 p.pump_status.osaka_pwm = Some(v);
                 p.osaka_pwm = v;
             }
-            if let Some(v) = pd.is_misting_active { p.is_misting_active = v; }
-            if let Some(v) = pd.is_scheduled_mixing_active { p.is_scheduled_mixing_active = v; }
-            if let Some(v) = pd.misting_started_by_dosing { p.misting_started_by_dosing = v; }
-            if let Some(v) = pd.last_mist_toggle_time { p.last_mist_toggle_time = v; }
-            if let Some(v) = pd.last_mixing_start_sec { p.last_mixing_start_sec = v; }
-            if let Some(v) = pd.last_ec_before_dose { self.safety.last_ec_before_dose = v; }
-            if let Some(v) = pd.last_ph_before_dose { self.safety.last_ph_before_dose = v; }
-            if let Some(v) = pd.previous_ec { p.previous_ec = v; }
-            if let Some(v) = pd.previous_ph { p.previous_ph = v; }
-            if let Some(v) = pd.last_continuous_level { p.last_continuous_level = v; }
+            if let Some(v) = pd.is_misting_active {
+                p.is_misting_active = v;
+            }
+            if let Some(v) = pd.is_scheduled_mixing_active {
+                p.is_scheduled_mixing_active = v;
+            }
+            if let Some(v) = pd.misting_started_by_dosing {
+                p.misting_started_by_dosing = v;
+            }
+            if let Some(v) = pd.last_mist_toggle_time {
+                p.last_mist_toggle_time = v;
+            }
+            if let Some(v) = pd.last_mixing_start_sec {
+                p.last_mixing_start_sec = v;
+            }
+            if let Some(v) = pd.last_ec_before_dose {
+                self.safety.last_ec_before_dose = v;
+            }
+            if let Some(v) = pd.last_ph_before_dose {
+                self.safety.last_ph_before_dose = v;
+            }
+            if let Some(v) = pd.previous_ec {
+                p.previous_ec = v;
+            }
+            if let Some(v) = pd.previous_ph {
+                p.previous_ph = v;
+            }
+            if let Some(v) = pd.last_continuous_level {
+                p.last_continuous_level = v;
+            }
         }
 
         // --- 5. Calibration Sample Updates ---

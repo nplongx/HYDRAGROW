@@ -10,6 +10,7 @@ impl PhaseTick for CooldownPhase {
     fn tick(
         &self,
         now_ms: u64,
+        uptime: u64,
         _config: &ControllerConfig,
         _sensors: &SensorData,
         ctx: &mut SystemContext,

@@ -65,6 +65,11 @@ impl EventDispatcher {
                     warn!("⚠️ [DISPATCHER] SetMistValve error: {:?}", e);
                 }
             }
+            OrchestratorEvent::SetMixValve { on } => {
+                if let Err(e) = dc.pumps.set_mix_valve(on) {
+                    warn!("⚠️ [DISPATCHER] SetMixValve error: {:?}", e);
+                }
+            }
             OrchestratorEvent::SetOsakaPump { pwm_percent } => {
                 if let Err(e) = dc.pumps.set_osaka_pump_pwm(pwm_percent) {
                     warn!("⚠️ [DISPATCHER] SetOsakaPump error: {:?}", e);
@@ -131,6 +136,14 @@ impl EventDispatcher {
                     "_payload": serde_json::from_str::<serde_json::Value>(&cycle_json).unwrap_or_default()
                 });
                 let _ = dc.dosing_report_tx.send(wrapper.to_string());
+            }
+            OrchestratorEvent::TriggerOtaUpdate => {
+                std::thread::spawn(move || {
+                    if let Err(e) = crate::hw::ota::perform_ota_update() {
+                        log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);
+                        // Cân nhắc gửi một MQTT message báo lỗi ở đây
+                    }
+                });
             }
             _ => {}
         }

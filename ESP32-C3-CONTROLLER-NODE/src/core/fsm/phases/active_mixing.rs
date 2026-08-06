@@ -11,12 +11,13 @@ impl PhaseTick for ActiveMixingPhase {
     fn tick(
         &self,
         now_ms: u64,
+        uptime: u64,
         config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut SystemContext,
     ) -> TickResult {
         let mut result = TickResult::default();
-        let elapsed_ms = now_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(now_ms));
+        let elapsed_ms = now_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
         let max_mixing_timeout = now_ms >= ctx.phase_finish_ms.unwrap_or(0);
 
         if (elapsed_ms >= 15_000 && ctx.stabilizer_tracker.is_stable(config)) || max_mixing_timeout

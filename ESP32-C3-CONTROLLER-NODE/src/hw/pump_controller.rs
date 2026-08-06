@@ -30,10 +30,12 @@ pub struct PumpController {
     pump_ph_up: LedcDriver<'static>,
     pump_ph_down: LedcDriver<'static>,
     valve_mist: PinDriver<'static, Output>,
+    valve_mix: PinDriver<'static, Output>,
     water_pump_in: PinDriver<'static, Output>,
     water_pump_out: PinDriver<'static, Output>,
     osaka_en: PinDriver<'static, Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
+
     cancel_soft_start: Arc<AtomicBool>,
 }
 
@@ -45,6 +47,7 @@ impl PumpController {
         mut pump_ph_up: LedcDriver<'static>,
         mut pump_ph_down: LedcDriver<'static>,
         mut valve_mist: PinDriver<'static, Output>,
+        mut valve_mix: PinDriver<'static, Output>,
         mut water_pump_in: PinDriver<'static, Output>,
         mut water_pump_out: PinDriver<'static, Output>,
         mut osaka_en: PinDriver<'static, Output>,
@@ -68,6 +71,7 @@ impl PumpController {
             pump_ph_up,
             pump_ph_down,
             valve_mist,
+            valve_mix,
             water_pump_in,
             water_pump_out,
             osaka_en,
@@ -134,6 +138,15 @@ impl PumpController {
         Ok(())
     }
 
+    pub fn set_mix_valve(&mut self, state: bool) -> anyhow::Result<()> {
+        if state {
+            self.valve_mix.set_high()?;
+        } else {
+            self.valve_mix.set_low()?;
+        }
+        Ok(())
+    }
+
     pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
         info!("🌀 Điều khiển khởi động mềm Osaka lên {}%...", target_pwm_percent);
         self.osaka_en.set_high()?;
@@ -153,6 +166,7 @@ impl PumpController {
             let step_delay = Duration::from_millis(100);
 
             for i in 1..=steps {
+                // dừng bơm
                 if cancel_flag.load(Ordering::SeqCst) {
                     warn!("⚠️ Hủy tiến trình khởi động mềm Osaka!");
                     if let Ok(mut pump) = rpwm_clone.lock() {
@@ -160,7 +174,7 @@ impl PumpController {
                     }
                     return;
                 }
-                let current_duty = target_duty * i / steps;
+                let current_duty = target_duty * i / steps; // i -> steps, current_duty -> target_duty
                 if let Ok(mut pump) = rpwm_clone.lock() {
                     let _ = pump.set_duty(current_duty);
                 }

@@ -1,11 +1,10 @@
 // src/runtime/command_handler.rs
 //! CommandHandler — Chuyển đổi lệnh MQTT thành ContextDelta và OrchestratorEvent.
-
-use std::sync::mpsc::{Receiver, Sender};
 use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
 use hydragrow_shared::{ControlMode, ControllerConfig, MqttCommandIn};
 use log::{info, warn};
+use std::sync::mpsc::{Receiver, Sender};
 
 use crate::core::fsm::context::SystemContext;
 use crate::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
@@ -78,11 +77,34 @@ pub fn process_mqtt_commands(
             peri_delta.osaka_pwm = Some(0);
             peri_delta.is_misting_active = Some(false);
             peri_delta.mist_valve = Some(false);
+            peri_delta.mix_valve = Some(false);
             peri_delta.water_pump_in = Some(false);
             peri_delta.water_pump_out = Some(false);
             delta.peripherals = Some(peri_delta);
 
             all_events.push(OrchestratorEvent::SaveNvsSnapshot);
+            continue;
+        }
+
+        // --- 4. Lệnh cập nhật OTA ---
+        if action_lower == "trigger_ota" {
+            info!("⚠️ Nhận lệnh OTA Update! Dừng hệ thống để chuẩn bị flash...");
+            stop_all_hardware(&mut all_events);
+
+            // Ép hệ thống vào Phase Fault/Emergency để không bị trigger các logic khác
+            delta.phase = Some(SystemPhase::Fault(
+                hydragrow_shared::fsm::FaultCode::EmergencyStop,
+            ));
+
+            let mut peri_delta = delta.peripherals.take().unwrap_or_default();
+            peri_delta.osaka_pump = Some(false);
+            peri_delta.mist_valve = Some(false);
+            peri_delta.mix_valve = Some(false);
+            delta.peripherals = Some(peri_delta);
+
+            // Yêu cầu Dispatcher gọi hàm cập nhật
+            // (Bạn cần thêm TriggerOtaUpdate vào enum OrchestratorEvent)
+            all_events.push(OrchestratorEvent::TriggerOtaUpdate);
             continue;
         }
 
@@ -123,7 +145,10 @@ pub fn process_mqtt_commands(
         }
 
         if is_emergency_state && is_on && !is_force_on {
-            warn!("⛔ BLOCKED: Không thể điều khiển {} trong trạng thái khẩn cấp.", pump_name);
+            warn!(
+                "⛔ BLOCKED: Không thể điều khiển {} trong trạng thái khẩn cấp.",
+                pump_name
+            );
             continue;
         }
 
@@ -140,7 +165,9 @@ pub fn process_mqtt_commands(
                 "fsm_command",
                 current_time_ms,
             );
-            all_events.push(OrchestratorEvent::PublishSystemLog { payload_json: log_payload });
+            all_events.push(OrchestratorEvent::PublishSystemLog {
+                payload_json: log_payload,
+            });
         }
 
         if is_on {
@@ -157,7 +184,7 @@ pub fn process_mqtt_commands(
         }
 
         let pwm_val = pwm.unwrap_or(if is_on { 100 } else { 0 });
-        let mut pump_events = build_pump_events(&pump_name, is_on, pwm_val, &mut delta);
+        let mut pump_events = build_pump_events(&pump_name, is_on, pwm_val, &mut delta, &ctx);
         all_events.append(&mut pump_events);
     }
 
@@ -165,13 +192,31 @@ pub fn process_mqtt_commands(
 }
 
 fn stop_all_hardware(events: &mut Vec<OrchestratorEvent>) {
-    events.push(OrchestratorEvent::SetWaterPump { direction: WaterDirection::Stop });
+    events.push(OrchestratorEvent::SetWaterPump {
+        direction: WaterDirection::Stop,
+    });
     events.push(OrchestratorEvent::SetMistValve { on: false });
     events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
-    events.push(OrchestratorEvent::SetDosingPump { pump: DosingPumpTarget::NutrientA, on: false, pwm_percent: 0 });
-    events.push(OrchestratorEvent::SetDosingPump { pump: DosingPumpTarget::NutrientB, on: false, pwm_percent: 0 });
-    events.push(OrchestratorEvent::SetDosingPump { pump: DosingPumpTarget::PhUp, on: false, pwm_percent: 0 });
-    events.push(OrchestratorEvent::SetDosingPump { pump: DosingPumpTarget::PhDown, on: false, pwm_percent: 0 });
+    events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::NutrientA,
+        on: false,
+        pwm_percent: 0,
+    });
+    events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::NutrientB,
+        on: false,
+        pwm_percent: 0,
+    });
+    events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::PhUp,
+        on: false,
+        pwm_percent: 0,
+    });
+    events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::PhDown,
+        on: false,
+        pwm_percent: 0,
+    });
 }
 
 pub fn build_pump_events(
@@ -179,6 +224,7 @@ pub fn build_pump_events(
     is_on: bool,
     pwm_val: u32,
     delta: &mut ContextDelta,
+    ctx: &SystemContext,
 ) -> Vec<OrchestratorEvent> {
     let mut events = Vec::new();
     let mut peri_delta = delta.peripherals.take().unwrap_or_default();
@@ -217,11 +263,21 @@ pub fn build_pump_events(
             });
         }
         "OSAKA_PUMP" | "OSAKA" => {
-            peri_delta.osaka_pump = Some(is_on);
-            peri_delta.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
-            if is_on {
-                events.push(OrchestratorEvent::StartOsakaSoft { target_pwm_percent: pwm_val });
+            let mist_valve_is_open = peri_delta
+                .mist_valve
+                .unwrap_or_else(|| ctx.peripherals.pump_status.mist_valve);
+            let mix_valve_is_open = peri_delta
+                .mix_valve
+                .unwrap_or_else(|| ctx.peripherals.pump_status.mix_valve);
+            if is_on && (mist_valve_is_open || mix_valve_is_open) {
+                peri_delta.osaka_pump = Some(is_on);
+                peri_delta.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
+                events.push(OrchestratorEvent::StartOsakaSoft {
+                    target_pwm_percent: pwm_val,
+                });
             } else {
+                peri_delta.osaka_pump = Some(false);
+                peri_delta.osaka_pwm = Some(0);
                 events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
             }
         }
@@ -230,18 +286,34 @@ pub fn build_pump_events(
             peri_delta.is_misting_active = Some(is_on);
             events.push(OrchestratorEvent::SetMistValve { on: is_on });
         }
+        "MIX_VALVE" | "MIX" => {
+            peri_delta.mix_valve = Some(is_on);
+            events.push(OrchestratorEvent::SetMixValve { on: is_on });
+        }
         "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
             peri_delta.water_pump_in = Some(is_on);
-            if is_on { peri_delta.water_pump_out = Some(false); }
+            if is_on {
+                peri_delta.water_pump_out = Some(false);
+            }
             events.push(OrchestratorEvent::SetWaterPump {
-                direction: if is_on { WaterDirection::In } else { WaterDirection::Stop },
+                direction: if is_on {
+                    WaterDirection::In
+                } else {
+                    WaterDirection::Stop
+                },
             });
         }
         "DRAIN_PUMP" | "WATER_PUMP_OUT" | "PUMP_OUT" => {
             peri_delta.water_pump_out = Some(is_on);
-            if is_on { peri_delta.water_pump_in = Some(false); }
+            if is_on {
+                peri_delta.water_pump_in = Some(false);
+            }
             events.push(OrchestratorEvent::SetWaterPump {
-                direction: if is_on { WaterDirection::Out } else { WaterDirection::Stop },
+                direction: if is_on {
+                    WaterDirection::Out
+                } else {
+                    WaterDirection::Stop
+                },
             });
         }
         _ => {}
@@ -251,6 +323,10 @@ pub fn build_pump_events(
     events
 }
 
-pub fn build_stop_pump_events(pump_name: &str, delta: &mut ContextDelta) -> Vec<OrchestratorEvent> {
-    build_pump_events(pump_name, false, 0, delta)
+pub fn build_stop_pump_events(
+    pump_name: &str,
+    delta: &mut ContextDelta,
+    ctx: &SystemContext,
+) -> Vec<OrchestratorEvent> {
+    build_pump_events(pump_name, false, 0, delta, ctx)
 }

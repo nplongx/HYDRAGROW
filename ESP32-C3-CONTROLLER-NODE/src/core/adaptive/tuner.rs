@@ -222,7 +222,7 @@ impl AutoTuner {
             return;
         }
 
-        let gain_vs_expected: f32 = response / expected.max(0.001_f32);
+        let gain_vs_expected: f32 = response / expected.max(0.001_f32); //~1
         let tracker = if is_ec {
             &mut self.ec_tracker
         } else {

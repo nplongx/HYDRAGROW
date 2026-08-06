@@ -25,6 +25,11 @@ pub enum OrchestratorEvent {
         on: bool,
     },
 
+    // --- HARDWARE: Van trộn ---
+    SetMixValve {
+        on: bool,
+    },
+
     // --- HARDWARE: Bơm Osaka (sục trộn) ---
     SetOsakaPump {
         pwm_percent: u32,
@@ -63,6 +68,8 @@ pub enum OrchestratorEvent {
     PublishDosingCycle {
         cycle_json: String,
     },
+
+    TriggerOtaUpdate
 }
 
 /// Target bơm định lượng (tách riêng để tránh dùng PumpType từ pump.rs ở layer này)

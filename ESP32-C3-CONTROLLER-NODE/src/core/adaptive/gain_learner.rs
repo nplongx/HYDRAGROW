@@ -2,18 +2,19 @@
 //! GainLearner — Học động hệ số phản ứng thực tế (Response Gain) từ phản hồi dung dịch.
 //! Thuộc tầng Pure Core: Không phụ thuộc ESP-IDF, có thể test 100% bằng `cargo test`.
 
+
 use hydragrow_shared::ControllerConfig;
 
 /// Học hệ số gain cho từng kênh đơn lẻ (EC / pH Up / pH Down)
 #[derive(Debug, Clone)]
 pub struct SingleGainLearner {
-    pub ema: f32,
+    pub ema: f32, // observed_gain được áp dụng ema
     pub sample_count: u32,
     pub alpha: f32,
     pub confidence: f32,
     pub min_samples: u32,
     pub variance: f32,
-    pub last_observed: f32,
+    // pub last_observed: f32,
 }
 
 impl Default for SingleGainLearner {
@@ -25,7 +26,7 @@ impl Default for SingleGainLearner {
             confidence: 0.0,
             min_samples: 5,
             variance: 0.0,
-            last_observed: 0.0,
+            // last_observed: 0.0,
         }
     }
 }
@@ -40,9 +41,19 @@ impl SingleGainLearner {
 
         let diff = observed_gain - self.ema;
         self.variance = (1.0 - self.alpha) * self.variance + self.alpha * diff * diff;
-        self.last_observed = observed_gain;
+        // self.last_observed = observed_gain;
         self.sample_count = self.sample_count.saturating_add(1);
-        self.confidence = (self.sample_count as f32 / self.min_samples as f32).min(1.0);
+        let c_n = (self.sample_count as f32 / self.min_samples as f32).min(1.0);
+        let c_v = (-c_n * self.variance).exp();
+        self.confidence = c_n * c_v;
+    }
+
+    pub fn outlier(&self, observed_gain: f32) -> bool {
+        if self.sample_count < self.min_samples {
+            return false;
+        }
+        let diff = (observed_gain - self.ema).abs();
+        diff <= 3.0 * self.variance.sqrt()
     }
 }
 
@@ -63,10 +74,14 @@ impl GainLearner {
         let observed_gain = delta_ec / dose_ml;
         let base = config.ec_gain_per_ml.max(0.0001);
 
-        // Bỏ qua ngoại lệ bất thường (Outliers > 3x hoặc < 0.3x base)
         if observed_gain < base * 0.3 || observed_gain > base * 3.0 {
             return;
         }
+
+        if self.ec.outlier(observed_gain) {
+            return;
+        }
+
         self.ec.update(observed_gain);
     }
 
@@ -98,6 +113,11 @@ impl GainLearner {
         } else {
             &mut self.ph_down
         };
+
+        if target.outlier(observed_gain){
+            return;
+        }
+
         target.update(observed_gain);
     }
 
@@ -108,7 +128,7 @@ impl GainLearner {
             && self.ec.ema.is_finite()
             && self.ec.ema > 0.0
         {
-            0.6 * self.ec.ema + 0.4 * config_gain
+            self.ec.confidence * self.ec.ema + (1.0 - self.ec.confidence) * config_gain
         } else {
             config_gain
         }
@@ -121,7 +141,7 @@ impl GainLearner {
             && self.ph_up.ema.is_finite()
             && self.ph_up.ema > 0.0
         {
-            0.6 * self.ph_up.ema + 0.4 * config_gain
+            self.ph_up.confidence * self.ph_up.ema + (1.0 - self.ph_up.confidence) * config_gain
         } else {
             config_gain
         }
@@ -134,7 +154,7 @@ impl GainLearner {
             && self.ph_down.ema.is_finite()
             && self.ph_down.ema > 0.0
         {
-            0.6 * self.ph_down.ema + 0.4 * config_gain
+            self.ph_down.confidence * self.ph_down.ema + (1.0 - self.ph_down.confidence) * config_gain
         } else {
             config_gain
         }
@@ -143,8 +163,6 @@ impl GainLearner {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_single_gain_learner_confidence_increase() {
         let mut learner = SingleGainLearner::default();

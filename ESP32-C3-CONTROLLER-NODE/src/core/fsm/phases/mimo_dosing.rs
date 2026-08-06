@@ -8,37 +8,43 @@ use crate::core::fsm::tick_result::CalibrationDelta;
 use crate::core::fsm::types::PendingCalibrationSample;
 use crate::core::fsm::{DosingPumpTarget, OrchestratorEvent, PeripheralDelta, PhaseTick, SystemContext, TickResult};
 use crate::hw::WaterDirection;
+
 pub struct MimoDosingPhase;
 
 impl PhaseTick for MimoDosingPhase {
     fn tick(
         &self,
         now_ms: u64,
+        uptime: u64, // Đã thêm tham số uptime
         config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut SystemContext,
     ) -> TickResult {
         let mut result = TickResult::default();
         let mut peri_delta = PeripheralDelta::default();
-        let elapsed_ms = now_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(now_ms));
+        
+        // SỬA: Dùng `uptime` để tính thời gian trôi qua, chống lỗi nhảy cóc thời gian
+        let elapsed_ms = uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
 
-        // 1. Kiểm tra Safety Timeout của bơm nước
+        // 1. Kiểm tra Safety Timeout của bơm nước (elapsed_ms giờ đã an toàn tuyệt đối)
         self.check_water_pump_timeouts(elapsed_ms, config, ctx, &mut result, &mut peri_delta);
 
         // 2. Hard Timeout toàn Phase -> Chuyển Cooldown
-        if now_ms >= ctx.phase_finish_ms.unwrap_or(u64::MAX) + 5_000 {
+        // SỬA: Dùng `uptime` để so sánh và thiết lập mốc thời gian tương lai
+        if uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX) + 5_000 {
             warn!("⚠️ [FSM] Dosing phase timeout cứng! Chuyển về Cooldown.");
             stop_water_and_misting(ctx, &mut result, &mut peri_delta);
 
             result.delta.phase = Some(SystemPhase::Cooldown);
             result.delta.phase_finish_ms =
-                Some(Some(now_ms + config.cooldown_sec.max(30) as u64 * 1000));
+                Some(Some(uptime + config.cooldown_sec.max(30) as u64 * 1000));
             result.delta.peripherals = Some(peri_delta);
             return result;
         }
 
         // 3. Tick DosingActor & xử lý sự kiện
-        let (dosing_event, hardware_events) = ctx.dosing.tick(now_ms, config);
+        // SỬA: Truyền `uptime` vào DosingActor để các bộ đếm xung PWM bên trong không bị lỗi khi mất/có Wi-Fi
+        let (dosing_event, hardware_events) = ctx.dosing.tick(uptime, config);
         result.events.extend(hardware_events);
 
         match dosing_event {
@@ -59,16 +65,16 @@ impl PhaseTick for MimoDosingPhase {
                     stop_water_and_misting(ctx, &mut result, &mut peri_delta);
 
                     let sample = build_calibration_sample(
-                        format!("water-{now_ms}"),
+                        format!("water-{now_ms}"), // GIỮ NGUYÊN: Dùng now_ms để tạo ID dễ đọc cho người dùng
                         "water_only_cycle".to_string(),
                         (0.0, 0.0, 0.0, 0.0),
                         (water_in_spent, water_out_spent),
-                        now_ms,
+                        uptime, // SỬA: Dùng uptime cho logic tracking bên trong
                         sensors,
                         config,
                         ctx,
                     );
-                    transition_to_active_mixing(now_ms, sample, ctx, &mut result);
+                    transition_to_active_mixing(uptime, sample, ctx, &mut result);
                 }
             }
             DosingEvent::SoftStartDone | DosingEvent::PhaseTransition => {}
@@ -109,16 +115,16 @@ impl PhaseTick for MimoDosingPhase {
                 stop_water_and_misting(ctx, &mut result, &mut peri_delta);
 
                 let sample = build_calibration_sample(
-                    format!("mimo-{now_ms}"),
+                    format!("mimo-{now_ms}"), // GIỮ NGUYÊN: ID dùng mốc giờ thực tế
                     "mimo_matrix_control".to_string(),
                     (dose_a_ml, dose_b_ml, ph_up_ml, ph_down_ml),
                     (water_in_spent, water_out_spent),
-                    now_ms,
+                    uptime, // SỬA: Logic tracking dùng thời gian chip (uptime)
                     sensors,
                     config,
                     ctx,
                 );
-                transition_to_active_mixing(now_ms, sample, ctx, &mut result);
+                transition_to_active_mixing(uptime, sample, ctx, &mut result); // SỬA: Dùng uptime
             }
             DosingEvent::Failed(code) => {
                 result.delta.phase = Some(SystemPhase::Fault(code));
@@ -189,7 +195,7 @@ fn build_calibration_sample(
     trigger: String,
     doses_ml: (f32, f32, f32, f32), // (A, B, pH Up, pH Down)
     water_sec: (f32, f32),          // (In, Out)
-    now_ms: u64,
+    uptime: u64,                    // SỬA: Đổi tham số now_ms thành uptime
     sensors: &SensorData,
     config: &ControllerConfig,
     ctx: &SystemContext,
@@ -214,8 +220,8 @@ fn build_calibration_sample(
         water_out_sec,
         post_mixing_ec: 0.0,
         post_mixing_ph: 0.0,
-        start_ms: ctx.phase_start_ms.unwrap_or(now_ms),
-        active_mixing_finish_ms: now_ms + (ctx.diagnostic.adaptive_mixing_sec as u64 * 1000),
+        start_ms: ctx.phase_start_ms.unwrap_or(uptime), // SỬA: Dùng uptime
+        active_mixing_finish_ms: uptime + (ctx.diagnostic.adaptive_mixing_sec as u64 * 1000), // SỬA: Dùng uptime
         stabilizing_start_ms: None,
         stabilizing_finish_ms: None,
         invalid_by_noise: false,
@@ -225,16 +231,16 @@ fn build_calibration_sample(
 
 /// Cập nhật kết quả chuyển phase sang ActiveMixing
 fn transition_to_active_mixing(
-    now_ms: u64,
+    uptime: u64, // SỬA: Đổi tham số now_ms thành uptime
     sample: PendingCalibrationSample,
     ctx: &SystemContext,
     result: &mut TickResult,
 ) {
     result.delta.calibration = Some(CalibrationDelta::Start(sample));
     result.delta.phase = Some(SystemPhase::ActiveMixing);
-    result.delta.phase_start_ms = Some(Some(now_ms));
+    result.delta.phase_start_ms = Some(Some(uptime)); // SỬA: Dùng uptime
     result.delta.phase_finish_ms = Some(Some(
-        now_ms + ctx.diagnostic.adaptive_mixing_sec as u64 * 1000,
+        uptime + ctx.diagnostic.adaptive_mixing_sec as u64 * 1000, // SỬA: Dùng uptime
     ));
     result.delta.reset_stabilizer = true;
 }

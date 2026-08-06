@@ -23,14 +23,19 @@ impl PhaseTick for StabilizingPhase {
     fn tick(
         &self,
         now_ms: u64,
+        uptime_ms: u64, // SỬA: Thêm tham số uptime_ms
         config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut SystemContext,
     ) -> TickResult {
         let mut result = TickResult::default();
-        let elapsed_ms = now_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(now_ms));
+        
+        // SỬA: Dùng uptime_ms để tính thời gian trôi qua cực kỳ an toàn
+        let elapsed_ms = uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms));
         let min_stabilize_ms = 10_000;
-        let max_stabilize_timeout = now_ms >= ctx.phase_finish_ms.unwrap_or(0);
+        
+        // SỬA: Dùng uptime_ms để check timeout
+        let max_stabilize_timeout = uptime_ms >= ctx.phase_finish_ms.unwrap_or(0);
 
         // 1. Kiểm tra điều kiện hoàn thành Phase (Chỉ số đã ổn định hoặc Timeout)
         let is_ready = (elapsed_ms >= min_stabilize_ms && ctx.stabilizer_tracker.is_stable(config))
@@ -44,7 +49,7 @@ impl PhaseTick for StabilizingPhase {
 
         // 2. Chốt mẫu Calibration đang chờ
         if let Some(s) = ctx.calibration.pending_sample.as_mut() {
-            s.stabilizing_finish_ms = Some(now_ms);
+            s.stabilizing_finish_ms = Some(uptime_ms); // SỬA: Dùng uptime_ms vì start_ms cũng đang dùng uptime
         }
 
         if let Some(sample) = ctx.calibration.finalize() {
@@ -77,7 +82,7 @@ impl PhaseTick for StabilizingPhase {
                 sensors.water_level,
                 sensors.temp,
                 config,
-                now_ms / 1000,
+                uptime_ms / 1000, // SỬA: Dùng uptime để tránh rối loạn thời gian học trong nội bộ tuner
             );
 
             // C. Học đặc tính thủy động học (Fluid Dynamics - Thời gian sục/ổn định tối ưu)
@@ -86,8 +91,10 @@ impl PhaseTick for StabilizingPhase {
                     Some(sample.active_mixing_finish_ms),
                     sample.stabilizing_start_ms,
                 ) {
+                    // Cả 3 biến này đều đang lưu bằng uptime_ms nên phép trừ này là chính xác tuyệt đối
                     let actual_mixing_ms = mixing_finish.saturating_sub(sample.start_ms);
-                    let actual_stabilize_ms = now_ms.saturating_sub(stab_start);
+                    let actual_stabilize_ms = uptime_ms.saturating_sub(stab_start);
+                    
                     if actual_mixing_ms > 1000 && actual_stabilize_ms > 1000 {
                         ctx.diagnostic
                             .learn_fluid_dynamics(actual_mixing_ms, actual_stabilize_ms);
@@ -102,26 +109,29 @@ impl PhaseTick for StabilizingPhase {
             }
 
             // D. Tạo và phát các bản tin Telemetry, Report & System Logs
-            push_telemetry_events(&sample, sensors, config, ctx, now_ms, did_learn, &mut result);
+            // SỬA: Truyền cả now_ms (để ghi log) và uptime_ms (để tính duration)
+            push_telemetry_events(&sample, sensors, config, ctx, now_ms, uptime_ms, did_learn, &mut result);
         }
 
         // 3. Lưu NVS Snapshot xuống Flash
-        let snapshot = NvsSnapshot::from_context(ctx, now_ms / 1000);
+        let snapshot = NvsSnapshot::from_context(ctx, uptime_ms / 1000); // SỬA: Khớp với logic budget trong monitoring
         if serde_json::to_string(&snapshot).is_ok() {
             result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 
         // 4. Chuyển Phase sang Cooldown
         result.delta.phase = Some(SystemPhase::Cooldown);
+        
+        // SỬA: Cắm cờ phase_finish_ms bằng uptime tương lai
         result.delta.phase_finish_ms =
-            Some(Some(now_ms + config.cooldown_sec.max(0) as u64 * 1000));
+            Some(Some(uptime_ms + config.cooldown_sec.max(0) as u64 * 1000));
 
         result
     }
 }
 
 // ============================================================================
-// HELPER FUNCTIONS (Tách riêng logic xây dựng DTOs giúp hàm tick() ngắn gọn)
+// HELPER FUNCTIONS 
 // ============================================================================
 
 fn push_telemetry_events(
@@ -130,6 +140,7 @@ fn push_telemetry_events(
     config: &ControllerConfig,
     ctx: &SystemContext,
     now_ms: u64,
+    uptime_ms: u64, // SỬA: Nhận thêm uptime_ms
     did_learn: bool,
     result: &mut TickResult,
 ) {
@@ -138,18 +149,18 @@ fn push_telemetry_events(
     let final_water = sensors.water_level;
 
     // 1. DosingCycleEvent (Backend Cloud Telemetry)
-    let cycle_event = build_dosing_cycle_event(sample, final_ec, final_ph, final_water, config, ctx, now_ms, did_learn);
+    let cycle_event = build_dosing_cycle_event(sample, final_ec, final_ph, final_water, config, ctx, now_ms, uptime_ms, did_learn);
     if let Ok(json) = serde_json::to_string(&cycle_event) {
         result.events.push(OrchestratorEvent::PublishDosingCycle { cycle_json: json });
     }
 
     // 2. DosingReportPayload (Báo cáo Analytics chi tiết)
-    let report = build_dosing_report_payload(sample, final_ec, final_ph, config, ctx, now_ms);
+    let report = build_dosing_report_payload(sample, final_ec, final_ph, config, ctx, uptime_ms);
     if let Ok(json) = serde_json::to_string(&report) {
         result.events.push(OrchestratorEvent::PublishDosingReport { report_json: json });
     }
 
-    // 3. System Log đọc được cho người dùng
+    // 3. System Log đọc được cho người dùng (Chỉ cần now_ms cho timestamp hiển thị)
     let human_message = build_human_message(sample, final_ec, final_ph, final_water, config);
     let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
         &config.device_id,
@@ -174,6 +185,7 @@ fn build_dosing_cycle_event(
     config: &ControllerConfig,
     ctx: &SystemContext,
     now_ms: u64,
+    uptime_ms: u64, // SỬA: Nhận thêm uptime_ms
     did_learn: bool,
 ) -> DosingCycleEvent {
     let ec_ok = (sample.target_ec - final_ec).abs() <= config.ec_tolerance;
@@ -238,10 +250,11 @@ fn build_dosing_cycle_event(
             water_out_sec: sample.water_out_sec,
         },
         outcome,
-        duration_ms: now_ms.saturating_sub(sample.start_ms),
+        // SỬA: Mọi phép tính duration phải dùng uptime_ms vì các mốc start_ms được lưu bằng uptime
+        duration_ms: uptime_ms.saturating_sub(sample.start_ms),
         mixing_duration_ms: sample.active_mixing_finish_ms.saturating_sub(sample.start_ms),
-        stabilize_duration_ms: now_ms.saturating_sub(sample.stabilizing_start_ms.unwrap_or(now_ms)),
-        timestamp_ms: now_ms,
+        stabilize_duration_ms: uptime_ms.saturating_sub(sample.stabilizing_start_ms.unwrap_or(uptime_ms)),
+        timestamp_ms: now_ms, // SỬA: Giữ nguyên now_ms để hiển thị thời gian gửi log chuẩn xác lên App
         kalman,
         season_id: None,
     }
@@ -253,7 +266,7 @@ fn build_dosing_report_payload(
     final_ph: f32,
     config: &ControllerConfig,
     ctx: &SystemContext,
-    now_ms: u64,
+    uptime_ms: u64, // SỬA: Nhận uptime_ms
 ) -> DosingReportPayload {
     DosingReportPayload {
         cycle_id: sample.cycle_id.clone(),
@@ -285,7 +298,7 @@ fn build_dosing_report_payload(
         target_ph: sample.target_ph,
         error_ec: sample.target_ec - final_ec,
         error_ph: sample.target_ph - final_ph,
-        duration_ms: now_ms.saturating_sub(sample.start_ms),
+        duration_ms: uptime_ms.saturating_sub(sample.start_ms), // SỬA: Tính duration bằng uptime
         ema_ec_gain_used: config.ec_gain_per_ml,
         ema_ph_shift_used: config.ph_shift_up_per_ml,
         step_ratio_ec: Some(ctx.tuner.active_ec_ratio()),

@@ -13,3 +13,5 @@ pub use ntp::sync_sntp_time;
 pub use nvs_store::NvsStore;
 pub use pump_controller::{PumpController, PumpType, WaterDirection};
 pub use wifi::connect_wifi;
+pub mod ota;
+pub use ota::perform_ota_update;

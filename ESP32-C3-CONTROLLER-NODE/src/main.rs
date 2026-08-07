@@ -1,5 +1,6 @@
 // src/main.rs
 use esp_idf_hal::gpio::PinDriver;
+use esp_idf_hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_hal::ledc::config::TimerConfig;
 use esp_idf_hal::ledc::{LedcDriver, LedcTimerDriver};
 use esp_idf_hal::peripherals::Peripherals;
@@ -22,34 +23,36 @@ use runtime::fsm_loop::start_fsm_control_loop;
 use runtime::health::run_main_health_loop;
 use utils::get_current_time_sec;
 
+use crate::hw::pcf857x::I2cExpander;
+
 const WIFI_SSID: &str = match option_env!("HYDRAGROW_WIFI_SSID") {
     Some(val) => val,
-    None => "YOUR_WIFI_SSID",
+    None => "Huynh Hong",
 };
 const WIFI_PASS: &str = match option_env!("HYDRAGROW_WIFI_PASSWORD") {
     Some(val) => val,
-    None => "YOUR_WIFI_PASSWORD",
+    None => "123443215",
 };
 const MQTT_URL: &str = match option_env!("HYDRAGROW_MQTT_URL") {
     Some(val) => val,
-    None => "mqtt://YOUR_MQTT_HOST:1883",
+    None => "mqtt://broker.hivemq.com:1883",
 };
 const MQTT_USER: &str = match option_env!("HYDRAGROW_MQTT_USER") {
     Some(val) => val,
-    None => "YOUR_MQTT_USERNAME",
+    None => "long",
 };
 const MQTT_PASSWORD: &str = match option_env!("HYDRAGROW_MQTT_PASSWORD") {
     Some(val) => val,
-    None => "YOUR_MQTT_PASSWORD",
+    None => "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i",
 };
 const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
     Some(val) => val,
-    None => "YOUR_DEVICE_ID",
+    None => "device_001",
 };
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
-    EspLogger::initialize_default();
+    //EspLogger::initialize_default();
 
     info!("🚀 Khởi động hệ thống FSM Thủy canh Agitech (ESP32-C3)...");
 
@@ -76,20 +79,55 @@ fn main() -> anyhow::Result<()> {
         &TimerConfig::new().frequency(esp_idf_hal::units::Hertz(20000)),
     )?);
 
+    let i2c_driver = I2cDriver::new(
+        peripherals.i2c0,
+        peripherals.pins.gpio8,
+        peripherals.pins.gpio9,
+        &I2cConfig::default(),
+    )?;
+    let valve = I2cExpander::new(i2c_driver);
+
     let pump_controller = PumpController::new(
-        LedcDriver::new(peripherals.ledc.channel1, timer_driver.clone(), peripherals.pins.gpio6)?,
-        LedcDriver::new(peripherals.ledc.channel2, timer_driver.clone(), peripherals.pins.gpio7)?,
-        LedcDriver::new(peripherals.ledc.channel3, timer_driver.clone(), peripherals.pins.gpio8)?,
-        LedcDriver::new(peripherals.ledc.channel4, timer_driver.clone(), peripherals.pins.gpio21)?,
-        PinDriver::output(peripherals.pins.gpio10)?,
+        LedcDriver::new(
+            peripherals.ledc.channel1,
+            timer_driver.clone(),
+            peripherals.pins.gpio6,
+        )?,
+        LedcDriver::new(
+            peripherals.ledc.channel2,
+            timer_driver.clone(),
+            peripherals.pins.gpio7,
+        )?,
+        LedcDriver::new(
+            peripherals.ledc.channel3,
+            timer_driver.clone(),
+            peripherals.pins.gpio0,
+        )?,
+        LedcDriver::new(
+            peripherals.ledc.channel4,
+            timer_driver.clone(),
+            peripherals.pins.gpio4,
+        )?,
+        valve,
+        PinDriver::output(peripherals.pins.gpio5)?,
         PinDriver::output(peripherals.pins.gpio1)?,
         PinDriver::output(peripherals.pins.gpio2)?,
-        PinDriver::output(peripherals.pins.gpio0)?,
-        LedcDriver::new(peripherals.ledc.channel0, timer_driver.clone(), peripherals.pins.gpio3)?,
+        LedcDriver::new(
+            peripherals.ledc.channel0,
+            timer_driver.clone(),
+            peripherals.pins.gpio3,
+        )?,
     )?;
 
     // 2. Network & Time Sync
-    connect_wifi(peripherals.modem, sysloop, nvs_partition.clone(), WIFI_SSID, WIFI_PASS, conn_tx.clone())?;
+    connect_wifi(
+        peripherals.modem,
+        sysloop,
+        nvs_partition.clone(),
+        WIFI_SSID,
+        WIFI_PASS,
+        conn_tx.clone(),
+    )?;
     let _sntp = sync_sntp_time()?;
 
     // 3. Spawn FSM Thread

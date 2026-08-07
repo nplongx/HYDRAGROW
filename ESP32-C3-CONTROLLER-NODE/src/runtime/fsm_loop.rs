@@ -1,11 +1,11 @@
 // src/runtime/fsm_loop.rs
 //! FSM Control Loop Thread Runtime.
 
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::MqttCommandIn;
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::Duration;
 use tracing::{debug, info};
 
 use crate::config::SharedConfig;
@@ -45,9 +45,9 @@ pub fn start_fsm_control_loop(
     loop {
         let config = shared_config.read().unwrap().clone();
         let sensors = shared_sensors.read().unwrap().clone();
-        
+
         // SỬA: Lấy cả 2 loại thời gian
-        let current_wall_time_ms = get_current_time_ms(); 
+        let current_wall_time_ms = get_current_time_ms();
         let current_uptime_ms = get_uptime_ms();
 
         // Tracker mất tín hiệu cảm biến sử dụng Uptime để chống nhảy cóc
@@ -71,7 +71,7 @@ pub fn start_fsm_control_loop(
                 sensor_cmd_tx: &sensor_cmd_tx,
                 ctx: &ctx,
                 // SỬA: NVS và Log cần giờ thực tế chuẩn (wall_time), và phải chia 1000 để ra Giây
-                now_sec: current_wall_time_ms / 1000, 
+                now_sec: current_wall_time_ms / 1000,
                 device_id: &config.device_id,
                 config: &config,
                 observers: &mut observer_set,

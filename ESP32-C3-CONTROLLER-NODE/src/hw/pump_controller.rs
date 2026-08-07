@@ -1,13 +1,17 @@
 // src/hw/pump_controller.rs
 //! Driver điều khiển Bơm, Van và Xung PWM phần cứng ESP32-C3.
 
+use esp_idf_hal::gpio::InterruptType::AnyEdge;
 use esp_idf_hal::gpio::{Output, PinDriver};
 use esp_idf_hal::ledc::LedcDriver;
 use log::{info, warn};
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+
+use crate::hw::pcf857x::{ExpanderPin, I2cExpander};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PumpType {
@@ -24,13 +28,14 @@ pub enum WaterDirection {
     Stop,
 }
 
-pub struct PumpController {
+pub struct PumpController<'d> {
     pump_a: LedcDriver<'static>,
     pump_b: LedcDriver<'static>,
     pump_ph_up: LedcDriver<'static>,
     pump_ph_down: LedcDriver<'static>,
-    valve_mist: PinDriver<'static, Output>,
-    valve_mix: PinDriver<'static, Output>,
+    // valve_mist: PinDriver<'static, Output>,
+    // valve_mix: PinDriver<'static, Output>,
+    valve: I2cExpander<'d>,
     water_pump_in: PinDriver<'static, Output>,
     water_pump_out: PinDriver<'static, Output>,
     osaka_en: PinDriver<'static, Output>,
@@ -39,15 +44,16 @@ pub struct PumpController {
     cancel_soft_start: Arc<AtomicBool>,
 }
 
-impl PumpController {
+impl<'d> PumpController<'d> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         mut pump_a: LedcDriver<'static>,
         mut pump_b: LedcDriver<'static>,
         mut pump_ph_up: LedcDriver<'static>,
         mut pump_ph_down: LedcDriver<'static>,
-        mut valve_mist: PinDriver<'static, Output>,
-        mut valve_mix: PinDriver<'static, Output>,
+        // mut valve_mist: PinDriver<'static, Output>,
+        // mut valve_mix: PinDriver<'static, Output>,
+        mut valve: I2cExpander<'d>,
         mut water_pump_in: PinDriver<'static, Output>,
         mut water_pump_out: PinDriver<'static, Output>,
         mut osaka_en: PinDriver<'static, Output>,
@@ -57,7 +63,13 @@ impl PumpController {
         pump_b.set_duty(0)?;
         pump_ph_up.set_duty(0)?;
         pump_ph_down.set_duty(0)?;
-        valve_mist.set_low()?;
+        // valve_mist.set_low()?;
+        valve
+            .set_low(ExpanderPin::ValveMist.mask())
+            .map_err(|e| anyhow::anyhow!("{e:?}"));
+        valve
+            .set_low(ExpanderPin::ValveMix.mask())
+            .map_err(|e| anyhow::anyhow!("{e:?}"));
         water_pump_in.set_low()?;
         water_pump_out.set_low()?;
         osaka_en.set_low()?;
@@ -70,8 +82,9 @@ impl PumpController {
             pump_b,
             pump_ph_up,
             pump_ph_down,
-            valve_mist,
-            valve_mix,
+            // valve_mist,
+            // valve_mix,
+            valve,
             water_pump_in,
             water_pump_out,
             osaka_en,
@@ -131,24 +144,35 @@ impl PumpController {
 
     pub fn set_mist_valve(&mut self, state: bool) -> anyhow::Result<()> {
         if state {
-            self.valve_mist.set_high()?;
+            self.valve
+                .set_high(ExpanderPin::ValveMist.mask())
+                .map_err(|e| anyhow::anyhow!("{e:?}"));
         } else {
-            self.valve_mist.set_low()?;
+            self.valve
+                .set_low(ExpanderPin::ValveMist.mask())
+                .map_err(|e| anyhow::anyhow!("{e:?}"));
         }
         Ok(())
     }
 
     pub fn set_mix_valve(&mut self, state: bool) -> anyhow::Result<()> {
         if state {
-            self.valve_mix.set_high()?;
+            self.valve
+                .set_high(ExpanderPin::ValveMix.mask())
+                .map_err(|e| anyhow::anyhow!("{e:?}"));
         } else {
-            self.valve_mix.set_low()?;
+            self.valve
+                .set_low(ExpanderPin::ValveMix.mask())
+                .map_err(|e| anyhow::anyhow!("{e:?}"));
         }
         Ok(())
     }
 
     pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
-        info!("🌀 Điều khiển khởi động mềm Osaka lên {}%...", target_pwm_percent);
+        info!(
+            "🌀 Điều khiển khởi động mềm Osaka lên {}%...",
+            target_pwm_percent
+        );
         self.osaka_en.set_high()?;
         self.cancel_soft_start.store(false, Ordering::SeqCst);
 

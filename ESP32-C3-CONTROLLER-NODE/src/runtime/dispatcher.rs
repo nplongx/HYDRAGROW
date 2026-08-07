@@ -1,9 +1,9 @@
 // src/runtime/dispatcher.rs
 //! EventDispatcher — Thực thi toàn bộ side-effects (Hardware, Flash, MQTT).
 
-use std::sync::mpsc::Sender;
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_shared::ControllerConfig;
+use std::sync::mpsc::Sender;
 use tracing::warn;
 
 use crate::core::fsm::context::{NvsSnapshot, SystemContext};
@@ -11,8 +11,8 @@ use crate::core::fsm::events::OrchestratorEvent;
 use crate::hw::pump_controller::{PumpController, PumpType};
 use crate::runtime::observers::{ObserverContext, ObserverSet};
 
-pub struct DispatchContext<'a> {
-    pub pumps: &'a mut PumpController,
+pub struct DispatchContext<'a, 'd> {
+    pub pumps: &'a mut PumpController<'d>,
     pub nvs: &'a mut Option<EspDefaultNvs>,
     pub mqtt_tx: &'a Sender<String>,
     pub dosing_report_tx: &'a Sender<String>,
@@ -27,7 +27,7 @@ pub struct DispatchContext<'a> {
 pub struct EventDispatcher;
 
 impl EventDispatcher {
-    pub fn dispatch(events: Vec<OrchestratorEvent>, dc: &mut DispatchContext<'_>) {
+    pub fn dispatch(events: Vec<OrchestratorEvent>, dc: &mut DispatchContext<'_, '_>) {
         for event in events {
             Self::handle_event(event.clone(), dc);
 
@@ -42,9 +42,13 @@ impl EventDispatcher {
         }
     }
 
-    fn handle_event(event: OrchestratorEvent, dc: &mut DispatchContext<'_>) {
+    fn handle_event(event: OrchestratorEvent, dc: &mut DispatchContext<'_, '_>) {
         match event {
-            OrchestratorEvent::SetDosingPump { pump, on, pwm_percent } => {
+            OrchestratorEvent::SetDosingPump {
+                pump,
+                on,
+                pwm_percent,
+            } => {
                 let pump_type: PumpType = pump.into();
                 let res = if pwm_percent == 100 {
                     dc.pumps.set_pump_state(pump_type, on)
@@ -107,7 +111,12 @@ impl EventDispatcher {
                     enabled
                 ));
             }
-            OrchestratorEvent::PublishFsmTransition { from_phase, to_phase, reason, phase_duration_ms } => {
+            OrchestratorEvent::PublishFsmTransition {
+                from_phase,
+                to_phase,
+                reason,
+                phase_duration_ms,
+            } => {
                 use hydragrow_shared::telemetry::transition::FsmTransitionEvent;
                 use hydragrow_shared::topics::topic_fsm_transition;
 

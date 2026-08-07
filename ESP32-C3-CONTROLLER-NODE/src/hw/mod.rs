@@ -2,6 +2,7 @@
 pub mod mqtt_client;
 pub mod ntp;
 pub mod nvs_store;
+pub mod pcf857x;
 pub mod pump_controller;
 pub mod wifi;
 

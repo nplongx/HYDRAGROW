@@ -322,11 +322,12 @@ async fn main() -> anyhow::Result<()> {
         server_host, server_port
     );
 
+    // main.rs
+
     HttpServer::new(move || {
         let auth_middleware = api::middleware::auth::ApiKeyAuth::new();
         let rate_limit_middleware = api::middleware::rate_limit::RateLimiter::new(60, 60);
 
-        // Khai báo CORS Middleware
         let cors = actix_cors::Cors::default()
             .allow_any_origin()
             .allow_any_method()
@@ -334,23 +335,21 @@ async fn main() -> anyhow::Result<()> {
 
         App::new()
             .app_data(app_state.clone())
-            // CHÚ Ý 1: CORS bọc ngoài cùng (khai báo cuối cùng của App)
             .wrap(cors)
-            // CHÚ Ý 2: Đưa Auth và Rate Limit vào bên TRONG scope /api
+            // 🟢 1. ROUTE WEBSOCKET ĐỨNG RIÊNG (Không đi qua ApiKeyAuthMiddleware)
+            .service(web::scope("/api/devices/{device_id}").configure(api::ws::init_routes))
+            // 🟢 2. ROUTE REST API (Đi qua Auth & Rate Limiter Middleware)
             .service(
                 web::scope("/api")
-                    // Middleware nội bộ của /api.
-                    // Chạy sau CORS, auth chạy trước rate limit.
                     .wrap(auth_middleware)
                     .wrap(rate_limit_middleware)
-                    // Các routes
                     .configure(api::notification::init_routes)
                     .configure(api::solana::init_routes)
                     .service(
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)
                             .configure(api::sensor::init_routes)
-                            .configure(api::ws::init_routes)
+                            // 🛑 Đã bỏ api::ws::init_routes ở đây
                             .configure(api::config::init_routes)
                             .configure(api::calibration::init_routes)
                             .configure(api::crop_season::init_routes)

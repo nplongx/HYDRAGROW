@@ -16,6 +16,7 @@ pub enum DeviceState {
     Off,
 }
 
+/// Struct này lưu trạng thái của các cơ cấu chấp hành để đồng bộ với frontend
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct PumpStatus {
     pub pump_a: bool,
@@ -24,6 +25,7 @@ pub struct PumpStatus {
     pub ph_down: bool,
     pub osaka_pump: bool,
     pub mist_valve: bool,
+    pub mix_valve: bool,
     pub water_pump_in: bool,
     pub water_pump_out: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

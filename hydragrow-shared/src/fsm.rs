@@ -84,6 +84,7 @@ pub enum FaultCode {
     EcStagnant,
     PhOscillating,
     WaterLevelCritical,
+    EmergencyStop
 }
 
 impl FaultCode {
@@ -101,6 +102,7 @@ impl FaultCode {
             Self::EcStagnant => "EC_STAGNANT",
             Self::PhOscillating => "PH_OSCILLATING",
             Self::WaterLevelCritical => "WATER_LEVEL_CRITICAL",
+            Self::EmergencyStop => "EMERGENCY_STOP"
         }
     }
 }

@@ -1,3 +1,4 @@
+// api/ws.rs
 use actix_web::{Error, HttpRequest, HttpResponse, web};
 use actix_ws::Message;
 use futures_util::StreamExt as _;
@@ -17,11 +18,17 @@ struct WsAuthMessage {
     api_key: String,
 }
 
+#[derive(serde::Deserialize)]
+struct WsQuery {
+    api_key: Option<String>,
+}
+
 pub async fn ws_handler(
     req: HttpRequest,
     body: web::Payload,
     app_state: web::Data<AppState>,
 ) -> Result<HttpResponse, Error> {
+    // Gọi trực tiếp actix_ws::handle để trả về Handshake Body nguyên bản
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
     let client_ip = req
@@ -38,17 +45,28 @@ pub async fn ws_handler(
     let expected_api_key = app_state.api_key.clone();
     let event_bus = app_state.event_bus.clone();
 
+    // Kiểm tra API key nếu client truyền trên URL (?api_key=...)
+    let query_api_key = web::Query::<WsQuery>::from_query(req.query_string())
+        .ok()
+        .and_then(|q| q.api_key.clone());
+
+    let pre_authorized = query_api_key.as_deref() == Some(&expected_api_key);
+
     actix_web::rt::spawn(async move {
-        let auth_result = timeout(Duration::from_secs(10), msg_stream.next()).await;
-        let is_authorized = match auth_result {
-            Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<WsAuthMessage>(&text)
-                .map(|auth| auth.message_type == "auth" && auth.api_key == expected_api_key)
-                .unwrap_or(false),
-            Ok(Some(Ok(Message::Close(reason)))) => {
-                let _ = session.close(reason).await;
-                return;
+        let is_authorized = if pre_authorized {
+            true
+        } else {
+            let auth_result = timeout(Duration::from_secs(10), msg_stream.next()).await;
+            match auth_result {
+                Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<WsAuthMessage>(&text)
+                    .map(|auth| auth.message_type == "auth" && auth.api_key == expected_api_key)
+                    .unwrap_or(false),
+                Ok(Some(Ok(Message::Close(reason)))) => {
+                    let _ = session.close(reason).await;
+                    return;
+                }
+                _ => false,
             }
-            _ => false,
         };
 
         if !is_authorized {

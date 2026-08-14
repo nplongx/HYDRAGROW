@@ -81,8 +81,8 @@ fn main() -> anyhow::Result<()> {
 
     let i2c_driver = I2cDriver::new(
         peripherals.i2c0,
-        peripherals.pins.gpio8,
-        peripherals.pins.gpio9,
+        peripherals.pins.gpio20,
+        peripherals.pins.gpio21,
         &I2cConfig::default(),
     )?;
     let valve = I2cExpander::new(i2c_driver);

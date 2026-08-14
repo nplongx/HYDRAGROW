@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
@@ -7,13 +7,20 @@ import {
   LineChart as ChartIcon, Clock, Filter,
   Thermometer, Droplets, ActivitySquare, Waves, Timer, Loader2, AlertTriangle, Activity
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+
+// --- STORE, HOOKS & UTILS ---
+import { useDeviceStore } from '../store/useDeviceStore';
 import { useCropSeason } from '../hooks/useCropSeason';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
-import { loadAppSettings } from '../platform/settings';
+import { httpFetch } from '../platform/http';
 import { UnifiedDeviceConfig } from '../types/models';
 
-// Màu sắc biểu đồ trên nền sáng
+// --- IMPORT LOGIC ĐÃ BIÊN DỊCH TỪ GLEAM ---
+import { should_keep_sample } from '../../gleam_core/build/dev/javascript/gleam_core/analytics.mjs';
+
+// Mức biểu đồ
 const CHART_THEMES: Record<string, any> = {
   cyan: { stroke: '#0284c7', fill1: '#0284c7', fill2: '#e0f2fe', text: 'text-cyan-700', bg: 'bg-cyan-50' },
   fuchsia: { stroke: '#c026d3', fill1: '#c026d3', fill2: '#fae8ff', text: 'text-fuchsia-700', bg: 'bg-fuchsia-50' },
@@ -29,7 +36,6 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
     if (!data || data.length === 0) return { min: '--', max: '--', avg: '--', current: '--' };
     const values = data.map((d: any) => Number(d[dataKey])).filter((v: number) => !isNaN(v));
     if (values.length === 0) return { min: '--', max: '--', avg: '--', current: '--' };
-
     return {
       min: Math.min(...values).toFixed(2),
       max: Math.max(...values).toFixed(2),
@@ -102,10 +108,7 @@ const FlatChartCard = ({ title, data, dataKey, color, unit, icon: Icon }: any) =
   );
 };
 
-// Hàm tạo UTC ISO string
-const getUtcIsoString = (date: Date) => date.toISOString();
-
-// Hàm kiểm tra trạng thái cảm biến để render chính xác (chống lỗi Type Mismatch hoặc undefined)
+// Hàm kiểm tra trạng thái cảm biến
 const isSensorEnabled = (val: any, defaultState: boolean = true) => {
   if (val === undefined || val === null) return defaultState;
   const strVal = String(val).toLowerCase().trim();
@@ -113,186 +116,138 @@ const isSensorEnabled = (val: any, defaultState: boolean = true) => {
   return true;
 };
 
-// --- Component chính Analytics ---
+// --- COMPONENT CHÍNH ANALYTICS ---
 const Analytics = () => {
-  const { activeSeason, history } = useCropSeason();
+  // Lấy state trực tiếp từ Zustand Store
+  const deviceId = useDeviceStore((s) => s.deviceId);
+  const settings = useDeviceStore((s) => s.settings);
 
-  const [appConfig, setAppConfig] = useState<any>(null);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [deviceConfig, setDeviceConfig] = useState<UnifiedDeviceConfig | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { activeSeason, history: seasonHistory } = useCropSeason();
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const settings: any = await loadAppSettings();
-        if (settings && settings.device_id) {
-          setAppConfig(settings);
-          setDeviceId(settings.device_id);
-          await fetchDeviceConfig(settings.device_id, settings);
-        } else {
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error("Lỗi khi tải cấu hình:", err);
-        setIsLoading(false);
-      }
-    };
-    init();
-  }, []);
-
-  const fetchDeviceConfig = async (id: string, settings: any) => {
-    try {
-      const res = await fetch(`${settings.backend_url}/api/devices/${id}/config/unified`, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': settings.api_key,
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        },
-        cache: 'no-store'
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const unifiedData = {
-          ...(data.device_config || {}),
-          ...(data.water_config || {}),
-          ...(data.safety_config || {}),
-          ...(data.dosing_calibration || {}),
-          ...(data.sensor_calibration || {})
-        };
-        setDeviceConfig(unifiedData);
-      }
-    } catch (e) {
-      console.error("Lỗi tải cấu hình thiết bị:", e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const defaultIntervalSec = useMemo(
-    () => (appConfig?.publish_interval ? appConfig.publish_interval / 1000 : 5),
-    [appConfig]
-  );
-
-  const allSeasons = useMemo(() => {
-    const list = [...history];
-    if (activeSeason && !list.find(s => s.id === activeSeason.id)) {
-      list.unshift(activeSeason);
-    }
-    return list.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
-  }, [activeSeason, history]);
-
+  // Local Filter UI States
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('realtime');
   const [timeRange, setTimeRange] = useState<string>('24h');
   const [intervalMode, setIntervalMode] = useState<string>('default');
   const [customIntervalValue, setCustomIntervalValue] = useState<number>(60);
-  const [historyData, setHistoryData] = useState<any[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Danh sách mùa vụ
+  const allSeasons = useMemo(() => {
+    const list = [...seasonHistory];
+    if (activeSeason && !list.find(s => s.id === activeSeason.id)) {
+      list.unshift(activeSeason);
+    }
+    return list.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+  }, [activeSeason, seasonHistory]);
 
   const selectedSeason = useMemo(() => {
     if (selectedSeasonId === 'realtime') return null;
     return allSeasons.find(s => s.id.toString() === selectedSeasonId);
   }, [allSeasons, selectedSeasonId]);
 
-  // Tự động chuyển TimeRange sang "Toàn bộ" khi chọn mùa cụ thể
+  // Tự động chuyển TimeRange sang "Tất cả" khi chọn Mùa vụ cũ
   useEffect(() => {
     if (selectedSeasonId !== 'realtime') {
       setTimeRange('all');
     } else if (timeRange === 'all') {
-      setTimeRange('24h'); // Trả về 24h nếu quay lại Realtime
+      setTimeRange('24h');
     }
   }, [selectedSeasonId]);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // 1. Query lấy Unified Device Config thông qua TanStack Query
+  const { data: deviceConfig } = useQuery<UnifiedDeviceConfig | null>({
+    queryKey: ['device-config-unified', deviceId],
+    queryFn: async () => {
+      if (!deviceId || !settings?.backend_url) return null;
+      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/config/unified`, {
+        headers: {
+          'X-API-Key': settings.api_key || '',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return {
+        ...(data.device_config || {}),
+        ...(data.water_config || {}),
+        ...(data.safety_config || {}),
+        ...(data.dosing_calibration || {}),
+        ...(data.sensor_calibration || {})
+      } as UnifiedDeviceConfig;
+    },
+    enabled: Boolean(deviceId && settings?.backend_url),
+  });
 
-  const loadHistory = useCallback(async () => {
-    if (!deviceId || !appConfig) return;
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsFetching(true);
-    setFetchError(null);
-
-    let startIso = '';
-    let endIso = '';
+  // Tính toán khung thời gian ISO & độ phân giải (resolution)
+  const { startIso, endIso, resolution } = useMemo(() => {
     const now = new Date();
+    let start = '';
+    let end = '';
 
-    // Tính toán mốc thời gian thông minh
     if (selectedSeasonId !== 'realtime' && selectedSeason) {
       const seasonStart = new Date(selectedSeason.start_time);
       const seasonEnd = selectedSeason.end_time ? new Date(selectedSeason.end_time) : now;
-      endIso = getUtcIsoString(seasonEnd);
+      end = seasonEnd.toISOString();
 
       if (timeRange === 'all') {
-        startIso = getUtcIsoString(seasonStart);
+        start = seasonStart.toISOString();
       } else {
         const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
         const computedStart = new Date(seasonEnd.getTime() - diffHours * 60 * 60 * 1000);
-        // Không cho phép khoảng thời gian lùi quá thời điểm bắt đầu mùa vụ
-        startIso = getUtcIsoString(computedStart > seasonStart ? computedStart : seasonStart);
+        start = (computedStart > seasonStart ? computedStart : seasonStart).toISOString();
       }
     } else {
-      endIso = getUtcIsoString(now);
+      end = now.toISOString();
       const diffHours = timeRange === '24h' ? 24 : timeRange === '7d' ? 24 * 7 : 24 * 30;
-      startIso = getUtcIsoString(new Date(now.getTime() - diffHours * 60 * 60 * 1000));
+      start = new Date(now.getTime() - diffHours * 60 * 60 * 1000).toISOString();
     }
 
-    // Tự động tính độ phân giải dữ liệu (giảm tải cho Backend)
-    let resolution: string | undefined;
-    if (timeRange === '24h') resolution = undefined;
-    else if (timeRange === '7d') resolution = '5m';
-    else if (timeRange === '30d') resolution = '1h';
+    let res: string | undefined;
+    if (timeRange === '24h') res = undefined;
+    else if (timeRange === '7d') res = '5m';
+    else if (timeRange === '30d') res = '1h';
     else if (timeRange === 'all') {
-      const days = (new Date(endIso).getTime() - new Date(startIso).getTime()) / 86400000;
-      if (days > 30) resolution = '1h';
-      else if (days > 7) resolution = '30m';
-      else resolution = '5m';
+      const days = (new Date(end).getTime() - new Date(start).getTime()) / 86400000;
+      if (days > 30) res = '1h';
+      else if (days > 7) res = '30m';
+      else res = '5m';
     }
 
-    const fetchWithRetry = async (attempt = 1): Promise<any> => {
-      try {
-        const params = new URLSearchParams();
-        params.append('start', startIso);
-        params.append('end', endIso);
-        if (resolution) params.append('resolution', resolution);
+    return { startIso: start, endIso: end, resolution: res };
+  }, [selectedSeasonId, selectedSeason, timeRange]);
 
-        const url = `${appConfig.backend_url}/api/devices/${deviceId}/sensors/history?${params.toString()}`;
+  // 2. Query lấy Lịch sử cảm biến thông qua TanStack Query (Tự động Abort Request khi chuyển tab)
+  const {
+    data: historyData = [],
+    isLoading: isFetching,
+    isError,
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['sensor-history', deviceId, selectedSeasonId, timeRange, startIso, endIso, resolution],
+    queryFn: async ({ signal }) => {
+      if (!deviceId || !settings?.backend_url) return [];
+      const params = new URLSearchParams({ start: startIso, end: endIso });
+      if (resolution) params.append('resolution', resolution);
 
-        const response = await fetch(url, {
+      const response = await httpFetch(
+        `${settings.backend_url}/api/devices/${deviceId}/sensors/history?${params.toString()}`,
+        {
           method: 'GET',
-          headers: { 'X-API-Key': appConfig.api_key },
-          signal: controller.signal
-        });
-
-        if (response.ok) {
-          const text = await response.text();
-          if (text && text.trim() !== '') {
-            const res = JSON.parse(text);
-            return res.data || res;
-          }
-          return [];
-        } else if ((response.status === 502 || response.status === 503) && attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          return fetchWithRetry(attempt + 1);
-        } else {
-          throw new Error(`HTTP ${response.status}`);
+          headers: { 'X-API-Key': settings.api_key || '' },
+          signal, // Hỗ trợ ngắt request tự động từ TanStack Query
         }
-      } catch (error) {
-        if ((error as Error).name === 'AbortError') throw error;
-        throw error;
-      }
-    };
+      );
 
-    try {
-      const data = await fetchWithRetry();
-      const formatted = (data || []).map((d: any) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const text = await response.text();
+      if (!text || text.trim() === '') return [];
+      const res = JSON.parse(text);
+      const rawList = res.data || res || [];
+
+      return rawList.map((d: any) => {
         const dateObj = new Date(d.time);
         return {
           ...d,
@@ -306,24 +261,12 @@ const Analytics = () => {
             : dateObj.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         };
       });
-      setHistoryData(formatted);
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error("Fetch history error:", error);
-        setHistoryData([]);
-        setFetchError(error.message || 'Lỗi không xác định');
-      }
-    } finally {
-      if (abortControllerRef.current === controller) {
-        setIsFetching(false);
-      }
-    }
-  }, [deviceId, appConfig, selectedSeasonId, timeRange, selectedSeason]);
+    },
+    enabled: Boolean(deviceId && settings?.backend_url),
+  });
 
-  useEffect(() => {
-    const timer = setTimeout(loadHistory, 300);
-    return () => clearTimeout(timer);
-  }, [loadHistory]);
+  // Tần suất lọc dữ liệu (Interval)
+  const defaultIntervalSec = Number(settings?.publish_interval) ? Number(settings.publish_interval) / 1000 : 5;
 
   const effectiveIntervalMs = useMemo(() => {
     let seconds = 0;
@@ -333,13 +276,27 @@ const Analytics = () => {
     return seconds * 1000;
   }, [intervalMode, customIntervalValue, defaultIntervalSec]);
 
+  // 3. Lọc giảm mật độ điểm dữ liệu (Downsampling) bằng Module Gleam analytics.mjs
   const displayData = useMemo(() => {
     if (effectiveIntervalMs === 0 || historyData.length === 0) return historyData;
     const filtered = [];
     let lastTime = 0;
+
     for (let i = 0; i < historyData.length; i++) {
       const currentPoint = historyData[i];
-      if (i === 0 || i === historyData.length - 1 || currentPoint.timestamp - lastTime >= effectiveIntervalMs) {
+      const isFirst = i === 0;
+      const isLast = i === historyData.length - 1;
+
+      // Gọi hàm Gleam kiểm tra điều kiện giữ điểm dữ liệu
+      const keep = should_keep_sample(
+        currentPoint.timestamp,
+        lastTime,
+        effectiveIntervalMs,
+        isFirst,
+        isLast
+      );
+
+      if (keep) {
         filtered.push(currentPoint);
         lastTime = currentPoint.timestamp;
       }
@@ -347,26 +304,19 @@ const Analytics = () => {
     return filtered;
   }, [historyData, effectiveIntervalMs]);
 
-  if (isLoading) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4">
-        <Loader2 size={32} className="text-blue-500 animate-spin" />
-        <p className="text-sm font-medium text-emerald-700/75">Đang tải cấu hình...</p>
-      </div>
-    );
-  }
-
+  // --- RENDER GIAO DIỆN ---
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 pb-28">
       <PageHeader
         icon={ChartIcon}
-        title="Phân Tích"
-      // subtitle="Theo dõi biến động và khai thác dữ liệu chuỗi thời gian"
+        title="Phân Tích Dữ Liệu"
+        subtitle="Theo dõi biến động và khai thác chuỗi thời gian"
       />
 
+      {/* Bộ Lọc Dashboard */}
       <div className="bg-white border border-emerald-100 rounded-xl p-4 md:p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Lọc Mùa Vụ */}
+          {/* Chọn Mùa Vụ */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-emerald-800/80 flex items-center gap-1.5 pl-1">
               <Filter size={14} className="text-emerald-500" /> Mùa vụ
@@ -379,30 +329,29 @@ const Analytics = () => {
               <option value="realtime">Mùa hiện tại</option>
               {allSeasons.map((s) => (
                 <option key={s.id} value={s.id.toString()}>
-                  {s.name} {s.end_time ? '(Đã lưu)' : '(Đang chạy)'}
+                  {s.name} {s.end_time ? '(Đã kết thúc)' : '(Đang chạy)'}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Khung Thời Gian */}
+          {/* Chọn Khung Thời Gian */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-emerald-800/80 flex items-center gap-1.5 pl-1">
-              <Clock size={14} className="text-blue-500" /> Thời gian
+              <Clock size={14} className="text-blue-500" /> Khung thời gian
             </label>
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value)}
               className="bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600"
             >
-              {selectedSeasonId !== 'realtime' && <option value="all">Toàn bộ mùa vụ</option>}
-              <option value="24h">24 Giờ {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
-              <option value="7d">7 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option>
-              {/* <option value="30d">30 Ngày {selectedSeason?.end_time ? 'cuối' : 'qua'}</option> */}
+              {selectedSeasonId !== 'realtime' && <option value="all">Tất cả</option>}
+              <option value="24h">24 Giờ {selectedSeason?.end_time ? 'cuối' : 'vừa qua'}</option>
+              <option value="7d">7 Ngày {selectedSeason?.end_time ? 'cuối' : 'vừa qua'}</option>
             </select>
           </div>
 
-          {/* Tần Suất Lọc */}
+          {/* Chọn Tần Suất Lọc */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-emerald-800/80 flex items-center gap-1.5 pl-1">
               <Timer size={14} className="text-purple-500" /> Tần suất điểm
@@ -414,10 +363,10 @@ const Analytics = () => {
                 className="flex-1 bg-white border border-emerald-100 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-purple-500"
               >
                 <option value="default">Không Lọc (Mặc định)</option>
-                <option value="60">1 Phút / Điểm</option>
-                <option value="300">5 Phút / Điểm</option>
-                <option value="900">15 Phút / Điểm</option>
-                <option value="1800">30 Phút / Điểm</option>
+                <option value="60">1 Phút / điểm</option>
+                <option value="300">5 Phút / điểm</option>
+                <option value="900">15 Phút / điểm</option>
+                <option value="1800">30 Phút / điểm</option>
                 <option value="custom">Tùy chỉnh...</option>
               </select>
               {intervalMode === 'custom' && (
@@ -427,7 +376,7 @@ const Analytics = () => {
                     min={defaultIntervalSec}
                     value={customIntervalValue}
                     onChange={(e) => setCustomIntervalValue(Number(e.target.value))}
-                    className="w-full h-full bg-white border border-purple-500/50 text-purple-300 text-sm rounded-lg px-2 text-center outline-none focus:border-purple-500"
+                    className="w-full h-full bg-white border border-purple-500/50 text-purple-950 text-sm rounded-lg px-2 text-center outline-none focus:border-purple-500"
                     placeholder="giây"
                   />
                 </div>
@@ -437,20 +386,21 @@ const Analytics = () => {
         </div>
       </div>
 
+      {/* Khu vực hiển thị Biểu đồ */}
       <div className="pt-2">
         {isFetching ? (
           <div className="h-[40vh] flex flex-col items-center justify-center gap-4">
             <Loader2 size={32} className="text-blue-500 animate-spin" />
-            <p className="text-sm font-medium text-emerald-700/75">Đang trích xuất dữ liệu chuỗi thời gian...</p>
+            <p className="text-sm font-medium text-emerald-700/75">Đang trích xuất chuỗi thời gian...</p>
           </div>
-        ) : fetchError ? (
+        ) : isError ? (
           <div className="h-[40vh] flex flex-col items-center justify-center gap-4 text-center">
             <AlertTriangle size={32} className="text-amber-500" />
-            <p className="text-sm font-medium text-emerald-900">Lỗi tải dữ liệu</p>
-            <p className="text-xs text-emerald-700/75 max-w-md">{fetchError}</p>
+            <p className="text-sm font-medium text-emerald-950">Không thể tải dữ liệu lịch sử</p>
+            <p className="text-xs text-emerald-700/75 max-w-md">{(error as Error)?.message || 'Lỗi không xác định'}</p>
             <button
-              onClick={() => loadHistory()}
-              className="mt-2 px-4 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600"
+              onClick={() => refetch()}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors"
             >
               Thử lại
             </button>
@@ -458,30 +408,27 @@ const Analytics = () => {
         ) : displayData.length === 0 ? (
           <StateView
             icon={ActivitySquare}
-            title="Dữ liệu trống"
-            description="Chưa có bản ghi nào trong khung thời gian này."
+            title="Chưa có dữ liệu"
+            description="Không có ghi nhận nào trong khung thời gian này."
             className="h-[40vh]"
           />
         ) : (
           <div className="space-y-6">
             {/* EC Chart */}
             {isSensorEnabled(deviceConfig?.enable_ec_sensor) && (
-              <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS" icon={Activity} />
+              <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS/cm" icon={Activity} />
             )}
-
             {/* pH Chart */}
             {isSensorEnabled(deviceConfig?.enable_ph_sensor) && (
-              <FlatChartCard title="Chỉ Số cân bằng (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
+              <FlatChartCard title="Chỉ số nồng độ (pH)" data={displayData} dataKey="ph" color="fuchsia" unit="pH" icon={Droplets} />
             )}
-
             {/* Nhiệt độ */}
             {isSensorEnabled(deviceConfig?.enable_temp_sensor) && (
-              <FlatChartCard title="Nhiệt Độ môi trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
+              <FlatChartCard title="Nhiệt độ môi trường" data={displayData} dataKey="temp" color="orange" unit="°C" icon={Thermometer} />
             )}
-
             {/* Mực nước */}
             {isSensorEnabled(deviceConfig?.enable_water_level_sensor) && (
-              <FlatChartCard title="Mực nước (%)" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
+              <FlatChartCard title="Mực nước bồn" data={displayData} dataKey="water_level" color="blue" unit="%" icon={Waves} />
             )}
           </div>
         )}

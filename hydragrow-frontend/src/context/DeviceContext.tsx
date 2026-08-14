@@ -6,6 +6,9 @@ import { getItem, setItem } from '../platform/storage';
 import { hasRequiredRemoteConfig, isTauriRuntime, loadAppSettings } from '../platform/settings';
 import { debugLog } from '../lib/redact';
 
+// --- IMPORT LOGIC ĐÃ BIÊN DỊCH TỪ GLEAM ---
+import { friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
+
 interface FriendlyState {
   label: string;
   description: string;
@@ -28,8 +31,8 @@ interface DeviceContextType {
   isControllerStatusKnown: boolean;
   controllerHealth: any;
   fsmState: string;
-  friendlyState: FriendlyState; // 🌟 THÊM MỚI: Trạng thái thân thiện với người dùng cuối
-  computedHealth: ComputedHealth; // 🌟 THÊM MỚI: Trạng thái sức khỏe trực quan hóa đơn giản
+  friendlyState: FriendlyState;
+  computedHealth: ComputedHealth;
   isLoading: boolean;
   systemEvents: any[];
   isSensorOnline: boolean;
@@ -68,7 +71,6 @@ const createOfflineSensorSnapshot = (deviceId: string): SensorData => ({
 
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus as any;
-
   const mapped: Record<string, string> = {
     PUMP_A: 'pump_a',
     PUMP_B: 'pump_b',
@@ -81,7 +83,6 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
     WATER_PUMP_IN: 'water_pump_in',
     WATER_PUMP_OUT: 'water_pump_out'
   };
-
   const normalized: any = { ...defaultPumpStatus };
   const booleanKeys = [
     'pump_a',
@@ -93,17 +94,14 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
     'water_pump_in',
     'water_pump_out'
   ];
-
   Object.entries(rawPumpStatus).forEach(([key, value]) => {
     const normalizedKey = mapped[key] || mapped[key.toUpperCase()] || key.toLowerCase();
-
     if (booleanKeys.includes(normalizedKey)) {
       normalized[normalizedKey] = Boolean(value);
     } else if (normalizedKey.includes('pwm')) {
       normalized[normalizedKey] = Number(value);
     }
   });
-
   return normalized;
 };
 
@@ -141,7 +139,14 @@ const flattenUnifiedConfig = (raw: any) => {
 
 const phaseToString = (phase: any): string | null => {
   if (phase == null) return null;
-  if (typeof phase === 'string') return phase;
+  if (typeof phase === 'string') {
+    if (phase.startsWith('{')) {
+      try {
+        return phaseToString(JSON.parse(phase));
+      } catch (_) { }
+    }
+    return phase;
+  }
   if (typeof phase === 'object') {
     const key = Object.keys(phase)[0];
     const value = key ? phase[key] : null;
@@ -156,19 +161,15 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [isMissingConfig, setIsMissingConfig] = useState(false);
-
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [controllerHealth, setControllerHealth] = useState<any>(null);
-
   const [deviceStatus, setDeviceStatus] = useState<StatusPayload>({ is_online: false, last_seen: '' });
   const [isControllerStatusKnown, setIsControllerStatusKnown] = useState(false);
   const [fsmState, setFsmState] = useState<string>("Offline");
   const [systemEvents, setSystemEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
   const [isSensorOnline, setIsSensorOnline] = useState<boolean>(false);
   const [pwmPreferences, setPwmPreferences] = useState<Record<string, number>>({});
-
   const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshSettings = useCallback(async () => {
@@ -187,7 +188,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           }
         } catch (_) { }
       }
-
       setSettings(mergedSettings);
       setDeviceId(s.device_id || null);
       if (!isTauriRuntime() && !hasRequiredRemoteConfig(s)) {
@@ -202,10 +202,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const resetSensorTimeout = useCallback(() => {
     if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
-
     sensorTimeoutRef.current = setTimeout(() => {
       setIsSensorOnline(false);
-      toast.error("Mất tín hiệu từ bồn chứa. Đang hiển thị dữ liệu lưu lần cuối.");
+      toast.error("Mất tín hiệu cảm biến; hiển thị giá trị cuối.");
     }, 65000);
   }, []);
 
@@ -238,7 +237,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const applyDeviceSnapshot = useCallback((snapshot: any) => {
     if (!snapshot || typeof snapshot !== 'object') return;
-
     const state = snapshot.fsm_state || snapshot.fsm_phase || snapshot.current_phase || snapshot.current_state;
     if (state) {
       setFsmState(phaseToString(state) || 'Monitoring');
@@ -252,7 +250,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     if (snapshot.pump_status) {
       applyPumpStatus(normalizePumpStatus(snapshot.pump_status));
     }
-
     if (
       snapshot.ec !== undefined ||
       snapshot.ph !== undefined ||
@@ -278,12 +275,9 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshDeviceSnapshot = useCallback(async () => {
     if (!deviceId || !settings?.backend_url) return;
-
     const cachedPwmPrefs = await loadPwmPrefsFromStore();
     if (cachedPwmPrefs) setPwmPreferences(cachedPwmPrefs);
-
     const headers = { 'Content-Type': 'application/json', 'X-API-Key': settings.api_key || '' };
-
     try {
       const response = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/sensors/latest`, {
         method: 'GET',
@@ -294,7 +288,6 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         applyDeviceSnapshot(resData.data || resData);
       }
     } catch (_) { }
-
     try {
       const response = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/state`, {
         method: 'GET',
@@ -307,58 +300,29 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
     } catch (_) { }
   }, [applyDeviceSnapshot, deviceId, settings]);
 
-  // 🌟 CƠ CHẾ UX MỚI 1: Trừu tượng hóa FSM Core cứng nhắc thành câu thoại ngôn ngữ tự nhiên
+  // --- TRẠNG THÁI THÂN THIỆN FSM (Xử lý thông qua Gleam Module fsm.gleam) ---
   const friendlyState = useMemo<FriendlyState>(() => {
-    if (!deviceStatus.is_online || fsmState === 'Offline') {
-      return { label: 'Ngoại tuyến', description: 'Trạm điều khiển đang mất kết nối mạng.', type: 'danger' };
-    }
-    if (fsmState.startsWith('SystemFault:')) {
-      const code = fsmState.replace('SystemFault:', '').trim();
-      return { label: `Cần kiểm tra: ${code}`, description: 'Hệ thống đã tạm dừng để đảm bảo an toàn cho cây.', type: 'danger' };
-    }
-    if (fsmState.startsWith('EmergencyStop:')) {
-      return { label: 'Dừng khẩn cấp', description: 'Phần cứng đã bị ngắt kích hoạt toàn bộ do lệnh cưỡng chế.', type: 'danger' };
-    }
-    if (fsmState.startsWith('SensorCalibration:')) {
-      return { label: 'Đang hiệu chuẩn', description: 'Đang trong quá trình tinh chỉnh độ nhạy đầu dò cảm biến.', type: 'info' };
-    }
-
-    switch (fsmState) {
-      case 'Booting':
-      case 'SystemBooting':
-        return { label: 'Đang khởi động', description: 'Thiết bị đang rà soát cấu trúc hệ thống thủy lực.', type: 'info' };
-      case 'Monitoring':
-        return { label: 'Đang chăm sóc tự động', description: 'Mô hình thông minh đang tối ưu môi trường sinh trưởng lý tưởng.', type: 'success' };
-      case 'MimoDosing':
-        return { label: 'Đang bổ sung vi chất', description: 'Hệ thống đang tự cân bằng dinh dưỡng và độ pH bồn chứa.', type: 'mist' };
-      case 'ActiveMixing':
-        return { label: 'Đang sục trộn phân đều', description: 'Bơm trộn tuần hoàn đang hòa tan đều hóa chất trong nước.', type: 'info' };
-      case 'Stabilizing':
-        return { label: 'Đang lắng bão hòa', description: 'Chờ dòng nước tĩnh lặng để cảm biến chốt số liệu bão hòa.', type: 'warn' };
-      case 'Cooldown':
-        return { label: 'Đang nghỉ ngơi dưỡng bồn', description: 'Hệ thống tạm khóa bảo vệ để hóa chất thẩm thấu an toàn.', type: 'warn' };
-      case 'ManualMode':
-        return { label: 'Chế độ thủ công', description: 'Người dùng đang vận hành rơ-le bằng tay qua bảng điều khiển.', type: 'warn' };
-      default:
-        return { label: fsmState, description: 'Đang thực thi tác vụ nền.', type: 'default' };
-    }
+    const res = friendly_state(fsmState || 'Monitoring', deviceStatus.is_online);
+    return {
+      label: res.label,
+      description: res.description,
+      type: res.tone as any
+    };
   }, [fsmState, deviceStatus.is_online]);
 
-  // 🌟 CƠ CHẾ UX MỚI 2: Đơn giản hóa bảng chẩn đoán lỗi thành thanh Sức khỏe người dùng (Consumer UI)
+  // --- ĐIỂM SỨC KHỎE TRẠM (Xử lý thông qua Gleam Module fsm.gleam) ---
   const computedHealth = useMemo<ComputedHealth>(() => {
     const rawScore = controllerHealth?.health_score_percent ?? controllerHealth?.diagnostics?.health_score_percent;
-    const score = typeof rawScore === 'number' ? rawScore : 100;
+    const scoreInt = typeof rawScore === 'number' ? Math.round(rawScore) : -1;
 
-    if (!deviceStatus.is_online) {
-      return { score: 0, label: 'Mất kết nối', color: 'bg-rose-500', description: 'Không có dữ liệu chẩn đoán từ thiết bị ngoại vi.' };
-    }
-    if (score >= 90) {
-      return { score, label: 'Hệ thống hoàn hảo', color: 'bg-emerald-500', description: 'Mọi mạch điện, rơ-le và đường ống silicon đều hoạt động tuyệt vời.' };
-    }
-    if (score >= 60) {
-      return { score, label: 'Cần lưu ý', color: 'bg-amber-500', description: 'Phát hiện có mạch châm bị gợn bọt khí hoặc phản ứng hóa chất chậm nhẹ.' };
-    }
-    return { score, label: 'Yêu cầu kiểm tra', color: 'bg-rose-500', description: 'Phát hiện có đường ống bị nghẹt hoặc một bình chứa thuốc đã cạn.' };
+    const res = compute_health_safe(deviceStatus.is_online, scoreInt);
+
+    return {
+      score: res.score,
+      label: res.label,
+      color: res.color,
+      description: res.description,
+    };
   }, [controllerHealth, deviceStatus.is_online]);
 
   useEffect(() => {
@@ -388,20 +352,17 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!deviceId || !settings) return;
-
     let ws: WebSocket;
     let pingInterval: ReturnType<typeof setTimeout>;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     const setupConnection = async () => {
       setIsLoading(true);
-
       const cachedPumpStatus = await loadPumpStatusFromStore();
       if (cachedPumpStatus) applyPumpStatus(cachedPumpStatus);
       setSensorData(prev => prev || createOfflineSensorSnapshot(deviceId));
       setIsLoading(false);
       refreshDeviceSnapshot().catch(() => { });
-
       try {
         const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/events`, {
           method: 'GET',
@@ -417,19 +378,16 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
         const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
         const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws`;
         ws = new WebSocket(wsUrl);
-
         ws.onopen = () => {
-          console.log('🟢 [GlobalContext] Đã kết nối tới Server WebSocket');
+          console.log('🔗 [GlobalContext] Đã kết nối Server WebSocket');
           ws.send(JSON.stringify({ type: 'auth', api_key: settings.api_key }));
           setIsControllerStatusKnown(false);
           resetSensorTimeout();
-
           httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
             method: 'POST',
             headers: { 'X-API-Key': settings.api_key }
-          }).catch(() => debugLog("Lỗi gửi lệnh Sync ban đầu"));
+          }).catch(() => debugLog("Lỗi Sync ban đầu"));
           refreshDeviceSnapshot().catch(() => { });
-
           pingInterval = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) ws.send('ping');
           }, 25000);
@@ -439,30 +397,23 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
           try {
             const data = JSON.parse(event.data);
             console.log("📥 RAW WS MESSAGE:", data.type || data._msg_type);
-
             if (data._msg_type === 'fsm_status' || data.type === 'fsm_status') {
               const payload = data.payload || data;
-
               let newState = payload.current_state || payload.current_phase;
               if (newState) {
                 setFsmState(phaseToString(newState) || 'Monitoring');
               }
-
               if (payload.budgets) {
                 setDeviceStatus(prev => ({ ...prev, budgets: payload.budgets }));
               }
-
               if (payload.pump_status && Object.keys(payload.pump_status).length > 0) {
                 applyPumpStatus(normalizePumpStatus(payload.pump_status));
               }
-
               return;
             }
-
             if (data.type === 'fsm_state_update') {
               const payload = data.payload || {};
               const newState = payload.current_phase || payload.current_state || payload.fsm_state;
-
               if (newState) {
                 setFsmState(phaseToString(newState) || 'Monitoring');
               }
@@ -483,21 +434,17 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               if (payload.pump_status) {
                 applyPumpStatus(normalizePumpStatus(payload.pump_status));
               }
-
               return;
             }
-
             if (data.type === 'device_status') {
               const payload = data.payload || {};
               const isOnline: boolean = payload.is_online ?? payload.online ?? false;
-
               setIsControllerStatusKnown(true);
               setDeviceStatus(prev => {
                 if (prev.is_online !== isOnline) {
-                  if (isOnline) toast.success("Trạm điều khiển đã trực tuyến trở lại.");
-                  else toast.error("Trạm điều khiển đã ngắt kết nối mạng.");
+                  if (isOnline) toast.success("Trạm điều khiển trực tuyến trở lại.");
+                  else toast.error("Trạm điều khiển ngắt kết nối.");
                 }
-
                 return {
                   ...prev,
                   ...payload,
@@ -505,58 +452,52 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                   last_seen: new Date().toISOString()
                 };
               });
-
               if (!isOnline) {
                 setFsmState("Offline");
               }
               return;
             }
-
             if (data.type === 'alert') {
               const alert = data.payload;
-
               if (alert.title === 'Trạng thái Trạm Điều Khiển') {
                 const isOnline = alert.level === 'success';
                 setDeviceStatus({ is_online: isOnline, last_seen: new Date().toISOString() });
                 setIsControllerStatusKnown(true);
                 if (isOnline) {
-                  toast.success("Trạm điều khiển đã trực tuyến.");
+                  toast.success("Trạm điều khiển trực tuyến.");
                 } else {
                   setFsmState("Offline");
                   setSensorData(prev => prev ? { ...prev, pump_status: {} as any } : prev);
-                  toast.error("Trạm điều khiển đã mất kết nối mạng.");
+                  toast.error("Trạm điều khiển ngắt kết nối.");
                 }
                 return;
               }
-
-              if (alert.title === 'Trạng thái Mạch Cảm Biến') {
+              if (alert.title === 'Trạng thái Cặp Cảm Biến') {
                 const onlineStatus = alert.level === 'success';
                 setIsSensorOnline(onlineStatus);
                 if (!onlineStatus) {
-                  toast.error("Hộp cảm biến bồn chứa đã ngắt kết nối.");
+                  toast.error("Hệ cảm biến ngắt kết nối.");
                   setSensorData(prev => prev ? { ...prev, err_water: true, err_temp: true, err_ph: true, err_ec: true } : prev);
                   if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
                 } else {
-                  toast.success("Tín hiệu bồn chứa đã trực tuyến.");
+                  toast.success("Tín hiệu cảm biến trực tuyến.");
                   resetSensorTimeout();
                 }
                 return;
               }
-
               setSystemEvents(prev => [alert, ...prev].slice(0, 50));
               if (alert.level === 'critical' || alert.level === 'warning') {
                 toast.error(`${alert.title}\n${alert.message}`, { id: 'sys-alert', duration: 4000 });
               } else if (alert.level === 'success') {
                 toast.success(`✅ ${alert.title}\n${alert.message}`, { id: 'sys-success', duration: 3000 });
-              } return;
+              }
+              return;
             }
-
             if (data.type === 'sensor_update') {
               const incomingPayload = data.payload.data || data.payload;
               const incomingPumpStatus = incomingPayload?.pump_status
                 ? normalizePumpStatus(incomingPayload.pump_status)
                 : null;
-
               setSensorData(prev => {
                 if (!prev) {
                   return {
@@ -582,14 +523,11 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                   ph_voltage_mv: incomingPayload.ph_voltage_mv !== undefined ? incomingPayload.ph_voltage_mv : prev.ph_voltage_mv,
                 };
               });
-
               if (incomingPumpStatus) savePumpStatusToStore(incomingPumpStatus);
-
               setIsSensorOnline(true);
               resetSensorTimeout();
               return;
             }
-
             if (data.type === 'controller_status') {
               const payload = data.payload || {};
               const healthState = payload.fsm_state_display ?? payload.fsm_state ?? payload.current_phase;
@@ -609,10 +547,8 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
               }
               return;
             }
-
             if (data.type === 'device_health' || data.type === 'health_snapshot') {
               const healthData = data.payload;
-
               setControllerHealth({
                 rssi: healthData.rssi,
                 free_heap: healthData.free_heap,
@@ -626,38 +562,30 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
                 hestia: healthData.hestia || null,
                 diagnostics: healthData.diagnostics || null
               });
-
               const healthState = healthData.fsm_state_display ?? healthData.fsm_state;
               if (healthState) {
-                setFsmState(typeof healthState === 'object' ? JSON.stringify(healthState) : String(healthState));
+                setFsmState(phaseToString(healthState) || 'Monitoring');
               }
-
               if (healthData.budgets && Object.keys(healthData.budgets).length > 0) {
                 setDeviceStatus(prev => ({ ...prev, budgets: healthData.budgets }));
               }
-
               if (healthData.pump_status) {
                 applyPumpStatus(normalizePumpStatus(healthData.pump_status));
               }
-
               setDeviceStatus(prev => !prev.is_online ? { is_online: true, last_seen: new Date().toISOString() } : prev);
               setIsControllerStatusKnown(true);
               return;
             }
-
           } catch (err) {
-            console.error("Lỗi xử lý luồng WS Message:", err);
+            console.error("Lỗi ngắt WS Message:", err);
           }
         };
 
         ws.onclose = () => {
-          debugLog('🔴 [GlobalContext] Mất kết nối WebSocket. Đang tự động cấu hình lại...');
-          // setDeviceStatus({ is_online: false, last_seen: '' });
-          // setIsControllerStatusKnown(true);
+          debugLog('❌ [GlobalContext] Mất kết nối WebSocket. Đang tự động kết nối lại...');
           setIsSensorOnline(false);
           clearInterval(pingInterval);
           if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
-
           reconnectTimeout = setTimeout(() => { connectWs(); }, 5000);
         };
 
@@ -683,7 +611,7 @@ export const DeviceProvider = ({ children }: { children: ReactNode }) => {
   return (
     <DeviceContext.Provider value={{
       deviceId, sensorData, deviceStatus, isControllerStatusKnown, controllerHealth, fsmState, isLoading,
-      friendlyState, computedHealth, // 🌟 Khai thông mạch ống dữ liệu hướng người dùng cuối lên các trang UI
+      friendlyState, computedHealth,
       settings, systemEvents, isSensorOnline, isMissingConfig,
       pwmPreferences, savePwmPreference, refreshSettings, refreshDeviceSnapshot
     }}>

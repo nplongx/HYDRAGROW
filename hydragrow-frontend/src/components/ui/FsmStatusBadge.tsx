@@ -1,9 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { FaultExplanation, getFaultGuide } from './FaultExplanation';
 
+// File: components/ui/FsmStatusBadge.tsx
+
 export const extractFaultCode = (state?: string): string | null => {
-  if (state?.startsWith('SystemFault:')) return state.replace('SystemFault:', '').trim();
-  if (state?.startsWith('Fault:')) return state.replace('Fault:', '').trim();
+  if (!state) return null;
+  
+  if (state.startsWith('SystemFault:')) return state.replace('SystemFault:', '').trim();
+  if (state.startsWith('Fault:')) return state.replace('Fault:', '').trim();
+  
+  // 🟢 Bổ sung: Bắt trường hợp chuỗi JSON thô {"Fault":"PhDosingFailed"}
+  if (state.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(state);
+      if (parsed.Fault) return String(parsed.Fault).trim();
+    } catch (_) {}
+  }
   return null;
 };
 

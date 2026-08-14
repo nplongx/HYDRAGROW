@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import path from 'path';
 
 const tauriDevHost = process.env.TAURI_DEV_HOST;
 const isTauriDevRuntime = Boolean(tauriDevHost);
@@ -33,15 +34,20 @@ export default defineConfig(({ mode }) => {
       host: true,
       hmr: isTauriDevRuntime
         ? {
-            protocol: "ws",
-            host: tauriDevHost,
-            port: 1421,
-          }
+          protocol: "ws",
+          host: tauriDevHost,
+          port: 1421,
+        }
         : undefined,
       watch: {
         // Ignore Tauri Rust sources when running Vite watcher.
         ignored: ["**/src-tauri/**"],
       },
     },
-  };
-});
+
+    resolve: {
+      alias: {
+        '@gleam': path.resolve(__dirname, './gleam_core/build/dev/javascript/gleam_core')
+      }
+    }
+  }});

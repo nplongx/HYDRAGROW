@@ -13,36 +13,38 @@ import {
   Leaf,
   Box
 } from 'lucide-react';
-import { useDeviceContext } from '../../context/DeviceContext';
+
+// Import Zustand Store & Sync Hook
+import { useDeviceStore } from '../../store/useDeviceStore';
+import { useDeviceSync } from '../../hooks/useDeviceSync';
 
 const MainLayout: React.FC = () => {
+  // Khởi chạy Sync WebSocket / REST Polling 1 lần duy nhất ở cấp Layout
+  useDeviceSync();
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Lấy dữ liệu systemEvents từ Context thay vì tự fetch
-  const { isSensorOnline, systemEvents, isMissingConfig } = useDeviceContext();
+  // Selector: CHỈ re-render khi các trường dữ liệu cụ thể này thay đổi!
+  const isSensorOnline = useDeviceStore((state) => state.isSensorOnline);
+  const isMissingConfig = useDeviceStore((state) => state.isMissingConfig);
+  const systemEvents = useDeviceStore((state) => state.systemEvents);
 
-  // Tự động tính số lượng thông báo chưa đọc / cảnh báo mới trong 24h
+  // Tính số lượng thông báo chưa đọc trong 24h
   const unreadAlertCount = useMemo(() => {
     if (!systemEvents || !Array.isArray(systemEvents)) return 0;
-
     return systemEvents.filter((ev: any) => {
       const ts = ev?.timestamp ? new Date(ev.timestamp).getTime() : 0;
       if (!ts || Number.isNaN(ts)) return false;
-
-      // Lọc các cảnh báo trong 24h qua có level là warning/critical
       const within24h = Date.now() - ts <= 24 * 60 * 60 * 1000;
       const level = String(ev?.level || '').toLowerCase();
       const isWarning = level === 'warning' || level === 'critical' || level === 'error';
-
-      // Nếu dữ liệu của bạn có cờ is_read, hãy thêm điều kiện: && !ev.is_read
       return within24h && isWarning;
     }).length;
   }, [systemEvents]);
 
-  // Đóng menu "Thêm" khi chuyển trang
   useEffect(() => {
     setIsMenuOpen(false);
   }, [location.pathname]);
@@ -62,24 +64,23 @@ const MainLayout: React.FC = () => {
 
   const isActiveMore = moreMenuItems.some(item => location.pathname === item.path);
 
-
   if (isMissingConfig) {
     return (
       <div className="min-h-screen bg-emerald-50 text-emerald-950 flex items-center justify-center p-6">
         <div className="max-w-md w-full ui-card text-center space-y-3">
           <h2 className="text-xl font-semibold">Thiếu cấu hình ứng dụng</h2>
           <p className="text-emerald-800/75 text-sm">
-            Ứng dụng web chưa có <b>backend URL</b> hoặc <b>API key</b>. Hãy cung cấp qua
+            Ứng dụng web cần <b>backend URL</b> hoặc <b>API key</b>. Hãy cung cấp qua
             <code className="mx-1">window.__APP_CONFIG__</code>, localStorage hoặc <code>/config.json</code>.
           </p>
         </div>
       </div>
     );
   }
+
   return (
     <div className="flex flex-col h-screen bg-emerald-50 text-emerald-950 font-sans overflow-hidden">
-
-      {/* 🟢 Top Header (Trạng thái thiết bị) */}
+      {/* Top Header */}
       <header className="flex items-center justify-between px-5 py-3 bg-white border-b border-emerald-100 z-30 pt-[calc(env(safe-area-inset-top)+12px)] shadow-sm shadow-emerald-950/5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-sm">
@@ -87,28 +88,26 @@ const MainLayout: React.FC = () => {
           </div>
           <div>
             <h1 className="text-sm font-bold tracking-tight leading-none text-emerald-950">HydraGrow Khí Canh</h1>
-            <p className="text-[10px] text-emerald-700/75 font-semibold mt-0.5">Trung tâm vận hành vườn</p>
+            <p className="text-[10px] text-emerald-700/75 font-semibold mt-0.5">Trung tâm vận hành</p>
           </div>
         </div>
-
         <div className={`farm-status-pill ${isSensorOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           <Activity size={12} />
           {isSensorOnline ? 'Đang kết nối' : 'Mất tín hiệu'}
         </div>
       </header>
 
-      {/* 🟢 Main Content Area */}
+      {/* Main Content */}
       <main className="flex-1 overflow-y-auto pb-24 relative z-10 custom-scrollbar scroll-smooth">
         <Outlet />
       </main>
 
-      {/* 🟢 Overlay mờ khi mở Menu "Thêm" */}
+      {/* More Menu Overlay & Popup */}
       <div
         className={`fixed inset-0 bg-emerald-950/35 backdrop-blur-sm z-40 transition-opacity duration-300 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setIsMenuOpen(false)}
       />
 
-      {/* 🟢 Menu "Thêm" (Popup từ dưới lên) */}
       <div
         ref={menuRef}
         className={`fixed bottom-[84px] left-4 right-4 z-50 transition-all duration-300 ease-out ${isMenuOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}
@@ -133,7 +132,7 @@ const MainLayout: React.FC = () => {
         </div>
       </div>
 
-      {/* 🟢 Bottom Navigation Bar (Minimalist Flat Design) */}
+      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-emerald-100 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_rgba(20,83,45,0.08)]">
         <div className="flex items-center justify-around h-16 px-2">
           {mainNavItems.map((item) => {
@@ -153,8 +152,6 @@ const MainLayout: React.FC = () => {
                 <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActive ? 'text-emerald-800' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
                   {item.label}
                 </span>
-
-                {/* Dấu chấm active thay thế cho gạch chân rườm rà */}
                 {isActive && (
                   <div className="absolute top-1 w-1 h-1 bg-emerald-700 rounded-full" />
                 )}
@@ -162,7 +159,6 @@ const MainLayout: React.FC = () => {
             );
           })}
 
-          {/* Nút "Thêm" (More Menu) */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="relative flex flex-col items-center justify-center w-full h-full group"

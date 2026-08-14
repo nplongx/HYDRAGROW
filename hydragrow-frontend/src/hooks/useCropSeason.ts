@@ -1,133 +1,83 @@
 // src/hooks/useCropSeason.ts
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CropSeason } from '../types/models';
-import toast from 'react-hot-toast';
-import { useDeviceContext } from '../context/DeviceContext';
+import { useDeviceStore } from '../store/useDeviceStore';
 import { httpFetch } from '../platform/http';
+import toast from 'react-hot-toast';
 
 export const useCropSeason = () => {
-  const { deviceId, settings } = useDeviceContext();
-  const [activeSeason, setActiveSeason] = useState<CropSeason | null>(null);
-  const [history, setHistory] = useState<CropSeason[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const deviceId = useDeviceStore((s) => s.deviceId);
+  const settings = useDeviceStore((s) => s.settings);
 
-  const getHeaders = useCallback(() => ({
+  const baseUrl = `${settings?.backend_url}/api/devices/${deviceId}/seasons`;
+  const headers = {
     'Content-Type': 'application/json',
-    'X-API-Key': settings?.api_key || ''
-  }), [settings]);
-
-  // Hàm parse an toàn để fix lỗi Tauri Stream
-  const safeJsonParse = async (res: Response) => {
-    const text = await res.text();
-    if (!text || text.trim() === '') return null;
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.warn("Không thể parse JSON:", text);
-      return null;
-    }
+    'X-API-Key': settings?.api_key || '',
   };
 
-  const loadSeasons = useCallback(async () => {
-    if (!deviceId || !settings?.backend_url) return;
-    setIsLoading(true);
-    try {
-      const baseUrl = `${settings.backend_url}/api/devices/${deviceId}/seasons`;
+  // 1. Query lấy Active Season
+  const activeSeasonQuery = useQuery<CropSeason | null>({
+    queryKey: ['seasons', deviceId, 'active'],
+    queryFn: async () => {
+      const res = await httpFetch(`${baseUrl}/active`, { headers });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json?.data || null;
+    },
+    enabled: Boolean(deviceId && settings?.backend_url),
+  });
 
-      // 1. Load active season
-      const activeRes = await httpFetch(`${baseUrl}/active`, { method: 'GET', headers: getHeaders() });
-      if (activeRes.ok) {
-        const activeData = await safeJsonParse(activeRes);
-        setActiveSeason(activeData?.data || null);
-      } else {
-        console.warn(`Lỗi API Active Season: ${activeRes.status}`);
-      }
+  // 2. Query lấy Lịch sử các mùa vụ
+  const seasonHistoryQuery = useQuery<CropSeason[]>({
+    queryKey: ['seasons', deviceId, 'history'],
+    queryFn: async () => {
+      const res = await httpFetch(baseUrl, { headers });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json?.data || [];
+    },
+    enabled: Boolean(deviceId && settings?.backend_url),
+  });
 
-      // 2. Load history
-      const historyRes = await httpFetch(baseUrl, { method: 'GET', headers: getHeaders() });
-      if (historyRes.ok) {
-        const historyData = await safeJsonParse(historyRes);
-        setHistory(historyData?.data || []);
-      } else {
-        console.warn(`Lỗi API History: ${historyRes.status}`);
-      }
-    } catch (error) {
-      console.error("Lỗi tải dữ liệu mùa vụ:", error);
-      toast.error("Không thể tải thông tin mùa vụ");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [deviceId, settings, getHeaders]);
-
-  useEffect(() => {
-    loadSeasons();
-  }, [loadSeasons]);
-
-  const createSeason = async (name: string, plantType: string, description: string = '') => {
-    if (!deviceId || !settings?.backend_url) return false;
-    try {
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/seasons`, {
+  // 3. Mutation Tạo Mùa Vụ Mới
+  const createMutation = useMutation({
+    mutationFn: async (payload: { name: string; plant_type: string; description: string }) => {
+      const res = await httpFetch(baseUrl, {
         method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ name, plant_type: plantType, description })
+        headers,
+        body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        toast.success("Đã bắt đầu mùa vụ mới!");
-        await loadSeasons();
-        return true;
-      } else {
-        const err = await safeJsonParse(res);
-        toast.error(`Lỗi: ${err?.message || 'Không thể tạo mùa vụ'}`);
-      }
-    } catch (error) {
-      toast.error("Lỗi mạng khi tạo mùa vụ");
-    }
-    return false;
-  };
+      if (!res.ok) throw new Error('Không thể tạo mùa vụ');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Đã tạo mùa vụ mới!');
+      queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
 
-  // Hàm Update mùa vụscheduled_dose_a_mlAPI chưa sẵn sàng ĐANG CHẠY
-  const updateSeason = async (name: string, plantType: string, description: string) => {
-    if (!deviceId || !settings?.backend_url) return false;
-    try {
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ name, plant_type: plantType, description })
-      });
-      if (res.ok) {
-        toast.success("Đã cập nhật thông tin mùa vụ!");
-        await loadSeasons(); // Tải lại dữ liệu mới
-        return true;
-      } else {
-        const err = await safeJsonParse(res);
-        toast.error(`Lỗi: ${err?.message || 'Không thể cập nhật mùa vụ'}`);
-      }
-    } catch (error) {
-      toast.error("Lỗi mạng khi cập nhật mùa vụ");
-    }
-    return false;
-  };
+  // 4. Mutation Kết thúc Mùa Vụ
+  const endMutation = useMutation({
+    mutationFn: async () => {
+      const res = await httpFetch(`${baseUrl}/active/end`, { method: 'PUT', headers });
+      if (!res.ok) throw new Error('Không thể kết thúc mùa vụ');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Đã kết thúc mùa vụ!');
+      queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
 
-  const endSeason = async () => {
-    if (!deviceId || !settings?.backend_url) return false;
-    try {
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/seasons/active/end`, {
-        method: 'PUT',
-        headers: getHeaders()
-      });
-      if (res.ok) {
-        toast.success("Đã kết thúc mùa vụ hiện tại!");
-        await loadSeasons();
-        return true;
-      } else {
-        const err = await safeJsonParse(res);
-        toast.error(`Lỗi: ${err?.message || 'Không thể kết thúc mùa vụ'}`);
-      }
-    } catch (error) {
-      toast.error("Lỗi mạng khi kết thúc mùa vụ");
-    }
-    return false;
+  return {
+    activeSeason: activeSeasonQuery.data || null,
+    history: seasonHistoryQuery.data || [],
+    isLoading: activeSeasonQuery.isLoading || seasonHistoryQuery.isLoading,
+    createSeason: (name: string, plantType: string, description: string) =>
+      createMutation.mutateAsync({ name, plant_type: plantType, description }),
+    endSeason: () => endMutation.mutateAsync(),
   };
-
-  return { activeSeason, history, isLoading, createSeason, endSeason, refresh: loadSeasons, updateSeason };
 };

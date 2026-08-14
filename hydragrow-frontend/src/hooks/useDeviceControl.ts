@@ -1,6 +1,5 @@
-// src/hooks/useDeviceControl.ts
 import { useState, useCallback } from 'react';
-import { useDeviceContext } from '../context/DeviceContext';
+import { useDeviceStore } from '../store/useDeviceStore';
 import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 
@@ -13,9 +12,9 @@ const isDangerousCommand = (pumpId: string, action: string, pwm?: number) => {
     || dosingPumps.includes(pumpId.toUpperCase());
 };
 
-
 export const useDeviceControl = (deviceId: string) => {
-  const { settings, refreshDeviceSnapshot } = useDeviceContext();
+  const settings = useDeviceStore((state) => state.settings);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingPumpIds, setProcessingPumpIds] = useState<Record<string, boolean>>({});
   const [commandStatus, setCommandStatus] = useState<Record<string, string>>({});
@@ -28,7 +27,6 @@ export const useDeviceControl = (deviceId: string) => {
     }, 1500);
   }, []);
 
-  // Hàm gửi command chung (Đảm bảo cấu trúc chuẩn với Backend Rust)
   const sendCommand = useCallback(async (
     pumpId: string,
     action: string,
@@ -36,22 +34,19 @@ export const useDeviceControl = (deviceId: string) => {
     pwm?: number
   ) => {
     if (!deviceId || !settings?.backend_url) {
-      toast.error("Chưa cấu hình thiết bị hoặc máy chủ!");
+      toast.error("Chưa cấu hình máy chủ!");
       return false;
     }
-
     const dangerous = isDangerousCommand(pumpId, action, pwm);
     if (dangerous) {
       const confirmed = window.confirm(
-        `Lệnh nguy hiểm: ${action} cho ${pumpId}. Xác nhận bạn muốn gửi lệnh điều khiển này?`
+        `Lệnh nguy hiểm: ${action} cho ${pumpId}. Xác nhận thực thi?`
       );
       if (!confirmed) return false;
     }
-
     setIsProcessing(true);
     cooldownPump(pumpId, 'sending');
     try {
-      // Body chuẩn khớp với MqttCommandPayload của ESP32
       const payload = {
         target: 'all',
         action: action,
@@ -68,7 +63,6 @@ export const useDeviceControl = (deviceId: string) => {
           dangerous
         }
       };
-
       const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control`, {
         method: 'POST',
         headers: {
@@ -78,64 +72,29 @@ export const useDeviceControl = (deviceId: string) => {
         },
         body: JSON.stringify(payload)
       });
-
       if (res.ok) {
-        const result = await res.json().catch(() => null);
-        const publishedAction = result?.action || action;
-        const target = result?.target || 'all';
         setCommandStatus(prev => ({ ...prev, [pumpId]: 'accepted' }));
-        toast.success(`Backend đã publish MQTT: ${publishedAction} -> ${pumpId} (${target})`);
-
-        await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/control/sync`, {
-          method: 'POST',
-          headers: {
-            'X-API-Key': settings.api_key || ''
-          }
-        }).catch(err => console.error("Lỗi khi yêu cầu sync trạng thái:", err));
-
-        await refreshDeviceSnapshot();
-        setTimeout(() => {
-          refreshDeviceSnapshot().catch(err => console.error("Lỗi refresh trạng thái sau lệnh:", err));
-        }, 1200);
-
+        toast.success(`Đã gửi lệnh: ${action} -> ${pumpId}`);
         return true;
       } else {
-        const errorText = await res.text();
-        console.error(`HTTP ${res.status}:`, errorText);
-        const rejectedStatus = res.status === 429 ? 'command rejected: rate_limited' : `command rejected: HTTP ${res.status}`;
+        const rejectedStatus = res.status === 429 ? 'rate_limited' : `HTTP ${res.status}`;
         setCommandStatus(prev => ({ ...prev, [pumpId]: rejectedStatus }));
-        toast.error(res.status === 429 ? 'command rejected: rate_limited' : `Từ chối lệnh: HTTP ${res.status}`);
+        toast.error(`Từ chối: ${rejectedStatus}`);
         return false;
       }
     } catch (error: any) {
-      console.error(`Lỗi thực thi lệnh (${pumpId}):`, error);
-      setCommandStatus(prev => ({ ...prev, [pumpId]: 'command rejected: network_error' }));
+      setCommandStatus(prev => ({ ...prev, [pumpId]: 'network_error' }));
       toast.error("Lỗi mạng khi gửi lệnh!");
       return false;
     } finally {
       setIsProcessing(false);
     }
-  }, [deviceId, settings, refreshDeviceSnapshot, processingPumpIds, cooldownPump]);
+  }, [deviceId, settings, cooldownPump]);
 
-  // 1. Lệnh Bật/Tắt bình thường
-  const togglePump = (pumpId: string, action: 'on' | 'off') => {
-    return sendCommand(pumpId, action);
-  };
-
-  // 2. Lệnh Cưỡng chế an toàn (Kèm thời gian đếm ngược)
-  const forceOn = (pumpId: string, durationSec: number, pwmValue?: number) => {
-    return sendCommand(pumpId, 'force_on', durationSec, pwmValue);
-  };
-
-  // 3. Lệnh Cài đặt Công suất (PWM)
-  const setPwm = (pumpId: string, pwmValue: number, durationSec?: number) => {
-    return sendCommand(pumpId, 'set_pwm', durationSec, pwmValue);
-  };
-
-  const resetFault = () => {
-    // Truyền "ALL" làm target để Backend cho qua, ESP32 sẽ nhận và reset toàn bộ state
-    return sendCommand('ALL', 'reset_fault');
-  };
+  const togglePump = (pumpId: string, action: 'on' | 'off') => sendCommand(pumpId, action);
+  const forceOn = (pumpId: string, durationSec: number, pwmValue?: number) => sendCommand(pumpId, 'force_on', durationSec, pwmValue);
+  const setPwm = (pumpId: string, pwmValue: number, durationSec?: number) => sendCommand(pumpId, 'set_pwm', durationSec, pwmValue);
+  const resetFault = () => sendCommand('ALL', 'reset_fault');
 
   return { isProcessing, processingPumpIds, commandStatus, togglePump, forceOn, setPwm, resetFault };
 };

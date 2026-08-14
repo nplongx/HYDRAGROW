@@ -336,9 +336,12 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .app_data(app_state.clone())
             .wrap(cors)
-            // 🟢 1. ROUTE WEBSOCKET ĐỨNG RIÊNG (Không đi qua ApiKeyAuthMiddleware)
-            .service(web::scope("/api/devices/{device_id}").configure(api::ws::init_routes))
-            // 🟢 2. ROUTE REST API (Đi qua Auth & Rate Limiter Middleware)
+            // 🟢 1. Chỉ bắt đúng 1 endpoint WebSocket, KHÔNG dùng web::scope chiếm toàn bộ đường dẫn
+            .service(
+                web::resource("/api/devices/{device_id}/ws")
+                    .route(web::get().to(api::ws::ws_handler)),
+            )
+            // 🟢 2. Toàn bộ REST APIs sẽ đi vào đây bình thường
             .service(
                 web::scope("/api")
                     .wrap(auth_middleware)
@@ -349,7 +352,6 @@ async fn main() -> anyhow::Result<()> {
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)
                             .configure(api::sensor::init_routes)
-                            // 🛑 Đã bỏ api::ws::init_routes ở đây
                             .configure(api::config::init_routes)
                             .configure(api::calibration::init_routes)
                             .configure(api::crop_season::init_routes)

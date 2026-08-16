@@ -219,3 +219,10 @@ export interface DeviceHealth {
 export interface ControllerData extends DeviceHealth {
   // Có thể chứa thêm trạng thái FSM hoặc các config khác nếu cần
 }
+
+export interface TankAlert {
+  tank_a_low: boolean;
+  tank_b_low: boolean;
+  tank_ph_down_low: boolean;
+  tank_ph_up_low: boolean;
+}

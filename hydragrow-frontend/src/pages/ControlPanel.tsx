@@ -124,8 +124,9 @@ const ControlPanel = () => {
         <div className="space-y-3">
           <h2 className="farm-section-title">Phun sương và Tuần hoàn</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="OSAKA" title="Bơm trộn tuần hoàn" icon={Power} currentStatus={Boolean(pumps.osaka_pump)} allowPwm={true} colorTheme="indigo" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="OSAKA" title="Bơm tăng áp" icon={Power} currentStatus={Boolean(pumps.osaka_pump)} allowPwm={true} colorTheme="indigo" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
             <AdvancedDeviceControl deviceId={deviceId} pumpId="MIST" title="Van phun sương" icon={Wind} currentStatus={Boolean(pumps.mist_valve)} allowPwm={false} colorTheme="sky" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="MIX" title="Van trộn" icon={Wind} currentStatus={Boolean(pumps.mist_valve)} allowPwm={false} colorTheme="sky" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
           </div>
         </div>
       </div>

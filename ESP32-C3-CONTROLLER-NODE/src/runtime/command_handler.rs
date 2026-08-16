@@ -103,7 +103,6 @@ pub fn process_mqtt_commands(
             delta.peripherals = Some(peri_delta);
 
             // Yêu cầu Dispatcher gọi hàm cập nhật
-            // (Bạn cần thêm TriggerOtaUpdate vào enum OrchestratorEvent)
             all_events.push(OrchestratorEvent::TriggerOtaUpdate);
             continue;
         }

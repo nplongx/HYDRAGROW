@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SubCard } from '../components/ui/SubCard';
 import { AccordionSection } from '../components/ui/AccordionSection';
-// import { useDeviceContext } from '../context/DeviceContext';
 import { LoadingState } from '../components/ui/LoadingState';
 
 // --- IMPORT PLATFORM & UTILS ---
@@ -13,6 +12,7 @@ import { validate_dosing_config } from '../../gleam_core/build/dev/javascript/gl
 import { calculate_summary } from '../../gleam_core/build/dev/javascript/gleam_core/settings/calibration.mjs';
 import { parse_cron_safe } from '../../gleam_core/build/dev/javascript/gleam_core/settings/cron.mjs';
 import { build_unified_payload_json } from '../../gleam_core/build/dev/javascript/gleam_core/settings/payload.mjs';
+
 import { Activity, CalendarClock, FlaskConical, LockKeyhole, Network, Power, Save, Settings2, ShieldAlert, Target, Waves, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Switch } from '../components/ui/Switch';
@@ -25,19 +25,15 @@ type DosingFieldKey =
   | 'pump_b_capacity_ml_per_sec' | 'pump_ph_up_capacity_ml_per_sec' | 'pump_ph_down_capacity_ml_per_sec';
 type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 
-// --- COMPONENT TRỰC QUAN HOÁ CRON (Dùng logic parse từ Gleam) ---
+// --- COMPONENT TRỰC QUAN HOÁ CRON ---
 const VisualCronPicker = ({ value, onChange, label, desc }: {
   value: string; onChange: (val: string) => void; label: string; desc?: string;
 }) => {
-  // Gọi trực tiếp hàm parse_cron_safe -> Đảm bảo luôn trả về Object đầy đủ thuộc tính!
   const schedule = parse_cron_safe(value || "0 0 8 * * *");
-
   const minuteStr = String(schedule.minute).padStart(2, '0');
   const hourStr = String(schedule.hour).padStart(2, '0');
   const timeStr = `${hourStr}:${minuteStr}`;
-
   const isEveryDay = schedule.is_every_day;
-  // Chuỗi ngày "MON,TUE" được .split(',') trực tiếp bằng JS
   const selectedDays: string[] = schedule.days_str ? schedule.days_str.split(',') : [];
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,8 +93,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
                 <button
                   key={day.val}
                   onClick={() => toggleDay(day.val)}
-                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-blue-500/20 border-blue-500 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800/80 hover:border-emerald-400 hover:text-emerald-950'
-                    }`}
+                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-blue-500/20 border-blue-500 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800/80 hover:border-emerald-400 hover:text-emerald-950'}`}
                 >
                   {day.label}
                 </button>
@@ -109,12 +104,16 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
       </div>
     </div>
   );
-};// --- COMPONENT SETTINGS CHÍNH ---
+};
+
+// --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
   const sensorData = useDeviceStore((s) => s.sensorData);
   const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
   const runtimeSettings = useDeviceStore((s) => s.settings);
-  const ctxDeviceId = useDeviceStore((s) => s.deviceId);  const [isLoading, setIsLoading] = useState(true);
+  const ctxDeviceId = useDeviceStore((s) => s.deviceId);
+
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>('general');
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
@@ -219,7 +218,6 @@ const Settings = () => {
 
   const goToNextPoint = () => { if (wizardStep < calibrationPoints.length - 1) { setWizardStep((prev) => prev + 1); return; } setWizardStep(calibrationPoints.length); };
 
-  // --- CALIBRATION SUMMARY (Dùng Gleam calculate_summary) ---
   const calibrationSummary = useMemo(() => {
     const p7 = capturedPoints[7]?.voltage;
     const p4 = capturedPoints[4]?.voltage;
@@ -261,24 +259,31 @@ const Settings = () => {
     await handleSave(c);
   };
 
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        setIsLoading(true);
-        let settings: any = await loadAppSettings();
-        if (settings) setAppSettings(settings);
-        const currentDeviceId = settings?.device_id || appSettings.device_id;
-        if (!currentDeviceId) return;
-        const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
-        if (unifiedData) {
-          setConfig((prev: any) => ({ ...prev, ...unifiedData.device_config, ...unifiedData.water_config, ...unifiedData.safety_config, ...unifiedData.sensor_calibration, ...unifiedData.dosing_calibration }));
-        }
-      } catch (error) { } finally { setIsLoading(false); }
-    };
-    loadConfig();
-  }, []);
+  const loadConfig = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      let settings: any = await loadAppSettings();
+      if (settings) setAppSettings(settings);
+      const currentDeviceId = settings?.device_id || appSettings.device_id || ctxDeviceId;
+      if (!currentDeviceId) return;
+      const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
+      if (unifiedData) {
+        setConfig((prev: any) => ({
+          ...prev,
+          ...unifiedData.device_config,
+          ...unifiedData.water_config,
+          ...unifiedData.safety_config,
+          ...unifiedData.sensor_calibration,
+          ...unifiedData.dosing_calibration
+        }));
+      }
+    } catch (error) { } finally { setIsLoading(false); }
+  }, [appSettings.device_id, ctxDeviceId]);
 
-  // --- VALIDATION DOSING CONFIG (Dùng Gleam validate_dosing_config) ---
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
   const dosingValidationErrors = useMemo(() => {
     const gleamErrors = validate_dosing_config(
       String(config.dosing_pwm_percent ?? ''),
@@ -292,7 +297,7 @@ const Settings = () => {
     const errors: DosingValidationErrors = {};
     if (Array.isArray(gleamErrors)) {
       gleamErrors.forEach((err: any) => {
-        errors[err.field as DosingFieldKey] = `Giống như cho ${err.field}: ${err.message}.`;
+        errors[err.field as DosingFieldKey] = `Giá trị không hợp lệ cho ${err.field}: ${err.message}.`;
       });
     }
     return errors;
@@ -300,9 +305,7 @@ const Settings = () => {
 
   const hasDosingValidationError = Object.keys(dosingValidationErrors).length > 0;
 
-  // --- SAVE CONFIG (Dùng Gleam build_unified_payload_json) ---
-  
-const handleSave = async (configOverride?: any) => {
+  const handleSave = async (configOverride?: any) => {
     if (!appSettings.device_id || !appSettings.backend_url) { toast.error('Thiếu thông tin kết nối.'); return; }
     setIsSaving(true);
     const toastId = toast.loading("Đang lưu...");
@@ -314,7 +317,6 @@ const handleSave = async (configOverride?: any) => {
       await saveAppSettings({ ...appSettings, device_id: devId });
       const ts = new Date().toISOString();
 
-      // Dựng payload JSON chứa đủ 5 khối bằng Gleam
       const jsonStringPayload = build_unified_payload_json(
         devId,
         savingConfig.control_mode || 'manual',
@@ -364,14 +366,14 @@ const handleSave = async (configOverride?: any) => {
         throw new Error(`HTTP ${res.status}`);
       }
 
-      await refreshSettings();
+      await loadConfig();
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã lưu cấu hình thành công.', { id: toastId });
     } catch (error: any) { toast.error(`Lỗi: ${error?.message}`, { id: toastId }); }
     finally { setIsSaving(false); }
   };
 
-    const handleForgetApiKey = async () => {
+  const handleForgetApiKey = async () => {
     try {
       await forgetStoredApiKey();
       setAppSettings((current) => ({ ...current, api_key: '' }));
@@ -384,7 +386,6 @@ const handleSave = async (configOverride?: any) => {
 
   if (isLoading) return <LoadingState message="Đang tải cấu hình..." />;
 
-  // ------------------------- RENDER GIAO DIỆN UI -------------------------
   return (
     <div className="app-page max-w-5xl pb-36">
       {/* Header */}
@@ -420,7 +421,7 @@ const handleSave = async (configOverride?: any) => {
             <div className="space-y-2">
               <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                Web build chỉ lưu API key trong phiên hiện tại; Tauri lưu khoá trong OS credential vault.
+                Web build chỉ lưu API key trong phiên hiện tại; Tauri lưu khoá trong OS credential vault[cite: 3].
               </div>
               <button type="button" onClick={handleForgetApiKey} className="w-full rounded-xl border border-red-200 bg-white/90 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50">
                 Quên / xoá API key
@@ -569,7 +570,9 @@ const handleSave = async (configOverride?: any) => {
         )}
 
         {/* CALIBRATION */}
-        <AccordionSection id="sensor" title="Cảm biến & Hiệu chuẩn" icon={Activity} isOpen={openSection === 'sensor'} onToggle={() => handleToggleSection('sensor')}>
+        <AccordionSection id="sensor" title="Cảm biến & Hiệu chuẩn" icon={Activity[38;5;9m[1m
+Terminal response timeout: [0m[0mThe request sent by Yazi didn't receive a correct response.
+Please check your terminal environment as per: https://yazi-rs.github.io/docs/faq#trt} isOpen={openSection === 'sensor'} onToggle={() => handleToggleSection('sensor')}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SubCard title="Hiệu chuẩn pH" className="h-full">
               <div className="space-y-4">

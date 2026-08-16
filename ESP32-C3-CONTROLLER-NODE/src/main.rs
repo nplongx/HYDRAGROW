@@ -72,8 +72,8 @@ fn main() -> anyhow::Result<()> {
     let (fsm_tx, fsm_rx) = mpsc::channel();
     let (dosing_report_tx, dosing_report_rx) = mpsc::channel();
     let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel();
-
-    // 1. Hardware Drivers
+    let (int_tx, int_rx) = mpsc::channel::<()>(); // Channel tín hiệu ngắt INT
+                                                  // 1. Hardware Drivers
     let timer_driver = Arc::new(LedcTimerDriver::new(
         peripherals.ledc.timer0,
         &TimerConfig::new().frequency(esp_idf_hal::units::Hertz(20000)),
@@ -119,6 +119,15 @@ fn main() -> anyhow::Result<()> {
         )?,
     )?;
 
+    let mut int_pin = PinDriver::input(peripherals.pins.gpio10, esp_idf_hal::gpio::Pull::Up)?;
+    int_pin.set_interrupt_type(esp_idf_hal::gpio::InterruptType::NegEdge)?;
+    unsafe {
+        int_pin.subscribe(move || {
+            let _ = int_tx.send(()); // Bắt ngắt an toàn, không đọc I2C trực tiếp trong ISR
+        })?;
+    }
+    int_pin.enable_interrupt()?;
+
     // 2. Network & Time Sync
     connect_wifi(
         peripherals.modem,
@@ -148,6 +157,7 @@ fn main() -> anyhow::Result<()> {
                 fsm_tx,
                 dosing_report_tx,
                 sensor_cmd_tx,
+                int_rx,
                 get_current_time_sec(),
             );
         })?;

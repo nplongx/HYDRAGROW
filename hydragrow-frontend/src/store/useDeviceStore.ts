@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SensorData, StatusPayload, AppSettings } from '../types/models';
+import { SensorData, StatusPayload, AppSettings, TankAlert } from '../types/models';
 import { setItem } from '../platform/storage';
 
 interface DeviceState {
@@ -16,6 +16,8 @@ interface DeviceState {
   isLoading: boolean;
   isSensorOnline: boolean;
   pwmPreferences: Record<string, number>;
+  tankAlert: TankAlert | null; // <-- Thêm state
+  setTankAlert: (tankAlert: TankAlert | null) => void;
 
   // --- ACTIONS ---
   setDeviceId: (id: string | null) => void;
@@ -48,6 +50,8 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   isLoading: true,
   isSensorOnline: false,
   pwmPreferences: {},
+  tankAlert: null,
+  setTankAlert: (tankAlert) => set({ tankAlert }),
 
   setDeviceId: (deviceId) => set({ deviceId }),
   setSettings: (settings) => set({ settings }),

@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
-  Wifi, AlertTriangle, LineChart
+  Wifi, AlertTriangle, LineChart,
+  AlertCircle
 } from 'lucide-react';
 
 // --- ZUSTAND & GLEAM ---
 import { useDeviceStore } from '../store/useDeviceStore';
 import {
   eval_sensor_status_safe,
-  calc_budget_percent_safe,
   calc_hourly_dose_str
 } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
@@ -18,7 +18,6 @@ import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_cor
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
-import { loadAppSettings } from '../platform/settings';
 import { useFCM } from '../hooks/useFCM';
 import { useQuery } from '@tanstack/react-query';
 
@@ -176,10 +175,10 @@ const deviceId = useDeviceStore((s) => s.deviceId);
   const faultGuide = faultGuideOpt && (faultGuideOpt as any)[0] ? (faultGuideOpt as any)[0] : null;
 
   const pumps: any = sensorData?.pump_status || {};
-  const budgets = {
-    ec_ml: Number(rawBudgets?.ec_ml || 0) > 0 ? rawBudgets.ec_ml : eventBudgets.ec_ml,
-    ph_ml: Number(rawBudgets?.ph_ml || 0) > 0 ? rawBudgets.ph_ml : eventBudgets.ph_ml,
-  };
+  // const budgets = {
+  //   ec_ml: Number(rawBudgets?.ec_ml || 0) > 0 ? rawBudgets.ec_ml : eventBudgets.ec_ml,
+  //   ph_ml: Number(rawBudgets?.ph_ml || 0) > 0 ? rawBudgets.ph_ml : eventBudgets.ph_ml,
+  // };
 
   const modeLabel = settings?.control_mode === 'auto' ? 'Tự động' : 'Thủ công';
 
@@ -194,7 +193,14 @@ const deviceId = useDeviceStore((s) => s.deviceId);
       ? 'Đang mất tín hiệu cảm biến. Kiểm tra nguồn node cảm biến.'
       : faultGuide?.action || (permission !== 'granted' ? 'Bật thông báo để nhận cảnh báo tức thì.' : 'Không cần thao tác. Tiếp tục theo dõi.');
 
-  return (
+  // Lấy tankAlert từ useDeviceStore
+    const tankAlert = useDeviceStore((s) => s.tankAlert);
+
+    // Kiểm tra có bình nào đang cạn không
+    const hasTankAlert = Boolean(
+      tankAlert && (tankAlert.tank_a_low || tankAlert.tank_b_low || tankAlert.tank_ph_down_low || tankAlert.tank_ph_up_low)
+    );
+    return (
     <div className="app-page">
       {/* Header Bento Box */}
       <div className="ui-card relative overflow-hidden p-6 md:p-8">
@@ -248,6 +254,39 @@ const deviceId = useDeviceStore((s) => s.deviceId);
           </div>
         </div>
       </div>
+
+
+      {/* BANNER CẢNH BÁO BÌNH DUNG DỊCH */}
+      {hasTankAlert && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3 text-amber-900 shadow-sm animate-in fade-in">
+          <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+          <div className="space-y-1">
+            <h4 className="font-bold text-sm">Cảnh báo: Bình dung dịch sắp hết</h4>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {tankAlert?.tank_a_low && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">
+                  Cạn Dinh Dưỡng A
+                </span>
+              )}
+              {tankAlert?.tank_b_low && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">
+                  Cạn Dinh Dưỡng B
+                </span>
+              )}
+              {tankAlert?.tank_ph_up_low && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 border border-purple-300 text-purple-900">
+                  Cạn pH Up
+                </span>
+              )}
+              {tankAlert?.tank_ph_down_low && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 border border-rose-300 text-rose-900">
+                  Cạn pH Down
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sensor Bento Grid */}
       <div className="space-y-3">

@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use crate::hw::pcf857x::{ExpanderPin, I2cExpander};
+use crate::hw::pcf857x::{ExpanderPin, I2cExpander, TankAlert};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PumpType {
@@ -224,5 +224,11 @@ impl<'d> PumpController<'d> {
             pump.set_duty(target_duty)?;
         }
         Ok(())
+    }
+
+    pub fn check_tank_alert(&mut self) -> anyhow::Result<TankAlert> {
+        self.valve
+            .parse_tank_alert()
+            .map_err(|e| anyhow::anyhow!("Lỗi đọc I2C TankAlert: {:?}", e))
     }
 }

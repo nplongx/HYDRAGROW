@@ -37,6 +37,8 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
         }
         "/fsm/state" => handlers::fsm::handle_state(device_id, &payload_bytes, app_state).await,
 
+        "/fsm/events" => handlers::events::handle(device_id, &payload_bytes, app_state).await,
+
         "/system_log" => handlers::system_log::handle(device_id, &payload_bytes, app_state).await,
         "/calibration" => {
             let payload_json = match serde_json::from_slice::<serde_json::Value>(&payload_bytes) {

@@ -160,9 +160,10 @@ const connectWs = () => {
         pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
       };
 
-      ws.onmessage = (event) => {
+ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
           if (data.type === 'sensor_update') {
             const incomingPayload = data.payload.data || data.payload;
             useDeviceStore.getState().setSensorData(prev => ({
@@ -175,6 +176,30 @@ const connectWs = () => {
           } else if (data.type === 'fsm_state_update' || data.type === 'controller_status') {
             const newState = data.payload?.current_phase || data.payload?.current_state;
             if (newState) useDeviceStore.getState().setFsmState(phaseToString(newState) || 'Monitoring');
+          } 
+          // --- BỔ SUNG NHÁNH XỬ LÝ ALERT TỪ WEBSOCKET ---
+          else if (data.type === 'alert') {
+            const alert = data.payload;
+            if (alert) {
+              useDeviceStore.getState().setSystemEvents(prev => [alert, ...(prev || [])].slice(0, 50));
+              
+              // Nếu là cảnh báo mức bình dung dịch, lưu vào Zustand store
+              if (alert.reason === 'tank_level_alert' || alert.metadata?.tank_a_low !== undefined) {
+                const details = alert.metadata || {};
+                useDeviceStore.getState().setTankAlert({
+                  tank_a_low: Boolean(details.tank_a_low),
+                  tank_b_low: Boolean(details.tank_b_low),
+                  tank_ph_down_low: Boolean(details.tank_ph_down_low),
+                  tank_ph_up_low: Boolean(details.tank_ph_up_low),
+                });
+              }
+
+              if (alert.level === 'critical' || alert.level === 'warning') {
+                toast.error(`${alert.title}\n${alert.message}`, { id: 'sys-alert', duration: 4000 });
+              } else if (alert.level === 'success') {
+                toast.success(`${alert.title}\n${alert.message}`, { id: 'sys-success', duration: 3000 });
+              }
+            }
           }
         } catch (e) {}
       };

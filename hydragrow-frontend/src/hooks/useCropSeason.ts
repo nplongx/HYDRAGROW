@@ -28,7 +28,7 @@ export const useCropSeason = () => {
     enabled: Boolean(deviceId && settings?.backend_url),
   });
 
-  // 2. Query lấy Lịch sử các mùa vụ
+  // 2. Query lịch sử các mùa vụ
   const seasonHistoryQuery = useQuery<CropSeason[]>({
     queryKey: ['seasons', deviceId, 'history'],
     queryFn: async () => {
@@ -48,17 +48,37 @@ export const useCropSeason = () => {
         headers,
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Không thể tạo mùa vụ');
+      if (!res.ok) throw new Error('Không thể tạo mùa vụ mới');
       return res.json();
     },
     onSuccess: () => {
       toast.success('Đã tạo mùa vụ mới!');
       queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['seasons-list', deviceId] });
     },
     onError: (err: any) => toast.error(err.message),
   });
 
-  // 4. Mutation Kết thúc Mùa Vụ
+  // 4. Mutation Cập nhật Mùa Vụ Đang Chạy
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { name: string; plant_type: string; description: string }) => {
+      const res = await httpFetch(`${baseUrl}/active`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Không thể cập nhật thông tin mùa vụ');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Đã cập nhật thông tin mùa vụ!');
+      queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['seasons-list', deviceId] });
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // 5. Mutation Kết thúc Mùa Vụ
   const endMutation = useMutation({
     mutationFn: async () => {
       const res = await httpFetch(`${baseUrl}/active/end`, { method: 'PUT', headers });
@@ -68,6 +88,7 @@ export const useCropSeason = () => {
     onSuccess: () => {
       toast.success('Đã kết thúc mùa vụ!');
       queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['seasons-list', deviceId] });
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -75,9 +96,11 @@ export const useCropSeason = () => {
   return {
     activeSeason: activeSeasonQuery.data || null,
     history: seasonHistoryQuery.data || [],
-    isLoading: activeSeasonQuery.isLoading || seasonHistoryQuery.isLoading,
+    isLoading: activeSeasonQuery.isLoading || seasonHistoryQuery.isLoading || updateMutation.isPending,
     createSeason: (name: string, plantType: string, description: string) =>
       createMutation.mutateAsync({ name, plant_type: plantType, description }),
+    updateSeason: (name: string, plantType: string, description: string) =>
+      updateMutation.mutateAsync({ name, plant_type: plantType, description }),
     endSeason: () => endMutation.mutateAsync(),
   };
 };

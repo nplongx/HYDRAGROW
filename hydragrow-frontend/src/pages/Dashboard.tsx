@@ -1,25 +1,15 @@
 import { useMemo } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
-  Wifi, AlertTriangle, LineChart,
-  AlertCircle
+  Wifi, AlertTriangle, LineChart
 } from 'lucide-react';
-
-// --- ZUSTAND & GLEAM ---
 import { useDeviceStore } from '../store/useDeviceStore';
-import {
-  eval_sensor_status_safe,
-  calc_hourly_dose_str
-} from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
+import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
-
-// --- UI COMPONENTS & UTILS ---
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { LoadingState } from '../components/ui/LoadingState';
-import { httpFetch } from '../platform/http';
 import { useFCM } from '../hooks/useFCM';
-import { useQuery } from '@tanstack/react-query';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${color}`}>
@@ -62,54 +52,15 @@ const sensorStatus = (hasError: boolean | undefined, value: any, min?: any, max?
   return { label: res.label, tone: res.tone as 'good' | 'warn' | 'danger' | 'info' };
 };
 
-const getDosingDose = (event: any) => {
-  const meta = event?.metadata || event?.payload || {};
-  const dose = meta.dose ?? meta.dosing_report?.dose ?? meta.dosing_data?.dose ?? meta.dosing_report ?? meta.dosing_data ?? meta;
-  return {
-    ec_ml: Number(dose.pump_a_ml || 0) + Number(dose.pump_b_ml || 0),
-    ph_ml: Number(dose.ph_up_ml || 0) + Number(dose.ph_down_ml || 0),
-  };
-};
-
-const deriveHourlyBudgets = (events: any[]) => {
-  const now = Date.now();
-  const doseItemsString = events
-    .map((event) => {
-      const ts = Number(event?.timestamp || event?.timestamp_ms || 0);
-      const eventMs = ts > 1e12 ? ts : ts * 1000;
-      const dose = getDosingDose(event);
-      return `${eventMs},${dose.ec_ml},${dose.ph_ml}`;
-    })
-    .join(';');
-
-  const res = calc_hourly_dose_str(doseItemsString, now);
-  return { ec_ml: res.ec_ml, ph_ml: res.ph_ml };
-};
-
-const mergeUniqueEvents = (...groups: any[][]) => {
-  const seen = new Set<string>();
-  const merged: any[] = [];
-  groups.flat().forEach((event) => {
-    if (!event) return;
-    const key = String(event.id ?? `${event.timestamp || event.timestamp_ms}-${event.category || ''}-${event.title || ''}-${event.message || ''}`);
-    if (seen.has(key)) return;
-    seen.add(key);
-    merged.push(event);
-  });
-  return merged;
-};
-
 const Dashboard = () => {
-const deviceId = useDeviceStore((s) => s.deviceId);
+  const deviceId = useDeviceStore((s) => s.deviceId);
   const sensorData = useDeviceStore((s) => s.sensorData);
   const isOnline = useDeviceStore((s) => s.deviceStatus.is_online);
-  const rawBudgets = useDeviceStore((s) => (s.deviceStatus as any)?.budgets);
   const controllerHealth = useDeviceStore((s) => s.controllerHealth);
   const fsmState = useDeviceStore((s) => s.fsmState);
   const isLoading = useDeviceStore((s) => s.isLoading);
   const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
   const settings = useDeviceStore((s) => s.settings);
-  const systemEvents = useDeviceStore((s) => s.systemEvents);
 
   const friendlyState = useMemo(() => {
     const res = friendly_state(fsmState || 'Monitoring', isOnline);
@@ -124,27 +75,6 @@ const deviceId = useDeviceStore((s) => s.deviceId);
   }, [controllerHealth, isOnline]);
 
   const { permission } = useFCM();
-
-  // 🔴 THAY THẾ useEffect CŨ BẰNG useQuery (Tự động catch AbortError & Retry)
-  const { data: recentEvents = [] } = useQuery({
-    queryKey: ['recent-events', deviceId],
-    queryFn: async ({ signal }) => {
-      if (!deviceId || !settings?.backend_url) return [];
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/events?limit=200`, {
-        headers: { 'X-API-Key': settings.api_key || '' },
-        signal // Tự động chuyển AbortSignal của TanStack Query vào fetch
-      });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json.data) ? json.data : [];
-    },
-    enabled: Boolean(deviceId && settings?.backend_url),
-  });
-
-  const eventBudgets = useMemo(
-    () => deriveHourlyBudgets(mergeUniqueEvents(recentEvents, systemEvents || [])),
-    [recentEvents, systemEvents]
-  );
 
   if (isLoading) {
     return <LoadingState message="Đang tải dữ liệu trạm thông minh..." />;
@@ -175,11 +105,6 @@ const deviceId = useDeviceStore((s) => s.deviceId);
   const faultGuide = faultGuideOpt && (faultGuideOpt as any)[0] ? (faultGuideOpt as any)[0] : null;
 
   const pumps: any = sensorData?.pump_status || {};
-  // const budgets = {
-  //   ec_ml: Number(rawBudgets?.ec_ml || 0) > 0 ? rawBudgets.ec_ml : eventBudgets.ec_ml,
-  //   ph_ml: Number(rawBudgets?.ph_ml || 0) > 0 ? rawBudgets.ph_ml : eventBudgets.ph_ml,
-  // };
-
   const modeLabel = settings?.control_mode === 'auto' ? 'Tự động' : 'Thủ công';
 
   const ecStatus = sensorStatus(sensorData?.err_ec, sensorData?.ec, (settings as any)?.min_ec_limit, (settings as any)?.max_ec_limit);
@@ -193,14 +118,12 @@ const deviceId = useDeviceStore((s) => s.deviceId);
       ? 'Đang mất tín hiệu cảm biến. Kiểm tra nguồn node cảm biến.'
       : faultGuide?.action || (permission !== 'granted' ? 'Bật thông báo để nhận cảnh báo tức thì.' : 'Không cần thao tác. Tiếp tục theo dõi.');
 
-  // Lấy tankAlert từ useDeviceStore
-    const tankAlert = useDeviceStore((s) => s.tankAlert);
+  const tankAlert = useDeviceStore((s) => s.tankAlert);
+  const hasTankAlert = Boolean(
+    tankAlert && (tankAlert.tank_a_low || tankAlert.tank_b_low || tankAlert.tank_ph_down_low || tankAlert.tank_ph_up_low)
+  );
 
-    // Kiểm tra có bình nào đang cạn không
-    const hasTankAlert = Boolean(
-      tankAlert && (tankAlert.tank_a_low || tankAlert.tank_b_low || tankAlert.tank_ph_down_low || tankAlert.tank_ph_up_low)
-    );
-    return (
+  return (
     <div className="app-page">
       {/* Header Bento Box */}
       <div className="ui-card relative overflow-hidden p-6 md:p-8">
@@ -255,34 +178,17 @@ const deviceId = useDeviceStore((s) => s.deviceId);
         </div>
       </div>
 
-
-      {/* BANNER CẢNH BÁO BÌNH DUNG DỊCH */}
+      {/* Cảnh báo cạn bình dung dịch */}
       {hasTankAlert && (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3 text-amber-900 shadow-sm animate-in fade-in">
-          <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+          <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
           <div className="space-y-1">
-            <h4 className="font-bold text-sm">Cảnh báo: Bình dung dịch sắp hết</h4>
+            <h4 className="font-bold text-sm">Cảnh báo: Bình dung dịch sắp cạn</h4>
             <div className="flex flex-wrap gap-2 pt-1">
-              {tankAlert?.tank_a_low && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">
-                  Cạn Dinh Dưỡng A
-                </span>
-              )}
-              {tankAlert?.tank_b_low && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">
-                  Cạn Dinh Dưỡng B
-                </span>
-              )}
-              {tankAlert?.tank_ph_up_low && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 border border-purple-300 text-purple-900">
-                  Cạn pH Up
-                </span>
-              )}
-              {tankAlert?.tank_ph_down_low && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 border border-rose-300 text-rose-900">
-                  Cạn pH Down
-                </span>
-              )}
+              {tankAlert?.tank_a_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">Cạn Dinh Dưỡng A</span>}
+              {tankAlert?.tank_b_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">Cạn Dinh Dưỡng B</span>}
+              {tankAlert?.tank_ph_up_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 border border-purple-300 text-purple-900">Cạn pH Up</span>}
+              {tankAlert?.tank_ph_down_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 border border-rose-300 text-rose-900">Cạn pH Down</span>}
             </div>
           </div>
         </div>

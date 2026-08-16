@@ -106,8 +106,7 @@ export function useDeviceSync() {
     const state = snapshot.fsm_state || snapshot.fsm_phase || snapshot.current_phase || snapshot.current_state;
     if (state) useDeviceStore.getState().setFsmState(phaseToString(state) || 'Monitoring');
     if (snapshot.budgets) useDeviceStore.getState().setDeviceStatus(prev => ({ ...prev, budgets: snapshot.budgets }));
-    if (snapshot.diagnostics) useDeviceStore.getState().setControllerHealth(prev => ({ ...(prev || {}), ...snapshot.diagnostics }));
-    if (snapshot.pump_status) applyPumpStatus(normalizePumpStatus(snapshot.pump_status));
+    useDeviceStore.getState().setSystemEvents((prev: any[]) => [alert, ...(prev || [])].slice(0, 50));    if (snapshot.pump_status) applyPumpStatus(normalizePumpStatus(snapshot.pump_status));
   }, [applyPumpStatus]);
 
   const refreshDeviceSnapshot = useCallback(async () => {

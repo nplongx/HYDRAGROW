@@ -266,7 +266,8 @@ const Analytics = () => {
   });
 
   // Tần suất lọc dữ liệu (Interval)
-  const defaultIntervalSec = Number(settings?.publish_interval) ? Number(settings.publish_interval) / 1000 : 5;
+
+  const defaultIntervalSec = Number(settings?.publish_interval) ? Number(settings?.publish_interval) / 1000 : 5;
 
   const effectiveIntervalMs = useMemo(() => {
     let seconds = 0;

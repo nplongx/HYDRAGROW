@@ -6,10 +6,7 @@ import {
 import { useDeviceStore } from '../store/useDeviceStore';
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
-import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';[38;5;9m[1m
-Terminal response timeout: [0m[0mThe request sent by Yazi didn't receive a correct response.
-Please check your terminal environment as per: https://yazi-rs.github.io/docs/faq#trt
-
+import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { LoadingState } from '../components/ui/LoadingState';
 import { useFCM } from '../hooks/useFCM';

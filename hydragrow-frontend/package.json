@@ -10,7 +10,7 @@
     "dev:tauri": "tauri dev",
     "build:tauri": "tauri build",
     "dev": "npm run dev:web",
-    "build": "cd gleam_core && gleam build --target=javascript && cd .. && tsc && vite build",
+    "build": "npm run build:web",
     "preview": "npm run preview:web",
     "tauri": "tauri"
   },

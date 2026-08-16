@@ -41,7 +41,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
     if (!val) return;
     const [h, m] = val.split(':');
     const dow = selectedDays.length === 0 || isEveryDay ? '*' : selectedDays.join(',');
-    onChange(`0 ${parseInt(m)} ${parseInt(h)} * * ${dow}`);
+    onChange(`0 ${parseInt(m, 10)} ${parseInt(h, 10)} * * ${dow}`);
   };
 
   const toggleDay = (dayVal: string) => {
@@ -49,10 +49,10 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
     if (newDays.includes(dayVal)) newDays = newDays.filter(d => d !== dayVal);
     else newDays.push(dayVal);
     const newDow = newDays.length === 0 ? '*' : newDays.join(',');
-    onChange(`0 ${parseInt(minuteStr)} ${parseInt(hourStr)} * * ${newDow}`);
+    onChange(`0 ${parseInt(minuteStr, 10)} ${parseInt(hourStr, 10)} * * ${newDow}`);
   };
 
-  const setEveryDay = () => onChange(`0 ${parseInt(minuteStr)} ${parseInt(hourStr)} * * *`);
+  const setEveryDay = () => onChange(`0 ${parseInt(minuteStr, 10)} ${parseInt(hourStr, 10)} * * *`);
 
   const daysOfWeek = [
     { val: 'MON', label: 'T2' }, { val: 'TUE', label: 'T3' }, { val: 'WED', label: 'T4' },
@@ -421,7 +421,7 @@ const Settings = () => {
             <div className="space-y-2">
               <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                Web build chỉ lưu API key trong phiên hiện tại; Tauri lưu khoá trong OS credential vault[cite: 3].
+                Web build chỉ lưu API key trong phiên hiện tại; Tauri lưu khoá trong OS credential vault.
               </div>
               <button type="button" onClick={handleForgetApiKey} className="w-full rounded-xl border border-red-200 bg-white/90 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50">
                 Quên / xoá API key
@@ -570,9 +570,7 @@ const Settings = () => {
         )}
 
         {/* CALIBRATION */}
-        <AccordionSection id="sensor" title="Cảm biến & Hiệu chuẩn" icon={Activity[38;5;9m[1m
-Terminal response timeout: [0m[0mThe request sent by Yazi didn't receive a correct response.
-Please check your terminal environment as per: https://yazi-rs.github.io/docs/faq#trt} isOpen={openSection === 'sensor'} onToggle={() => handleToggleSection('sensor')}>
+        <AccordionSection id="sensor" title="Cảm biến & Hiệu chuẩn" icon={Activity} isOpen={openSection === 'sensor'} onToggle={() => handleToggleSection('sensor')}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SubCard title="Hiệu chuẩn pH" className="h-full">
               <div className="space-y-4">

@@ -7,8 +7,14 @@ import toast from 'react-hot-toast';
 import { PumpStatus, SensorData } from '../types/models';
 
 const defaultPumpStatus: PumpStatus = {
-  pump_a: false, pump_b: false, ph_up: false, ph_down: false,
-  osaka_pump: false, mist_valve: false, water_pump_in: false, water_pump_out: false,
+  pump_a: false,
+  pump_b: false,
+  ph_up: false,
+  ph_down: false,
+  osaka_pump: false,
+  mist_valve: false,
+  water_pump_in: false,
+  water_pump_out: false,
 };
 
 const PUMP_STATUS_STORE_KEY = 'last_pump_status';
@@ -18,7 +24,9 @@ const phaseToString = (phase: any): string | null => {
   if (phase == null) return null;
   if (typeof phase === 'string') {
     if (phase.startsWith('{')) {
-      try { return phaseToString(JSON.parse(phase)); } catch (_) {}
+      try {
+        return phaseToString(JSON.parse(phase));
+      } catch (_) {}
     }
     return phase;
   }
@@ -35,12 +43,28 @@ const phaseToString = (phase: any): string | null => {
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus as any;
   const mapped: Record<string, string> = {
-    PUMP_A: 'pump_a', PUMP_B: 'pump_b', PH_UP: 'ph_up', PH_DOWN: 'ph_down',
-    OSAKA: 'osaka_pump', OSAKA_PUMP: 'osaka_pump', MIST: 'mist_valve', MIST_VALVE: 'mist_valve',
-    WATER_PUMP_IN: 'water_pump_in', WATER_PUMP_OUT: 'water_pump_out'
+    PUMP_A: 'pump_a',
+    PUMP_B: 'pump_b',
+    PH_UP: 'ph_up',
+    PH_DOWN: 'ph_down',
+    OSAKA: 'osaka_pump',
+    OSAKA_PUMP: 'osaka_pump',
+    MIST: 'mist_valve',
+    MIST_VALVE: 'mist_valve',
+    WATER_PUMP_IN: 'water_pump_in',
+    WATER_PUMP_OUT: 'water_pump_out',
   };
   const normalized: any = { ...defaultPumpStatus };
-  const booleanKeys = ['pump_a', 'pump_b', 'ph_up', 'ph_down', 'osaka_pump', 'mist_valve', 'water_pump_in', 'water_pump_out'];
+  const booleanKeys = [
+    'pump_a',
+    'pump_b',
+    'ph_up',
+    'ph_down',
+    'osaka_pump',
+    'mist_valve',
+    'water_pump_in',
+    'water_pump_out',
+  ];
   Object.entries(rawPumpStatus).forEach(([key, value]) => {
     const normalizedKey = mapped[key] || mapped[key.toUpperCase()] || key.toLowerCase();
     if (booleanKeys.includes(normalizedKey)) {
@@ -55,14 +79,13 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
 export function useDeviceSync() {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
-
   const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetSensorTimeout = useCallback(() => {
     if (sensorTimeoutRef.current) clearTimeout(sensorTimeoutRef.current);
     sensorTimeoutRef.current = setTimeout(() => {
       useDeviceStore.getState().setIsSensorOnline(false);
-      toast.error("Mất tín hiệu cảm biến; hiển thị giá trị cuối.");
+      toast.error('Mất tín hiệu cảm biến.');
     }, 65000);
   }, []);
 
@@ -72,19 +95,31 @@ export function useDeviceSync() {
       let mergedSettings = s;
       if (s.api_key) {
         try {
-          const configRes = await httpFetch(`${s.backend_url}/api/devices/${s.device_id}/config/unified`, {
-            method: 'GET',
-            headers: { 'X-API-Key': s.api_key || '' }
-          });
+          const configRes = await httpFetch(
+            `${s.backend_url}/api/devices/${s.device_id}/config/unified`,
+            {
+              method: 'GET',
+              headers: { 'X-API-Key': s.api_key || '' },
+            }
+          );
           if (configRes.ok) {
             const unifiedConfig = await configRes.json();
-            mergedSettings = { ...s, ...(unifiedConfig.device_config || {}), ...(unifiedConfig.water_config || {}), ...(unifiedConfig.safety_config || {}), ...(unifiedConfig.sensor_calibration || {}), ...(unifiedConfig.dosing_calibration || {}) };
+            mergedSettings = {
+              ...s,
+              ...(unifiedConfig.device_config || {}),
+              ...(unifiedConfig.water_config || {}),
+              ...(unifiedConfig.safety_config || {}),
+              ...(unifiedConfig.sensor_calibration || {}),
+              ...(unifiedConfig.dosing_calibration || {}),
+            };
           }
         } catch (_) {}
       }
       useDeviceStore.getState().setSettings(mergedSettings);
       useDeviceStore.getState().setDeviceId(s.device_id || null);
-      useDeviceStore.getState().setIsMissingConfig(!isTauriRuntime() && !hasRequiredRemoteConfig(s));
+      useDeviceStore
+        .getState()
+        .setIsMissingConfig(!isTauriRuntime() && !hasRequiredRemoteConfig(s));
     } else if (!isTauriRuntime()) {
       useDeviceStore.getState().setIsMissingConfig(true);
     }
@@ -95,34 +130,66 @@ export function useDeviceSync() {
     useDeviceStore.getState().setSensorData((prev) => ({
       ...((prev || {}) as SensorData),
       device_id: prev?.device_id || useDeviceStore.getState().deviceId || '',
-      ec: prev?.ec ?? 0, ph: prev?.ph ?? 0, temp: prev?.temp ?? 0, water_level: prev?.water_level ?? 0,
+      ec: prev?.ec ?? 0,
+      ph: prev?.ph ?? 0,
+      temp: prev?.temp ?? 0,
+      water_level: prev?.water_level ?? 0,
       time: prev?.time || new Date().toISOString(),
       pump_status: pumpStatus,
     }));
   }, []);
 
-  const applyDeviceSnapshot = useCallback((snapshot: any) => {
-    if (!snapshot || typeof snapshot !== 'object') return;
-    const state = snapshot.fsm_state || snapshot.fsm_phase || snapshot.current_phase || snapshot.current_state;
-    if (state) useDeviceStore.getState().setFsmState(phaseToString(state) || 'Monitoring');
-    if (snapshot.budgets) useDeviceStore.getState().setDeviceStatus(prev => ({ ...prev, budgets: snapshot.budgets }));
-    useDeviceStore.getState().setSystemEvents((prev: any[]) => [alert, ...(prev || [])].slice(0, 50));    if (snapshot.pump_status) applyPumpStatus(normalizePumpStatus(snapshot.pump_status));
-  }, [applyPumpStatus]);
+  const applyDeviceSnapshot = useCallback(
+    (snapshot: any) => {
+      if (!snapshot || typeof snapshot !== 'object') return;
+      const state =
+        snapshot.fsm_state ||
+        snapshot.fsm_phase ||
+        snapshot.current_phase ||
+        snapshot.current_state;
+      if (state) useDeviceStore.getState().setFsmState(phaseToString(state) || 'Monitoring');
+      if (snapshot.budgets) {
+        useDeviceStore.getState().setDeviceStatus((prev) => ({ ...prev, budgets: snapshot.budgets }));
+      }
+      if (snapshot.diagnostics) {
+        useDeviceStore.getState().setControllerHealth(snapshot.diagnostics);
+      }
+      if (snapshot.pump_status) {
+        applyPumpStatus(normalizePumpStatus(snapshot.pump_status));
+      }
+      // Đánh dấu trạm đang Online khi tải thành công snapshot
+      useDeviceStore.getState().setDeviceStatus((prev) => ({
+        ...prev,
+        is_online: true,
+        last_seen: new Date().toISOString(),
+      }));
+      useDeviceStore.getState().setIsControllerStatusKnown(true);
+    },
+    [applyPumpStatus]
+  );
 
   const refreshDeviceSnapshot = useCallback(async () => {
     const currentDeviceId = useDeviceStore.getState().deviceId;
     const currentSettings = useDeviceStore.getState().settings;
     if (!currentDeviceId || !currentSettings?.backend_url) return;
+
     const cachedPwm = await getItem<Record<string, number>>(PWM_PREFS_STORE_KEY);
     if (cachedPwm) useDeviceStore.getState().setPwmPreferences(cachedPwm);
-    const headers = { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key || '' };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-API-Key': currentSettings.api_key || '',
+    };
     try {
-      const response = await httpFetch(`${currentSettings.backend_url}/api/devices/${currentDeviceId}/sensors/latest`, { method: 'GET', headers });
+      const response = await httpFetch(
+        `${currentSettings.backend_url}/api/devices/${currentDeviceId}/sensors/latest`,
+        { method: 'GET', headers }
+      );
       if (response.ok) applyDeviceSnapshot((await response.json()).data);
     } catch (_) {}
   }, [applyDeviceSnapshot]);
 
-  // Khởi tạo ban đầu
+  // Khởi tạo cài đặt ban đầu
   useEffect(() => {
     refreshSettings().then(() => useDeviceStore.getState().setIsLoading(false));
     const onUpdate = () => refreshSettings();
@@ -134,55 +201,112 @@ export function useDeviceSync() {
     };
   }, [refreshSettings]);
 
-  // Vòng đời kết nối WebSocket
+  // WebSocket Live Sync
   useEffect(() => {
-    if (!deviceId || !settings) return;
-
+    if (!deviceId || !settings?.backend_url) return;
     let ws: WebSocket;
     let pingInterval: ReturnType<typeof setTimeout>;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
-const connectWs = () => {
-      const cleanBaseUrl = settings.backend_url.replace(/\/$/, "");
-      
-      // Thêm query parameter ?api_key=... vào WS URL
+    const connectWs = () => {
+      const cleanBaseUrl = settings.backend_url.replace(/\/$/, '');
       const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${encodeURIComponent(settings.api_key || '')}`;
-      
+
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        // Gửi tin nhắn auth bổ sung nếu backend yêu cầu song song
         ws.send(JSON.stringify({ type: 'auth', api_key: settings.api_key }));
         useDeviceStore.getState().setIsControllerStatusKnown(false);
         resetSensorTimeout();
         refreshDeviceSnapshot();
-        pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+        }, 25000);
       };
 
-ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
+          // 1. Cập nhật dữ liệu cảm biến
           if (data.type === 'sensor_update') {
             const incomingPayload = data.payload.data || data.payload;
-            useDeviceStore.getState().setSensorData(prev => ({
+            useDeviceStore.getState().setSensorData((prev) => ({
               ...prev,
               ...incomingPayload,
-              pump_status: incomingPayload?.pump_status ? normalizePumpStatus(incomingPayload.pump_status) : prev?.pump_status
+              pump_status: incomingPayload?.pump_status
+                ? normalizePumpStatus(incomingPayload.pump_status)
+                : prev?.pump_status,
             }));
             useDeviceStore.getState().setIsSensorOnline(true);
             resetSensorTimeout();
-          } else if (data.type === 'fsm_state_update' || data.type === 'controller_status') {
-            const newState = data.payload?.current_phase || data.payload?.current_state;
-            if (newState) useDeviceStore.getState().setFsmState(phaseToString(newState) || 'Monitoring');
-          } 
-          // --- BỔ SUNG NHÁNH XỬ LÝ ALERT TỪ WEBSOCKET ---
+          }
+
+          // 2. Trạng thái kết nối trạm (Online / Offline)
+          else if (data.type === 'device_status') {
+            const payload = data.payload || {};
+            const isOnline = Boolean(payload.is_online ?? payload.online ?? false);
+            useDeviceStore.getState().setIsControllerStatusKnown(true);
+            useDeviceStore.getState().setDeviceStatus((prev) => ({
+              ...prev,
+              ...payload,
+              is_online: isOnline,
+              last_seen: new Date().toISOString(),
+            }));
+            if (!isOnline) {
+              useDeviceStore.getState().setFsmState('Offline');
+            }
+          }
+
+          // 3. Cập nhật FSM State & Trạng thái Controller
+          else if (data.type === 'fsm_state_update' || data.type === 'controller_status') {
+            const payload = data.payload || {};
+            const newState = payload.current_phase || payload.current_state || payload.fsm_state;
+            if (newState) {
+              useDeviceStore.getState().setFsmState(phaseToString(newState) || 'Monitoring');
+            }
+            if (payload.budgets) {
+              useDeviceStore.getState().setDeviceStatus((prev) => ({ ...prev, budgets: payload.budgets }));
+            }
+            if (payload.pump_status) {
+              applyPumpStatus(normalizePumpStatus(payload.pump_status));
+            }
+            if (payload.online !== undefined || payload.is_online !== undefined) {
+              const isOnline = Boolean(payload.is_online ?? payload.online);
+              useDeviceStore.getState().setDeviceStatus((prev) => ({
+                ...prev,
+                is_online: isOnline,
+                last_seen: new Date().toISOString(),
+              }));
+              useDeviceStore.getState().setIsControllerStatusKnown(true);
+            }
+          }
+
+          // 4. Cập nhật Health Snapshot
+          else if (data.type === 'device_health' || data.type === 'health_snapshot') {
+            const healthData = data.payload || {};
+            useDeviceStore.getState().setControllerHealth(healthData);
+            if (healthData.fsm_state_display) {
+              useDeviceStore
+                .getState()
+                .setFsmState(phaseToString(healthData.fsm_state_display) || 'Monitoring');
+            }
+            useDeviceStore.getState().setDeviceStatus((prev) => ({
+              ...prev,
+              is_online: true,
+              last_seen: new Date().toISOString(),
+            }));
+            useDeviceStore.getState().setIsControllerStatusKnown(true);
+          }
+
+          // 5. Cảnh báo hệ thống
           else if (data.type === 'alert') {
             const alert = data.payload;
             if (alert) {
-              useDeviceStore.getState().setSystemEvents(prev => [alert, ...(prev || [])].slice(0, 50));
-              
-              // Nếu là cảnh báo mức bình dung dịch, lưu vào Zustand store
+              useDeviceStore
+                .getState()
+                .setSystemEvents((prev: any[]) => [alert, ...(prev || [])].slice(0, 50));
+
               if (alert.reason === 'tank_level_alert' || alert.metadata?.tank_a_low !== undefined) {
                 const details = alert.metadata || {};
                 useDeviceStore.getState().setTankAlert({
@@ -200,7 +324,7 @@ ws.onmessage = (event) => {
               }
             }
           }
-        } catch (e) {}
+        } catch (_) {}
       };
 
       ws.onclose = () => {
@@ -211,10 +335,19 @@ ws.onmessage = (event) => {
     };
 
     connectWs();
+
     return () => {
       clearInterval(pingInterval);
       clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
-  }, [deviceId, settings?.backend_url, settings?.api_key, resetSensorTimeout, refreshDeviceSnapshot]);
+  }, [
+    deviceId,
+    settings?.backend_url,
+    settings?.api_key,
+    resetSensorTimeout,
+    refreshDeviceSnapshot,
+    applyPumpStatus,
+    applyDeviceSnapshot,
+  ]);
 }

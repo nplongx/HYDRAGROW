@@ -4,6 +4,7 @@ use tracing::{error, info, warn};
 
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
+use crate::metrics::*;
 use hydragrow_shared::{
     PumpStatus, events::AppEvent, fsm::FsmSnapshot, telemetry::FsmTransitionEvent,
 };
@@ -145,6 +146,99 @@ pub async fn handle_calibration_update(
 
     if let Some(coeffs) = json.get("runtime_coefficients") {
         let update = runtime_calibration_update_from_coeffs(device_id, coeffs);
+
+        // =====================================================================
+        // Prometheus Metrics Recording
+        // =====================================================================
+        if let Some(v) = update.ec_gain {
+            ADAPTIVE_GAIN_PER_ML
+                .with_label_values(&[device_id, "ec"])
+                .set(v);
+        }
+        if let Some(v) = update.ph_up {
+            ADAPTIVE_GAIN_PER_ML
+                .with_label_values(&[device_id, "ph_up"])
+                .set(v);
+        }
+        if let Some(v) = update.ph_down {
+            ADAPTIVE_GAIN_PER_ML
+                .with_label_values(&[device_id, "ph_down"])
+                .set(v);
+        }
+        if let Some(v) = update.step_ec {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "ec"])
+                .set(v);
+        }
+        if let Some(v) = update.step_ph {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "ph"])
+                .set(v);
+        }
+        if let Some(v) = update.best_ec_ratio {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "best_ec"])
+                .set(v);
+        }
+        if let Some(v) = update.best_ph_ratio {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "best_ph"])
+                .set(v);
+        }
+        if let Some(v) = update.tuner_state {
+            ADAPTIVE_TUNER_STATE.with_label_values(&[device_id]).set(v);
+        }
+        if let Some(v) = update.matrix_is_warm {
+            ADAPTIVE_MATRIX_IS_WARM
+                .with_label_values(&[device_id])
+                .set(if v { 1 } else { 0 });
+        }
+        if let Some(v) = update.matrix_update_count {
+            ADAPTIVE_MATRIX_UPDATE_COUNT
+                .with_label_values(&[device_id])
+                .set(v);
+        }
+        if let Some(v) = update.effective_ec_tolerance {
+            ADAPTIVE_EFFECTIVE_TOLERANCE
+                .with_label_values(&[device_id, "ec"])
+                .set(v);
+        }
+        if let Some(v) = update.effective_ph_tolerance {
+            ADAPTIVE_EFFECTIVE_TOLERANCE
+                .with_label_values(&[device_id, "ph"])
+                .set(v);
+        }
+        if let Some(v) = update.adaptive_mixing_sec {
+            ADAPTIVE_FLUID_TIME_SECONDS
+                .with_label_values(&[device_id, "mixing"])
+                .set(v);
+        }
+        if let Some(v) = update.adaptive_stabilize_sec {
+            ADAPTIVE_FLUID_TIME_SECONDS
+                .with_label_values(&[device_id, "stabilizing"])
+                .set(v);
+        }
+
+        // Cập nhật Kalman Confidences 8 kênh nếu có
+        if let Some(arr) = update.kalman_confidence.as_ref().and_then(|k| k.as_array()) {
+            let labels = [
+                "nutrient_a",
+                "nutrient_b",
+                "ph_up",
+                "ph_down",
+                "water_in",
+                "water_out",
+                "osaka_mixing",
+                "misting",
+            ];
+            for (idx, label) in labels.iter().enumerate() {
+                if let Some(val) = arr.get(idx).and_then(|v| v.as_f64()) {
+                    KALMAN_ACTUATOR_CONFIDENCE
+                        .with_label_values(&[device_id, label])
+                        .set(val);
+                }
+            }
+        }
 
         let query = r#"
                 UPDATE dosing_calibration

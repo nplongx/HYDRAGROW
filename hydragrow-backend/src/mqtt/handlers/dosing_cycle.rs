@@ -7,7 +7,7 @@ use tracing::{error, info, instrument};
 
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_dosing_report, insert_system_event};
-use crate::metrics::DOSING_CYCLES_TOTAL;
+use crate::metrics::*;
 use crate::models::alert::AlertMessage;
 
 #[instrument(
@@ -66,10 +66,147 @@ pub async fn handle_dosing_cycle(
     // }
     // ============================================================
 
+    let dev = &device_id;
+
+    // 1. Snapshot EC qua các giai đoạn
+    DOSING_SNAPSHOT_EC
+        .with_label_values(&[dev, "pre"])
+        .set(event.pre.ec as f64);
+    DOSING_SNAPSHOT_EC
+        .with_label_values(&[dev, "post_mixing"])
+        .set(event.post_mixing.ec as f64);
+    DOSING_SNAPSHOT_EC
+        .with_label_values(&[dev, "post_stable"])
+        .set(event.post_stable.ec as f64);
+    DOSING_SNAPSHOT_EC
+        .with_label_values(&[dev, "target"])
+        .set(event.target_ec as f64);
+    DOSING_SNAPSHOT_EC
+        .with_label_values(&[dev, "delta"])
+        .set(event.delta_ec() as f64);
+    DOSING_SNAPSHOT_EC
+        .with_label_values(&[dev, "error"])
+        .set(event.error_ec() as f64);
+
+    // 2. Snapshot pH qua các giai đoạn
+    DOSING_SNAPSHOT_PH
+        .with_label_values(&[dev, "pre"])
+        .set(event.pre.ph as f64);
+    DOSING_SNAPSHOT_PH
+        .with_label_values(&[dev, "post_mixing"])
+        .set(event.post_mixing.ph as f64);
+    DOSING_SNAPSHOT_PH
+        .with_label_values(&[dev, "post_stable"])
+        .set(event.post_stable.ph as f64);
+    DOSING_SNAPSHOT_PH
+        .with_label_values(&[dev, "target"])
+        .set(event.target_ph as f64);
+    DOSING_SNAPSHOT_PH
+        .with_label_values(&[dev, "delta"])
+        .set(event.delta_ph() as f64);
+    DOSING_SNAPSHOT_PH
+        .with_label_values(&[dev, "error"])
+        .set(event.error_ph() as f64);
+
+    // 3. Snapshot Mực nước
+    DOSING_SNAPSHOT_WATER_LEVEL
+        .with_label_values(&[dev, "pre"])
+        .set(event.pre.water_level as f64);
+    DOSING_SNAPSHOT_WATER_LEVEL
+        .with_label_values(&[dev, "post_mixing"])
+        .set(event.post_mixing.water_level as f64);
+    DOSING_SNAPSHOT_WATER_LEVEL
+        .with_label_values(&[dev, "post_stable"])
+        .set(event.post_stable.water_level as f64);
+
+    // 4. Lượng dung dịch châm trong chu kỳ & Tích lũy (Counter)
+    DOSING_DELIVERED_DOSE_ML
+        .with_label_values(&[dev, "pump_a"])
+        .set(event.dose.pump_a_ml as f64);
+    DOSING_DELIVERED_DOSE_ML
+        .with_label_values(&[dev, "pump_b"])
+        .set(event.dose.pump_b_ml as f64);
+    DOSING_DELIVERED_DOSE_ML
+        .with_label_values(&[dev, "ph_up"])
+        .set(event.dose.ph_up_ml as f64);
+    DOSING_DELIVERED_DOSE_ML
+        .with_label_values(&[dev, "ph_down"])
+        .set(event.dose.ph_down_ml as f64);
+    DOSING_DELIVERED_DOSE_ML
+        .with_label_values(&[dev, "total_nutrient"])
+        .set(event.total_nutrient_ml() as f64);
+    DOSING_DELIVERED_DOSE_ML
+        .with_label_values(&[dev, "total_ph"])
+        .set(event.total_ph_ml() as f64);
+
+    DOSING_WATER_ACTUATOR_SECONDS
+        .with_label_values(&[dev, "water_in"])
+        .set(event.dose.water_in_sec as f64);
+    DOSING_WATER_ACTUATOR_SECONDS
+        .with_label_values(&[dev, "water_out"])
+        .set(event.dose.water_out_sec as f64);
+
+    if event.dose.pump_a_ml > 0.0 {
+        DOSING_PUMP_TOTAL_ML
+            .with_label_values(&[dev, "pump_a"])
+            .inc_by(event.dose.pump_a_ml as f64);
+    }
+    if event.dose.pump_b_ml > 0.0 {
+        DOSING_PUMP_TOTAL_ML
+            .with_label_values(&[dev, "pump_b"])
+            .inc_by(event.dose.pump_b_ml as f64);
+    }
+    if event.dose.ph_up_ml > 0.0 {
+        DOSING_PUMP_TOTAL_ML
+            .with_label_values(&[dev, "ph_up"])
+            .inc_by(event.dose.ph_up_ml as f64);
+    }
+    if event.dose.ph_down_ml > 0.0 {
+        DOSING_PUMP_TOTAL_ML
+            .with_label_values(&[dev, "ph_down"])
+            .inc_by(event.dose.ph_down_ml as f64);
+    }
     DOSING_CYCLES_TOTAL
         .with_label_values(&[event.trigger.as_str(), outcome_str])
         .inc();
 
+    // Ghi nhận thời gian các phase
+    DOSING_CYCLE_PHASE_DURATION_SECONDS
+        .with_label_values(&[&device_id, "total"])
+        .observe(event.duration_ms as f64 / 1000.0);
+
+    DOSING_CYCLE_PHASE_DURATION_SECONDS
+        .with_label_values(&[&device_id, "mixing"])
+        .observe(event.mixing_duration_ms as f64 / 1000.0);
+
+    DOSING_CYCLE_PHASE_DURATION_SECONDS
+        .with_label_values(&[&device_id, "stabilizing"])
+        .observe(event.stabilize_duration_ms as f64 / 1000.0);
+
+    // Nếu có dữ liệu Kalman học được sau chu kỳ
+    if let Some(kalman) = &event.kalman {
+        ADAPTIVE_GAIN_PER_ML
+            .with_label_values(&[&device_id, "ec"])
+            .set(kalman.ec_gain_after as f64);
+        ADAPTIVE_GAIN_PER_ML
+            .with_label_values(&[&device_id, "ph_up"])
+            .set(kalman.ph_up_gain_after as f64);
+        ADAPTIVE_GAIN_PER_ML
+            .with_label_values(&[&device_id, "ph_down"])
+            .set(kalman.ph_down_gain_after as f64);
+        ADAPTIVE_MATRIX_UPDATE_COUNT
+            .with_label_values(&[&device_id])
+            .set(kalman.matrix_update_count as i64);
+        ADAPTIVE_MATRIX_IS_WARM
+            .with_label_values(&[&device_id])
+            .set(if kalman.matrix_is_warm { 1 } else { 0 });
+        ADAPTIVE_FLUID_TIME_SECONDS
+            .with_label_values(&[&device_id, "mixing"])
+            .set(kalman.adaptive_mixing_sec as i64);
+        ADAPTIVE_FLUID_TIME_SECONDS
+            .with_label_values(&[&device_id, "stabilizing"])
+            .set(kalman.adaptive_stabilize_sec as i64);
+    }
     // ============================================================
     // 4. Logging
     // ============================================================

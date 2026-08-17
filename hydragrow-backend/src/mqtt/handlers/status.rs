@@ -4,6 +4,7 @@ use serde_json::json;
 use tracing::{error, info, instrument, warn};
 
 use crate::AppState;
+use crate::metrics::*;
 use crate::models::alert::AlertMessage;
 use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
 use hydragrow_shared::telemetry::DeviceHealthSnapshot;
@@ -89,7 +90,8 @@ pub async fn handle_device(
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     if let Ok(parsed) = parse_controller_status_payload(payload) {
-        let payload_json = parsed.raw_json;
+        let payload_json = &parsed.raw_json;
+        let dev = &device_id;
         let mut states = app_state.device_states.write().await;
 
         let mut merged = states
@@ -151,13 +153,103 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
 
         let _ = app_state
             .event_bus
-            .send(AppEvent::ControllerStatus(payload_json));
+            .send(AppEvent::ControllerStatus(payload_json.clone()));
 
-        if let Some(snapshot) = parsed.health_snapshot {
-            let _ = app_state.event_bus.send(AppEvent::HealthSnapshot(snapshot));
+        // 1. Cập nhật thông số phần cứng ESP32
+        if let Some(heap) = payload_json.get("free_heap").and_then(|v| v.as_u64()) {
+            CONTROLLER_FREE_HEAP_BYTES
+                .with_label_values(&[dev])
+                .set(heap as i64);
         }
-    } else {
-        warn!("Lỗi parse JSON Health Data từ {}", device_id);
+        if let Some(rssi) = payload_json.get("rssi").and_then(|v| v.as_i64()) {
+            CONTROLLER_WIFI_RSSI_DBM.with_label_values(&[dev]).set(rssi);
+        }
+        if let Some(uptime) = payload_json.get("uptime_sec").and_then(|v| v.as_u64()) {
+            CONTROLLER_UPTIME_SECONDS
+                .with_label_values(&[dev])
+                .set(uptime as i64);
+        }
+        if let Some(drops) = payload_json.get("log_drop_count").and_then(|v| v.as_u64()) {
+            CONTROLLER_LOG_DROPPED_TOTAL
+                .with_label_values(&[dev])
+                .set(drops as i64);
+        }
+
+        // 2. Cập nhật Budgets & Streaks từ FsmSnapshot nếu có
+        if let Some(budgets) = payload_json.get("budgets") {
+            if let Some(ec_ml) = budgets.get("ec_ml").and_then(|v| v.as_f64()) {
+                SAFETY_HOURLY_DOSE_ML
+                    .with_label_values(&[dev, "ec"])
+                    .set(ec_ml);
+            }
+            if let Some(ph_ml) = budgets.get("ph_ml").and_then(|v| v.as_f64()) {
+                SAFETY_HOURLY_DOSE_ML
+                    .with_label_values(&[dev, "ph"])
+                    .set(ph_ml);
+            }
+            if let Some(refills) = budgets.get("refill_count").and_then(|v| v.as_i64()) {
+                SAFETY_HOURLY_WATER_CYCLES
+                    .with_label_values(&[dev, "refill"])
+                    .set(refills);
+            }
+            if let Some(drains) = budgets.get("drain_count").and_then(|v| v.as_i64()) {
+                SAFETY_HOURLY_WATER_CYCLES
+                    .with_label_values(&[dev, "drain"])
+                    .set(drains);
+            }
+        }
+
+        if let Some(diag) = payload_json.get("diagnostics") {
+            if let Some(ec_streak) = diag.get("ec_pump_streak").and_then(|v| v.as_i64()) {
+                DIAGNOSTIC_FAULT_STREAK
+                    .with_label_values(&[dev, "ec_pump"])
+                    .set(ec_streak);
+            }
+            if let Some(ph_streak) = diag.get("ph_pump_streak").and_then(|v| v.as_i64()) {
+                DIAGNOSTIC_FAULT_STREAK
+                    .with_label_values(&[dev, "ph_pump"])
+                    .set(ph_streak);
+            }
+            if let Some(water_streak) = diag.get("water_hydraulics_streak").and_then(|v| v.as_i64())
+            {
+                DIAGNOSTIC_FAULT_STREAK
+                    .with_label_values(&[dev, "water_hydraulics"])
+                    .set(water_streak);
+            }
+            if let Some(snapshot) = parsed.health_snapshot {
+                if let Some(hestia) = snapshot.hestia {
+                    HESTIA_CONFIDENCE
+                        .with_label_values(&[dev])
+                        .set(hestia.confidence as f64);
+
+                    HESTIA_AXIS_WEIGHT
+                        .with_label_values(&[dev, "ec"])
+                        .set(hestia.axes.ec.weight as f64);
+                    HESTIA_AXIS_WEIGHT
+                        .with_label_values(&[dev, "ph"])
+                        .set(hestia.axes.ph.weight as f64);
+                    HESTIA_AXIS_WEIGHT
+                        .with_label_values(&[dev, "water_level"])
+                        .set(hestia.axes.water_level.weight as f64);
+                    HESTIA_AXIS_WEIGHT
+                        .with_label_values(&[dev, "temp"])
+                        .set(hestia.axes.temp.weight as f64);
+
+                    HESTIA_AXIS_ACTION_FACTOR
+                        .with_label_values(&[dev, "ec"])
+                        .set(hestia.axes.ec.action_factor as f64);
+                    HESTIA_AXIS_ACTION_FACTOR
+                        .with_label_values(&[dev, "ph"])
+                        .set(hestia.axes.ph.action_factor as f64);
+                    HESTIA_AXIS_ACTION_FACTOR
+                        .with_label_values(&[dev, "water_level"])
+                        .set(hestia.axes.water_level.action_factor as f64);
+                    HESTIA_AXIS_ACTION_FACTOR
+                        .with_label_values(&[dev, "temp"])
+                        .set(hestia.axes.temp.action_factor as f64);
+                }
+            }
+        }
     }
 }
 

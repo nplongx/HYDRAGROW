@@ -56,13 +56,27 @@ pub fn register_metrics() {
         let _ = REGISTRY.register(Box::new(process_collector));
     }
 
-    REGISTRY.register(Box::new(HTTP_REQUESTS_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(HTTP_REQ_DURATION_SECONDS.clone())).unwrap();
-    REGISTRY.register(Box::new(ACTIVE_WS_CONNECTIONS.clone())).unwrap();
-    REGISTRY.register(Box::new(MQTT_MESSAGES_RECEIVED_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(MQTT_PROCESSING_ERRORS_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(SENSOR_UPDATES_TOTAL.clone())).unwrap();
-    REGISTRY.register(Box::new(DOSING_CYCLES_TOTAL.clone())).unwrap();
+    REGISTRY
+        .register(Box::new(HTTP_REQUESTS_TOTAL.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(HTTP_REQ_DURATION_SECONDS.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(ACTIVE_WS_CONNECTIONS.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(MQTT_MESSAGES_RECEIVED_TOTAL.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(MQTT_PROCESSING_ERRORS_TOTAL.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(SENSOR_UPDATES_TOTAL.clone()))
+        .unwrap();
+    REGISTRY
+        .register(Box::new(DOSING_CYCLES_TOTAL.clone()))
+        .unwrap();
 }
 
 pub fn gather_metrics() -> String {

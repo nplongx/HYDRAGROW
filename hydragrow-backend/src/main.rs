@@ -133,6 +133,8 @@ pub struct AppState {
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
+    crate::metrics::register_metrics();
+
     // =========================================================================
     // 1. KHỞI TẠO LOKI LOGGING PIPELINE
     // =========================================================================

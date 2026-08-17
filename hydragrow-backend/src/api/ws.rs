@@ -10,6 +10,7 @@ use tokio::{
 use tracing::{info, warn};
 
 use crate::AppState;
+use crate::metrics::ACTIVE_WS_CONNECTIONS;
 
 #[derive(serde::Deserialize)]
 struct WsAuthMessage {
@@ -21,6 +22,23 @@ struct WsAuthMessage {
 #[derive(serde::Deserialize)]
 struct WsQuery {
     api_key: Option<String>,
+}
+
+/// RAII guard để đảm bảo active WebSocket luôn được giảm
+/// khi connection kết thúc.
+struct WsConnectionGuard;
+
+impl WsConnectionGuard {
+    fn new() -> Self {
+        ACTIVE_WS_CONNECTIONS.inc();
+        Self
+    }
+}
+
+impl Drop for WsConnectionGuard {
+    fn drop(&mut self) {
+        ACTIVE_WS_CONNECTIONS.dec();
+    }
 }
 
 pub async fn ws_handler(
@@ -38,8 +56,8 @@ pub async fn ws_handler(
         .to_string();
 
     info!(
-        "New WebSocket connection established from IP: {}",
-        client_ip
+        client_ip = %client_ip,
+        "New WebSocket connection established"
     );
 
     let expected_api_key = app_state.api_key.clone();
@@ -57,44 +75,127 @@ pub async fn ws_handler(
             true
         } else {
             let auth_result = timeout(Duration::from_secs(10), msg_stream.next()).await;
+
             match auth_result {
                 Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<WsAuthMessage>(&text)
                     .map(|auth| auth.message_type == "auth" && auth.api_key == expected_api_key)
                     .unwrap_or(false),
+
                 Ok(Some(Ok(Message::Close(reason)))) => {
                     let _ = session.close(reason).await;
                     return;
                 }
+
                 _ => false,
             }
         };
 
+        // Không được tính connection chưa authenticate
         if !is_authorized {
             warn!(
-                "Rejected unauthenticated WebSocket connection from IP: {}",
-                client_ip
+                client_ip = %client_ip,
+                "Rejected unauthenticated WebSocket connection"
             );
+
             let _ = session.close(None).await;
             return;
         }
 
+        // Từ thời điểm này connection được xem là ACTIVE.
+        //
+        // Guard sẽ tự động gọi:
+        // ACTIVE_WS_CONNECTIONS.inc()
+        //
+        // và khi task kết thúc:
+        // ACTIVE_WS_CONNECTIONS.dec()
+        let _ws_connection_guard = WsConnectionGuard::new();
+
+        info!(
+            client_ip = %client_ip,
+            active_connections = ACTIVE_WS_CONNECTIONS.get(),
+            "WebSocket client authenticated"
+        );
+
         let mut event_rx = event_bus.subscribe();
+
         loop {
             tokio::select! {
                 event_result = event_rx.recv() => {
                     match event_result {
                         Ok(event) => {
                             let ws_msg = match event {
-                                AppEvent::SystemAlert(alert_msg) => serde_json::json!({"type":"alert","payload":alert_msg}),
-                                AppEvent::SensorUpdate(sensor_data) => serde_json::json!({"type":"sensor_update","payload":sensor_data}),
-                                AppEvent::DeviceStatus(status) => serde_json::json!({"type":"device_status","payload":{"is_online":status.is_online,"last_seen":chrono::Utc::now().to_rfc3339()}}),
-                                AppEvent::FsmTransition(fsm) => serde_json::json!({"type":"fsm_transition","payload":fsm}),
-                                AppEvent::DosingCycle(report) => serde_json::json!({"type":"dosing_report","payload":report}),
-                                AppEvent::CalibrationUpdate(payload) => serde_json::json!({"type":"calibration_update","payload":payload}),
-                                AppEvent::WaterCycle(payload) => serde_json::json!({"type":"water_cycle", "payload":payload}),
-                                AppEvent::HealthSnapshot(snapshot) => serde_json::json!({"type":"health_snapshot", "payload":snapshot}),
-                                AppEvent::FsmStateUpdate(snapshot) => serde_json::json!({"type":"fsm_state_update", "payload":snapshot}),
-                                AppEvent::ControllerStatus(payload) => serde_json::json!({"type":"controller_status", "payload":payload}),
+                                AppEvent::SystemAlert(alert_msg) => {
+                                    serde_json::json!({
+                                        "type": "alert",
+                                        "payload": alert_msg
+                                    })
+                                }
+
+                                AppEvent::SensorUpdate(sensor_data) => {
+                                    serde_json::json!({
+                                        "type": "sensor_update",
+                                        "payload": sensor_data
+                                    })
+                                }
+
+                                AppEvent::DeviceStatus(status) => {
+                                    serde_json::json!({
+                                        "type": "device_status",
+                                        "payload": {
+                                            "is_online": status.is_online,
+                                            "last_seen": chrono::Utc::now().to_rfc3339()
+                                        }
+                                    })
+                                }
+
+                                AppEvent::FsmTransition(fsm) => {
+                                    serde_json::json!({
+                                        "type": "fsm_transition",
+                                        "payload": fsm
+                                    })
+                                }
+
+                                AppEvent::DosingCycle(report) => {
+                                    serde_json::json!({
+                                        "type": "dosing_report",
+                                        "payload": report
+                                    })
+                                }
+
+                                AppEvent::CalibrationUpdate(payload) => {
+                                    serde_json::json!({
+                                        "type": "calibration_update",
+                                        "payload": payload
+                                    })
+                                }
+
+                                AppEvent::WaterCycle(payload) => {
+                                    serde_json::json!({
+                                        "type": "water_cycle",
+                                        "payload": payload
+                                    })
+                                }
+
+                                AppEvent::HealthSnapshot(snapshot) => {
+                                    serde_json::json!({
+                                        "type": "health_snapshot",
+                                        "payload": snapshot
+                                    })
+                                }
+
+                                AppEvent::FsmStateUpdate(snapshot) => {
+                                    serde_json::json!({
+                                        "type": "fsm_state_update",
+                                        "payload": snapshot
+                                    })
+                                }
+
+                                AppEvent::ControllerStatus(payload) => {
+                                    serde_json::json!({
+                                        "type": "controller_status",
+                                        "payload": payload
+                                    })
+                                }
                             };
 
                             if let Ok(json_str) = serde_json::to_string(&ws_msg) {
@@ -103,10 +204,18 @@ pub async fn ws_handler(
                                 }
                             }
                         }
-                        Err(RecvError::Lagged(_)) => {
-                            warn!("WS Client {} is too slow, missed some events", client_ip);
+
+                        Err(RecvError::Lagged(skipped)) => {
+                            warn!(
+                                client_ip = %client_ip,
+                                skipped,
+                                "WebSocket client is too slow and missed events"
+                            );
                         }
-                        Err(RecvError::Closed) => break,
+
+                        Err(RecvError::Closed) => {
+                            break;
+                        }
                     }
                 }
 
@@ -117,18 +226,32 @@ pub async fn ws_handler(
                                 break;
                             }
                         }
+
                         Message::Close(reason) => {
                             let _ = session.close(reason).await;
                             break;
                         }
+
                         _ => {}
                     }
                 }
 
-                else => break,
+                else => {
+                    break;
+                }
             }
         }
-        info!("WebSocket connection closed for IP: {}", client_ip);
+
+        info!(
+            client_ip = %client_ip,
+            active_connections = ACTIVE_WS_CONNECTIONS.get(),
+            "WebSocket connection closed"
+        );
+
+        // Không cần ACTIVE_WS_CONNECTIONS.dec() ở đây.
+        //
+        // Khi scope kết thúc, _ws_connection_guard bị drop
+        // và tự động gọi ACTIVE_WS_CONNECTIONS.dec().
     });
 
     Ok(response)

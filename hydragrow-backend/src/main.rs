@@ -30,6 +30,7 @@ use crate::{
 
 pub mod api;
 pub mod db;
+pub mod metrics;
 pub mod models;
 pub mod mqtt;
 pub mod services;
@@ -372,7 +373,7 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .app_data(app_state.clone())
             .wrap(cors)
-            // 🟢 1. Chỉ bắt đúng 1 endpoint WebSocket, KHÔNG dùng web::scope chiếm toàn bộ đường dẫn
+            .route("/metrics", web::get().to(api::metrics::metrics_handler)) // 🟢 1. Chỉ bắt đúng 1 endpoint WebSocket, KHÔNG dùng web::scope chiếm toàn bộ đường dẫn
             .service(
                 web::resource("/api/devices/{device_id}/ws")
                     .route(web::get().to(api::ws::ws_handler)),

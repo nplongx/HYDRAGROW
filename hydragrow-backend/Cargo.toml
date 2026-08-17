@@ -68,3 +68,5 @@ hydragrow-shared = { path = "../hydragrow-shared" }
 actix-cors = "0.7.1"
 lazy_static = "1.5.0"
 serde_urlencoded = "0.7.1"
+
+prometheus = { version = "0.13", features = ["process"] }

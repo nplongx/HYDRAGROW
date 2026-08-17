@@ -1,10 +1,10 @@
 use crate::AppState;
 use actix_web::{
-    body::EitherBody,
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage, HttpResponse,
+    body::EitherBody,
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
 };
-use futures_util::future::{ready, LocalBoxFuture, Ready};
+use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::rc::Rc;
 
 #[derive(Clone, Debug, Default)]
@@ -80,7 +80,8 @@ where
         }
 
         // Bypass cho WebSocket
-        if req.path().ends_with("/ws") {
+
+        if req.path() == "/metrics" || req.path().ends_with("/ws") {
             let srv = Rc::clone(&self.service);
             return Box::pin(async move {
                 let res = srv.call(req).await?;

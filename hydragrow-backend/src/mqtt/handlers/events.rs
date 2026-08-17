@@ -1,7 +1,7 @@
 // src/mqtt/handlers/events.rs
-use crate::db::postgres::{insert_system_event, NewSystemEventRecord};
-use crate::models::alert::AlertMessage;
 use crate::AppState;
+use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
+use crate::models::alert::AlertMessage;
 use actix_web::web;
 use hydragrow_shared::events::AppEvent;
 use serde_json::json;
@@ -141,8 +141,10 @@ async fn handle_system_alert(
     if level == "warning" || level == "critical" {
         let tokens = app_state.fcm_tokens.lock().unwrap().clone();
         if !tokens.is_empty() {
+            let notification_message = message.clone();
             tokio::spawn(async move {
-                crate::services::fcm::send_push_notification(&title, &message, tokens).await;
+                crate::services::fcm::send_push_notification(&title, &notification_message, tokens)
+                    .await;
             });
         }
     }

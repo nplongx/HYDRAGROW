@@ -1,7 +1,7 @@
 // src/services/fcm.rs
 use reqwest::Client;
 use serde_json::json;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use yup_oauth2::{ServiceAccountAuthenticator, read_service_account_key};
 
 fn firebase_project_id() -> String {

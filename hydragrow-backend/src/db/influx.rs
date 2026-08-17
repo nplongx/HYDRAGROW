@@ -10,7 +10,7 @@ use crate::models::sensor::{SensorData, SensorDataRow};
 pub async fn write_sensor_data(client: &Client, bucket: &str, data: &SensorData) -> Result<()> {
     let mut point_builder = DataPoint::builder("sensor_data")
         .tag("device_id", &data.device_id)
-        .field("tds", data.ec as f64)
+        .field("tds", data.tds as f64)
         .field("ph", data.ph as f64)
         .field("temp", data.temp as f64)
         .field("water_level", data.water_level as f64);

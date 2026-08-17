@@ -26,7 +26,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     let mut sensor_data = SensorData {
         device_id: device_id.clone(),
         temp: incoming.temp,
-        ec: incoming.ec,
+        tds: incoming.tds,
         ph: incoming.ph,
         water_level: incoming.water_level,
         pump_status: incoming.pump_status,
@@ -38,14 +38,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         err_water: incoming.err_water,
         err_temp: incoming.err_temp,
         err_ph: incoming.err_ph,
-        err_ec: incoming.err_ec,
+        err_tds: incoming.err_tds,
         is_continuous: incoming.is_continuous,
         ph_voltage_mv: incoming.ph_voltage_mv,
     };
 
     debug!(
-        "Nhận dữ liệu cảm biến: ph={:.2}, ec={:.2}",
-        sensor_data.ph, sensor_data.ec
+        "Nhận dữ liệu cảm biến: ph={:.2}, tds={:.2}",
+        sensor_data.ph, sensor_data.tds
     );
 
     if let Some(ph_voltage_mv) = incoming.ph_voltage_mv {
@@ -132,7 +132,7 @@ mod tests {
     fn sensor_data() -> SensorData {
         SensorData {
             device_id: "device_001".to_string(),
-            ec: 1.2,
+            tds: 1.2,
             ph: 6.1,
             temp: 25.0,
             water_level: 80.0,
@@ -145,7 +145,7 @@ mod tests {
             err_water: None,
             err_temp: None,
             err_ph: None,
-            err_ec: None,
+            err_tds: None,
             is_continuous: None,
             ph_voltage_mv: Some(2450.0),
         }

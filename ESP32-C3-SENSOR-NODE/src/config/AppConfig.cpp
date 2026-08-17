@@ -9,7 +9,7 @@ AppConfig appConfig = {
         0.0f,    // tdsOffset
         0.0f,    // tempOffset
         100.0f,  // tankHeight
-        false,    // enablePh
+        true,    // enablePh
         true,    // enableTds
         false,    // enableTemp
         false     // enableWater

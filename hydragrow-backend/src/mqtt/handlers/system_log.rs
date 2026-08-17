@@ -1,11 +1,11 @@
-use actix_web::web;
-use hydragrow_shared::log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
-use tracing::{error, info, warn};
-
+// src/mqtt/handlers/system_log.rs
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::alert::AlertMessage;
+use actix_web::web;
 use hydragrow_shared::events::AppEvent;
+use hydragrow_shared::log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog};
+use tracing::{error, info, warn};
 
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let log_data: UnifiedSystemLog = match serde_json::from_slice(payload) {
@@ -15,8 +15,9 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 .map(|s| &s[..s.len().min(200)])
                 .unwrap_or("<invalid utf8>");
             error!(
-                "❌ [SYSTEM LOG] Parse UnifiedSystemLog thất bại từ {}. Error: {:?}. Payload preview: {}",
-                device_id, e, raw_preview
+                target: "esp32_device",
+                device_id = %device_id,
+                "Lỗi parse UnifiedSystemLog: {:?}. Raw: {}", e, raw_preview
             );
             return;
         }
@@ -27,12 +28,12 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     let message_str = match &log_data.event {
         SystemLogEvent::BasicSystemLog(meta) => {
             if let Some(reason) = &meta.skip_reason {
-                tracing::warn!(
+                warn!(
+                    target: "esp32_device",
                     device_id = %log_data.device_id,
                     cycle_id = ?meta.cycle_id,
                     skip_reason = %reason,
-                    "⚠️ [SYSTEM LOG] Firmware báo cáo skip cycle: {}",
-                    reason
+                    "Firmware báo skip cycle: {}", reason
                 );
             }
             meta.message.clone()
@@ -44,16 +45,49 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             if let Some(reason) = &meta.skip_reason {
                 format!("Bỏ qua cập nhật: {}", reason)
             } else {
-                format!("Đã cập nhật hệ số: {}", meta.parameter)
+                format!("Cập nhật: {}", meta.parameter)
             }
         }
         SystemLogEvent::WaterEvent(meta) => format!(
-            "Mực nước: {:.1} -> {:.1}",
+            "Mức nước: {:.1} -> {:.1}",
             meta.level_before, meta.level_after
         ),
     };
 
-    // 2. Chuyển đổi thành Record để lưu Database
+    // =========================================================================
+    // 🟢 BẮN LOG CẤU TRÚC SANG LOKI (Qua Tracing Layer)
+    // =========================================================================
+    match log_data.level {
+        LogLevel::Critical => {
+            error!(
+                target: "esp32_device",
+                device_id = %log_data.device_id,
+                category = %category_str,
+                title = %log_data.title,
+                "[{}] {}", log_data.title, message_str
+            );
+        }
+        LogLevel::Warning => {
+            warn!(
+                target: "esp32_device",
+                device_id = %log_data.device_id,
+                category = %category_str,
+                title = %log_data.title,
+                "[{}] {}", log_data.title, message_str
+            );
+        }
+        _ => {
+            info!(
+                target: "esp32_device",
+                device_id = %log_data.device_id,
+                category = %category_str,
+                title = %log_data.title,
+                "[{}] {}", log_data.title, message_str
+            );
+        }
+    }
+
+    // 2. Lưu vào CSDL PostgreSQL
     let db_record = NewSystemEventRecord {
         device_id: log_data.device_id.clone(),
         level: level_str.clone(),
@@ -65,12 +99,11 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         timestamp: log_data.timestamp_ms as i64,
     };
 
-    // 3. Lưu vào Postgres
     if let Err(e) = insert_system_event(&app_state.pg_pool, &db_record).await {
-        error!("❌ [SYSTEM LOG] Lỗi lưu Database: {:?}", e);
+        error!("Lưu Database thất bại: {:?}", e);
     }
 
-    // 4. Quyết định xem có bắn Push Notification / Toast Alert lên App không
+    // 3. Đẩy thông báo thời gian thực qua WebSocket & FCM
     let is_critical = log_data.level == LogLevel::Critical;
     let is_warning = log_data.level == LogLevel::Warning;
     let is_success = log_data.level == LogLevel::Success;
@@ -78,11 +111,8 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         log_data.category,
         LogCategory::Dosing | LogCategory::Water | LogCategory::Alert
     );
-    let should_push_ws = is_critical || is_warning || is_success || category_is_priority;
 
-    if should_push_ws {
-        info!("🚨 Gửi Alert tới UI: [{}] {}", device_id, log_data.title);
-
+    if is_critical || is_warning || is_success || category_is_priority {
         let alert = AlertMessage {
             level: level_str.clone(),
             category: category_str.clone(),
@@ -93,7 +123,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             reason: None,
             metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
         };
-
         let _ = app_state
             .event_bus
             .send(AppEvent::SystemAlert(alert.clone()));

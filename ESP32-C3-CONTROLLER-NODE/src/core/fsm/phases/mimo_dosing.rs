@@ -206,11 +206,11 @@ fn build_calibration_sample(
     PendingCalibrationSample {
         cycle_id,
         trigger,
-        start_ec: ctx.safety.last_ec_before_dose.unwrap_or(sensors.ec),
+        start_ec: ctx.safety.last_ec_before_dose.unwrap_or(sensors.tds),
         start_ph: ctx.safety.last_ph_before_dose.unwrap_or(sensors.ph),
         start_water_level: sensors.water_level,
         start_temp: sensors.temp,
-        target_ec: config.ec_target,
+        target_ec: config.tds_target,
         target_ph: config.ph_target,
         dose_a_ml,
         dose_b_ml,

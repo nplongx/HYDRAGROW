@@ -72,7 +72,7 @@ pub fn tick(
         ctx.phase,
         SystemPhase::ActiveMixing | SystemPhase::Stabilizing
     ) {
-        ctx.stabilizer_tracker.push(sensors.ec, sensors.ph);
+        ctx.stabilizer_tracker.push(sensors.tds, sensors.ph);
     }
 
     // 4. Delegate sang Phase Handler tương ứng (Truyền cả 2 tham số thời gian)
@@ -369,13 +369,13 @@ fn check_sensor_noise(
     let mut is_noisy = false;
     let mut peri_delta = PeripheralDelta::default();
 
-    if config.enable_ec_sensor && !sensors.err_ec.unwrap_or(false) {
+    if config.enable_tds_sensor && !sensors.err_tds.unwrap_or(false) {
         if let Some(prev_ec) = ctx.peripherals.previous_ec {
-            if (sensors.ec - prev_ec).abs() > config.max_ec_delta {
+            if (sensors.tds - prev_ec).abs() > config.max_tds_delta {
                 is_noisy = true;
             }
         }
-        peri_delta.previous_ec = Some(Some(sensors.ec));
+        peri_delta.previous_ec = Some(Some(sensors.tds));
     }
     if config.enable_ph_sensor && !sensors.err_ph.unwrap_or(false) {
         if let Some(prev_ph) = ctx.peripherals.previous_ph {

@@ -84,7 +84,7 @@ pub enum FaultCode {
     EcStagnant,
     PhOscillating,
     WaterLevelCritical,
-    EmergencyStop
+    EmergencyStop,
 }
 
 impl FaultCode {
@@ -102,7 +102,7 @@ impl FaultCode {
             Self::EcStagnant => "EC_STAGNANT",
             Self::PhOscillating => "PH_OSCILLATING",
             Self::WaterLevelCritical => "WATER_LEVEL_CRITICAL",
-            Self::EmergencyStop => "EMERGENCY_STOP"
+            Self::EmergencyStop => "EMERGENCY_STOP",
         }
     }
 }
@@ -189,7 +189,7 @@ impl FsmDiagnostics {
     ) -> Result<(), FaultCode> {
         // --- 1. KIỂM TRA MẠCH CHÂM PHÂN EC ---
         if total_nutrient_ml > 1.0 {
-            if actual_delta_ec < config.ec_ack_threshold {
+            if actual_delta_ec < config.tds_ack_threshold {
                 self.ec_pump_streak += 1;
                 log::warn!(
                     "⚠️ [DIAGNOSTIC] Bất thường mạch dinh dưỡng lần {}! Bơm chạy {:.1}ml nhưng EC không nhích.",

@@ -31,7 +31,7 @@ impl PhaseTick for ActiveMixingPhase {
             // Ghi lại EC/pH tại thời điểm mixing xong để update_matrix_adaptive có dữ liệu chính xác
             result.delta.calibration = Some(
                 UpdatePostMixing {
-                    ec: sensors.ec,
+                    ec: sensors.tds,
                     ph: sensors.ph,
                     finish_ms: now_ms,
                 },

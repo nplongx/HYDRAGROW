@@ -357,7 +357,7 @@ impl AutoTuner {
 
         // 2. AutoTuner ACK
         if total_nutrient_ml > 0.5 {
-            let expected_ec_delta = total_nutrient_ml * config.ec_gain_per_ml;
+            let expected_ec_delta = total_nutrient_ml * config.tds_gain_per_ml;
             if expected_ec_delta > 1e-6 {
                 self.on_ec_dosing_ack(actual_delta_ec, expected_ec_delta, config, now_sec);
             }
@@ -458,9 +458,9 @@ impl AutoTuner {
                 "state": self.state.as_u8(),
                 "adaptive_mixing_sec": adaptive_mixing_sec,
                 "adaptive_stabilize_sec": adaptive_stabilize_sec,
-                "effective_ec_tolerance": self.effective_ec_tolerance(config.ec_tolerance),
+                "effective_ec_tolerance": self.effective_ec_tolerance(config.tds_tolerance),
                 "effective_ph_tolerance": self.effective_ph_tolerance(config.ph_tolerance),
-                "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
+                "ec_gain_per_ml": self.gain_learner.effective_ec_gain(config.tds_gain_per_ml),
                 "ph_shift_up_per_ml": self.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
                 "ph_shift_down_per_ml": self.gain_learner.effective_ph_down_gain(config.ph_shift_down_per_ml),
                 "interaction_matrix": flat,

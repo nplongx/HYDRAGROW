@@ -1,29 +1,18 @@
-    Blocking waiting for file lock on package cache
-    Checking once_cell v1.21.4
-    Checking cfg-if v1.0.4
-    Checking libc v0.2.186
-    Checking serde_core v1.0.228
-    Checking lazy_static v1.5.0
-    Checking linux-raw-sys v0.12.1
-    Checking bitflags v2.11.1
-    Checking zmij v1.0.21
-    Checking thread_local v1.1.9
-    Checking sharded-slab v0.1.7
-    Checking fastrand v2.4.1
-    Checking tracing-core v0.1.36
-    Checking pin-project-lite v0.2.17
-    Checking itoa v1.0.18
-    Checking memchr v2.8.0
-    Checking log v0.4.29
-    Checking rustix v1.1.4
-    Checking similar v2.7.0
-    Checking tracing v0.1.44
-    Checking tracing-subscriber v0.3.23
-    Checking getrandom v0.4.2
-    Checking console v0.16.3
-    Checking tempfile v3.27.0
-    Checking serde v1.0.228
-    Checking serde_json v1.0.149
-    Checking insta v1.47.2
+   0.050885863s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint: stale: changed "/home/nplong/HYDRAGROW/hydragrow-shared/src/lib.rs"
+   0.050905496s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint:           (vs) "/home/nplong/HYDRAGROW/hydragrow-shared/target/debug/.fingerprint/hydragrow-shared-ac714766080f7642/dep-lib-hydragrow_shared"
+   0.050915727s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 1786881228, nanos: 18638957 } < FileTime { seconds: 1786881653, nanos: 395285448 }
+   0.050999246s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint: fingerprint dirty for hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("hydragrow_shared", ["lib"], "/home/nplong/HYDRAGROW/hydragrow-shared/src/lib.rs", Edition2024) }
+   0.051024682s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "/home/nplong/HYDRAGROW/hydragrow-shared/target/debug/.fingerprint/hydragrow-shared-ac714766080f7642/dep-lib-hydragrow_shared", reference_mtime: FileTime { seconds: 1786881228, nanos: 18638957 }, stale: "/home/nplong/HYDRAGROW/hydragrow-shared/src/lib.rs", stale_mtime: FileTime { seconds: 1786881653, nanos: 395285448 } }))
+   0.054919419s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint: stale: changed "/home/nplong/HYDRAGROW/hydragrow-shared/src/lib.rs"
+   0.054933775s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint:           (vs) "/home/nplong/HYDRAGROW/hydragrow-shared/target/debug/.fingerprint/hydragrow-shared-42b138b97c176701/dep-test-lib-hydragrow_shared"
+   0.054944069s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 1786881228, nanos: 18638957 } < FileTime { seconds: 1786881653, nanos: 395285448 }
+   0.055012366s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint: fingerprint dirty for hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("hydragrow_shared", ["lib"], "/home/nplong/HYDRAGROW/hydragrow-shared/src/lib.rs", Edition2024) }
+   0.055033537s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hydragrow_shared"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "/home/nplong/HYDRAGROW/hydragrow-shared/target/debug/.fingerprint/hydragrow-shared-42b138b97c176701/dep-test-lib-hydragrow_shared", reference_mtime: FileTime { seconds: 1786881228, nanos: 18638957 }, stale: "/home/nplong/HYDRAGROW/hydragrow-shared/src/lib.rs", stale_mtime: FileTime { seconds: 1786881653, nanos: 395285448 } }))
+   0.057302755s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hestia_context_engine"}: cargo::core::compiler::fingerprint: fingerprint dirty for hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)/Check { test: true }/TargetInner { kind: "test", name: "hestia_context_engine", benched: false, ..: with_path("/home/nplong/HYDRAGROW/hydragrow-shared/tests/hestia_context_engine.rs", Edition2024) }
+   0.057336597s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="hestia_context_engine"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(7) })
+   0.057846830s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="schema_roundtrip_and_snapshots"}: cargo::core::compiler::fingerprint: fingerprint dirty for hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)/Check { test: true }/TargetInner { kind: "test", name: "schema_roundtrip_and_snapshots", benched: false, ..: with_path("/home/nplong/HYDRAGROW/hydragrow-shared/tests/schema_roundtrip_and_snapshots.rs", Edition2024) }
+   0.057927853s  INFO prepare_target{force=false package_id=hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared) target="schema_roundtrip_and_snapshots"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(7) })
     Checking hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.43s
+error: could not compile `hydragrow-shared` (lib test) due to 13 previous errors; 1 warning emitted
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `hydragrow-shared` (lib) due to 13 previous errors; 1 warning emitted

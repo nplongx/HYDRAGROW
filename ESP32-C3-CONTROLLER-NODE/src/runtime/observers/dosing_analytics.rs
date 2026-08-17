@@ -118,7 +118,7 @@ impl DosingAnalyticsObserver {
             .and_then(|v| v.as_f64())
             .unwrap_or(f64::MAX)
             .abs();
-        if error_ec < oc.config.ec_tolerance as f64 && error_ph < oc.config.ph_tolerance as f64 {
+        if error_ec < oc.config.tds_tolerance as f64 && error_ph < oc.config.ph_tolerance as f64 {
             self.current_window.successful_cycles += 1;
         }
 

@@ -149,11 +149,17 @@ pub fn run_main_health_loop(
                         let topic_status = topic_status(&device_id);
                         let topic_sensors = topic_sensors(&device_id);
 
+                        let payload = serde_json::json!({
+                            "device_id": device_id,
+                            "is_online": true,
+                            "online": true
+                        })
+                        .to_string();
                         let _ = client.publish(
                             &topic_status,
                             QoS::AtLeastOnce,
                             true,
-                            r#"{"online": true}"#.as_bytes(),
+                            payload.as_bytes(),
                         );
                         let _ = client.subscribe(&topic_config, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_command, QoS::AtLeastOnce);

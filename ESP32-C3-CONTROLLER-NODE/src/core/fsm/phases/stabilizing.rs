@@ -55,7 +55,7 @@ impl PhaseTick for StabilizingPhase {
         if let Some(sample) = ctx.calibration.finalize() {
             let total_nutrient = sample.dose_a_ml + sample.dose_b_ml;
             let total_ph_agent = sample.dose_ph_up_ml + sample.dose_ph_down_ml;
-            let actual_delta_ec = sensors.ec - sample.start_ec;
+            let actual_delta_ec = sensors.tds - sample.start_ec;
             let actual_delta_ph = sensors.ph - sample.start_ph;
             let actual_delta_water = sensors.water_level - sample.start_water_level;
 
@@ -77,7 +77,7 @@ impl PhaseTick for StabilizingPhase {
             // B. Chạy Pipeline Học máy Thích ứng (Adaptive Learning)
             let did_learn = ctx.tuner.learn_from_cycle(
                 &sample,
-                sensors.ec,
+                sensors.tds,
                 sensors.ph,
                 sensors.water_level,
                 sensors.temp,
@@ -144,7 +144,7 @@ fn push_telemetry_events(
     did_learn: bool,
     result: &mut TickResult,
 ) {
-    let final_ec = sensors.ec;
+    let final_ec = sensors.tds;
     let final_ph = sensors.ph;
     let final_water = sensors.water_level;
 
@@ -188,7 +188,7 @@ fn build_dosing_cycle_event(
     uptime_ms: u64, // SỬA: Nhận thêm uptime_ms
     did_learn: bool,
 ) -> DosingCycleEvent {
-    let ec_ok = (sample.target_ec - final_ec).abs() <= config.ec_tolerance;
+    let ec_ok = (sample.target_ec - final_ec).abs() <= config.tds_tolerance;
     let ph_ok = (sample.target_ph - final_ph).abs() <= config.ph_tolerance;
 
     let outcome = if ec_ok && ph_ok {
@@ -202,8 +202,8 @@ fn build_dosing_cycle_event(
 
     let kalman = if did_learn {
         Some(KalmanLearningData {
-            ec_gain_before: config.ec_gain_per_ml,
-            ec_gain_after: ctx.tuner.gain_learner.effective_ec_gain(config.ec_gain_per_ml),
+            ec_gain_before: config.tds_gain_per_ml,
+            ec_gain_after: ctx.tuner.gain_learner.effective_ec_gain(config.tds_gain_per_ml),
             ph_up_gain_before: config.ph_shift_up_per_ml,
             ph_up_gain_after: ctx.tuner.gain_learner.effective_ph_up_gain(config.ph_shift_up_per_ml),
             ph_down_gain_before: config.ph_shift_down_per_ml,
@@ -299,7 +299,7 @@ fn build_dosing_report_payload(
         error_ec: sample.target_ec - final_ec,
         error_ph: sample.target_ph - final_ph,
         duration_ms: uptime_ms.saturating_sub(sample.start_ms), // SỬA: Tính duration bằng uptime
-        ema_ec_gain_used: config.ec_gain_per_ml,
+        ema_ec_gain_used: config.tds_gain_per_ml,
         ema_ph_shift_used: config.ph_shift_up_per_ml,
         step_ratio_ec: Some(ctx.tuner.active_ec_ratio()),
         step_ratio_ph: Some(ctx.tuner.adaptive_ph_ratio),
@@ -319,7 +319,7 @@ fn build_human_message(
 
     if sample.dose_a_ml > 0.0 || sample.dose_b_ml > 0.0 {
         let total = sample.dose_a_ml + sample.dose_b_ml;
-        if config.enable_ec_sensor && actual_delta_ec > 0.02 {
+        if config.enable_tds_sensor && actual_delta_ec > 0.02 {
             msg.push_str(&format!(
                 "Hệ thống đã bổ sung {:.1}ml dinh dưỡng (EC dâng từ {:.2} lên {:.2} mS/cm). ",
                 total, sample.start_ec, final_ec

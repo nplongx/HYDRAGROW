@@ -22,6 +22,7 @@ export interface PumpStatus {
   ph_down: boolean;    // Bơm giảm pH
   osaka_pump: boolean; // Bơm trộn/phun sương chính (Osaka)
   mist_valve: boolean; // Van điện từ phun sương
+  mix_valve: boolean;
   water_pump_in: boolean; // Bơm cấp nước vào (In)
   water_pump_out: boolean; // Bơm thoát nước ra (Out)
   pump_a_pwm?: number;

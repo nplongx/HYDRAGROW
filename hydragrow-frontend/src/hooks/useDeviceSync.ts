@@ -13,6 +13,7 @@ const defaultPumpStatus: PumpStatus = {
   ph_down: false,
   osaka_pump: false,
   mist_valve: false,
+  mix_valve: false,
   water_pump_in: false,
   water_pump_out: false,
 };
@@ -50,7 +51,9 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
     OSAKA: 'osaka_pump',
     OSAKA_PUMP: 'osaka_pump',
     MIST: 'mist_valve',
+    MIX: 'mix_valve',
     MIST_VALVE: 'mist_valve',
+    MIX_VALVE: 'mix_valve',
     WATER_PUMP_IN: 'water_pump_in',
     WATER_PUMP_OUT: 'water_pump_out',
   };
@@ -62,6 +65,7 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
     'ph_down',
     'osaka_pump',
     'mist_valve',
+    'mix_valve',
     'water_pump_in',
     'water_pump_out',
   ];

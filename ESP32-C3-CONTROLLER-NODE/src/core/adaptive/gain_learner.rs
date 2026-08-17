@@ -72,7 +72,7 @@ impl GainLearner {
             return;
         }
         let observed_gain = delta_ec / dose_ml;
-        let base = config.ec_gain_per_ml.max(0.0001);
+        let base = config.tds_gain_per_ml.max(0.0001);
 
         if observed_gain < base * 0.3 || observed_gain > base * 3.0 {
             return;

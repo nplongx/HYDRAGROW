@@ -42,6 +42,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 num-traits = "0.2.19"
 env_logger = "0.11.9"
+tracing-loki = "0.2"
+url = "2.5"
 
 # HTTP Client (Đã lùi về 0.11 để chơi chung với Solana)
 reqwest = { version = "0.11", features = ["json"] }

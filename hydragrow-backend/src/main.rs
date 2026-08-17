@@ -19,6 +19,9 @@ use tokio::sync::{
 use tracing::{Level, error, info};
 use tracing_subscriber::FmtSubscriber;
 
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use url::Url;
+
 use crate::{
     models::{alert::AlertMessage, sensor::SensorData},
     mqtt::process_message,
@@ -128,14 +131,47 @@ pub struct AppState {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    env_logger::init();
 
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("Lỗi khởi tạo tracing");
-    info!("Bắt đầu khởi động hệ thống IoT Hydroponics...");
+    // =========================================================================
+    // 1. KHỞI TẠO LOKI LOGGING PIPELINE
+    // =========================================================================
+    let loki_url_str = env::var("LOKI_URL").unwrap_or_else(|_| "http://localhost:3100".to_string());
+    let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
 
+    let (loki_layer, loki_task) = if let Ok(loki_url) = Url::parse(&loki_url_str) {
+        // Gắn nhãn tĩnh cho instance Backend
+        let (layer, task) = tracing_loki::builder()
+            .label("service", "hydragrow-backend")
+            .unwrap()
+            .extra_field("environment", environment)
+            .unwrap()
+            .build_url(loki_url)
+            .expect("Lỗi cấu hình Loki Layer");
+        (Some(layer), Some(task))
+    } else {
+        (None, None)
+    };
+
+    // Spawn background task để đẩy log HTTP batch về Loki (không block server)
+    if let Some(task) = loki_task {
+        tokio::spawn(task);
+    }
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_target(true)
+        .with_level(true);
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,hydragrow_backend=debug,actix_web=info"));
+
+    // Đăng ký toàn bộ layers vào registry
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .with(loki_layer)
+        .init();
+
+    info!("🚀 Khởi động hệ thống IoT Hydroponics Backend với Loki Collector...");
     let database_url = env::var("DATABASE_URL").expect("Thiếu biến DATABASE_URL");
     let pg_pool = PgPoolOptions::new()
         .max_connections(5)

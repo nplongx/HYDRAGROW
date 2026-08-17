@@ -39,11 +39,11 @@ const MQTT_URL: &str = match option_env!("HYDRAGROW_MQTT_URL") {
 };
 const MQTT_USER: &str = match option_env!("HYDRAGROW_MQTT_USER") {
     Some(val) => val,
-    None => "long",
+    None => "",
 };
 const MQTT_PASSWORD: &str = match option_env!("HYDRAGROW_MQTT_PASSWORD") {
     Some(val) => val,
-    None => "s7cjsq7bmxd7v4hlrf9idtwv6983rf3i",
+    None => "",
 };
 const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
     Some(val) => val,
@@ -52,7 +52,7 @@ const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
-    //EspLogger::initialize_default();
+    EspLogger::initialize_default();
 
     info!("🚀 Khởi động hệ thống FSM Thủy canh Agitech (ESP32-C3)...");
 

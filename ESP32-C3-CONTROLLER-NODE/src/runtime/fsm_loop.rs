@@ -14,7 +14,7 @@ use crate::core::fsm::orchestrator;
 use crate::core::fsm::types::SharedSensorData;
 use crate::hw::mqtt_client::get_uptime_ms; // SỬA: Import đúng module chứa get_uptime_ms
 use crate::hw::pump_controller::PumpController;
-use crate::runtime::command_handler::process_mqtt_commands;
+use crate::runtime::command_handler::{build_stop_pump_events, process_mqtt_commands};
 use crate::runtime::dispatcher::{DispatchContext, EventDispatcher};
 use crate::runtime::health::build_status_msg;
 use crate::runtime::observers::ObserverSet;
@@ -108,6 +108,50 @@ pub fn start_fsm_control_loop(
                 observers: &mut observer_set,
             };
             EventDispatcher::dispatch(cmd_events, &mut dc);
+
+            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_wall_time_ms / 1000));
+        }
+
+        let expired_pumps: Vec<String> = ctx
+            .safety
+            .manual_timeouts
+            .iter()
+            .filter(|(_, &finish_ms)| current_uptime_ms >= finish_ms)
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        for pump_name in expired_pumps {
+            info!(
+                "⏱️ [MANUAL TIMEOUT] Hết thời gian hẹn giờ cho {}, tự động ngắt!",
+                pump_name
+            );
+            let mut timeout_delta = crate::core::fsm::ContextDelta::default();
+
+            // Tạo các event ngắt rơ-le / PWM tương ứng cho thiết bị
+            let stop_events = build_stop_pump_events(&pump_name, &mut timeout_delta, &ctx);
+
+            // Xóa thiết bị khỏi danh sách chờ timeout
+            timeout_delta.manual_pump_timeout_clear = Some(pump_name);
+            ctx.apply_delta(&mut timeout_delta);
+
+            if !stop_events.is_empty() {
+                let mut dc = DispatchContext {
+                    pumps: &mut pump_ctrl,
+                    nvs: &mut nvs,
+                    mqtt_tx: &fsm_mqtt_tx,
+                    dosing_report_tx: &dosing_report_tx,
+                    sensor_cmd_tx: &sensor_cmd_tx,
+                    ctx: &ctx,
+                    now_sec: current_wall_time_ms / 1000,
+                    device_id: &config.device_id,
+                    config: &config,
+                    observers: &mut observer_set,
+                };
+                EventDispatcher::dispatch(stop_events, &mut dc);
+
+                // Đồng bộ ngay lập tức trạng thái Tắt lên MQTT để UI Web/App cập nhật tức thì
+                let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_wall_time_ms / 1000));
+            }
         }
 
         // 2. Chạy FSM Tick Decision Engine

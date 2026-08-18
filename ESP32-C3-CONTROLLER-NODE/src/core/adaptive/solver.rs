@@ -171,6 +171,12 @@ impl SolverStrategy for ColdPathSolver {
             sensors.ph,
             sensors.water_level,
             config,
+            ctx.tuner
+                .gain_learner
+                .effective_ec_a_gain(config.ec_gain_per_ml),
+            ctx.tuner
+                .gain_learner
+                .effective_ec_b_gain(config.ec_gain_per_ml),
         );
 
         if is_control_zero(&control) {
@@ -237,6 +243,12 @@ impl SolverStrategy for WarmPathSolver {
             sensors.ph,
             sensors.water_level,
             config,
+            ctx.tuner
+                .gain_learner
+                .effective_ec_a_gain(config.ec_gain_per_ml),
+            ctx.tuner
+                .gain_learner
+                .effective_ec_b_gain(config.ec_gain_per_ml),
         );
 
         // 4. Kiểm tra xem sau guardrails có lệnh nào được thực thi không

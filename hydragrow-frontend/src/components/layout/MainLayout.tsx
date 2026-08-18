@@ -1,9 +1,9 @@
+// src/components/layout/MainLayout.tsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   SlidersHorizontal,
-  LineChart,
   Settings,
   Sprout,
   AlignLeft,
@@ -11,7 +11,8 @@ import {
   X,
   Activity,
   Leaf,
-  Box
+  Box,
+  LineChart
 } from 'lucide-react';
 
 // Import Zustand Store & Sync Hook
@@ -27,7 +28,7 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Selector: CHỈ re-render khi các trường dữ liệu cụ thể này thay đổi!
+  // Selector: CHỈ re-render khi các trường dữ liệu cụ thể này thay đổi
   const isSensorOnline = useDeviceStore((state) => state.isSensorOnline);
   const isMissingConfig = useDeviceStore((state) => state.isMissingConfig);
   const systemEvents = useDeviceStore((state) => state.systemEvents);
@@ -49,17 +50,19 @@ const MainLayout: React.FC = () => {
     setIsMenuOpen(false);
   }, [location.pathname]);
 
+  // Các mục vận hành thiết yếu hàng ngày
   const mainNavItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/control', icon: SlidersHorizontal, label: 'Điều Khiển' },
-    { path: '/analytics', icon: LineChart, label: 'Phân Tích' },
+    { path: '/crop-seasons', icon: Leaf, label: 'Mùa Vụ' },
     { path: '/logs', icon: AlignLeft, label: 'Nhật Ký', hasBadge: unreadAlertCount > 0 }
   ];
 
+  // Các mục nâng cao & Cài đặt hệ thống
   const moreMenuItems = [
-    { path: '/crop-seasons', icon: Leaf, label: 'Mùa Vụ' },
     { path: '/dosing-history', icon: Box, label: 'Lịch Sử Châm' },
-    { path: '/settings', icon: Settings, label: 'Cài Đặt' }
+    { path: '/analytics', icon: LineChart, label: 'Grafana Metrics' },
+    { path: '/settings', icon: Settings, label: 'Cài Đặt Trạm' }
   ];
 
   const isActiveMore = moreMenuItems.some(item => location.pathname === item.path);
@@ -121,10 +124,10 @@ const MainLayout: React.FC = () => {
                   key={item.path}
                   onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${index !== moreMenuItems.length - 1 ? 'border-b border-emerald-100' : ''
-                    } ${isActive ? 'bg-emerald-50 text-emerald-700' : 'text-emerald-900 hover:bg-emerald-50'}`}
+                    } ${isActive ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-emerald-900 hover:bg-emerald-50'}`}
                 >
                   <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} />
-                  <span className="text-sm font-medium">{item.label}</span>
+                  <span className="text-sm">{item.label}</span>
                 </button>
               );
             })}
@@ -149,7 +152,7 @@ const MainLayout: React.FC = () => {
                     <span className="absolute top-2 right-1/4 translate-x-2 -translate-y-1 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-white"></span>
                   )}
                 </div>
-                <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActive ? 'text-emerald-800' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
+                <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActive ? 'text-emerald-800 font-bold' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
                   {item.label}
                 </span>
                 {isActive && (
@@ -172,7 +175,7 @@ const MainLayout: React.FC = () => {
               {isMenuOpen ? <X size={18} strokeWidth={2.5} /> : <MoreHorizontal size={22} strokeWidth={isActiveMore ? 2.5 : 2} />}
             </div>
             {!isMenuOpen && (
-              <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActiveMore ? 'text-emerald-800' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
+              <span className={`text-[10px] mt-1 font-semibold tracking-wide ${isActiveMore ? 'text-emerald-800 font-bold' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
                 Thêm
               </span>
             )}

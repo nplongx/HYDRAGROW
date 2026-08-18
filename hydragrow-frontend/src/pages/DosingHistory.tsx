@@ -1,3 +1,4 @@
+// src/pages/DosingHistory.tsx
 import { useState } from 'react';
 import { ShieldCheck, Box, Calendar, ChevronDown, Download, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,10 +16,9 @@ import { saveTextFile } from '../platform/file';
 const DosingHistory = () => {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
-
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
 
-  // 1. Query danh sách Mùa Vụ
+  // 1. Query danh sách Mùa vụ
   const { data: seasons = [] } = useQuery({
     queryKey: ['seasons-list', deviceId],
     queryFn: async () => {
@@ -37,7 +37,7 @@ const DosingHistory = () => {
     enabled: Boolean(deviceId && settings?.backend_url)
   });
 
-  // 2. Query Báo Cáo Châm Phân theo Mùa Vụ
+  // 2. Query Báo cáo Châm Phân theo Mùa vụ
   const { data: history = [], isLoading, isError, error } = useQuery<DosingReportRecord[]>({
     queryKey: ['dosing-reports', deviceId, selectedSeason],
     queryFn: async () => {
@@ -52,49 +52,36 @@ const DosingHistory = () => {
     enabled: Boolean(deviceId && settings?.backend_url && selectedSeason)
   });
 
-  // Xuất file CSV thông qua Module Gleam csv.mjs
+  // Xuất file CSV nông vụ tinh gọn
   const handleExportCSV = async () => {
     if (history.length === 0) return toast.error("Không có dữ liệu để xuất!");
     try {
       const headers = [
-        "Mã Thiết Bị", "Mùa Vụ", "Thời Gian", "Phân A (ml)", "Phân B (ml)", "pH Up (ml)", "pH Down (ml)",
-        "pH Trước", "pH Sau", "TDS Trước", "TDS Sau", "Mục tiêu TDS", "Mục tiêu pH",
-        "Sai số TDS", "Sai số pH", "Δ TDS", "Δ pH", "Hệ số Gain TDS", "Hệ số Shift pH"
+        "Mã Thiết Bị",
+        "Mùa Vụ",
+        "Thời Gian",
+        "Phân A (ml)",
+        "Phân B (ml)",
+        "pH Up (ml)",
+        "pH Down (ml)"
       ];
-      const csvRows = history.map(row => {
-        const d = row.payload?.dosing_data ?? row.payload ?? {};
-        const prePh = d.pre?.ph?.toFixed(2) ?? '';
-        const postPh = d.post_stable?.ph?.toFixed(2) ?? '';
-        const preEc = d.pre?.ec?.toFixed(2) ?? '';
-        const postEc = d.post_stable?.ec?.toFixed(2) ?? '';
 
-        return [
-          escape_field_str(row.device_id),
-          escape_field_str(row.season_id || ''),
-          escape_field_str(new Date(row.created_at).toLocaleString('vi-VN')),
-          escape_field_str(String(row.pump_a_ml)),
-          escape_field_str(String(row.pump_b_ml)),
-          escape_field_str(String(row.ph_up_ml)),
-          escape_field_str(String(row.ph_down_ml)),
-          escape_field_str(prePh),
-          escape_field_str(postPh),
-          escape_field_str(preEc),
-          escape_field_str(postEc),
-          escape_field_str(String(d.target_ec ?? '')),
-          escape_field_str(String(d.target_ph ?? '')),
-          escape_field_str(String(d.error_ec ?? '')),
-          escape_field_str(String(d.error_ph ?? '')),
-          escape_field_str(String(d.delta_ec ?? '')),
-          escape_field_str(String(d.delta_ph ?? '')),
-          escape_field_str(String(d.ema_ec_gain_used ?? '')),
-          escape_field_str(String(d.ema_ph_shift_used ?? ''))
-        ].join(",");
-      });
+      const csvRows = history.map(row => [
+        escape_field_str(row.device_id),
+        escape_field_str(row.season_id || ''),
+        escape_field_str(new Date(row.created_at).toLocaleString('vi-VN')),
+        escape_field_str(String(row.pump_a_ml)),
+        escape_field_str(String(row.pump_b_ml)),
+        escape_field_str(String(row.ph_up_ml)),
+        escape_field_str(String(row.ph_down_ml))
+      ].join(","));
 
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
       const saved = await saveTextFile(`lich-su-cham-phan-${selectedSeason || 'tat-ca'}.csv`, csvContent);
       if (saved) toast.success("Xuất file Excel/CSV thành công!");
-    } catch (err) { toast.error("Lỗi khi xuất file!"); }
+    } catch (err) {
+      toast.error("Lỗi khi xuất file!");
+    }
   };
 
   const activeSeasonData = seasons.find((s: any) => s.id === selectedSeason);
@@ -104,10 +91,10 @@ const DosingHistory = () => {
       <PageHeader
         icon={ShieldCheck}
         title="Lịch Sử Châm Phân"
-        subtitle="Theo dõi chi tiết lượng hóa chất châm cho cây trồng"
+        subtitle="Theo dõi chi tiết lượng phân bón & vi chất đã cấp cho cây trồng"
       />
 
-      {/* Thanh chọn Mùa Vụ & Xuất Excel */}
+      {/* Thanh chọn & Xuất Excel */}
       <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 backdrop-blur-md relative z-20">
         <div className="relative flex-1 max-w-xs">
           <label className="text-[10px] font-bold text-emerald-700/75 uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ml-1">
@@ -122,7 +109,7 @@ const DosingHistory = () => {
             >
               {seasons.length === 0 && <option value="">Chưa có mùa vụ</option>}
               {seasons.map((ss: any) => (
-                <option key={ss.id} value={ss.id}>{ss.status === 'active' ? '🟢 ' : '⚪ '} {ss.name}</option>
+                <option key={ss.id} value={ss.id}>{ss.status === 'active' ? '🌱 ' : '📦 '} {ss.name}</option>
               ))}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-700/75 pointer-events-none" size={16} />
@@ -139,7 +126,7 @@ const DosingHistory = () => {
         </button>
       </div>
 
-      {/* Banner thông tin mùa vụ active */}
+      {/* Banner thông tin mùa active */}
       {activeSeasonData && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
           <div className="flex items-center gap-3">
@@ -176,9 +163,9 @@ const DosingHistory = () => {
             <span className="text-xs font-bold tracking-widest uppercase">Đang tải nhật ký châm...</span>
           </div>
         ) : history.length === 0 && !isError ? (
-          <StateView icon={Box} title="Chưa có chu kỳ châm phân" description="Hệ thống sẽ tự ghi nhận khi chu kỳ châm MIMO được kích hoạt." />
+          <StateView icon={Box} title="Chưa có chu kỳ châm phân" description="Hệ thống sẽ ghi nhận khi chu kỳ châm dinh dưỡng được kích hoạt." />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {history.map((record, index) => (
               <DosingReportCard key={record.id || index} record={record} index={index} />
             ))}

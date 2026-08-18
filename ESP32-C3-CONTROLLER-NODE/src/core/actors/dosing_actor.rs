@@ -147,35 +147,33 @@ impl DosingActor {
         }
 
         if control.nutrient_a_ml > 1e-3 {
-            let (on_ms, off_ms, max_pulses) = pulse_params(
-                control.nutrient_a_ml,
-                config.pump_a_capacity_ml_per_sec,
-                config,
-            );
-            let ml_per_sec = match effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config)
+            if let Some(ml_per_sec) =
+                effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config)
             {
-                Some(v) => v,
-                None => config.pump_a_capacity_ml_per_sec * (safe_pwm as f32 / 100.0),
-            };
+                let (on_ms, off_ms, max_pulses) =
+                    pulse_params(control.nutrient_a_ml, ml_per_sec, config);
 
-            self.sub_state = DosingSubState::SoftStarting {
-                finish_ms: now_ms + config.soft_start_duration as u64,
-                next_state: Box::new(DosingSubState::PumpingA(PulseJob {
-                    pump: PumpTarget::NutrientA {
-                        dose_b_ml: control.nutrient_b_ml,
-                    },
-                    target_ml: control.nutrient_a_ml,
-                    delivered_ml: 0.0,
-                    pulse_on: false,
-                    pulse_count: 0,
-                    max_pulses,
-                    on_ms,
-                    off_ms,
-                    pwm: safe_pwm,
-                    ml_per_sec,
-                    next_toggle_ms: now_ms,
-                })),
-            };
+                self.sub_state = DosingSubState::SoftStarting {
+                    finish_ms: now_ms + config.soft_start_duration as u64,
+                    next_state: Box::new(DosingSubState::PumpingA(PulseJob {
+                        pump: PumpTarget::NutrientA {
+                            dose_b_ml: control.nutrient_b_ml,
+                        },
+                        target_ml: control.nutrient_a_ml,
+                        delivered_ml: 0.0,
+                        pulse_on: false,
+                        pulse_count: 0,
+                        max_pulses,
+                        on_ms,
+                        off_ms,
+                        pwm: safe_pwm,
+                        ml_per_sec,
+                        next_toggle_ms: now_ms,
+                    })),
+                };
+            } else {
+                self.sub_state = DosingSubState::Idle;
+            }
         } else if let Some(ph_job) = self.pending_ph_job.take() {
             self.sub_state = DosingSubState::SoftStarting {
                 finish_ms: now_ms + config.soft_start_duration as u64,
@@ -317,6 +315,8 @@ impl DosingActor {
         });
 
         b_job.pulse_on = true;
+        b_job.pulse_count += 1;
+        b_job.delivered_ml += b_job.ml_per_sec * (b_job.on_ms as f32 / 1000.0);
         b_job.next_toggle_ms = now_ms + b_job.on_ms;
         self.sub_state = DosingSubState::PumpingB(b_job);
         (DosingEvent::PhaseTransition, hw_events)

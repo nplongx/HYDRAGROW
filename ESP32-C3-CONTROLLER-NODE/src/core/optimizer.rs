@@ -13,6 +13,8 @@ pub fn apply_safety_guardrails(
     current_ph: f32,
     current_water_level: f32,
     config: &ControllerConfig,
+    ec_a_gain_per_ml: f32,
+    ec_b_gain_per_ml: f32,
 ) {
     // =========================================================================
     // LƯỚI 1: BẢO VỆ MỰC NƯỚC SINH TỒN & CHỐNG TRÀN BỒN (ƯU TIÊN CAO NHẤT)
@@ -47,7 +49,10 @@ pub fn apply_safety_guardrails(
     // LƯỚI 2: CHỐNG ĐỘC TÍNH DINH DƯỠNG & SỐC EC (EC OVERDOSE GUARD)
     // =========================================================================
     let total_nutrient_ml = control.nutrient_a_ml + control.nutrient_b_ml;
-    let predicted_ec_gain = total_nutrient_ml * config.ec_gain_per_ml;
+    let safe_ec_a_gain = ec_a_gain_per_ml.max(0.0001);
+    let safe_ec_b_gain = ec_b_gain_per_ml.max(0.0001);
+    let predicted_ec_gain =
+        control.nutrient_a_ml * safe_ec_a_gain + control.nutrient_b_ml * safe_ec_b_gain;
 
     // 2.1. Đã vượt trần độc tính hoặc dự báo sau châm sẽ vượt trần
     if current_ec >= config.max_ec_limit || (current_ec + predicted_ec_gain) > config.max_ec_limit {
@@ -63,7 +68,10 @@ pub fn apply_safety_guardrails(
 
     // 2.2. Kiểm tra mức tăng vượt ngưỡng sốc tối đa trong 1 chu kỳ (max_ec_delta)
     if predicted_ec_gain > config.max_ec_delta && total_nutrient_ml > 0.0 {
-        let safe_total_ml = (config.max_ec_delta / config.ec_gain_per_ml.max(0.0001)).max(0.0);
+        let weighted_avg_gain = ((control.nutrient_a_ml * safe_ec_a_gain)
+            + (control.nutrient_b_ml * safe_ec_b_gain))
+            / total_nutrient_ml.max(0.0001);
+        let safe_total_ml = (config.max_ec_delta / weighted_avg_gain.max(0.0001)).max(0.0);
         let scale = safe_total_ml / total_nutrient_ml;
         warn!(
             "⚠️ [GUARDRAIL] Thu nhỏ liều phân bón từ {:.1}ml xuống {:.1}ml để khống chế ΔEC <= {:.2}",

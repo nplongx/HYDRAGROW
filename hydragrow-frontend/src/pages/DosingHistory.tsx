@@ -58,8 +58,8 @@ const DosingHistory = () => {
     try {
       const headers = [
         "Mã Thiết Bị", "Mùa Vụ", "Thời Gian", "Phân A (ml)", "Phân B (ml)", "pH Up (ml)", "pH Down (ml)",
-        "pH Trước", "pH Sau", "EC Trước", "EC Sau", "Mục tiêu EC", "Mục tiêu pH",
-        "Sai số EC", "Sai số pH", "Δ EC", "Δ pH", "Hệ số Gain EC", "Hệ số Shift pH"
+        "pH Trước", "pH Sau", "TDS Trước", "TDS Sau", "Mục tiêu TDS", "Mục tiêu pH",
+        "Sai số TDS", "Sai số pH", "Δ TDS", "Δ pH", "Hệ số Gain TDS", "Hệ số Shift pH"
       ];
       const csvRows = history.map(row => {
         const d = row.payload?.dosing_data ?? row.payload ?? {};

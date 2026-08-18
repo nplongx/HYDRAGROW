@@ -42,6 +42,8 @@ const formatNumber = (value: any, digits = 1) => {
   return num.toFixed(digits);
 };
 
+const getTdsSetting = (settings: any, tdsKey: string, legacyEcKey: string) => settings?.[tdsKey] ?? settings?.[legacyEcKey];
+
 const sensorStatus = (hasError: boolean | undefined, value: any, min?: any, max?: any) => {
   const res = eval_sensor_status_safe(
     Boolean(hasError),
@@ -107,7 +109,7 @@ const Dashboard = () => {
   const pumps: any = sensorData?.pump_status || {};
   const modeLabel = settings?.control_mode === 'auto' ? 'Tự động' : 'Thủ công';
 
-  const ecStatus = sensorStatus(sensorData?.err_ec, sensorData?.ec, (settings as any)?.min_ec_limit, (settings as any)?.max_ec_limit);
+  const ecStatus = sensorStatus(sensorData?.err_tds, sensorData?.tds, getTdsSetting(settings, 'min_tds_limit', 'min_ec_limit'), getTdsSetting(settings, 'max_tds_limit', 'max_ec_limit'));
   const phStatus = sensorStatus(sensorData?.err_ph, sensorData?.ph, (settings as any)?.min_ph_limit, (settings as any)?.max_ph_limit);
   const tempStatus = sensorStatus(sensorData?.err_temp, sensorData?.temp, (settings as any)?.min_temp_limit, (settings as any)?.max_temp_limit);
   const waterStatus = sensorStatus(sensorData?.err_water, sensorData?.water_level, (settings as any)?.water_level_min, (settings as any)?.water_level_max);
@@ -204,15 +206,15 @@ const Dashboard = () => {
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 transition-all duration-500 ${!isSensorOnline ? 'opacity-60 grayscale' : ''}`}>
           <SensorBentoCard
-            title="Dinh dưỡng EC"
-            value={sensorData?.err_ec === true ? "Bảo trì" : formatNumber(sensorData?.ec, 2)}
-            unit={sensorData?.err_ec === true ? "" : "mS/cm"}
+            title="Dinh dưỡng TDS"
+            value={sensorData?.err_tds === true ? "Bảo trì" : formatNumber(sensorData?.tds, 2)}
+            unit={sensorData?.err_tds === true ? "" : "ppm"}
             icon={Activity}
-            theme={sensorData?.err_ec === true ? "rose" : "blue"}
+            theme={sensorData?.err_tds === true ? "rose" : "blue"}
             statusLabel={ecStatus.label}
             statusTone={ecStatus.tone}
-            rangeLabel={`Mục tiêu ${formatNumber((settings as any)?.ec_target, 2)} ± ${formatNumber((settings as any)?.ec_tolerance, 2)}`}
-            description={sensorData?.err_ec === true ? 'Lỗi cảm biến EC.' : 'Nồng độ dinh dưỡng bồn chứa.'}
+            rangeLabel={`Mục tiêu ${formatNumber(getTdsSetting(settings, 'tds_target', 'ec_target'), 2)} ± ${formatNumber(getTdsSetting(settings, 'tds_tolerance', 'ec_tolerance'), 2)}`}
+            description={sensorData?.err_tds === true ? 'Lỗi cảm biến TDS.' : 'Nồng độ dinh dưỡng bồn chứa.'}
           />
           <SensorBentoCard
             title="Độ pH"

@@ -27,24 +27,24 @@ const AdvancedSpecsGrid = ({ dosing }: { dosing: any }) => {
   const post = dosing.post_stable ?? dosing.post_mixing ?? {};
   const rows: { label: string; value: string; accent?: string }[] = [];
 
-  const ecBefore = getMetaNumber(pre, ['ec', 'EC']);
-  const ecAfter = getMetaNumber(post, ['ec', 'EC']);
+  const ecBefore = getMetaNumber(pre, ['tds', 'TDS', 'ec', 'EC']);
+  const ecAfter = getMetaNumber(post, ['tds', 'TDS', 'ec', 'EC']);
   const phBefore = getMetaNumber(pre, ['ph', 'pH']);
   const phAfter = getMetaNumber(post, ['ph', 'pH']);
 
-  if (ecBefore != null) rows.push({ label: 'EC trước châm', value: ecBefore.toFixed(2), accent: 'text-cyan-700' });
-  if (ecAfter != null) rows.push({ label: 'EC sau ổn định', value: ecAfter.toFixed(2), accent: 'text-cyan-700 font-bold' });
+  if (ecBefore != null) rows.push({ label: 'TDS trước châm', value: ecBefore.toFixed(2), accent: 'text-cyan-700' });
+  if (ecAfter != null) rows.push({ label: 'TDS sau ổn định', value: ecAfter.toFixed(2), accent: 'text-cyan-700 font-bold' });
   if (phBefore != null) rows.push({ label: 'pH trước châm', value: phBefore.toFixed(2), accent: 'text-fuchsia-600' });
   if (phAfter != null) rows.push({ label: 'pH sau ổn định', value: phAfter.toFixed(2), accent: 'text-fuchsia-600 font-bold' });
 
-  if (dosing.target_ec != null) rows.push({ label: 'Ngưỡng EC mục tiêu', value: Number(dosing.target_ec).toFixed(2), accent: 'text-emerald-950 font-semibold' });
+  if (dosing.target_ec != null) rows.push({ label: 'Ngưỡng TDS mục tiêu', value: Number(dosing.target_ec).toFixed(2), accent: 'text-emerald-950 font-semibold' });
   if (dosing.target_ph != null) rows.push({ label: 'Ngưỡng pH mục tiêu', value: Number(dosing.target_ph).toFixed(2), accent: 'text-emerald-950 font-semibold' });
-  if (dosing.delta_ec != null) rows.push({ label: 'Biến thiên EC (Δ)', value: Number(dosing.delta_ec).toFixed(2), accent: 'text-teal-600' });
+  if (dosing.delta_ec != null) rows.push({ label: 'Biến thiên TDS (Δ)', value: Number(dosing.delta_ec).toFixed(2), accent: 'text-teal-600' });
   if (dosing.delta_ph != null) rows.push({ label: 'Biến thiên pH (Δ)', value: Number(dosing.delta_ph).toFixed(2), accent: 'text-teal-600' });
 
-  if (dosing.ema_ec_gain_used != null) rows.push({ label: 'Hệ số Gain EC', value: Number(dosing.ema_ec_gain_used).toFixed(5), accent: 'text-orange-600 font-mono' });
+  if (dosing.ema_ec_gain_used != null) rows.push({ label: 'Hệ số Gain TDS', value: Number(dosing.ema_ec_gain_used).toFixed(5), accent: 'text-orange-600 font-mono' });
   if (dosing.ema_ph_shift_used != null) rows.push({ label: 'Hệ số Shift pH', value: Number(dosing.ema_ph_shift_used).toFixed(5), accent: 'text-orange-600 font-mono' });
-  if (dosing.step_ratio_ec != null) rows.push({ label: 'Bước nhảy Kalman EC', value: `${(Number(dosing.step_ratio_ec) * 100).toFixed(0)}%`, accent: 'text-amber-600' });
+  if (dosing.step_ratio_ec != null) rows.push({ label: 'Bước nhảy Kalman TDS', value: `${(Number(dosing.step_ratio_ec) * 100).toFixed(0)}%`, accent: 'text-amber-600' });
   if (dosing.step_ratio_ph != null) rows.push({ label: 'Bước nhảy Kalman pH', value: `${(Number(dosing.step_ratio_ph) * 100).toFixed(0)}%`, accent: 'text-amber-600' });
 
   if (rows.length === 0) return null;

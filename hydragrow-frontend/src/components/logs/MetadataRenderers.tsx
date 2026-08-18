@@ -56,14 +56,14 @@ export const DosingMetadata = ({ meta }: { meta: any }) => {
   if (doseRows.length) sections.push({ title: 'Khẩu phần châm thực tế', rows: doseRows });
 
   const deltaRows: { label: string; value: string; accent?: string }[] = [];
-  const ecBefore = getMetaNumber(pre, ['ec', 'EC', 'start_ec']);
-  const ecAfter = getMetaNumber(post, ['ec', 'EC', 'after_ec', 'post_mixing_ec']);
+  const ecBefore = getMetaNumber(pre, ['tds', 'TDS', 'ec', 'EC', 'start_tds', 'start_ec']);
+  const ecAfter = getMetaNumber(post, ['tds', 'TDS', 'ec', 'EC', 'after_tds', 'after_ec', 'post_mixing_tds', 'post_mixing_ec']);
   const phBefore = getMetaNumber(pre, ['ph', 'pH', 'start_ph']);
   const phAfter = getMetaNumber(post, ['ph', 'pH', 'after_ph', 'post_mixing_ph']);
 
   if (ecBefore != null && ecAfter != null && ecBefore !== 0.0) {
     const diff = ecAfter - ecBefore;
-    deltaRows.push({ label: 'Hành trình sai số EC:', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)})`, accent: 'text-cyan-700 font-mono font-bold' });
+    deltaRows.push({ label: 'Hành trình sai số TDS:', value: `${ecBefore.toFixed(2)} → ${ecAfter.toFixed(2)} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)})`, accent: 'text-cyan-700 font-mono font-bold' });
   }
   if (phBefore != null && phAfter != null && phBefore !== 0.0) {
     const diff = phAfter - phBefore;
@@ -72,12 +72,12 @@ export const DosingMetadata = ({ meta }: { meta: any }) => {
   if (deltaRows.length) sections.push({ title: 'Biến động cảm biến', rows: deltaRows });
 
   const targetRows: { label: string; value: string; accent?: string }[] = [];
-  const targetEc = getMetaNumber(target, ['ec', 'target_ec']);
+  const targetEc = getMetaNumber(target, ['tds', 'target_tds', 'ec', 'target_ec']);
   const targetPh = getMetaNumber(target, ['ph', 'target_ph']);
 
-  if (targetEc != null && targetEc > 0) targetRows.push({ label: 'Ngưỡng EC mục tiêu:', value: targetEc.toFixed(2), accent: 'text-cyan-300 font-bold' });
+  if (targetEc != null && targetEc > 0) targetRows.push({ label: 'Ngưỡng TDS mục tiêu:', value: targetEc.toFixed(2), accent: 'text-cyan-300 font-bold' });
   if (targetPh != null && targetPh > 0) targetRows.push({ label: 'Ngưỡng pH mục tiêu:', value: targetPh.toFixed(2), accent: 'text-fuchsia-300 font-bold' });
-  if (cycleMeta.step_ratio_ec != null) targetRows.push({ label: 'AI Kalman Step EC:', value: `${(cycleMeta.step_ratio_ec * 100).toFixed(0)}%`, accent: 'text-teal-400 font-bold' });
+  if (cycleMeta.step_ratio_ec != null) targetRows.push({ label: 'AI Kalman Step TDS:', value: `${(cycleMeta.step_ratio_ec * 100).toFixed(0)}%`, accent: 'text-teal-400 font-bold' });
 
   if (targetRows.length) sections.push({ title: 'Mục tiêu & Thuật toán', rows: targetRows });
   if (sections.length === 0) return null;

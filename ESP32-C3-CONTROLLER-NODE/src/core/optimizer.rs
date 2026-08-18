@@ -38,11 +38,11 @@ pub fn apply_safety_guardrails(
     // --- LƯỚI 2: CHỐNG ĐỘC TÍNH DINH DƯỠNG (EC OVERDOSE GUARD) ---
     // Nếu chỉ số EC thực tế đo được đã vượt ngưỡng max_ec_limit an toàn của cây,
     // hoặc kết quả châm ma trận tính toán cộng dồn làm vượt quá ranh giới, khóa lập tức bơm phân A, B.
-    if current_ec >= config.max_tds_limit
-        || (current_ec + (control.nutrient_a_ml * config.tds_gain_per_ml)) > config.max_tds_limit
+    if current_ec >= config.max_ec_limit
+        || (current_ec + (control.nutrient_a_ml * config.ec_gain_per_ml)) > config.max_ec_limit
     {
         if control.nutrient_a_ml > 0.0 {
-            warn!("⚠️ [GUARDRAIL] Chặn lệnh châm phân dinh dưỡng do EC hiện tại ({:.2}) tiến sát giới hạn độc tính ({:.2})", current_ec, config.max_tds_limit);
+            warn!("⚠️ [GUARDRAIL] Chặn lệnh châm phân dinh dưỡng do EC hiện tại ({:.2}) tiến sát giới hạn độc tính ({:.2})", current_ec, config.max_ec_limit);
             control.nutrient_a_ml = 0.0;
             control.nutrient_b_ml = 0.0;
         }

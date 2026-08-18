@@ -39,7 +39,7 @@ export interface PumpStatus {
  */
 export interface SensorData extends DeviceHealth {
   device_id: string;
-  tds: number;       // Giá trị TDS (tổng chất rắn hòa tan)
+  ec: number;       // Giá trị EC (tổng chất rắn hòa tan)
   ph: number;        // Giá trị pH
   temp: number;      // Nhiệt độ nước/môi trường
   water_level: number;     // Mực nước (cm)
@@ -51,7 +51,7 @@ export interface SensorData extends DeviceHealth {
   err_water?: boolean;
   err_temp?: boolean;
   err_ph?: boolean;
-  err_tds?: boolean;
+  err_ec?: boolean;
   is_continuous?: boolean;
   ph_voltage_mv?: number;
 }
@@ -61,7 +61,7 @@ export interface SensorData extends DeviceHealth {
  */
 export interface AlertPayload {
   id: string;
-  metric: string;          // Chỉ số gây ra lỗi (ví dụ: "TDS", "WaterLevel")
+  metric: string;          // Chỉ số gây ra lỗi (ví dụ: "EC", "WaterLevel")
   value: number;           // Giá trị tại thời điểm xảy ra lỗi
   severity: 'info' | 'warning' | 'critical';
   message: string;         // Nội dung cảnh báo chi tiết
@@ -80,7 +80,7 @@ export interface StatusPayload {
  * Trạng thái máy trạng thái (FSM) gửi từ Controller
  */
 export interface FsmStatePayload {
-  current_state: string;   // Ví dụ: "Monitoring", "DosingTDS", "EmergencyStop"
+  current_state: string;   // Ví dụ: "Monitoring", "DosingEC", "EmergencyStop"
   timestamp: string;
 }
 
@@ -92,8 +92,8 @@ export interface UnifiedDeviceConfig {
   is_enabled: boolean;
 
   // --- Ngưỡng mục tiêu ---
-  tds_target: number;
-  tds_tolerance: number;
+  ec_target: number;
+  ec_tolerance: number;
   ph_target: number;
   ph_tolerance: number;
 
@@ -114,34 +114,34 @@ export interface UnifiedDeviceConfig {
 
   // --- An Toàn ---
   emergency_shutdown: boolean;
-  max_tds_limit: number;
-  min_tds_limit: number;
+  max_ec_limit: number;
+  min_ec_limit: number;
   min_ph_limit: number;
   max_ph_limit: number;
-  max_tds_delta: number;
+  max_ec_delta: number;
   max_ph_delta: number;
   max_dose_per_cycle: number;
   water_level_critical_min: number;
   max_refill_duration_sec: number;
   max_drain_duration_sec: number;
-  tds_ack_threshold: number;
+  ec_ack_threshold: number;
   ph_ack_threshold: number;
   water_ack_threshold: number;
 
   // --- Châm Phân ---
-  tds_gain_per_ml: number;
+  ec_gain_per_ml: number;
   ph_shift_up_per_ml: number;
   ph_shift_down_per_ml: number;
   active_mixing_sec: number;
   sensor_stabilize_sec: number;
-  tds_step_ratio: number;
+  ec_step_ratio: number;
   ph_step_ratio: number;
-  best_tds_ratio?: number;
+  best_ec_ratio?: number;
   best_ph_ratio?: number;
   tuner_state?: number;
   adaptive_mixing_sec?: number;
   adaptive_stabilize_sec?: number;
-  effective_tds_tolerance?: number;
+  effective_ec_tolerance?: number;
   effective_ph_tolerance?: number;
   interaction_matrix?: number[];
   matrix_update_count?: number;
@@ -155,8 +155,8 @@ export interface UnifiedDeviceConfig {
   // --- Cảm biến & Lọc nhiễu ---
   ph_v7: number;
   ph_v4: number;
-  tds_factor: number;
-  tds_offset: number;
+  ec_factor: number;
+  ec_offset: number;
   temp_offset: number;
   temp_compensation_beta: number;
   sampling_interval: number;
@@ -164,7 +164,7 @@ export interface UnifiedDeviceConfig {
   moving_average_window: number;
 
   // --- Cờ Bật/Tắt Cảm Biến ---
-  enable_tds_sensor: boolean;
+  enable_ec_sensor: boolean;
   enable_ph_sensor: boolean;
   enable_water_level_sensor: boolean;
   enable_temp_sensor: boolean;

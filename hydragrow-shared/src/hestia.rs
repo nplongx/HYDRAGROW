@@ -95,13 +95,13 @@ impl HestiaEngine {
         config: &ControllerConfig,
         context: &HestiaContext,
     ) -> HestiaAssessment {
-        let ec_comfort = if config.enable_tds_sensor {
+        let ec_comfort = if config.enable_ec_sensor {
             target_comfort(
-                current.tds,
-                config.tds_target,
-                config.tds_tolerance,
-                config.min_tds_limit,
-                config.max_tds_limit,
+                current.ec,
+                config.ec_target,
+                config.ec_tolerance,
+                config.min_ec_limit,
+                config.max_ec_limit,
             )
         } else {
             1.0
@@ -147,11 +147,11 @@ impl HestiaEngine {
             ec_comfort,
             previous.map(|s| {
                 target_comfort(
-                    s.tds,
-                    config.tds_target,
-                    config.tds_tolerance,
-                    config.min_tds_limit,
-                    config.max_tds_limit,
+                    s.ec,
+                    config.ec_target,
+                    config.ec_tolerance,
+                    config.min_ec_limit,
+                    config.max_ec_limit,
                 )
             }),
             minutes,
@@ -374,7 +374,7 @@ fn reasons_for(
 ) -> Vec<String> {
     let mut reasons = Vec::new();
 
-    if config.enable_tds_sensor && ec.comfort < 0.6 {
+    if config.enable_ec_sensor && ec.comfort < 0.6 {
         reasons.push("ec_out_of_range".to_string());
     }
     if config.enable_ph_sensor && ph.comfort < 0.6 {

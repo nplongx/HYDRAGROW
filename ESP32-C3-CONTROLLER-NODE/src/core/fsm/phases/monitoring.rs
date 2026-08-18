@@ -99,7 +99,7 @@ fn check_scheduled_water_change(
 
     Some(SolveResult::Execute {
         control,
-        target_ec: config.tds_target,
+        target_ec: config.ec_target,
         target_ph: config.ph_target,
         pwm: config.dosing_pwm_percent as u32,
     })
@@ -235,7 +235,7 @@ fn apply_decision(
             result.delta.phase_start_ms = Some(Some(uptime_ms));
             result.delta.phase_finish_ms = Some(Some(uptime_ms + hardware_run_ms + 5000));
 
-            peri_delta.last_ec_before_dose = Some(Some(sensors.tds));
+            peri_delta.last_ec_before_dose = Some(Some(sensors.ec));
             peri_delta.last_ph_before_dose = Some(Some(sensors.ph));
             result.delta.reset_stabilizer = true;
 

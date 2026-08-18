@@ -3,15 +3,15 @@
 #include "Logger.h"
 
 namespace {
-// Pin configuration
+// Cấu hình chân GPIO ESP32-C3
 constexpr int PIN_DS18B20 = 2;
-constexpr int PIN_TRIG = 3;
-constexpr int PIN_ECHO = 5;
+constexpr int PIN_TRIG    = 3;
+constexpr int PIN_ECHO    = 5;
 
-constexpr int PIN_SDA     = 6; // GPIO 6 làm SDA
-constexpr int PIN_SCL     = 7; // GPIO 7 làm SCL
+constexpr int PIN_SDA     = 6;
+constexpr int PIN_SCL     = 7;
 
-// Địa chỉ I2C cho 2 ADS1115
+// Địa chỉ I2C của 2 ADS1115
 constexpr uint8_t ADS_PH_ADDR  = 0x48; // Chân ADDR nối GND
 constexpr uint8_t ADS_TDS_ADDR = 0x49; // Chân ADDR nối VCC
 } // namespace
@@ -24,20 +24,19 @@ SensorManager::SensorManager()
       tempFilter_(5.0f, 0.125f),
       waterFilter_(20.0f, 0.125f),
       phFilter_(1.5f, 0.125f),
-      tdsFilter_(1.0f, 0.125f) {}
+      tdsFilter_(0.5f, 0.125f) {}
 
 void SensorManager::begin() {
-    // Khởi tạo bus I2C (mặc định chân SDA/SCL trên ESP32-C3)
     Wire.begin(PIN_SDA, PIN_SCL);
 
     tempSensor_.begin();
     waterLevelSensor_.begin();
     
     if (!phSensor_.begin()) {
-        Logger::debugPrintln("Error: ADS1115 pH not found!");
+        Logger::debugPrintln("Lỗi: Không tìm thấy ADS1115 pH (0x48)!");
     }
     if (!tdsSensor_.begin()) {
-        Logger::debugPrintln("Error: ADS1115 TDS not found!");
+        Logger::debugPrintln("Lỗi: Không tìm thấy ADS1115 TDS (0x49)!");
     }
 }
 
@@ -66,10 +65,6 @@ void SensorManager::enableTemperature(bool enabled) { enableTemperature_ = enabl
 void SensorManager::enableWaterLevel(bool enabled)  { enableWaterLevel_ = enabled; }
 void SensorManager::enablePh(bool enabled)          { enablePh_ = enabled; }
 void SensorManager::enableTds(bool enabled)         { enableTds_ = enabled; }
-
-// ============================================================
-// Private Sensor Update Methods
-// ============================================================
 
 void SensorManager::updateTemperature() {
     if (!enableTemperature_) return;
@@ -109,7 +104,7 @@ void SensorManager::updatePh() {
 
 void SensorManager::updateTds() {
     if (!enableTds_) return;
-    float raw = tdsSensor_.read(data_.temperature);
+    float raw = tdsSensor_.read(data_.temperature); // Trả về EC (mS/cm)
     if (isnan(raw)) {
         data_.errTds = true;
     } else {

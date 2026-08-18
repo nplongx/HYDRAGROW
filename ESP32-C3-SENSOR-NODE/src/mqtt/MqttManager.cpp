@@ -3,214 +3,114 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <WiFiClientSecure.h>
+#include <time.h>
 
 #include "AppConfig.h"
 #include "CommandSecurity.h"
 #include "Logger.h"
 #include "SensorManager.h"
 #include "secrets.h"
-#include <WiFiClientSecure.h>
-#include "RootCA.h"
-
-// ============================================================
-// MQTT / WiFi objects
-// ============================================================
 
 namespace {
 
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
-
 CommandSecurity commandSecurity;
-
 SensorManager* sensorManager = nullptr;
-
 MqttManager* instance = nullptr;
 
-// MQTT connection state
 unsigned long lastReconnectAttempt = 0;
 
-// ============================================================
-// MQTT topics
-// ============================================================
+// Topic chuẩn khớp Backend: AGITECH/<DEVICE_ID>/...
+const String TOPIC_PREFIX   = String("AGITECH/") + MQTT_CLIENT_ID + "/";
+const String TOPIC_SENSOR   = TOPIC_PREFIX + "sensors";
+const String TOPIC_STATUS   = TOPIC_PREFIX + "sensor/status";
+const String TOPIC_COMMAND  = TOPIC_PREFIX + "command";
+const String TOPIC_CONFIG   = TOPIC_PREFIX + "config";
 
-constexpr const char* TOPIC_SENSOR  = "device/sensor";
-constexpr const char* TOPIC_STATUS  = "device/status";
-constexpr const char* TOPIC_COMMAND = "device/command";
-constexpr const char* TOPIC_CONFIG  = "device/config";
-
-// ============================================================
-// Status messages
-// ============================================================
-
-void publishStatus(
-    const char* status,
-    const char* message
-) {
+void publishStatus(const char* status, const char* message) {
     JsonDocument doc;
-
+    doc["device_id"] = MQTT_CLIENT_ID;
     doc["status"] = status;
     doc["message"] = message;
 
     char buffer[256];
-
-    serializeJson(doc, buffer, sizeof(buffer));
-
-    mqttClient.publish(
-        TOPIC_STATUS,
-        buffer,
-        false
-    );
+    size_t len = serializeJson(doc, buffer, sizeof(buffer));
+    mqttClient.publish(TOPIC_STATUS.c_str(), reinterpret_cast<const uint8_t*>(buffer), len, false);
 }
 
 } // namespace
 
-
-// ============================================================
-// Constructor
-// ============================================================
-
-MqttManager::MqttManager(
-    SensorManager& sensors
-)
-    : sensors_(sensors) {
-}
-
-
-// ============================================================
-// begin()
-// ============================================================
+MqttManager::MqttManager(SensorManager& sensors)
+    : sensors_(sensors) {}
 
 void MqttManager::begin() {
     instance = this;
     sensorManager = &sensors_;
 
-    // WiFi
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-    Logger::debugPrintf("Connecting WiFi: %s\n", WIFI_SSID);
+    Logger::debugPrintf("Dang ket noi WiFi: %s\n", WIFI_SSID);
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
         delay(250);
-        Logger::debugPrintln("Waiting for WiFi...");
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Logger::debugPrintf("WiFi connected. IP=%s\n", WiFi.localIP().toString().c_str());
-    } else {
-        Logger::debugPrintln("WiFi connection timeout");
+        Logger::debugPrintf("WiFi da ket noi. IP=%s\n", WiFi.localIP().toString().c_str());
+        configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     }
 
-    // Bỏ qua xác thực CA (Phù hợp cho public test broker)
     wifiClient.setInsecure();
-
-    // MQTT
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
     mqttClient.setBufferSize(2048);
     reconnect();
 }
 
-
-// ============================================================
-// update()
-// ============================================================
-
 void MqttManager::update() {
-
-    // WiFi mất kết nối
     if (WiFi.status() != WL_CONNECTED) {
-
         unsigned long now = millis();
-
         if (now - lastReconnectAttempt >= 5000) {
-
             lastReconnectAttempt = now;
-
             WiFi.disconnect();
-            WiFi.begin(
-                WIFI_SSID,
-                WIFI_PASSWORD
-            );
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
         }
-
         return;
     }
 
-    // MQTT mất kết nối
     if (!mqttClient.connected()) {
-
         unsigned long now = millis();
-
         if (now - lastReconnectAttempt >= 5000) {
-
             lastReconnectAttempt = now;
-
             reconnect();
         }
-
         return;
     }
 
     mqttClient.loop();
-
     publishSensorIfNeeded();
 }
 
-
-// ============================================================
-// MQTT reconnect
-// ============================================================
-
 void MqttManager::reconnect() {
+    if (WiFi.status() != WL_CONNECTED) return;
 
-    if (WiFi.status() != WL_CONNECTED) {
-        return;
-    }
-
-    Logger::debugPrintln(
-        "Connecting MQTT..."
-    );
-
-    bool connected = mqttClient.connect(
-        MQTT_CLIENT_ID,
-        MQTT_USERNAME,
-        MQTT_PASSWORD
-    );
+    Logger::debugPrintln("Dang ket noi MQTT...");
+    bool connected = mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
 
     if (!connected) {
-
-        Logger::debugPrintf(
-            "MQTT connection failed, state=%d\n",
-            mqttClient.state()
-        );
-
+        Logger::debugPrintf("Ket noi MQTT that bai, rc=%d\n", mqttClient.state());
         return;
     }
 
-    Logger::debugPrintln(
-        "MQTT connected"
-    );
+    Logger::debugPrintln("MQTT da ket noi thanh cong!");
+    mqttClient.subscribe(TOPIC_COMMAND.c_str());
+    mqttClient.subscribe(TOPIC_CONFIG.c_str());
 
-    mqttClient.subscribe(
-        TOPIC_COMMAND
-    );
-
-    mqttClient.subscribe(
-        TOPIC_CONFIG
-    );
-
-    publishStatus(
-        "online",
-        "device connected"
-    );
+    publishStatus("online", "Sensor node connected");
 }
-
-
-// ============================================================
-// MQTT callback
-// ============================================================
 
 void MqttManager::mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (!instance) return;
@@ -221,253 +121,90 @@ void MqttManager::mqttCallback(char* topic, byte* payload, unsigned int length) 
         message += static_cast<char>(payload[i]);
     }
 
-    Logger::debugPrintf("MQTT RX topic=%s\n", topic);
-
-    if (strcmp(topic, TOPIC_COMMAND) == 0) {
+    if (strcmp(topic, TOPIC_COMMAND.c_str()) == 0) {
         instance->handleCommand(message);
-        return;
-    }
-
-    if (strcmp(topic, TOPIC_CONFIG) == 0) {
+    } else if (strcmp(topic, TOPIC_CONFIG.c_str()) == 0) {
         instance->handleConfig(message);
-        return;
     }
 }
 
-
-// ============================================================
-// Command
-// ============================================================
-
-void MqttManager::handleCommand(
-    const String& payload
-) {
+void MqttManager::handleCommand(const String& payload) {
     JsonDocument doc;
-
-    DeserializationError error =
-        deserializeJson(
-            doc,
-            payload
-        );
-
-    if (error) {
-
-        Logger::debugPrintln(
-            "Invalid command JSON"
-        );
-
-        publishStatus(
-            "error",
-            "invalid command JSON"
-        );
-
+    if (deserializeJson(doc, payload)) {
+        publishStatus("error", "invalid command JSON");
         return;
     }
-
-    // --------------------------------------------------------
-    // Security
-    // --------------------------------------------------------
 
     if (!commandSecurity.verify(doc)) {
-
-        Logger::debugPrintln(
-            "Command rejected: invalid signature"
-        );
-
-        publishStatus(
-            "error",
-            "command authentication failed"
-        );
-
+        publishStatus("error", "command authentication failed");
         return;
     }
 
-    const char* command =
-        doc["cmd"] | "";
-
-    if (strcmp(command, "set_config") == 0) {
-
-        handleConfigDocument(doc);
-
-        return;
-    }
-
+    const char* command = doc["cmd"] | "";
     if (strcmp(command, "get_status") == 0) {
-
         publishSensorData();
-
-        return;
-    }
-
-    if (strcmp(command, "restart") == 0) {
-
-        publishStatus(
-            "ok",
-            "restarting"
-        );
-
+    } else if (strcmp(command, "restart") == 0) {
+        publishStatus("ok", "restarting");
         delay(100);
-
         ESP.restart();
-
-        return;
     }
-
-    Logger::debugPrintf(
-        "Unknown command: %s\n",
-        command
-    );
-
-    publishStatus(
-        "error",
-        "unknown command"
-    );
 }
 
-
-// ============================================================
-// Config
-// ============================================================
-
-void MqttManager::handleConfig(
-    const String& payload
-) {
+void MqttManager::handleConfig(const String& payload) {
     JsonDocument doc;
-
-    DeserializationError error =
-        deserializeJson(
-            doc,
-            payload
-        );
-
-    if (error) {
-
-        publishStatus(
-            "error",
-            "invalid config JSON"
-        );
-
+    if (deserializeJson(doc, payload)) {
+        publishStatus("error", "invalid config JSON");
         return;
     }
-
-    if (!commandSecurity.verify(doc)) {
-
-        publishStatus(
-            "error",
-            "config authentication failed"
-        );
-
-        return;
-    }
-
     handleConfigDocument(doc);
 }
 
-
-void MqttManager::handleConfigDocument(
-    JsonDocument& doc
-) {
-    // Phần validate/apply configuration
-    // nên nằm trong AppConfig.
-    //
-    // Ví dụ:
-    //
-    // if (!appConfig.apply(doc)) {
-    //     publishStatus("error", "invalid config");
-    //     return;
-    // }
-
-    Logger::debugPrintln(
-        "Configuration received"
-    );
-
-    publishStatus(
-        "ok",
-        "configuration accepted"
-    );
+void MqttManager::handleConfigDocument(JsonDocument& doc) {
+    Logger::debugPrintln("Da nhan cau hinh tu Backend");
+    publishStatus("ok", "configuration accepted");
 }
-
-
-// ============================================================
-// Publish sensor data
-// ============================================================
 
 void MqttManager::publishSensorData() {
+    if (!mqttClient.connected()) return;
 
-    if (!mqttClient.connected()) {
-        return;
-    }
-
-    const SensorData& data =
-        sensors_.getData();
-
+    const SensorData& data = sensors_.getData();
     JsonDocument doc;
 
-    doc["temperature"] = data.temperature;
-
-    doc["water_level"] =
-        data.waterLevel;
-
-    doc["ph"] =
-        data.ph;
-
-    doc["ph_raw"] =
-        data.rawPh;
-
-    doc["ph_voltage_mv"] =
-        data.phVoltageMv;
-
-    doc["tds"] =
-        data.tds;
-
-    doc["err_temperature"] =
-        data.errTemperature;
-
-    doc["err_water_level"] =
-        data.errWaterLevel;
-
-    doc["err_ph"] =
-        data.errPh;
-
-    doc["err_tds"] =
-        data.errTds;
-
-    char buffer[1024];
-
-    size_t length =
-        serializeJson(
-            doc,
-            buffer,
-            sizeof(buffer)
-        );
-
-    mqttClient.publish(
-        TOPIC_SENSOR,
-        reinterpret_cast<const uint8_t*>(buffer),
-        length,
-        false
-    );
-}
-
-
-// ============================================================
-// Publish interval
-// ============================================================
-
-void MqttManager::publishSensorIfNeeded() {
-
-    static unsigned long lastPublish = 0;
-
-    unsigned long now = millis();
-
-    if (
-        now - lastPublish <
-        appConfig.publishInterval
-    ) {
-        return;
+    time_t now = time(nullptr);
+    char timeBuffer[30] = "2026-08-18T00:00:00Z";
+    if (now > 100000) {
+        struct tm* timeinfo = gmtime(&now);
+        strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo);
     }
 
-    lastPublish = now;
+    doc["device_id"]      = MQTT_CLIENT_ID;
+    doc["tds"]            = data.tds;               // EC tính bằng mS/cm
+    doc["ph"]             = data.ph;
+    doc["temp"]           = data.temperature;       // Tên trường 'temp'
+    doc["water_level"]    = data.waterLevel;
+    doc["ph_voltage_mv"]  = data.phVoltageMv;
+    doc["time"]           = timeBuffer;
+    doc["rssi"]           = WiFi.RSSI();
+    doc["free_heap"]      = ESP.getFreeHeap();
+    
+    doc["err_temp"]       = data.errTemperature;
+    doc["err_water"]      = data.errWaterLevel;
+    doc["err_ph"]         = data.errPh;
+    doc["err_tds"]        = data.errTds;
 
+    char buffer[1024];
+    size_t length = serializeJson(doc, buffer, sizeof(buffer));
+
+    mqttClient.publish(TOPIC_SENSOR.c_str(), reinterpret_cast<const uint8_t*>(buffer), length, false);
+}
+
+void MqttManager::publishSensorIfNeeded() {
+    static unsigned long lastPublish = 0;
+    unsigned long now = millis();
+
+    if (now - lastPublish < appConfig.publishInterval) {
+        return;
+    }
+    lastPublish = now;
     publishSensorData();
 }

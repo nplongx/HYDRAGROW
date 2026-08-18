@@ -7,7 +7,8 @@ TDSSensor::TDSSensor(uint8_t i2cAddress)
 bool TDSSensor::begin() {
     isConnected_ = ads_.begin(i2cAddress_);
     if (isConnected_) {
-        ads_.setGain(GAIN_TWOTHIRDS);
+        // GAIN_ONE: dải đo ±4.096V (tín hiệu TDS analog từ 0 đến ~2.3V)
+        ads_.setGain(GAIN_ONE);
     }
     return isConnected_;
 }
@@ -23,65 +24,57 @@ const TDSSensorConfig& TDSSensor::getConfig() const {
 float TDSSensor::getLastVoltageMv() const { return lastVoltageMv_; }
 float TDSSensor::getLastEc() const { return lastEc_; }
 float TDSSensor::getLastTds() const { return lastTds_; }
-float TDSSensor::getLastVccMv() const { return lastVccMv_; }
 
-float TDSSensor::readDifferentialMv() {
+float TDSSensor::readVoltageMv() {
     int32_t sum = 0;
     constexpr int samples = 10;
     for (int i = 0; i < samples; i++) {
-        sum += ads_.readADC_Differential_0_1();
+        // Đọc chân A0 chế độ Single-Ended (tham chiếu GND)
+        sum += ads_.readADC_SingleEnded(0);
         delay(5);
     }
     float rawAvg = static_cast<float>(sum) / samples;
     return ads_.computeVolts(static_cast<int16_t>(rawAvg)) * 1000.0f;
 }
 
-float TDSSensor::readVccMv() {
-    int16_t rawA3 = ads_.readADC_SingleEnded(3);
-    return ads_.computeVolts(rawA3) * 1000.0f;
-}
-
-float TDSSensor::calculateEc(float voltageMv, float temperature) {
-    float rawEc = (voltageMv / 1000.0f) * config_.ecFactor + config_.ecOffset;
-    if (config_.temperatureCompensation) {
-        float coefficient = 1.0f + config_.temperatureCoefficient * (temperature - 25.0f);
-        if (coefficient > 0.0f) {
-            rawEc /= coefficient;
-        }
-    }
-    return max(rawEc, 0.0f);
-}
-
-float TDSSensor::calculateTds(float ec) {
-    return ec * config_.tdsFactor;
-}
-
 float TDSSensor::read(float temperature) {
-    if (!isConnected_) { // Bỏ qua nếu không kết nối được ADS1115 TDS
+    if (!isConnected_) {
         lastVoltageMv_ = NAN;
         lastEc_ = NAN;
         lastTds_ = NAN;
         return NAN;
     }
 
-    float diffMv = readDifferentialMv();
-    float vccMv = readVccMv();
-    lastVccMv_ = vccMv;
+    float voltageMv = readVoltageMv();
+    lastVoltageMv_ = voltageMv;
 
-    if (vccMv <= 1000.0f) {
-        lastVoltageMv_ = NAN;
-        lastEc_ = NAN;
-        lastTds_ = NAN;
-        return NAN;
+    // Chuyển sang Volt để áp dụng công thức đặc tính DFRobot
+    float voltageV = voltageMv / 1000.0f;
+
+    // 1. Bù nhiệt độ chuẩn hóa về 25°C
+    float compensationCoefficient = 1.0f;
+    if (config_.temperatureCompensation && !isnan(temperature) && temperature > 0.0f) {
+        compensationCoefficient = 1.0f + config_.temperatureCoefficient * (temperature - 25.0f);
+        if (compensationCoefficient <= 0.0f) compensationCoefficient = 1.0f;
     }
+    float compensationVoltage = voltageV / compensationCoefficient;
 
-    float compensatedMv = diffMv * (config_.nominalVccMv / vccMv);
-    lastVoltageMv_ = compensatedMv;
+    // 2. Đa thức bậc 3 chuẩn DFRobot tính độ dẫn điện EC (µS/cm)
+    float ec_uS = (133.42f * powf(compensationVoltage, 3) 
+                 - 255.86f * powf(compensationVoltage, 2) 
+                 + 857.39f * compensationVoltage) * config_.kValue;
 
-    float ec = calculateEc(compensatedMv, temperature);
-    lastEc_ = ec;
+    if (ec_uS < 0.0f) ec_uS = 0.0f;
 
-    float tds = calculateTds(ec);
-    lastTds_ = tds;
-    return tds;
+    // 3. Quy đổi ra đơn vị chuẩn EC (mS/cm) và TDS (ppm)
+    float ec_mS = (ec_uS / 1000.0f) + config_.ecOffset;
+    if (ec_mS < 0.0f) ec_mS = 0.0f;
+
+    float tds_ppm = ec_mS * config_.tdsFactor; // ppm = mS/cm * 500
+
+    lastEc_ = ec_mS;
+    lastTds_ = tds_ppm;
+
+    // Trả về EC (mS/cm) làm giá trị đo chính
+    return ec_mS;
 }

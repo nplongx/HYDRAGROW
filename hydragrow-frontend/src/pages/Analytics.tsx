@@ -415,9 +415,9 @@ const Analytics = () => {
           />
         ) : (
           <div className="space-y-6">
-            {/* EC Chart */}
-            {isSensorEnabled(deviceConfig?.enable_ec_sensor) && (
-              <FlatChartCard title="Chỉ số dinh dưỡng (EC)" data={displayData} dataKey="ec" color="cyan" unit="mS/cm" icon={Activity} />
+            {/* TDS Chart */}
+            {isSensorEnabled(deviceConfig?.enable_tds_sensor) && (
+              <FlatChartCard title="Chỉ số dinh dưỡng (TDS)" data={displayData} dataKey="tds" color="cyan" unit="ppm" icon={Activity} />
             )}
             {/* pH Chart */}
             {isSensorEnabled(deviceConfig?.enable_ph_sensor) && (

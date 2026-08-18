@@ -41,6 +41,12 @@ const phaseToString = (phase: any): string | null => {
   return String(phase);
 };
 
+const normalizeSensorPayload = (payload: any = {}) => ({
+  ...payload,
+  tds: payload.tds ?? payload.ec,
+  err_tds: payload.err_tds ?? payload.err_ec,
+});
+
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
   if (!rawPumpStatus || typeof rawPumpStatus !== 'object') return defaultPumpStatus as any;
   const mapped: Record<string, string> = {
@@ -134,7 +140,7 @@ export function useDeviceSync() {
     useDeviceStore.getState().setSensorData((prev) => ({
       ...((prev || {}) as SensorData),
       device_id: prev?.device_id || useDeviceStore.getState().deviceId || '',
-      ec: prev?.ec ?? 0,
+      tds: prev?.tds ?? 0,
       ph: prev?.ph ?? 0,
       temp: prev?.temp ?? 0,
       water_level: prev?.water_level ?? 0,
@@ -189,7 +195,7 @@ export function useDeviceSync() {
         `${currentSettings.backend_url}/api/devices/${currentDeviceId}/sensors/latest`,
         { method: 'GET', headers }
       );
-      if (response.ok) applyDeviceSnapshot((await response.json()).data);
+      if (response.ok) applyDeviceSnapshot(normalizeSensorPayload((await response.json()).data));
     } catch (_) {}
   }, [applyDeviceSnapshot]);
 
@@ -234,7 +240,7 @@ export function useDeviceSync() {
 
           // 1. Cập nhật dữ liệu cảm biến
           if (data.type === 'sensor_update') {
-            const incomingPayload = data.payload.data || data.payload;
+            const incomingPayload = normalizeSensorPayload(data.payload.data || data.payload);
             useDeviceStore.getState().setSensorData((prev) => ({
               ...prev,
               ...incomingPayload,

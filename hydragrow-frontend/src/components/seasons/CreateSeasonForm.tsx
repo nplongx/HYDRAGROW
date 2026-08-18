@@ -47,7 +47,7 @@ export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, o
             <label className="text-sm font-medium text-emerald-900">Ghi chú ban đầu</label>
             <textarea
               rows={2}
-              placeholder="Nguồn hạt giống, mục tiêu EC/pH mong muốn..."
+              placeholder="Nguồn hạt giống, mục tiêu TDS/pH mong muốn..."
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
               className="w-full bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 hover:border-emerald-300 resize-none transition-colors"

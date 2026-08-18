@@ -102,7 +102,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
                 rows={3}
                 value={editDesc}
                 onChange={(e) => setEditDesc(e.target.value)}
-                placeholder="Cập nhật thông tin phân bón, mục tiêu EC/pH..."
+                placeholder="Cập nhật thông tin phân bón, mục tiêu TDS/pH..."
                 className="w-full bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 hover:border-emerald-300 resize-none transition-colors"
               />
             </div>

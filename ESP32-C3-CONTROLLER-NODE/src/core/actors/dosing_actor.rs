@@ -1,8 +1,8 @@
-use hydragrow_shared::fsm::FaultCode;
-use hydragrow_shared::{ControllerConfig, SensorData};
 use crate::core::adaptive::matrix::ControlVector;
 use crate::core::fsm::{DosingPumpTarget, OrchestratorEvent};
 use crate::utils::{effective_flow_ml_per_sec, DosePumpKind};
+use hydragrow_shared::fsm::FaultCode;
+use hydragrow_shared::{ControllerConfig, SensorData};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DosingSubState {
@@ -152,7 +152,11 @@ impl DosingActor {
                 config.pump_a_capacity_ml_per_sec,
                 config,
             );
-            let ml_per_sec = config.pump_a_capacity_ml_per_sec * (safe_pwm as f32 / 100.0);
+            let ml_per_sec = match effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config)
+            {
+                Some(v) => v,
+                None => config.pump_a_capacity_ml_per_sec * (safe_pwm as f32 / 100.0),
+            };
 
             self.sub_state = DosingSubState::SoftStarting {
                 finish_ms: now_ms + config.soft_start_duration as u64,

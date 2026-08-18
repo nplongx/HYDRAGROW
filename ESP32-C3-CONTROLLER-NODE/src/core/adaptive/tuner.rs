@@ -1,22 +1,23 @@
 // src/core/adaptive/tuner.rs
-//! AutoTuner & ConvergenceTracker — Đánh giá độ hội tụ và tự động điều chỉnh bước châm (step ratio).
+//! AutoTuner & ConvergenceTracker đánh giá và điều chỉnh bước châm thích ứng (step ratio).
 //! Thuộc tầng Pure Core: Không phụ thuộc ESP-IDF, có thể test 100% bằng `cargo test`.
 
 use hydragrow_shared::ControllerConfig;
 use serde::{Deserialize, Serialize};
-use crate::core::fsm::types::PendingCalibrationSample;
+
 use super::gain_learner::GainLearner;
 use super::kalman::KalmanCovarianceDiag;
 use super::matrix::InteractionMatrix;
+use crate::core::fsm::types::PendingCalibrationSample;
 
-/// Trạng thái học máy của AutoTuner
+/// Trạng thái của AutoTuner
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TunerState {
     Exploring = 0,  // Đang thăm dò gain ban đầu
     Converging = 1, // Đang hội tụ về target
-    Stable = 2,     // Đạt trạng thái ổn định
-    Degraded = 3,   // Phương hại / Nhiễu cao
+    Stable = 2,     // Đã đạt trạng thái ổn định
+    Degraded = 3,   // Phản ứng bất thường / Nhiễu cao
 }
 
 impl TunerState {
@@ -91,6 +92,7 @@ impl ConvergenceTracker {
             }
 
             abs_sum += v.abs();
+
             let sign = if v > 0.0 {
                 1
             } else if v < 0.0 {
@@ -130,20 +132,29 @@ impl ConvergenceTracker {
     }
 }
 
-/// AutoTuner chính điều phối việc học ma trận và thích ứng tỷ lệ bước châm
+/// AutoTuner điều phối việc học ma trận và thích ứng bước châm
 #[derive(Debug, Clone)]
 pub struct AutoTuner {
     pub state: TunerState,
+
+    // Tách riêng Step Ratio cho từng kênh
     pub adaptive_ec_ratio: f32,
-    pub adaptive_ph_ratio: f32,
+    pub adaptive_ph_up_ratio: f32,
+    pub adaptive_ph_down_ratio: f32,
+
     pub best_ec_ratio: f32,
-    pub best_ph_ratio: f32,
+    pub best_ph_up_ratio: f32,
+    pub best_ph_down_ratio: f32,
+
     pub last_update_sec: u64,
     pub ec_tracker: ConvergenceTracker,
-    pub ph_tracker: ConvergenceTracker,
+    pub ph_up_tracker: ConvergenceTracker,
+    pub ph_down_tracker: ConvergenceTracker,
+
     pub gain_learner: GainLearner,
     pub ec_variance_baseline: f32,
     pub ph_variance_baseline: f32,
+
     pub interaction_matrix: InteractionMatrix,
     pub kalman: KalmanCovarianceDiag,
     pub matrix_update_count: u32,
@@ -154,13 +165,16 @@ impl Default for AutoTuner {
     fn default() -> Self {
         Self {
             adaptive_ec_ratio: 0.4,
-            adaptive_ph_ratio: 0.2,
+            adaptive_ph_up_ratio: 0.2,
+            adaptive_ph_down_ratio: 0.2,
             best_ec_ratio: 0.4,
-            best_ph_ratio: 0.2,
+            best_ph_up_ratio: 0.2,
+            best_ph_down_ratio: 0.2,
             state: TunerState::Exploring,
             last_update_sec: 0,
             ec_tracker: ConvergenceTracker::default(),
-            ph_tracker: ConvergenceTracker::default(),
+            ph_up_tracker: ConvergenceTracker::default(),
+            ph_down_tracker: ConvergenceTracker::default(),
             gain_learner: GainLearner::default(),
             ec_variance_baseline: 0.0,
             ph_variance_baseline: 0.0,
@@ -181,12 +195,29 @@ impl AutoTuner {
         self.adaptive_ec_ratio
     }
 
+    pub fn active_ph_up_ratio(&self) -> f32 {
+        self.adaptive_ph_up_ratio
+    }
+
+    pub fn active_ph_down_ratio(&self) -> f32 {
+        self.adaptive_ph_down_ratio
+    }
+
+    // Hàm tương thích ngược nếu cần lấy ratio trung bình
+    pub fn adaptive_ph_ratio(&self) -> f32 {
+        (self.adaptive_ph_up_ratio + self.adaptive_ph_down_ratio) * 0.5
+    }
+
     pub fn effective_ec_tolerance(&self, base: f32) -> f32 {
         adaptive_solver_tolerance(base, self.state, self.ec_tracker.oscillation)
     }
 
     pub fn effective_ph_tolerance(&self, base: f32) -> f32 {
-        adaptive_solver_tolerance(base, self.state, self.ph_tracker.oscillation)
+        let max_osc = self
+            .ph_up_tracker
+            .oscillation
+            .max(self.ph_down_tracker.oscillation);
+        adaptive_solver_tolerance(base, self.state, max_osc)
     }
 
     pub fn on_ec_dosing_ack(
@@ -222,43 +253,51 @@ impl AutoTuner {
             return;
         }
 
-        let gain_vs_expected: f32 = response / expected.max(0.001_f32); //~1
+        let gain_vs_expected: f32 = response / expected.max(0.001_f32);
+
         let tracker = if is_ec {
             &mut self.ec_tracker
+        } else if is_ph_up == Some(true) {
+            &mut self.ph_up_tracker
         } else {
-            &mut self.ph_tracker
+            &mut self.ph_down_tracker
         };
+
         tracker.push(gain_vs_expected - 1.0);
 
-        let tune_delta = self.compute_delta(is_ec).clamp(-0.08, 0.08);
+        let tune_delta = self.compute_delta(is_ec, is_ph_up).clamp(-0.08, 0.08);
         if tune_delta != 0.0 {
-            self.adjust_step_ratio(is_ec, tune_delta);
-            if is_ec {
-                self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
-            } else {
-                self.best_ph_ratio = self.best_ph_ratio.max(self.adaptive_ph_ratio);
-            }
+            self.adjust_step_ratio(is_ec, is_ph_up, tune_delta);
         }
 
         self.last_update_sec = now_sec;
         self.update_state(is_ec, is_ph_up);
     }
 
-    pub fn adjust_step_ratio(&mut self, is_ec: bool, delta: f32) {
-        let ratio = if is_ec {
-            &mut self.adaptive_ec_ratio
+    pub fn adjust_step_ratio(&mut self, is_ec: bool, is_ph_up: Option<bool>, delta: f32) {
+        if is_ec {
+            self.adaptive_ec_ratio = (self.adaptive_ec_ratio + delta).clamp(0.1_f32, 2.0_f32);
+            self.best_ec_ratio = self.best_ec_ratio.max(self.adaptive_ec_ratio);
+        } else if is_ph_up == Some(true) {
+            self.adaptive_ph_up_ratio =
+                (self.adaptive_ph_up_ratio + delta).clamp(0.05_f32, 1.0_f32);
+            self.best_ph_up_ratio = self.best_ph_up_ratio.max(self.adaptive_ph_up_ratio);
         } else {
-            &mut self.adaptive_ph_ratio
-        };
-        *ratio = (*ratio + delta).clamp(0.1_f32, 2.0_f32);
+            self.adaptive_ph_down_ratio =
+                (self.adaptive_ph_down_ratio + delta).clamp(0.05_f32, 1.0_f32);
+            self.best_ph_down_ratio = self.best_ph_down_ratio.max(self.adaptive_ph_down_ratio);
+        }
     }
 
-    fn compute_delta(&self, is_ec: bool) -> f32 {
+    fn compute_delta(&self, is_ec: bool, is_ph_up: Option<bool>) -> f32 {
         let tracker = if is_ec {
             &self.ec_tracker
+        } else if is_ph_up == Some(true) {
+            &self.ph_up_tracker
         } else {
-            &self.ph_tracker
+            &self.ph_down_tracker
         };
+
         let error = tracker.current_error();
         let p_term = error * 0.04;
         let d_term = tracker.trend * (-0.015);
@@ -275,22 +314,24 @@ impl AutoTuner {
     fn update_state(&mut self, is_ec: bool, is_ph_up: Option<bool>) {
         let (err, tracker_count) = if is_ec {
             (self.ec_tracker.current_error().abs(), self.ec_tracker.count)
+        } else if is_ph_up == Some(true) {
+            (
+                self.ph_up_tracker.current_error().abs(),
+                self.ph_up_tracker.count,
+            )
         } else {
-            (self.ph_tracker.current_error().abs(), self.ph_tracker.count)
+            (
+                self.ph_down_tracker.current_error().abs(),
+                self.ph_down_tracker.count,
+            )
         };
 
         let confidence = if is_ec {
             self.gain_learner.ec.confidence
+        } else if is_ph_up == Some(true) {
+            self.gain_learner.ph_up.confidence
         } else {
-            match is_ph_up {
-                Some(true) => self.gain_learner.ph_up.confidence,
-                Some(false) => self.gain_learner.ph_down.confidence,
-                None => self
-                    .gain_learner
-                    .ph_up
-                    .confidence
-                    .max(self.gain_learner.ph_down.confidence),
-            }
+            self.gain_learner.ph_down.confidence
         };
 
         self.refresh_variance_baseline();
@@ -311,19 +352,24 @@ impl AutoTuner {
 
     pub fn on_water_change(&mut self) {
         self.adaptive_ec_ratio += (self.best_ec_ratio - self.adaptive_ec_ratio) * 0.5;
-        self.adaptive_ph_ratio += (self.best_ph_ratio - self.adaptive_ph_ratio) * 0.5;
+        self.adaptive_ph_up_ratio += (self.best_ph_up_ratio - self.adaptive_ph_up_ratio) * 0.5;
+        self.adaptive_ph_down_ratio +=
+            (self.best_ph_down_ratio - self.adaptive_ph_down_ratio) * 0.5;
+
         self.ec_tracker.reset();
-        self.ph_tracker.reset();
+        self.ph_up_tracker.reset();
+        self.ph_down_tracker.reset();
         self.state = TunerState::Converging;
     }
 
     pub fn on_manual_reset(&mut self) {
         self.ec_tracker.reset();
-        self.ph_tracker.reset();
+        self.ph_up_tracker.reset();
+        self.ph_down_tracker.reset();
         self.state = TunerState::Converging;
     }
 
-    /// Entry point duy nhất cho adaptive learning pipeline sau mỗi chu kỳ châm.
+    /// Entry point duy nhất cho adaptive learning pipeline sau mỗi chu kỳ
     pub fn learn_from_cycle(
         &mut self,
         sample: &PendingCalibrationSample,
@@ -349,7 +395,6 @@ impl AutoTuner {
             self.gain_learner
                 .update_ec_gain(total_nutrient_ml, actual_delta_ec, config);
         }
-
         if ph_dose_ml > 0.1 && actual_delta_ph.abs() > 0.01 {
             self.gain_learner
                 .update_ph_gain(ph_dose_ml, actual_delta_ph.abs(), is_ph_up, config);
@@ -362,7 +407,6 @@ impl AutoTuner {
                 self.on_ec_dosing_ack(actual_delta_ec, expected_ec_delta, config, now_sec);
             }
         }
-
         if ph_dose_ml > 0.1 {
             let expected_ph_delta = if is_ph_up {
                 ph_dose_ml * config.ph_shift_up_per_ml
@@ -395,7 +439,7 @@ impl AutoTuner {
         if !self.matrix_is_warm && self.matrix_update_count >= 10 {
             self.matrix_is_warm = true;
             log::info!(
-                "🔥 [ADAPTIVE] InteractionMatrix đã ẤM sau {} cycles! Chuyển sang WarmPathSolver.",
+                "🔥 [ADAPTIVE] InteractionMatrix ĐÃ ẤM sau {} cycles! Chuyển sang WarmPathSolver.",
                 self.matrix_update_count
             );
         }
@@ -418,7 +462,6 @@ impl AutoTuner {
         {
             self.ec_variance_baseline = self.gain_learner.ec.variance.max(1e-6);
         }
-
         if (self.gain_learner.ph_up.sample_count + self.gain_learner.ph_down.sample_count)
             >= self.gain_learner.ph_up.min_samples
             && self.ph_variance_baseline <= 0.0
@@ -435,6 +478,7 @@ impl AutoTuner {
         let ph_degraded = self.ph_variance_baseline > 0.0
             && ((self.gain_learner.ph_up.variance + self.gain_learner.ph_down.variance) * 0.5)
                 > self.ph_variance_baseline * 1.5;
+
         ec_degraded || ph_degraded
     }
 
@@ -452,9 +496,13 @@ impl AutoTuner {
             "device_id": device_id,
             "runtime_coefficients": {
                 "step_ratio_ec": self.adaptive_ec_ratio,
-                "step_ratio_ph": self.adaptive_ph_ratio,
+                "step_ratio_ph": self.adaptive_ph_ratio(),
+                "step_ratio_ph_up": self.adaptive_ph_up_ratio,
+                "step_ratio_ph_down": self.adaptive_ph_down_ratio,
                 "best_ec_ratio": self.best_ec_ratio,
-                "best_ph_ratio": self.best_ph_ratio,
+                "best_ph_ratio": (self.best_ph_up_ratio + self.best_ph_down_ratio) * 0.5,
+                "best_ph_up_ratio": self.best_ph_up_ratio,
+                "best_ph_down_ratio": self.best_ph_down_ratio,
                 "state": self.state.as_u8(),
                 "adaptive_mixing_sec": adaptive_mixing_sec,
                 "adaptive_stabilize_sec": adaptive_stabilize_sec,
@@ -487,12 +535,14 @@ pub fn adaptive_solver_tolerance(base: f32, state: TunerState, oscillation: f32)
     if !base.is_finite() || base <= 0.0 {
         return 0.0;
     }
+
     let state_multiplier = match state {
         TunerState::Stable => 1.0,
         TunerState::Converging => 1.25,
         TunerState::Exploring => 1.5,
         TunerState::Degraded => 1.75,
     };
+
     let oscillation_multiplier = 1.0 + oscillation.clamp(0.0, 1.0) * 0.75;
     let multiplier = (state_multiplier * oscillation_multiplier).clamp(1.0, 2.5);
     base * multiplier

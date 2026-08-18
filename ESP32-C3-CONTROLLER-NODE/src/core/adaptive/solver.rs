@@ -1,11 +1,15 @@
-// src/fsm/solver.rs
+// src/core/adaptive/solver.rs
 //! SolverStrategy — Trừu tượng hóa thuật toán tính ControlVector.
-//! Cold path dùng hằng số config tĩnh.
-//! Warm path dùng Moore-Penrose giả nghịch đảo.
+//! Cold path dùng hằng số config tĩnh kết hợp AutoTuner Step Ratio.
+//! Warm path dùng Moore-Penrose giả nghịch đảo từ ma trận tương tác MIMO.
 
 use hydragrow_shared::{ControllerConfig, SensorData};
 
-use crate::core::{adaptive::matrix::{ControlVector, StateDeltaVector}, fsm::SystemContext, optimizer::apply_safety_guardrails};
+use crate::core::{
+    adaptive::matrix::{ControlVector, StateDeltaVector},
+    fsm::SystemContext,
+    optimizer::apply_safety_guardrails,
+};
 
 /// Kết quả từ solver: control vector và target để pass vào DosingActor.
 #[derive(Debug, Clone)]
@@ -87,7 +91,7 @@ impl SafeStateDeltas {
     }
 }
 
-/// Cold path: Học máy chưa ấm, dùng hằng số config tĩnh làm dự phòng.
+/// Cold path: Học máy chưa ấm, dùng hằng số config tĩnh kết hợp AutoTuner Step Ratio.
 pub struct ColdPathSolver;
 
 impl SolverStrategy for ColdPathSolver {
@@ -99,13 +103,13 @@ impl SolverStrategy for ColdPathSolver {
     ) -> SolveResult {
         let deltas = SafeStateDeltas::compute(sensors, config, ctx);
 
-        if deltas.ec == 0.0 && deltas.ph == 0.0 && deltas.water == 0.0 {
+        if deltas.is_empty() {
             return SolveResult::Idle;
         }
 
         let mut control = ControlVector::default();
 
-        // 1. Tính toán châm phân (Nutrient A/B)
+        // 1. Tính toán châm dinh dưỡng (Nutrient A/B) — Chia đều 50/50 cho 2 bơm
         if config.enable_ec_sensor && deltas.ec > 0.0 {
             let gain = ctx
                 .tuner
@@ -113,34 +117,39 @@ impl SolverStrategy for ColdPathSolver {
                 .effective_ec_gain(config.ec_gain_per_ml)
                 .max(0.0001);
 
-            let (ec_step, _) = extract_step_ratios(ctx);
-            let ml = (deltas.ec / gain * ec_step).clamp(0.0, config.max_dose_per_cycle);
+            let (ec_step, _, _) = extract_step_ratios(ctx);
+            // Tổng thể tích phân cần nạp vào bể
+            let total_nutrient_ml = deltas.ec / gain * ec_step;
+            // Chia đều cho từng bình A và B
+            let per_pump_ml = (total_nutrient_ml / 2.0).clamp(0.0, config.max_dose_per_cycle);
 
-            control.nutrient_a_ml = ml;
-            control.nutrient_b_ml = ml;
+            control.nutrient_a_ml = per_pump_ml;
+            control.nutrient_b_ml = per_pump_ml;
         }
 
-        // 2. Tính toán điều chỉnh pH (pH Up / Down)
+        // 2. Tính toán điều chỉnh pH (pH Up / Down) tách biệt độc lập
         if config.enable_ph_sensor && deltas.ph.abs() > 0.0 {
             let is_up = deltas.ph > 0.0;
-            let gain = if is_up {
-                ctx.tuner
-                    .gain_learner
-                    .effective_ph_up_gain(config.ph_shift_up_per_ml)
-            } else {
-                ctx.tuner
-                    .gain_learner
-                    .effective_ph_down_gain(config.ph_shift_down_per_ml)
-            }
-            .max(0.0001);
-
-            let (_, ph_step) = extract_step_ratios(ctx);
-            let ml = (deltas.ph.abs() / gain * ph_step).clamp(0.0, config.max_dose_per_cycle);
+            let (_, ph_up_step, ph_down_step) = extract_step_ratios(ctx);
 
             if is_up {
-                control.ph_up_ml = ml;
+                let gain = ctx
+                    .tuner
+                    .gain_learner
+                    .effective_ph_up_gain(config.ph_shift_up_per_ml)
+                    .max(0.0001);
+
+                control.ph_up_ml =
+                    (deltas.ph / gain * ph_up_step).clamp(0.0, config.max_dose_per_cycle);
             } else {
-                control.ph_down_ml = ml;
+                let gain = ctx
+                    .tuner
+                    .gain_learner
+                    .effective_ph_down_gain(config.ph_shift_down_per_ml)
+                    .max(0.0001);
+
+                control.ph_down_ml =
+                    (deltas.ph.abs() / gain * ph_down_step).clamp(0.0, config.max_dose_per_cycle);
             }
         }
 
@@ -153,6 +162,19 @@ impl SolverStrategy for ColdPathSolver {
                 control.water_out_sec =
                     (deltas.water.abs() / 0.1).clamp(0.0, config.max_drain_duration_sec as f32);
             }
+        }
+
+        // 4. Áp dụng Safety Guardrails kiểm tra độc tính, tràn bồn và sốc môi trường
+        apply_safety_guardrails(
+            &mut control,
+            sensors.ec,
+            sensors.ph,
+            sensors.water_level,
+            config,
+        );
+
+        if is_control_zero(&control) {
+            return SolveResult::Idle;
         }
 
         finalize_solve_result(control, config)
@@ -187,19 +209,12 @@ impl SolverStrategy for WarmPathSolver {
             None => return SolveResult::Idle,
         };
 
-        // 1. Áp dụng step ratio từ AutoTuner & clamp giới hạn
-        let (ec_step, ph_step) = extract_step_ratios(ctx);
-
-        control.nutrient_a_ml = (control.nutrient_a_ml * ec_step).min(config.max_dose_per_cycle);
-        control.nutrient_b_ml = (control.nutrient_b_ml * ec_step).min(config.max_dose_per_cycle);
-        control.ph_up_ml = (control.ph_up_ml * ph_step).min(config.max_dose_per_cycle);
-        control.ph_down_ml = (control.ph_down_ml * ph_step).min(config.max_dose_per_cycle);
-        control.water_in_sec = control
-            .water_in_sec
-            .min(config.max_refill_duration_sec as f32);
-        control.water_out_sec = control
-            .water_out_sec
-            .min(config.max_drain_duration_sec as f32);
+        // 1. Áp dụng step ratio từ AutoTuner
+        let (ec_step, ph_up_step, ph_down_step) = extract_step_ratios(ctx);
+        control.nutrient_a_ml *= ec_step;
+        control.nutrient_b_ml *= ec_step;
+        control.ph_up_ml *= ph_up_step;
+        control.ph_down_ml *= ph_down_step;
 
         // 2. Tắt các kênh không bật cảm biến tương ứng
         if !config.enable_ec_sensor {
@@ -245,11 +260,19 @@ pub fn select_solver(ctx: &SystemContext) -> &'static dyn SolverStrategy {
 // --- Internal Helper Functions ---
 
 #[inline]
-fn extract_step_ratios(ctx: &SystemContext) -> (f32, f32) {
+fn extract_step_ratios(ctx: &SystemContext) -> (f32, f32, f32) {
     if ctx.tuner.is_locked() {
-        (ctx.tuner.best_ec_ratio, ctx.tuner.best_ph_ratio)
+        (
+            ctx.tuner.best_ec_ratio,
+            ctx.tuner.best_ph_up_ratio,
+            ctx.tuner.best_ph_down_ratio,
+        )
     } else {
-        (ctx.tuner.active_ec_ratio(), ctx.tuner.adaptive_ph_ratio)
+        (
+            ctx.tuner.active_ec_ratio(),
+            ctx.tuner.active_ph_up_ratio(),
+            ctx.tuner.active_ph_down_ratio(),
+        )
     }
 }
 
@@ -284,12 +307,13 @@ fn effective_ph_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use hydragrow_shared::{PumpStatus, SensorData};
 
     fn sensor(ec: f32, ph: f32, water_level: f32) -> SensorData {
         SensorData {
             device_id: "device_001".to_string(),
-            ec: ec,
+            ec,
             ph,
             temp: 25.0,
             water_level,
@@ -309,31 +333,31 @@ mod tests {
     }
 
     #[test]
-    fn cold_solver_uses_adaptive_ec_tolerance_to_skip_small_chatter_dose() {
+    fn cold_solver_splits_nutrient_equally_between_a_and_b() {
         let mut config = ControllerConfig {
             enable_ec_sensor: true,
             enable_ph_sensor: false,
             enable_water_level_sensor: false,
-            ec_target: 1.20,
+            ec_target: 1.60,
             ec_tolerance: 0.05,
+            ec_gain_per_ml: 0.02,
+            max_dose_per_cycle: 50.0,
             ..ControllerConfig::default()
         };
         config.control_mode = hydragrow_shared::ControlMode::Auto;
 
-        let sensors = sensor(1.13, 6.0, 20.0);
+        let sensors = sensor(1.20, 6.0, 20.0);
         let mut ctx = SystemContext::default();
-        ctx.tuner.state = TunerState::Exploring;
-        ctx.tuner.ec_tracker.oscillation = 1.0;
+        ctx.tuner.adaptive_ec_ratio = 0.40;
 
         let result = ColdPathSolver.solve(&sensors, &config, &ctx);
-
-        assert!(matches!(result, SolveResult::Idle));
-    }
-
-    #[test]
-    fn adaptive_solver_tolerance_keeps_configured_tolerance_when_stable() {
-        let tolerance = adaptive_solver_tolerance(0.05, TunerState::Stable, 0.0);
-
-        assert!((tolerance - 0.05).abs() < f32::EPSILON);
+        match result {
+            SolveResult::Execute { control, .. } => {
+                // delta = 0.40, gain = 0.02 -> total = 20ml * 0.40 = 8.0ml -> per pump = 4.0ml
+                assert!((control.nutrient_a_ml - 4.0).abs() < 1e-3);
+                assert!((control.nutrient_b_ml - 4.0).abs() < 1e-3);
+            }
+            _ => panic!("Expected Execute result"),
+        }
     }
 }

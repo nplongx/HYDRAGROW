@@ -12,26 +12,26 @@ use std::{
 
 static LOG_DROP_COUNT: AtomicU32 = AtomicU32::new(0);
 
-// ---------------------------------------------------------------------------
-// DosePumpKind – dùng nội bộ để tra flow capacity theo loại bơm
-// ---------------------------------------------------------------------------
 #[derive(Debug, Clone, Copy)]
 pub enum DosePumpKind {
+    PumpA,
     PumpB,
     PhUp,
     PhDown,
 }
 
-// ---------------------------------------------------------------------------
-// effective_flow_ml_per_sec
-// Trả về None nếu cấu hình không hợp lệ hoặc PWM dưới ngưỡng tối thiểu.
-// ---------------------------------------------------------------------------
 pub fn effective_flow_ml_per_sec(
     pump: DosePumpKind,
     pwm_percent: u32,
     config: &ControllerConfig,
 ) -> Option<f32> {
     let (capacity, min_pwm) = match pump {
+        DosePumpKind::PumpA => (
+            config.pump_a_capacity_ml_per_sec,
+            config
+                .pump_a_min_pwm_percent
+                .unwrap_or(config.dosing_min_pwm_percent),
+        ),
         DosePumpKind::PumpB => (
             config.pump_b_capacity_ml_per_sec,
             config
@@ -57,7 +57,6 @@ pub fn effective_flow_ml_per_sec(
     if capacity <= 0.0 || safe_pwm < safe_min_pwm {
         return None;
     }
-
     Some(capacity * (safe_pwm as f32 / 100.0))
 }
 

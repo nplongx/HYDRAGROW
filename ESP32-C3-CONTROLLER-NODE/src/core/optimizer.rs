@@ -1,12 +1,9 @@
+
+// src/core/optimizer.rs
 use hydragrow_shared::ControllerConfig;
 use log::warn;
 
 use crate::core::adaptive::matrix::ControlVector;
-
-// pub fn confidence_from_error_ratio(target: f32, predicted: f32) -> f32 {
-//     let denom = target.abs().max(0.0001);
-//     (1.0 - ((target - predicted).abs() / denom)).clamp(0.0, 1.0)
-// }
 
 /// Hàm này nhận đầu vào là ControlVector do Ma trận tính toán ra, duyệt qua các ranh giới
 /// sinh tồn vật lý của cây trồng và thiết bị để cắt tỉa (truncate) hoặc khóa (interlock) dòng lệnh.
@@ -17,12 +14,15 @@ pub fn apply_safety_guardrails(
     current_water_level: f32,
     config: &ControllerConfig,
 ) {
-    // --- LƯỚI 1: BẢO VỆ MỰC NƯỚC SINH TỒN (MỨC ƯU TIÊN CAO NHẤT) ---
-    // Nếu mực nước chạm ranh giới critical_min, nguy cơ cháy bơm Osaka/bơm sục rất cao.
-    // Toàn bộ các cơ cấu châm hóa chất, dinh dưỡng, phun sương phải bị KHÓA CHẶT VỀ 0.
-    // Hệ thống chỉ cho phép duy nhất kênh water_in_sec hoạt động hết công suất.
+    // =========================================================================
+    // LƯỚI 1: BẢO VỆ MỰC NƯỚC SINH TỒN & CHỐNG TRÀN BỒN (ƯU TIÊN CAO NHẤT)
+    // =========================================================================
+    // 1.1. Mực nước cạn nguy hiểm -> Cháy bơm, khóa toàn bộ hóa chất, ép cấp nước
     if current_water_level <= config.water_level_critical_min {
-        warn!("🚨 [GUARDRAIL] Mực nước chạm ngưỡng nguy hiểm ({:.1}cm)! Khóa toàn bộ các kênh châm, ép chạy bơm cấp.", current_water_level);
+        warn!(
+            "🚨 [GUARDRAIL] Mực nước cạn nguy hiểm ({:.1}cm <= {:.1}cm)! Khóa toàn bộ kênh châm hóa chất, ép chạy bơm cấp nước.",
+            current_water_level, config.water_level_critical_min
+        );
         control.nutrient_a_ml = 0.0;
         control.nutrient_b_ml = 0.0;
         control.ph_up_ml = 0.0;
@@ -30,45 +30,94 @@ pub fn apply_safety_guardrails(
         control.water_out_sec = 0.0;
         control.misting_sec = 0.0;
         control.mixing_sec = 0.0;
-        // Bơm nước vào hết công suất cấu hình
         control.water_in_sec = config.max_refill_duration_sec as f32;
         return;
     }
 
-    // --- LƯỚI 2: CHỐNG ĐỘC TÍNH DINH DƯỠNG (EC OVERDOSE GUARD) ---
-    // Nếu chỉ số EC thực tế đo được đã vượt ngưỡng max_ec_limit an toàn của cây,
-    // hoặc kết quả châm ma trận tính toán cộng dồn làm vượt quá ranh giới, khóa lập tức bơm phân A, B.
-    if current_ec >= config.max_ec_limit
-        || (current_ec + (control.nutrient_a_ml * config.ec_gain_per_ml)) > config.max_ec_limit
-    {
-        if control.nutrient_a_ml > 0.0 {
-            warn!("⚠️ [GUARDRAIL] Chặn lệnh châm phân dinh dưỡng do EC hiện tại ({:.2}) tiến sát giới hạn độc tính ({:.2})", current_ec, config.max_ec_limit);
+    // 1.2. Mực nước đã đầy hoặc vượt trần -> Cấm tuyệt đối cấp thêm nước chống tràn
+    if current_water_level >= config.water_level_max && control.water_in_sec > 0.0 {
+        warn!(
+            "⚠️ [GUARDRAIL] Mực nước bồn đã đầy ({:.1}cm >= {:.1}cm), triệt tiêu lệnh cấp nước chống tràn.",
+            current_water_level, config.water_level_max
+        );
+        control.water_in_sec = 0.0;
+    }
+
+    // =========================================================================
+    // LƯỚI 2: CHỐNG ĐỘC TÍNH DINH DƯỠNG & SỐC EC (EC OVERDOSE GUARD)
+    // =========================================================================
+    let total_nutrient_ml = control.nutrient_a_ml + control.nutrient_b_ml;
+    let predicted_ec_gain = total_nutrient_ml * config.ec_gain_per_ml;
+
+    // 2.1. Đã vượt trần độc tính hoặc dự báo sau châm sẽ vượt trần
+    if current_ec >= config.max_ec_limit || (current_ec + predicted_ec_gain) > config.max_ec_limit {
+        if total_nutrient_ml > 0.0 {
+            warn!(
+                "⚠️ [GUARDRAIL] Chặn châm phân A/B: EC hiện tại ({:.2}) + dự tăng ({:.2}) vượt ngưỡng độc tính ({:.2})",
+                current_ec, predicted_ec_gain, config.max_ec_limit
+            );
             control.nutrient_a_ml = 0.0;
             control.nutrient_b_ml = 0.0;
         }
     }
 
-    // --- LƯỚI 3: CHỐNG SỐC AXIT / KIỀM (pH BORDER INTERLOCK) ---
-    // Kiểm tra ranh giới pH sinh tồn [min_ph_limit -> max_ph_limit].
-    if current_ph <= config.min_ph_limit && control.ph_down_ml > 0.0 {
+    // 2.2. Kiểm tra mức tăng vượt ngưỡng sốc tối đa trong 1 chu kỳ (max_ec_delta)
+    if predicted_ec_gain > config.max_ec_delta && total_nutrient_ml > 0.0 {
+        let safe_total_ml = (config.max_ec_delta / config.ec_gain_per_ml.max(0.0001)).max(0.0);
+        let scale = safe_total_ml / total_nutrient_ml;
         warn!(
-            "🚨 [GUARDRAIL] Cực đoan: pH quá thấp ({:.2})! Cấm tuyệt đối châm thêm pH Down.",
-            current_ph
+            "⚠️ [GUARDRAIL] Thu nhỏ liều phân bón từ {:.1}ml xuống {:.1}ml để khống chế ΔEC <= {:.2}",
+            total_nutrient_ml, safe_total_ml, config.max_ec_delta
         );
-        control.ph_down_ml = 0.0;
-    }
-    if current_ph >= config.max_ph_limit && control.ph_up_ml > 0.0 {
-        warn!(
-            "🚨 [GUARDRAIL] Cực đoan: pH quá cao ({:.2})! Cấm tuyệt đối châm thêm pH Up.",
-            current_ph
-        );
-        control.ph_up_ml = 0.0;
+        control.nutrient_a_ml *= scale;
+        control.nutrient_b_ml *= scale;
     }
 
-    // --- LƯỚI 4: TRIỆT TIÊU HÀNH VI ĐỐI KHÁNG THỦY LỰC ---
-    // Ma trận trong quá trình học (chưa hội tụ hoàn toàn) có thể đưa ra nghiệm đồng thời:
-    // Vừa bật bơm nước vào (Water In) vừa bật bơm xả nước (Water Out).
-    // Bộ lọc này sẽ lấy hiệu số để giữ lại duy nhất một hướng dòng chảy tối ưu.
+    // =========================================================================
+    // LƯỚI 3: CHỐNG SỐC AXIT / KIỀM (pH BORDER & DELTA INTERLOCK)
+    // =========================================================================
+    // 3.1. Bảo vệ pH Down (Axit)
+    if control.ph_down_ml > 0.0 {
+        let predicted_ph_drop = control.ph_down_ml * config.ph_shift_down_per_ml;
+        if current_ph <= config.min_ph_limit || (current_ph - predicted_ph_drop) < config.min_ph_limit {
+            warn!(
+                "🚨 [GUARDRAIL] Chặn pH Down: pH hiện tại ({:.2}) - dự giảm ({:.2}) chạm sàn an toàn ({:.2})",
+                current_ph, predicted_ph_drop, config.min_ph_limit
+            );
+            control.ph_down_ml = 0.0;
+        } else if predicted_ph_drop > config.max_ph_delta {
+            let safe_ph_down_ml = config.max_ph_delta / config.ph_shift_down_per_ml.max(0.0001);
+            warn!(
+                "⚠️ [GUARDRAIL] Cắt tỉa pH Down từ {:.1}ml xuống {:.1}ml để khống chế ΔpH <= {:.2}",
+                control.ph_down_ml, safe_ph_down_ml, config.max_ph_delta
+            );
+            control.ph_down_ml = safe_ph_down_ml;
+        }
+    }
+
+    // 3.2. Bảo vệ pH Up (Kiềm)
+    if control.ph_up_ml > 0.0 {
+        let predicted_ph_rise = control.ph_up_ml * config.ph_shift_up_per_ml;
+        if current_ph >= config.max_ph_limit || (current_ph + predicted_ph_rise) > config.max_ph_limit {
+            warn!(
+                "🚨 [GUARDRAIL] Chặn pH Up: pH hiện tại ({:.2}) + dự tăng ({:.2}) chạm trần an toàn ({:.2})",
+                current_ph, predicted_ph_rise, config.max_ph_limit
+            );
+            control.ph_up_ml = 0.0;
+        } else if predicted_ph_rise > config.max_ph_delta {
+            let safe_ph_up_ml = config.max_ph_delta / config.ph_shift_up_per_ml.max(0.0001);
+            warn!(
+                "⚠️ [GUARDRAIL] Cắt tỉa pH Up từ {:.1}ml xuống {:.1}ml để khống chế ΔpH <= {:.2}",
+                control.ph_up_ml, safe_ph_up_ml, config.max_ph_delta
+            );
+            control.ph_up_ml = safe_ph_up_ml;
+        }
+    }
+
+    // =========================================================================
+    // LƯỚI 4: TRIỆT TIÊU HÀNH VI ĐỐI KHÁNG THỦY LỰC & HÓA CHẤT
+    // =========================================================================
+    // 4.1. Triệt tiêu xung đột vừa cấp nước vừa xả nước
     if control.water_in_sec > 0.0 && control.water_out_sec > 0.0 {
         if control.water_in_sec >= control.water_out_sec {
             control.water_in_sec -= control.water_out_sec;
@@ -79,7 +128,7 @@ pub fn apply_safety_guardrails(
         }
     }
 
-    // Triệt tiêu hành vi châm đối kháng cả pH Up và pH Down
+    // 4.2. Triệt tiêu xung đột vừa châm pH Up vừa châm pH Down
     if control.ph_up_ml > 0.0 && control.ph_down_ml > 0.0 {
         if control.ph_up_ml >= control.ph_down_ml {
             control.ph_up_ml -= control.ph_down_ml;
@@ -89,4 +138,17 @@ pub fn apply_safety_guardrails(
             control.ph_up_ml = 0.0;
         }
     }
+
+    // =========================================================================
+    // LƯỚI 5: RÀNG BUỘC CÔNG SUẤT VẬT LÝ VÀ THỜI GIAN CHẠY TỐI ĐA
+    // =========================================================================
+    control.nutrient_a_ml = control.nutrient_a_ml.clamp(0.0, config.max_dose_per_cycle);
+    control.nutrient_b_ml = control.nutrient_b_ml.clamp(0.0, config.max_dose_per_cycle);
+    control.ph_up_ml = control.ph_up_ml.clamp(0.0, config.max_dose_per_cycle);
+    control.ph_down_ml = control.ph_down_ml.clamp(0.0, config.max_dose_per_cycle);
+
+    control.water_in_sec = control.water_in_sec.clamp(0.0, config.max_refill_duration_sec as f32);
+    control.water_out_sec = control.water_out_sec.clamp(0.0, config.max_drain_duration_sec as f32);
+    control.mixing_sec = control.mixing_sec.clamp(0.0, 3600.0);
+    control.misting_sec = control.misting_sec.clamp(0.0, 300.0);
 }

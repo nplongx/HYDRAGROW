@@ -40,7 +40,7 @@ pub async fn get_latest_sensor_data(
     let flux_query = format!(
         r#"
         from(bucket: "{}")
-        |> range(start: -24h)
+        |> range(start: -1h)
         |> filter(fn: (r) => r["_measurement"] == "sensor_data")
         |> filter(fn: (r) => r.device_id == "{}")
         |> sort(columns: ["_time"], desc: true)

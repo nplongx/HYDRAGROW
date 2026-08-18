@@ -57,6 +57,25 @@ pub struct DosingCalibration {
     pub sensor_stabilize_sec: i32,
     pub ec_step_ratio: f32,
     pub ph_step_ratio: f32,
+
+    #[serde(default = "default_best_ec_ratio")]
+    pub ec_a_step_ratio: f32,
+    #[serde(default = "default_best_ec_ratio")]
+    pub ec_b_step_ratio: f32,
+    #[serde(default = "default_best_ph_ratio")]
+    pub ph_up_step_ratio: f32,
+    #[serde(default = "default_best_ph_ratio")]
+    pub ph_down_step_ratio: f32,
+
+    #[serde(default = "default_best_ec_ratio")]
+    pub best_ec_a_ratio: f32,
+    #[serde(default = "default_best_ec_ratio")]
+    pub best_ec_b_ratio: f32,
+    #[serde(default = "default_best_ph_ratio")]
+    pub best_ph_up_ratio: f32,
+    #[serde(default = "default_best_ph_ratio")]
+    pub best_ph_down_ratio: f32,
+
     #[serde(default = "default_best_ec_ratio")]
     pub best_ec_ratio: f32,
     #[serde(default = "default_best_ph_ratio")]
@@ -125,6 +144,14 @@ impl Default for DosingCalibration {
             ph_step_ratio: 0.1,
             best_ec_ratio: 0.4,
             best_ph_ratio: 0.2,
+            ec_a_step_ratio: 0.1,
+            ec_b_step_ratio: 0.1,
+            ph_up_step_ratio: 0.1,
+            ph_down_step_ratio: 0.1,
+            best_ec_a_ratio: 0.4,
+            best_ec_b_ratio: 0.4,
+            best_ph_up_ratio: 0.2,
+            best_ph_down_ratio: 0.2,
             tuner_state: 0,
             adaptive_mixing_sec: default_adaptive_mixing_sec(),
             adaptive_stabilize_sec: default_adaptive_stabilize_sec(),

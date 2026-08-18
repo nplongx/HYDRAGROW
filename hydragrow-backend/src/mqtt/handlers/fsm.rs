@@ -74,11 +74,25 @@ struct RuntimeCalibrationUpdate {
     ph_down: Option<f64>,
     step_ec: Option<f64>,
     step_ph: Option<f64>,
+
+    step_ec_a: Option<f64>,
+    step_ec_b: Option<f64>,
+    step_ph_up: Option<f64>,
+    step_ph_down: Option<f64>,
+
     interaction_matrix_json: Option<serde_json::Value>,
     matrix_update_count: Option<i64>,
     matrix_is_warm: Option<bool>,
+
     best_ec_ratio: Option<f64>,
     best_ph_ratio: Option<f64>,
+
+    best_ec_a_ratio: Option<f64>,
+    best_ec_b_ratio: Option<f64>,
+
+    best_ph_up_ratio: Option<f64>,
+    best_ph_down_ratio: Option<f64>,
+
     tuner_state: Option<i64>,
     kalman_confidence: Option<serde_json::Value>,
     adaptive_mixing_sec: Option<i64>,
@@ -112,11 +126,19 @@ fn runtime_calibration_update_from_coeffs(
         ph_down: coeffs.get("ph_shift_down_per_ml").and_then(|v| v.as_f64()),
         step_ec: coeffs.get("step_ratio_ec").and_then(|v| v.as_f64()),
         step_ph: coeffs.get("step_ratio_ph").and_then(|v| v.as_f64()),
+        step_ec_a: coeffs.get("step_ratio_ec_a").and_then(|v| v.as_f64()),
+        step_ec_b: coeffs.get("step_ratio_ec_b").and_then(|v| v.as_f64()),
+        step_ph_up: coeffs.get("step_ratio_ph_up").and_then(|v| v.as_f64()),
+        step_ph_down: coeffs.get("step_ratio_ph_down").and_then(|v| v.as_f64()),
         interaction_matrix_json,
         matrix_update_count: coeffs.get("matrix_update_count").and_then(|v| v.as_i64()),
         matrix_is_warm: coeffs.get("matrix_is_warm").and_then(|v| v.as_bool()),
         best_ec_ratio: coeffs.get("best_ec_ratio").and_then(|v| v.as_f64()),
         best_ph_ratio: coeffs.get("best_ph_ratio").and_then(|v| v.as_f64()),
+        best_ec_a_ratio: coeffs.get("best_ec_a_ratio").and_then(|v| v.as_f64()),
+        best_ec_b_ratio: coeffs.get("best_ec_b_ratio").and_then(|v| v.as_f64()),
+        best_ph_up_ratio: coeffs.get("best_ph_up_ratio").and_then(|v| v.as_f64()),
+        best_ph_down_ratio: coeffs.get("best_ph_down_ratio").and_then(|v| v.as_f64()),
         tuner_state: coeffs.get("state").and_then(|v| v.as_i64()),
         kalman_confidence: coeffs
             .get("kalman_confidence")
@@ -175,6 +197,28 @@ pub async fn handle_calibration_update(
                 .with_label_values(&[device_id, "ph"])
                 .set(v);
         }
+
+        if let Some(v) = update.step_ec_a {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "ec_a"])
+                .set(v);
+        }
+        if let Some(v) = update.step_ec_b {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "ec_b"])
+                .set(v);
+        }
+        if let Some(v) = update.step_ph_up {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "ph_up"])
+                .set(v);
+        }
+        if let Some(v) = update.step_ph_down {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "ph_down"])
+                .set(v);
+        }
+
         if let Some(v) = update.best_ec_ratio {
             ADAPTIVE_STEP_RATIO
                 .with_label_values(&[device_id, "best_ec"])
@@ -185,6 +229,28 @@ pub async fn handle_calibration_update(
                 .with_label_values(&[device_id, "best_ph"])
                 .set(v);
         }
+
+        if let Some(v) = update.best_ec_a_ratio {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "best_ec_a"])
+                .set(v);
+        }
+        if let Some(v) = update.best_ec_b_ratio {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "best_ph_b"])
+                .set(v);
+        }
+        if let Some(v) = update.best_ph_up_ratio {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "best_ph_up"])
+                .set(v);
+        }
+        if let Some(v) = update.best_ph_down_ratio {
+            ADAPTIVE_STEP_RATIO
+                .with_label_values(&[device_id, "best_ph_down"])
+                .set(v);
+        }
+
         if let Some(v) = update.tuner_state {
             ADAPTIVE_TUNER_STATE.with_label_values(&[device_id]).set(v);
         }

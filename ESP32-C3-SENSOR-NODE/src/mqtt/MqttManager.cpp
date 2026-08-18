@@ -178,7 +178,7 @@ void MqttManager::publishSensorData() {
     }
 
     doc["device_id"]      = MQTT_CLIENT_ID;
-    doc["tds"]            = data.tds;               // EC tính bằng mS/cm
+    doc["ec"]            = data.tds;               // EC tính bằng mS/cm
     doc["ph"]             = data.ph;
     doc["temp"]           = data.temperature;       // Tên trường 'temp'
     doc["water_level"]    = data.waterLevel;

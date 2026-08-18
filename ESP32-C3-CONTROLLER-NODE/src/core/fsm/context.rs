@@ -329,11 +329,37 @@ impl SystemContext {
 // 4. NVS SNAPSHOT DTO (PERISTENCE MAPPING)
 // ============================================================================
 
-/// Snapshot lưu trữ các thông số chạy động xuống Flash NVS
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NvsSnapshot {
+    // 🟢 Tách riêng 4 kênh
+    #[serde(default)]
+    pub step_ratio_ec_a: f32,
+    #[serde(default)]
+    pub step_ratio_ec_b: f32,
+    #[serde(default)]
+    pub step_ratio_ph_up: f32,
+    #[serde(default)]
+    pub step_ratio_ph_down: f32,
+
+    #[serde(default)]
+    pub best_ec_a_ratio: f32,
+    #[serde(default)]
+    pub best_ec_b_ratio: f32,
+    #[serde(default)]
+    pub best_ph_up_ratio: f32,
+    #[serde(default)]
+    pub best_ph_down_ratio: f32,
+
+    // 🟢 Chừa trường cũ để tương thích ngược JSON cũ (tránh crash lúc parse)
+    #[serde(default)]
     pub step_ratio_ec: f32,
+    #[serde(default)]
     pub step_ratio_ph: f32,
+    #[serde(default)]
+    pub best_ec_ratio: f32,
+    #[serde(default)]
+    pub best_ph_ratio: f32,
+
     pub last_water_change_sec: u64,
     pub hourly_dose_ec_ml: f32,
     pub hourly_dose_ph_ml: f32,
@@ -341,8 +367,7 @@ pub struct NvsSnapshot {
     pub retry_ec: u8,
     pub retry_ph: u8,
     pub dosing_cycle_count: u64,
-    pub best_ec_ratio: f32,
-    pub best_ph_ratio: f32,
+
     pub ema_ec_gain: f32,
     pub ema_ph_up_gain: f32,
     pub ema_ph_down_gain: f32,
@@ -352,12 +377,17 @@ pub struct NvsSnapshot {
     pub ph_up_sample_count: u32,
     #[serde(default)]
     pub ph_down_sample_count: u32,
-    #[serde(default = "default_tuner_state")]
-    pub tuner_state: u8,
+
     #[serde(default)]
-    pub ec_variance_baseline: f32,
+    pub tuner_state: u8,
+
+    #[serde(default)]
+    pub ec_a_variance_baseline: f32,
+    #[serde(default)]
+    pub ec_b_variance_baseline: f32,
     #[serde(default)]
     pub ph_variance_baseline: f32,
+
     #[serde(default)]
     pub interaction_matrix: Option<[f32; 32]>,
     #[serde(default)]
@@ -366,17 +396,13 @@ pub struct NvsSnapshot {
     pub matrix_is_warm: bool,
 }
 
-fn default_tuner_state() -> u8 {
-    TunerState::Converging as u8
-}
-
 impl NvsSnapshot {
     pub fn from_context(ctx: &SystemContext, now_sec: u64) -> Self {
         let hourly_dose_ec_ml = ctx
             .safety
             .hourly_doses()
             .iter()
-            .filter(|(pump, _)| pump.as_str() == "NutrientA" || pump.as_str() == "NutrientB")
+            .filter(|(p, _)| p.as_str() == "NutrientA" || p.as_str() == "NutrientB")
             .map(|(_, h)| {
                 h.iter()
                     .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
@@ -389,7 +415,7 @@ impl NvsSnapshot {
             .safety
             .hourly_doses()
             .iter()
-            .filter(|(pump, _)| pump.as_str() == "PhUp" || pump.as_str() == "PhDown")
+            .filter(|(p, _)| p.as_str() == "PhUp" || p.as_str() == "PhDown")
             .map(|(_, h)| {
                 h.iter()
                     .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
@@ -399,8 +425,21 @@ impl NvsSnapshot {
             .sum();
 
         Self {
-            step_ratio_ec: ctx.tuner.adaptive_ec_ratio,
-            step_ratio_ph: ctx.tuner.adaptive_ph_ratio,
+            step_ratio_ec_a: ctx.tuner.adaptive_ec_a_ratio,
+            step_ratio_ec_b: ctx.tuner.adaptive_ec_b_ratio,
+            step_ratio_ph_up: ctx.tuner.adaptive_ph_up_ratio,
+            step_ratio_ph_down: ctx.tuner.adaptive_ph_down_ratio,
+
+            best_ec_a_ratio: ctx.tuner.best_ec_a_ratio,
+            best_ec_b_ratio: ctx.tuner.best_ec_b_ratio,
+            best_ph_up_ratio: ctx.tuner.best_ph_up_ratio,
+            best_ph_down_ratio: ctx.tuner.best_ph_down_ratio,
+
+            step_ratio_ec: ctx.tuner.adaptive_ec_ratio(),
+            step_ratio_ph: ctx.tuner.adaptive_ph_ratio(),
+            best_ec_ratio: ctx.tuner.best_ec_ratio(),
+            best_ph_ratio: ctx.tuner.best_ph_ratio(),
+
             last_water_change_sec: ctx.last_water_change_sec,
             hourly_dose_ec_ml,
             hourly_dose_ph_ml,
@@ -408,8 +447,7 @@ impl NvsSnapshot {
             retry_ec: ctx.dosing.retry_ec,
             retry_ph: ctx.dosing.retry_ph,
             dosing_cycle_count: ctx.dosing_cycle_count,
-            best_ec_ratio: ctx.tuner.best_ec_ratio,
-            best_ph_ratio: ctx.tuner.best_ph_ratio,
+
             ema_ec_gain: ctx.tuner.gain_learner.ec.ema,
             ema_ph_up_gain: ctx.tuner.gain_learner.ph_up.ema,
             ema_ph_down_gain: ctx.tuner.gain_learner.ph_down.ema,
@@ -422,8 +460,10 @@ impl NvsSnapshot {
                 .max(ctx.tuner.gain_learner.ph_down.sample_count),
             ph_up_sample_count: ctx.tuner.gain_learner.ph_up.sample_count,
             ph_down_sample_count: ctx.tuner.gain_learner.ph_down.sample_count,
+
             tuner_state: ctx.tuner.state.as_u8(),
-            ec_variance_baseline: ctx.tuner.ec_variance_baseline,
+            ec_a_variance_baseline: ctx.tuner.ec_a_variance_baseline,
+            ec_b_variance_baseline: ctx.tuner.ec_b_variance_baseline,
             ph_variance_baseline: ctx.tuner.ph_variance_baseline,
             interaction_matrix: Some(ctx.tuner.interaction_matrix.as_flat()),
             matrix_update_count: ctx.tuner.matrix_update_count,

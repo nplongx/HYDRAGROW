@@ -43,8 +43,8 @@ const phaseToString = (phase: any): string | null => {
 
 const normalizeSensorPayload = (payload: any = {}) => ({
   ...payload,
-  tds: payload.tds ?? payload.ec,
-  err_tds: payload.err_tds ?? payload.err_ec,
+  ec: payload.ec ?? payload.tds,
+  err_ec: payload.err_ec ?? payload.err_tds,
 });
 
 const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
@@ -140,7 +140,7 @@ export function useDeviceSync() {
     useDeviceStore.getState().setSensorData((prev) => ({
       ...((prev || {}) as SensorData),
       device_id: prev?.device_id || useDeviceStore.getState().deviceId || '',
-      tds: prev?.tds ?? 0,
+      ec: prev?.ec ?? 0,
       ph: prev?.ph ?? 0,
       temp: prev?.temp ?? 0,
       water_level: prev?.water_level ?? 0,

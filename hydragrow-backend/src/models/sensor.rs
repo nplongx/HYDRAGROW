@@ -8,7 +8,7 @@ pub use hydragrow_shared::{DeviceState, PumpStatus, SensorData};
 #[derive(Debug, Clone, Serialize, Deserialize, FromDataPoint, Default)]
 pub struct SensorDataRow {
     pub device_id: String,
-    pub tds: f64,
+    pub ec: f64,
     pub ph: f64,
     pub temp: f64,
     pub water_level: f64,
@@ -20,7 +20,7 @@ impl From<SensorDataRow> for SensorData {
     fn from(row: SensorDataRow) -> Self {
         Self {
             device_id: row.device_id,
-            tds: row.tds as f32,
+            ec: row.ec as f32,
             ph: row.ph as f32,
             temp: row.temp as f32,
             water_level: row.water_level as f32,
@@ -35,7 +35,7 @@ impl From<SensorDataRow> for SensorData {
             err_water: None,
             err_temp: None,
             err_ph: None,
-            err_tds: None,
+            err_ec: None,
             ph_voltage_mv: None,
         }
     }

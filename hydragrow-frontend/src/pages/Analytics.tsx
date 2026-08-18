@@ -16,7 +16,7 @@ const Analytics = () => {
         <SubCard title="Trung tâm Giám sát Grafana">
           <div className="space-y-4 text-sm text-emerald-900">
             <p className="leading-relaxed">
-              Các biểu đồ chi tiết về biến động TDS, pH, nhiệt độ, mực nước, hệ số tự học EMA Gain, ma trận tương tác MIMO và độ tin cậy Kalman hiện được giám sát trực tiếp trên hạ tầng Grafana/Prometheus chuyên dụng.
+              Các biểu đồ chi tiết về biến động EC, pH, nhiệt độ, mực nước, hệ số tự học EMA Gain, ma trận tương tác MIMO và độ tin cậy Kalman hiện được giám sát trực tiếp trên hạ tầng Grafana/Prometheus chuyên dụng.
             </p>
             <a
               href="http://localhost:3000"

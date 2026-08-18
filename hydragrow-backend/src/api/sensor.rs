@@ -89,7 +89,7 @@ pub async fn get_history(
             |> range({range})
             |> filter(fn: (r) => r["_measurement"] == "sensor_data")
             |> filter(fn: (r) => r.device_id == "{device}")
-            |> filter(fn: (r) => r._field == "tds" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
+            |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
             |> map(fn: (r) => ({{ r with _value: float(v: r._value) }}))
             |> aggregateWindow(every: {res}, fn: mean, createEmpty: false)
             |> sort(columns: ["_time"], desc: false)
@@ -108,7 +108,7 @@ pub async fn get_history(
             |> range({range})
             |> filter(fn: (r) => r["_measurement"] == "sensor_data")
             |> filter(fn: (r) => r.device_id == "{device}")
-            |> filter(fn: (r) => r._field == "tds" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
+            |> filter(fn: (r) => r._field == "ec" or r._field == "ph" or r._field == "temp" or r._field == "water_level")
             |> sort(columns: ["_time"], desc: false)
             |> limit(n: 2000)
             "#,

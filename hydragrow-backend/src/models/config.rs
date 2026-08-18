@@ -323,8 +323,8 @@ pub fn from_db_rows(
         control_mode: ControlMode::from_string(&dev.control_mode),
         is_enabled: dev.is_enabled,
         delay_between_a_and_b_sec: dev.delay_between_a_and_b_sec,
-        tds_target: dev.ec_target,
-        tds_tolerance: dev.ec_tolerance,
+        ec_target: dev.ec_target,
+        ec_tolerance: dev.ec_tolerance,
         ph_target: dev.ph_target,
         ph_tolerance: dev.ph_tolerance,
         water_level_min: water.water_level_min,
@@ -341,11 +341,11 @@ pub fn from_db_rows(
         misting_on_duration_ms: water.misting_on_duration_ms,
         misting_off_duration_ms: water.misting_off_duration_ms,
         emergency_shutdown: safe.emergency_shutdown,
-        max_tds_limit: safe.max_ec_limit,
-        min_tds_limit: safe.min_ec_limit,
+        max_ec_limit: safe.max_ec_limit,
+        min_ec_limit: safe.min_ec_limit,
         min_ph_limit: safe.min_ph_limit,
         max_ph_limit: safe.max_ph_limit,
-        max_tds_delta: safe.max_ec_delta,
+        max_ec_delta: safe.max_ec_delta,
         max_ph_delta: safe.max_ph_delta,
         min_temp_limit: safe.min_temp_limit,
         max_temp_limit: safe.max_temp_limit,
@@ -361,17 +361,17 @@ pub fn from_db_rows(
         max_refill_duration_sec: safe.max_refill_duration_sec,
         max_drain_duration_sec: safe.max_drain_duration_sec,
 
-        tds_ack_threshold: safe.ec_ack_threshold,
+        ec_ack_threshold: safe.ec_ack_threshold,
         ph_ack_threshold: safe.ph_ack_threshold,
         water_ack_threshold: safe.water_ack_threshold,
-        tds_gain_per_ml: dose.ec_gain_per_ml,
+        ec_gain_per_ml: dose.ec_gain_per_ml,
         ph_shift_up_per_ml: dose.ph_shift_up_per_ml,
         ph_shift_down_per_ml: dose.ph_shift_down_per_ml,
         active_mixing_sec: dose.active_mixing_sec,
         sensor_stabilize_sec: dose.sensor_stabilize_sec,
-        tds_step_ratio: dose.ec_step_ratio,
+        ec_step_ratio: dose.ec_step_ratio,
         ph_step_ratio: dose.ph_step_ratio,
-        best_tds_ratio: dose.best_ec_ratio,
+        best_ec_ratio: dose.best_ec_ratio,
         best_ph_ratio: dose.best_ph_ratio,
         tuner_state: dose.tuner_state.clamp(0, u8::MAX as i32) as u8,
         adaptive_mixing_sec: dose.adaptive_mixing_sec.clamp(15, 120) as u32,
@@ -398,7 +398,7 @@ pub fn from_db_rows(
         scheduled_mixing_interval_sec: dose.scheduled_mixing_interval_sec,
         scheduled_mixing_duration_sec: dose.scheduled_mixing_duration_sec,
 
-        enable_tds_sensor: sens.enable_ec_sensor,
+        enable_ec_sensor: sens.enable_ec_sensor,
         enable_ph_sensor: sens.enable_ph_sensor,
         enable_water_level_sensor: sens.enable_water_level_sensor,
         enable_temp_sensor: sens.enable_temp_sensor,
@@ -514,7 +514,7 @@ mod tests {
 
         let config = from_db_rows(&dev, &water, &safe, &dose, &sens);
 
-        assert_eq!(config.best_tds_ratio, 0.77);
+        assert_eq!(config.best_ec_ratio, 0.77);
         assert_eq!(config.best_ph_ratio, 0.33);
         assert_eq!(config.tuner_state, 2);
         assert_eq!(config.adaptive_mixing_sec, 42);

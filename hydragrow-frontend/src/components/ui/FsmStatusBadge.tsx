@@ -59,7 +59,7 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
     case 'WaterDraining': return renderBadge('info', 'Đang xả nước');
     case 'StartingOsakaPump': return renderBadge('default', 'Khởi động máy trộn');
 
-    case 'MimoDosing': return renderBadge('mist', 'Đang châm MIMO (TDS/pH)');
+    case 'MimoDosing': return renderBadge('mist', 'Đang châm MIMO (EC/pH)');
 
     case 'ActiveMixing': return renderBadge('info', 'Đang sục trộn khuấy động');
     case 'Stabilizing': return renderBadge('warn', 'Chờ ổn định cảm biến');

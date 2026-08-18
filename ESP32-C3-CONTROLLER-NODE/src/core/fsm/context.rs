@@ -56,7 +56,7 @@ impl SensorStabilizerTracker {
         }
 
         // Kiểm tra ổn định EC
-        let ec_is_stable = if config.enable_tds_sensor {
+        let ec_is_stable = if config.enable_ec_sensor {
             let max_ec = self.history_ec.iter().fold(f32::MIN, |a, &b| a.max(b));
             let min_ec = self.history_ec.iter().fold(f32::MAX, |a, &b| a.min(b));
             (max_ec - min_ec) < 0.05

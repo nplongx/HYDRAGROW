@@ -47,7 +47,8 @@ pub struct PumpStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorData {
     pub device_id: String,
-    pub tds: f32,
+    #[serde(alias = "tds")]
+    pub ec: f32,
     pub ph: f32,
     pub temp: f32,
     pub water_level: f32,
@@ -68,8 +69,8 @@ pub struct SensorData {
     pub err_temp: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub err_ph: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub err_tds: Option<bool>,
+    #[serde(alias = "err_tds", skip_serializing_if = "Option::is_none")]
+    pub err_ec: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_continuous: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -168,8 +169,10 @@ pub struct ControllerConfig {
     pub is_enabled: bool,
 
     // 1. NGƯỠNG MỤC TIÊU
-    pub tds_target: f32,
-    pub tds_tolerance: f32,
+    #[serde(alias = "tds_target")]
+    pub ec_target: f32,
+    #[serde(alias = "tds_tolerance")]
+    pub ec_tolerance: f32,
     pub ph_target: f32,
     pub ph_tolerance: f32,
 
@@ -195,11 +198,14 @@ pub struct ControllerConfig {
 
     // 3. AN TOÀN
     pub emergency_shutdown: bool,
-    pub max_tds_limit: f32,
-    pub min_tds_limit: f32,
+    #[serde(alias = "max_tds_limit")]
+    pub max_ec_limit: f32,
+    #[serde(alias = "min_tds_limit")]
+    pub min_ec_limit: f32,
     pub min_ph_limit: f32,
     pub max_ph_limit: f32,
-    pub max_tds_delta: f32,
+    #[serde(alias = "max_tds_delta")]
+    pub max_ec_delta: f32,
     pub max_ph_delta: f32,
     pub max_dose_per_cycle: f32,
     pub min_temp_limit: f32,
@@ -214,20 +220,24 @@ pub struct ControllerConfig {
     pub water_level_critical_min: f32,
     pub max_refill_duration_sec: i32,
     pub max_drain_duration_sec: i32,
-    pub tds_ack_threshold: f32,
+    #[serde(alias = "tds_ack_threshold")]
+    pub ec_ack_threshold: f32,
     pub ph_ack_threshold: f32,
     pub water_ack_threshold: f32,
 
     // 4. CHÂM PHÂN
-    pub tds_gain_per_ml: f32,
+    #[serde(alias = "tds_gain_per_ml")]
+    pub ec_gain_per_ml: f32,
     pub ph_shift_up_per_ml: f32,
     pub ph_shift_down_per_ml: f32,
     pub active_mixing_sec: i32,
     pub sensor_stabilize_sec: i32,
-    pub tds_step_ratio: f32,
+    #[serde(alias = "tds_step_ratio")]
+    pub ec_step_ratio: f32,
     pub ph_step_ratio: f32,
     #[serde(default)]
-    pub best_tds_ratio: f32,
+    #[serde(alias = "best_tds_ratio")]
+    pub best_ec_ratio: f32,
     #[serde(default)]
     pub best_ph_ratio: f32,
     #[serde(default)]
@@ -264,7 +274,8 @@ pub struct ControllerConfig {
     // pub sampling_interval: u64,
     // pub publish_interval: u64,
     // pub moving_average_window: u32,
-    pub enable_tds_sensor: bool,
+    #[serde(alias = "enable_tds_sensor")]
+    pub enable_ec_sensor: bool,
     pub enable_ph_sensor: bool,
     pub enable_water_level_sensor: bool,
     pub enable_temp_sensor: bool,
@@ -300,8 +311,8 @@ impl Default for ControllerConfig {
             control_mode: ControlMode::Manual,
             is_enabled: true,
 
-            tds_target: 1.2,
-            tds_tolerance: 0.05,
+            ec_target: 1.2,
+            ec_tolerance: 0.05,
             ph_target: 6.0,
             ph_tolerance: 0.1,
 
@@ -325,11 +336,11 @@ impl Default for ControllerConfig {
             misting_off_duration_ms: 180000,
 
             emergency_shutdown: false,
-            max_tds_limit: 3.5,
-            min_tds_limit: 1.0,
+            max_ec_limit: 3.5,
+            min_ec_limit: 1.0,
             min_ph_limit: 4.0,
             max_ph_limit: 8.5,
-            max_tds_delta: 1.0,
+            max_ec_delta: 1.0,
             max_ph_delta: 1.5,
             max_dose_per_cycle: 2.0,
             min_temp_limit: 15.0,
@@ -344,18 +355,18 @@ impl Default for ControllerConfig {
             water_level_critical_min: 5.0,
             max_refill_duration_sec: 120,
             max_drain_duration_sec: 120,
-            tds_ack_threshold: 0.05,
+            ec_ack_threshold: 0.05,
             ph_ack_threshold: 0.1,
             water_ack_threshold: 0.5,
 
-            tds_gain_per_ml: 0.015,
+            ec_gain_per_ml: 0.015,
             ph_shift_up_per_ml: 0.02,
             ph_shift_down_per_ml: 0.025,
             active_mixing_sec: 5,
             sensor_stabilize_sec: 5,
-            tds_step_ratio: 0.4,
+            ec_step_ratio: 0.4,
             ph_step_ratio: 0.2,
-            best_tds_ratio: 0.4,
+            best_ec_ratio: 0.4,
             best_ph_ratio: 0.2,
             tuner_state: 0,
             adaptive_mixing_sec: default_adaptive_mixing_sec(),
@@ -381,7 +392,7 @@ impl Default for ControllerConfig {
             // sampling_interval: 1000,
             // publish_interval: 5000,
             // moving_average_window: 10,
-            enable_tds_sensor: false,
+            enable_ec_sensor: false,
             enable_ph_sensor: false,
             enable_water_level_sensor: false,
             enable_temp_sensor: false,
@@ -501,11 +512,11 @@ pub struct ControllerHealthPayload {
 impl ControllerConfig {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.tds_target <= 0.0 || self.tds_target > 10.0 {
-            errors.push("tds_target phải trong khoảng (0, 10]".into());
+        if self.ec_target <= 0.0 || self.ec_target > 10.0 {
+            errors.push("ec_target phải trong khoảng (0, 10]".into());
         }
-        if self.tds_tolerance < 0.0 || self.tds_tolerance >= self.tds_target {
-            errors.push("tds_tolerance phải >= 0 và < tds_target".into());
+        if self.ec_tolerance < 0.0 || self.ec_tolerance >= self.ec_target {
+            errors.push("ec_tolerance phải >= 0 và < ec_target".into());
         }
         if self.ph_target < 0.0 || self.ph_target > 14.0 {
             errors.push("ph_target phải trong khoảng [0, 14]".into());

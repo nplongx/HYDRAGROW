@@ -143,7 +143,7 @@ const Settings = () => {
     ph_v7: 2.5, ph_v4: 1.428, ph_v10: null, ph_calibration_mode: '2-point',
     ec_factor: 880.0, ec_offset: 0.0, temp_offset: 0.0, temp_compensation_beta: 0.02,
     publish_interval: 5000, moving_average_window: 15,
-    enable_ph_sensor: true, enable_tds_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
+    enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
   });
 
   const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'http://localhost:8000', device_id: '' });
@@ -275,19 +275,19 @@ const Settings = () => {
           ...unifiedData.sensor_calibration,
           ...unifiedData.dosing_calibration
         };
-        const tdsAliases = {
-          ec_target: merged.tds_target ?? merged.ec_target,
-          ec_tolerance: merged.tds_tolerance ?? merged.ec_tolerance,
-          min_ec_limit: merged.min_tds_limit ?? merged.min_ec_limit,
-          max_ec_limit: merged.max_tds_limit ?? merged.max_ec_limit,
-          max_ec_delta: merged.max_tds_delta ?? merged.max_ec_delta,
-          ec_ack_threshold: merged.tds_ack_threshold ?? merged.ec_ack_threshold,
-          ec_gain_per_ml: merged.tds_gain_per_ml ?? merged.ec_gain_per_ml,
-          ec_step_ratio: merged.tds_step_ratio ?? merged.ec_step_ratio,
-          best_ec_ratio: merged.best_tds_ratio ?? merged.best_ec_ratio,
-          enable_ec_sensor: merged.enable_tds_sensor ?? merged.enable_ec_sensor
+        const ecAliases = {
+          ec_target: merged.ec_target ?? merged.ec_target,
+          ec_tolerance: merged.ec_tolerance ?? merged.ec_tolerance,
+          min_ec_limit: merged.min_ec_limit ?? merged.min_ec_limit,
+          max_ec_limit: merged.max_ec_limit ?? merged.max_ec_limit,
+          max_ec_delta: merged.max_ec_delta ?? merged.max_ec_delta,
+          ec_ack_threshold: merged.ec_ack_threshold ?? merged.ec_ack_threshold,
+          ec_gain_per_ml: merged.ec_gain_per_ml ?? merged.ec_gain_per_ml,
+          ec_step_ratio: merged.ec_step_ratio ?? merged.ec_step_ratio,
+          best_ec_ratio: merged.best_ec_ratio ?? merged.best_ec_ratio,
+          enable_ec_sensor: merged.enable_ec_sensor ?? merged.enable_ec_sensor
         };
-        setConfig((prev: any) => ({ ...prev, ...merged, ...tdsAliases }));
+        setConfig((prev: any) => ({ ...prev, ...merged, ...ecAliases }));
       }
     } catch (error) { } finally { setIsLoading(false); }
   }, [appSettings.device_id, ctxDeviceId]);
@@ -408,7 +408,7 @@ const Settings = () => {
             <Settings2 size={22} className="text-emerald-700/75" />
           </h1>
           <p className="text-sm text-emerald-800/75 max-w-2xl">
-            Điều chỉnh mục tiêu TDS, pH, thời gian phun sương. Các thông số nguy hiểm cần được cài đặt cẩn thận.
+            Điều chỉnh mục tiêu EC, pH, thời gian phun sương. Các thông số nguy hiểm cần được cài đặt cẩn thận.
           </p>
         </div>
         <div className={`flex items-center justify-between gap-4 p-3 rounded-xl border flex-shrink-0 ${isAdvancedMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-emerald-100'}`}>
@@ -468,10 +468,10 @@ const Settings = () => {
 
         {/* GROWTH */}
         <AccordionSection id="growth" title="Ngưỡng mục tiêu" icon={Target} isOpen={openSection === 'growth'} onToggle={() => handleToggleSection('growth')}>
-          <SubCard title="Dinh dưỡng (TDS) & pH">
+          <SubCard title="Dinh dưỡng (EC) & pH">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <InputGroup label="TDS mục tiêu" step="0.1" value={config.ec_target} onChange={(e: InputEvent) => setConfig({ ...config, ec_target: e.target.value })} />
-              <InputGroup label="Sai số TDS (±)" step="0.05" value={config.ec_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, ec_tolerance: e.target.value })} />
+              <InputGroup label="EC mục tiêu" step="0.1" value={config.ec_target} onChange={(e: InputEvent) => setConfig({ ...config, ec_target: e.target.value })} />
+              <InputGroup label="Sai số EC (±)" step="0.05" value={config.ec_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, ec_tolerance: e.target.value })} />
               <InputGroup label="pH mục tiêu" step="0.1" value={config.ph_target} onChange={(e: InputEvent) => setConfig({ ...config, ph_target: e.target.value })} />
               <InputGroup label="Sai số pH (±)" step="0.05" value={config.ph_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, ph_tolerance: e.target.value })} />
             </div>
@@ -511,7 +511,7 @@ const Settings = () => {
                   <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100"><span className="text-sm text-emerald-900 font-medium">Tự động xả tràn</span><Switch isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} /></div>
                 </div>
                 <div className="pt-3 border-t border-emerald-100">
-                  <div className="flex items-center justify-between mb-3"><span className="text-sm text-emerald-900 font-medium">Tự động pha loãng khi quá TDS</span><Switch isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} /></div>
+                  <div className="flex items-center justify-between mb-3"><span className="text-sm text-emerald-900 font-medium">Tự động pha loãng khi quá EC</span><Switch isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} /></div>
                   {config.auto_dilute_enabled && (
                     <InputGroup label="Lượng xả pha loãng (cm)" step="0.5" value={config.dilute_drain_amount_cm} onChange={(e: InputEvent) => setConfig({ ...config, dilute_drain_amount_cm: e.target.value })} />
                   )}
@@ -571,8 +571,8 @@ const Settings = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <InputGroup label="Nhiệt độ thấp (°C)" value={config.min_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_temp_limit: e.target.value })} />
                 <InputGroup label="Nhiệt độ cao (°C)" value={config.max_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_temp_limit: e.target.value })} />
-                <InputGroup label="TDS thấp" value={config.min_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ec_limit: e.target.value })} />
-                <InputGroup label="TDS cao" value={config.max_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_limit: e.target.value })} />
+                <InputGroup label="EC thấp" value={config.min_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ec_limit: e.target.value })} />
+                <InputGroup label="EC cao" value={config.max_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_limit: e.target.value })} />
                 <InputGroup label="pH thấp" value={config.min_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ph_limit: e.target.value })} />
                 <InputGroup label="pH cao" value={config.max_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_limit: e.target.value })} />
                 <div className="sm:col-span-2 lg:col-span-3"><InputGroup label="Nước tối thiểu ngắt khẩn (cm)" value={config.water_level_critical_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_critical_min: e.target.value })} /></div>

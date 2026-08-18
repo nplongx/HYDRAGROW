@@ -24,6 +24,7 @@ pub enum ConnectionState {
 #[derive(Debug, Deserialize)]
 pub struct IncomingSensorPayload {
     pub temp: Option<f32>,
+    #[serde(alias = "tds")]
     pub ec: Option<f32>,
     pub ph: Option<f32>,
     pub water_level: Option<f32>,
@@ -36,6 +37,7 @@ pub struct IncomingSensorPayload {
     pub err_water: Option<bool>,
     pub err_temp: Option<bool>,
     pub err_ph: Option<bool>,
+    #[serde(alias = "err_tds")]
     pub err_ec: Option<bool>,
 }
 
@@ -44,7 +46,7 @@ pub type SharedSensorData = Arc<RwLock<SensorData>>;
 pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
     Arc::new(RwLock::new(SensorData {
         device_id: device_id.to_string(),
-        tds: 0.0,
+        ec: 0.0,
         ph: 7.0,
         temp: 25.0,
         water_level: 20.0,
@@ -57,7 +59,7 @@ pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
         err_water: None,
         err_temp: None,
         err_ph: None,
-        err_tds: None,
+        err_ec: None,
         is_continuous: None,
         ph_voltage_mv: None,
     }))
@@ -172,14 +174,14 @@ pub fn init_mqtt_client(
                         if let Ok(mut sensors) = shared_sensor_data.write() {
                             sensors.controller_received_ms = Some(get_uptime_ms());
                             if let Some(t) = payload.temp { sensors.temp = t; }
-                            if let Some(e) = payload.ec { sensors.tds = e; }
+                            if let Some(e) = payload.ec { sensors.ec = e; }
                             if let Some(p) = payload.ph { sensors.ph = p; }
                             if let Some(w) = payload.water_level { sensors.water_level = w; }
                             if let Some(mv) = payload.ph_voltage_mv { sensors.ph_voltage_mv = Some(mv as f64); }
                             if let Some(cont) = payload.is_continuous { sensors.is_continuous = Some(cont); }
                             sensors.err_water = payload.err_water;
                             sensors.err_temp = payload.err_temp;
-                            sensors.err_tds = payload.err_ec;
+                            sensors.err_ec = payload.err_ec;
                             sensors.err_ph = payload.err_ph;
                             sensors.rssi = payload.rssi;
                             sensors.free_heap = payload.free_heap;

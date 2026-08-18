@@ -40,7 +40,7 @@ struct SafeStateDeltas {
 
 impl SafeStateDeltas {
     fn compute(sensors: &SensorData, config: &ControllerConfig, ctx: &SystemContext) -> Self {
-        let ec_delta = (config.tds_target - sensors.tds).max(0.0);
+        let ec_delta = (config.ec_target - sensors.ec).max(0.0);
         let ph_delta = config.ph_target - sensors.ph;
         let water_delta = config.water_level_target - sensors.water_level;
         let temp_delta = config.misting_temp_threshold - sensors.temp;
@@ -48,7 +48,7 @@ impl SafeStateDeltas {
         let ec_tolerance = effective_ec_tolerance(config, ctx);
         let ph_tolerance = effective_ph_tolerance(config, ctx);
 
-        let ec = if config.enable_tds_sensor && ec_delta.abs() > ec_tolerance {
+        let ec = if config.enable_ec_sensor && ec_delta.abs() > ec_tolerance {
             ec_delta
         } else {
             0.0
@@ -106,11 +106,11 @@ impl SolverStrategy for ColdPathSolver {
         let mut control = ControlVector::default();
 
         // 1. Tính toán châm phân (Nutrient A/B)
-        if config.enable_tds_sensor && deltas.ec > 0.0 {
+        if config.enable_ec_sensor && deltas.ec > 0.0 {
             let gain = ctx
                 .tuner
                 .gain_learner
-                .effective_ec_gain(config.tds_gain_per_ml)
+                .effective_ec_gain(config.ec_gain_per_ml)
                 .max(0.0001);
 
             let (ec_step, _) = extract_step_ratios(ctx);
@@ -202,7 +202,7 @@ impl SolverStrategy for WarmPathSolver {
             .min(config.max_drain_duration_sec as f32);
 
         // 2. Tắt các kênh không bật cảm biến tương ứng
-        if !config.enable_tds_sensor {
+        if !config.enable_ec_sensor {
             control.nutrient_a_ml = 0.0;
             control.nutrient_b_ml = 0.0;
         }
@@ -218,7 +218,7 @@ impl SolverStrategy for WarmPathSolver {
         // 3. Safety guardrails
         apply_safety_guardrails(
             &mut control,
-            sensors.tds,
+            sensors.ec,
             sensors.ph,
             sensors.water_level,
             config,
@@ -268,14 +268,14 @@ fn is_control_zero(control: &ControlVector) -> bool {
 fn finalize_solve_result(control: ControlVector, config: &ControllerConfig) -> SolveResult {
     SolveResult::Execute {
         control,
-        target_ec: config.tds_target,
+        target_ec: config.ec_target,
         target_ph: config.ph_target,
         pwm: config.dosing_pwm_percent as u32,
     }
 }
 
 fn effective_ec_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32 {
-    ctx.tuner.effective_ec_tolerance(config.tds_tolerance)
+    ctx.tuner.effective_ec_tolerance(config.ec_tolerance)
 }
 
 fn effective_ph_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32 {
@@ -289,7 +289,7 @@ mod tests {
     fn sensor(ec: f32, ph: f32, water_level: f32) -> SensorData {
         SensorData {
             device_id: "device_001".to_string(),
-            tds: ec,
+            ec: ec,
             ph,
             temp: 25.0,
             water_level,
@@ -302,7 +302,7 @@ mod tests {
             err_water: None,
             err_temp: None,
             err_ph: None,
-            err_tds: None,
+            err_ec: None,
             is_continuous: None,
             ph_voltage_mv: None,
         }

@@ -387,6 +387,7 @@ async fn main() -> anyhow::Result<()> {
                     .wrap(rate_limit_middleware)
                     .configure(api::notification::init_routes)
                     .configure(api::solana::init_routes)
+                    .configure(api::recipe::init_routes)
                     .service(
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)

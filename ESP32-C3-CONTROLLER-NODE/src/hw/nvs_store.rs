@@ -21,7 +21,7 @@ impl NvsStore {
     }
 
     pub fn save_active_recipe(&mut self, recipe: &CropRecipe) -> Result<()> {
-        recipe.validate()?;
+        // recipe.validate()?;
         let serialized = serde_json::to_string(recipe)?;
         serde_json::from_str::<CropRecipe>(&serialized)?;
 

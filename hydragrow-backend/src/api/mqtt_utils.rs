@@ -59,19 +59,47 @@ pub fn sign_command<T: Serialize>(device_id: &str, payload: &T) -> Result<Value>
     sign_command_value(device_id, serde_json::to_value(payload)?)
 }
 
+pub async fn publish_signed_payload<T: Serialize>(
+    app_state: &AppState,
+    device_id: &str,
+    topic: impl Into<String>,
+    payload: &T,
+) -> Result<Value> {
+    let signed_payload = sign_command(device_id, payload)?;
+    let payload_bytes = serde_json::to_vec(&signed_payload)?;
+
+    app_state
+        .mqtt_client
+        .publish(topic.into(), QoS::AtLeastOnce, false, payload_bytes)
+        .await?;
+
+    Ok(signed_payload)
+}
+
+pub async fn publish_signed_json_value(
+    app_state: &AppState,
+    device_id: &str,
+    topic: impl Into<String>,
+    payload: Value,
+) -> Result<Value> {
+    let signed_payload = sign_command_value(device_id, payload)?;
+    let payload_bytes = serde_json::to_vec(&signed_payload)?;
+
+    app_state
+        .mqtt_client
+        .publish(topic.into(), QoS::AtLeastOnce, false, payload_bytes)
+        .await?;
+
+    Ok(signed_payload)
+}
+
+// Cập nhật lại hàm publish_command cũ
 pub async fn publish_command(
     app_state: &AppState,
     device_id: &str,
     payload: &MqttCommandOut,
 ) -> Result<()> {
     let topic = topic_controller_command(device_id);
-    let signed_payload = sign_command(device_id, payload)?;
-    let payload_bytes = serde_json::to_vec(&signed_payload)?;
-
-    app_state
-        .mqtt_client
-        .publish(topic, QoS::AtLeastOnce, false, payload_bytes)
-        .await?;
-
+    publish_signed_payload(app_state, device_id, topic, payload).await?;
     Ok(())
 }

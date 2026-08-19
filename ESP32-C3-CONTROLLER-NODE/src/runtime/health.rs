@@ -13,7 +13,7 @@ use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence
 use hydragrow_shared::topics::{
     topic_calibration, topic_controller_command, topic_controller_config, topic_controller_recipe,
     topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state,
-    topic_sensor_command, topic_sensors, topic_status,
+    topic_recipe_set, topic_sensor_command, topic_sensors, topic_status,
 };
 use hydragrow_shared::MqttCommandIn;
 use log::{error, info, warn};
@@ -90,6 +90,7 @@ pub fn run_main_health_loop(
     mqtt_url: &str,
     mqtt_user: &str,
     mqtt_password: &str,
+    mqtt_command_secret: &str,
     shared_config: SharedConfig,
     shared_sensor_data: SharedSensorData,
     conn_rx: Receiver<ConnectionState>,
@@ -126,6 +127,7 @@ pub fn run_main_health_loop(
                             mqtt_url,
                             mqtt_user,
                             mqtt_password,
+                            mqtt_command_secret,
                             shared_config.clone(),
                             shared_sensor_data.clone(),
                             cmd_tx.clone(),
@@ -176,6 +178,8 @@ pub fn run_main_health_loop(
                         let _ = client.subscribe(&topic_command, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_sensors, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_recipe, QoS::AtLeastOnce);
+                        let topic_recipe_set = topic_recipe_set(&device_id);
+                        let _ = client.subscribe(&topic_recipe_set, QoS::AtLeastOnce);
                     }
                 }
                 ConnectionState::MqttDisconnected => {

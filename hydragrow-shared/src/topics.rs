@@ -37,9 +37,6 @@ impl MqttTopics {
     pub fn recipe_status(device_id: &str) -> String {
         format!("AGITECH/{}/recipe/status", device_id)
     }
-    pub fn recipe_events(device_id: &str) -> String {
-        format!("AGITECH/{}/recipe/events", device_id)
-    }
     pub fn dosing_report(device_id: &str) -> String {
         format!("AGITECH/{}/dosing_report", device_id)
     }
@@ -108,9 +105,6 @@ pub fn topic_recipe_clear(device_id: &str) -> String {
 pub fn topic_recipe_status(device_id: &str) -> String {
     MqttTopics::recipe_status(device_id)
 }
-pub fn topic_recipe_events(device_id: &str) -> String {
-    MqttTopics::recipe_events(device_id)
-}
 pub fn topic_calibration(device_id: &str) -> String {
     format!("AGITECH/{}/calibration", device_id)
 }
@@ -143,11 +137,6 @@ pub fn topic_water_cycle(device_id: &str) -> String {
 
 pub fn topic_health_snapshot(device_id: &str) -> String {
     format!("AGITECH/{}/controller/status", device_id)
-}
-
-/// MQTT topic used by the backend to set or clear a device crop recipe.
-pub fn topic_recipe_set(device_id: &str) -> String {
-    format!("AGITECH/{}/recipe/set", device_id)
 }
 
 #[cfg(test)]

@@ -45,6 +45,10 @@ const MQTT_PASSWORD: &str = match option_env!("HYDRAGROW_MQTT_PASSWORD") {
     Some(val) => val,
     None => "",
 };
+const MQTT_COMMAND_SECRET: &str = match option_env!("HYDRAGROW_MQTT_COMMAND_SECRET") {
+    Some(val) => val,
+    None => "",
+};
 const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
     Some(val) => val,
     None => "device_001",
@@ -63,8 +67,12 @@ fn main() -> anyhow::Result<()> {
     let shared_config = create_shared_config();
     let mut nvs_store = NvsStore::new(nvs_partition.clone());
     let device_id = nvs_store.load_or_init_device_id(DEVICE_ID);
+
+    // Đóng ngoặc đúng chỗ để giải phóng Lock
     if let Ok(mut config) = shared_config.write() {
-        config.device_id = device_id.clone();
+        config.base_config.device_id = device_id.clone();
+    }
+
     match nvs_store.load_active_recipe() {
         Ok(Some(_recipe)) => info!("Đã khôi phục active recipe từ NVS"),
         Ok(None) => info!("Không có active recipe trong NVS"),
@@ -84,7 +92,8 @@ fn main() -> anyhow::Result<()> {
     let (dosing_report_tx, dosing_report_rx) = mpsc::channel();
     let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel();
     let (int_tx, int_rx) = mpsc::channel::<()>(); // Channel tín hiệu ngắt INT
-                                                  // 1. Hardware Drivers
+
+    // 1. Hardware Drivers
     let timer_driver = Arc::new(LedcTimerDriver::new(
         peripherals.ledc.timer0,
         &TimerConfig::new().frequency(esp_idf_hal::units::Hertz(20000)),
@@ -129,7 +138,6 @@ fn main() -> anyhow::Result<()> {
             peripherals.pins.gpio3,
         )?,
     )?;
-
     let mut int_pin = PinDriver::input(peripherals.pins.gpio10, esp_idf_hal::gpio::Pull::Up)?;
     int_pin.set_interrupt_type(esp_idf_hal::gpio::InterruptType::NegEdge)?;
     unsafe {
@@ -178,6 +186,7 @@ fn main() -> anyhow::Result<()> {
         MQTT_URL,
         MQTT_USER,
         MQTT_PASSWORD,
+        MQTT_COMMAND_SECRET,
         shared_config,
         shared_sensors,
         conn_rx,

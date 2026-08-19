@@ -154,9 +154,11 @@ pub fn start_fsm_control_loop(
             }
         }
 
+        let mut w_config = shared_config.write().unwrap().effective_config.clone();
+
         // 2. Chạy Recipe Engine trước FSM để stage override có hiệu lực trong tick hiện tại
         let mut recipe_result = crate::core::fsm::recipe_manager::tick_recipe_engine(
-            &mut config,
+            &mut w_config,
             &ctx,
             current_wall_time_ms / 1000,
         );

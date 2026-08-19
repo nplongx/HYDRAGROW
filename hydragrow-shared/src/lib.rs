@@ -9,6 +9,26 @@ pub mod recipe;
 pub mod telemetry;
 pub mod topics;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SignedJsonEnvelope {
+    pub ts: i64,
+    pub nonce: String,
+    pub signature: String,
+    #[serde(flatten)]
+    pub payload: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecipeSetCommand {
+    pub recipe: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ts: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DeviceState {
@@ -144,24 +164,6 @@ pub struct MqttCommandParams {
     pub state: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ota_url: Option<String>,
-}
-
-/// Active crop recipe persisted by the controller.
-///
-/// The schema is intentionally flexible so firmware can cache recipes produced by
-/// backend versions with fields unknown to this build, while still requiring the
-/// persisted payload to be a valid JSON object.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CropRecipe {
-    #[serde(flatten)]
-    pub data: serde_json::Map<String, serde_json::Value>,
-}
-
-impl CropRecipe {
-    pub fn validate(&self) -> Result<(), serde_json::Error> {
-        let json = serde_json::to_string(self)?;
-        serde_json::from_str::<Self>(&json).map(|_| ())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

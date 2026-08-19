@@ -4,7 +4,46 @@ use hydragrow_shared::{
         AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
         SystemLogEvent, UnifiedSystemLog, WaterMetadata,
     },
+    recipe::{CropRecipe, CropStage, RecipeStageChangedEvent},
 };
+
+fn sample_crop_recipe() -> CropRecipe {
+    CropRecipe {
+        schema_version: 2,
+        recipe_id: "lettuce-romaine-v1".into(),
+        season_id: "season-2026-08".into(),
+        device_id: "device-001".into(),
+        revision: 7,
+        start_time_sec: 1_777_000_000,
+        current_stage_index: 1,
+        stages: vec![
+            CropStage {
+                name: "seedling".into(),
+                duration_sec: 604_800,
+                ec_target: 0.8,
+                ec_tolerance: 0.1,
+                ph_target: 6.0,
+                ph_tolerance: 0.2,
+                water_level_target: 18.0,
+                light_hours_per_day: 14.0,
+                temperature_target_c: Some(24.0),
+                humidity_target_percent: Some(70.0),
+            },
+            CropStage {
+                name: "vegetative".into(),
+                duration_sec: 1_209_600,
+                ec_target: 1.4,
+                ec_tolerance: 0.15,
+                ph_target: 6.1,
+                ph_tolerance: 0.2,
+                water_level_target: 20.0,
+                light_hours_per_day: 16.0,
+                temperature_target_c: Some(23.5),
+                humidity_target_percent: None,
+            },
+        ],
+    }
+}
 
 fn sample_system_log(event: SystemLogEvent) -> UnifiedSystemLog {
     UnifiedSystemLog {
@@ -315,4 +354,49 @@ fn golden_build_basic_log_json_with_ts_snapshot() {
         .expect("build_basic_log_json_with_ts phải tạo JSON parse được bởi backend");
 
     insta::assert_json_snapshot!("build_basic_log_json_with_ts_golden", decoded);
+}
+
+#[test]
+fn crop_recipe_snapshot_round_trip_preserves_required_fields() {
+    let original = sample_crop_recipe();
+    let json = serde_json::to_string(&original).expect("serialize crop recipe");
+    let decoded: CropRecipe = serde_json::from_str(&json).expect("deserialize crop recipe");
+
+    assert_eq!(decoded, original);
+    assert_eq!(decoded.schema_version, 2);
+    assert_eq!(decoded.recipe_id, "lettuce-romaine-v1");
+    assert_eq!(decoded.season_id, "season-2026-08");
+    assert_eq!(decoded.device_id, "device-001");
+    assert_eq!(decoded.revision, 7);
+    assert_eq!(decoded.start_time_sec, 1_777_000_000);
+    assert_eq!(decoded.current_stage_index, 1);
+    assert_eq!(decoded.stages.len(), 2);
+}
+
+#[test]
+fn golden_crop_recipe_snapshot() {
+    insta::assert_json_snapshot!("crop_recipe_golden", sample_crop_recipe());
+}
+
+#[test]
+fn recipe_stage_changed_event_round_trip() {
+    let recipe = sample_crop_recipe();
+    let event = RecipeStageChangedEvent {
+        schema_version: recipe.schema_version,
+        recipe_id: recipe.recipe_id,
+        season_id: recipe.season_id,
+        device_id: recipe.device_id,
+        revision: recipe.revision,
+        start_time_sec: recipe.start_time_sec,
+        previous_stage_index: Some(0),
+        current_stage_index: recipe.current_stage_index,
+        changed_at_sec: 1_777_604_800,
+        stages: recipe.stages,
+    };
+
+    let json = serde_json::to_string(&event).expect("serialize recipe stage event");
+    let decoded: RecipeStageChangedEvent =
+        serde_json::from_str(&json).expect("deserialize recipe stage event");
+
+    assert_eq!(decoded, event);
 }

@@ -11,6 +11,7 @@ use esp_idf_sys::{
 use hydragrow_shared::topics::{
     topic_controller_command, topic_controller_config, topic_controller_recipe,
     topic_recipe_events, topic_sensors, topic_status,
+    topic_controller_command, topic_controller_config, topic_sensors, topic_status,
 };
 use hydragrow_shared::{ControllerConfig, MqttCommandIn, PumpStatus, SensorData};
 use log::{debug, error, info, warn};
@@ -108,7 +109,12 @@ pub fn init_mqtt_client(
     info!("🚀 Initializing MQTT client...");
     info!("Broker: {}", broker_url);
 
-    let device_id = shared_config.read().unwrap().device_id.to_string();
+    let device_id = shared_config
+        .read()
+        .unwrap()
+        .effective_config
+        .device_id
+        .to_string();
     let topic_config = topic_controller_config(&device_id);
     let topic_command = topic_controller_command(&device_id);
     let topic_recipe = topic_controller_recipe(&device_id);
@@ -167,7 +173,7 @@ pub fn init_mqtt_client(
                             } else {
                                 info!("✅ New config received & applied: {}", new_config.device_id);
                                 if let Ok(mut config) = shared_config.write() {
-                                    *config = new_config;
+                                    config.set_base_config(new_config);
                                 }
                             }
                         }

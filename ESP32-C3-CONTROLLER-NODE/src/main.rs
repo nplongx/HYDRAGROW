@@ -63,6 +63,9 @@ fn main() -> anyhow::Result<()> {
     let shared_config = create_shared_config();
     let mut nvs_store = NvsStore::new(nvs_partition.clone());
     let device_id = nvs_store.load_or_init_device_id(DEVICE_ID);
+    if let Ok(mut config) = shared_config.write() {
+        config.device_id = device_id.clone();
+    }
 
     let shared_sensors = create_shared_sensor_data(&device_id);
 
@@ -70,6 +73,7 @@ fn main() -> anyhow::Result<()> {
     let (conn_tx, conn_rx) = mpsc::channel();
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let (fsm_tx, fsm_rx) = mpsc::channel();
+    let health_fsm_tx = fsm_tx.clone();
     let (dosing_report_tx, dosing_report_rx) = mpsc::channel();
     let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel();
     let (int_tx, int_rx) = mpsc::channel::<()>(); // Channel tín hiệu ngắt INT
@@ -172,8 +176,10 @@ fn main() -> anyhow::Result<()> {
         conn_rx,
         conn_tx,
         cmd_tx,
+        health_fsm_tx,
         fsm_rx,
         dosing_report_rx,
         sensor_cmd_rx,
+        nvs_partition.clone(),
     )
 }

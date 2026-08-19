@@ -4,10 +4,13 @@
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
+use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_sys::{
     esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t,
 };
 use hydragrow_shared::topics::{
+    topic_controller_command, topic_controller_config, topic_controller_recipe,
+    topic_recipe_events, topic_sensors, topic_status,
     topic_controller_command, topic_controller_config, topic_sensors, topic_status,
 };
 use hydragrow_shared::{ControllerConfig, MqttCommandIn, PumpStatus, SensorData};
@@ -16,6 +19,7 @@ use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use crate::config::SharedConfig;
+use crate::utils::{build_recipe_event, validate_recipe, CropRecipe};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -99,6 +103,8 @@ pub fn init_mqtt_client(
     shared_sensor_data: SharedSensorData,
     cmd_tx: Sender<MqttCommandIn>,
     conn_tx: Sender<ConnectionState>,
+    recipe_event_tx: Sender<String>,
+    nvs_partition: EspDefaultNvsPartition,
 ) -> anyhow::Result<EspMqttClient<'static>> {
     info!("🚀 Initializing MQTT client...");
     info!("Broker: {}", broker_url);
@@ -111,11 +117,14 @@ pub fn init_mqtt_client(
         .to_string();
     let topic_config = topic_controller_config(&device_id);
     let topic_command = topic_controller_command(&device_id);
+    let topic_recipe = topic_controller_recipe(&device_id);
     let topic_sensors_top = topic_sensors(&device_id);
 
     let topic_config_cb = topic_config.clone();
     let topic_command_cb = topic_command.clone();
+    let topic_recipe_cb = topic_recipe.clone();
     let topic_sensors_cb = topic_sensors_top.clone();
+    let recipe_event_topic = topic_recipe_events(&device_id);
 
     let lwt_topic = topic_status(&device_id);
     let lwt_payload = r#"{"online": false, "status": "disconnected"}"#.as_bytes();
@@ -171,7 +180,53 @@ pub fn init_mqtt_client(
                         Err(e) => error!("❌ Config JSON parse error: {:?}", e),
                     }
                 }
-                // 2. Received Command
+                // 2. Update Crop Recipe
+                else if topic_str == topic_recipe_cb {
+                    match serde_json::from_slice::<CropRecipe>(data) {
+                        Ok(recipe) => {
+                            let config = shared_config.read().unwrap().clone();
+                            let mut nvs = EspNvs::new(nvs_partition.clone(), "agitech", true).ok();
+                            let current_revision = nvs
+                                .as_mut()
+                                .and_then(|nvs| nvs.get_u32("recipe_rev").ok().flatten());
+
+                            match validate_recipe(&recipe, &config, &device_id, current_revision) {
+                                Ok(()) => {
+                                    if let Some(nvs) = nvs.as_mut() {
+                                        if let Ok(serialized) = serde_json::to_string(&recipe) {
+                                            let _ = nvs.set_str("crop_recipe", &serialized);
+                                            let _ = nvs.set_u32("recipe_rev", recipe.revision);
+                                        }
+                                    }
+                                    let event = serde_json::json!({
+                                        "_mqtt_topic_override": recipe_event_topic.clone(),
+                                        "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "accepted", recipe.revision, None)).unwrap_or_default()
+                                    });
+                                    let _ = recipe_event_tx.send(event.to_string());
+                                }
+                                Err(e) => {
+                                    let reason = e.to_string();
+                                    warn!("❌ Recipe validation failed: {}", reason);
+                                    let event = serde_json::json!({
+                                        "_mqtt_topic_override": recipe_event_topic.clone(),
+                                        "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "rejected", recipe.revision, Some(&reason))).unwrap_or_default()
+                                    });
+                                    let _ = recipe_event_tx.send(event.to_string());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let reason = format!("invalid_json: {:?}", e);
+                            error!("❌ Recipe JSON parse error: {}", reason);
+                            let event = serde_json::json!({
+                                "_mqtt_topic_override": recipe_event_topic.clone(),
+                                "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "rejected", 0, Some(&reason))).unwrap_or_default()
+                            });
+                            let _ = recipe_event_tx.send(event.to_string());
+                        }
+                    }
+                }
+                // 3. Received Command
                 else if topic_str == topic_command_cb {
                     match serde_json::from_slice::<MqttCommandIn>(data) {
                         Ok(cmd) => {

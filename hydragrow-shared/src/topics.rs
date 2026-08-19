@@ -10,6 +10,12 @@ impl MqttTopics {
     pub fn controller_config(device_id: &str) -> String {
         format!("AGITECH/{}/controller/config", device_id)
     }
+    pub fn controller_recipe(device_id: &str) -> String {
+        format!("AGITECH/{}/controller/recipe", device_id)
+    }
+    pub fn recipe_events(device_id: &str) -> String {
+        format!("AGITECH/{}/recipe/events", device_id)
+    }
     pub fn controller_command(device_id: &str) -> String {
         format!("AGITECH/{}/controller/command", device_id)
     }
@@ -71,6 +77,12 @@ pub fn topic_controller_command(device_id: &str) -> String {
 }
 pub fn topic_controller_config(device_id: &str) -> String {
     MqttTopics::controller_config(device_id)
+}
+pub fn topic_controller_recipe(device_id: &str) -> String {
+    MqttTopics::controller_recipe(device_id)
+}
+pub fn topic_recipe_events(device_id: &str) -> String {
+    MqttTopics::recipe_events(device_id)
 }
 pub fn topic_sensor_status(device_id: &str) -> String {
     format!("AGITECH/{}/sensor/status", device_id)

@@ -6,13 +6,14 @@ use std::thread;
 use std::time::Duration;
 
 use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use hydragrow_shared::fsm::{FsmBudgets, FsmSnapshot};
 use hydragrow_shared::hestia::{HestiaAction, HestiaContext, HestiaEngine};
 use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence};
 use hydragrow_shared::topics::{
-    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
-    topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
-    topic_status,
+    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_recipe,
+    topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state,
+    topic_sensor_command, topic_sensors, topic_status,
 };
 use hydragrow_shared::MqttCommandIn;
 use log::{error, info, warn};
@@ -94,9 +95,11 @@ pub fn run_main_health_loop(
     conn_rx: Receiver<ConnectionState>,
     conn_tx: Sender<ConnectionState>,
     cmd_tx: Sender<MqttCommandIn>,
+    fsm_tx: Sender<String>,
     fsm_rx: Receiver<String>,
     dosing_report_rx: Receiver<String>,
     sensor_cmd_rx: Receiver<String>,
+    nvs_partition: EspDefaultNvsPartition,
 ) -> anyhow::Result<()> {
     let mut mqtt_client: Option<EspMqttClient> = None;
     let mut is_mqtt_connected = false;
@@ -127,6 +130,8 @@ pub fn run_main_health_loop(
                             shared_sensor_data.clone(),
                             cmd_tx.clone(),
                             conn_tx.clone(),
+                            fsm_tx.clone(),
+                            nvs_partition.clone(),
                         ) {
                             Ok(client) => mqtt_client = Some(client),
                             Err(e) => error!("❌ Lỗi khởi tạo MQTT: {:?}", e),
@@ -153,6 +158,7 @@ pub fn run_main_health_loop(
                         let topic_command = topic_controller_command(&device_id);
                         let topic_status = topic_status(&device_id);
                         let topic_sensors = topic_sensors(&device_id);
+                        let topic_recipe = topic_controller_recipe(&device_id);
 
                         let payload = serde_json::json!({
                             "device_id": device_id,
@@ -169,6 +175,7 @@ pub fn run_main_health_loop(
                         let _ = client.subscribe(&topic_config, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_command, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_sensors, QoS::AtLeastOnce);
+                        let _ = client.subscribe(&topic_recipe, QoS::AtLeastOnce);
                     }
                 }
                 ConnectionState::MqttDisconnected => {

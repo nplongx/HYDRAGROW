@@ -7,6 +7,7 @@ pub mod metrics;
 pub mod middleware;
 pub mod mqtt_utils;
 pub mod notification;
+pub mod recipe;
 pub mod sensor;
 pub mod solana;
 pub mod ws;

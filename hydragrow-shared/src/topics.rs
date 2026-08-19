@@ -108,3 +108,8 @@ pub fn topic_water_cycle(device_id: &str) -> String {
 pub fn topic_health_snapshot(device_id: &str) -> String {
     format!("AGITECH/{}/controller/status", device_id)
 }
+
+/// MQTT topic used by the backend to set or clear a device crop recipe.
+pub fn topic_recipe_set(device_id: &str) -> String {
+    format!("AGITECH/{}/recipe/set", device_id)
+}

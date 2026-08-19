@@ -145,6 +145,24 @@ pub struct MqttCommandParams {
     pub ota_url: Option<String>,
 }
 
+/// Active crop recipe persisted by the controller.
+///
+/// The schema is intentionally flexible so firmware can cache recipes produced by
+/// backend versions with fields unknown to this build, while still requiring the
+/// persisted payload to be a valid JSON object.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropRecipe {
+    #[serde(flatten)]
+    pub data: serde_json::Map<String, serde_json::Value>,
+}
+
+impl CropRecipe {
+    pub fn validate(&self) -> Result<(), serde_json::Error> {
+        let json = serde_json::to_string(self)?;
+        serde_json::from_str::<Self>(&json).map(|_| ())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ControlMode {

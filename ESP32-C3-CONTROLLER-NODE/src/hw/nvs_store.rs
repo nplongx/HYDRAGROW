@@ -2,8 +2,13 @@
 //! Trạng thái và phục hồi persistent snapshot xuống bộ Flash NVS.
 
 use crate::core::fsm::context::{NvsSnapshot, SystemContext};
+use anyhow::{anyhow, Result};
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
+use hydragrow_shared::CropRecipe;
 use log::{info, warn};
+
+const ACTIVE_RECIPE_KEY: &str = "active_recipe";
+const ACTIVE_RECIPE_BUF_SIZE: usize = 4096;
 
 pub struct NvsStore {
     nvs: Option<EspDefaultNvs>,
@@ -13,6 +18,51 @@ impl NvsStore {
     pub fn new(nvs_partition: EspDefaultNvsPartition) -> Self {
         let nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
         Self { nvs }
+    }
+
+    pub fn save_active_recipe(&mut self, recipe: &CropRecipe) -> Result<()> {
+        recipe.validate()?;
+        let serialized = serde_json::to_string(recipe)?;
+        serde_json::from_str::<CropRecipe>(&serialized)?;
+
+        let nvs = self
+            .nvs
+            .as_mut()
+            .ok_or_else(|| anyhow!("NVS namespace 'agitech' is not available"))?;
+        nvs.set_str(ACTIVE_RECIPE_KEY, &serialized)?;
+        Ok(())
+    }
+
+    pub fn load_active_recipe(&mut self) -> Result<Option<CropRecipe>> {
+        let Some(nvs) = self.nvs.as_mut() else {
+            return Ok(None);
+        };
+
+        let mut buf = [0u8; ACTIVE_RECIPE_BUF_SIZE];
+        let Some(raw) = nvs.get_str(ACTIVE_RECIPE_KEY, &mut buf)? else {
+            return Ok(None);
+        };
+
+        match serde_json::from_str::<CropRecipe>(raw) {
+            Ok(recipe) => Ok(Some(recipe)),
+            Err(error) => {
+                warn!(
+                    "recipe_rejected: active recipe JSON in NVS is invalid; clearing key: {:?}",
+                    error
+                );
+                self.clear_active_recipe()?;
+                Ok(None)
+            }
+        }
+    }
+
+    pub fn clear_active_recipe(&mut self) -> Result<()> {
+        let nvs = self
+            .nvs
+            .as_mut()
+            .ok_or_else(|| anyhow!("NVS namespace 'agitech' is not available"))?;
+        nvs.remove(ACTIVE_RECIPE_KEY)?;
+        Ok(())
     }
 
     pub fn load_or_init_device_id(&mut self, default_id: &str) -> String {

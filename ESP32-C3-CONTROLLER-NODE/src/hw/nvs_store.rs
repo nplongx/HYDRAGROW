@@ -91,6 +91,15 @@ impl NvsStore {
                     ctx.dosing.retry_ph = snapshot.retry_ph;
                     ctx.dosing_cycle_count = snapshot.dosing_cycle_count;
                     ctx.last_water_change_sec = snapshot.last_water_change_sec;
+                    ctx.current_stage_index = snapshot.current_stage_index;
+                }
+            }
+
+            if ctx.current_stage_index.is_none() {
+                if let Ok(Some(stage_index)) = nvs.get_u64("current_stage") {
+                    if stage_index != u64::MAX {
+                        ctx.current_stage_index = Some(stage_index as usize);
+                    }
                 }
             }
         }

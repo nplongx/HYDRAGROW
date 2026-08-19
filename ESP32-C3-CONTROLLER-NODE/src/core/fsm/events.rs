@@ -43,6 +43,9 @@ pub enum OrchestratorEvent {
     SaveLastWaterChange {
         timestamp_sec: u64,
     },
+    SaveCurrentStageIndex {
+        stage_index: Option<usize>,
+    },
 
     // --- MESSAGING: MQTT ---
     PublishFsmState,
@@ -51,6 +54,9 @@ pub enum OrchestratorEvent {
         report_json: String,
     },
     PublishSystemLog {
+        payload_json: String,
+    },
+    PublishRecipeStageChanged {
         payload_json: String,
     },
 
@@ -69,7 +75,7 @@ pub enum OrchestratorEvent {
         cycle_json: String,
     },
 
-    TriggerOtaUpdate
+    TriggerOtaUpdate,
 }
 
 /// Target bơm định lượng (tách riêng để tránh dùng PumpType từ pump.rs ở layer này)

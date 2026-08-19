@@ -8,6 +8,7 @@ import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_cor
 
 // --- UI COMPONENTS ---
 import { AdvancedDeviceControl } from '../components/control/AdvancedDeviceControl';
+import { ActiveRecipeStatus } from '../components/recipes/ActiveRecipeStatus';
 import { LoadingState } from '../components/ui/LoadingState';
 import { PumpStatus } from '../types/models';
 
@@ -84,6 +85,8 @@ const ControlPanel = () => {
           </div>
         )}
       </div>
+
+      <ActiveRecipeStatus />
 
       {/* Lưới điều khiển Bento Grid */}
       <div className="relative border border-emerald-100 rounded-3xl p-5 md:p-6 bg-white/80 backdrop-blur-sm space-y-6 overflow-hidden shadow-sm shadow-emerald-950/5 mt-4">

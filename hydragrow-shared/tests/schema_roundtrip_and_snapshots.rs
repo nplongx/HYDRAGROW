@@ -2,7 +2,8 @@ use hydragrow_shared::{
     MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
     log::{
         AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
-        SystemLogEvent, UnifiedSystemLog, WaterMetadata,
+        RecipeAppliedMetadata, RecipeCompletedMetadata, RecipeRejectedMetadata,
+        RecipeStageChangedMetadata, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
     },
 };
 
@@ -52,6 +53,41 @@ fn unified_system_log_round_trip_for_all_event_variants() {
             source: "system".into(),
             message: "node boot".into(),
             skip_reason: None,
+        }),
+        SystemLogEvent::RecipeApplied(RecipeAppliedMetadata {
+            recipe_id: "recipe-lettuce-a".into(),
+            recipe_name: "Lettuce A".into(),
+            source: "web_app".into(),
+            stage_id: Some("veg".into()),
+            stage_name: Some("Vegetative".into()),
+            cycle_id: Some("recipe-cycle-001".into()),
+        }),
+        SystemLogEvent::RecipeRejected(RecipeRejectedMetadata {
+            recipe_id: "recipe-lettuce-b".into(),
+            recipe_name: Some("Lettuce B".into()),
+            source: "firmware".into(),
+            reason: "ec_target_out_of_range".into(),
+            stage_id: Some("bloom".into()),
+            stage_name: Some("Bloom".into()),
+            cycle_id: Some("recipe-cycle-002".into()),
+        }),
+        SystemLogEvent::RecipeStageChanged(RecipeStageChangedMetadata {
+            recipe_id: "recipe-lettuce-a".into(),
+            recipe_name: "Lettuce A".into(),
+            source: "scheduler".into(),
+            from_stage_id: Some("seedling".into()),
+            from_stage_name: Some("Seedling".into()),
+            to_stage_id: "veg".into(),
+            to_stage_name: "Vegetative".into(),
+            cycle_id: Some("recipe-cycle-003".into()),
+        }),
+        SystemLogEvent::RecipeCompleted(RecipeCompletedMetadata {
+            recipe_id: "recipe-lettuce-a".into(),
+            recipe_name: "Lettuce A".into(),
+            source: "scheduler".into(),
+            final_stage_id: Some("harvest".into()),
+            final_stage_name: Some("Harvest".into()),
+            cycle_id: Some("recipe-cycle-004".into()),
         }),
     ];
 
@@ -186,14 +222,18 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
 
 #[test]
 fn golden_payload_snapshots() {
-    let unified = sample_system_log(SystemLogEvent::CalibrationUpdate(CalibrationMetadata {
-        source: "auto_tuner".into(),
-        parameter: "ec_gain_per_ml".into(),
-        old_value: Some(0.012),
-        new_value: Some(0.015),
-        skip_reason: None,
-        cycle_id: Some("c-42".into()),
-    }));
+    let unified = sample_system_log(SystemLogEvent::RecipeStageChanged(
+        RecipeStageChangedMetadata {
+            recipe_id: "recipe-lettuce-a".into(),
+            recipe_name: "Lettuce A".into(),
+            source: "scheduler".into(),
+            from_stage_id: Some("seedling".into()),
+            from_stage_name: Some("Seedling".into()),
+            to_stage_id: "veg".into(),
+            to_stage_name: "Vegetative".into(),
+            cycle_id: Some("recipe-cycle-003".into()),
+        },
+    ));
 
     let sensor = SensorData {
         device_id: "sensor-001".into(),

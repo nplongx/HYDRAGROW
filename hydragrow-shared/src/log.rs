@@ -123,6 +123,66 @@ pub struct CalibrationMetadata {
     pub cycle_id: Option<String>,
 }
 
+/// Metadata khi một recipe dinh dưỡng được áp dụng cho thiết bị.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecipeAppliedMetadata {
+    pub recipe_id: String,
+    pub recipe_name: String,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle_id: Option<String>,
+}
+
+/// Metadata khi firmware/backend từ chối áp dụng recipe.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecipeRejectedMetadata {
+    pub recipe_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipe_name: Option<String>,
+    pub source: String,
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle_id: Option<String>,
+}
+
+/// Metadata khi recipe chuyển sang một stage khác.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecipeStageChangedMetadata {
+    pub recipe_id: String,
+    pub recipe_name: String,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_stage_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_stage_name: Option<String>,
+    pub to_stage_id: String,
+    pub to_stage_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle_id: Option<String>,
+}
+
+/// Metadata khi recipe hoàn tất.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecipeCompletedMetadata {
+    pub recipe_id: String,
+    pub recipe_name: String,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_stage_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_stage_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BasicSystemLogMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -142,6 +202,14 @@ pub enum SystemLogEvent {
     SystemAlert(AlertMetadata),
 
     CalibrationUpdate(CalibrationMetadata),
+
+    RecipeApplied(RecipeAppliedMetadata),
+
+    RecipeRejected(RecipeRejectedMetadata),
+
+    RecipeStageChanged(RecipeStageChangedMetadata),
+
+    RecipeCompleted(RecipeCompletedMetadata),
 
     /// Dành cho các log text cơ bản không cần metadata phức tạp
     BasicSystemLog(BasicSystemLogMetadata),

@@ -26,6 +26,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const DosingHistory = React.lazy(() => import('./pages/DosingHistory'));
 const CropSeasons = React.lazy(() => import('./pages/CropSeasons'));
 const SystemLog = React.lazy(() => import('./pages/SystemLog'));
+const RecipeBuilder = React.lazy(() => import('./pages/RecipeBuilder'));
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
               <Route path="analytics" element={<Analytics />} />
               <Route path="dosing-history" element={<DosingHistory />} />
               <Route path="crop-seasons" element={<CropSeasons />} />
+              <Route path="recipes" element={<RecipeBuilder />} />
               <Route path="settings" element={<Settings />} />
               <Route path="logs" element={<SystemLog />} />
             </Route>

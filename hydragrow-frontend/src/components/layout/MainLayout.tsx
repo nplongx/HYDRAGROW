@@ -11,6 +11,7 @@ import {
   X,
   Activity,
   Leaf,
+  ClipboardList,
   Box,
   LineChart
 } from 'lucide-react';
@@ -55,6 +56,7 @@ const MainLayout: React.FC = () => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/control', icon: SlidersHorizontal, label: 'Điều Khiển' },
     { path: '/crop-seasons', icon: Leaf, label: 'Mùa Vụ' },
+    { path: '/recipes', icon: ClipboardList, label: 'Recipes' },
     { path: '/logs', icon: AlignLeft, label: 'Nhật Ký', hasBadge: unreadAlertCount > 0 }
   ];
 

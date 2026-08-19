@@ -44,7 +44,7 @@ pub fn start_fsm_control_loop(
     let mut last_tank_alert = crate::hw::pcf857x::TankAlert::default();
 
     loop {
-        let config = shared_config.read().unwrap().clone();
+        let config = shared_config.read().unwrap().effective_config.clone();
         let sensors = shared_sensors.read().unwrap().clone();
 
         let current_wall_time_ms = get_current_time_ms();

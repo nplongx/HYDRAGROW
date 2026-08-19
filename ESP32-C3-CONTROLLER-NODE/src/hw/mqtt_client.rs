@@ -4,8 +4,12 @@
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
-use esp_idf_sys::{esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t};
-use hydragrow_shared::topics::{topic_controller_command, topic_controller_config, topic_sensors, topic_status};
+use esp_idf_sys::{
+    esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t,
+};
+use hydragrow_shared::topics::{
+    topic_controller_command, topic_controller_config, topic_sensors, topic_status,
+};
 use hydragrow_shared::{ControllerConfig, MqttCommandIn, PumpStatus, SensorData};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
@@ -99,7 +103,12 @@ pub fn init_mqtt_client(
     info!("🚀 Initializing MQTT client...");
     info!("Broker: {}", broker_url);
 
-    let device_id = shared_config.read().unwrap().device_id.to_string();
+    let device_id = shared_config
+        .read()
+        .unwrap()
+        .effective_config
+        .device_id
+        .to_string();
     let topic_config = topic_controller_config(&device_id);
     let topic_command = topic_controller_command(&device_id);
     let topic_sensors_top = topic_sensors(&device_id);
@@ -147,11 +156,15 @@ pub fn init_mqtt_client(
                     match serde_json::from_slice::<ControllerConfig>(data) {
                         Ok(new_config) => {
                             if let Err(errors) = new_config.validate() {
-                                error!("❌ Config validation failed ({} errors): {:?}", errors.len(), errors);
+                                error!(
+                                    "❌ Config validation failed ({} errors): {:?}",
+                                    errors.len(),
+                                    errors
+                                );
                             } else {
                                 info!("✅ New config received & applied: {}", new_config.device_id);
                                 if let Ok(mut config) = shared_config.write() {
-                                    *config = new_config;
+                                    config.set_base_config(new_config);
                                 }
                             }
                         }
@@ -173,12 +186,24 @@ pub fn init_mqtt_client(
                     if let Ok(payload) = serde_json::from_slice::<IncomingSensorPayload>(data) {
                         if let Ok(mut sensors) = shared_sensor_data.write() {
                             sensors.controller_received_ms = Some(get_uptime_ms());
-                            if let Some(t) = payload.temp { sensors.temp = t; }
-                            if let Some(e) = payload.ec { sensors.ec = e; }
-                            if let Some(p) = payload.ph { sensors.ph = p; }
-                            if let Some(w) = payload.water_level { sensors.water_level = w; }
-                            if let Some(mv) = payload.ph_voltage_mv { sensors.ph_voltage_mv = Some(mv as f64); }
-                            if let Some(cont) = payload.is_continuous { sensors.is_continuous = Some(cont); }
+                            if let Some(t) = payload.temp {
+                                sensors.temp = t;
+                            }
+                            if let Some(e) = payload.ec {
+                                sensors.ec = e;
+                            }
+                            if let Some(p) = payload.ph {
+                                sensors.ph = p;
+                            }
+                            if let Some(w) = payload.water_level {
+                                sensors.water_level = w;
+                            }
+                            if let Some(mv) = payload.ph_voltage_mv {
+                                sensors.ph_voltage_mv = Some(mv as f64);
+                            }
+                            if let Some(cont) = payload.is_continuous {
+                                sensors.is_continuous = Some(cont);
+                            }
                             sensors.err_water = payload.err_water;
                             sensors.err_temp = payload.err_temp;
                             sensors.err_ec = payload.err_ec;
@@ -186,7 +211,9 @@ pub fn init_mqtt_client(
                             sensors.rssi = payload.rssi;
                             sensors.free_heap = payload.free_heap;
                             sensors.uptime = payload.uptime;
-                            if let Some(time) = payload.time { sensors.time = time; }
+                            if let Some(time) = payload.time {
+                                sensors.time = time;
+                            }
                         }
                     }
                 }

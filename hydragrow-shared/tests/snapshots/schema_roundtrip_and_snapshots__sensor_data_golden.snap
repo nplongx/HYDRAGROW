@@ -15,6 +15,7 @@ expression: sensor
     "ph_down": false,
     "osaka_pump": false,
     "mist_valve": false,
+    "mix_valve": false,
     "water_pump_in": false,
     "water_pump_out": false
   },

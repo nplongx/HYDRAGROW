@@ -6,13 +6,14 @@ use std::thread;
 use std::time::Duration;
 
 use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use hydragrow_shared::fsm::{FsmBudgets, FsmSnapshot};
 use hydragrow_shared::hestia::{HestiaAction, HestiaContext, HestiaEngine};
 use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence};
 use hydragrow_shared::topics::{
-    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_status,
-    topic_dosing_report, topic_fsm_events, topic_fsm_state, topic_sensor_command, topic_sensors,
-    topic_status,
+    topic_calibration, topic_controller_command, topic_controller_config, topic_controller_recipe,
+    topic_controller_status, topic_dosing_report, topic_fsm_events, topic_fsm_state,
+    topic_sensor_command, topic_sensors, topic_status,
 };
 use hydragrow_shared::MqttCommandIn;
 use log::{error, info, warn};
@@ -94,9 +95,11 @@ pub fn run_main_health_loop(
     conn_rx: Receiver<ConnectionState>,
     conn_tx: Sender<ConnectionState>,
     cmd_tx: Sender<MqttCommandIn>,
+    fsm_tx: Sender<String>,
     fsm_rx: Receiver<String>,
     dosing_report_rx: Receiver<String>,
     sensor_cmd_rx: Receiver<String>,
+    nvs_partition: EspDefaultNvsPartition,
 ) -> anyhow::Result<()> {
     let mut mqtt_client: Option<EspMqttClient> = None;
     let mut is_mqtt_connected = false;
@@ -127,6 +130,8 @@ pub fn run_main_health_loop(
                             shared_sensor_data.clone(),
                             cmd_tx.clone(),
                             conn_tx.clone(),
+                            fsm_tx.clone(),
+                            nvs_partition.clone(),
                         ) {
                             Ok(client) => mqtt_client = Some(client),
                             Err(e) => error!("❌ Lỗi khởi tạo MQTT: {:?}", e),
@@ -143,11 +148,17 @@ pub fn run_main_health_loop(
                     is_mqtt_connected = true;
 
                     if let Some(client) = mqtt_client.as_mut() {
-                        let device_id = shared_config.read().unwrap().device_id.clone();
+                        let device_id = shared_config
+                            .read()
+                            .unwrap()
+                            .effective_config
+                            .device_id
+                            .clone();
                         let topic_config = topic_controller_config(&device_id);
                         let topic_command = topic_controller_command(&device_id);
                         let topic_status = topic_status(&device_id);
                         let topic_sensors = topic_sensors(&device_id);
+                        let topic_recipe = topic_controller_recipe(&device_id);
 
                         let payload = serde_json::json!({
                             "device_id": device_id,
@@ -164,6 +175,7 @@ pub fn run_main_health_loop(
                         let _ = client.subscribe(&topic_config, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_command, QoS::AtLeastOnce);
                         let _ = client.subscribe(&topic_sensors, QoS::AtLeastOnce);
+                        let _ = client.subscribe(&topic_recipe, QoS::AtLeastOnce);
                     }
                 }
                 ConnectionState::MqttDisconnected => {
@@ -187,7 +199,12 @@ pub fn run_main_health_loop(
                             latest_runtime_calibration = Some(v.clone());
                         }
 
-                        let device_id = shared_config.read().unwrap().device_id.clone();
+                        let device_id = shared_config
+                            .read()
+                            .unwrap()
+                            .effective_config
+                            .device_id
+                            .clone();
                         let topic = if let Some(override_topic) =
                             v.get("_mqtt_topic_override").and_then(|t| t.as_str())
                         {
@@ -238,7 +255,12 @@ pub fn run_main_health_loop(
                             continue;
                         }
                     }
-                    let device_id = shared_config.read().unwrap().device_id.clone();
+                    let device_id = shared_config
+                        .read()
+                        .unwrap()
+                        .effective_config
+                        .device_id
+                        .clone();
                     let topic = topic_dosing_report(&device_id);
                     let _ = client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
                 }
@@ -250,7 +272,12 @@ pub fn run_main_health_loop(
                 force_publish_next = true;
             } else if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    let device_id = shared_config.read().unwrap().device_id.clone();
+                    let device_id = shared_config
+                        .read()
+                        .unwrap()
+                        .effective_config
+                        .device_id
+                        .clone();
                     let topic_sensor_cmd = topic_sensor_command(&device_id);
                     let _ = client.publish(
                         &topic_sensor_cmd,
@@ -335,7 +362,10 @@ pub fn run_main_health_loop(
                     last_hestia_intervention_sec = Some(now_sec);
                 }
                 let current_sensor = shared_sensor_data.read().ok().map(|sensor| sensor.clone());
-                let current_config = shared_config.read().ok().map(|config| config.clone());
+                let current_config = shared_config
+                    .read()
+                    .ok()
+                    .map(|state| state.effective_config.clone());
                 let hestia = match (current_sensor, current_config) {
                     (Some(sensor), Some(config)) => {
                         let context = HestiaContext {
@@ -357,7 +387,12 @@ pub fn run_main_health_loop(
                     _ => None,
                 };
 
-                let device_id = shared_config.read().unwrap().device_id.clone();
+                let device_id = shared_config
+                    .read()
+                    .unwrap()
+                    .effective_config
+                    .device_id
+                    .clone();
                 let health_payload = DeviceHealthSnapshot {
                     device_id: device_id.clone(),
                     free_heap: get_free_heap(),

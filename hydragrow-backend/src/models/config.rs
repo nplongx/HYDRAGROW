@@ -377,6 +377,8 @@ pub fn from_db_rows(
         min_temp_limit: safe.min_temp_limit,
         max_temp_limit: safe.max_temp_limit,
 
+        active_recipe: None,
+
         max_dose_per_cycle: safe.max_dose_per_cycle,
         max_dose_per_hour: safe.max_dose_per_hour,
         cooldown_sec: safe.cooldown_sec,

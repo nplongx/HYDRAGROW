@@ -3,7 +3,7 @@ use crate::fsm::FsmSnapshot;
 use crate::telemetry::cycle::{DosingCycleEvent, WaterCycleEvent};
 use crate::telemetry::health::DeviceHealthSnapshot;
 use crate::telemetry::transition::FsmTransitionEvent;
-use crate::{AlertMessage, DosingReportPayload, PumpStatus, SensorData};
+use crate::{AlertMessage, PumpStatus, SensorData};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

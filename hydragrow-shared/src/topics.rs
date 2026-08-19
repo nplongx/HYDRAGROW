@@ -10,6 +10,12 @@ impl MqttTopics {
     pub fn controller_config(device_id: &str) -> String {
         format!("AGITECH/{}/controller/config", device_id)
     }
+    pub fn controller_recipe(device_id: &str) -> String {
+        format!("AGITECH/{}/controller/recipe", device_id)
+    }
+    pub fn recipe_events(device_id: &str) -> String {
+        format!("AGITECH/{}/recipe/events", device_id)
+    }
     pub fn controller_command(device_id: &str) -> String {
         format!("AGITECH/{}/controller/command", device_id)
     }
@@ -21,6 +27,18 @@ impl MqttTopics {
     }
     pub fn fsm_events(device_id: &str) -> String {
         format!("AGITECH/{}/fsm/events", device_id)
+    }
+    pub fn recipe_set(device_id: &str) -> String {
+        format!("AGITECH/{}/recipe/set", device_id)
+    }
+    pub fn recipe_clear(device_id: &str) -> String {
+        format!("AGITECH/{}/recipe/clear", device_id)
+    }
+    pub fn recipe_status(device_id: &str) -> String {
+        format!("AGITECH/{}/recipe/status", device_id)
+    }
+    pub fn recipe_events(device_id: &str) -> String {
+        format!("AGITECH/{}/recipe/events", device_id)
     }
     pub fn dosing_report(device_id: &str) -> String {
         format!("AGITECH/{}/dosing_report", device_id)
@@ -60,6 +78,12 @@ pub fn topic_controller_command(device_id: &str) -> String {
 pub fn topic_controller_config(device_id: &str) -> String {
     MqttTopics::controller_config(device_id)
 }
+pub fn topic_controller_recipe(device_id: &str) -> String {
+    MqttTopics::controller_recipe(device_id)
+}
+pub fn topic_recipe_events(device_id: &str) -> String {
+    MqttTopics::recipe_events(device_id)
+}
 pub fn topic_sensor_status(device_id: &str) -> String {
     format!("AGITECH/{}/sensor/status", device_id)
 }
@@ -74,6 +98,18 @@ pub fn topic_fsm_state(device_id: &str) -> String {
 }
 pub fn topic_fsm_events(device_id: &str) -> String {
     MqttTopics::fsm_events(device_id)
+}
+pub fn topic_recipe_set(device_id: &str) -> String {
+    MqttTopics::recipe_set(device_id)
+}
+pub fn topic_recipe_clear(device_id: &str) -> String {
+    MqttTopics::recipe_clear(device_id)
+}
+pub fn topic_recipe_status(device_id: &str) -> String {
+    MqttTopics::recipe_status(device_id)
+}
+pub fn topic_recipe_events(device_id: &str) -> String {
+    MqttTopics::recipe_events(device_id)
 }
 pub fn topic_calibration(device_id: &str) -> String {
     format!("AGITECH/{}/calibration", device_id)
@@ -112,4 +148,62 @@ pub fn topic_health_snapshot(device_id: &str) -> String {
 /// MQTT topic used by the backend to set or clear a device crop recipe.
 pub fn topic_recipe_set(device_id: &str) -> String {
     format!("AGITECH/{}/recipe/set", device_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recipe_topics_use_recipe_suffixes() {
+        let device_id = "device-01";
+
+        assert_eq!(
+            MqttTopics::recipe_set(device_id),
+            "AGITECH/device-01/recipe/set"
+        );
+        assert_eq!(
+            MqttTopics::recipe_clear(device_id),
+            "AGITECH/device-01/recipe/clear"
+        );
+        assert_eq!(
+            MqttTopics::recipe_status(device_id),
+            "AGITECH/device-01/recipe/status"
+        );
+        assert_eq!(
+            MqttTopics::recipe_events(device_id),
+            "AGITECH/device-01/recipe/events"
+        );
+    }
+
+    #[test]
+    fn recipe_topic_wrappers_match_mqtt_topics() {
+        let device_id = "device-01";
+
+        assert_eq!(
+            topic_recipe_set(device_id),
+            MqttTopics::recipe_set(device_id)
+        );
+        assert_eq!(
+            topic_recipe_clear(device_id),
+            MqttTopics::recipe_clear(device_id)
+        );
+        assert_eq!(
+            topic_recipe_status(device_id),
+            MqttTopics::recipe_status(device_id)
+        );
+        assert_eq!(
+            topic_recipe_events(device_id),
+            MqttTopics::recipe_events(device_id)
+        );
+    }
+
+    #[test]
+    fn parse_agitech_topic_accepts_recipe_topics() {
+        let topic = topic_recipe_events("device-01");
+        let parsed = parse_agitech_topic(&topic).unwrap();
+
+        assert_eq!(parsed.device_id, "device-01");
+        assert_eq!(parsed.suffix, "recipe/events");
+    }
 }

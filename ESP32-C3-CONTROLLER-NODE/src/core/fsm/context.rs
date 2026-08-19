@@ -144,6 +144,11 @@ pub struct SystemContext {
     pub water_change_cron: CronSchedule,
     pub last_water_change_sec: u64,
     pub next_water_change_trigger_sec: Option<u64>,
+
+    // Recipe Engine
+    pub current_stage_index: Option<usize>,
+    pub recipe_completed: bool,
+    pub last_recipe_check_sec: u64,
 }
 
 impl Default for SystemContext {
@@ -165,6 +170,9 @@ impl Default for SystemContext {
             water_change_cron: String::new(),
             last_water_change_sec: 0,
             next_water_change_trigger_sec: None,
+            current_stage_index: None,
+            recipe_completed: false,
+            last_recipe_check_sec: 0,
         }
     }
 }
@@ -215,6 +223,18 @@ impl SystemContext {
 
         if let Some(cron) = delta.water_change_cron.clone() {
             self.water_change_cron = cron;
+        }
+
+        if let Some(v) = delta.current_stage_index {
+            self.current_stage_index = v;
+        }
+
+        if let Some(v) = delta.recipe_completed {
+            self.recipe_completed = v;
+        }
+
+        if let Some(v) = delta.last_recipe_check_sec {
+            self.last_recipe_check_sec = v;
         }
 
         // --- 3. Safety & Budget Reset ---
@@ -394,6 +414,9 @@ pub struct NvsSnapshot {
     pub matrix_update_count: u32,
     #[serde(default)]
     pub matrix_is_warm: bool,
+
+    #[serde(default)]
+    pub current_stage_index: Option<usize>,
 }
 
 impl NvsSnapshot {
@@ -468,6 +491,7 @@ impl NvsSnapshot {
             interaction_matrix: Some(ctx.tuner.interaction_matrix.as_flat()),
             matrix_update_count: ctx.tuner.matrix_update_count,
             matrix_is_warm: ctx.tuner.matrix_is_warm,
+            current_stage_index: ctx.current_stage_index,
         }
     }
 }

@@ -5,6 +5,7 @@ pub mod fsm;
 pub mod helper;
 pub mod hestia;
 pub mod log;
+pub mod recipe;
 pub mod telemetry;
 pub mod topics;
 
@@ -145,6 +146,24 @@ pub struct MqttCommandParams {
     pub ota_url: Option<String>,
 }
 
+/// Active crop recipe persisted by the controller.
+///
+/// The schema is intentionally flexible so firmware can cache recipes produced by
+/// backend versions with fields unknown to this build, while still requiring the
+/// persisted payload to be a valid JSON object.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropRecipe {
+    #[serde(flatten)]
+    pub data: serde_json::Map<String, serde_json::Value>,
+}
+
+impl CropRecipe {
+    pub fn validate(&self) -> Result<(), serde_json::Error> {
+        let json = serde_json::to_string(self)?;
+        serde_json::from_str::<Self>(&json).map(|_| ())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ControlMode {
@@ -167,6 +186,9 @@ pub struct ControllerConfig {
     pub device_id: String,
     pub control_mode: ControlMode,
     pub is_enabled: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_recipe: Option<CropRecipe>,
 
     // 1. NGƯỠNG MỤC TIÊU
     #[serde(alias = "tds_target")]
@@ -304,12 +326,38 @@ pub struct ControllerConfig {
     pub high_temp_misting_off_duration_ms: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropRecipe {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    pub start_time_sec: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_day: Option<u32>,
+    #[serde(default)]
+    pub stages: Vec<CropRecipeStage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropRecipeStage {
+    #[serde(default)]
+    pub name: String,
+    pub start_day: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ec_target: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ph_target: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_level_target: Option<f32>,
+}
+
 impl Default for ControllerConfig {
     fn default() -> Self {
         Self {
             device_id: "device_001".to_string(),
             control_mode: ControlMode::Manual,
             is_enabled: true,
+            active_recipe: None,
 
             ec_target: 1.2,
             ec_tolerance: 0.05,

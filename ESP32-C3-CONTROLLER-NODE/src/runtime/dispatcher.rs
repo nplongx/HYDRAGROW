@@ -97,8 +97,27 @@ impl EventDispatcher {
                     let _ = flash.set_u64("last_w_change", timestamp_sec);
                 }
             }
+            OrchestratorEvent::SaveCurrentStageIndex { stage_index } => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    match stage_index {
+                        Some(idx) => {
+                            let _ = flash.set_u64("current_stage", idx as u64);
+                        }
+                        None => {
+                            let _ = flash.set_u64("current_stage", u64::MAX);
+                        }
+                    }
+                    let snapshot = NvsSnapshot::from_context(dc.ctx, dc.now_sec);
+                    if let Ok(serialized) = serde_json::to_string(&snapshot) {
+                        let _ = flash.set_str("runtime_snap", &serialized);
+                    }
+                }
+            }
             OrchestratorEvent::PublishDosingReport { report_json } => {
                 let _ = dc.dosing_report_tx.send(report_json);
+            }
+            OrchestratorEvent::PublishRecipeStageChanged { payload_json } => {
+                let _ = dc.mqtt_tx.send(payload_json);
             }
             OrchestratorEvent::RequestSensorForcePublish => {
                 let _ = dc.sensor_cmd_tx.send(

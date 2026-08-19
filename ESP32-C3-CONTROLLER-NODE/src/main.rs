@@ -8,7 +8,7 @@ use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::log::EspLogger;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
-use log::info;
+use log::{info, warn};
 use std::sync::{mpsc, Arc};
 
 mod config;
@@ -63,6 +63,16 @@ fn main() -> anyhow::Result<()> {
     let shared_config = create_shared_config();
     let mut nvs_store = NvsStore::new(nvs_partition.clone());
     let device_id = nvs_store.load_or_init_device_id(DEVICE_ID);
+    if let Ok(mut config) = shared_config.write() {
+        config.device_id = device_id.clone();
+    match nvs_store.load_active_recipe() {
+        Ok(Some(_recipe)) => info!("Đã khôi phục active recipe từ NVS"),
+        Ok(None) => info!("Không có active recipe trong NVS"),
+        Err(error) => warn!(
+            "recipe_rejected: không thể đọc active recipe từ NVS khi boot: {:?}",
+            error
+        ),
+    }
 
     let shared_sensors = create_shared_sensor_data(&device_id);
 
@@ -70,6 +80,7 @@ fn main() -> anyhow::Result<()> {
     let (conn_tx, conn_rx) = mpsc::channel();
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let (fsm_tx, fsm_rx) = mpsc::channel();
+    let health_fsm_tx = fsm_tx.clone();
     let (dosing_report_tx, dosing_report_rx) = mpsc::channel();
     let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel();
     let (int_tx, int_rx) = mpsc::channel::<()>(); // Channel tín hiệu ngắt INT
@@ -172,8 +183,10 @@ fn main() -> anyhow::Result<()> {
         conn_rx,
         conn_tx,
         cmd_tx,
+        health_fsm_tx,
         fsm_rx,
         dosing_report_rx,
         sensor_cmd_rx,
+        nvs_partition.clone(),
     )
 }

@@ -52,6 +52,50 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             "Mức nước: {:.1} -> {:.1}",
             meta.level_before, meta.level_after
         ),
+        SystemLogEvent::RecipeApplied(meta) => match &meta.stage_name {
+            Some(stage_name) => format!(
+                "Áp dụng recipe '{}' - stage '{}' từ {}",
+                meta.recipe_name, stage_name, meta.source
+            ),
+            None => format!("Áp dụng recipe '{}' từ {}", meta.recipe_name, meta.source),
+        },
+        SystemLogEvent::RecipeRejected(meta) => {
+            warn!(
+                target: "esp32_device",
+                device_id = %log_data.device_id,
+                recipe_id = %meta.recipe_id,
+                cycle_id = ?meta.cycle_id,
+                reason = %meta.reason,
+                "Recipe bị từ chối: {}", meta.reason
+            );
+            match &meta.recipe_name {
+                Some(recipe_name) => format!(
+                    "Từ chối recipe '{}' từ {}: {}",
+                    recipe_name, meta.source, meta.reason
+                ),
+                None => format!(
+                    "Từ chối recipe {} từ {}: {}",
+                    meta.recipe_id, meta.source, meta.reason
+                ),
+            }
+        }
+        SystemLogEvent::RecipeStageChanged(meta) => match &meta.from_stage_name {
+            Some(from_stage_name) => format!(
+                "Recipe '{}' chuyển stage '{}' -> '{}'",
+                meta.recipe_name, from_stage_name, meta.to_stage_name
+            ),
+            None => format!(
+                "Recipe '{}' bắt đầu stage '{}'",
+                meta.recipe_name, meta.to_stage_name
+            ),
+        },
+        SystemLogEvent::RecipeCompleted(meta) => match &meta.final_stage_name {
+            Some(final_stage_name) => format!(
+                "Recipe '{}' hoàn tất tại stage '{}'",
+                meta.recipe_name, final_stage_name
+            ),
+            None => format!("Recipe '{}' hoàn tất", meta.recipe_name),
+        },
     };
 
     // =========================================================================
@@ -111,8 +155,20 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         log_data.category,
         LogCategory::Dosing | LogCategory::Water | LogCategory::Alert
     );
+    let recipe_event_needs_notification = matches!(
+        &log_data.event,
+        SystemLogEvent::RecipeApplied(_)
+            | SystemLogEvent::RecipeRejected(_)
+            | SystemLogEvent::RecipeStageChanged(_)
+            | SystemLogEvent::RecipeCompleted(_)
+    );
 
-    if is_critical || is_warning || is_success || category_is_priority {
+    if is_critical
+        || is_warning
+        || is_success
+        || category_is_priority
+        || recipe_event_needs_notification
+    {
         let alert = AlertMessage {
             level: level_str.clone(),
             category: category_str.clone(),

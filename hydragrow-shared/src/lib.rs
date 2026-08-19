@@ -187,6 +187,9 @@ pub struct ControllerConfig {
     pub control_mode: ControlMode,
     pub is_enabled: bool,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_recipe: Option<CropRecipe>,
+
     // 1. NGƯỠNG MỤC TIÊU
     #[serde(alias = "tds_target")]
     pub ec_target: f32,
@@ -323,12 +326,38 @@ pub struct ControllerConfig {
     pub high_temp_misting_off_duration_ms: i64,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropRecipe {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    pub start_time_sec: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_day: Option<u32>,
+    #[serde(default)]
+    pub stages: Vec<CropRecipeStage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CropRecipeStage {
+    #[serde(default)]
+    pub name: String,
+    pub start_day: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ec_target: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ph_target: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_level_target: Option<f32>,
+}
+
 impl Default for ControllerConfig {
     fn default() -> Self {
         Self {
             device_id: "device_001".to_string(),
             control_mode: ControlMode::Manual,
             is_enabled: true,
+            active_recipe: None,
 
             ec_target: 1.2,
             ec_tolerance: 0.05,

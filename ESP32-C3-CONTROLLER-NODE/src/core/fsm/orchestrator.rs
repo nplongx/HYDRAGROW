@@ -154,6 +154,15 @@ fn merge_tick_results(mut base: TickResult, addition: TickResult) -> TickResult 
     if addition.delta.water_change_cron.is_some() {
         base.delta.water_change_cron = addition.delta.water_change_cron;
     }
+    if addition.delta.current_stage_index.is_some() {
+        base.delta.current_stage_index = addition.delta.current_stage_index;
+    }
+    if addition.delta.recipe_completed.is_some() {
+        base.delta.recipe_completed = addition.delta.recipe_completed;
+    }
+    if addition.delta.last_recipe_check_sec.is_some() {
+        base.delta.last_recipe_check_sec = addition.delta.last_recipe_check_sec;
+    }
     if addition.delta.reset_safety_budget {
         base.delta.reset_safety_budget = true;
     }

@@ -39,6 +39,15 @@ pub struct ContextDelta {
     /// Cập nhật water_change_cron
     pub water_change_cron: Option<String>,
 
+    /// Cập nhật stage hiện tại của crop recipe.
+    pub current_stage_index: Option<Option<usize>>,
+
+    /// Đánh dấu recipe đã hoàn tất.
+    pub recipe_completed: Option<bool>,
+
+    /// Mốc lần cuối recipe engine được kiểm tra (wall-clock seconds).
+    pub last_recipe_check_sec: Option<u64>,
+
     /// Xóa các budget/history an toàn khi reset lỗi thủ công
     pub reset_safety_budget: bool,
 

@@ -154,7 +154,31 @@ pub fn start_fsm_control_loop(
             }
         }
 
-        // 2. Chạy FSM Tick Decision Engine
+        // 2. Chạy Recipe Engine trước FSM để stage override có hiệu lực trong tick hiện tại
+        let mut recipe_result = crate::core::fsm::recipe_manager::tick_recipe_engine(
+            &mut config,
+            &ctx,
+            current_wall_time_ms / 1000,
+        );
+        ctx.apply_delta(&mut recipe_result.delta);
+
+        if !recipe_result.events.is_empty() {
+            let mut dc = DispatchContext {
+                pumps: &mut pump_ctrl,
+                nvs: &mut nvs,
+                mqtt_tx: &fsm_mqtt_tx,
+                dosing_report_tx: &dosing_report_tx,
+                sensor_cmd_tx: &sensor_cmd_tx,
+                ctx: &ctx,
+                now_sec: current_wall_time_ms / 1000,
+                device_id: &config.device_id,
+                config: &config,
+                observers: &mut observer_set,
+            };
+            EventDispatcher::dispatch(recipe_result.events, &mut dc);
+        }
+
+        // 3. Chạy FSM Tick Decision Engine
         let mut tick_result = orchestrator::tick(
             current_wall_time_ms,
             current_uptime_ms,
@@ -165,7 +189,7 @@ pub fn start_fsm_control_loop(
         );
         ctx.apply_delta(&mut tick_result.delta);
 
-        // 3. Thực thi Side Effects
+        // 4. Thực thi Side Effects
         if !tick_result.events.is_empty() {
             let mut dc = DispatchContext {
                 pumps: &mut pump_ctrl,
@@ -182,7 +206,7 @@ pub fn start_fsm_control_loop(
             EventDispatcher::dispatch(tick_result.events, &mut dc);
         }
 
-        // 4. Báo trạng thái chuyển Phase
+        // 5. Báo trạng thái chuyển Phase
         let state_str = ctx.phase.as_str().to_string();
         if state_str != last_reported_state {
             info!("  [FSM] Phase thay đổi: [{}]", state_str);

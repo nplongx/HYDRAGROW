@@ -67,7 +67,6 @@ struct ClearRecipeMqttPayload {
     signature: Option<String>,
 }
 
-// Helper lấy danh sách stage từ bảng crop_recipe_stages
 async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<CropStage> {
     let rows = sqlx::query(
         r#"
@@ -122,7 +121,6 @@ async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<Cr
         .collect()
 }
 
-// 1. LẤY DANH SÁCH RECIPES TỪ DATABASE
 pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
     let recipes_res = sqlx::query_as::<_, RecipeTemplate>(
         r#"
@@ -138,7 +136,10 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
         Ok(r) => r,
         Err(e) => {
             tracing::error!("Lỗi truy vấn crop_recipes: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({ "error": "database_error" }));
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "database_error",
+                "details": e.to_string()
+            }));
         }
     };
 
@@ -149,7 +150,6 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
     HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }))
 }
 
-// 2. TẠO VÀ LƯU RECIPE VÀO DATABASE
 pub async fn create_recipe(
     app_state: web::Data<AppState>,
     req: web::Json<CreateRecipeRequest>,
@@ -168,7 +168,10 @@ pub async fn create_recipe(
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!("Lỗi mở transaction: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({ "error": "db_error" }));
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "db_error",
+                "details": e.to_string()
+            }));
         }
     };
 
@@ -187,7 +190,10 @@ pub async fn create_recipe(
     .await
     {
         tracing::error!("Lỗi INSERT crop_recipes: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({ "error": "db_insert_recipe_failed" }));
+        return HttpResponse::InternalServerError().json(json!({
+            "error": "db_insert_recipe_failed",
+            "details": e.to_string()
+        }));
     }
 
     for (idx, stage) in req.stages.iter().enumerate() {
@@ -234,13 +240,19 @@ pub async fn create_recipe(
         .await
         {
             tracing::error!("Lỗi INSERT crop_recipe_stages: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({ "error": "db_insert_stage_failed" }));
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "db_insert_stage_failed",
+                "details": e.to_string()
+            }));
         }
     }
 
     if let Err(e) = tx.commit().await {
         tracing::error!("Lỗi commit transaction: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({ "error": "db_commit_failed" }));
+        return HttpResponse::InternalServerError().json(json!({
+            "error": "db_commit_failed",
+            "details": e.to_string()
+        }));
     }
 
     let created = RecipeTemplate {
@@ -255,7 +267,6 @@ pub async fn create_recipe(
     HttpResponse::Created().json(json!({ "status": "success", "data": created }))
 }
 
-// 3. ÁP DỤNG RECIPE VÀ LƯU VÀO device_active_recipes
 pub async fn apply_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
@@ -365,7 +376,6 @@ pub async fn apply_recipe(
     HttpResponse::Ok().json(json!({ "status": "success", "data": snapshot }))
 }
 
-// 4. XÓA ACTIVE RECIPE TRÊN THIẾT BỊ VÀ DB
 pub async fn clear_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
@@ -408,7 +418,6 @@ pub async fn clear_recipe(
     HttpResponse::Ok().json(json!({ "status": "success" }))
 }
 
-// 5. TRUY VẤN ACTIVE RECIPE CỦA THIẾT BỊ TỪ DB
 pub async fn recipe_status(
     path: web::Path<String>,
     app_state: web::Data<AppState>,

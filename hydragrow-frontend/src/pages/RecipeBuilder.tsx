@@ -1,8 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Bookmark, ClipboardList, Plus, Send, Trash2, XCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowDown,
+  ArrowUp,
+  BookOpen,
+  ClipboardList,
+  Plus,
+  Save,
+  Trash2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ActiveRecipeStatus } from '../components/recipes/ActiveRecipeStatus';
 import { httpFetch } from '../platform/http';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { CropStage, RecipeTemplate } from '../types/models';
@@ -36,13 +43,14 @@ const toNumber = (value: string, fallback = 0) => {
 };
 
 const RecipeBuilder: React.FC = () => {
+  const queryClient = useQueryClient();
   const settings = useDeviceStore((s) => s.settings);
-  const deviceId = useDeviceStore((s) => s.deviceId);
+
   const [templateName, setTemplateName] = useState('Xà lách thủy canh thương phẩm');
   const [cropType, setCropType] = useState('lettuce');
-  const [description, setDescription] = useState('Quy trình chuẩn 30 ngày cho xà lách mỡ xoăn');
+  const [description, setDescription] = useState('Quy trình chuẩn dinh dưỡng và vi khí hậu');
   const [stages, setStages] = useState<EditableStage[]>([createDefaultStage(1), createDefaultStage(2)]);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const headers = useMemo(
     () => ({
@@ -64,7 +72,7 @@ const RecipeBuilder: React.FC = () => {
 
   const totalDays = timeline.length ? timeline[timeline.length - 1].endDay : 0;
 
-  const { data: recipesList = [], refetch: refetchRecipes } = useQuery<RecipeTemplate[]>({
+  const { data: recipesList = [], isLoading: isLoadingTemplates } = useQuery<RecipeTemplate[]>({
     queryKey: ['recipes-templates', settings?.backend_url],
     enabled: Boolean(settings?.backend_url),
     queryFn: async () => {
@@ -75,34 +83,35 @@ const RecipeBuilder: React.FC = () => {
     },
   });
 
-  const handleSelectExistingTemplate = (templateId: string) => {
-    if (!templateId) {
-      setSelectedRecipeId(null);
-      return;
-    }
-    const found = recipesList.find((r) => r.id === templateId);
-    if (!found) return;
-
-    setSelectedRecipeId(found.id);
-    setTemplateName(found.name);
-    setCropType(found.crop);
-    setDescription(found.description || '');
+  const handleSelectTemplate = (template: RecipeTemplate) => {
+    setSelectedTemplateId(template.id);
+    setTemplateName(template.name);
+    setCropType(template.crop);
+    setDescription(template.description || '');
     setStages(
-      found.stages.map((stage) => ({
+      template.stages.map((stage) => ({
         ...stage,
         id: crypto.randomUUID(),
         duration_days: Math.max(1, Math.round(stage.duration_sec / 86400)),
       }))
     );
-    toast.success(`Đã nạp mẫu: ${found.name}`);
+    toast.success(`Đã chọn: ${template.name}`);
   };
 
-  const createRecipeMutation = useMutation({
+  const handleResetForm = () => {
+    setSelectedTemplateId(null);
+    setTemplateName('Công thức mới');
+    setCropType('');
+    setDescription('');
+    setStages([createDefaultStage(1), createDefaultStage(2)]);
+  };
+
+  const saveRecipeMutation = useMutation({
     mutationFn: async () => {
       if (!settings?.backend_url) throw new Error('Thiếu backend URL.');
       const payload = {
-        name: templateName,
-        crop: cropType,
+        name: templateName.trim(),
+        crop: cropType.trim().toLowerCase(),
         description,
         stages: stages.map(({ id: _id, duration_days, ...stage }) => ({
           ...stage,
@@ -117,59 +126,37 @@ const RecipeBuilder: React.FC = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       return res.json();
     },
-    onSuccess: (res) => {
-      const newId = res.data?.id || res.id;
-      setSelectedRecipeId(newId);
-      toast.success('Đã tạo Recipe Template thành công.');
-      refetchRecipes();
+    onSuccess: () => {
+      toast.success('Đã lưu Công thức mẫu vào CSDL!');
+      queryClient.invalidateQueries({ queryKey: ['recipes-templates'] });
     },
-    onError: (error: Error) => toast.error(`Lỗi tạo recipe: ${error.message}`),
+    onError: (error: Error) => toast.error(`Lỗi lưu công thức: ${error.message}`),
   });
 
-  const applyRecipeMutation = useMutation({
-    mutationFn: async () => {
-      if (!settings?.backend_url || !deviceId) throw new Error('Thiếu Backend URL hoặc Device ID.');
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/recipe/apply`, {
-        method: 'POST',
+  const deleteRecipeMutation = useMutation({
+    mutationFn: async (recipeId: string) => {
+      if (!settings?.backend_url) throw new Error('Thiếu backend URL.');
+      const res = await httpFetch(`${settings.backend_url}/api/recipes/${recipeId}`, {
+        method: 'DELETE',
         headers,
-        body: JSON.stringify(
-          selectedRecipeId
-            ? { recipe_id: selectedRecipeId }
-            : {
-                recipe: {
-                  name: templateName,
-                  crop: cropType,
-                  description,
-                  stages: stages.map(({ id: _id, duration_days, ...stage }) => ({
-                    ...stage,
-                    duration_sec: duration_days * 86400,
-                  })),
-                },
-              }
-        ),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       return res.json();
     },
     onSuccess: () => {
-      toast.success('Đã áp dụng Recipe xuống thiết bị thành công!');
+      toast.success('Đã xóa công thức mẫu!');
+      if (selectedTemplateId) handleResetForm();
+      queryClient.invalidateQueries({ queryKey: ['recipes-templates'] });
     },
-    onError: (error: Error) => toast.error(`Lỗi áp dụng recipe: ${error.message}`),
+    onError: (err: Error) => toast.error(`Lỗi xóa: ${err.message}`),
   });
 
-  const clearRecipeMutation = useMutation({
-    mutationFn: async () => {
-      if (!settings?.backend_url || !deviceId) throw new Error('Thiếu cấu hình kết nối.');
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/recipe/clear`, {
-        method: 'POST',
-        headers,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    },
-    onSuccess: () => toast.success('Đã hủy Recipe trên thiết bị!'),
-    onError: (err: Error) => toast.error(`Lỗi hủy recipe: ${err.message}`),
-  });
+  const handleDeleteTemplate = (e: React.MouseEvent, template: RecipeTemplate) => {
+    e.stopPropagation();
+    if (window.confirm(`Bạn có chắc muốn xóa công thức "${template.name}"?`)) {
+      deleteRecipeMutation.mutate(template.id);
+    }
+  };
 
   const updateStage = (id: string, patch: Partial<EditableStage>) => {
     setStages((current) =>
@@ -195,189 +182,217 @@ const RecipeBuilder: React.FC = () => {
   };
 
   return (
-    <div className="app-page max-w-5xl">
+    <div className="app-page max-w-6xl">
       <div className="page-header">
         <div className="page-header-main">
           <div className="page-header-icon"><ClipboardList size={22} /></div>
           <div>
-            <h1 className="page-header-title">Thiết Kế Quy Trình (Recipe Builder)</h1>
+            <h1 className="page-header-title">Thư Viện Công Thức (Recipe Templates)</h1>
             <p className="page-header-subtitle">
-              Quản lý tỷ lệ dinh dưỡng A:B, chu kỳ thay nước và mục tiêu vi khí hậu theo từng độ tuổi cây.
+              Thiết lập quy trình dinh dưỡng, tỷ lệ A:B và chu kỳ thay nước chuẩn để áp dụng khi bắt đầu mùa vụ mới.
             </p>
           </div>
         </div>
+        <button
+          onClick={handleResetForm}
+          className="ui-btn-md bg-white border border-emerald-200 text-emerald-900 hover:bg-emerald-50 text-xs font-bold"
+        >
+          <Plus size={14} className="inline mr-1" /> Soạn công thức mới
+        </button>
       </div>
 
-      <section className="ui-card space-y-4">
-        {recipesList.length > 0 && (
-          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-950">
-              <Bookmark size={16} className="text-emerald-700" />
-              <span>Nạp nhanh từ mẫu đã lưu:</span>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Danh sách mẫu có sẵn & Nút Xóa */}
+        <div className="ui-card space-y-4 h-fit">
+          <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+            <h2 className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+              <BookOpen size={16} className="text-emerald-700" />
+              Mẫu đã lưu ({recipesList.length})
+            </h2>
+          </div>
+
+          {isLoadingTemplates ? (
+            <p className="text-xs text-emerald-700/75 py-6 text-center">Đang tải danh sách...</p>
+          ) : recipesList.length === 0 ? (
+            <p className="text-xs text-emerald-700/75 py-6 text-center">Chưa có công thức mẫu nào trong CSDL.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {recipesList.map((tmpl) => {
+                const isSelected = selectedTemplateId === tmpl.id;
+                return (
+                  <div
+                    key={tmpl.id}
+                    onClick={() => handleSelectTemplate(tmpl)}
+                    className={`group relative w-full text-left p-3.5 rounded-xl border transition-all text-xs flex flex-col gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500'
+                        : 'bg-white border-emerald-100 hover:border-emerald-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-emerald-950 pr-6">
+                      <span className="truncate">{tmpl.name}</span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-100/80 text-emerald-800 text-[10px] uppercase shrink-0">
+                        {tmpl.crop}
+                      </span>
+                    </div>
+                    {tmpl.description && (
+                      <p className="text-emerald-700/80 line-clamp-1 text-[11px]">{tmpl.description}</p>
+                    )}
+                    <span className="text-[10px] text-emerald-600 font-medium">
+                      {tmpl.stages.length} giai đoạn • {tmpl.stages.reduce((sum, s) => sum + Math.round(s.duration_sec / 86400), 0)} ngày
+                    </span>
+
+                    {/* NÚT XÓA RECIPE TEMPLATE */}
+                    <button
+                      title="Xóa công thức mẫu này"
+                      onClick={(e) => handleDeleteTemplate(e, tmpl)}
+                      className="absolute right-2.5 top-3 p-1.5 rounded-lg text-emerald-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-70 group-hover:opacity-100"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-            <select
-              value={selectedRecipeId || ''}
-              onChange={(e) => handleSelectExistingTemplate(e.target.value)}
-              className="bg-white border border-emerald-200 rounded-lg px-3 py-1.5 text-xs text-emerald-950 font-medium outline-none focus:border-emerald-600 cursor-pointer"
-            >
-              <option value="">-- Chọn công thức có sẵn --</option>
-              {recipesList.map((tmpl) => (
-                <option key={tmpl.id} value={tmpl.id}>
-                  {tmpl.name} ({tmpl.crop})
-                </option>
+          )}
+        </div>
+
+        {/* Form soạn thảo Stages & Timeline */}
+        <div className="lg:col-span-2 space-y-6">
+          <section className="ui-card space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="ui-form-row">
+                <span className="ui-form-label">Tên công thức</span>
+                <input className="ui-input" value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
+              </label>
+              <label className="ui-form-row">
+                <span className="ui-form-label">Loại cây trồng (crop)</span>
+                <input
+                  className="ui-input font-medium"
+                  placeholder="vd: lettuce, tomato, cabbage"
+                  value={cropType}
+                  onChange={(e) => setCropType(e.target.value)}
+                />
+              </label>
+            </div>
+            <label className="ui-form-row">
+              <span className="ui-form-label">Mô tả quy trình</span>
+              <textarea
+                className="ui-input min-h-16 resize-none text-xs"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </label>
+          </section>
+
+          <section className="ui-card space-y-4">
+            <div className="flex items-center justify-between gap-3 border-b border-emerald-100 pb-3">
+              <h2 className="text-sm font-bold text-emerald-950">Các giai đoạn sinh trưởng (Stages)</h2>
+              <button
+                className="ui-btn-md bg-emerald-700 text-white hover:bg-emerald-800 py-1.5 px-3 text-xs"
+                onClick={() => setStages((s) => [...s, createDefaultStage(s.length + 1)])}
+              >
+                <Plus size={14} className="inline mr-1" /> Thêm giai đoạn
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {stages.map((stage, index) => (
+                <div key={stage.id} className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3.5 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5">
+                    <span className="font-bold text-emerald-950 text-xs">#{index + 1} • {stage.name}</span>
+                    <div className="flex gap-1.5">
+                      <button className="p-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-900" onClick={() => moveStage(index, -1)} disabled={index === 0}><ArrowUp size={12} /></button>
+                      <button className="p-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-900" onClick={() => moveStage(index, 1)} disabled={index === stages.length - 1}><ArrowDown size={12} /></button>
+                      <button className="p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100" onClick={() => setStages((s) => s.filter((item) => item.id !== stage.id))} disabled={stages.length === 1}><Trash2 size={12} /></button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="ui-form-row sm:col-span-2">
+                      <span className="ui-form-label">Tên giai đoạn</span>
+                      <input className="ui-input" value={stage.name} onChange={(e) => updateStage(stage.id, { name: e.target.value })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Thời gian (ngày)</span>
+                      <input className="ui-input font-bold" type="number" min={1} value={stage.duration_days} onChange={(e) => updateStage(stage.id, { duration_days: toNumber(e.target.value, 1) })} />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-emerald-100">
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">EC mục tiêu</span>
+                      <input className="ui-input" type="number" step="0.1" value={stage.ec_target} onChange={(e) => updateStage(stage.id, { ec_target: toNumber(e.target.value, 1.4) })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Sai số EC (±)</span>
+                      <input className="ui-input" type="number" step="0.05" value={stage.ec_tolerance} onChange={(e) => updateStage(stage.id, { ec_tolerance: toNumber(e.target.value, 0.1) })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">pH mục tiêu</span>
+                      <input className="ui-input" type="number" step="0.1" value={stage.ph_target} onChange={(e) => updateStage(stage.id, { ph_target: toNumber(e.target.value, 6.0) })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Sai số pH (±)</span>
+                      <input className="ui-input" type="number" step="0.05" value={stage.ph_tolerance} onChange={(e) => updateStage(stage.id, { ph_tolerance: toNumber(e.target.value, 0.2) })} />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-emerald-100">
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Tỷ lệ Phân A</span>
+                      <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={stage.nutrient_a_ratio} onChange={(e) => updateStage(stage.id, { nutrient_a_ratio: toNumber(e.target.value, 1.0) })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Tỷ lệ Phân B</span>
+                      <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={stage.nutrient_b_ratio} onChange={(e) => updateStage(stage.id, { nutrient_b_ratio: toNumber(e.target.value, 1.0) })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Chu kỳ thay nước (ngày)</span>
+                      <input className="ui-input bg-blue-50/50 border-blue-200" type="number" min={1} placeholder="VD: 7" value={stage.water_change_interval_days ?? ''} onChange={(e) => updateStage(stage.id, { water_change_interval_days: e.target.value ? toNumber(e.target.value) : undefined })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Mực nước mục tiêu (cm)</span>
+                      <input className="ui-input bg-blue-50/50 border-blue-200" type="number" step="0.5" value={stage.water_level_target} onChange={(e) => updateStage(stage.id, { water_level_target: toNumber(e.target.value, 20) })} />
+                    </label>
+                  </div>
+                </div>
               ))}
-            </select>
-          </div>
-        )}
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <label className="ui-form-row">
-            <span className="ui-form-label">Tên quy trình</span>
-            <input className="ui-input" value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
-          </label>
-          <label className="ui-form-row">
-            <span className="ui-form-label">Loại cây trồng (crop)</span>
-            <input className="ui-input" value={cropType} onChange={(e) => setCropType(e.target.value)} />
-          </label>
-          <label className="ui-form-row">
-            <span className="ui-form-label">Áp dụng cho trạm</span>
-            <input className="ui-input font-mono font-bold bg-emerald-50 text-emerald-900" value={deviceId || 'Chưa chọn'} disabled />
-          </label>
-        </div>
-        <label className="ui-form-row">
-          <span className="ui-form-label">Mô tả / Ghi chú</span>
-          <textarea className="ui-input min-h-20 resize-none" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </label>
-      </section>
-
-      <section className="ui-card space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-emerald-950">Danh sách Giai đoạn (Stages)</h2>
-          <button className="ui-btn-md bg-emerald-700 text-white hover:bg-emerald-800" onClick={() => setStages((s) => [...s, createDefaultStage(s.length + 1)])}>
-            <Plus size={16} className="inline mr-1" /> Thêm giai đoạn
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {stages.map((stage, index) => (
-            <div key={stage.id} className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 md:p-5 space-y-4 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/60 pb-3">
-                <span className="font-bold text-emerald-900 text-sm">Giai đoạn #{index + 1}: {stage.name}</span>
-                <div className="flex gap-2">
-                  <button className="ui-btn-md bg-white border border-emerald-200 py-1 px-3 text-xs" onClick={() => moveStage(index, -1)} disabled={index === 0}><ArrowUp size={14} /></button>
-                  <button className="ui-btn-md bg-white border border-emerald-200 py-1 px-3 text-xs" onClick={() => moveStage(index, 1)} disabled={index === stages.length - 1}><ArrowDown size={14} /></button>
-                  <button className="ui-btn-md bg-red-50 text-red-700 border border-red-200 py-1 px-3 text-xs" onClick={() => setStages((s) => s.filter((item) => item.id !== stage.id))} disabled={stages.length === 1}><Trash2 size={14} /></button>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-                <label className="ui-form-row md:col-span-2">
-                  <span className="ui-form-label">Tên giai đoạn</span>
-                  <input className="ui-input" value={stage.name} onChange={(e) => updateStage(stage.id, { name: e.target.value })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Thời gian (ngày)</span>
-                  <input className="ui-input" type="number" min={1} value={stage.duration_days} onChange={(e) => updateStage(stage.id, { duration_days: toNumber(e.target.value, 1) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Mực nước mục tiêu (cm)</span>
-                  <input className="ui-input" type="number" step="0.5" value={stage.water_level_target} onChange={(e) => updateStage(stage.id, { water_level_target: toNumber(e.target.value, 20) })} />
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-emerald-100">
-                <label className="ui-form-row">
-                  <span className="ui-form-label">EC mục tiêu</span>
-                  <input className="ui-input" type="number" step="0.1" value={stage.ec_target} onChange={(e) => updateStage(stage.id, { ec_target: toNumber(e.target.value, 1.4) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Sai số EC (±)</span>
-                  <input className="ui-input" type="number" step="0.05" value={stage.ec_tolerance} onChange={(e) => updateStage(stage.id, { ec_tolerance: toNumber(e.target.value, 0.1) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">pH mục tiêu</span>
-                  <input className="ui-input" type="number" step="0.1" value={stage.ph_target} onChange={(e) => updateStage(stage.id, { ph_target: toNumber(e.target.value, 6.0) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Sai số pH (±)</span>
-                  <input className="ui-input" type="number" step="0.05" value={stage.ph_tolerance} onChange={(e) => updateStage(stage.id, { ph_tolerance: toNumber(e.target.value, 0.2) })} />
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-emerald-100">
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Tỷ lệ Phân A</span>
-                  <input className="ui-input bg-orange-50/50 border-orange-200" type="number" step="0.1" min={0.1} value={stage.nutrient_a_ratio} onChange={(e) => updateStage(stage.id, { nutrient_a_ratio: toNumber(e.target.value, 1.0) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Tỷ lệ Phân B</span>
-                  <input className="ui-input bg-orange-50/50 border-orange-200" type="number" step="0.1" min={0.1} value={stage.nutrient_b_ratio} onChange={(e) => updateStage(stage.id, { nutrient_b_ratio: toNumber(e.target.value, 1.0) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Chu kỳ thay nước (ngày)</span>
-                  <input className="ui-input bg-blue-50/50 border-blue-200" type="number" min={1} placeholder="VD: 7" value={stage.water_change_interval_days ?? ''} onChange={(e) => updateStage(stage.id, { water_change_interval_days: e.target.value ? toNumber(e.target.value) : undefined })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Xả thay nước (cm)</span>
-                  <input className="ui-input bg-blue-50/50 border-blue-200" type="number" step="0.5" placeholder="VD: 5.0" value={stage.water_change_drain_cm ?? ''} onChange={(e) => updateStage(stage.id, { water_change_drain_cm: e.target.value ? toNumber(e.target.value) : undefined })} />
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 pt-2 border-t border-emerald-100">
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Phun sương Bật (ms)</span>
-                  <input className="ui-input" type="number" step="1000" value={stage.misting_on_duration_ms} onChange={(e) => updateStage(stage.id, { misting_on_duration_ms: toNumber(e.target.value, 10000) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Phun sương Nghỉ (ms)</span>
-                  <input className="ui-input" type="number" step="1000" value={stage.misting_off_duration_ms} onChange={(e) => updateStage(stage.id, { misting_off_duration_ms: toNumber(e.target.value, 180000) })} />
-                </label>
-                <label className="ui-form-row">
-                  <span className="ui-form-label">Max châm 1 lần (ml)</span>
-                  <input className="ui-input" type="number" placeholder="Theo an toàn mặc định" value={stage.max_dose_per_cycle_ml ?? ''} onChange={(e) => updateStage(stage.id, { max_dose_per_cycle_ml: e.target.value ? toNumber(e.target.value) : undefined })} />
-                </label>
-              </div>
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="ui-card space-y-3">
-          <h2 className="text-lg font-bold text-emerald-950">Xem trước Lộ trình (Timeline)</h2>
-          <p className="text-sm">Tổng thời gian toàn bộ chu kỳ: <b className="text-emerald-800">{totalDays}</b> ngày.</p>
-          <div className="space-y-2">
-            {timeline.map((stage) => (
-              <div key={stage.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm gap-2">
-                <div>
-                  <span className="font-bold text-emerald-950">Ngày {stage.startDay} - {stage.endDay}:</span> {stage.name}
-                  <span className="block text-[11px] text-emerald-700">Tỷ lệ A:B: <b>{stage.nutrient_a_ratio}:{stage.nutrient_b_ratio}</b> {stage.water_change_interval_days ? `| Thay nước mỗi ${stage.water_change_interval_days} ngày` : ''}</span>
-                </div>
-                <span className="text-emerald-800 font-medium whitespace-nowrap text-xs bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                  EC {stage.ec_target} ± {stage.ec_tolerance} | pH {stage.ph_target}
-                </span>
+          <section className="ui-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-emerald-950">Xem trước Lộ trình</h3>
+                <p className="text-xs text-emerald-700/80 mt-0.5">Tổng thời gian chu kỳ: <b>{totalDays} ngày</b></p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="ui-card space-y-4">
-          <ActiveRecipeStatus />
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button className="ui-btn-md bg-emerald-700 text-white hover:bg-emerald-800 flex items-center justify-center gap-2" onClick={() => createRecipeMutation.mutate()} disabled={createRecipeMutation.isPending || !templateName.trim()}>
-                <Send size={16} /> Lưu thành Template
-              </button>
-              <button className="ui-btn-md bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center gap-2" onClick={() => applyRecipeMutation.mutate()} disabled={applyRecipeMutation.isPending || !deviceId}>
-                <ClipboardList size={16} /> Nạp vào Trạm ESP32
+              <button
+                onClick={() => saveRecipeMutation.mutate()}
+                disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
+                className="ui-btn-md bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
+              >
+                <Save size={15} />
+                {saveRecipeMutation.isPending ? 'Đang lưu...' : 'Lưu vào Thư Viện'}
               </button>
             </div>
-            <button className="ui-btn-md bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 flex items-center justify-center gap-2" onClick={() => clearRecipeMutation.mutate()} disabled={clearRecipeMutation.isPending || !deviceId}>
-              <XCircle size={16} /> Xóa Recipe trên Trạm
-            </button>
-          </div>
+
+            <div className="space-y-2 pt-2 border-t border-emerald-100">
+              {timeline.map((stage) => (
+                <div key={stage.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-emerald-100 bg-white px-3.5 py-2.5 text-xs gap-2">
+                  <div>
+                    <span className="font-bold text-emerald-950">Ngày {stage.startDay} - {stage.endDay}:</span> {stage.name}
+                    <span className="block text-[11px] text-emerald-700 mt-0.5">Tỷ lệ A:B: <b>{stage.nutrient_a_ratio}:{stage.nutrient_b_ratio}</b> {stage.water_change_interval_days ? `| Thay nước mỗi ${stage.water_change_interval_days} ngày` : ''}</span>
+                  </div>
+                  <span className="text-emerald-800 font-medium whitespace-nowrap bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                    EC {stage.ec_target} ± {stage.ec_tolerance} | pH {stage.ph_target}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
     </div>
   );
 };

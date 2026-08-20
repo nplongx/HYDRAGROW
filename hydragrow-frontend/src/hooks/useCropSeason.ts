@@ -1,4 +1,3 @@
-// src/hooks/useCropSeason.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CropSeason } from '../types/models';
 import { useDeviceStore } from '../store/useDeviceStore';
@@ -9,14 +8,12 @@ export const useCropSeason = () => {
   const queryClient = useQueryClient();
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
-
   const baseUrl = `${settings?.backend_url}/api/devices/${deviceId}/seasons`;
   const headers = {
     'Content-Type': 'application/json',
     'X-API-Key': settings?.api_key || '',
   };
 
-  // 1. Query lấy Active Season
   const activeSeasonQuery = useQuery<CropSeason | null>({
     queryKey: ['seasons', deviceId, 'active'],
     queryFn: async () => {
@@ -28,7 +25,6 @@ export const useCropSeason = () => {
     enabled: Boolean(deviceId && settings?.backend_url),
   });
 
-  // 2. Query lịch sử các mùa vụ
   const seasonHistoryQuery = useQuery<CropSeason[]>({
     queryKey: ['seasons', deviceId, 'history'],
     queryFn: async () => {
@@ -40,9 +36,8 @@ export const useCropSeason = () => {
     enabled: Boolean(deviceId && settings?.backend_url),
   });
 
-  // 3. Mutation Tạo Mùa Vụ Mới
   const createMutation = useMutation({
-    mutationFn: async (payload: { name: string; plant_type: string; description: string }) => {
+    mutationFn: async (payload: { name: string; plant_type?: string; description?: string; recipe_id?: string }) => {
       const res = await httpFetch(baseUrl, {
         method: 'POST',
         headers,
@@ -52,14 +47,13 @@ export const useCropSeason = () => {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('Đã tạo mùa vụ mới!');
+      toast.success('Đã khởi tạo mùa vụ & nạp quy trình thành công!');
       queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
-      queryClient.invalidateQueries({ queryKey: ['seasons-list', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['recipe-status', settings?.backend_url, deviceId] });
     },
     onError: (err: any) => toast.error(err.message),
   });
 
-  // 4. Mutation Cập nhật Mùa Vụ Đang Chạy
   const updateMutation = useMutation({
     mutationFn: async (payload: { name: string; plant_type: string; description: string }) => {
       const res = await httpFetch(`${baseUrl}/active`, {
@@ -71,14 +65,12 @@ export const useCropSeason = () => {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('Đã cập nhật thông tin mùa vụ!');
+      toast.success('Cập nhật thành công!');
       queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
-      queryClient.invalidateQueries({ queryKey: ['seasons-list', deviceId] });
     },
     onError: (err: any) => toast.error(err.message),
   });
 
-  // 5. Mutation Kết thúc Mùa Vụ
   const endMutation = useMutation({
     mutationFn: async () => {
       const res = await httpFetch(`${baseUrl}/active/end`, { method: 'PUT', headers });
@@ -86,9 +78,9 @@ export const useCropSeason = () => {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('Đã kết thúc mùa vụ!');
+      toast.success('Đã kết thúc mùa vụ canh tác!');
       queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
-      queryClient.invalidateQueries({ queryKey: ['seasons-list', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['recipe-status', settings?.backend_url, deviceId] });
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -96,9 +88,9 @@ export const useCropSeason = () => {
   return {
     activeSeason: activeSeasonQuery.data || null,
     history: seasonHistoryQuery.data || [],
-    isLoading: activeSeasonQuery.isLoading || seasonHistoryQuery.isLoading || updateMutation.isPending,
-    createSeason: (name: string, plantType: string, description: string) =>
-      createMutation.mutateAsync({ name, plant_type: plantType, description }),
+    isLoading: activeSeasonQuery.isLoading || seasonHistoryQuery.isLoading || createMutation.isPending || updateMutation.isPending,
+    createSeason: (name: string, plantType: string, description: string, recipeId?: string) =>
+      createMutation.mutateAsync({ name, plant_type: plantType, description, recipe_id: recipeId }),
     updateSeason: (name: string, plantType: string, description: string) =>
       updateMutation.mutateAsync({ name, plant_type: plantType, description }),
     endSeason: () => endMutation.mutateAsync(),

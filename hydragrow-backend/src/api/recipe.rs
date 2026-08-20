@@ -267,6 +267,30 @@ pub async fn create_recipe(
     HttpResponse::Created().json(json!({ "status": "success", "data": created }))
 }
 
+// XÓA RECIPE TEMPLATE TRONG CSDL
+pub async fn delete_recipe(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let recipe_id = path.into_inner();
+
+    let res = sqlx::query("DELETE FROM crop_recipes WHERE id = $1")
+        .bind(&recipe_id)
+        .execute(&app_state.pg_pool)
+        .await;
+
+    match res {
+        Ok(r) if r.rows_affected() > 0 => {
+            HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã xóa recipe template" }))
+        }
+        Ok(_) => HttpResponse::NotFound().json(json!({ "error": "recipe_not_found" })),
+        Err(e) => HttpResponse::InternalServerError().json(json!({
+            "error": "db_delete_failed",
+            "details": e.to_string()
+        })),
+    }
+}
+
 pub async fn apply_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
@@ -306,7 +330,15 @@ pub async fn apply_recipe(
     };
 
     let season_id = match postgres::get_active_crop_season(&app_state.pg_pool, &device_id).await {
-        Ok(Some(season)) => season.id,
+        Ok(Some(season)) => {
+            // TỰ ĐỘNG ĐỒNG BỘ GIỐNG CÂY TRỒNG CỦA MÙA VỤ THEO RECIPE
+            let _ = sqlx::query("UPDATE crop_seasons SET plant_type = $1 WHERE id = $2")
+                .bind(&recipe_template.crop)
+                .bind(&season.id)
+                .execute(&app_state.pg_pool)
+                .await;
+            season.id
+        }
         _ => "default_season".to_string(),
     };
 
@@ -472,6 +504,7 @@ pub async fn recipe_status(
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/recipes", web::get().to(list_recipes))
         .route("/recipes", web::post().to(create_recipe))
+        .route("/recipes/{recipe_id}", web::delete().to(delete_recipe))
         .route(
             "/devices/{device_id}/recipe/apply",
             web::post().to(apply_recipe),

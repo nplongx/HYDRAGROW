@@ -4,7 +4,7 @@
 use crate::core::fsm::context::{NvsSnapshot, SystemContext};
 use anyhow::{anyhow, Result};
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
-use hydragrow_shared::CropRecipe;
+use hydragrow_shared::recipe::CropRecipe;
 use log::{info, warn};
 
 const ACTIVE_RECIPE_KEY: &str = "active_recipe";

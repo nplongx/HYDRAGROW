@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+use crate::recipe::CropRecipe;
+
 pub mod events;
 pub mod fsm;
 pub mod helper;
 pub mod hestia;
 pub mod log;
-pub mod recipe;
 pub mod telemetry;
 pub mod topics;
+pub mod recipe;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignedJsonEnvelope {
@@ -193,23 +195,21 @@ pub struct ControllerConfig {
     pub active_recipe: Option<CropRecipe>,
 
     // 1. NGƯỠNG MỤC TIÊU
-    #[serde(alias = "tds_target")]
     pub ec_target: f32,
-    #[serde(alias = "tds_tolerance")]
     pub ec_tolerance: f32,
     pub ph_target: f32,
     pub ph_tolerance: f32,
 
-    // 2. QUẢN LÝ NƯỚC
+    // 🟢 TỶ LỆ DINH DƯỠNG A:B THỰC THI (Được override bởi Recipe)
+    pub nutrient_a_ratio: f32,
+    pub nutrient_b_ratio: f32,
+
+    // 2. QUẢN LÝ NƯỚC & LỊCH THAY NƯỚC
     pub water_level_min: f32,
     pub water_level_target: f32,
     pub water_level_max: f32,
     pub water_level_tolerance: f32,
 
-    // 🟢 THÊM: Sục khí / Tuần hoàn
-    // pub circulation_mode: String,
-    // pub circulation_on_sec: u64,
-    // pub circulation_off_sec: u64,
     pub auto_refill_enabled: bool,
     pub auto_drain_overflow: bool,
     pub auto_dilute_enabled: bool,
@@ -217,25 +217,26 @@ pub struct ControllerConfig {
     pub scheduled_water_change_enabled: bool,
     pub water_change_cron: String,
     pub scheduled_drain_amount_cm: f32,
+
+    // 🟢 LỊCH THAY NƯỚC THEO STAGE (Nếu có sẽ ưu tiên hơn Cron tĩnh)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_change_interval_days: Option<u32>,
+
     pub misting_on_duration_ms: i32,
     pub misting_off_duration_ms: i32,
 
     // 3. AN TOÀN
     pub emergency_shutdown: bool,
-    #[serde(alias = "max_tds_limit")]
     pub max_ec_limit: f32,
-    #[serde(alias = "min_tds_limit")]
     pub min_ec_limit: f32,
     pub min_ph_limit: f32,
     pub max_ph_limit: f32,
-    #[serde(alias = "max_tds_delta")]
     pub max_ec_delta: f32,
     pub max_ph_delta: f32,
     pub max_dose_per_cycle: f32,
     pub min_temp_limit: f32,
     pub max_temp_limit: f32,
 
-    // 🟢 THÊM: Giới hạn an toàn bơm
     pub max_dose_per_hour: f32,
     pub cooldown_sec: i32,
     pub max_refill_cycles_per_hour: i32,
@@ -244,35 +245,27 @@ pub struct ControllerConfig {
     pub water_level_critical_min: f32,
     pub max_refill_duration_sec: i32,
     pub max_drain_duration_sec: i32,
-    #[serde(alias = "tds_ack_threshold")]
     pub ec_ack_threshold: f32,
     pub ph_ack_threshold: f32,
     pub water_ack_threshold: f32,
 
-    // 4. CHÂM PHÂN
-    #[serde(alias = "tds_gain_per_ml")]
+    // 4. CHÂM PHÂN & THỦY LỰC
     pub ec_gain_per_ml: f32,
     pub ph_shift_up_per_ml: f32,
     pub ph_shift_down_per_ml: f32,
     pub active_mixing_sec: i32,
     pub sensor_stabilize_sec: i32,
-    #[serde(alias = "tds_step_ratio")]
     pub ec_step_ratio: f32,
     pub ph_step_ratio: f32,
     #[serde(default)]
-    #[serde(alias = "best_tds_ratio")]
     pub best_ec_ratio: f32,
     #[serde(default)]
     pub best_ph_ratio: f32,
     #[serde(default)]
     pub tuner_state: u8,
-    #[serde(default = "default_adaptive_mixing_sec")]
     pub adaptive_mixing_sec: u32,
-    #[serde(default = "default_adaptive_stabilize_sec")]
     pub adaptive_stabilize_sec: u32,
-    #[serde(default = "default_effective_ec_tolerance")]
     pub effective_ec_tolerance: f32,
-    #[serde(default = "default_effective_ph_tolerance")]
     pub effective_ph_tolerance: f32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interaction_matrix: Option<Vec<f32>>,
@@ -294,23 +287,13 @@ pub struct ControllerConfig {
     pub scheduled_mixing_duration_sec: i32,
 
     // 5. CẢM BIẾN
-    // 🔴 BỎ: Các trường dư thừa
-    // pub sampling_interval: u64,
-    // pub publish_interval: u64,
-    // pub moving_average_window: u32,
-    #[serde(alias = "enable_tds_sensor")]
     pub enable_ec_sensor: bool,
     pub enable_ph_sensor: bool,
     pub enable_water_level_sensor: bool,
     pub enable_temp_sensor: bool,
-
     pub tank_height: i32,
 
-    // 🔴 BỎ: Chuyển sang check logic (temp_compensation_beta > 0)
-    // pub enable_ec_tc: bool,
-    // pub enable_ph_tc: bool,
-
-    // 6. THÔNG SỐ LOCAL CỦA ESP32 (Backend không có cũng không sao)
+    // 6. THÔNG SỐ CHẤP HÀNH
     pub dosing_pwm_percent: i32,
     pub dosing_min_pwm_percent: i32,
     pub pump_a_min_pwm_percent: Option<i32>,
@@ -328,31 +311,6 @@ pub struct ControllerConfig {
     pub high_temp_misting_off_duration_ms: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CropRecipe {
-    pub id: String,
-    #[serde(default)]
-    pub name: String,
-    pub start_time_sec: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub end_day: Option<u32>,
-    #[serde(default)]
-    pub stages: Vec<CropRecipeStage>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CropRecipeStage {
-    #[serde(default)]
-    pub name: String,
-    pub start_day: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ec_target: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ph_target: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub water_level_target: Option<f32>,
-}
-
 impl Default for ControllerConfig {
     fn default() -> Self {
         Self {
@@ -366,15 +324,14 @@ impl Default for ControllerConfig {
             ph_target: 6.0,
             ph_tolerance: 0.1,
 
+            nutrient_a_ratio: 1.0,
+            nutrient_b_ratio: 1.0,
+
             water_level_min: 15.0,
             water_level_target: 20.0,
             water_level_max: 24.0,
             water_level_tolerance: 1.0,
 
-            // 🟢 THÊM mặc định
-            // circulation_mode: "always_on".to_string(),
-            // circulation_on_sec: 1800,
-            // circulation_off_sec: 900,
             auto_refill_enabled: true,
             auto_drain_overflow: true,
             auto_dilute_enabled: true,
@@ -382,6 +339,8 @@ impl Default for ControllerConfig {
             scheduled_water_change_enabled: false,
             water_change_cron: "0 0 7 * * SUN".to_string(),
             scheduled_drain_amount_cm: 5.0,
+            water_change_interval_days: None,
+
             misting_on_duration_ms: 10000,
             misting_off_duration_ms: 180000,
 
@@ -396,7 +355,6 @@ impl Default for ControllerConfig {
             min_temp_limit: 15.0,
             max_temp_limit: 35.0,
 
-            // 🟢 THÊM mặc định
             max_dose_per_hour: 200.0,
             cooldown_sec: 60,
             max_refill_cycles_per_hour: 3,
@@ -419,10 +377,10 @@ impl Default for ControllerConfig {
             best_ec_ratio: 0.4,
             best_ph_ratio: 0.2,
             tuner_state: 0,
-            adaptive_mixing_sec: default_adaptive_mixing_sec(),
-            adaptive_stabilize_sec: default_adaptive_stabilize_sec(),
-            effective_ec_tolerance: default_effective_ec_tolerance(),
-            effective_ph_tolerance: default_effective_ph_tolerance(),
+            adaptive_mixing_sec: 15,
+            adaptive_stabilize_sec: 10,
+            effective_ec_tolerance: 0.05,
+            effective_ph_tolerance: 0.1,
             interaction_matrix: None,
             matrix_update_count: 0,
             matrix_is_warm: false,
@@ -430,7 +388,7 @@ impl Default for ControllerConfig {
 
             pump_a_capacity_ml_per_sec: 1.2,
             pump_b_capacity_ml_per_sec: 1.15,
-            delay_between_a_and_b_sec: 10, // Độ trễ (Mix) giữa A và B
+            delay_between_a_and_b_sec: 10,
             pump_ph_up_capacity_ml_per_sec: 1.2,
             pump_ph_down_capacity_ml_per_sec: 1.2,
 
@@ -438,21 +396,12 @@ impl Default for ControllerConfig {
             scheduled_mixing_interval_sec: 3600,
             scheduled_mixing_duration_sec: 300,
 
-            // 🔴 BỎ
-            // sampling_interval: 1000,
-            // publish_interval: 5000,
-            // moving_average_window: 10,
             enable_ec_sensor: false,
             enable_ph_sensor: false,
             enable_water_level_sensor: false,
             enable_temp_sensor: false,
-
-            // để tạm thuận tiện để lấy thông số cho sensor node
             tank_height: 50,
 
-            // 🔴 BỎ
-            // enable_ec_tc: true,
-            // enable_ph_tc: true,
             dosing_pwm_percent: 50,
             dosing_min_pwm_percent: 35,
             pump_a_min_pwm_percent: None,

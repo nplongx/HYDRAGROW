@@ -1,5 +1,2 @@
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.69s
+    Checking hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)
+error: could not compile `hydragrow-shared` (test "schema_roundtrip_and_snapshots") due to 6 previous errors

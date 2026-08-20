@@ -1,22 +1,6 @@
-use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::{recipe::CropStage, ControllerConfig};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct CropStage {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ec_target: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ec_tolerance: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ph_target: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ph_tolerance: Option<f32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub misting_on_duration_ms: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub misting_off_duration_ms: Option<i32>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControllerRuntimeState {
@@ -68,22 +52,10 @@ pub fn create_shared_config() -> SharedConfig {
 }
 
 pub fn apply_stage_override(config: &mut ControllerConfig, stage: &CropStage) {
-    if let Some(value) = stage.ec_target {
-        config.ec_target = value;
-    }
-    if let Some(value) = stage.ec_tolerance {
-        config.ec_tolerance = value;
-    }
-    if let Some(value) = stage.ph_target {
-        config.ph_target = value;
-    }
-    if let Some(value) = stage.ph_tolerance {
-        config.ph_tolerance = value;
-    }
-    if let Some(value) = stage.misting_on_duration_ms {
-        config.misting_on_duration_ms = value;
-    }
-    if let Some(value) = stage.misting_off_duration_ms {
-        config.misting_off_duration_ms = value;
-    }
+    config.ec_target = stage.ec_target;
+    config.ec_tolerance = stage.ec_tolerance;
+    config.ph_target = stage.ph_target;
+    config.ph_tolerance = stage.ph_tolerance;
+    config.misting_on_duration_ms = stage.misting_on_duration_ms;
+    config.misting_off_duration_ms = stage.misting_off_duration_ms;
 }

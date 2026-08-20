@@ -21,8 +21,8 @@ pub struct SensorCalibration {
     pub device_id: String,
     pub ph_v7: f32,
     pub ph_v4: f32,
-    pub ph_v10: Option<f32>,         // 🟢 THÊM MỚI
-    pub ph_calibration_mode: String, // 🟢 THÊM MỚI: "2-point" hoặc "3-point"
+    pub ph_v10: Option<f32>,
+    pub ph_calibration_mode: String,
     pub ec_factor: f32,
     pub ec_offset: f32,
     pub temp_offset: f32,
@@ -122,13 +122,6 @@ pub struct DosingCalibration {
     pub dosing_pwm_percent: i32,
     pub osaka_mixing_pwm_percent: i32,
     pub osaka_misting_pwm_percent: i32,
-    // pub ec_gain_dynamic: f32,
-    // pub ph_up_dynamic: f32,
-    // pub ph_down_dynamic: f32,
-    // pub dynamic_sample_count: i32,
-    // pub dynamic_confidence: f32,
-    // pub last_dynamic_update: Option<DateTime<Utc>>,
-    // pub dynamic_model_version: String,
 }
 
 impl Default for DosingCalibration {
@@ -186,13 +179,6 @@ impl Default for DosingCalibration {
             dosing_pwm_percent: 50,
             osaka_mixing_pwm_percent: 60,
             osaka_misting_pwm_percent: 100,
-            // ec_gain_dynamic: 0.01,
-            // ph_up_dynamic: 0.01,
-            // ph_down_dynamic: 0.01,
-            // dynamic_sample_count: 0,
-            // dynamic_confidence: 0.0,
-            // last_dynamic_update: None,
-            // dynamic_model_version: "v1".to_string(),
         }
     }
 }
@@ -285,9 +271,6 @@ pub struct WaterConfig {
     pub water_level_target: f32,
     pub water_level_max: f32,
     pub water_level_drain: f32,
-    // pub circulation_mode: String,
-    // pub circulation_on_sec: i32,
-    // pub circulation_off_sec: i32,
     pub water_level_tolerance: f32,
     pub auto_refill_enabled: bool,
     pub auto_drain_overflow: bool,
@@ -315,9 +298,6 @@ impl Default for WaterConfig {
             water_level_target: 20.0,
             water_level_max: 30.0,
             water_level_drain: 5.0,
-            // circulation_mode: "auto".to_string(),
-            // circulation_on_sec: 60,
-            // circulation_off_sec: 300,
             water_level_tolerance: 1.0,
             auto_refill_enabled: true,
             auto_drain_overflow: true,
@@ -354,6 +334,10 @@ pub fn from_db_rows(
         ec_tolerance: dev.ec_tolerance,
         ph_target: dev.ph_target,
         ph_tolerance: dev.ph_tolerance,
+
+        nutrient_a_ratio: 1.0,
+        nutrient_b_ratio: 1.0,
+
         water_level_min: water.water_level_min,
         water_level_target: water.water_level_target,
         water_level_max: water.water_level_max,
@@ -365,6 +349,8 @@ pub fn from_db_rows(
         scheduled_water_change_enabled: water.scheduled_water_change_enabled,
         water_change_cron: water.water_change_cron.clone(),
         scheduled_drain_amount_cm: water.scheduled_drain_amount_cm,
+        water_change_interval_days: None,
+
         misting_on_duration_ms: water.misting_on_duration_ms,
         misting_off_duration_ms: water.misting_off_duration_ms,
         emergency_shutdown: safe.emergency_shutdown,
@@ -554,6 +540,9 @@ mod tests {
         assert!(config.matrix_is_warm);
         assert_eq!(config.interaction_matrix.as_ref().unwrap().len(), 32);
         assert_eq!(config.kalman_confidence.as_ref().unwrap().len(), 8);
+        assert_eq!(config.nutrient_a_ratio, 1.0);
+        assert_eq!(config.nutrient_b_ratio, 1.0);
+        assert_eq!(config.water_change_interval_days, None);
     }
 
     #[test]

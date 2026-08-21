@@ -77,7 +77,9 @@ pub async fn handle_device(
         reason: None,
         metadata: Some(json!({ "event_type": "device_status" })),
     };
-    let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert));
+    let _ = app_state
+        .event_bus
+        .send(AppEvent::SystemAlert(alert.clone()));
 
     let _ = app_state
         .event_bus

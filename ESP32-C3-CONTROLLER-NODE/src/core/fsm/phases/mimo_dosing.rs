@@ -6,7 +6,9 @@ use log::warn;
 use crate::core::actors::dosing_actor::{DosingEvent, PumpTarget};
 use crate::core::fsm::tick_result::CalibrationDelta;
 use crate::core::fsm::types::PendingCalibrationSample;
-use crate::core::fsm::{DosingPumpTarget, OrchestratorEvent, PeripheralDelta, PhaseTick, SystemContext, TickResult};
+use crate::core::fsm::{
+    DosingPumpTarget, OrchestratorEvent, PeripheralDelta, PhaseTick, SystemContext, TickResult,
+};
 use crate::hw::WaterDirection;
 
 pub struct MimoDosingPhase;
@@ -22,7 +24,7 @@ impl PhaseTick for MimoDosingPhase {
     ) -> TickResult {
         let mut result = TickResult::default();
         let mut peri_delta = PeripheralDelta::default();
-        
+
         // SỬA: Dùng `uptime` để tính thời gian trôi qua, chống lỗi nhảy cóc thời gian
         let elapsed_ms = uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
 
@@ -113,6 +115,12 @@ impl PhaseTick for MimoDosingPhase {
                 };
 
                 stop_water_and_misting(ctx, &mut result, &mut peri_delta);
+
+                // Tắt trạng thái ảo
+                peri_delta.pump_a = Some(false);
+                peri_delta.pump_b = Some(false);
+                peri_delta.ph_up = Some(false);
+                peri_delta.ph_down = Some(false);
 
                 let sample = build_calibration_sample(
                     format!("mimo-{now_ms}"), // GIỮ NGUYÊN: ID dùng mốc giờ thực tế

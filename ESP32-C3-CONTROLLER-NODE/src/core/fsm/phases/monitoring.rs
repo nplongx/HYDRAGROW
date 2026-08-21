@@ -158,6 +158,7 @@ fn apply_decision(
                     config.max_dose_per_hour / 2.0,
                 )
             {
+                peri_delta.pump_a = Some(true); // trạng thái ảo để frontend cập nhật đang châm
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
                 return result;
             }
@@ -169,6 +170,7 @@ fn apply_decision(
                     config.max_dose_per_hour / 2.0,
                 )
             {
+                peri_delta.pump_b = Some(true);
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
                 return result;
             }
@@ -179,6 +181,7 @@ fn apply_decision(
                     control.ph_up_ml,
                     config.max_dose_per_hour / 4.0,
                 );
+                peri_delta.ph_up = Some(true);
             }
             if control.ph_down_ml > 0.0 {
                 let _ = ctx.safety.check_hourly_dose(
@@ -187,6 +190,7 @@ fn apply_decision(
                     control.ph_down_ml,
                     config.max_dose_per_hour / 4.0,
                 );
+                peri_delta.ph_down = Some(true);
             }
             if control.water_in_sec > 0.0
                 && !ctx

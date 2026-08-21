@@ -17,9 +17,9 @@ use tokio::sync::{
     broadcast::{self, Receiver},
 };
 use tracing::{Level, error, info};
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{FmtSubscriber, filter::filter_fn};
 
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
 
 use crate::{
@@ -138,41 +138,31 @@ async fn main() -> anyhow::Result<()> {
     // =========================================================================
     // 1. KHỞI TẠO LOKI LOGGING PIPELINE
     // =========================================================================
-
     let loki_url_str = env::var("LOKI_URL").unwrap_or_else(|_| "http://localhost:3100".to_string());
     let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
 
+    // Khởi tạo 2 bộ (Layer, Task) riêng biệt
     let (backend_loki, esp_loki) = if let Ok(loki_url) = Url::parse(&loki_url_str) {
-        // Ống 1: Dành cho Backend
-        let (b_layer, b_task) = tracing_loki::builder()
-            .label("service_name", "hydragrow-backend")
+        let b = tracing_loki::builder()
+            .label("service", "hydragrow-backend")
             .unwrap()
             .extra_field("environment", environment.clone())
             .unwrap()
             .build_url(loki_url.clone())
             .expect("Lỗi cấu hình Loki Layer cho Backend");
 
-        // Ống 2: Dành cho Controller Node (ESP32)
-        let (e_layer, e_task) = tracing_loki::builder()
-            .label("service_name", "hydragrow-controller") // Tách hẳn thành một Service độc lập trên Grafana!
+        let e = tracing_loki::builder()
+            .label("service", "hydragrow-controller")
             .unwrap()
             .extra_field("environment", environment)
             .unwrap()
             .build_url(loki_url)
             .expect("Lỗi cấu hình Loki Layer cho ESP32");
 
-        (Some((b_layer, b_task)), Some((e_layer, e_task)))
+        (Some(b), Some(e))
     } else {
         (None, None)
     };
-
-    // Spawn 2 background tasks để đẩy log
-    if let Some((_, b_task)) = &backend_loki {
-        tokio::spawn(b_task.clone()); // Tùy phiên bản tracing_loki, có thể không cần clone() mà lấy trực tiếp
-    }
-    if let Some((_, e_task)) = &esp_loki {
-        tokio::spawn(e_task.clone());
-    }
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(true)
@@ -181,23 +171,23 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,hydragrow_backend=debug,actix_web=info"));
 
-    // Bộ lọc thông minh: Phân loại rác vào đúng thùng
+    // Phân loại luồng Log
     let is_esp_log = filter_fn(|meta| meta.target().contains("esp32_device"));
     let is_backend_log = filter_fn(|meta| !meta.target().contains("esp32_device"));
 
-    // Khởi tạo Registry
-    let mut registry = tracing_subscriber::registry()
+    // Gom Layer và Kích hoạt
+    let registry = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer);
 
-    // Gắn 2 ống dẫn vào Registry với các bộ lọc tương ứng
     if let (Some((b_layer, b_task)), Some((e_layer, e_task))) = (backend_loki, esp_loki) {
-        // Đăng ký layer
+        // Áp dụng filter cho từng ống dẫn
         registry
             .with(b_layer.with_filter(is_backend_log))
             .with(e_layer.with_filter(is_esp_log))
             .init();
 
+        // [VÁ BUG LỖI E0277]: Chỉ spawn 1 lần duy nhất bằng cách move quyền sở hữu (ownership)
         tokio::spawn(b_task);
         tokio::spawn(e_task);
     } else {

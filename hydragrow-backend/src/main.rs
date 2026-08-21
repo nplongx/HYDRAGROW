@@ -226,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
         info!("Đã cấu hình xác thực MQTT với user: {}", mqtt_user);
     }
 
-    let (mqtt_client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
+    let (mqtt_client, mut eventloop) = AsyncClient::new(mqttoptions, 50);
 
     let wallet_data =
         fs::read_to_string("server_wallet.json").expect("Không tìm thấy server_wallet.json");

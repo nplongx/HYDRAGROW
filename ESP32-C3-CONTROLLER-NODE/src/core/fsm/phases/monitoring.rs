@@ -1,4 +1,5 @@
 // src/core/fsm/phases/monitoring.rs
+
 use chrono::Local;
 use cron::Schedule;
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
@@ -14,6 +15,7 @@ use crate::core::fsm::events::OrchestratorEvent;
 use crate::core::fsm::phase_tick::PhaseTick;
 use crate::core::fsm::tick_result::{CalibrationDelta, ContextDelta, TickResult};
 use crate::hw::pump_controller::WaterDirection;
+use crate::utils::{effective_flow_ml_per_sec, DosePumpKind};
 
 pub struct MonitoringPhase;
 
@@ -21,14 +23,14 @@ impl PhaseTick for MonitoringPhase {
     fn tick(
         &self,
         now_ms: u64,
-        uptime_ms: u64, // SỬA: Thêm uptime_ms từ interface
+        uptime_ms: u64, // Dùng uptime_ms từ interface để chống nhiễu NTP
         config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut SystemContext,
     ) -> TickResult {
         let mut result = TickResult::default();
-        
-        // Cronjob dùng giờ thực tế (Wall Time)
+
+        // Cronjob dùng giờ Wall Time
         let now_sec = now_ms / 1000;
 
         // 1. Kiểm tra lịch xả/thay nước định kỳ (Cronjob)
@@ -36,22 +38,33 @@ impl PhaseTick for MonitoringPhase {
             check_scheduled_water_change(ctx, config, now_sec, &mut result.delta)
         {
             // Truyền thêm uptime_ms vào apply_decision
-            return apply_decision(water_change_result, ctx, config, sensors, now_ms, uptime_ms, result, true);
+            return apply_decision(
+                water_change_result,
+                ctx,
+                config,
+                sensors,
+                now_ms,
+                uptime_ms,
+                result,
+                true,
+            );
         }
 
         // 2. Chạy Solver (ColdPath hoặc WarmPath tùy trạng thái ma trận)
         let solver = select_solver(ctx);
         let decision = solver.solve(sensors, config, ctx);
 
-        apply_decision(decision, ctx, config, sensors, now_ms, uptime_ms, result, false)
+        apply_decision(
+            decision, ctx, config, sensors, now_ms, uptime_ms, result, false,
+        )
     }
 }
 
-// Hàm này CHỈ làm việc với lịch trình thật nên chỉ cần now_sec
+// Hàm kiểm tra lịch trình xả nước định kỳ (chạy theo Wall Time `now_sec`)
 fn check_scheduled_water_change(
     ctx: &SystemContext,
     config: &ControllerConfig,
-    now_sec: u64, 
+    now_sec: u64,
     delta: &mut ContextDelta,
 ) -> Option<SolveResult> {
     if !(config.enable_water_level_sensor
@@ -62,7 +75,6 @@ fn check_scheduled_water_change(
     }
 
     let mut current_next_trigger = ctx.next_water_change_trigger_sec;
-
     if ctx.water_change_cron != config.water_change_cron {
         delta.water_change_cron = Some(config.water_change_cron.clone());
         if let Ok(schedule) = Schedule::from_str(&config.water_change_cron) {
@@ -87,7 +99,6 @@ fn check_scheduled_water_change(
     }
 
     delta.last_water_change_sec = Some(now_sec);
-
     let mut peri_delta = delta.peripherals.take().unwrap_or_default();
     peri_delta.last_mixing_start_sec = Some(now_sec);
     peri_delta.is_scheduled_mixing_active = Some(false);
@@ -105,13 +116,14 @@ fn check_scheduled_water_change(
     })
 }
 
+// Xử lý và áp dụng quyết định từ AI/Solver xuống Hardware
 fn apply_decision(
     decision: SolveResult,
     ctx: &mut SystemContext,
     config: &ControllerConfig,
     sensors: &SensorData,
     now_ms: u64,
-    uptime_ms: u64, // SỬA: Nhận thêm tham số uptime_ms
+    uptime_ms: u64, // Nhận thêm tham số uptime_ms
     mut result: TickResult,
     is_water_change: bool,
 ) -> TickResult {
@@ -123,23 +135,25 @@ fn apply_decision(
             pwm,
         } => {
             let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
-            
-            // Tính số giây uptime để làm mốc tính Safety Budget (Miễn nhiễm NTP Jump)
+
+            // Tính số giây uptime cho Safety Budget (Miễn nhiễm rủi ro do NTP Jump)
             let uptime_sec = uptime_ms / 1000;
 
             if is_water_change {
                 ctx.tuner.on_water_change();
-                log::info!("🔄 [MONITORING] Thay nước theo lịch: Reset AutoTuner trackers.");
+                log::info!("  [MONITORING] Thay nước theo lịch: Reset AutoTuner trackers.");
                 result.events.push(OrchestratorEvent::SaveLastWaterChange {
-                    timestamp_sec: now_ms / 1000, // Ghi NVS vẫn dùng giờ thực tế
+                    timestamp_sec: now_ms / 1000, // Ghi NVS theo giờ Wall Time
                 });
             }
 
-            // SỬA: Dùng uptime_sec cho toàn bộ Safety Budget (check_hourly_dose / record)
+            // =========================================================================
+            // KIỂM TRA LƯỚI AN TOÀN (SAFETY BUDGETS) DỰA TRÊN UPTIME_SEC
+            // =========================================================================
             if control.nutrient_a_ml > 0.0
                 && !ctx.safety.check_hourly_dose(
                     "NutrientA",
-                    uptime_sec, 
+                    uptime_sec,
                     control.nutrient_a_ml,
                     config.max_dose_per_hour / 2.0,
                 )
@@ -147,7 +161,6 @@ fn apply_decision(
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
                 return result;
             }
-
             if control.nutrient_b_ml > 0.0
                 && !ctx.safety.check_hourly_dose(
                     "NutrientB",
@@ -159,7 +172,6 @@ fn apply_decision(
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
                 return result;
             }
-
             if control.ph_up_ml > 0.0 {
                 let _ = ctx.safety.check_hourly_dose(
                     "PhUp",
@@ -168,7 +180,6 @@ fn apply_decision(
                     config.max_dose_per_hour / 4.0,
                 );
             }
-
             if control.ph_down_ml > 0.0 {
                 let _ = ctx.safety.check_hourly_dose(
                     "PhDown",
@@ -177,28 +188,28 @@ fn apply_decision(
                     config.max_dose_per_hour / 4.0,
                 );
             }
-
             if control.water_in_sec > 0.0
                 && !ctx
                     .safety
                     .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32)
             {
-                warn!("⚠️ [SAFETY] Vượt giới hạn cấp nước/giờ.");
+                warn!("  [SAFETY] Vượt quá giới hạn chu kỳ cấp nước / giờ.");
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyRefills));
                 return result;
             }
-
             if control.water_out_sec > 0.0
                 && !ctx
                     .safety
                     .record_drain(uptime_sec, config.max_drain_cycles_per_hour as u32)
             {
-                warn!("⚠️ [SAFETY] Vượt giới hạn xả nước/giờ.");
+                warn!("  [SAFETY] Vượt quá giới hạn chu kỳ xả nước / giờ.");
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyDrains));
                 return result;
             }
 
-            // Kích hoạt thiết bị
+            // =========================================================================
+            // LÊN LỊCH PHẦN CỨNG (NƯỚC, SƯƠNG, BƠM ĐỊNH LƯỢNG)
+            // =========================================================================
             if control.water_in_sec > 0.0 {
                 result.events.push(OrchestratorEvent::SetWaterPump {
                     direction: WaterDirection::In,
@@ -217,29 +228,69 @@ fn apply_decision(
                     .push(OrchestratorEvent::SetMistValve { on: true });
                 peri_delta.mist_valve = Some(true);
                 peri_delta.is_misting_active = Some(true);
-                peri_delta.misting_started_by_dosing = Some(true); // MIMO solver yêu cầu bật phun sương, cho nên CẤM cho phun theo lịch chiếm quyền điều khiển
+                // Đánh dấu để Phun sương do MIMO yêu cầu không bị ghi đè bởi Phun sương định kỳ
+                peri_delta.misting_started_by_dosing = Some(true);
             }
 
-            // SỬA: Truyền uptime_ms vào DosingActor để hệ thống băm xung PWM chạy dựa trên Monotonic Time
-            ctx.dosing
-                .start_matrix_cycle(uptime_ms, &control, target_ec, target_ph, pwm, config, sensors);
+            // =================================================================
+            // [VÁ BUG]: TÍNH TOÁN CHÍNH XÁC THỜI GIAN CẦN THIẾT CHO DOSING ACTOR
+            // =================================================================
+            let safe_pwm = pwm.clamp(1, 100);
+            let mut dosing_time_sec = (config.soft_start_duration as f32) / 1000.0;
 
+            if control.nutrient_a_ml > 0.0 {
+                let flow_a =
+                    effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config).unwrap_or(1.0);
+                dosing_time_sec += control.nutrient_a_ml / flow_a;
+
+                // Trạm FSM bơm theo tuần tự: Bơm A xong sẽ trễ (delay) rồi mới bơm B
+                if control.nutrient_b_ml > 0.0 {
+                    dosing_time_sec += config.delay_between_a_and_b_sec as f32;
+                }
+            }
+            if control.nutrient_b_ml > 0.0 {
+                let flow_b =
+                    effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config).unwrap_or(1.0);
+                dosing_time_sec += control.nutrient_b_ml / flow_b;
+            }
+            if control.ph_up_ml > 0.0 {
+                let flow_up =
+                    effective_flow_ml_per_sec(DosePumpKind::PhUp, safe_pwm, config).unwrap_or(1.0);
+                dosing_time_sec += control.ph_up_ml / flow_up;
+            }
+            if control.ph_down_ml > 0.0 {
+                let flow_down = effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config)
+                    .unwrap_or(1.0);
+                dosing_time_sec += control.ph_down_ml / flow_down;
+            }
+
+            // Chọn ra khoảng thời gian lớn nhất giữa tất cả các phần cứng đang chạy
             let hardware_run_ms = (control
                 .water_in_sec
                 .max(control.water_out_sec)
                 .max(control.misting_sec)
+                .max(dosing_time_sec)
                 * 1000.0) as u64;
 
-            // SỬA: Cắm cờ bắt đầu Phase bằng thời gian uptime (miễn nhiễm với NTP jump)
+            // Truyền uptime_ms vào DosingActor để bơm xung PWM chính xác trên Monotonic Time
+            ctx.dosing.start_matrix_cycle(
+                uptime_ms, &control, target_ec, target_ph, pwm, config, sensors,
+            );
+
+            // =========================================================================
+            // CẬP NHẬT TRẠNG THÁI VÀ TIMEOUT CHO PHA MIMO DOSING BẰNG UPTIME_MS
+            // =========================================================================
             result.delta.phase = Some(SystemPhase::MimoDosing);
             result.delta.phase_start_ms = Some(Some(uptime_ms));
+
+            // Timeout cứng của toàn bộ Phase (Cộng dư thêm 5 giây an toàn)
             result.delta.phase_finish_ms = Some(Some(uptime_ms + hardware_run_ms + 5000));
 
             peri_delta.last_ec_before_dose = Some(Some(sensors.ec));
             peri_delta.last_ph_before_dose = Some(Some(sensors.ph));
             result.delta.reset_stabilizer = true;
 
-            // Log cho người dùng vẫn giữ nguyên Wall Time (`now_ms`)
+            // Log cho con người đọc vẫn giữ nguyên Wall Time (`now_ms`)
             let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
                 LogLevel::Info,
@@ -256,10 +307,10 @@ fn apply_decision(
                 "monitoring_phase",
                 now_ms,
             );
-
             result.events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });
+
             result.delta.peripherals = Some(peri_delta);
         }
         SolveResult::Idle => {}

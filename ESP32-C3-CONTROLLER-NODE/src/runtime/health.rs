@@ -191,18 +191,20 @@ pub fn run_main_health_loop(
 
         // XỬ LÝ PAYLOAD TỪ FSM
         if let Ok(payload) = fsm_rx.try_recv() {
-            if is_mqtt_connected {
-                if let Some(client) = mqtt_client.as_mut() {
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
-                        if v.get("current_phase").is_some() {
-                            latest_fsm_snapshot = Some(v.clone());
-                        }
-                        if v.get("type").and_then(|t| t.as_str())
-                            == Some("runtime_calibration_update")
-                        {
-                            latest_runtime_calibration = Some(v.clone());
-                        }
+            // [VÁ BUG]: LUÔN LUÔN parse và cập nhật snapshot mới nhất
+            // bất kể đã kết nối MQTT hay chưa.
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&payload) {
+                // Cập nhật bộ nhớ đệm nội bộ
+                if v.get("current_phase").is_some() {
+                    latest_fsm_snapshot = Some(v.clone());
+                }
+                if v.get("type").and_then(|t| t.as_str()) == Some("runtime_calibration_update") {
+                    latest_runtime_calibration = Some(v.clone());
+                }
 
+                // CHỈ publish lên MQTT nếu mạng đã kết nối
+                if is_mqtt_connected {
+                    if let Some(client) = mqtt_client.as_mut() {
                         let device_id = shared_config
                             .read()
                             .unwrap()
@@ -222,7 +224,15 @@ pub fn run_main_health_loop(
                                 actual_payload_str.as_bytes(),
                             );
                             continue;
+                        } else if v.get("level").is_some()
+                            && v.get("category").is_some()
+                            && v.get("title").is_some()
+                        {
+                            // [VÁ BUG]: Nhận diện chính xác gói tin UnifiedSystemLog
+                            // Trả về đúng topic: AGITECH/{device_id}/system_log
+                            hydragrow_shared::topics::topic_system_log(&device_id)
                         } else {
+                            // Các gói tin khác phân loại theo trường "type"
                             match v.get("type").and_then(|t| t.as_str()) {
                                 Some("water_event") | Some("system_alert")
                                 | Some("dosing_cycle") => topic_fsm_events(&device_id),

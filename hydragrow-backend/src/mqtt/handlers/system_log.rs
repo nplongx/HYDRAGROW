@@ -104,7 +104,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     match log_data.level {
         LogLevel::Critical => {
             error!(
-                target: "esp32_device",
+                target: "hydragrow_backend::esp32_device",
                 device_id = %log_data.device_id,
                 category = %category_str,
                 title = %log_data.title,
@@ -113,7 +113,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
         LogLevel::Warning => {
             warn!(
-                target: "esp32_device",
+                target: "hydragrow_backend::esp32_device",
                 device_id = %log_data.device_id,
                 category = %category_str,
                 title = %log_data.title,
@@ -122,7 +122,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
         _ => {
             info!(
-                target: "esp32_device",
+                target: "hydragrow_backend::esp32_device",
                 device_id = %log_data.device_id,
                 category = %category_str,
                 title = %log_data.title,
@@ -130,7 +130,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             );
         }
     }
-
     // 2. Lưu vào CSDL PostgreSQL
     let db_record = NewSystemEventRecord {
         device_id: log_data.device_id.clone(),

@@ -2,40 +2,42 @@ use hydragrow_shared::fsm::SystemPhase;
 // src/fsm/phase_impls/active_mixing.rs
 use hydragrow_shared::{ControllerConfig, SensorData};
 
-use crate::core::fsm::{PhaseTick, SystemContext, TickResult};
 use crate::core::fsm::tick_result::CalibrationDelta::UpdatePostMixing;
+use crate::core::fsm::{PhaseTick, SystemContext, TickResult};
 
 pub struct ActiveMixingPhase;
 
 impl PhaseTick for ActiveMixingPhase {
     fn tick(
         &self,
-        now_ms: u64,
-        uptime: u64,
+        _now_ms: u64, // Không dùng now_ms nữa
+        uptime: u64,  // [VÁ BUG]: Dùng uptime để tính toán
         config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut SystemContext,
     ) -> TickResult {
         let mut result = TickResult::default();
-        let elapsed_ms = now_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
-        let max_mixing_timeout = now_ms >= ctx.phase_finish_ms.unwrap_or(0);
+
+        // 1. Tính toán mốc thời gian an toàn
+        let elapsed_ms = uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
+        let max_mixing_timeout = uptime >= ctx.phase_finish_ms.unwrap_or(0);
 
         if (elapsed_ms >= 15_000 && ctx.stabilizer_tracker.is_stable(config)) || max_mixing_timeout
         {
             result.delta.phase = Some(SystemPhase::Stabilizing);
-            result.delta.phase_start_ms = Some(Some(now_ms));
+
+            // 2. [VÁ BUG] Thiết lập mốc thời gian tương lai bằng UPTIME
+            result.delta.phase_start_ms = Some(Some(uptime));
             result.delta.phase_finish_ms = Some(Some(
-                now_ms + ctx.diagnostic.adaptive_stabilize_sec as u64 * 1000,
+                uptime + ctx.diagnostic.adaptive_stabilize_sec as u64 * 1000,
             ));
             result.delta.reset_stabilizer = true;
-            // Ghi lại EC/pH tại thời điểm mixing xong để update_matrix_adaptive có dữ liệu chính xác
-            result.delta.calibration = Some(
-                UpdatePostMixing {
-                    ec: sensors.ec,
-                    ph: sensors.ph,
-                    finish_ms: now_ms,
-                },
-            );
+
+            result.delta.calibration = Some(UpdatePostMixing {
+                ec: sensors.ec,
+                ph: sensors.ph,
+                finish_ms: uptime, // Phải truyền uptime để StabilizingPhase tính toán delta chính xác
+            });
         }
 
         result

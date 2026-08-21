@@ -17,14 +17,6 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(), 
       tailwindcss(),
-      VitePWA({
-        strategies: 'injectManifest',
-        srcDir: 'src', // Trỏ thư mục chứa SW vào src
-        filename: 'firebase-messaging-sw.js', // Tên file SW của bạn
-        injectManifest: {
-          injectionPoint: undefined // Nếu bạn không dùng tính năng cache offline, chỉ dùng push notification
-        }
-      })
     ],
 
     define: {

@@ -85,6 +85,18 @@ pub async fn handle_device(
             device_id: device_id.clone(),
             is_online,
         }));
+
+    if alert.level == "warning" || alert.level == "critical" {
+        let tokens = app_state.fcm_tokens.lock().unwrap().clone();
+        if !tokens.is_empty() {
+            let push_title = alert.title.clone();
+            let push_message = alert.message.clone();
+            tokio::spawn(async move {
+                crate::services::fcm::send_push_notification(&push_title, &push_message, tokens)
+                    .await;
+            });
+        }
+    }
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]

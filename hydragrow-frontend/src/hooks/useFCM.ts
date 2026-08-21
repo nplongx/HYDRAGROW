@@ -56,6 +56,11 @@ export function useFCM() {
   useEffect(() => {
     const isWeb = !('__TAURI__' in window);
     if (!isWeb) return;
+
+    if (Notification.permission === 'granted' && settings?.backend_url && settings?.api_key) {
+      enableNotifications();
+    }
+
     const unsubscribe = subscribeWebMessages((payload: any) => {
       debugLog('Foreground message:', payload);
       if (payload?.notification) {
@@ -66,7 +71,7 @@ export function useFCM() {
       }
     });
     return unsubscribe;
-  }, []);
+  }, [settings?.backend_url, settings?.api_key]);
 
   return {
     fcmToken,

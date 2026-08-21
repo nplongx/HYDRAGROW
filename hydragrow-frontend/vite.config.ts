@@ -13,7 +13,19 @@ export default defineConfig(({ mode }) => {
   const enableSourceMap = mode !== "production";
 
   return {
-    plugins: [react(), tailwindcss()],
+    // 👇 SỬA Ở ĐÂY: Thêm VitePWA vào bên trong mảng plugins
+    plugins: [
+      react(), 
+      tailwindcss(),
+      VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src', // Trỏ thư mục chứa SW vào src
+        filename: 'firebase-messaging-sw.js', // Tên file SW của bạn
+        injectManifest: {
+          injectionPoint: undefined // Nếu bạn không dùng tính năng cache offline, chỉ dùng push notification
+        }
+      })
+    ],
 
     define: {
       __TAURI_BUILD__: JSON.stringify(isTauriTarget),
@@ -50,14 +62,6 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@gleam': path.resolve(__dirname, './gleam_core/build/dev/javascript/gleam_core')
       }
-    },
-
-    VitePWA({
-      strategies: 'injectManifest',
-      srcDir: 'src', // Trỏ thư mục chứa SW vào src
-      filename: 'firebase-messaging-sw.js', // Tên file SW của bạn
-      injectManifest: {
-        injectionPoint: undefined // Nếu bạn không dùng tính năng cache offline, chỉ dùng push notification
-      }
-    })
-  }});
+    }
+  };
+});

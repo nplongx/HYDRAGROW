@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Calendar, Leaf, Edit3, Save, X, FileText, StopCircle } from 'lucide-react';
+import { Play, Calendar, Leaf, Edit3, Save, X, StopCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CropSeason } from '../../types/models';
 import { InputGroup } from '../ui/InputGroup';

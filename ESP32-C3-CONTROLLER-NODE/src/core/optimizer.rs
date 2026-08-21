@@ -1,4 +1,3 @@
-
 // src/core/optimizer.rs
 use hydragrow_shared::ControllerConfig;
 use log::warn;
@@ -87,7 +86,9 @@ pub fn apply_safety_guardrails(
     // 3.1. Bảo vệ pH Down (Axit)
     if control.ph_down_ml > 0.0 {
         let predicted_ph_drop = control.ph_down_ml * config.ph_shift_down_per_ml;
-        if current_ph <= config.min_ph_limit || (current_ph - predicted_ph_drop) < config.min_ph_limit {
+        if current_ph <= config.min_ph_limit
+            || (current_ph - predicted_ph_drop) < config.min_ph_limit
+        {
             warn!(
                 "🚨 [GUARDRAIL] Chặn pH Down: pH hiện tại ({:.2}) - dự giảm ({:.2}) chạm sàn an toàn ({:.2})",
                 current_ph, predicted_ph_drop, config.min_ph_limit
@@ -106,7 +107,9 @@ pub fn apply_safety_guardrails(
     // 3.2. Bảo vệ pH Up (Kiềm)
     if control.ph_up_ml > 0.0 {
         let predicted_ph_rise = control.ph_up_ml * config.ph_shift_up_per_ml;
-        if current_ph >= config.max_ph_limit || (current_ph + predicted_ph_rise) > config.max_ph_limit {
+        if current_ph >= config.max_ph_limit
+            || (current_ph + predicted_ph_rise) > config.max_ph_limit
+        {
             warn!(
                 "🚨 [GUARDRAIL] Chặn pH Up: pH hiện tại ({:.2}) + dự tăng ({:.2}) chạm trần an toàn ({:.2})",
                 current_ph, predicted_ph_rise, config.max_ph_limit
@@ -150,13 +153,26 @@ pub fn apply_safety_guardrails(
     // =========================================================================
     // LƯỚI 5: RÀNG BUỘC CÔNG SUẤT VẬT LÝ VÀ THỜI GIAN CHẠY TỐI ĐA
     // =========================================================================
-    control.nutrient_a_ml = control.nutrient_a_ml.clamp(0.0, config.max_dose_per_cycle);
-    control.nutrient_b_ml = control.nutrient_b_ml.clamp(0.0, config.max_dose_per_cycle);
+    let max_ab = control.nutrient_a_ml.max(control.nutrient_b_ml);
+    if max_ab > config.max_dose_per_cycle {
+        let scale = config.max_dose_per_cycle / max_ab;
+        control.nutrient_a_ml *= scale;
+        control.nutrient_b_ml *= scale;
+    }
+
+    // Chặn chống âm (phòng ngừa lỗi số học)
+    control.nutrient_a_ml = control.nutrient_a_ml.max(0.0);
+    control.nutrient_b_ml = control.nutrient_b_ml.max(0.0);
+
     control.ph_up_ml = control.ph_up_ml.clamp(0.0, config.max_dose_per_cycle);
     control.ph_down_ml = control.ph_down_ml.clamp(0.0, config.max_dose_per_cycle);
 
-    control.water_in_sec = control.water_in_sec.clamp(0.0, config.max_refill_duration_sec as f32);
-    control.water_out_sec = control.water_out_sec.clamp(0.0, config.max_drain_duration_sec as f32);
+    control.water_in_sec = control
+        .water_in_sec
+        .clamp(0.0, config.max_refill_duration_sec as f32);
+    control.water_out_sec = control
+        .water_out_sec
+        .clamp(0.0, config.max_drain_duration_sec as f32);
     control.mixing_sec = control.mixing_sec.clamp(0.0, 3600.0);
     control.misting_sec = control.misting_sec.clamp(0.0, 300.0);
 }

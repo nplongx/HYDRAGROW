@@ -14,6 +14,7 @@ use crate::core::fsm::orchestrator;
 use crate::core::fsm::types::SharedSensorData;
 use crate::hw::mqtt_client::get_uptime_ms; // SỬA: Import đúng module chứa get_uptime_ms
 use crate::hw::pump_controller::PumpController;
+use crate::hw::NvsStore;
 use crate::runtime::command_handler::{build_stop_pump_events, process_mqtt_commands};
 use crate::runtime::dispatcher::{DispatchContext, EventDispatcher};
 use crate::runtime::health::build_status_msg;
@@ -34,6 +35,8 @@ pub fn start_fsm_control_loop(
     _current_time_sec: u64,
 ) {
     let mut ctx = SystemContext::default();
+    let mut nvs_store = NvsStore::new(nvs_partition.clone());
+    nvs_store.load_runtime_snapshot(&mut ctx);
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
     let mut observer_set = ObserverSet::new();
     info!("  [RUNTIME] FSM Loop đã chạy...");
@@ -157,11 +160,34 @@ pub fn start_fsm_control_loop(
         let mut w_config = shared_config.write().unwrap().effective_config.clone();
 
         // 2. Chạy Recipe Engine trước FSM để stage override có hiệu lực trong tick hiện tại
-        let mut recipe_result = crate::core::fsm::recipe_manager::tick_recipe_engine(
-            &mut w_config,
-            &ctx,
-            current_wall_time_ms / 1000,
-        );
+        let mut recipe_result;
+        let updated_config;
+        {
+            let mut state = shared_config.write().unwrap();
+
+            // Cho phép Recipe Engine can thiệp thẳng vào effective_config của hệ thống
+            recipe_result = crate::core::fsm::recipe_manager::tick_recipe_engine(
+                &mut state.effective_config,
+                &ctx,
+                current_wall_time_ms / 1000,
+            );
+
+            // [VÁ BUG 4b]: Cập nhật `active_recipe` vào Runtime State.
+            // Điều này cực kỳ quan trọng để nếu có lệnh cập nhật cấu hình từ MQTT,
+            // hàm `state.recompute_effective_config()` (trong config.rs)
+            // sẽ tự biết để áp dụng đè lại stage này lên base config mới.
+            if let Some(Some(stage_idx)) = recipe_result.delta.current_stage_index {
+                if let Some(recipe) = &state.effective_config.active_recipe {
+                    state.active_recipe = recipe.stages.get(stage_idx).cloned();
+                }
+            } else if let Some(true) = recipe_result.delta.recipe_completed {
+                state.active_recipe = None;
+            }
+
+            // Lấy ra bản clone MỚI NHẤT (đã được override) để truyền xuống Orchestrator
+            updated_config = state.effective_config.clone();
+        }
+
         ctx.apply_delta(&mut recipe_result.delta);
 
         if !recipe_result.events.is_empty() {
@@ -173,8 +199,8 @@ pub fn start_fsm_control_loop(
                 sensor_cmd_tx: &sensor_cmd_tx,
                 ctx: &ctx,
                 now_sec: current_wall_time_ms / 1000,
-                device_id: &config.device_id,
-                config: &config,
+                device_id: &updated_config.device_id, // Sử dụng updated_config
+                config: &updated_config,              // Sử dụng updated_config
                 observers: &mut observer_set,
             };
             EventDispatcher::dispatch(recipe_result.events, &mut dc);
@@ -184,7 +210,7 @@ pub fn start_fsm_control_loop(
         let mut tick_result = orchestrator::tick(
             current_wall_time_ms,
             current_uptime_ms,
-            &config,
+            &updated_config,
             &sensors,
             sensor_last_update_ms,
             &mut ctx,

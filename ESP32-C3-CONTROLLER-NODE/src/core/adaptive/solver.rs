@@ -84,6 +84,38 @@ impl SafeStateDeltas {
     }
 }
 
+/// Helper để phân bổ liều EC tuân thủ tuyệt đối tỉ lệ A:B từ Recipe
+fn apply_ab_ratio(
+    target_ec_delta: f32,
+    gain_a: f32,
+    gain_b: f32,
+    ratio_a: f32,
+    ratio_b: f32,
+    step_a: f32,
+    step_b: f32,
+) -> (f32, f32) {
+    let safe_ratio_a = ratio_a.max(0.0);
+    let safe_ratio_b = ratio_b.max(0.0);
+
+    // Fallback về 1:1 nếu công thức cấu hình lỗi (cả 2 = 0)
+    let (r_a, r_b) = if safe_ratio_a == 0.0 && safe_ratio_b == 0.0 {
+        (1.0, 1.0)
+    } else {
+        (safe_ratio_a, safe_ratio_b)
+    };
+
+    // Bắt buộc dùng chung một step_ratio (chọn min để hội tụ an toàn) để không phá vỡ tỉ lệ
+    let unified_step = step_a.min(step_b);
+    let combined_gain = r_a * gain_a + r_b * gain_b;
+
+    if combined_gain <= 0.0 {
+        return (0.0, 0.0);
+    }
+
+    let base_u = target_ec_delta / combined_gain;
+    (base_u * r_a * unified_step, base_u * r_b * unified_step)
+}
+
 pub struct ColdPathSolver;
 
 impl SolverStrategy for ColdPathSolver {
@@ -112,14 +144,19 @@ impl SolverStrategy for ColdPathSolver {
                 .gain_learner
                 .effective_ec_b_gain(config.ec_gain_per_ml)
                 .max(0.0001);
-
             let (ec_a_step, ec_b_step, _, _) = extract_step_ratios(ctx);
-            let half_ec = deltas.ec / 2.0;
 
-            control.nutrient_a_ml =
-                (half_ec / gain_a * ec_a_step).clamp(0.0, config.max_dose_per_cycle);
-            control.nutrient_b_ml =
-                (half_ec / gain_b * ec_b_step).clamp(0.0, config.max_dose_per_cycle);
+            let (dose_a, dose_b) = apply_ab_ratio(
+                deltas.ec,
+                gain_a,
+                gain_b,
+                config.nutrient_a_ratio,
+                config.nutrient_b_ratio,
+                ec_a_step,
+                ec_b_step,
+            );
+            control.nutrient_a_ml = dose_a;
+            control.nutrient_b_ml = dose_b;
         }
 
         if config.enable_ph_sensor && deltas.ph.abs() > 0.0 {
@@ -187,7 +224,6 @@ impl SolverStrategy for WarmPathSolver {
         ctx: &SystemContext,
     ) -> SolveResult {
         let deltas = SafeStateDeltas::compute(sensors, config, ctx);
-
         if deltas.is_empty() {
             return SolveResult::Idle;
         }
@@ -205,8 +241,44 @@ impl SolverStrategy for WarmPathSolver {
         };
 
         let (ec_a_step, ec_b_step, ph_up_step, ph_down_step) = extract_step_ratios(ctx);
-        control.nutrient_a_ml *= ec_a_step;
-        control.nutrient_b_ml *= ec_b_step;
+
+        // [VÁ BUG]: Khóa cứng output của Ma trận MIMO để tuân thủ tỉ lệ A:B
+        if config.enable_ec_sensor {
+            let gain_a = ctx
+                .tuner
+                .gain_learner
+                .effective_ec_a_gain(config.ec_gain_per_ml);
+            let gain_b = ctx
+                .tuner
+                .gain_learner
+                .effective_ec_b_gain(config.ec_gain_per_ml);
+
+            // 1. Tính tổng EC mà Solver thực sự muốn tăng
+            let raw_intended_ec = control.nutrient_a_ml * gain_a + control.nutrient_b_ml * gain_b;
+
+            if raw_intended_ec > 0.0 {
+                // 2. Phân bổ lại tổng EC đó theo đúng tỉ lệ recipe
+                let (dose_a, dose_b) = apply_ab_ratio(
+                    raw_intended_ec,
+                    gain_a,
+                    gain_b,
+                    config.nutrient_a_ratio,
+                    config.nutrient_b_ratio,
+                    ec_a_step,
+                    ec_b_step,
+                );
+                control.nutrient_a_ml = dose_a;
+                control.nutrient_b_ml = dose_b;
+            } else {
+                control.nutrient_a_ml = 0.0;
+                control.nutrient_b_ml = 0.0;
+            }
+        } else {
+            control.nutrient_a_ml = 0.0;
+            control.nutrient_b_ml = 0.0;
+        }
+
+        // pH giữ nguyên việc nhân step
         control.ph_up_ml *= ph_up_step;
         control.ph_down_ml *= ph_down_step;
 

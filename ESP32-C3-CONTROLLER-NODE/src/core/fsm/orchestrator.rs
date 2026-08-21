@@ -27,6 +27,9 @@ pub fn tick(
 ) -> TickResult {
     let mut result = TickResult::default();
 
+    // Điều này đảm bảo rằng mỗi khi user lưu cấu hình mới, AI sẽ phản hồi ngay lập tức
+    ctx.tuner.sync_with_config(config);
+
     // 1. Kiểm tra Sensor Timeout
     // SỬA: Dùng uptime_ms để kiểm tra timeout, an toàn tuyệt đối trước Time Jump
     if uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000 {

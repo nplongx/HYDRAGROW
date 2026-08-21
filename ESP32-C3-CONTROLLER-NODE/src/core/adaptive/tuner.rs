@@ -167,6 +167,9 @@ pub struct AutoTuner {
     pub kalman: KalmanCovarianceDiag,
     pub matrix_update_count: u32,
     pub matrix_is_warm: bool,
+
+    pub last_config_ec_step: f32,
+    pub last_config_ph_step: f32,
 }
 
 impl Default for AutoTuner {
@@ -194,11 +197,71 @@ impl Default for AutoTuner {
             kalman: KalmanCovarianceDiag::new(1.0, 0.001, 0.1),
             matrix_update_count: 0,
             matrix_is_warm: false,
+
+            last_config_ec_step: -1.0,
+            last_config_ph_step: -1.0,
         }
     }
 }
 
 impl AutoTuner {
+    pub fn sync_with_config(&mut self, config: &ControllerConfig) {
+        // --- XỬ LÝ KHỞI ĐỘNG LẦN ĐẦU ---
+        if self.last_config_ec_step < 0.0 {
+            self.last_config_ec_step = config.ec_step_ratio;
+            self.last_config_ph_step = config.ph_step_ratio;
+
+            // Nếu chưa được NVS Snapshot ghi đè (tức là vẫn mang giá trị khởi tạo mặc định 0.4/0.2)
+            // thì ta lấy giá trị từ cấu hình config tĩnh thay thế cho hằng số hard-code.
+            if (self.adaptive_ec_a_ratio - 0.4).abs() < 1e-4
+                && (self.adaptive_ec_b_ratio - 0.4).abs() < 1e-4
+            {
+                self.adaptive_ec_a_ratio = config.ec_step_ratio;
+                self.adaptive_ec_b_ratio = config.ec_step_ratio;
+                self.best_ec_a_ratio = config.best_ec_ratio;
+                self.best_ec_b_ratio = config.best_ec_ratio;
+            }
+            if (self.adaptive_ph_up_ratio - 0.2).abs() < 1e-4
+                && (self.adaptive_ph_down_ratio - 0.2).abs() < 1e-4
+            {
+                self.adaptive_ph_up_ratio = config.ph_step_ratio;
+                self.adaptive_ph_down_ratio = config.ph_step_ratio;
+                self.best_ph_up_ratio = config.best_ph_ratio;
+                self.best_ph_down_ratio = config.best_ph_ratio;
+            }
+            return;
+        }
+
+        // --- XỬ LÝ RUNTIME (Khi User/Backend đổi config) ---
+        // Nếu nhận thấy giá trị EC step ratio từ config bị đổi, ép AI học lại từ baseline mới
+        if (self.last_config_ec_step - config.ec_step_ratio).abs() > 1e-4 {
+            self.last_config_ec_step = config.ec_step_ratio;
+
+            self.adaptive_ec_a_ratio = config.ec_step_ratio;
+            self.adaptive_ec_b_ratio = config.ec_step_ratio;
+            self.best_ec_a_ratio = config.best_ec_ratio;
+            self.best_ec_b_ratio = config.best_ec_ratio;
+
+            self.state = TunerState::Converging;
+            self.ec_a_tracker.reset();
+            self.ec_b_tracker.reset();
+        }
+
+        // Tương tự cho pH step ratio
+        if (self.last_config_ph_step - config.ph_step_ratio).abs() > 1e-4 {
+            self.last_config_ph_step = config.ph_step_ratio;
+
+            self.adaptive_ph_up_ratio = config.ph_step_ratio;
+            self.adaptive_ph_down_ratio = config.ph_step_ratio;
+            self.best_ph_up_ratio = config.best_ph_ratio;
+            self.best_ph_down_ratio = config.best_ph_ratio;
+
+            self.state = TunerState::Converging;
+            self.ph_up_tracker.reset();
+            self.ph_down_tracker.reset();
+        }
+    }
+
     pub fn is_locked(&self) -> bool {
         matches!(self.state, TunerState::Stable)
     }

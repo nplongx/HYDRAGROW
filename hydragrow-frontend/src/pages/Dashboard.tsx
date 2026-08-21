@@ -76,7 +76,7 @@ const Dashboard = () => {
     return { score: res.score, label: res.label, color: res.color, description: res.description };
   }, [controllerHealth, isOnline]);
 
-  const { permission } = useFCM();
+  const { permission, enableNotifications } = useFCM();
 
   if (isLoading) {
     return <LoadingState message="Đang tải dữ liệu trạm thông minh..." />;
@@ -157,6 +157,15 @@ const Dashboard = () => {
               <div>
                 <h2 className="text-sm font-bold text-emerald-950">Hành động tiếp theo</h2>
                 <p className="text-xs md:text-sm text-emerald-800/80 leading-relaxed mt-1">{nextAction}</p>
+
+                {permission !== 'granted' && (
+                  <button 
+                    onClick={enableNotifications}
+                    className="mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider"
+                  >
+                    Bật quyền thông báo
+                  </button>
+                )}
               </div>
             </div>
           </div>

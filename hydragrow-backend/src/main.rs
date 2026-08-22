@@ -112,6 +112,9 @@ pub struct AppState {
     // Device state cache — in-memory, keyed by device_id
     pub device_states: Arc<RwLock<HashMap<String, String>>>,
 
+    /// Last firmware version reported by each controller health snapshot.
+    pub device_firmware: Arc<RwLock<HashMap<String, String>>>,
+
     // Solana
     pub solana_traceability: SolanaTraceability,
 
@@ -251,6 +254,7 @@ async fn main() -> anyhow::Result<()> {
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let device_states = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+    let device_firmware = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
     // Spawn retention task: xóa system_events cũ hơn 90 ngày, mỗi 24h
     crate::services::retention::spawn(pg_pool.clone());
@@ -264,6 +268,7 @@ async fn main() -> anyhow::Result<()> {
         alert_sender,
         api_key,
         device_states,
+        device_firmware,
         solana_traceability: solana_service,
         fcm_tokens: Arc::new(Mutex::new(Vec::new())),
         event_bus: event_bus.clone(),
@@ -425,6 +430,7 @@ async fn main() -> anyhow::Result<()> {
                     .service(
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)
+                            .configure(api::device_admin::init_routes)
                             .configure(api::sensor::init_routes)
                             .configure(api::config::init_routes)
                             .configure(api::calibration::init_routes)

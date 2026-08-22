@@ -104,6 +104,15 @@ pub async fn handle_device(
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     if let Ok(parsed) = parse_controller_status_payload(payload) {
+        if let Some(health) = parsed.health_snapshot.as_ref() {
+            if !health.firmware_version.is_empty() && health.firmware_version != "unknown" {
+                app_state
+                    .device_firmware
+                    .write()
+                    .await
+                    .insert(device_id.clone(), health.firmware_version.clone());
+            }
+        }
         let payload_json = &parsed.raw_json;
         let dev = &device_id;
         let mut states = app_state.device_states.write().await;

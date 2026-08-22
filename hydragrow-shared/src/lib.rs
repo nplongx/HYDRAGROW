@@ -7,9 +7,38 @@ pub mod fsm;
 pub mod helper;
 pub mod hestia;
 pub mod log;
+pub mod recipe;
 pub mod telemetry;
 pub mod topics;
-pub mod recipe;
+
+/// A WiFi network credential tried by a controller in ascending priority order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiCandidate {
+    pub ssid: String,
+    pub password: String,
+    /// Lower values are attempted before higher values.
+    pub priority: u8,
+}
+
+/// Persistable controller WiFi provisioning payload.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiCredentialList {
+    pub candidates: Vec<WifiCandidate>,
+}
+
+impl WifiCredentialList {
+    /// Returns non-empty SSIDs in stable ascending priority order.
+    pub fn sorted_valid(&self) -> Vec<WifiCandidate> {
+        let mut candidates: Vec<_> = self
+            .candidates
+            .iter()
+            .filter(|candidate| !candidate.ssid.trim().is_empty())
+            .cloned()
+            .collect();
+        candidates.sort_by_key(|candidate| candidate.priority);
+        candidates
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignedJsonEnvelope {
@@ -153,6 +182,8 @@ pub struct MqttCommandInParams {
     pub state: Option<bool>,
     #[serde(default)]
     pub ota_url: Option<String>,
+    #[serde(default)]
+    pub candidates: Option<Vec<WifiCandidate>>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MqttCommandParams {
@@ -166,6 +197,45 @@ pub struct MqttCommandParams {
     pub state: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ota_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidates: Option<Vec<WifiCandidate>>,
+}
+
+#[cfg(test)]
+mod wifi_credential_tests {
+    use super::*;
+
+    #[test]
+    fn sorted_valid_orders_by_priority_and_drops_blank_ssids() {
+        let credentials = WifiCredentialList {
+            candidates: vec![
+                WifiCandidate {
+                    ssid: "Backup".into(),
+                    password: "x".into(),
+                    priority: 2,
+                },
+                WifiCandidate {
+                    ssid: " ".into(),
+                    password: "y".into(),
+                    priority: 0,
+                },
+                WifiCandidate {
+                    ssid: "Main".into(),
+                    password: "z".into(),
+                    priority: 1,
+                },
+            ],
+        };
+
+        let sorted = credentials.sorted_valid();
+        assert_eq!(
+            sorted
+                .iter()
+                .map(|item| item.ssid.as_str())
+                .collect::<Vec<_>>(),
+            ["Main", "Backup"]
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -387,6 +387,7 @@ pub fn run_main_health_loop(
                     health_score_percent,
                     fsm_state_display,
                     log_drop_count,
+                    firmware_version: crate::hw::CURRENT_VERSION.to_string(),
                     kalman_confidence,
                     matrix_update_count,
                     matrix_is_warm,

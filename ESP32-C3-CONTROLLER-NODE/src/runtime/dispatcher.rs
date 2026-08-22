@@ -166,12 +166,30 @@ impl EventDispatcher {
                 let _ = dc.dosing_report_tx.send(wrapper.to_string());
             }
             OrchestratorEvent::TriggerOtaUpdate => {
+                let device_id = dc.device_id.to_string();
+                let mqtt_tx = dc.mqtt_tx.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = crate::hw::ota::perform_ota_update() {
+                    if let Err(e) = crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx)) {
                         log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);
                         // Cân nhắc gửi một MQTT message báo lỗi ở đây
                     }
                 });
+            }
+            OrchestratorEvent::UpdateWifiList { list } => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    match crate::hw::save_wifi_list(flash, &list) {
+                        Ok(()) => {
+                            let payload = serde_json::json!({
+                                "type": "system_alert", "device_id": dc.device_id, "level": "Success",
+                                "category": "Network", "title": "Đã lưu danh sách WiFi mới",
+                                "message": format!("{} SSID đã lưu; áp dụng sau lần khởi động tiếp theo.", list.sorted_valid().len()),
+                                "timestamp_ms": dc.now_sec * 1000,
+                            });
+                            let _ = dc.mqtt_tx.send(payload.to_string());
+                        }
+                        Err(error) => warn!("⚠️ [DISPATCHER] Cannot save wifi_list: {:?}", error),
+                    }
+                }
             }
             _ => {}
         }

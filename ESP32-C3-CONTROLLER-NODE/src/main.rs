@@ -148,12 +148,20 @@ fn main() -> anyhow::Result<()> {
     int_pin.enable_interrupt()?;
 
     // 2. Network & Time Sync
+    let mut wifi_candidates = hw::load_wifi_list(nvs_partition.clone()).sorted_valid();
+    if wifi_candidates.is_empty() {
+        info!("📶 [WIFI] No provisioned WiFi list; using compile-time fallback.");
+        wifi_candidates.push(hydragrow_shared::WifiCandidate {
+            ssid: WIFI_SSID.to_string(),
+            password: WIFI_PASS.to_string(),
+            priority: 0,
+        });
+    }
     connect_wifi(
         peripherals.modem,
         sysloop,
         nvs_partition.clone(),
-        WIFI_SSID,
-        WIFI_PASS,
+        wifi_candidates,
         conn_tx.clone(),
     )?;
     let _sntp = sync_sntp_time()?;

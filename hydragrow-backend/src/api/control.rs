@@ -226,6 +226,7 @@ pub async fn control_pump(
             pwm,
             state: explicit_state,
             ota_url: None,
+            candidates: None,
         }),
         ts: None,
         nonce: None,

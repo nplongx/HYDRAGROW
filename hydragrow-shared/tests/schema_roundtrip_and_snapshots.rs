@@ -1,11 +1,11 @@
 use hydragrow_shared::{
-    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
     log::{
         AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
         RecipeAppliedMetadata, RecipeCompletedMetadata, RecipeRejectedMetadata,
         RecipeStageChangedMetadata, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
     },
     recipe::{CropRecipe, CropStage, RecipeStageChangedEvent},
+    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
 };
 
 fn sample_crop_recipe() -> CropRecipe {
@@ -205,6 +205,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 pwm: Some(70),
                 state: Some(true),
                 ota_url: None,
+                candidates: None,
             }),
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
@@ -219,6 +220,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 pwm: None,
                 state: Some(false),
                 ota_url: None,
+                candidates: None,
             }),
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
@@ -233,6 +235,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 pwm: Some(55),
                 state: None,
                 ota_url: None,
+                candidates: None,
             }),
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
@@ -303,6 +306,7 @@ fn golden_payload_snapshots() {
             pwm: Some(65),
             state: Some(true),
             ota_url: None,
+            candidates: None,
         }),
         ts: Some(1_771_000_000),
         nonce: Some("nonce-golden".into()),
@@ -439,4 +443,15 @@ fn recipe_stage_changed_event_round_trip() {
         serde_json::from_str(&json).expect("deserialize recipe stage event");
 
     assert_eq!(decoded, event);
+}
+#[test]
+fn device_health_snapshot_deserializes_without_firmware_version_field() {
+    let old_json = r#"{
+        "device_id":"dev-1", "free_heap":12345, "uptime_sec":100, "rssi":-60,
+        "health_score_percent":90, "fsm_state_display":"Monitoring", "log_drop_count":0,
+        "matrix_update_count":0, "matrix_is_warm":false, "timestamp_ms":1000
+    }"#;
+    let snapshot: hydragrow_shared::telemetry::health::DeviceHealthSnapshot =
+        serde_json::from_str(old_json).expect("legacy health payload must deserialize");
+    assert_eq!(snapshot.firmware_version, "unknown");
 }

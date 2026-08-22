@@ -37,6 +37,10 @@ pub fn start_fsm_control_loop(
     let mut ctx = SystemContext::default();
     let mut nvs_store = NvsStore::new(nvs_partition.clone());
     nvs_store.load_runtime_snapshot(&mut ctx);
+    // Safety budget (hourly_doses, refill_history, drain_history) KHÔNG được restore sau reboot.
+    // Đây là thiết kế có chủ ý: uptime-based timestamps không tương thích với wall-clock của NVS.
+    // Budget sẽ tích lũy lại từ đầu sau mỗi reboot.
+    info!("ℹ️ [BOOT] Safety budget được reset (uptime-based, không restore từ NVS).");
 
     ctx.phase = SystemPhase::Monitoring;
 
@@ -48,6 +52,8 @@ pub fn start_fsm_control_loop(
     let mut sensor_last_update_ms = get_uptime_ms();
     let mut last_controller_recieved_ms = None;
     let mut last_tank_alert = crate::hw::pcf857x::TankAlert::default();
+    let mut last_int_handled_uptime_ms: u64 = 0;
+    const INT_DEBOUNCE_MS: u64 = 80;
 
     loop {
         let config = shared_config.read().unwrap().effective_config.clone();
@@ -63,36 +69,37 @@ pub fn start_fsm_control_loop(
 
         // --- 0. XỬ LÝ NGẮT TỪ EXPANDER PIN (CẢNH BÁO MỨC DUNG DỊCH) ---
         if int_rx.try_recv().is_ok() {
-            // Chống rung tiếp điểm cơ khí của phao
-            std::thread::sleep(Duration::from_millis(50));
-            while int_rx.try_recv().is_ok() {} // Xả các cờ ngắt tồn đọng do rung tiếp điểm
+            while int_rx.try_recv().is_ok() {}
 
-            match pump_ctrl.check_tank_alert() {
-                Ok(alert) => {
-                    if alert != last_tank_alert {
-                        last_tank_alert = alert;
-                        info!("  [ALERT] Trạng thái bình dung dịch thay đổi: {:?}", alert);
+            if current_uptime_ms.saturating_sub(last_int_handled_uptime_ms) >= INT_DEBOUNCE_MS {
+                last_int_handled_uptime_ms = current_uptime_ms;
+                match pump_ctrl.check_tank_alert() {
+                    Ok(alert) => {
+                        if alert != last_tank_alert {
+                            last_tank_alert = alert;
+                            info!("  [ALERT] Trạng thái bình dung dịch thay đổi: {:?}", alert);
 
-                        let alert_payload = serde_json::json!({
-                            "type": "system_alert",
-                            "device_id": config.device_id,
-                            "level": if alert.has_alert() { "Warning" } else { "Info" },
-                            "category": "Dosing",
-                            "title": "Cảnh báo mức dung dịch bình chứa",
-                            "details": {
-                                "tank_a_low": alert.tank_a_low,
-                                "tank_b_low": alert.tank_b_low,
-                                "tank_ph_down_low": alert.tank_ph_down_low,
-                                "tank_ph_up_low": alert.tank_ph_up_low,
-                            },
-                            "timestamp_ms": current_wall_time_ms
-                        });
+                            let alert_payload = serde_json::json!({
+                                "type": "system_alert",
+                                "device_id": config.device_id,
+                                "level": if alert.has_alert() { "Warning" } else { "Info" },
+                                "category": "Dosing",
+                                "title": "Cảnh báo mức dung dịch bình chứa",
+                                "details": {
+                                    "tank_a_low": alert.tank_a_low,
+                                    "tank_b_low": alert.tank_b_low,
+                                    "tank_ph_down_low": alert.tank_ph_down_low,
+                                    "tank_ph_up_low": alert.tank_ph_up_low,
+                                },
+                                "timestamp_ms": current_wall_time_ms
+                            });
 
-                        // Gửi thẳng vào kênh fsm_mqtt_tx để đẩy lên topic fsm_events qua health_loop
-                        let _ = fsm_mqtt_tx.send(alert_payload.to_string());
+                            // Gửi thẳng vào kênh fsm_mqtt_tx để đẩy lên topic fsm_events qua health_loop
+                            let _ = fsm_mqtt_tx.send(alert_payload.to_string());
+                        }
                     }
+                    Err(e) => tracing::warn!("  [ALERT] Không thể đọc I2C Expander: {:?}", e),
                 }
-                Err(e) => tracing::warn!("  [ALERT] Không thể đọc I2C Expander: {:?}", e),
             }
         }
 
@@ -115,7 +122,11 @@ pub fn start_fsm_control_loop(
             };
             EventDispatcher::dispatch(cmd_events, &mut dc);
 
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_wall_time_ms / 1000));
+            let _ = fsm_mqtt_tx.send(build_status_msg(
+                &ctx,
+                current_wall_time_ms / 1000,
+                current_uptime_ms / 1000,
+            ));
         }
 
         let expired_pumps: Vec<String> = ctx
@@ -156,11 +167,13 @@ pub fn start_fsm_control_loop(
                 EventDispatcher::dispatch(stop_events, &mut dc);
 
                 // Đồng bộ ngay lập tức trạng thái Tắt lên MQTT để UI Web/App cập nhật tức thì
-                let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_wall_time_ms / 1000));
+                let _ = fsm_mqtt_tx.send(build_status_msg(
+                    &ctx,
+                    current_wall_time_ms / 1000,
+                    current_uptime_ms / 1000,
+                ));
             }
         }
-
-        let mut w_config = shared_config.write().unwrap().effective_config.clone();
 
         // 2. Chạy Recipe Engine trước FSM để stage override có hiệu lực trong tick hiện tại
         let mut recipe_result;
@@ -230,8 +243,8 @@ pub fn start_fsm_control_loop(
                 sensor_cmd_tx: &sensor_cmd_tx,
                 ctx: &ctx,
                 now_sec: current_wall_time_ms / 1000,
-                device_id: &config.device_id,
-                config: &config,
+                device_id: &updated_config.device_id,
+                config: &updated_config,
                 observers: &mut observer_set,
             };
             EventDispatcher::dispatch(tick_result.events, &mut dc);
@@ -242,7 +255,11 @@ pub fn start_fsm_control_loop(
         if state_str != last_reported_state {
             info!("  [FSM] Phase thay đổi: [{}]", state_str);
             last_reported_state = state_str;
-            let _ = fsm_mqtt_tx.send(build_status_msg(&ctx, current_wall_time_ms / 1000));
+            let _ = fsm_mqtt_tx.send(build_status_msg(
+                &ctx,
+                current_wall_time_ms / 1000,
+                current_uptime_ms / 1000,
+            ));
         }
 
         std::thread::sleep(Duration::from_millis(100));

@@ -141,6 +141,10 @@ impl NvsStore {
                     ctx.dosing.retry_ph = snapshot.retry_ph;
                     ctx.dosing_cycle_count = snapshot.dosing_cycle_count;
                     ctx.last_water_change_sec = snapshot.last_water_change_sec;
+                    // hourly_dose_ec_ml và hourly_dose_ph_ml KHÔNG được restore vào ctx.safety
+                    // vì timestamps trong safety guard dùng uptime_sec (bắt đầu từ 0 sau reboot),
+                    // còn giá trị trong NVS được lưu theo wall-clock.
+                    // Budget sẽ tự tích lũy lại từ 0 sau reboot.
                     ctx.current_stage_index = snapshot.current_stage_index;
                 }
             }

@@ -33,9 +33,21 @@ impl PhaseTick for MimoDosingPhase {
 
         // 2. Hard Timeout toàn Phase -> Chuyển Cooldown
         // SỬA: Dùng `uptime` để so sánh và thiết lập mốc thời gian tương lai
-        if uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX) + 5_000 {
+        if uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000) {
             warn!("⚠️ [FSM] Dosing phase timeout cứng! Chuyển về Cooldown.");
             stop_water_and_misting(ctx, &mut result, &mut peri_delta);
+
+            result.events.push(OrchestratorEvent::PublishFsmTransition {
+                from_phase: SystemPhase::MimoDosing,
+                to_phase: SystemPhase::Cooldown,
+                // TODO: replace with TransitionReason::HardTimeout if shared telemetry adds it.
+                reason: hydragrow_shared::telemetry::transition::TransitionReason::Manual {
+                    description: "MimoDosing hard timeout".to_string(),
+                },
+                phase_duration_ms: Some(
+                    uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime)),
+                ),
+            });
 
             result.delta.phase = Some(SystemPhase::Cooldown);
             result.delta.phase_finish_ms =
@@ -53,13 +65,22 @@ impl PhaseTick for MimoDosingPhase {
             DosingEvent::Pending => {
                 if ctx.dosing.is_idle() && elapsed_ms >= 500 {
                     // Chu kỳ chỉ bơm nước hoàn tất
+                    let water_pump_elapsed_ms = uptime.saturating_sub(
+                        ctx.peripherals
+                            .water_pump_started_uptime_ms
+                            .unwrap_or(uptime),
+                    );
                     let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
-                        elapsed_ms.min(config.max_refill_duration_sec as u64 * 1000) as f32 / 1000.0
+                        water_pump_elapsed_ms.min(config.max_refill_duration_sec as u64 * 1000)
+                            as f32
+                            / 1000.0
                     } else {
                         0.0
                     };
                     let water_out_spent = if ctx.peripherals.pump_status.water_pump_out {
-                        elapsed_ms.min(config.max_drain_duration_sec as u64 * 1000) as f32 / 1000.0
+                        water_pump_elapsed_ms.min(config.max_drain_duration_sec as u64 * 1000)
+                            as f32
+                            / 1000.0
                     } else {
                         0.0
                     };
@@ -194,6 +215,7 @@ fn stop_water_and_misting(
     }
     peri_delta.water_pump_in = Some(false);
     peri_delta.water_pump_out = Some(false);
+    peri_delta.water_pump_started_uptime_ms = Some(None);
 }
 
 /// Khởi tạo mẫu Calibration DTO
@@ -251,4 +273,35 @@ fn transition_to_active_mixing(
         uptime + ctx.diagnostic.adaptive_mixing_sec as u64 * 1000, // SỬA: Dùng uptime
     ));
     result.delta.reset_stabilizer = true;
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::core::fsm::context::SystemContext;
+
+    fn make_ctx_no_finish_ms() -> SystemContext {
+        let mut ctx = SystemContext::default();
+        ctx.phase_start_ms = Some(0);
+        ctx.phase_finish_ms = None;
+        ctx
+    }
+
+    #[test]
+    fn hard_timeout_does_not_trigger_when_finish_ms_is_none() {
+        let ctx = make_ctx_no_finish_ms();
+        let uptime: u64 = 1_000;
+        let timed_out = uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000);
+        assert!(!timed_out, "Không nên timeout khi phase_finish_ms là None");
+    }
+
+    #[test]
+    fn hard_timeout_triggers_5s_after_finish_ms() {
+        let mut ctx = SystemContext::default();
+        ctx.phase_finish_ms = Some(10_000);
+        let not_yet = 14_999u64 >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000);
+        assert!(!not_yet);
+        let at_limit = 15_000u64 >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000);
+        assert!(at_limit);
+    }
 }

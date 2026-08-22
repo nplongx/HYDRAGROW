@@ -98,6 +98,7 @@ pub struct PeripheralState {
     pub previous_ec: Option<f32>,
     pub previous_ph: Option<f32>,
     pub misting_started_by_dosing: bool,
+    pub water_pump_started_uptime_ms: Option<u64>,
 }
 
 /// Quản lý mẫu thu thập dữ liệu calibration đang chờ xử lý
@@ -318,6 +319,9 @@ impl SystemContext {
             }
             if let Some(v) = pd.last_continuous_level {
                 p.last_continuous_level = v;
+            }
+            if let Some(v) = pd.water_pump_started_uptime_ms {
+                p.water_pump_started_uptime_ms = v;
             }
         }
 

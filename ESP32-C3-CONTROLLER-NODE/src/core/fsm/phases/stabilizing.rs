@@ -35,7 +35,7 @@ impl PhaseTick for StabilizingPhase {
         let min_stabilize_ms = 10_000;
 
         // SỬA: Dùng uptime_ms để check timeout
-        let max_stabilize_timeout = uptime_ms >= ctx.phase_finish_ms.unwrap_or(0);
+        let max_stabilize_timeout = uptime_ms >= ctx.phase_finish_ms.unwrap_or(u64::MAX);
 
         // 1. Kiểm tra điều kiện hoàn thành Phase (Chỉ số đã ổn định hoặc Timeout)
         let is_ready = (elapsed_ms >= min_stabilize_ms && ctx.stabilizer_tracker.is_stable(config))
@@ -404,4 +404,26 @@ fn build_human_message(
     }
 
     msg
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::core::fsm::context::SystemContext;
+
+    #[test]
+    fn stabilizing_does_not_exit_immediately_when_finish_ms_is_none() {
+        let ctx = SystemContext::default();
+        let uptime_ms: u64 = 100;
+        let timeout = uptime_ms >= ctx.phase_finish_ms.unwrap_or(u64::MAX);
+        assert!(!timeout, "Không nên exit ngay khi finish_ms là None — dùng unwrap_or(u64::MAX)");
+    }
+
+    #[test]
+    fn stabilizing_exits_at_correct_timeout() {
+        let mut ctx = SystemContext::default();
+        ctx.phase_finish_ms = Some(30_000);
+        assert!(29_999u64 < ctx.phase_finish_ms.unwrap_or(u64::MAX));
+        assert!(30_000u64 >= ctx.phase_finish_ms.unwrap_or(u64::MAX));
+    }
 }

@@ -26,14 +26,14 @@ use crate::hw::mqtt_client::{
 };
 use crate::utils::{get_current_time_sec, get_log_drop_count};
 
-pub fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
+pub fn build_status_msg(ctx: &SystemContext, now_sec: u64, uptime_sec: u64) -> String {
     let sum_ml = |pump_name: &str| -> f32 {
         ctx.safety
             .hourly_doses()
             .get(pump_name)
             .map(|hist| {
                 hist.iter()
-                    .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                    .filter(|(ts, _)| uptime_sec.saturating_sub(*ts) <= 3600)
                     .map(|(_, ml)| ml)
                     .sum()
             })
@@ -44,14 +44,14 @@ pub fn build_status_msg(ctx: &SystemContext, now_sec: u64) -> String {
         .safety
         .refill_history()
         .iter()
-        .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+        .filter(|ts| uptime_sec.saturating_sub(**ts) <= 3600)
         .count();
 
     let drain_count = ctx
         .safety
         .drain_history()
         .iter()
-        .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+        .filter(|ts| uptime_sec.saturating_sub(**ts) <= 3600)
         .count();
 
     let mut diagnostics_snapshot = ctx.diagnostic.clone();

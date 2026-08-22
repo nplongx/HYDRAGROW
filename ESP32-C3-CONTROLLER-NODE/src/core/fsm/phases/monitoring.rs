@@ -150,29 +150,39 @@ fn apply_decision(
             // =========================================================================
             // KIỂM TRA LƯỚI AN TOÀN (SAFETY BUDGETS) DỰA TRÊN UPTIME_SEC
             // =========================================================================
-            if control.nutrient_a_ml > 0.0
-                && !ctx.safety.check_hourly_dose(
+            let nutrient_a_ok = control.nutrient_a_ml <= 0.0
+                || ctx.safety.peek_hourly_dose(
                     "NutrientA",
                     uptime_sec,
                     control.nutrient_a_ml,
                     config.max_dose_per_hour / 2.0,
-                )
-            {
-                peri_delta.pump_a = Some(true); // trạng thái ảo để frontend cập nhật đang châm
-                result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
-                return result;
-            }
-            if control.nutrient_b_ml > 0.0
-                && !ctx.safety.check_hourly_dose(
+                );
+            let nutrient_b_ok = control.nutrient_b_ml <= 0.0
+                || ctx.safety.peek_hourly_dose(
                     "NutrientB",
                     uptime_sec,
                     control.nutrient_b_ml,
                     config.max_dose_per_hour / 2.0,
-                )
-            {
-                peri_delta.pump_b = Some(true);
+                );
+
+            if !nutrient_a_ok || !nutrient_b_ok {
+                peri_delta.pump_a = Some(control.nutrient_a_ml > 0.0);
+                peri_delta.pump_b = Some(control.nutrient_b_ml > 0.0);
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
+                result.delta.peripherals = Some(peri_delta);
                 return result;
+            }
+
+            if control.nutrient_a_ml > 0.0 {
+                ctx.safety
+                    .commit_hourly_dose("NutrientA", uptime_sec, control.nutrient_a_ml);
+            }
+            if control.nutrient_b_ml > 0.0 {
+                ctx.safety.commit_hourly_dose(
+                    "NutrientB",
+                    uptime_sec,
+                    control.nutrient_b_ml,
+                );
             }
             if control.ph_up_ml > 0.0 {
                 let _ = ctx.safety.check_hourly_dose(
@@ -219,12 +229,14 @@ fn apply_decision(
                     direction: WaterDirection::In,
                 });
                 peri_delta.water_pump_in = Some(true);
+                peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
             }
             if control.water_out_sec > 0.0 {
                 result.events.push(OrchestratorEvent::SetWaterPump {
                     direction: WaterDirection::Out,
                 });
                 peri_delta.water_pump_out = Some(true);
+                peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
             }
             if control.misting_sec > 0.0 {
                 result

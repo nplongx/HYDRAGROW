@@ -31,7 +31,7 @@ const WIFI_SSID: &str = match option_env!("HYDRAGROW_WIFI_SSID") {
 };
 const WIFI_PASS: &str = match option_env!("HYDRAGROW_WIFI_PASSWORD") {
     Some(val) => val,
-    None => "123443215",
+    None => "",
 };
 const MQTT_URL: &str = match option_env!("HYDRAGROW_MQTT_URL") {
     Some(val) => val,

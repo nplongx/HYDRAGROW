@@ -67,6 +67,47 @@ struct ClearRecipeMqttPayload {
     signature: Option<String>,
 }
 
+fn map_row_to_crop_stage<R: Row>(r: &R) -> CropStage
+where
+    usize: sqlx::ColumnIndex<R>,
+    for<'c> i32: sqlx::Decode<'c, R::Database> + sqlx::Type<R::Database>,
+    for<'c> String: sqlx::Decode<'c, R::Database> + sqlx::Type<R::Database>,
+    for<'c> f32: sqlx::Decode<'c, R::Database> + sqlx::Type<R::Database>,
+    for<'c> &'c str: sqlx::ColumnIndex<R>,
+{
+    let duration_days: i32 = r.try_get("duration_days").unwrap_or(7);
+    CropStage {
+        name: r.try_get("name").unwrap_or_default(),
+        duration_sec: (duration_days.max(1) as u64) * 86_400,
+        ec_target: r.try_get("ec_target").unwrap_or(1.4),
+        ec_tolerance: r.try_get("ec_tolerance").unwrap_or(0.1),
+        ph_target: r.try_get("ph_target").unwrap_or(6.0),
+        ph_tolerance: r.try_get("ph_tolerance").unwrap_or(0.2),
+        nutrient_a_ratio: r.try_get("nutrient_a_ratio").unwrap_or(1.0),
+        nutrient_b_ratio: r.try_get("nutrient_b_ratio").unwrap_or(1.0),
+        water_level_target: r.try_get("water_level_target").unwrap_or(20.0),
+        water_change_interval_days: r
+            .try_get::<Option<i32>, _>("water_change_interval_days")
+            .ok()
+            .flatten()
+            .map(|v| v.max(0) as u32),
+        water_change_drain_cm: r
+            .try_get::<Option<f32>, _>("water_change_drain_cm")
+            .ok()
+            .flatten(),
+        auto_dilute_ec_trigger: r
+            .try_get::<Option<f32>, _>("auto_dilute_ec_trigger")
+            .ok()
+            .flatten(),
+        misting_on_duration_ms: r.try_get("misting_on_duration_ms").unwrap_or(10_000),
+        misting_off_duration_ms: r.try_get("misting_off_duration_ms").unwrap_or(180_000),
+        max_dose_per_cycle_ml: r
+            .try_get::<Option<f32>, _>("max_dose_per_cycle_ml")
+            .ok()
+            .flatten(),
+    }
+}
+
 async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<CropStage> {
     let rows = sqlx::query(
         r#"
@@ -84,41 +125,7 @@ async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<Cr
     .await
     .unwrap_or_default();
 
-    rows.iter()
-        .map(|r| {
-            let duration_days: i32 = r.try_get("duration_days").unwrap_or(7);
-            CropStage {
-                name: r.try_get("name").unwrap_or_default(),
-                duration_sec: (duration_days.max(1) as u64) * 86_400,
-                ec_target: r.try_get("ec_target").unwrap_or(1.4),
-                ec_tolerance: r.try_get("ec_tolerance").unwrap_or(0.1),
-                ph_target: r.try_get("ph_target").unwrap_or(6.0),
-                ph_tolerance: r.try_get("ph_tolerance").unwrap_or(0.2),
-                nutrient_a_ratio: r.try_get("nutrient_a_ratio").unwrap_or(1.0),
-                nutrient_b_ratio: r.try_get("nutrient_b_ratio").unwrap_or(1.0),
-                water_level_target: r.try_get("water_level_target").unwrap_or(20.0),
-                water_change_interval_days: r
-                    .try_get::<Option<i32>, _>("water_change_interval_days")
-                    .ok()
-                    .flatten()
-                    .map(|v| v.max(0) as u32),
-                water_change_drain_cm: r
-                    .try_get::<Option<f32>, _>("water_change_drain_cm")
-                    .ok()
-                    .flatten(),
-                auto_dilute_ec_trigger: r
-                    .try_get::<Option<f32>, _>("auto_dilute_ec_trigger")
-                    .ok()
-                    .flatten(),
-                misting_on_duration_ms: r.try_get("misting_on_duration_ms").unwrap_or(10_000),
-                misting_off_duration_ms: r.try_get("misting_off_duration_ms").unwrap_or(180_000),
-                max_dose_per_cycle_ml: r
-                    .try_get::<Option<f32>, _>("max_dose_per_cycle_ml")
-                    .ok()
-                    .flatten(),
-            }
-        })
-        .collect()
+    rows.iter().map(map_row_to_crop_stage).collect()
 }
 
 // CẬP NHẬT RECIPE TEMPLATE TRONG CSDL
@@ -200,6 +207,8 @@ pub async fn update_recipe(
     HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã cập nhật công thức" }))
 }
 
+use std::collections::HashMap;
+
 pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
     let recipes_res = sqlx::query_as::<_, RecipeTemplate>(
         r#"
@@ -222,8 +231,39 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
         }
     };
 
+    if recipes.is_empty() {
+        return HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }));
+    }
+
+    let recipe_ids: Vec<String> = recipes.iter().map(|r| r.id.clone()).collect();
+
+    let rows = sqlx::query(
+        r#"
+        SELECT recipe_id, name, duration_days, ec_target, ec_tolerance, ph_target, ph_tolerance,
+               nutrient_a_ratio, nutrient_b_ratio, water_level_target,
+               water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
+               misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+        FROM crop_recipe_stages
+        WHERE recipe_id = ANY($1)
+        ORDER BY recipe_id, stage_order ASC
+        "#,
+    )
+    .bind(&recipe_ids)
+    .fetch_all(&app_state.pg_pool)
+    .await
+    .unwrap_or_default();
+
+    let mut stages_by_recipe: HashMap<String, Vec<CropStage>> = HashMap::new();
+
+    for r in rows {
+        let recipe_id: String = r.try_get("recipe_id").unwrap_or_default();
+        let stage = map_row_to_crop_stage(&r);
+
+        stages_by_recipe.entry(recipe_id).or_default().push(stage);
+    }
+
     for recipe in &mut recipes {
-        recipe.stages = fetch_stages_for_recipe(&app_state.pg_pool, &recipe.id).await;
+        recipe.stages = stages_by_recipe.remove(&recipe.id).unwrap_or_default();
     }
 
     HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }))

@@ -103,3 +103,84 @@ pub async fn publish_command(
     publish_signed_payload(app_state, device_id, topic, payload).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::env;
+    use serial_test::serial;
+
+    #[test]
+    fn test_canonical_payload_removes_signature() {
+        let value = json!({
+            "a": 1,
+            "b": "test",
+            "signature": "some_sig"
+        });
+        let canonical = canonical_payload(&value).unwrap();
+        let expected = serde_json::to_vec(&json!({
+            "a": 1,
+            "b": "test"
+        })).unwrap();
+        assert_eq!(canonical, expected);
+    }
+
+    #[test]
+    #[serial]
+    fn test_command_secret_resolution() {
+        // Test with specific device secret
+        unsafe { env::set_var("MQTT_COMMAND_SECRET_TEST_DEVICE_1", "device_specific_secret"); }
+        assert_eq!(command_secret("test-device-1").unwrap(), "device_specific_secret");
+        unsafe { env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE_1"); }
+
+        // Test with fallback secret
+        unsafe { env::set_var("MQTT_COMMAND_SECRET", "fallback_secret"); }
+        assert_eq!(command_secret("test-device-2").unwrap(), "fallback_secret");
+        unsafe { env::remove_var("MQTT_COMMAND_SECRET");
+        env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE"); }
+
+        // Test missing secret
+        assert!(command_secret("test-device-3").is_err());
+    }
+
+    #[test]
+    fn test_sign_command_value_rejects_non_object() {
+        let value = json!("not an object");
+        let result = sign_command_value("test-device", value);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "MQTT command payload must be a JSON object");
+    }
+
+    #[test]
+    #[serial]
+    fn test_sign_command_value_adds_fields_and_valid_signature() {
+        unsafe { env::set_var("MQTT_COMMAND_SECRET", "test_secret");
+        env::set_var("MQTT_COMMAND_SECRET_TEST_DEVICE", "test_secret"); }
+
+        let value = json!({
+            "action": "turn_on"
+        });
+
+        let signed = sign_command_value("test-device", value).unwrap();
+        let obj = signed.as_object().unwrap();
+
+        assert!(obj.contains_key("ts"));
+        assert!(obj.contains_key("nonce"));
+        assert!(obj.contains_key("signature"));
+        assert!(obj.contains_key("action"));
+
+        // Verify the signature
+        let signature = obj.get("signature").unwrap().as_str().unwrap();
+        let canonical = canonical_payload(&signed).unwrap();
+
+        let mut mac = HmacSha256::new_from_slice(b"test_secret").unwrap();
+        mac.update(&canonical);
+        let expected_signature = hex::encode(mac.finalize().into_bytes());
+
+        assert_eq!(signature, expected_signature);
+
+        unsafe { env::remove_var("MQTT_COMMAND_SECRET");
+        env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE"); }
+    }
+}

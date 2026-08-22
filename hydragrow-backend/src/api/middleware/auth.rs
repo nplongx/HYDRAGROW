@@ -112,11 +112,8 @@ where
                     }
                 };
 
-                match crate::db::users::find_active_by_firebase_uid(
-                    &app_state.pg_pool,
-                    &claims.sub,
-                )
-                .await
+                match crate::db::users::find_active_by_firebase_uid(&app_state.pg_pool, &claims.sub)
+                    .await
                 {
                     Ok(Some(user)) => {
                         let auth_context = AuthContext {
@@ -221,12 +218,15 @@ fn default_legacy_scopes() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::http::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+    use actix_web::http::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 
     #[test]
     fn extracts_token_from_valid_bearer_header() {
         let mut headers = HeaderMap::new();
-        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer abc.def.ghi"));
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_static("Bearer abc.def.ghi"),
+        );
         assert_eq!(extract_bearer_token(&headers), Some("abc.def.ghi"));
     }
 

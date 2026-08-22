@@ -6,6 +6,7 @@
 #include <WiFiClientSecure.h>
 #include <time.h>
 
+#include "../config/RootCA.h"
 #include "AppConfig.h"
 #include "CommandSecurity.h"
 #include "Logger.h"
@@ -63,7 +64,7 @@ void MqttManager::begin() {
         configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     }
 
-    wifiClient.setInsecure();
+    wifiClient.setCACert(ROOT_CA);
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
     mqttClient.setBufferSize(2048);

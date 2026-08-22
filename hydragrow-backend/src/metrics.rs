@@ -212,135 +212,139 @@ lazy_static! {
     ).expect("metric can be created");
 }
 
+static INIT: std::sync::Once = std::sync::Once::new();
+
 pub fn register_metrics() {
-    // Thu thập metrics tiến trình OS (CPU, Memory, File Descriptors) trên Linux
-    #[cfg(target_os = "linux")]
-    {
-        let process_collector = prometheus::process_collector::ProcessCollector::for_self();
-        let _ = REGISTRY.register(Box::new(process_collector));
-    }
+    INIT.call_once(|| {
+        // Thu thập metrics tiến trình OS (CPU, Memory, File Descriptors) trên Linux
+        #[cfg(target_os = "linux")]
+        {
+            let process_collector = prometheus::process_collector::ProcessCollector::for_self();
+            let _ = REGISTRY.register(Box::new(process_collector));
+        }
 
-    // 1. Basic Infrastructure
-    REGISTRY
-        .register(Box::new(HTTP_REQUESTS_TOTAL.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(HTTP_REQ_DURATION_SECONDS.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(ACTIVE_WS_CONNECTIONS.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(MQTT_MESSAGES_RECEIVED_TOTAL.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(MQTT_PROCESSING_ERRORS_TOTAL.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(SENSOR_UPDATES_TOTAL.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(DOSING_CYCLES_TOTAL.clone()))
-        .unwrap();
+        // 1. Basic Infrastructure
+        REGISTRY
+            .register(Box::new(HTTP_REQUESTS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(HTTP_REQ_DURATION_SECONDS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(ACTIVE_WS_CONNECTIONS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(MQTT_MESSAGES_RECEIVED_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(MQTT_PROCESSING_ERRORS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SENSOR_UPDATES_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(DOSING_CYCLES_TOTAL.clone()))
+            .unwrap();
 
-    // 2. Adaptive Learning
-    REGISTRY
-        .register(Box::new(ADAPTIVE_GAIN_PER_ML.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(ADAPTIVE_STEP_RATIO.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(ADAPTIVE_TUNER_STATE.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(ADAPTIVE_EFFECTIVE_TOLERANCE.clone()))
-        .unwrap();
+        // 2. Adaptive Learning
+        REGISTRY
+            .register(Box::new(ADAPTIVE_GAIN_PER_ML.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(ADAPTIVE_STEP_RATIO.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(ADAPTIVE_TUNER_STATE.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(ADAPTIVE_EFFECTIVE_TOLERANCE.clone()))
+            .unwrap();
 
-    // 3. Matrix & Kalman
-    REGISTRY
-        .register(Box::new(ADAPTIVE_MATRIX_IS_WARM.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(ADAPTIVE_MATRIX_UPDATE_COUNT.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(KALMAN_ACTUATOR_CONFIDENCE.clone()))
-        .unwrap();
+        // 3. Matrix & Kalman
+        REGISTRY
+            .register(Box::new(ADAPTIVE_MATRIX_IS_WARM.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(ADAPTIVE_MATRIX_UPDATE_COUNT.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(KALMAN_ACTUATOR_CONFIDENCE.clone()))
+            .unwrap();
 
-    // 4. Fluid & Timing
-    REGISTRY
-        .register(Box::new(ADAPTIVE_FLUID_TIME_SECONDS.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(DOSING_CYCLE_PHASE_DURATION_SECONDS.clone()))
-        .unwrap();
+        // 4. Fluid & Timing
+        REGISTRY
+            .register(Box::new(ADAPTIVE_FLUID_TIME_SECONDS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(DOSING_CYCLE_PHASE_DURATION_SECONDS.clone()))
+            .unwrap();
 
-    // 5. Dosing Snapshots
-    REGISTRY
-        .register(Box::new(DOSING_SNAPSHOT_EC.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(DOSING_SNAPSHOT_PH.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(DOSING_SNAPSHOT_WATER_LEVEL.clone()))
-        .unwrap();
+        // 5. Dosing Snapshots
+        REGISTRY
+            .register(Box::new(DOSING_SNAPSHOT_EC.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(DOSING_SNAPSHOT_PH.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(DOSING_SNAPSHOT_WATER_LEVEL.clone()))
+            .unwrap();
 
-    // 6. Delivered Volumes & Total
-    REGISTRY
-        .register(Box::new(DOSING_DELIVERED_DOSE_ML.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(DOSING_WATER_ACTUATOR_SECONDS.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(DOSING_PUMP_TOTAL_ML.clone()))
-        .unwrap();
+        // 6. Delivered Volumes & Total
+        REGISTRY
+            .register(Box::new(DOSING_DELIVERED_DOSE_ML.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(DOSING_WATER_ACTUATOR_SECONDS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(DOSING_PUMP_TOTAL_ML.clone()))
+            .unwrap();
 
-    // 7. Safety Budgets
-    REGISTRY
-        .register(Box::new(SAFETY_HOURLY_DOSE_ML.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(SAFETY_HOURLY_WATER_CYCLES.clone()))
-        .unwrap();
+        // 7. Safety Budgets
+        REGISTRY
+            .register(Box::new(SAFETY_HOURLY_DOSE_ML.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SAFETY_HOURLY_WATER_CYCLES.clone()))
+            .unwrap();
 
-    // 8. Fault Diagnostics
-    REGISTRY
-        .register(Box::new(DIAGNOSTIC_FAULT_STREAK.clone()))
-        .unwrap();
+        // 8. Fault Diagnostics
+        REGISTRY
+            .register(Box::new(DIAGNOSTIC_FAULT_STREAK.clone()))
+            .unwrap();
 
-    // 9. Hardware & Node Telemetry
-    REGISTRY
-        .register(Box::new(CONTROLLER_FREE_HEAP_BYTES.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(CONTROLLER_WIFI_RSSI_DBM.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(CONTROLLER_UPTIME_SECONDS.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(CONTROLLER_LOG_DROPPED_TOTAL.clone()))
-        .unwrap();
+        // 9. Hardware & Node Telemetry
+        REGISTRY
+            .register(Box::new(CONTROLLER_FREE_HEAP_BYTES.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(CONTROLLER_WIFI_RSSI_DBM.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(CONTROLLER_UPTIME_SECONDS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(CONTROLLER_LOG_DROPPED_TOTAL.clone()))
+            .unwrap();
 
-    // 10. Hestia Bio-Comfort Assessment
-    REGISTRY
-        .register(Box::new(HESTIA_HEALTH_SCORE.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(HESTIA_CONFIDENCE.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(HESTIA_AXIS_COMFORT.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(HESTIA_AXIS_WEIGHT.clone()))
-        .unwrap();
-    REGISTRY
-        .register(Box::new(HESTIA_AXIS_ACTION_FACTOR.clone()))
-        .unwrap();
+        // 10. Hestia Bio-Comfort Assessment
+        REGISTRY
+            .register(Box::new(HESTIA_HEALTH_SCORE.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(HESTIA_CONFIDENCE.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(HESTIA_AXIS_COMFORT.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(HESTIA_AXIS_WEIGHT.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(HESTIA_AXIS_ACTION_FACTOR.clone()))
+            .unwrap();
+    });
 }
 
 pub fn gather_metrics() -> String {
@@ -349,4 +353,86 @@ pub fn gather_metrics() -> String {
     let mut buffer = vec![];
     encoder.encode(&metric_families, &mut buffer).unwrap();
     String::from_utf8(buffer).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn test_register_metrics() {
+        // register_metrics() itself is protected by std::sync::Once,
+        // so calling it multiple times must be safe.
+        register_metrics();
+        register_metrics();
+
+        let families = REGISTRY.gather();
+        let metric_names: Vec<String> =
+            families.iter().map(|f| f.get_name().to_string()).collect();
+
+        assert!(
+            metric_names.contains(&"active_ws_connections".to_string()),
+            "Custom metric active_ws_connections should be registered. Found: {:?}",
+            metric_names
+        );
+
+        assert!(
+            metric_names.contains(&"sensor_updates_total".to_string()),
+            "Custom metric sensor_updates_total should be registered. Found: {:?}",
+            metric_names
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_gather_metrics_output() {
+        register_metrics();
+
+        // Simulate some metric updates.
+        HTTP_REQUESTS_TOTAL
+            .with_label_values(&["GET", "/api/test", "200"])
+            .inc();
+
+        HTTP_REQUESTS_TOTAL
+            .with_label_values(&["POST", "/api/data", "500"])
+            .inc_by(2);
+
+        ACTIVE_WS_CONNECTIONS.inc();
+
+        let output = gather_metrics();
+
+        // Check metric names.
+        assert!(
+            output.contains("http_requests_total"),
+            "Output should contain the http_requests_total metric name"
+        );
+
+        assert!(
+            output.contains("active_ws_connections"),
+            "Output should contain the active_ws_connections metric name"
+        );
+
+        // Check HTTP metric values.
+        assert!(
+            output.contains(
+                r#"http_requests_total{endpoint="/api/test",method="GET",status="200"} 1"#
+            ),
+            "Output should contain the incremented metric value for GET /api/test"
+        );
+
+        assert!(
+            output.contains(
+                r#"http_requests_total{endpoint="/api/data",method="POST",status="500"} 2"#
+            ),
+            "Output should contain the incremented metric value for POST /api/data"
+        );
+
+        // Check gauge value.
+        assert!(
+            output.contains("active_ws_connections 1"),
+            "Output should contain the active_ws_connections metric value"
+        );
+    }
 }

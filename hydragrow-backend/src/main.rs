@@ -254,8 +254,8 @@ async fn main() -> anyhow::Result<()> {
     let (alert_sender, _) = broadcast::channel(100);
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
-    let firebase_project_id = std::env::var("FIREBASE_PROJECT_ID")
-        .context("FIREBASE_PROJECT_ID must be set in .env")?;
+    let firebase_project_id =
+        std::env::var("FIREBASE_PROJECT_ID").context("FIREBASE_PROJECT_ID must be set in .env")?;
     let firebase_auth = std::sync::Arc::new(
         crate::services::firebase_auth::FirebaseAuthVerifier::new(firebase_project_id),
     );
@@ -409,12 +409,26 @@ async fn main() -> anyhow::Result<()> {
 
     // main.rs
 
+    let allowed_origins_env = env::var("ALLOWED_ORIGINS").unwrap_or_else(|_| "".to_string());
+    let allowed_origins: Vec<String> = allowed_origins_env
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
     HttpServer::new(move || {
         let auth_middleware = api::middleware::auth::ApiKeyAuth::new();
         let rate_limit_middleware = api::middleware::rate_limit::RateLimiter::new(60, 60);
 
+        let allowed_origins = allowed_origins.clone();
         let cors = actix_cors::Cors::default()
-            .allow_any_origin()
+            .allowed_origin_fn(move |origin, _req_head| {
+                if allowed_origins.is_empty() {
+                    return false; // If no origins configured, deny all cross-origin requests
+                }
+                let origin_str = origin.as_bytes();
+                allowed_origins.iter().any(|allowed| allowed.as_bytes() == origin_str)
+            })
             .allow_any_method()
             .allow_any_header();
 

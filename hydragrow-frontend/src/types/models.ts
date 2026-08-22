@@ -165,3 +165,16 @@ export interface TankAlert {
   tank_ph_down_low: boolean;
   tank_ph_up_low: boolean;
 }
+
+export interface OtaStatus {
+  device_id: string;
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+}
+
+export interface WifiCandidate {
+  ssid: string;
+  password: string;
+  priority: number;
+}

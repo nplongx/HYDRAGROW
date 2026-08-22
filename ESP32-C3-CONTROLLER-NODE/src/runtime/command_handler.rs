@@ -107,6 +107,27 @@ pub fn process_mqtt_commands(
             continue;
         }
 
+        // The command itself has already passed HMAC/replay validation in the MQTT client.
+        if action_lower == "update_wifi_list" {
+            let candidates = cmd
+                .params
+                .as_ref()
+                .and_then(|params| params.candidates.clone());
+            match candidates {
+                Some(candidates)
+                    if candidates
+                        .iter()
+                        .any(|candidate| !candidate.ssid.trim().is_empty()) =>
+                {
+                    all_events.push(OrchestratorEvent::UpdateWifiList {
+                        list: hydragrow_shared::WifiCredentialList { candidates },
+                    });
+                }
+                _ => warn!("⚠️ [CMD] Ignoring update_wifi_list without a valid SSID."),
+            }
+            continue;
+        }
+
         // Nếu đang ở chế độ AUTO thì bỏ qua lệnh điều khiển tay đơn lẻ
         if config.control_mode == ControlMode::Auto {
             warn!("⚠️ Bỏ qua lệnh thủ công vì hệ thống đang ở chế độ AUTO.");

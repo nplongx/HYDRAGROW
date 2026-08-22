@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import { Switch } from '../components/ui/Switch';
 import { InputGroup } from '../components/ui/InputGroup';
 import { useDeviceStore } from '../store/useDeviceStore';
+import type { OtaStatus, WifiCandidate } from '../types/models';
 
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 type DosingFieldKey =
@@ -147,6 +148,10 @@ const Settings = () => {
   });
 
   const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'https://hydragrow.onrender.com', device_id: '' });
+  const [otaStatus, setOtaStatus] = useState<OtaStatus | null>(null);
+  const [isTriggeringOta, setIsTriggeringOta] = useState(false);
+  const [wifiCandidates, setWifiCandidates] = useState<WifiCandidate[]>([{ ssid: '', password: '', priority: 0 }]);
+  const [isSavingWifi, setIsSavingWifi] = useState(false);
   const calibrationPoints = [7, 4];
   const [wizardStep, setWizardStep] = useState(0);
   const [isCapturingPoint, setIsCapturingPoint] = useState(false);
@@ -170,6 +175,47 @@ const Settings = () => {
       throw new Error(errDetail);
     }
     return await res.json();
+  };
+
+  useEffect(() => {
+    const deviceId = appSettings.device_id || ctxDeviceId;
+    const settings = runtimeSettings || appSettings;
+    if (!deviceId || !settings?.backend_url || !settings?.api_key) { setOtaStatus(null); return; }
+    callApi(`/api/devices/${deviceId}/ota/status`, 'GET', null, settings)
+      .then((status) => setOtaStatus(status as OtaStatus))
+      .catch(() => setOtaStatus(null));
+  }, [appSettings.device_id, appSettings.api_key, appSettings.backend_url, ctxDeviceId, runtimeSettings]);
+
+  const handleTriggerOta = async () => {
+    const deviceId = appSettings.device_id || ctxDeviceId;
+    const settings = runtimeSettings || appSettings;
+    if (!deviceId || !otaStatus?.update_available || isTriggeringOta) return;
+    if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version}?\nThiết bị sẽ khởi động lại và tạm ngừng điều khiển trong quá trình cập nhật.`)) return;
+    setIsTriggeringOta(true);
+    try {
+      await callApi(`/api/devices/${deviceId}/ota/trigger`, 'POST', {}, settings);
+      toast.success('Đã gửi lệnh cập nhật. Theo dõi tiến trình trong Nhật ký hệ thống.');
+    } catch { toast.error('Không gửi được lệnh cập nhật firmware.'); }
+    finally { setIsTriggeringOta(false); }
+  };
+
+  const updateWifiCandidate = (index: number, patch: Partial<WifiCandidate>) => {
+    setWifiCandidates((current) => current.map((candidate, candidateIndex) => candidateIndex === index ? { ...candidate, ...patch } : candidate));
+  };
+
+  const handleSaveWifiList = async () => {
+    const deviceId = appSettings.device_id || ctxDeviceId;
+    const settings = runtimeSettings || appSettings;
+    const candidates = wifiCandidates.filter((candidate) => candidate.ssid.trim() !== '');
+    if (!deviceId) { toast.error('Thiếu Device ID.'); return; }
+    if (!candidates.length) { toast.error('Cần nhập ít nhất một SSID.'); return; }
+    if (!window.confirm(`Gửi ${candidates.length} mạng WiFi xuống thiết bị?\nThông tin sai có thể khiến thiết bị mất kết nối cho tới khi có người kiểm tra tại chỗ.`)) return;
+    setIsSavingWifi(true);
+    try {
+      await callApi(`/api/devices/${deviceId}/wifi`, 'POST', { candidates }, settings);
+      toast.success('Đã gửi danh sách WiFi; thiết bị áp dụng sau lần khởi động tiếp theo.');
+    } catch { toast.error('Không gửi được danh sách WiFi.'); }
+    finally { setIsSavingWifi(false); }
   };
 
   const normalizeVoltage = (payload: any): number | null => {
@@ -439,6 +485,33 @@ const Settings = () => {
                 Quên / xoá API key
               </button>
             </div>
+          </div>
+        </AccordionSection>
+
+        <AccordionSection id="firmware" title="Cập nhật Firmware" icon={Zap} isOpen={openSection === 'firmware'} onToggle={() => handleToggleSection('firmware')}>
+          <div className="space-y-3 p-1">
+            {otaStatus ? <>
+              <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-white/85 p-3">
+                <div><p className="text-xs text-emerald-700/75">Phiên bản hiện tại</p><p className="text-sm font-semibold text-emerald-950">{otaStatus.current_version}</p></div>
+                {otaStatus.update_available && <div className="text-right"><p className="text-xs text-amber-700">Có bản mới</p><p className="text-sm font-semibold text-amber-800">{otaStatus.latest_version}</p></div>}
+              </div>
+              <button type="button" disabled={!otaStatus.update_available || isTriggeringOta} onClick={handleTriggerOta} className="w-full rounded-xl border border-amber-300 bg-amber-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50">
+                {isTriggeringOta ? 'Đang gửi lệnh cập nhật...' : otaStatus.update_available ? 'Cập nhật ngay (thiết bị sẽ khởi động lại)' : 'Đã ở phiên bản mới nhất'}
+              </button>
+            </> : <p className="text-xs text-emerald-700/75">Đang tải thông tin firmware...</p>}
+          </div>
+        </AccordionSection>
+
+        <AccordionSection id="wifi" title="Mạng WiFi thiết bị (ưu tiên)" icon={Network} isOpen={openSection === 'wifi'} onToggle={() => handleToggleSection('wifi')}>
+          <div className="space-y-3 p-1">
+            {wifiCandidates.map((candidate, index) => <div key={`${index}-${candidate.priority}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_80px_32px] md:items-end">
+              <InputGroup label={`SSID #${index + 1}`} type="text" value={candidate.ssid} onChange={(event: InputEvent) => updateWifiCandidate(index, { ssid: event.target.value })} />
+              <InputGroup label="Mật khẩu" type="password" value={candidate.password} onChange={(event: InputEvent) => updateWifiCandidate(index, { password: event.target.value })} />
+              <InputGroup label="Ưu tiên" type="number" value={String(candidate.priority)} onChange={(event: InputEvent) => updateWifiCandidate(index, { priority: Math.max(0, Math.min(255, Number(event.target.value) || 0)) })} />
+              <button type="button" aria-label={`Xóa SSID ${index + 1}`} onClick={() => setWifiCandidates((current) => current.filter((_, candidateIndex) => candidateIndex !== index))} className="pb-2 text-xs text-red-500">✕</button>
+            </div>)}
+            <button type="button" onClick={() => setWifiCandidates((current) => [...current, { ssid: '', password: '', priority: current.length }])} className="text-xs font-medium text-emerald-700">+ Thêm mạng WiFi</button>
+            <button type="button" disabled={isSavingWifi} onClick={handleSaveWifiList} className="w-full rounded-xl border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{isSavingWifi ? 'Đang gửi...' : 'Lưu danh sách WiFi (áp dụng sau khi khởi động lại)'}</button>
           </div>
         </AccordionSection>
 

@@ -76,6 +76,9 @@ pub enum OrchestratorEvent {
     },
 
     TriggerOtaUpdate,
+    UpdateWifiList {
+        list: hydragrow_shared::WifiCredentialList,
+    },
 }
 
 /// Target bơm định lượng (tách riêng để tránh dùng PumpType từ pump.rs ở layer này)

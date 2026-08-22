@@ -2,6 +2,10 @@
 use crate::hestia::HestiaAssessment;
 use serde::{Deserialize, Serialize};
 
+fn default_unknown_version() -> String {
+    "unknown".to_string()
+}
+
 /// Độ tự tin của từng trục Kalman (0.0 - 1.0)
 /// Ánh xạ với 8 cột của InteractionMatrix
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +34,9 @@ pub struct DeviceHealthSnapshot {
     /// Display string của FSM phase hiện tại (để backward compat với frontend cũ)
     pub fsm_state_display: String,
     pub log_drop_count: u32,
+    /// Firmware version reported by the controller, for example `v1.2.3`.
+    #[serde(default = "default_unknown_version")]
+    pub firmware_version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kalman_confidence: Option<KalmanConfidence>,
     pub matrix_update_count: u32,

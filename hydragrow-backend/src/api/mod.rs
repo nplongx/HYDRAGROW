@@ -3,6 +3,7 @@ pub mod calibration;
 pub mod config;
 pub mod control;
 pub mod crop_season;
+pub mod device_admin;
 pub mod metrics;
 pub mod middleware;
 pub mod mqtt_utils;

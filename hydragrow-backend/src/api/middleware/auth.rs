@@ -162,5 +162,7 @@ fn default_legacy_scopes() -> Vec<String> {
         "write:config".to_string(),
         "control:pump".to_string(),
         "control:emergency".to_string(),
+        "device:ota".to_string(),
+        "device:network".to_string(),
     ]
 }

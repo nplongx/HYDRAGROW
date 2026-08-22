@@ -146,7 +146,7 @@ const Settings = () => {
     enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
   });
 
-  const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: window.location.origin, device_id: '' });
+  const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'https://hydragrow.onrender.com', device_id: '' });
   const calibrationPoints = [7, 4];
   const [wizardStep, setWizardStep] = useState(0);
   const [isCapturingPoint, setIsCapturingPoint] = useState(false);
@@ -430,9 +430,6 @@ const Settings = () => {
         <AccordionSection id="network" title="Thiết bị & Kết nối" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
             <InputGroup label="Device ID" type="text" value={appSettings.device_id} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, device_id: e.target.value })} />
-            {isTauriRuntime() && (
-              <InputGroup label="Backend URL (Render)" type="text" value={appSettings.backend_url} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, backend_url: e.target.value })} />
-            )}
             <div className="space-y-2">
               <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

@@ -53,8 +53,8 @@ const loadWebSettings = async (): Promise<AppSettings | null> => {
   //   }
   // } catch (_) {}
 
-    return sessionApiKey ? { backend_url: window.location.origin, api_key: sessionApiKey, device_id: '' } : null;
-  };
+  return sessionApiKey ? { backend_url: '', api_key: sessionApiKey, device_id: '' } : null
+};
 
 export const loadAppSettings = async (): Promise<AppSettings | null> => {
   if (isTauriRuntime()) {

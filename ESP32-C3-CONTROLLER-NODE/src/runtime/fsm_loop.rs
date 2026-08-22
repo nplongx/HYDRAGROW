@@ -37,12 +37,15 @@ pub fn start_fsm_control_loop(
     let mut ctx = SystemContext::default();
     let mut nvs_store = NvsStore::new(nvs_partition.clone());
     nvs_store.load_runtime_snapshot(&mut ctx);
+
+    ctx.phase = SystemPhase::Monitoring;
+
     let mut nvs = EspNvs::new(nvs_partition, "agitech", true).ok();
     let mut observer_set = ObserverSet::new();
     info!("  [RUNTIME] FSM Loop đã chạy...");
 
     let mut last_reported_state = String::new();
-    let mut sensor_last_update_ms = get_current_time_ms();
+    let mut sensor_last_update_ms = get_uptime_ms();
     let mut last_controller_recieved_ms = None;
     let mut last_tank_alert = crate::hw::pcf857x::TankAlert::default();
 

@@ -27,7 +27,7 @@ fn default_limit() -> i64 {
 fn normalize_categories(raw_categories: Option<&String>) -> Vec<String> {
     let mut categories = Vec::new();
 
-    while let Some(raw) = raw_categories {
+    if let Some(raw) = raw_categories {
         for category in raw.split(',') {
             let category = category.trim();
             if category.is_empty() || categories.iter().any(|c| c == category) {

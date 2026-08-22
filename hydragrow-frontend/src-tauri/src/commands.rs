@@ -80,3 +80,14 @@ pub async fn forget_api_key(app: AppHandle) -> Result<(), String> {
     let _ = store.save();
     Ok(())
 }
+
+/// Preflight manual water commands. This is deliberately a separate command
+/// because commands are sent directly from the React control client rather
+/// than through a Tauri-side HTTP proxy.
+#[tauri::command]
+pub fn check_valve_safety(app: AppHandle, target_pump: String, is_on: bool) -> Result<(), String> {
+    use tauri::Manager;
+
+    app.state::<crate::valve_guard::ValveGuardState>()
+        .check_safety(&target_pump, is_on)
+}

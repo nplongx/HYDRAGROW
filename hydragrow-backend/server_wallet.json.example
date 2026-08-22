@@ -1,0 +1,4 @@
+{
+  "_comment": "Chạy `solana-keygen new -o server_wallet.json` để tạo ví mới. KHÔNG BAO GIỜ commit file server_wallet.json thật vào git.",
+  "example_format": [1, 2, 3, "... 64 số u8, xem solana-keygen output"]
+}

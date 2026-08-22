@@ -19,7 +19,7 @@ use crate::runtime::command_handler::{build_stop_pump_events, process_mqtt_comma
 use crate::runtime::dispatcher::{DispatchContext, EventDispatcher};
 use crate::runtime::health::build_status_msg;
 use crate::runtime::observers::ObserverSet;
-use crate::utils::{get_current_time_ms, get_current_time_sec};
+use crate::utils::{get_current_time_ms, get_current_time_sec, read_or_recover, write_or_recover};
 
 #[allow(clippy::too_many_arguments)]
 pub fn start_fsm_control_loop(
@@ -56,8 +56,8 @@ pub fn start_fsm_control_loop(
     const INT_DEBOUNCE_MS: u64 = 80;
 
     loop {
-        let config = shared_config.read().unwrap().effective_config.clone();
-        let sensors = shared_sensors.read().unwrap().clone();
+        let config = read_or_recover(&shared_config).effective_config;
+        let sensors = read_or_recover(&shared_sensors);
 
         let current_wall_time_ms = get_current_time_ms();
         let current_uptime_ms = get_uptime_ms();
@@ -179,7 +179,7 @@ pub fn start_fsm_control_loop(
         let mut recipe_result;
         let updated_config;
         {
-            let mut state = shared_config.write().unwrap();
+            let mut state = write_or_recover(&shared_config);
 
             // Cho phép Recipe Engine can thiệp thẳng vào effective_config của hệ thống
             recipe_result = crate::core::fsm::recipe_manager::tick_recipe_engine(

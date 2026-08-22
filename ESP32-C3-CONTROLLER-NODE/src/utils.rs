@@ -6,11 +6,59 @@ use std::{
     sync::{
         atomic::{AtomicU32, Ordering},
         mpsc::Sender,
+        RwLock, RwLockWriteGuard,
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 static LOG_DROP_COUNT: AtomicU32 = AtomicU32::new(0);
+
+/// Clone a shared value even if a previous writer panicked while holding its
+/// lock. Control loops must continue operating safely rather than resetting
+/// halfway through an actuator operation.
+pub fn read_or_recover<T: Clone>(lock: &RwLock<T>) -> T {
+    match lock.read() {
+        Ok(guard) => guard.clone(),
+        Err(poisoned) => {
+            tracing::error!("shared RwLock poisoned; recovering its last value");
+            poisoned.into_inner().clone()
+        }
+    }
+}
+
+/// Obtain a write guard after recovering from poisoning. The caller still
+/// performs its normal update, but a poisoned lock cannot crash the control
+/// loop.
+pub fn write_or_recover<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
+    match lock.write() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            tracing::error!("shared RwLock poisoned; recovering write access");
+            poisoned.into_inner()
+        }
+    }
+}
+
+#[cfg(test)]
+mod recover_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn read_or_recover_returns_value_after_poison() {
+        let lock = Arc::new(RwLock::new(42u32));
+        let lock_clone = lock.clone();
+
+        let result = std::panic::catch_unwind(move || {
+            let _guard = lock_clone.write().unwrap();
+            panic!("simulated panic while holding write lock");
+        });
+        assert!(result.is_err());
+        assert!(lock.is_poisoned());
+
+        assert_eq!(read_or_recover(&lock), 42);
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum DosePumpKind {

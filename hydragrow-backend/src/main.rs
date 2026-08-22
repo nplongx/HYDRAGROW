@@ -8,7 +8,7 @@ use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use std::{
     collections::{HashMap, VecDeque},
-    env, fs,
+    env,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -228,10 +228,24 @@ async fn main() -> anyhow::Result<()> {
 
     let (mqtt_client, mut eventloop) = AsyncClient::new(mqttoptions, 50);
 
-    let wallet_data =
-        fs::read_to_string("server_wallet.json").expect("Không tìm thấy server_wallet.json");
-    let private_key: Vec<u8> = serde_json::from_str(&wallet_data).unwrap();
-    let solana_service = SolanaTraceability::new("https://api.devnet.solana.com", &private_key);
+    let private_key = match env::var("SOLANA_PRIVATE_KEY") {
+        Ok(encoded_key) => match bs58::decode(encoded_key).into_vec() {
+            Ok(key) => Some(key),
+            Err(error) => {
+                error!(
+                    ?error,
+                    "SOLANA_PRIVATE_KEY is not valid base58; Solana traceability disabled"
+                );
+                None
+            }
+        },
+        Err(_) => {
+            error!("SOLANA_PRIVATE_KEY is not configured; Solana traceability disabled");
+            None
+        }
+    };
+    let solana_service =
+        SolanaTraceability::new("https://api.devnet.solana.com", private_key.as_deref());
 
     let (alert_sender, _) = broadcast::channel(100);
     let (event_bus, _) = broadcast::channel(256);

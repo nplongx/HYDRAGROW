@@ -82,6 +82,8 @@ pub async fn start_ws_listener(app: AppHandle, device_id: String) {
                                 if let Ok(ws_msg) = serde_json::from_str::<WsMessage>(&text) {
                                     match ws_msg {
                                         WsMessage::SensorUpdate(data) => {
+                                            app.state::<crate::valve_guard::ValveGuardState>()
+                                                .update_status(data.pump_status.clone());
                                             // Bắn event cho React
                                             let _ = app.emit("sensor_update", data);
                                         }
@@ -108,6 +110,8 @@ pub async fn start_ws_listener(app: AppHandle, device_id: String) {
                                     serde_json::from_str::<SensorData>(&text)
                                 {
                                     // Fallback: Nếu backend chỉ gửi thẳng cục JSON SensorData mà không có Wrapper
+                                    app.state::<crate::valve_guard::ValveGuardState>()
+                                        .update_status(sensor_data.pump_status.clone());
                                     let _ = app.emit("sensor_update", sensor_data);
                                 } else {
                                     println!("[WebSocket] Không thể parse bản tin: {}", text);

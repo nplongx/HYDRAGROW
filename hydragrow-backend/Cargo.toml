@@ -57,6 +57,7 @@ hex = "0.4"
 validator = { version = "0.20.0", features = ["derive"] }
 solana-client = "2.0.9"
 solana-sdk = "2.0.9"
+bs58 = "0.5"
 influxdb2 = "0.5.2"
 influxdb2-structmap = "0.2.0"
 

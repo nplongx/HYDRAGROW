@@ -5,7 +5,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 
 // --- IMPORT PLATFORM & UTILS ---
 import { httpFetch } from '../platform/http';
-import { forgetStoredApiKey, isTauriRuntime, loadAppSettings, saveAppSettings } from '../platform/settings';
+import { forgetStoredApiKey, loadAppSettings, saveAppSettings } from '../platform/settings';
 
 // --- IMPORT LOGIC ĐÃ BIÊN DỊCH TỪ GLEAM ---
 import { validate_dosing_config } from '../../gleam_core/build/dev/javascript/gleam_core/settings/validation.mjs';

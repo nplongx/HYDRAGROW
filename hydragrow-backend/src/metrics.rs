@@ -350,3 +350,60 @@ pub fn gather_metrics() -> String {
     encoder.encode(&metric_families, &mut buffer).unwrap();
     String::from_utf8(buffer).unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    fn setup_metrics() {
+        INIT.call_once(|| {
+            register_metrics();
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_gather_metrics_output() {
+        setup_metrics();
+
+        // Simulate some metric updates
+        HTTP_REQUESTS_TOTAL
+            .with_label_values(&["GET", "/api/test", "200"])
+            .inc();
+        HTTP_REQUESTS_TOTAL
+            .with_label_values(&["POST", "/api/data", "500"])
+            .inc_by(2);
+
+        ACTIVE_WS_CONNECTIONS.inc();
+
+        // Call the function we want to test
+        let output = gather_metrics();
+
+        // Assert that the output contains the expected Prometheus exposition format
+        assert!(
+            output.contains("http_requests_total"),
+            "Output should contain the http_requests_total metric name"
+        );
+        assert!(
+            output.contains(r#"http_requests_total{endpoint="/api/test",method="GET",status="200"} 1"#),
+            "Output should contain the incremented metric value for GET /api/test"
+        );
+        assert!(
+            output.contains(r#"http_requests_total{endpoint="/api/data",method="POST",status="500"} 2"#),
+            "Output should contain the incremented metric value for POST /api/data"
+        );
+
+        assert!(
+            output.contains("active_ws_connections"),
+            "Output should contain the active_ws_connections metric name"
+        );
+        assert!(
+            output.contains("active_ws_connections 1"),
+            "Output should contain the active_ws_connections metric value"
+        );
+    }
+}

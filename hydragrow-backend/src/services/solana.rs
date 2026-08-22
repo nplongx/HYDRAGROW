@@ -12,16 +12,30 @@ use tracing::{error, info};
 
 pub struct SolanaTraceability {
     client: Arc<RpcClient>,
-    keypair: Keypair,
+    /// `None` keeps the optional traceability integration degraded without
+    /// preventing irrigation and monitoring services from starting.
+    keypair: Option<Keypair>,
 }
 
 impl SolanaTraceability {
-    pub fn new(rpc_url: &str, private_key_bytes: &[u8]) -> Self {
+    pub fn new(rpc_url: &str, private_key_bytes: Option<&[u8]>) -> Self {
         let client =
             RpcClient::new_with_commitment(rpc_url.to_string(), CommitmentConfig::confirmed());
 
-        let keypair = Keypair::try_from(private_key_bytes)
-            .expect("Lỗi: Không thể khởi tạo Ví Solana từ Private Key cung cấp!");
+        let keypair = private_key_bytes.and_then(|bytes| match Keypair::try_from(bytes) {
+            Ok(keypair) => Some(keypair),
+            Err(error) => {
+                error!(
+                    ?error,
+                    "Solana traceability disabled: invalid private key bytes"
+                );
+                None
+            }
+        });
+
+        if keypair.is_none() {
+            error!("Solana traceability disabled: SOLANA_PRIVATE_KEY is missing or invalid");
+        }
 
         Self {
             client: Arc::new(client),
@@ -30,12 +44,16 @@ impl SolanaTraceability {
     }
 
     pub async fn record_dosing_history(&self, json_payload: &str) -> Result<String, String> {
+        let keypair = self
+            .keypair
+            .as_ref()
+            .ok_or_else(|| "Solana traceability đang tắt (thiếu keypair hợp lệ)".to_string())?;
         let memo_program_id =
             Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr").unwrap();
 
         let memo_ix = Instruction {
             program_id: memo_program_id,
-            accounts: vec![AccountMeta::new_readonly(self.keypair.pubkey(), true)],
+            accounts: vec![AccountMeta::new_readonly(keypair.pubkey(), true)],
             data: json_payload.as_bytes().to_vec(),
         };
 
@@ -46,9 +64,9 @@ impl SolanaTraceability {
             .map_err(|e| format!("Lỗi lấy Blockhash: {}", e))?;
 
         let transaction = Transaction::new_signed_with_payer(
-            &[memo_ix],                   // Danh sách các lệnh (ở đây chỉ có 1 lệnh ghi Memo)
-            Some(&self.keypair.pubkey()), // Ai là người trả phí Gas? (Ví server)
-            &[&self.keypair],             // Ai là người ký? (Ví server)
+            &[memo_ix],              // Danh sách các lệnh (ở đây chỉ có 1 lệnh ghi Memo)
+            Some(&keypair.pubkey()), // Ai là người trả phí Gas? (Ví server)
+            &[keypair],              // Ai là người ký? (Ví server)
             recent_blockhash,
         );
 

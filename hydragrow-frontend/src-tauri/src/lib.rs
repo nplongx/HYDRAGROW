@@ -16,11 +16,13 @@ pub fn run() {
         .plugin(tauri_plugin_http::init()) // <--- Thêm dòng này 3. Đăng ký TOÀN BỘ các hàm đã expose ở file commands.rs và notification.rs
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(valve_guard::ValveGuardState::default())
         .invoke_handler(tauri::generate_handler![
             commands::save_settings,
             commands::load_settings,
             commands::start_ws_listener,
             commands::forget_api_key,
+            commands::check_valve_safety,
             // Tiện ích (Thông báo)
             notification::trigger_os_notification,
         ])

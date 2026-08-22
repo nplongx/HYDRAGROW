@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
+use std::collections::HashMap;
 
 use crate::{AppState, api::mqtt_utils::sign_command, db::postgres};
 
@@ -345,10 +346,12 @@ pub async fn list_recipes(
         }));
     }
 
+    // Lấy tất cả recipe IDs để fetch stages trong một query,
+    // tránh N+1 query (mỗi recipe một query riêng).
     let recipe_ids: Vec<String> =
-        recipes.iter().map(|r| r.id.clone()).collect();
+        recipes.iter().map(|recipe| recipe.id.clone()).collect();
 
-    let rows = sqlx::query(
+    let stages_rows = sqlx::query(
         r#"
         SELECT
             recipe_id,
@@ -377,14 +380,15 @@ pub async fn list_recipes(
     .await
     .unwrap_or_default();
 
+    // Group stages theo recipe_id.
     let mut stages_by_recipe: HashMap<String, Vec<CropStage>> =
         HashMap::new();
 
-    for r in rows {
+    for row in stages_rows {
         let recipe_id: String =
-            r.try_get("recipe_id").unwrap_or_default();
+            row.try_get("recipe_id").unwrap_or_default();
 
-        let stage = map_row_to_crop_stage(&r);
+        let stage = map_row_to_crop_stage(&row);
 
         stages_by_recipe
             .entry(recipe_id)
@@ -392,6 +396,7 @@ pub async fn list_recipes(
             .push(stage);
     }
 
+    // Gắn stages vào từng recipe.
     for recipe in &mut recipes {
         recipe.stages = stages_by_recipe
             .remove(&recipe.id)

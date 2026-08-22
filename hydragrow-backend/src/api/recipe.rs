@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{FromRow, Row};
 use uuid::Uuid;
+use std::collections::HashMap;
 
 use crate::{AppState, api::mqtt_utils::sign_command, db::postgres};
 
@@ -222,8 +223,68 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
         }
     };
 
+    if recipes.is_empty() {
+        return HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }));
+    }
+
+    let recipe_ids: Vec<String> = recipes.iter().map(|r| r.id.clone()).collect();
+
+    let stages_rows = sqlx::query(
+        r#"
+        SELECT recipe_id, name, duration_days, ec_target, ec_tolerance, ph_target, ph_tolerance,
+               nutrient_a_ratio, nutrient_b_ratio, water_level_target,
+               water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
+               misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+        FROM crop_recipe_stages
+        WHERE recipe_id = ANY($1)
+        ORDER BY recipe_id, stage_order ASC
+        "#,
+    )
+    .bind(&recipe_ids)
+    .fetch_all(&app_state.pg_pool)
+    .await
+    .unwrap_or_default();
+
+    let mut stages_map: HashMap<String, Vec<CropStage>> = HashMap::new();
+
+    for r in stages_rows {
+        let recipe_id: String = r.get("recipe_id");
+        let duration_days: i32 = r.try_get("duration_days").unwrap_or(7);
+        let stage = CropStage {
+            name: r.try_get("name").unwrap_or_default(),
+            duration_sec: (duration_days.max(1) as u64) * 86_400,
+            ec_target: r.try_get("ec_target").unwrap_or(1.4),
+            ec_tolerance: r.try_get("ec_tolerance").unwrap_or(0.1),
+            ph_target: r.try_get("ph_target").unwrap_or(6.0),
+            ph_tolerance: r.try_get("ph_tolerance").unwrap_or(0.2),
+            nutrient_a_ratio: r.try_get("nutrient_a_ratio").unwrap_or(1.0),
+            nutrient_b_ratio: r.try_get("nutrient_b_ratio").unwrap_or(1.0),
+            water_level_target: r.try_get("water_level_target").unwrap_or(20.0),
+            water_change_interval_days: r
+                .try_get::<Option<i32>, _>("water_change_interval_days")
+                .ok()
+                .flatten()
+                .map(|v| v.max(0) as u32),
+            water_change_drain_cm: r
+                .try_get::<Option<f32>, _>("water_change_drain_cm")
+                .ok()
+                .flatten(),
+            auto_dilute_ec_trigger: r
+                .try_get::<Option<f32>, _>("auto_dilute_ec_trigger")
+                .ok()
+                .flatten(),
+            misting_on_duration_ms: r.try_get("misting_on_duration_ms").unwrap_or(10_000),
+            misting_off_duration_ms: r.try_get("misting_off_duration_ms").unwrap_or(180_000),
+            max_dose_per_cycle_ml: r
+                .try_get::<Option<f32>, _>("max_dose_per_cycle_ml")
+                .ok()
+                .flatten(),
+        };
+        stages_map.entry(recipe_id).or_default().push(stage);
+    }
+
     for recipe in &mut recipes {
-        recipe.stages = fetch_stages_for_recipe(&app_state.pg_pool, &recipe.id).await;
+        recipe.stages = stages_map.remove(&recipe.id).unwrap_or_default();
     }
 
     HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }))

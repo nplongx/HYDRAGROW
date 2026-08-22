@@ -1,3 +1,4 @@
+pub mod admin_users;
 pub mod alert;
 pub mod calibration;
 pub mod config;

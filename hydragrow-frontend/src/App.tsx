@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MainLayout from './components/layout/MainLayout';
 import { Toaster } from 'react-hot-toast';
 import { LoadingState } from './components/ui/LoadingState';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginScreen } from './components/auth/LoginScreen';
 import './App.css';
 
 // Khởi tạo QueryClient
@@ -28,27 +30,51 @@ const CropSeasons = React.lazy(() => import('./pages/CropSeasons'));
 const SystemLog = React.lazy(() => import('./pages/SystemLog'));
 const RecipeBuilder = React.lazy(() => import('./pages/RecipeBuilder'));
 
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return <LoadingState message="Đang kiểm tra đăng nhập..." />;
+  }
+
+  if (status === 'unauthenticated') {
+    return <LoginScreen />;
+  }
+
+  return <>{children}</>;
+}
+
+function AppRoutes() {
+  return (
+    <Router>
+      <Toaster position="top-center" />
+      <Suspense fallback={<LoadingState message="Đang tải trang..." />}>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="control" element={<ControlPanel />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="dosing-history" element={<DosingHistory />} />
+            <Route path="crop-seasons" element={<CropSeasons />} />
+            <Route path="recipes" element={<RecipeBuilder />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="logs" element={<SystemLog />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </Router>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
-        <Toaster position="top-center" />
-        <Suspense fallback={<LoadingState message="Đang tải trang..." />}>
-          <Routes>
-            <Route path="/" element={<MainLayout />}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="control" element={<ControlPanel />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="dosing-history" element={<DosingHistory />} />
-              <Route path="crop-seasons" element={<CropSeasons />} />
-              <Route path="recipes" element={<RecipeBuilder />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="logs" element={<SystemLog />} />
-            </Route>
-          </Routes>
-        </Suspense>
-      </Router>
+      <AuthProvider>
+        <AuthGate>
+          <AppRoutes />
+        </AuthGate>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

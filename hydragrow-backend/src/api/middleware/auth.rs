@@ -6,6 +6,7 @@ use actix_web::{
 };
 use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::rc::Rc;
+use tracing::error;
 
 #[derive(Clone, Debug, Default)]
 pub struct AuthContext {
@@ -80,7 +81,6 @@ where
         }
 
         // Bypass cho WebSocket
-
         if req.path() == "/metrics" || req.path().ends_with("/ws") {
             let srv = Rc::clone(&self.service);
             return Box::pin(async move {
@@ -89,16 +89,80 @@ where
             });
         }
 
-        // 2. Kiếm tra API Key từ AppState
-        let app_state = req.app_data::<actix_web::web::Data<AppState>>().unwrap();
-        let expected_api_key = &app_state.api_key;
+        let app_state = req
+            .app_data::<actix_web::web::Data<AppState>>()
+            .unwrap()
+            .clone();
+
+        // 2. Ưu tiên xác thực bằng Firebase ID token (Authorization: Bearer <token>)
+        if let Some(token) = extract_bearer_token(req.headers()) {
+            let token = token.to_string();
+            let srv = Rc::clone(&self.service);
+            return Box::pin(async move {
+                let claims = match app_state.firebase_auth.verify(&token).await {
+                    Ok(claims) => claims,
+                    Err(e) => {
+                        let response = HttpResponse::Unauthorized()
+                            .json(serde_json::json!({
+                                "error": format!("Token không hợp lệ: {e}")
+                            }))
+                            .map_into_right_body();
+                        let (http_req, _payload) = req.into_parts();
+                        return Ok(ServiceResponse::new(http_req, response));
+                    }
+                };
+
+                match crate::db::users::find_active_by_firebase_uid(
+                    &app_state.pg_pool,
+                    &claims.sub,
+                )
+                .await
+                {
+                    Ok(Some(user)) => {
+                        let auth_context = AuthContext {
+                            scopes: user.scopes,
+                            user_id: Some(user.id.to_string()),
+                            session_id: Some(claims.sub),
+                        };
+                        req.extensions_mut().insert(auth_context);
+                        let res = srv.call(req).await?;
+                        Ok(res.map_into_left_body())
+                    }
+                    Ok(None) => {
+                        let response = HttpResponse::Forbidden()
+                            .json(serde_json::json!({
+                                "error": "Tài khoản chưa được cấp quyền truy cập"
+                            }))
+                            .map_into_right_body();
+                        let (http_req, _payload) = req.into_parts();
+                        Ok(ServiceResponse::new(http_req, response))
+                    }
+                    Err(e) => {
+                        error!(?e, "Lỗi truy vấn user theo firebase_uid");
+                        let response = HttpResponse::InternalServerError()
+                            .json(serde_json::json!({
+                                "error": "Lỗi hệ thống khi xác thực"
+                            }))
+                            .map_into_right_body();
+                        let (http_req, _payload) = req.into_parts();
+                        Ok(ServiceResponse::new(http_req, response))
+                    }
+                }
+            });
+        }
+
+        // 3. Fallback: X-API-Key tĩnh (đường cũ, giữ để tương thích ngược)
+        let expected_api_key = app_state.api_key.clone();
 
         let header_key = req
             .headers()
             .get("X-API-Key")
-            .and_then(|hv| hv.to_str().ok());
+            .and_then(|hv| hv.to_str().ok())
+            .map(ToString::to_string);
 
-        let is_authorized = header_key.is_some_and(|key| key == expected_api_key);
+        let is_authorized = header_key
+            .as_deref()
+            .is_some_and(|key| key == expected_api_key);
 
         if !is_authorized {
             let response = HttpResponse::Unauthorized()
@@ -108,7 +172,6 @@ where
             return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
         }
 
-        // --- SỬA LỖI TẠI ĐÂY: Khởi tạo struct AuthContext ---
         let raw_scopes = req
             .headers()
             .get("X-Scopes")
@@ -130,16 +193,23 @@ where
                 .map(ToString::to_string),
         };
 
-        // Gắn context vào request extensions để các Route Handler sau có thể lấy dùng
         req.extensions_mut().insert(auth_context);
 
-        // Cho phép request tiếp tục
         let srv = Rc::clone(&self.service);
         Box::pin(async move {
             let res = srv.call(req).await?;
             Ok(res.map_into_left_body())
         })
     }
+}
+
+fn extract_bearer_token(headers: &actix_web::http::header::HeaderMap) -> Option<&str> {
+    headers
+        .get(actix_web::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
 }
 
 fn parse_scopes(raw: Option<&str>) -> Option<Vec<String>> {
@@ -165,4 +235,37 @@ fn default_legacy_scopes() -> Vec<String> {
         "device:ota".to_string(),
         "device:network".to_string(),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::http::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+
+    #[test]
+    fn extracts_token_from_valid_bearer_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer abc.def.ghi"));
+        assert_eq!(extract_bearer_token(&headers), Some("abc.def.ghi"));
+    }
+
+    #[test]
+    fn returns_none_when_no_bearer_prefix() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Basic abc123"));
+        assert_eq!(extract_bearer_token(&headers), None);
+    }
+
+    #[test]
+    fn returns_none_when_header_missing() {
+        let headers = HeaderMap::new();
+        assert_eq!(extract_bearer_token(&headers), None);
+    }
+
+    #[test]
+    fn returns_none_for_empty_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer "));
+        assert_eq!(extract_bearer_token(&headers), None);
+    }
 }

@@ -19,7 +19,7 @@ const firebaseConfig = {
 
 
 const firebaseVapidKey = "BDHacUd3ZPRTo5QfnaErWYyXIgxW2sjOR22A9HrIyLzuPrJ62cylLTgaooS3PhscRnZ6jggodBFmd3hJ3izr33I";
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // Khởi tạo Messaging instance
 export const messaging = getMessaging(app);

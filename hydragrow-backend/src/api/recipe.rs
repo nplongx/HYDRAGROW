@@ -167,31 +167,41 @@ pub async fn update_recipe(
         .await;
 
     // 3. Chèn lại các Stages mới (y hệt như create)
-    for (idx, stage) in req.stages.iter().enumerate() {
-        let stage_id = Uuid::new_v4().to_string();
-        let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
-
-        if let Err(e) = sqlx::query(
-            r#"
-            INSERT INTO crop_recipe_stages (
+    if !req.stages.is_empty() {
+        let mut query_builder = sqlx::QueryBuilder::new(
+            "INSERT INTO crop_recipe_stages (
                 id, recipe_id, stage_order, name, duration_days,
                 ec_target, ec_tolerance, ph_target, ph_tolerance,
                 nutrient_a_ratio, nutrient_b_ratio, water_level_target,
                 water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
                 misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-            "#,
-        )
-        .bind(&stage_id).bind(&recipe_id).bind((idx + 1) as i32).bind(&stage.name)
-        .bind(duration_days).bind(stage.ec_target).bind(stage.ec_tolerance)
-        .bind(stage.ph_target).bind(stage.ph_tolerance).bind(stage.nutrient_a_ratio)
-        .bind(stage.nutrient_b_ratio).bind(stage.water_level_target)
-        .bind(stage.water_change_interval_days.map(|v| v as i32)).bind(stage.water_change_drain_cm)
-        .bind(stage.auto_dilute_ec_trigger).bind(stage.misting_on_duration_ms)
-        .bind(stage.misting_off_duration_ms).bind(stage.max_dose_per_cycle_ml)
-        .execute(&mut *tx)
-        .await
-        {
+            ) "
+        );
+
+        query_builder.push_values(req.stages.iter().enumerate(), |mut b, (idx, stage)| {
+            let stage_id = Uuid::new_v4().to_string();
+            let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
+            b.push_bind(stage_id)
+             .push_bind(&recipe_id)
+             .push_bind((idx + 1) as i32)
+             .push_bind(&stage.name)
+             .push_bind(duration_days)
+             .push_bind(stage.ec_target)
+             .push_bind(stage.ec_tolerance)
+             .push_bind(stage.ph_target)
+             .push_bind(stage.ph_tolerance)
+             .push_bind(stage.nutrient_a_ratio)
+             .push_bind(stage.nutrient_b_ratio)
+             .push_bind(stage.water_level_target)
+             .push_bind(stage.water_change_interval_days.map(|v| v as i32))
+             .push_bind(stage.water_change_drain_cm)
+             .push_bind(stage.auto_dilute_ec_trigger)
+             .push_bind(stage.misting_on_duration_ms)
+             .push_bind(stage.misting_off_duration_ms)
+             .push_bind(stage.max_dose_per_cycle_ml);
+        });
+
+        if let Err(e) = query_builder.build().execute(&mut *tx).await {
             return HttpResponse::InternalServerError().json(json!({"error": "db_insert_stage_failed", "details": e.to_string()}));
         }
     }
@@ -275,49 +285,41 @@ pub async fn create_recipe(
         }));
     }
 
-    for (idx, stage) in req.stages.iter().enumerate() {
-        let stage_id = Uuid::new_v4().to_string();
-        let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
-
-        if let Err(e) = sqlx::query(
-            r#"
-            INSERT INTO crop_recipe_stages (
+    if !req.stages.is_empty() {
+        let mut query_builder = sqlx::QueryBuilder::new(
+            "INSERT INTO crop_recipe_stages (
                 id, recipe_id, stage_order, name, duration_days,
                 ec_target, ec_tolerance, ph_target, ph_tolerance,
                 nutrient_a_ratio, nutrient_b_ratio, water_level_target,
                 water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
                 misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
-            )
-            VALUES (
-                $1, $2, $3, $4, $5,
-                $6, $7, $8, $9,
-                $10, $11, $12,
-                $13, $14, $15,
-                $16, $17, $18
-            )
-            "#,
-        )
-        .bind(&stage_id)
-        .bind(&recipe_id)
-        .bind((idx + 1) as i32)
-        .bind(&stage.name)
-        .bind(duration_days)
-        .bind(stage.ec_target)
-        .bind(stage.ec_tolerance)
-        .bind(stage.ph_target)
-        .bind(stage.ph_tolerance)
-        .bind(stage.nutrient_a_ratio)
-        .bind(stage.nutrient_b_ratio)
-        .bind(stage.water_level_target)
-        .bind(stage.water_change_interval_days.map(|v| v as i32))
-        .bind(stage.water_change_drain_cm)
-        .bind(stage.auto_dilute_ec_trigger)
-        .bind(stage.misting_on_duration_ms)
-        .bind(stage.misting_off_duration_ms)
-        .bind(stage.max_dose_per_cycle_ml)
-        .execute(&mut *tx)
-        .await
-        {
+            ) "
+        );
+
+        query_builder.push_values(req.stages.iter().enumerate(), |mut b, (idx, stage)| {
+            let stage_id = Uuid::new_v4().to_string();
+            let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
+            b.push_bind(stage_id)
+             .push_bind(&recipe_id)
+             .push_bind((idx + 1) as i32)
+             .push_bind(&stage.name)
+             .push_bind(duration_days)
+             .push_bind(stage.ec_target)
+             .push_bind(stage.ec_tolerance)
+             .push_bind(stage.ph_target)
+             .push_bind(stage.ph_tolerance)
+             .push_bind(stage.nutrient_a_ratio)
+             .push_bind(stage.nutrient_b_ratio)
+             .push_bind(stage.water_level_target)
+             .push_bind(stage.water_change_interval_days.map(|v| v as i32))
+             .push_bind(stage.water_change_drain_cm)
+             .push_bind(stage.auto_dilute_ec_trigger)
+             .push_bind(stage.misting_on_duration_ms)
+             .push_bind(stage.misting_off_duration_ms)
+             .push_bind(stage.max_dose_per_cycle_ml);
+        });
+
+        if let Err(e) = query_builder.build().execute(&mut *tx).await {
             tracing::error!("Lỗi INSERT crop_recipe_stages: {:?}", e);
             return HttpResponse::InternalServerError().json(json!({
                 "error": "db_insert_stage_failed",

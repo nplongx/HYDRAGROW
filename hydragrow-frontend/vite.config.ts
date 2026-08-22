@@ -54,6 +54,11 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@gleam': path.resolve(__dirname, './gleam_core/build/dev/javascript/gleam_core')
       }
+    },
+
+    test: {
+      environment: 'jsdom',
+      globals: true
     }
   };
 });

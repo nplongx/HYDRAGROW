@@ -5,6 +5,7 @@ import {
   ArrowUp,
   BookOpen,
   ClipboardList,
+  Play,
   Plus,
   Save,
   Trash2,
@@ -45,6 +46,7 @@ const toNumber = (value: string, fallback = 0) => {
 const RecipeBuilder: React.FC = () => {
   const queryClient = useQueryClient();
   const settings = useDeviceStore((s) => s.settings);
+  const deviceId = useDeviceStore((s) => s.deviceId);
 
   const [templateName, setTemplateName] = useState('Xà lách thủy canh thương phẩm');
   const [cropType, setCropType] = useState('lettuce');
@@ -69,6 +71,26 @@ const RecipeBuilder: React.FC = () => {
       return { ...stage, stageNumber: index + 1, startDay, endDay };
     });
   }, [stages]);
+
+  // Lấy ID của công thức đang được nạp dưới Controller Node
+  // Lấy ID của công thức đang được nạp dưới Controller Node
+  const { data: activeRecipeId } = useQuery<string | null>({
+    queryKey: ['active-recipe', deviceId],
+    enabled: Boolean(settings?.backend_url && deviceId),
+    queryFn: async () => {
+      // ĐỔI TỪ /recipe THÀNH /recipe/status
+      const res = await httpFetch(`${settings!.backend_url}/api/devices/${deviceId}/recipe/status`, {
+        method: 'GET',
+        headers,
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      
+      // Lấy đúng đường dẫn data theo định dạng của Backend
+      const activeRecipe = json.data?.active_recipe || json.active_recipe;
+      return activeRecipe?.recipe_id || null;
+    },
+  });
 
   const totalDays = timeline.length ? timeline[timeline.length - 1].endDay : 0;
 
@@ -118,8 +140,15 @@ const RecipeBuilder: React.FC = () => {
           duration_sec: duration_days * 86400,
         })),
       };
-      const res = await httpFetch(`${settings.backend_url}/api/recipes`, {
-        method: 'POST',
+
+      // THUẬT TOÁN ĐIỀU HƯỚNG: Có ID thì PUT, không có thì POST
+      const isUpdate = Boolean(selectedTemplateId);
+      const url = isUpdate
+        ? `${settings.backend_url}/api/recipes/${selectedTemplateId}`
+        : `${settings.backend_url}/api/recipes`;
+
+      const res = await httpFetch(url, {
+        method: isUpdate ? 'PUT' : 'POST',
         headers,
         body: JSON.stringify(payload),
       });
@@ -127,7 +156,8 @@ const RecipeBuilder: React.FC = () => {
       return res.json();
     },
     onSuccess: () => {
-      toast.success('Đã lưu Công thức mẫu vào CSDL!');
+      // BÁO CÁO THÀNH CÔNG ĐÚNG NGỮ CẢNH
+      toast.success(selectedTemplateId ? 'Đã cập nhật Công thức mẫu!' : 'Đã tạo Công thức mẫu mới!');
       queryClient.invalidateQueries({ queryKey: ['recipes-templates'] });
     },
     onError: (error: Error) => toast.error(`Lỗi lưu công thức: ${error.message}`),
@@ -150,6 +180,32 @@ const RecipeBuilder: React.FC = () => {
     },
     onError: (err: Error) => toast.error(`Lỗi xóa: ${err.message}`),
   });
+
+  const applyRecipeMutation = useMutation({
+    mutationFn: async (recipeId: string) => {
+      if (!settings?.backend_url || !deviceId) throw new Error('Thiếu kết nối hoặc chưa chọn thiết bị.');
+      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/recipe/apply`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ recipe_id: recipeId }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Đã nạp Lộ trình xuống Controller Node thành công!');
+      // Refresh lại trạng thái recipe nếu bạn có query nào đang lắng nghe
+      queryClient.invalidateQueries({ queryKey: ['recipe-status'] }); 
+    },
+    onError: (err: Error) => toast.error(`Lỗi áp dụng: ${err.message}`),
+  });
+
+  const handleApplyTemplate = (e: React.MouseEvent, template: RecipeTemplate) => {
+    e.stopPropagation();
+    if (window.confirm(`Bạn muốn áp dụng lộ trình "${template.name}" cho trạm hiện tại?`)) {
+      applyRecipeMutation.mutate(template.id);
+    }
+  };
 
   const handleDeleteTemplate = (e: React.MouseEvent, template: RecipeTemplate) => {
     e.stopPropagation();
@@ -219,6 +275,7 @@ const RecipeBuilder: React.FC = () => {
             <div className="space-y-2.5">
               {recipesList.map((tmpl) => {
                 const isSelected = selectedTemplateId === tmpl.id;
+                const isApplied = activeRecipeId === tmpl.id;
                 return (
                   <div
                     key={tmpl.id}
@@ -226,30 +283,57 @@ const RecipeBuilder: React.FC = () => {
                     className={`group relative w-full text-left p-3.5 rounded-xl border transition-all text-xs flex flex-col gap-1.5 cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500'
+                        : isApplied
+                        ? 'bg-blue-50/60 border-blue-300' // <--- Bôi nền xanh lơ cho mẫu đang chạy
                         : 'bg-white border-emerald-100 hover:border-emerald-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between font-bold text-emerald-950 pr-6">
-                      <span className="truncate">{tmpl.name}</span>
+                    <div className="flex items-center justify-between font-bold text-emerald-950 pr-16">
+                      
+                      {/* HIỂN THỊ TÊN + NHÃN "ĐANG CHẠY" */}
+                      <div className="truncate flex items-center gap-1.5">
+                        <span className="truncate">{tmpl.name}</span>
+                        {isApplied && (
+                          <span 
+                            title="Đang được áp dụng trên thiết bị" 
+                            className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span> 
+                            Đang chạy
+                          </span>
+                        )}
+                      </div>
+                      
                       <span className="px-2 py-0.5 rounded bg-emerald-100/80 text-emerald-800 text-[10px] uppercase shrink-0">
                         {tmpl.crop}
                       </span>
                     </div>
                     {tmpl.description && (
-                      <p className="text-emerald-700/80 line-clamp-1 text-[11px]">{tmpl.description}</p>
+                      <p className="text-emerald-700/80 line-clamp-1 text-[11px] pr-16">{tmpl.description}</p>
                     )}
                     <span className="text-[10px] text-emerald-600 font-medium">
                       {tmpl.stages.length} giai đoạn • {tmpl.stages.reduce((sum, s) => sum + Math.round(s.duration_sec / 86400), 0)} ngày
                     </span>
 
                     {/* NÚT XÓA RECIPE TEMPLATE */}
-                    <button
-                      title="Xóa công thức mẫu này"
-                      onClick={(e) => handleDeleteTemplate(e, tmpl)}
-                      className="absolute right-2.5 top-3 p-1.5 rounded-lg text-emerald-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-70 group-hover:opacity-100"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {/* KHU VỰC NÚT BẤM (ÁP DỤNG & XÓA) */}
+                    <div className="absolute right-2.5 top-2.5 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                      <button
+                        title="Áp dụng công thức này cho trạm"
+                        onClick={(e) => handleApplyTemplate(e, tmpl)}
+                        disabled={applyRecipeMutation.isPending}
+                        className="p-1.5 rounded-lg text-blue-600 hover:text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                      >
+                        <Play size={14} />
+                      </button>
+                      <button
+                        title="Xóa công thức mẫu này"
+                        onClick={(e) => handleDeleteTemplate(e, tmpl)}
+                        className="p-1.5 rounded-lg text-red-500 hover:text-white hover:bg-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -367,14 +451,39 @@ const RecipeBuilder: React.FC = () => {
                 <h3 className="text-sm font-bold text-emerald-950">Xem trước Lộ trình</h3>
                 <p className="text-xs text-emerald-700/80 mt-0.5">Tổng thời gian chu kỳ: <b>{totalDays} ngày</b></p>
               </div>
-              <button
-                onClick={() => saveRecipeMutation.mutate()}
-                disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
-                className="ui-btn-md bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
-              >
-                <Save size={15} />
-                {saveRecipeMutation.isPending ? 'Đang lưu...' : 'Lưu vào Thư Viện'}
-              </button>
+              
+              {/* GOM 2 NÚT VÀO CHUNG MỘT VÙNG (FLEX) */}
+              <div className="flex items-center gap-2">
+                
+                {/* NÚT NHÂN BẢN (Chỉ hiện khi đang sửa mẫu cũ) */}
+                {selectedTemplateId && (
+                  <button
+                    onClick={() => {
+                      setSelectedTemplateId(null);
+                      setTemplateName(`${templateName} (Bản sao)`);
+                      toast.success('Đã nhân bản! Hãy bấm Lưu để tạo mới.');
+                    }}
+                    className="ui-btn-md bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-900 font-bold text-xs"
+                  >
+                    Nhân bản
+                  </button>
+                )}
+
+                {/* NÚT LƯU / CẬP NHẬT */}
+                <button
+                  onClick={() => saveRecipeMutation.mutate()}
+                  disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
+                  className="ui-btn-md bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
+                >
+                  <Save size={15} />
+                  {saveRecipeMutation.isPending 
+                    ? 'Đang lưu...' 
+                    : selectedTemplateId 
+                      ? 'Cập nhật' 
+                      : 'Tạo mới'}
+                </button>
+              </div>
+
             </div>
 
             <div className="space-y-2 pt-2 border-t border-emerald-100">

@@ -121,6 +121,85 @@ async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<Cr
         .collect()
 }
 
+// CẬP NHẬT RECIPE TEMPLATE TRONG CSDL
+pub async fn update_recipe(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+    req: web::Json<CreateRecipeRequest>,
+) -> impl Responder {
+    let recipe_id = path.into_inner();
+
+    if req.name.trim().is_empty() || req.crop.trim().is_empty() || req.stages.is_empty() {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "invalid_recipe",
+            "message": "name, crop và stages là bắt buộc"
+        }));
+    }
+
+    let mut tx = match app_state.pg_pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return HttpResponse::InternalServerError().json(json!({"error": "db_error"})),
+    };
+
+    // 1. Cập nhật thông tin chung của Recipe
+    if let Err(e) = sqlx::query(
+        r#"
+        UPDATE crop_recipes 
+        SET name = $1, crop = $2, description = $3 
+        WHERE id = $4
+        "#,
+    )
+    .bind(req.name.trim())
+    .bind(req.crop.trim())
+    .bind(&req.description)
+    .bind(&recipe_id)
+    .execute(&mut *tx)
+    .await
+    {
+        return HttpResponse::InternalServerError()
+            .json(json!({"error": "db_update_failed", "details": e.to_string()}));
+    }
+
+    // 2. Xóa sạch các Stages cũ của Recipe này
+    let _ = sqlx::query("DELETE FROM crop_recipe_stages WHERE recipe_id = $1")
+        .bind(&recipe_id)
+        .execute(&mut *tx)
+        .await;
+
+    // 3. Chèn lại các Stages mới (y hệt như create)
+    for (idx, stage) in req.stages.iter().enumerate() {
+        let stage_id = Uuid::new_v4().to_string();
+        let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
+
+        if let Err(e) = sqlx::query(
+            r#"
+            INSERT INTO crop_recipe_stages (
+                id, recipe_id, stage_order, name, duration_days,
+                ec_target, ec_tolerance, ph_target, ph_tolerance,
+                nutrient_a_ratio, nutrient_b_ratio, water_level_target,
+                water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
+                misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            "#,
+        )
+        .bind(&stage_id).bind(&recipe_id).bind((idx + 1) as i32).bind(&stage.name)
+        .bind(duration_days).bind(stage.ec_target).bind(stage.ec_tolerance)
+        .bind(stage.ph_target).bind(stage.ph_tolerance).bind(stage.nutrient_a_ratio)
+        .bind(stage.nutrient_b_ratio).bind(stage.water_level_target)
+        .bind(stage.water_change_interval_days.map(|v| v as i32)).bind(stage.water_change_drain_cm)
+        .bind(stage.auto_dilute_ec_trigger).bind(stage.misting_on_duration_ms)
+        .bind(stage.misting_off_duration_ms).bind(stage.max_dose_per_cycle_ml)
+        .execute(&mut *tx)
+        .await
+        {
+            return HttpResponse::InternalServerError().json(json!({"error": "db_insert_stage_failed", "details": e.to_string()}));
+        }
+    }
+
+    let _ = tx.commit().await;
+    HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã cập nhật công thức" }))
+}
+
 pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
     let recipes_res = sqlx::query_as::<_, RecipeTemplate>(
         r#"
@@ -280,9 +359,8 @@ pub async fn delete_recipe(
         .await;
 
     match res {
-        Ok(r) if r.rows_affected() > 0 => {
-            HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã xóa recipe template" }))
-        }
+        Ok(r) if r.rows_affected() > 0 => HttpResponse::Ok()
+            .json(json!({ "status": "success", "message": "Đã xóa recipe template" })),
         Ok(_) => HttpResponse::NotFound().json(json!({ "error": "recipe_not_found" })),
         Err(e) => HttpResponse::InternalServerError().json(json!({
             "error": "db_delete_failed",
@@ -374,13 +452,19 @@ pub async fn apply_recipe(
         Ok(b) => b,
         Err(e) => {
             tracing::error!("Lỗi serialize recipe: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({ "error": "serialization_failed" }));
+            return HttpResponse::InternalServerError()
+                .json(json!({ "error": "serialization_failed" }));
         }
     };
 
     if let Err(e) = app_state
         .mqtt_client
-        .publish(topic_recipe_set(&device_id), QoS::AtLeastOnce, false, payload_bytes)
+        .publish(
+            topic_recipe_set(&device_id),
+            QoS::AtLeastOnce,
+            false,
+            payload_bytes,
+        )
         .await
     {
         tracing::error!("Lỗi publish MQTT: {:?}", e);
@@ -504,6 +588,7 @@ pub async fn recipe_status(
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/recipes", web::get().to(list_recipes))
         .route("/recipes", web::post().to(create_recipe))
+        .route("/recipes/{recipe_id}", web::put().to(update_recipe))
         .route("/recipes/{recipe_id}", web::delete().to(delete_recipe))
         .route(
             "/devices/{device_id}/recipe/apply",

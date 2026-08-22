@@ -108,7 +108,7 @@ async fn fetch_unified_config_concurrently(
         .unwrap_or_else(|| SensorCalibration {
             device_id: device_id.to_string(),
             ph_v7: 2.5,
-            ph_v4: 1.428,
+            ph_v4: 3.04,
             ph_v10: None,
             ph_calibration_mode: "2-point".into(),
             ec_factor: 880.0,
@@ -311,7 +311,7 @@ fn default_sensor_calibration(device_id: &str, now: DateTime<Utc>) -> SensorCali
     SensorCalibration {
         device_id: device_id.to_string(),
         ph_v7: 2.5,
-        ph_v4: 1.428,
+        ph_v4: 3.04,
         ph_v10: None,
         ph_calibration_mode: "2-point".into(),
         ec_factor: 880.0,
@@ -559,7 +559,7 @@ pub async fn get_unified_device_config(
             .unwrap_or_else(|| SensorCalibration {
                 device_id: device_id.clone(),
                 ph_v7: 2.5,
-                ph_v4: 1.428,
+                ph_v4: 3.04,
                 ph_v10: None,
                 ph_calibration_mode: "2-point".into(),
                 ec_factor: 880.0,

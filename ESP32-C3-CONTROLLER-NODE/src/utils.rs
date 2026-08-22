@@ -1,5 +1,5 @@
 use hydragrow_shared::{
-    log::{emit_system_log_event, LogCategory, LogLevel, SystemLogEvent},
+    log::{emit_system_log_event, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog},
     ControllerConfig,
 };
 use std::{
@@ -232,7 +232,20 @@ pub fn send_system_log(
     event: SystemLogEvent,
 ) {
     let ts = get_current_time_ms();
-    let _ = tx;
+
+    let log = UnifiedSystemLog {
+        device_id: device_id.to_string(),
+        level: level.clone(),
+        category: category.clone(),
+        title: title.to_string(),
+        event: event.clone(),
+        timestamp_ms: ts,
+    };
+
+    if let Ok(json) = serde_json::to_string(&log) {
+        let _ = tx.send(json);
+    }
+
     emit_system_log_event(device_id, level, category, title, event, ts);
 }
 

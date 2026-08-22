@@ -7,6 +7,7 @@ use super::ObserverContext;
 use crate::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use hydragrow_shared::log::{
     emit_basic_system_log, emit_system_log_json, LogCategory, LogLevel, SystemLogRecord,
+    UnifiedSystemLog,
 };
 
 pub struct SystemLogObserver {
@@ -23,7 +24,7 @@ impl SystemLogObserver {
         match event {
             // Pass-through: orchestrator đã build log payload đầy đủ
             OrchestratorEvent::PublishSystemLog { payload_json } => {
-                let _ = oc.mqtt_tx;
+                let _ = oc.mqtt_tx.send(payload_json.clone());
                 emit_system_log_json(payload_json);
             }
 
@@ -104,7 +105,18 @@ impl SystemLogObserver {
         title: &str,
         message: String,
     ) {
-        let _ = oc.mqtt_tx;
+        let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
+            &oc.config.device_id,
+            level.clone(),
+            category.clone(),
+            title,
+            message.clone(),
+            None,
+            "system_log_observer",
+            oc.now_ms,
+        );
+        let _ = oc.mqtt_tx.send(log_payload);
+
         emit_basic_system_log(SystemLogRecord {
             device_id: &oc.config.device_id,
             level,

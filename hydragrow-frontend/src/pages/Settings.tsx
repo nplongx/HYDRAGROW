@@ -140,7 +140,7 @@ const Settings = () => {
     max_dose_per_cycle: 50.0, max_dose_per_hour: 200.0, cooldown_sec: 60, water_level_critical_min: 10.0,
     max_refill_cycles_per_hour: 3, max_drain_cycles_per_hour: 3, max_refill_duration_sec: 120, max_drain_duration_sec: 120,
     emergency_shutdown: false, ec_ack_threshold: 0.05, ph_ack_threshold: 0.1, water_ack_threshold: 0.5,
-    ph_v7: 2.5, ph_v4: 1.428, ph_v10: null, ph_calibration_mode: '2-point',
+    ph_v7: 2.5, ph_v4: 3.04, ph_v10: null, ph_calibration_mode: '2-point',
     ec_factor: 880.0, ec_offset: 0.0, temp_offset: 0.0, temp_compensation_beta: 0.02,
     publish_interval: 5000, moving_average_window: 15,
     enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,

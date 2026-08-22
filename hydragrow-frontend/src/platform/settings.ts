@@ -9,6 +9,23 @@ const isBrowser = typeof window !== 'undefined';
 
 export const isTauriRuntime = () => isBrowser && '__TAURI_INTERNALS__' in window;
 
+let cachedLocalRaw: string | null = null;
+let cachedParsedLocal: any = null;
+
+const parseLocalSettings = (localRaw: string): any => {
+  if (localRaw === cachedLocalRaw) {
+    return cachedParsedLocal;
+  }
+  try {
+    const parsed = JSON.parse(localRaw);
+    cachedLocalRaw = localRaw;
+    cachedParsedLocal = parsed;
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+};
+
 const normalizeSettings = (raw: any): AppSettings | null => {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -29,8 +46,8 @@ const loadWebSettings = async (): Promise<AppSettings | null> => {
   // 2. Đọc từ localStorage
   const localRaw = localStorage.getItem(SETTINGS_STORAGE_KEY);
   if (localRaw) {
-    try {
-      const parsed = JSON.parse(localRaw);
+    const parsed = parseLocalSettings(localRaw);
+    if (parsed) {
       const localSettings = normalizeSettings(parsed);
       if (localSettings) {
         return {
@@ -38,20 +55,8 @@ const loadWebSettings = async (): Promise<AppSettings | null> => {
           api_key: sessionApiKey || localSettings.api_key || '',
         };
       }
-    } catch (_) {}
+    }
   }
-
-  // 3. Đọc từ file static /config.json (nếu có)
-  // try {
-  //   const res = await window.fetch('/config.json');
-  //   if (res.ok) {
-  //     const json = await res.json();
-  //     const remoteSettings = normalizeSettings(json);
-  //     if (remoteSettings) {
-  //       return { ...remoteSettings, api_key: sessionApiKey || remoteSettings.api_key || '' };
-  //     }
-  //   }
-  // } catch (_) {}
 
   return sessionApiKey ? { backend_url: '', api_key: sessionApiKey, device_id: '' } : null
 };
@@ -88,11 +93,11 @@ export const forgetStoredApiKey = async (): Promise<void> => {
   sessionStorage.removeItem(SESSION_API_KEY_STORAGE_KEY);
   const localRaw = localStorage.getItem(SETTINGS_STORAGE_KEY);
   if (localRaw) {
-    try {
-      const parsed = JSON.parse(localRaw);
+    const parsed = parseLocalSettings(localRaw);
+    if (parsed) {
       const { api_key: _, ...safeSettings } = parsed;
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(safeSettings));
-    } catch (_) {}
+    }
   }
 };
 

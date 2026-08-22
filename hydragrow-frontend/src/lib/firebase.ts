@@ -8,17 +8,17 @@ import { debugLog, redactSecret } from "./redact";
 // Configure Firebase with Vite environment variables from a local .env file.
 // See README.md for the required VITE_FIREBASE_* and VITE_FIREBASE_VAPID_KEY values.
 const firebaseConfig = {
-  apiKey: "AIzaSyAjxXN5YIUztbY_pSpor1xsleEvHNuZqnc",
-  authDomain: "hydragrow-iot.firebaseapp.com",
-  projectId: "hydragrow-iot",
-  storageBucket: "hydragrow-iot.firebasestorage.app",
-  messagingSenderId: "810716913891",
-  appId: "1:810716913891:web:a2fea867c0d63df1bfa5d6",
-  measurementId: "G-14M8B93S7V"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 
-const firebaseVapidKey = "BDHacUd3ZPRTo5QfnaErWYyXIgxW2sjOR22A9HrIyLzuPrJ62cylLTgaooS3PhscRnZ6jggodBFmd3hJ3izr33I";
+const firebaseVapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 export const app = initializeApp(firebaseConfig);
 
 // Khởi tạo Messaging instance

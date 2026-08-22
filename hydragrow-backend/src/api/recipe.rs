@@ -4,6 +4,7 @@ use hydragrow_shared::{
     recipe::{CropRecipe, CropStage},
     topics::topic_recipe_set,
 };
+
 use rumqttc::QoS;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -76,6 +77,7 @@ where
     for<'c> &'c str: sqlx::ColumnIndex<R>,
 {
     let duration_days: i32 = r.try_get("duration_days").unwrap_or(7);
+
     CropStage {
         name: r.try_get("name").unwrap_or_default(),
         duration_sec: (duration_days.max(1) as u64) * 86_400,
@@ -86,21 +88,31 @@ where
         nutrient_a_ratio: r.try_get("nutrient_a_ratio").unwrap_or(1.0),
         nutrient_b_ratio: r.try_get("nutrient_b_ratio").unwrap_or(1.0),
         water_level_target: r.try_get("water_level_target").unwrap_or(20.0),
+
         water_change_interval_days: r
             .try_get::<Option<i32>, _>("water_change_interval_days")
             .ok()
             .flatten()
             .map(|v| v.max(0) as u32),
+
         water_change_drain_cm: r
             .try_get::<Option<f32>, _>("water_change_drain_cm")
             .ok()
             .flatten(),
+
         auto_dilute_ec_trigger: r
             .try_get::<Option<f32>, _>("auto_dilute_ec_trigger")
             .ok()
             .flatten(),
-        misting_on_duration_ms: r.try_get("misting_on_duration_ms").unwrap_or(10_000),
-        misting_off_duration_ms: r.try_get("misting_off_duration_ms").unwrap_or(180_000),
+
+        misting_on_duration_ms: r
+            .try_get("misting_on_duration_ms")
+            .unwrap_or(10_000),
+
+        misting_off_duration_ms: r
+            .try_get("misting_off_duration_ms")
+            .unwrap_or(180_000),
+
         max_dose_per_cycle_ml: r
             .try_get::<Option<f32>, _>("max_dose_per_cycle_ml")
             .ok()
@@ -108,13 +120,28 @@ where
     }
 }
 
-async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<CropStage> {
+async fn fetch_stages_for_recipe(
+    pool: &sqlx::PgPool,
+    recipe_id: &str,
+) -> Vec<CropStage> {
     let rows = sqlx::query(
         r#"
-        SELECT name, duration_days, ec_target, ec_tolerance, ph_target, ph_tolerance,
-               nutrient_a_ratio, nutrient_b_ratio, water_level_target,
-               water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
-               misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+        SELECT
+            name,
+            duration_days,
+            ec_target,
+            ec_tolerance,
+            ph_target,
+            ph_tolerance,
+            nutrient_a_ratio,
+            nutrient_b_ratio,
+            water_level_target,
+            water_change_interval_days,
+            water_change_drain_cm,
+            auto_dilute_ec_trigger,
+            misting_on_duration_ms,
+            misting_off_duration_ms,
+            max_dose_per_cycle_ml
         FROM crop_recipe_stages
         WHERE recipe_id = $1
         ORDER BY stage_order ASC
@@ -136,7 +163,10 @@ pub async fn update_recipe(
 ) -> impl Responder {
     let recipe_id = path.into_inner();
 
-    if req.name.trim().is_empty() || req.crop.trim().is_empty() || req.stages.is_empty() {
+    if req.name.trim().is_empty()
+        || req.crop.trim().is_empty()
+        || req.stages.is_empty()
+    {
         return HttpResponse::BadRequest().json(json!({
             "error": "invalid_recipe",
             "message": "name, crop và stages là bắt buộc"
@@ -145,14 +175,21 @@ pub async fn update_recipe(
 
     let mut tx = match app_state.pg_pool.begin().await {
         Ok(tx) => tx,
-        Err(e) => return HttpResponse::InternalServerError().json(json!({"error": "db_error"})),
+        Err(e) => {
+            tracing::error!("Lỗi mở transaction: {:?}", e);
+
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "db_error"}));
+        }
     };
 
     // 1. Cập nhật thông tin chung của Recipe
     if let Err(e) = sqlx::query(
         r#"
-        UPDATE crop_recipes 
-        SET name = $1, crop = $2, description = $3 
+        UPDATE crop_recipes
+        SET name = $1,
+            crop = $2,
+            description = $3
         WHERE id = $4
         "#,
     )
@@ -164,66 +201,117 @@ pub async fn update_recipe(
     .await
     {
         return HttpResponse::InternalServerError()
-            .json(json!({"error": "db_update_failed", "details": e.to_string()}));
+            .json(json!({
+                "error": "db_update_failed",
+                "details": e.to_string()
+            }));
     }
 
     // 2. Xóa sạch các Stages cũ của Recipe này
-    let _ = sqlx::query("DELETE FROM crop_recipe_stages WHERE recipe_id = $1")
-        .bind(&recipe_id)
-        .execute(&mut *tx)
-        .await;
+    if let Err(e) = sqlx::query(
+        "DELETE FROM crop_recipe_stages WHERE recipe_id = $1",
+    )
+    .bind(&recipe_id)
+    .execute(&mut *tx)
+    .await
+    {
+        return HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "db_delete_stage_failed",
+                "details": e.to_string()
+            }));
+    }
 
-    // 3. Chèn lại các Stages mới (y hệt như create)
+    // 3. Chèn lại các Stages mới bằng một query
     if !req.stages.is_empty() {
-        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+        let mut query_builder = sqlx::QueryBuilder::new(
             r#"
             INSERT INTO crop_recipe_stages (
-                id, recipe_id, stage_order, name, duration_days,
-                ec_target, ec_tolerance, ph_target, ph_tolerance,
-                nutrient_a_ratio, nutrient_b_ratio, water_level_target,
-                water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
-                misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+                id,
+                recipe_id,
+                stage_order,
+                name,
+                duration_days,
+                ec_target,
+                ec_tolerance,
+                ph_target,
+                ph_tolerance,
+                nutrient_a_ratio,
+                nutrient_b_ratio,
+                water_level_target,
+                water_change_interval_days,
+                water_change_drain_cm,
+                auto_dilute_ec_trigger,
+                misting_on_duration_ms,
+                misting_off_duration_ms,
+                max_dose_per_cycle_ml
             )
             "#,
         );
 
-        qb.push_values(req.stages.iter().enumerate(), |mut b, (idx, stage)| {
-            let stage_id = Uuid::new_v4().to_string();
-            let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
+        query_builder.push_values(
+            req.stages.iter().enumerate(),
+            |mut b, (idx, stage)| {
+                let stage_id = Uuid::new_v4().to_string();
+                let duration_days =
+                    (stage.duration_sec / 86_400).max(1) as i32;
 
-            b.push_bind(stage_id)
-                .push_bind(recipe_id.clone())
-                .push_bind((idx + 1) as i32)
-                .push_bind(&stage.name)
-                .push_bind(duration_days)
-                .push_bind(stage.ec_target)
-                .push_bind(stage.ec_tolerance)
-                .push_bind(stage.ph_target)
-                .push_bind(stage.ph_tolerance)
-                .push_bind(stage.nutrient_a_ratio)
-                .push_bind(stage.nutrient_b_ratio)
-                .push_bind(stage.water_level_target)
-                .push_bind(stage.water_change_interval_days.map(|v| v as i32))
-                .push_bind(stage.water_change_drain_cm)
-                .push_bind(stage.auto_dilute_ec_trigger)
-                .push_bind(stage.misting_on_duration_ms)
-                .push_bind(stage.misting_off_duration_ms)
-                .push_bind(stage.max_dose_per_cycle_ml);
-        });
+                b.push_bind(stage_id)
+                    .push_bind(&recipe_id)
+                    .push_bind((idx + 1) as i32)
+                    .push_bind(&stage.name)
+                    .push_bind(duration_days)
+                    .push_bind(stage.ec_target)
+                    .push_bind(stage.ec_tolerance)
+                    .push_bind(stage.ph_target)
+                    .push_bind(stage.ph_tolerance)
+                    .push_bind(stage.nutrient_a_ratio)
+                    .push_bind(stage.nutrient_b_ratio)
+                    .push_bind(stage.water_level_target)
+                    .push_bind(
+                        stage.water_change_interval_days
+                            .map(|v| v as i32),
+                    )
+                    .push_bind(stage.water_change_drain_cm)
+                    .push_bind(stage.auto_dilute_ec_trigger)
+                    .push_bind(stage.misting_on_duration_ms)
+                    .push_bind(stage.misting_off_duration_ms)
+                    .push_bind(stage.max_dose_per_cycle_ml);
+            },
+        );
 
-        let query = qb.build();
-        if let Err(e) = query.execute(&mut *tx).await {
-            return HttpResponse::InternalServerError().json(json!({"error": "db_insert_stage_failed", "details": e.to_string()}));
+        if let Err(e) = query_builder
+            .build()
+            .execute(&mut *tx)
+            .await
+        {
+            return HttpResponse::InternalServerError()
+                .json(json!({
+                    "error": "db_insert_stage_failed",
+                    "details": e.to_string()
+                }));
         }
     }
 
-    let _ = tx.commit().await;
-    HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã cập nhật công thức" }))
+    if let Err(e) = tx.commit().await {
+        return HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "db_commit_failed",
+                "details": e.to_string()
+            }));
+    }
+
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "message": "Đã cập nhật công thức"
+    }))
 }
 
 use std::collections::HashMap;
 
-pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
+pub async fn list_recipes(
+    app_state: web::Data<AppState>,
+) -> impl Responder {
     let recipes_res = sqlx::query_as::<_, RecipeTemplate>(
         r#"
         SELECT id, name, crop, description, created_at
@@ -237,26 +325,48 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
     let mut recipes = match recipes_res {
         Ok(r) => r,
         Err(e) => {
-            tracing::error!("Lỗi truy vấn crop_recipes: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({
-                "error": "database_error",
-                "details": e.to_string()
-            }));
+            tracing::error!(
+                "Lỗi truy vấn crop_recipes: {:?}",
+                e
+            );
+
+            return HttpResponse::InternalServerError()
+                .json(json!({
+                    "error": "database_error",
+                    "details": e.to_string()
+                }));
         }
     };
 
     if recipes.is_empty() {
-        return HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }));
+        return HttpResponse::Ok().json(json!({
+            "status": "success",
+            "data": recipes
+        }));
     }
 
-    let recipe_ids: Vec<String> = recipes.iter().map(|r| r.id.clone()).collect();
+    let recipe_ids: Vec<String> =
+        recipes.iter().map(|r| r.id.clone()).collect();
 
     let rows = sqlx::query(
         r#"
-        SELECT recipe_id, name, duration_days, ec_target, ec_tolerance, ph_target, ph_tolerance,
-               nutrient_a_ratio, nutrient_b_ratio, water_level_target,
-               water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
-               misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+        SELECT
+            recipe_id,
+            name,
+            duration_days,
+            ec_target,
+            ec_tolerance,
+            ph_target,
+            ph_tolerance,
+            nutrient_a_ratio,
+            nutrient_b_ratio,
+            water_level_target,
+            water_change_interval_days,
+            water_change_drain_cm,
+            auto_dilute_ec_trigger,
+            misting_on_duration_ms,
+            misting_off_duration_ms,
+            max_dose_per_cycle_ml
         FROM crop_recipe_stages
         WHERE recipe_id = ANY($1)
         ORDER BY recipe_id, stage_order ASC
@@ -267,27 +377,41 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
     .await
     .unwrap_or_default();
 
-    let mut stages_by_recipe: HashMap<String, Vec<CropStage>> = HashMap::new();
+    let mut stages_by_recipe: HashMap<String, Vec<CropStage>> =
+        HashMap::new();
 
     for r in rows {
-        let recipe_id: String = r.try_get("recipe_id").unwrap_or_default();
+        let recipe_id: String =
+            r.try_get("recipe_id").unwrap_or_default();
+
         let stage = map_row_to_crop_stage(&r);
 
-        stages_by_recipe.entry(recipe_id).or_default().push(stage);
+        stages_by_recipe
+            .entry(recipe_id)
+            .or_default()
+            .push(stage);
     }
 
     for recipe in &mut recipes {
-        recipe.stages = stages_by_recipe.remove(&recipe.id).unwrap_or_default();
+        recipe.stages = stages_by_recipe
+            .remove(&recipe.id)
+            .unwrap_or_default();
     }
 
-    HttpResponse::Ok().json(json!({ "status": "success", "data": recipes }))
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "data": recipes
+    }))
 }
 
 pub async fn create_recipe(
     app_state: web::Data<AppState>,
     req: web::Json<CreateRecipeRequest>,
 ) -> impl Responder {
-    if req.name.trim().is_empty() || req.crop.trim().is_empty() || req.stages.is_empty() {
+    if req.name.trim().is_empty()
+        || req.crop.trim().is_empty()
+        || req.stages.is_empty()
+    {
         return HttpResponse::BadRequest().json(json!({
             "error": "invalid_recipe",
             "message": "name, crop và stages là bắt buộc"
@@ -301,16 +425,24 @@ pub async fn create_recipe(
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!("Lỗi mở transaction: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({
-                "error": "db_error",
-                "details": e.to_string()
-            }));
+
+            return HttpResponse::InternalServerError()
+                .json(json!({
+                    "error": "db_error",
+                    "details": e.to_string()
+                }));
         }
     };
 
     if let Err(e) = sqlx::query(
         r#"
-        INSERT INTO crop_recipes (id, name, crop, description, created_at)
+        INSERT INTO crop_recipes (
+            id,
+            name,
+            crop,
+            description,
+            created_at
+        )
         VALUES ($1, $2, $3, $4, $5)
         "#,
     )
@@ -322,66 +454,104 @@ pub async fn create_recipe(
     .execute(&mut *tx)
     .await
     {
-        tracing::error!("Lỗi INSERT crop_recipes: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({
-            "error": "db_insert_recipe_failed",
-            "details": e.to_string()
-        }));
+        tracing::error!(
+            "Lỗi INSERT crop_recipes: {:?}",
+            e
+        );
+
+        return HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "db_insert_recipe_failed",
+                "details": e.to_string()
+            }));
     }
 
     if !req.stages.is_empty() {
-        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+        let mut query_builder = sqlx::QueryBuilder::new(
             r#"
             INSERT INTO crop_recipe_stages (
-                id, recipe_id, stage_order, name, duration_days,
-                ec_target, ec_tolerance, ph_target, ph_tolerance,
-                nutrient_a_ratio, nutrient_b_ratio, water_level_target,
-                water_change_interval_days, water_change_drain_cm, auto_dilute_ec_trigger,
-                misting_on_duration_ms, misting_off_duration_ms, max_dose_per_cycle_ml
+                id,
+                recipe_id,
+                stage_order,
+                name,
+                duration_days,
+                ec_target,
+                ec_tolerance,
+                ph_target,
+                ph_tolerance,
+                nutrient_a_ratio,
+                nutrient_b_ratio,
+                water_level_target,
+                water_change_interval_days,
+                water_change_drain_cm,
+                auto_dilute_ec_trigger,
+                misting_on_duration_ms,
+                misting_off_duration_ms,
+                max_dose_per_cycle_ml
             )
             "#,
         );
 
-        qb.push_values(req.stages.iter().enumerate(), |mut b, (idx, stage)| {
-            let stage_id = Uuid::new_v4().to_string();
-            let duration_days = (stage.duration_sec / 86_400).max(1) as i32;
+        query_builder.push_values(
+            req.stages.iter().enumerate(),
+            |mut b, (idx, stage)| {
+                let stage_id = Uuid::new_v4().to_string();
+                let duration_days =
+                    (stage.duration_sec / 86_400).max(1) as i32;
 
-            b.push_bind(stage_id)
-                .push_bind(recipe_id.clone())
-                .push_bind((idx + 1) as i32)
-                .push_bind(&stage.name)
-                .push_bind(duration_days)
-                .push_bind(stage.ec_target)
-                .push_bind(stage.ec_tolerance)
-                .push_bind(stage.ph_target)
-                .push_bind(stage.ph_tolerance)
-                .push_bind(stage.nutrient_a_ratio)
-                .push_bind(stage.nutrient_b_ratio)
-                .push_bind(stage.water_level_target)
-                .push_bind(stage.water_change_interval_days.map(|v| v as i32))
-                .push_bind(stage.water_change_drain_cm)
-                .push_bind(stage.auto_dilute_ec_trigger)
-                .push_bind(stage.misting_on_duration_ms)
-                .push_bind(stage.misting_off_duration_ms)
-                .push_bind(stage.max_dose_per_cycle_ml);
-        });
+                b.push_bind(stage_id)
+                    .push_bind(&recipe_id)
+                    .push_bind((idx + 1) as i32)
+                    .push_bind(&stage.name)
+                    .push_bind(duration_days)
+                    .push_bind(stage.ec_target)
+                    .push_bind(stage.ec_tolerance)
+                    .push_bind(stage.ph_target)
+                    .push_bind(stage.ph_tolerance)
+                    .push_bind(stage.nutrient_a_ratio)
+                    .push_bind(stage.nutrient_b_ratio)
+                    .push_bind(stage.water_level_target)
+                    .push_bind(
+                        stage.water_change_interval_days
+                            .map(|v| v as i32),
+                    )
+                    .push_bind(stage.water_change_drain_cm)
+                    .push_bind(stage.auto_dilute_ec_trigger)
+                    .push_bind(stage.misting_on_duration_ms)
+                    .push_bind(stage.misting_off_duration_ms)
+                    .push_bind(stage.max_dose_per_cycle_ml);
+            },
+        );
 
-        let query = qb.build();
-        if let Err(e) = query.execute(&mut *tx).await {
-            tracing::error!("Lỗi INSERT crop_recipe_stages: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({
-                "error": "db_insert_stage_failed",
-                "details": e.to_string()
-            }));
+        if let Err(e) = query_builder
+            .build()
+            .execute(&mut *tx)
+            .await
+        {
+            tracing::error!(
+                "Lỗi INSERT crop_recipe_stages: {:?}",
+                e
+            );
+
+            return HttpResponse::InternalServerError()
+                .json(json!({
+                    "error": "db_insert_stage_failed",
+                    "details": e.to_string()
+                }));
         }
     }
 
     if let Err(e) = tx.commit().await {
-        tracing::error!("Lỗi commit transaction: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({
-            "error": "db_commit_failed",
-            "details": e.to_string()
-        }));
+        tracing::error!(
+            "Lỗi commit transaction: {:?}",
+            e
+        );
+
+        return HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "db_commit_failed",
+                "details": e.to_string()
+            }));
     }
 
     let created = RecipeTemplate {
@@ -393,7 +563,10 @@ pub async fn create_recipe(
         created_at: now,
     };
 
-    HttpResponse::Created().json(json!({ "status": "success", "data": created }))
+    HttpResponse::Created().json(json!({
+        "status": "success",
+        "data": created
+    }))
 }
 
 // XÓA RECIPE TEMPLATE TRONG CSDL
@@ -403,19 +576,34 @@ pub async fn delete_recipe(
 ) -> impl Responder {
     let recipe_id = path.into_inner();
 
-    let res = sqlx::query("DELETE FROM crop_recipes WHERE id = $1")
-        .bind(&recipe_id)
-        .execute(&app_state.pg_pool)
-        .await;
+    let res = sqlx::query(
+        "DELETE FROM crop_recipes WHERE id = $1"
+    )
+    .bind(&recipe_id)
+    .execute(&app_state.pg_pool)
+    .await;
 
     match res {
-        Ok(r) if r.rows_affected() > 0 => HttpResponse::Ok()
-            .json(json!({ "status": "success", "message": "Đã xóa recipe template" })),
-        Ok(_) => HttpResponse::NotFound().json(json!({ "error": "recipe_not_found" })),
-        Err(e) => HttpResponse::InternalServerError().json(json!({
-            "error": "db_delete_failed",
-            "details": e.to_string()
-        })),
+        Ok(r) if r.rows_affected() > 0 => {
+            HttpResponse::Ok().json(json!({
+                "status": "success",
+                "message": "Đã xóa recipe template"
+            }))
+        }
+
+        Ok(_) => {
+            HttpResponse::NotFound().json(json!({
+                "error": "recipe_not_found"
+            }))
+        }
+
+        Err(e) => {
+            HttpResponse::InternalServerError()
+                .json(json!({
+                    "error": "db_delete_failed",
+                    "details": e.to_string()
+                }))
+        }
     }
 }
 
@@ -428,7 +616,9 @@ pub async fn apply_recipe(
 
     let recipe_template = if let Some(recipe_id) = &req.recipe_id {
         let row = sqlx::query_as::<_, RecipeTemplate>(
-            "SELECT id, name, crop, description, created_at FROM crop_recipes WHERE id = $1",
+            "SELECT id, name, crop, description, created_at
+             FROM crop_recipes
+             WHERE id = $1",
         )
         .bind(recipe_id)
         .fetch_optional(&app_state.pg_pool)
@@ -436,10 +626,20 @@ pub async fn apply_recipe(
 
         match row {
             Ok(Some(mut r)) => {
-                r.stages = fetch_stages_for_recipe(&app_state.pg_pool, &r.id).await;
+                r.stages =
+                    fetch_stages_for_recipe(
+                        &app_state.pg_pool,
+                        &r.id,
+                    )
+                    .await;
                 r
             }
-            _ => return HttpResponse::NotFound().json(json!({ "error": "recipe_not_found" })),
+
+            _ => {
+                return HttpResponse::NotFound().json(json!({
+                    "error": "recipe_not_found"
+                }));
+            }
         }
     } else if let Some(inline) = &req.recipe {
         RecipeTemplate {
@@ -457,20 +657,34 @@ pub async fn apply_recipe(
         }));
     };
 
-    let season_id = match postgres::get_active_crop_season(&app_state.pg_pool, &device_id).await {
-        Ok(Some(season)) => {
-            // TỰ ĐỘNG ĐỒNG BỘ GIỐNG CÂY TRỒNG CỦA MÙA VỤ THEO RECIPE
-            let _ = sqlx::query("UPDATE crop_seasons SET plant_type = $1 WHERE id = $2")
+    let season_id =
+        match postgres::get_active_crop_season(
+            &app_state.pg_pool,
+            &device_id,
+        )
+        .await
+        {
+            Ok(Some(season)) => {
+                // TỰ ĐỘNG ĐỒNG BỘ GIỐNG CÂY TRỒNG
+                // CỦA MÙA VỤ THEO RECIPE
+                let _ = sqlx::query(
+                    "UPDATE crop_seasons
+                     SET plant_type = $1
+                     WHERE id = $2",
+                )
                 .bind(&recipe_template.crop)
                 .bind(&season.id)
                 .execute(&app_state.pg_pool)
                 .await;
-            season.id
-        }
-        _ => "default_season".to_string(),
-    };
+
+                season.id
+            }
+
+            _ => "default_season".to_string(),
+        };
 
     let now_ts = Utc::now().timestamp() as u64;
+
     let snapshot = CropRecipe {
         schema_version: 1,
         recipe_id: recipe_template.id.clone(),
@@ -490,22 +704,39 @@ pub async fn apply_recipe(
         signature: None,
     };
 
-    let signed_payload = match sign_command(&device_id, &payload) {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!("Lỗi ký recipe payload: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({ "error": "signing_failed" }));
-        }
-    };
+    let signed_payload =
+        match sign_command(&device_id, &payload) {
+            Ok(v) => v,
 
-    let payload_bytes = match serde_json::to_vec(&signed_payload) {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::error!("Lỗi serialize recipe: {:?}", e);
-            return HttpResponse::InternalServerError()
-                .json(json!({ "error": "serialization_failed" }));
-        }
-    };
+            Err(e) => {
+                tracing::error!(
+                    "Lỗi ký recipe payload: {:?}",
+                    e
+                );
+
+                return HttpResponse::InternalServerError()
+                    .json(json!({
+                        "error": "signing_failed"
+                    }));
+            }
+        };
+
+    let payload_bytes =
+        match serde_json::to_vec(&signed_payload) {
+            Ok(b) => b,
+
+            Err(e) => {
+                tracing::error!(
+                    "Lỗi serialize recipe: {:?}",
+                    e
+                );
+
+                return HttpResponse::InternalServerError()
+                    .json(json!({
+                        "error": "serialization_failed"
+                    }));
+            }
+        };
 
     if let Err(e) = app_state
         .mqtt_client
@@ -517,14 +748,28 @@ pub async fn apply_recipe(
         )
         .await
     {
-        tracing::error!("Lỗi publish MQTT: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({ "error": "mqtt_publish_failed" }));
+        tracing::error!(
+            "Lỗi publish MQTT: {:?}",
+            e
+        );
+
+        return HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "mqtt_publish_failed"
+            }));
     }
 
     let active_id = Uuid::new_v4().to_string();
+
     let _ = sqlx::query(
         r#"
-        INSERT INTO device_active_recipes (id, device_id, season_id, recipe_id, current_stage_id)
+        INSERT INTO device_active_recipes (
+            id,
+            device_id,
+            season_id,
+            recipe_id,
+            current_stage_id
+        )
         VALUES ($1, $2, $3, $4, 'stage_1')
         ON CONFLICT (device_id) DO UPDATE SET
             season_id = EXCLUDED.season_id,
@@ -539,7 +784,10 @@ pub async fn apply_recipe(
     .execute(&app_state.pg_pool)
     .await;
 
-    HttpResponse::Ok().json(json!({ "status": "success", "data": snapshot }))
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "data": snapshot
+    }))
 }
 
 pub async fn clear_recipe(
@@ -547,6 +795,7 @@ pub async fn clear_recipe(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
     let payload = ClearRecipeMqttPayload {
         action: "clear",
         ts: None,
@@ -554,13 +803,22 @@ pub async fn clear_recipe(
         signature: None,
     };
 
-    let signed_payload = match sign_command(&device_id, &payload) {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!("Lỗi ký clear recipe payload: {:?}", e);
-            return HttpResponse::InternalServerError().json(json!({ "error": "signing_failed" }));
-        }
-    };
+    let signed_payload =
+        match sign_command(&device_id, &payload) {
+            Ok(v) => v,
+
+            Err(e) => {
+                tracing::error!(
+                    "Lỗi ký clear recipe: {:?}",
+                    e
+                );
+
+                return HttpResponse::InternalServerError()
+                    .json(json!({
+                        "error": "signing_failed"
+                    }));
+            }
+        };
 
     if let Err(e) = app_state
         .mqtt_client
@@ -572,16 +830,28 @@ pub async fn clear_recipe(
         )
         .await
     {
-        tracing::error!("Lỗi MQTT clear recipe: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({ "error": "mqtt_publish_failed" }));
+        tracing::error!(
+            "Lỗi MQTT clear recipe: {:?}",
+            e
+        );
+
+        return HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "mqtt_publish_failed"
+            }));
     }
 
-    let _ = sqlx::query("DELETE FROM device_active_recipes WHERE device_id = $1")
-        .bind(&device_id)
-        .execute(&app_state.pg_pool)
-        .await;
+    let _ = sqlx::query(
+        "DELETE FROM device_active_recipes
+         WHERE device_id = $1",
+    )
+    .bind(&device_id)
+    .execute(&app_state.pg_pool)
+    .await;
 
-    HttpResponse::Ok().json(json!({ "status": "success" }))
+    HttpResponse::Ok().json(json!({
+        "status": "success"
+    }))
 }
 
 pub async fn recipe_status(
@@ -591,7 +861,10 @@ pub async fn recipe_status(
     let device_id = path.into_inner();
 
     let active_row = sqlx::query(
-        "SELECT recipe_id, season_id FROM device_active_recipes WHERE device_id = $1 LIMIT 1",
+        "SELECT recipe_id, season_id
+         FROM device_active_recipes
+         WHERE device_id = $1
+         LIMIT 1",
     )
     .bind(&device_id)
     .fetch_optional(&app_state.pg_pool)
@@ -612,7 +885,12 @@ pub async fn recipe_status(
     let recipe_id: String = row.get("recipe_id");
     let season_id: String = row.get("season_id");
 
-    let stages = fetch_stages_for_recipe(&app_state.pg_pool, &recipe_id).await;
+    let stages =
+        fetch_stages_for_recipe(
+            &app_state.pg_pool,
+            &recipe_id,
+        )
+        .await;
 
     let active_recipe = CropRecipe {
         schema_version: 1,
@@ -635,21 +913,35 @@ pub async fn recipe_status(
     }))
 }
 
-pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/recipes", web::get().to(list_recipes))
-        .route("/recipes", web::post().to(create_recipe))
-        .route("/recipes/{recipe_id}", web::put().to(update_recipe))
-        .route("/recipes/{recipe_id}", web::delete().to(delete_recipe))
-        .route(
-            "/devices/{device_id}/recipe/apply",
-            web::post().to(apply_recipe),
-        )
-        .route(
-            "/devices/{device_id}/recipe/clear",
-            web::post().to(clear_recipe),
-        )
-        .route(
-            "/devices/{device_id}/recipe/status",
-            web::get().to(recipe_status),
-        );
+pub fn init_routes(
+    cfg: &mut web::ServiceConfig,
+) {
+    cfg.route(
+        "/recipes",
+        web::get().to(list_recipes),
+    )
+    .route(
+        "/recipes",
+        web::post().to(create_recipe),
+    )
+    .route(
+        "/recipes/{recipe_id}",
+        web::put().to(update_recipe),
+    )
+    .route(
+        "/recipes/{recipe_id}",
+        web::delete().to(delete_recipe),
+    )
+    .route(
+        "/devices/{device_id}/recipe/apply",
+        web::post().to(apply_recipe),
+    )
+    .route(
+        "/devices/{device_id}/recipe/clear",
+        web::post().to(clear_recipe),
+    )
+    .route(
+        "/devices/{device_id}/recipe/status",
+        web::get().to(recipe_status),
+    );
 }

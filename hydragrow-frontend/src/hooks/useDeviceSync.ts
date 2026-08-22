@@ -101,7 +101,7 @@ export function useDeviceSync() {
 
   const refreshSettings = useCallback(async () => {
     const s: any = await loadAppSettings();
-    if (s && s.device_id && s.backend_url) {
+    if (s && s.device_id !== undefined && s.backend_url !== undefined) {
       let mergedSettings = s;
       if (s.api_key) {
         try {
@@ -219,8 +219,16 @@ export function useDeviceSync() {
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     const connectWs = () => {
-      const cleanBaseUrl = settings.backend_url.replace(/\/$/, '');
-      const wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}/api/devices/${deviceId}/ws?api_key=${encodeURIComponent(settings.api_key || '')}`;
+      const path = `/api/devices/${deviceId}/ws?api_key=${encodeURIComponent(settings.api_key || '')}`;
+      let wsUrl = '';
+      if (!settings.backend_url) {
+          // Tự động suy luận protocol (ws/wss) và domain (Vercel) từ trình duyệt
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${protocol}//${window.location.host}${path}`;
+      } else {
+          const cleanBaseUrl = settings.backend_url.replace(/\/$/, '');
+          wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}${path}`;
+      }
 
       ws = new WebSocket(wsUrl);
 

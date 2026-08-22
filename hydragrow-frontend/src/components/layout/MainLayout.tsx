@@ -69,15 +69,20 @@ const MainLayout: React.FC = () => {
 
   const isActiveMore = moreMenuItems.some(item => location.pathname === item.path);
 
-  if (isMissingConfig) {
+  if (isMissingConfig && location.pathname !== '/settings') {
     return (
       <div className="min-h-screen bg-emerald-50 text-emerald-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full ui-card text-center space-y-3">
-          <h2 className="text-xl font-semibold">Thiếu cấu hình ứng dụng</h2>
+        <div className="max-w-md w-full ui-card text-center space-y-4">
+          <h2 className="text-xl font-semibold">Chưa có API Key</h2>
           <p className="text-emerald-800/75 text-sm">
-            Ứng dụng web cần <b>backend URL</b> hoặc <b>API key</b>. Hãy cung cấp qua
-            <code className="mx-1">window.__APP_CONFIG__</code>, localStorage hoặc <code>/config.json</code>.
+            Ứng dụng cần <b>API Key</b> để kết nối. Vì lý do bảo mật, vui lòng nhập thông tin này trực tiếp trên trình duyệt của bạn.
           </p>
+          <button 
+            onClick={() => navigate('/settings')}
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-colors"
+          >
+            Đi tới Cài đặt
+          </button>
         </div>
       </div>
     );

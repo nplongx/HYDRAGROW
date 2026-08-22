@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { requestForWebToken, subscribeWebMessages } from '../lib/firebase';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { httpFetch } from '../platform/http';
-import toast from 'react-hot-toast';
+// import toast from 'react-hot-toast';
 import { debugLog, redactSecret } from '../lib/redact';
 
 export function useFCM() {
@@ -63,12 +63,12 @@ export function useFCM() {
 
     const unsubscribe = subscribeWebMessages((payload: any) => {
       debugLog('Foreground message:', payload);
-      if (payload?.notification) {
-        const title = payload.notification.title || '';
-        const body = payload.notification.body || '';
-        const id = payload.messageId || `${title}:${body}`;
-        toast(`${title}\n${body}`, { icon: '🔔', id });
-      }
+      // if (payload?.notification) {
+      //   const title = payload.notification.title || '';
+      //   const body = payload.notification.body || '';
+      //   const id = payload.messageId || `${title}:${body}`;
+      //   toast(`${title}\n${body}`, { icon: '🔔', id });
+      // }
     });
     return unsubscribe;
   }, [settings?.backend_url, settings?.api_key]);

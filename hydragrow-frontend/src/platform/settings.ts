@@ -42,19 +42,19 @@ const loadWebSettings = async (): Promise<AppSettings | null> => {
   }
 
   // 3. Đọc từ file static /config.json (nếu có)
-  try {
-    const res = await window.fetch('/config.json');
-    if (res.ok) {
-      const json = await res.json();
-      const remoteSettings = normalizeSettings(json);
-      if (remoteSettings) {
-        return { ...remoteSettings, api_key: sessionApiKey || remoteSettings.api_key || '' };
-      }
-    }
-  } catch (_) {}
+  // try {
+  //   const res = await window.fetch('/config.json');
+  //   if (res.ok) {
+  //     const json = await res.json();
+  //     const remoteSettings = normalizeSettings(json);
+  //     if (remoteSettings) {
+  //       return { ...remoteSettings, api_key: sessionApiKey || remoteSettings.api_key || '' };
+  //     }
+  //   }
+  // } catch (_) {}
 
-  return sessionApiKey ? { backend_url: '', api_key: sessionApiKey, device_id: '' } : null;
-};
+    return sessionApiKey ? { backend_url: window.location.origin, api_key: sessionApiKey, device_id: '' } : null;
+  };
 
 export const loadAppSettings = async (): Promise<AppSettings | null> => {
   if (isTauriRuntime()) {
@@ -97,7 +97,7 @@ export const forgetStoredApiKey = async (): Promise<void> => {
 };
 
 export const hasRequiredRemoteConfig = (settings: AppSettings | null) => {
-  return Boolean(settings?.backend_url && settings?.api_key);
+  return Boolean(settings?.api_key);
 };
 
 export const saveAppSettings = async (settings: AppSettings): Promise<void> => {

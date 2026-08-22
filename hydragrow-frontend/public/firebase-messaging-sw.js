@@ -22,11 +22,11 @@ messaging.onBackgroundMessage((payload) => {
     console.log('Đã nhận thông báo ngầm:', payload);
   }
 
-  const notificationTitle = payload?.notification?.title || 'HydraGrow';
-  const notificationOptions = {
-    body: payload?.notification?.body || 'Bạn có thông báo mới.',
-    icon: '/tauri.svg',
-  };
+  // const notificationTitle = payload?.notification?.title || 'HydraGrow';
+  // const notificationOptions = {
+  //   body: payload?.notification?.body || 'Bạn có thông báo mới.',
+  //   icon: '/tauri.svg',
+  // };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  // self.registration.showNotification(notificationTitle, notificationOptions);
 });

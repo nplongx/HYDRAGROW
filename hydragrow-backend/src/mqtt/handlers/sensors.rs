@@ -19,10 +19,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
 
     let time = incoming.time.clone();
 
-    // if !validate_payload_schema("sensor_update", &device_id, incoming.schema_version) {
-    //     return;
-    // }
-
     let mut sensor_data = SensorData {
         device_id: device_id.clone(),
         temp: incoming.temp,

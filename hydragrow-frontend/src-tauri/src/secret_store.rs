@@ -95,18 +95,23 @@ pub fn save_api_key(api_key: &str) -> Result<(), String> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn load_api_key() -> Result<String, String> {
-    let output = Command::new("secret-tool")
+fn load_api_key_with_cmd(cmd: &str) -> Result<String, String> {
+    let output = Command::new(cmd)
         .args(["lookup", "service", SERVICE, "account", API_KEY_ACCOUNT])
         .output()
         .map_err(|e| {
-            format!("Không tìm thấy secret-tool/libsecret để đọc OS credential vault: {e}")
+            format!("Không tìm thấy {cmd}/libsecret để đọc OS credential vault: {e}")
         })?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
         Ok(String::new())
     }
+}
+
+#[cfg(target_os = "linux")]
+pub fn load_api_key() -> Result<String, String> {
+    load_api_key_with_cmd("secret-tool")
 }
 
 #[cfg(target_os = "linux")]
@@ -157,4 +162,66 @@ pub fn load_api_key() -> Result<String, String> {
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn save_api_key(_api_key: &str) -> Result<(), String> {
     Err("Nền tảng này chưa hỗ trợ OS credential vault cho API key".to_string())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+
+    fn setup_mock_secret_tool(content: &str) -> PathBuf {
+        let dir = env::temp_dir().join(format!("mock_secret_tool_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let script_path = dir.join("secret-tool");
+        let mut file = fs::File::create(&script_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let mut perms = fs::metadata(&script_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script_path, perms).unwrap();
+
+        script_path
+    }
+
+    fn teardown_mock_secret_tool(script_path: PathBuf) {
+        if let Some(parent) = script_path.parent() {
+            let _ = fs::remove_dir_all(parent);
+        }
+    }
+
+    #[test]
+    fn test_load_api_key_success() {
+        let mock_script = r#"#!/bin/bash
+if [ "$1" = "lookup" ] && [ "$2" = "service" ] && [ "$3" = "com.hydragrow.frontend" ] && [ "$4" = "account" ] && [ "$5" = "api_key" ]; then
+    echo "mocked_api_key"
+    true
+else
+    false
+fi
+"#;
+        let script_path = setup_mock_secret_tool(mock_script);
+
+        let result = load_api_key_with_cmd(script_path.to_str().unwrap());
+        assert_eq!(result.unwrap(), "mocked_api_key");
+
+        teardown_mock_secret_tool(script_path);
+    }
+
+    #[test]
+    fn test_load_api_key_failure() {
+        let mock_script = r#"#!/bin/bash
+false
+"#;
+        let script_path = setup_mock_secret_tool(mock_script);
+
+        let result = load_api_key_with_cmd(script_path.to_str().unwrap());
+        // The implementation returns Ok(String::new()) when secret-tool fails to find it
+        assert_eq!(result.unwrap(), "");
+
+        teardown_mock_secret_tool(script_path);
+    }
 }

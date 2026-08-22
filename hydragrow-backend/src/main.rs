@@ -254,8 +254,8 @@ async fn main() -> anyhow::Result<()> {
     let (alert_sender, _) = broadcast::channel(100);
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
-    let firebase_project_id = std::env::var("FIREBASE_PROJECT_ID")
-        .context("FIREBASE_PROJECT_ID must be set in .env")?;
+    let firebase_project_id =
+        std::env::var("FIREBASE_PROJECT_ID").context("FIREBASE_PROJECT_ID must be set in .env")?;
     let firebase_auth = std::sync::Arc::new(
         crate::services::firebase_auth::FirebaseAuthVerifier::new(firebase_project_id),
     );

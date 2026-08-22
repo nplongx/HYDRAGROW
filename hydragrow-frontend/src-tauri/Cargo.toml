@@ -35,3 +35,7 @@ tauri-plugin-fs = "2.5.0"
 tauri-plugin-dialog = "2.7.0"
 
 hydragrow-shared = { path = "../../hydragrow-shared" }
+
+[dev-dependencies]
+uuid = { version = "1.25.0", features = ["v4"] }
+tauri = { version = "2", features = ["test"] }

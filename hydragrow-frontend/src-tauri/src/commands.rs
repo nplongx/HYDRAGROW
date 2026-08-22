@@ -85,9 +85,61 @@ pub async fn forget_api_key(app: AppHandle) -> Result<(), String> {
 /// because commands are sent directly from the React control client rather
 /// than through a Tauri-side HTTP proxy.
 #[tauri::command]
-pub fn check_valve_safety(app: AppHandle, target_pump: String, is_on: bool) -> Result<(), String> {
+pub fn check_valve_safety<R: tauri::Runtime>(app: tauri::AppHandle<R>, target_pump: String, is_on: bool) -> Result<(), String> {
     use tauri::Manager;
 
     app.state::<crate::valve_guard::ValveGuardState>()
         .check_safety(&target_pump, is_on)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::valve_guard::ValveGuardState;
+    use crate::models::PumpStatus;
+    use tauri::Manager;
+
+    fn setup_app() -> tauri::AppHandle<tauri::test::MockRuntime> {
+        let app = tauri::test::mock_app();
+        app.manage(ValveGuardState::default());
+        app.app_handle().clone()
+    }
+
+    #[test]
+    fn check_valve_safety_allowed() {
+        let app = setup_app();
+
+        let result = check_valve_safety(app, "WATER_PUMP_IN".to_string(), true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn check_valve_safety_blocked() {
+        let app = setup_app();
+        let guard = app.state::<ValveGuardState>();
+        guard.update_status(PumpStatus {
+            water_pump_out: true,
+            ..Default::default()
+        });
+
+        let result = check_valve_safety(app.clone(), "WATER_PUMP_IN".to_string(), true);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "⛔ XUNG ĐỘT AN TOÀN: Không thể mở VAN_IN do bơm/van xả đang hoạt động!"
+        );
+    }
+
+    #[test]
+    fn check_valve_safety_turn_off_always_allowed() {
+        let app = setup_app();
+        let guard = app.state::<ValveGuardState>();
+        guard.update_status(PumpStatus {
+            water_pump_out: true,
+            ..Default::default()
+        });
+
+        let result = check_valve_safety(app.clone(), "WATER_PUMP_IN".to_string(), false);
+        assert!(result.is_ok());
+    }
 }

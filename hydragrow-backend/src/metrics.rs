@@ -363,30 +363,76 @@ mod tests {
     #[test]
     #[serial]
     fn test_register_metrics() {
-        // Register metrics multiple times to ensure no panics occur due to duplicate registration
+        // register_metrics() itself is protected by std::sync::Once,
+        // so calling it multiple times must be safe.
         register_metrics();
         register_metrics();
 
         let families = REGISTRY.gather();
-        let metric_names: Vec<String> = families.iter().map(|f| f.get_name().to_string()).collect();
+        let metric_names: Vec<String> =
+            families.iter().map(|f| f.get_name().to_string()).collect();
 
-        // Assert that at least some of our custom metrics are registered
-        // (If another test runs first and fails registration because unwrap was used,
-        //  it would panic there. Since we use ok(), we just want to make sure
-        //  our custom metrics made it in at some point).
-
-        // Note: active_ws_connections is one of our custom metrics
         assert!(
             metric_names.contains(&"active_ws_connections".to_string()),
             "Custom metric active_ws_connections should be registered. Found: {:?}",
             metric_names
         );
 
-        // And check for sensor_updates_total
         assert!(
             metric_names.contains(&"sensor_updates_total".to_string()),
             "Custom metric sensor_updates_total should be registered. Found: {:?}",
             metric_names
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_gather_metrics_output() {
+        register_metrics();
+
+        // Simulate some metric updates.
+        HTTP_REQUESTS_TOTAL
+            .with_label_values(&["GET", "/api/test", "200"])
+            .inc();
+
+        HTTP_REQUESTS_TOTAL
+            .with_label_values(&["POST", "/api/data", "500"])
+            .inc_by(2);
+
+        ACTIVE_WS_CONNECTIONS.inc();
+
+        let output = gather_metrics();
+
+        // Check metric names.
+        assert!(
+            output.contains("http_requests_total"),
+            "Output should contain the http_requests_total metric name"
+        );
+
+        assert!(
+            output.contains("active_ws_connections"),
+            "Output should contain the active_ws_connections metric name"
+        );
+
+        // Check HTTP metric values.
+        assert!(
+            output.contains(
+                r#"http_requests_total{endpoint="/api/test",method="GET",status="200"} 1"#
+            ),
+            "Output should contain the incremented metric value for GET /api/test"
+        );
+
+        assert!(
+            output.contains(
+                r#"http_requests_total{endpoint="/api/data",method="POST",status="500"} 2"#
+            ),
+            "Output should contain the incremented metric value for POST /api/data"
+        );
+
+        // Check gauge value.
+        assert!(
+            output.contains("active_ws_connections 1"),
+            "Output should contain the active_ws_connections metric value"
         );
     }
 }

@@ -12,6 +12,6 @@ export function redactSecret(value: unknown, visibleSuffixLength = 4): string {
 
 export function debugLog(...args: unknown[]) {
   if (isDevelopment) {
-    console.log(...args);
+    console.debug(...args);
   }
 }

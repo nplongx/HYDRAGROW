@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { requestForWebToken, subscribeWebMessages } from '../lib/firebase';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { httpFetch } from '../platform/http';
-// import toast from 'react-hot-toast';
 import { debugLog, redactSecret } from '../lib/redact';
 
 export function useFCM() {

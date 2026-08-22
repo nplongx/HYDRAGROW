@@ -4,7 +4,11 @@
 //! Output: JSON payload lên topic fsm_state và calibration
 
 use super::ObserverContext;
-use crate::{core::fsm::events::OrchestratorEvent, runtime::build_status_msg};
+use crate::{
+    core::fsm::events::OrchestratorEvent,
+    hw::mqtt_client::get_uptime_sec,
+    runtime::build_status_msg,
+};
 use hydragrow_shared::topics::{topic_calibration, topic_fsm_state};
 use log::warn;
 
@@ -46,7 +50,7 @@ impl MqttTelemetryObserver {
 
         let now_sec = oc.now_ms / 1000;
 
-        let payload = build_status_msg(oc.ctx, now_sec);
+        let payload = build_status_msg(oc.ctx, now_sec, get_uptime_sec());
 
         let topic = topic_fsm_state(&oc.config.device_id);
         if oc.mqtt_tx.send(payload).is_err() {

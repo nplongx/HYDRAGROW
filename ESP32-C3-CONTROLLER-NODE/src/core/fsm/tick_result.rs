@@ -91,6 +91,7 @@ pub struct PeripheralDelta {
     pub previous_ec: Option<Option<f32>>,
     pub previous_ph: Option<Option<f32>>,
     pub last_continuous_level: Option<bool>,
+    pub water_pump_started_uptime_ms: Option<Option<u64>>,
 }
 
 #[derive(Debug, Clone)]

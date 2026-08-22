@@ -18,7 +18,7 @@ impl PhaseTick for CooldownPhase {
         let mut result = TickResult::default();
 
         // Kiểm tra timeout bằng uptime
-        if uptime >= ctx.phase_finish_ms.unwrap_or(0) {
+        if uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX) {
             result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);

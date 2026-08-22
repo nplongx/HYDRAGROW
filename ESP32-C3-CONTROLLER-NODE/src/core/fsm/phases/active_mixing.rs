@@ -20,7 +20,7 @@ impl PhaseTick for ActiveMixingPhase {
 
         // 1. Tính toán mốc thời gian an toàn
         let elapsed_ms = uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
-        let max_mixing_timeout = uptime >= ctx.phase_finish_ms.unwrap_or(0);
+        let max_mixing_timeout = uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX);
 
         if (elapsed_ms >= 15_000 && ctx.stabilizer_tracker.is_stable(config)) || max_mixing_timeout
         {

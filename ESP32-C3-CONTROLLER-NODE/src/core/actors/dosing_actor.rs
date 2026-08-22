@@ -316,7 +316,6 @@ impl DosingActor {
 
         b_job.pulse_on = true;
         b_job.pulse_count += 1;
-        b_job.delivered_ml += b_job.ml_per_sec * (b_job.on_ms as f32 / 1000.0);
         b_job.next_toggle_ms = now_ms + b_job.on_ms;
         self.sub_state = DosingSubState::PumpingB(b_job);
         (DosingEvent::PhaseTransition, hw_events)
@@ -338,6 +337,8 @@ impl DosingActor {
                 on: false,
                 pwm_percent: 0,
             });
+
+            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
 
             if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
                 let delivered_b = job.delivered_ml;
@@ -375,7 +376,6 @@ impl DosingActor {
 
             job.pulse_on = true;
             job.pulse_count += 1;
-            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
             job.next_toggle_ms = now_ms + job.on_ms;
             self.sub_state = DosingSubState::PumpingB(job.clone());
             (
@@ -534,4 +534,39 @@ fn pulse_params(
         1
     };
     (pulse_on_ms, pulse_off_ms, max_pulse_count)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pump_b_delivered_ml_starts_at_zero() {
+        let b_job = PulseJob {
+            pump: PumpTarget::NutrientB,
+            target_ml: 5.0,
+            delivered_ml: 0.0,
+            pulse_on: false,
+            pulse_count: 0,
+            max_pulses: 1,
+            on_ms: 1000,
+            off_ms: 0,
+            pwm: 80,
+            ml_per_sec: 5.0,
+            next_toggle_ms: 0,
+        };
+        let mut actor = DosingActor::new();
+        actor.cycle_ctx = Some(DosingCycleCtx {
+            dose_a_delivered_ml: 5.0,
+            dose_b_delivered_ml: 0.0,
+            ph_up_delivered_ml: 0.0,
+            ph_down_delivered_ml: 0.0,
+        });
+        let (_event, _hw) = actor.begin_pump_b(b_job, 1000);
+        assert!(matches!(actor.sub_state, DosingSubState::PumpingB(_)));
+        if let DosingSubState::PumpingB(job) = &actor.sub_state {
+            assert_eq!(job.delivered_ml, 0.0, "delivered_ml phải là 0 khi vừa bắt đầu bơm B");
+        }
+    }
 }

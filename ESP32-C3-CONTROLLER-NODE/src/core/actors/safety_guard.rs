@@ -41,6 +41,27 @@ impl SafetyGuard {
         true
     }
 
+    /// Kiểm tra xem dose có vượt budget không, KHÔNG ghi vào lịch sử.
+    pub fn peek_hourly_dose(&self, pump: &str, now_sec: u64, dose_ml: f32, max_ml: f32) -> bool {
+        let history = match self.hourly_doses.get(pump) {
+            Some(h) => h,
+            None => return true,
+        };
+        let total: f32 = history
+            .iter()
+            .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+            .map(|(_, ml)| *ml)
+            .sum();
+        total + dose_ml <= max_ml
+    }
+
+    /// Ghi dose vào lịch sử mà không kiểm tra. Chỉ gọi sau khi peek đã pass.
+    pub fn commit_hourly_dose(&mut self, pump: &str, now_sec: u64, dose_ml: f32) {
+        let history = self.hourly_doses.entry(pump.to_string()).or_default();
+        history.retain(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600);
+        history.push((now_sec, dose_ml));
+    }
+
     pub fn record_drain(&mut self, now_sec: u64, max: u32) -> bool {
         self.drain_history
             .retain(|ts| now_sec.saturating_sub(*ts) <= 3600);
@@ -79,5 +100,30 @@ impl SafetyGuard {
         self.drain_history.clear();
         self.last_ec_before_dose = None;
         self.last_ph_before_dose = None;
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn budget_not_consumed_when_second_pump_fails() {
+        let mut guard = SafetyGuard::new();
+        let now_sec = 1000u64;
+        let max_ml = 10.0f32;
+
+        assert!(guard.peek_hourly_dose("NutrientA", now_sec, 5.0, max_ml));
+        guard.commit_hourly_dose("NutrientA", now_sec, 5.0);
+        assert!(!guard.peek_hourly_dose("NutrientB", now_sec, 11.0, max_ml));
+        assert!(guard.peek_hourly_dose("NutrientA", now_sec, 5.0, max_ml));
+    }
+
+    #[test]
+    fn old_check_hourly_dose_keeps_backward_compat_commit_behavior() {
+        let mut guard = SafetyGuard::new();
+        assert!(guard.check_hourly_dose("PumpA", 1000, 5.0, 10.0));
+        assert!(!guard.check_hourly_dose("PumpA", 1000, 6.0, 10.0));
     }
 }

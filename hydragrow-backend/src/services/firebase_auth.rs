@@ -7,7 +7,7 @@
 //! để xác minh chữ ký + `iss`/`aud`/`exp` trước khi tin tưởng `sub` (Firebase UID).
 
 use jsonwebtoken::jwk::JwkSet;
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -138,7 +138,7 @@ mod tests {
         AlgorithmParameters, CommonParameters, Jwk, KeyAlgorithm, PublicKeyUse, RSAKeyParameters,
         RSAKeyType,
     };
-    use jsonwebtoken::{encode, EncodingKey, Header};
+    use jsonwebtoken::{EncodingKey, Header, encode};
 
     const TEST_PROJECT_ID: &str = "hydragrow-iot";
     const TEST_KID: &str = "test-key-1";

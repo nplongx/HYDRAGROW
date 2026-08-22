@@ -1,4 +1,5 @@
 import { isTauriRuntime } from './settings';
+import { getIdToken } from '../lib/authToken';
 
 const DEFAULT_WEB_TIMEOUT_MS = 12_000;
 
@@ -26,11 +27,31 @@ const fetchWithTimeout: typeof fetch = async (input, init = {}) => {
   }
 };
 
-export const httpFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  if (isTauriRuntime()) {
-    const { fetch } = await import('@tauri-apps/plugin-http');
-    return fetch(input as any, init as any) as any;
+/**
+ * Gắn `Authorization: Bearer <Firebase ID token>` vào request, trừ khi caller
+ * đã tự đặt header `Authorization` (giữ khả năng override khi cần).
+ */
+function withAuthHeader(init?: RequestInit): RequestInit | undefined {
+  const token = getIdToken();
+  if (!token) {
+    return init;
   }
 
-  return fetchWithTimeout(input, init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return { ...init, headers };
+}
+
+export const httpFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const authedInit = withAuthHeader(init);
+
+  if (isTauriRuntime()) {
+    const { fetch } = await import('@tauri-apps/plugin-http');
+    return fetch(input as any, authedInit as any) as any;
+  }
+
+  return fetchWithTimeout(input, authedInit);
 };

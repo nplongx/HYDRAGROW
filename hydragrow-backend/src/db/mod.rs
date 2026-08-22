@@ -2,6 +2,7 @@ use thiserror::Error;
 
 pub mod influx;
 pub mod postgres; // Đổi từ sqlite -> postgres
+pub mod users;
 
 #[derive(Error, Debug)]
 pub enum DbError {

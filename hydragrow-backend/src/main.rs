@@ -102,6 +102,7 @@ pub struct AppState {
 
     // Auth
     pub api_key: String,
+    pub firebase_auth: std::sync::Arc<crate::services::firebase_auth::FirebaseAuthVerifier>,
 
     // Event bus — tất cả side-effect đi qua đây
     pub event_bus: broadcast::Sender<AppEvent>,
@@ -253,6 +254,11 @@ async fn main() -> anyhow::Result<()> {
     let (alert_sender, _) = broadcast::channel(100);
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
+    let firebase_project_id = std::env::var("FIREBASE_PROJECT_ID")
+        .context("FIREBASE_PROJECT_ID must be set in .env")?;
+    let firebase_auth = std::sync::Arc::new(
+        crate::services::firebase_auth::FirebaseAuthVerifier::new(firebase_project_id),
+    );
     let device_states = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
     let device_firmware = Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
@@ -267,6 +273,7 @@ async fn main() -> anyhow::Result<()> {
         mqtt_client: mqtt_client.clone(),
         alert_sender,
         api_key,
+        firebase_auth,
         device_states,
         device_firmware,
         solana_traceability: solana_service,
@@ -427,6 +434,7 @@ async fn main() -> anyhow::Result<()> {
                     .configure(api::notification::init_routes)
                     .configure(api::solana::init_routes)
                     .configure(api::recipe::init_routes)
+                    .configure(api::admin_users::init_routes)
                     .service(
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)

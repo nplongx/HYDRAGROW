@@ -6,6 +6,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 // --- IMPORT PLATFORM & UTILS ---
 import { httpFetch } from '../platform/http';
 import { forgetStoredApiKey, loadAppSettings, saveAppSettings } from '../platform/settings';
+import { useAuth } from '../contexts/AuthContext';
 
 // --- IMPORT LOGIC ĐÃ BIÊN DỊCH TỪ GLEAM ---
 import { validate_dosing_config } from '../../gleam_core/build/dev/javascript/gleam_core/settings/validation.mjs';
@@ -109,6 +110,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
 
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
+  const { user, logout } = useAuth();
   const sensorData = useDeviceStore((s) => s.sensorData);
   const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
   const runtimeSettings = useDeviceStore((s) => s.settings);
@@ -472,6 +474,13 @@ const Settings = () => {
       </div>
 
       <div className="space-y-6">
+        <SubCard title="Tài khoản đăng nhập">
+          <p>Đang đăng nhập: <strong>{user?.email ?? 'Không xác định'}</strong></p>
+          <button type="button" onClick={() => logout()}>
+            Đăng xuất
+          </button>
+        </SubCard>
+
         {/* NETWORK */}
         <AccordionSection id="network" title="Thiết bị & Kết nối" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">

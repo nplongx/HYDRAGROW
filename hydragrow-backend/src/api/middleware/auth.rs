@@ -172,12 +172,7 @@ where
             return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
         }
 
-        let raw_scopes = req
-            .headers()
-            .get("X-Scopes")
-            .and_then(|hv| hv.to_str().ok());
-
-        let scopes = parse_scopes(raw_scopes).unwrap_or_else(default_legacy_scopes);
+        let scopes = default_legacy_scopes();
 
         let auth_context = AuthContext {
             scopes,
@@ -210,20 +205,6 @@ fn extract_bearer_token(headers: &actix_web::http::header::HeaderMap) -> Option<
         .and_then(|value| value.strip_prefix("Bearer "))
         .map(str::trim)
         .filter(|token| !token.is_empty())
-}
-
-fn parse_scopes(raw: Option<&str>) -> Option<Vec<String>> {
-    let scopes: Vec<String> = raw?
-        .split(|c| c == ',' || c == ' ')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(ToString::to_string)
-        .collect();
-    if scopes.is_empty() {
-        None
-    } else {
-        Some(scopes)
-    }
 }
 
 fn default_legacy_scopes() -> Vec<String> {

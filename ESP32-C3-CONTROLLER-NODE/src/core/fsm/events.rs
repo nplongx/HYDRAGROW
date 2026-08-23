@@ -79,6 +79,12 @@ pub enum OrchestratorEvent {
     UpdateWifiList {
         list: hydragrow_shared::WifiCredentialList,
     },
+
+    /// Reboot thiết bị ngay lập tức (sau khi dừng hardware).
+    RebootDevice,
+
+    /// Xoá toàn bộ NVS: recipe + wifi_list + safety_budget, sau đó reboot.
+    FactoryReset,
 }
 
 /// Target bơm định lượng (tách riêng để tránh dùng PumpType từ pump.rs ở layer này)

@@ -159,11 +159,35 @@ fn main() -> anyhow::Result<()> {
     }
     connect_wifi(
         peripherals.modem,
-        sysloop,
+        sysloop.clone(),
         nvs_partition.clone(),
-        wifi_candidates,
+        wifi_candidates.clone(),
         conn_tx.clone(),
     )?;
+
+    use std::time::Duration as StdDuration;
+    let wifi_up = match conn_rx.recv_timeout(StdDuration::from_secs(120)) {
+        Ok(crate::hw::mqtt_client::ConnectionState::WifiConnected) => {
+            info!("✅ WiFi connected normally.");
+            true
+        }
+        _ => {
+            warn!("⚠️ WiFi không kết nối được trong 2 phút. Mở Captive Portal...");
+            match hw::run_captive_portal(nvs_partition.clone(), None) {
+                Ok(true) => {
+                    info!("✅ [PORTAL] Credentials saved, rebooting...");
+                    std::thread::sleep(StdDuration::from_millis(500));
+                    unsafe { esp_idf_svc::sys::esp_restart(); }
+                    unreachable!()
+                }
+                Ok(false) | Err(_) => {
+                    warn!("⚠️ [PORTAL] Không có credentials. Tiếp tục không có WiFi.");
+                    false
+                }
+            }
+        }
+    };
+
     let _sntp = sync_sntp_time()?;
 
     // 3. Spawn FSM Thread

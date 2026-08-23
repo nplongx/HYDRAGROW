@@ -140,7 +140,7 @@ const Settings = () => {
       });
       if(!res.ok) throw new Error(await res.text());
       toast.success('Lệnh reboot đã được gửi');
-    } catch (e: unknown) {
+    } catch (e: any) {
       toast.error((e as Error).message);
     } finally { setRebootLoading(false); }
   }
@@ -160,7 +160,7 @@ const Settings = () => {
       if(!res.ok) throw new Error(await res.text());
       setFactoryResetConfirm(false);
       toast.success('Lệnh factory reset đã được gửi');
-    } catch (e: unknown) {
+    } catch (e: any) {
       toast.error((e as Error).message);
     }
   }
@@ -217,7 +217,7 @@ const Settings = () => {
     const res = await httpFetch(url, options);
     if (!res.ok) {
       let errDetail = `HTTP ${res.status}`;
-      try { errDetail = `${res.status}: ${await res.text()}`; } catch (_) { }
+      try { errDetail = `${res.status}: ${await res.text()}`; } catch (error) { }
       throw new Error(errDetail);
     }
     return await res.json();
@@ -241,7 +241,7 @@ const Settings = () => {
     try {
       await callApi(`/api/devices/${deviceId}/ota/trigger`, 'POST', {}, settings);
       toast.success('Đã gửi lệnh cập nhật. Theo dõi tiến trình trong Nhật ký hệ thống.');
-    } catch { toast.error('Không gửi được lệnh cập nhật firmware.'); }
+    } catch (error) { toast.error('Không gửi được lệnh cập nhật firmware.'); }
     finally { setIsTriggeringOta(false); }
   };
 
@@ -260,7 +260,7 @@ const Settings = () => {
     try {
       await callApi(`/api/devices/${deviceId}/wifi`, 'POST', { candidates }, settings);
       toast.success('Đã gửi danh sách WiFi; thiết bị áp dụng sau lần khởi động tiếp theo.');
-    } catch { toast.error('Không gửi được danh sách WiFi.'); }
+    } catch (error) { toast.error('Không gửi được danh sách WiFi.'); }
     finally { setIsSavingWifi(false); }
   };
 
@@ -287,7 +287,7 @@ const Settings = () => {
     setIsCapturingPoint(true);
     if (wizardStep === 0) {
       try { await callApi(`/api/devices/${currentDeviceId}/calibration/ph/start`, 'POST', { mode: '2-point' }, currentSettings); }
-      catch (error: unknown) { toast.error(`Lỗi: ${(error as Error).message}`); setIsCapturingPoint(false); return; }
+      catch (error: any) { toast.error(`Lỗi: ${(error as Error).message}`); setIsCapturingPoint(false); return; }
     }
     const targetSamples = 5;
     const intervalSec = Number(config.publish_interval || 5000) / 1000;
@@ -345,7 +345,7 @@ const Settings = () => {
     if (!currentDeviceId || !currentSettings?.backend_url) return;
     try {
       await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', {}, currentSettings);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.warn('Finish calibration session error (non-fatal):', (error as Error).message);
     }
     await handleSave(c);
@@ -473,7 +473,7 @@ const Settings = () => {
       await loadConfig();
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã lưu cấu hình thành công.', { id: toastId });
-    } catch (error: unknown) { toast.error(`Lỗi: ${(error as Error)?.message}`, { id: toastId }); }
+    } catch (error: any) { toast.error(`Lỗi: ${(error as Error)?.message}`, { id: toastId }); }
     finally { setIsSaving(false); }
   };
 
@@ -483,7 +483,7 @@ const Settings = () => {
       setAppSettings((current) => ({ ...current, api_key: '' }));
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã xóa API key khỏi bộ nhớ an toàn.');
-    } catch (error: unknown) {
+    } catch (error: any) {
       toast.error(`Không thể xóa API key: ${(error as Error)?.message || error}`);
     }
   };

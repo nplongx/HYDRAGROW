@@ -12,7 +12,7 @@ const fetchWithTimeout: typeof fetch = async (input, init = {}) => {
   const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
     ? requestedTimeout
     : DEFAULT_WEB_TIMEOUT_MS;
-  const { timeout: _timeout, connectTimeout: _connectTimeout, ...fetchInit } = init as RequestInit & {
+  const { ...fetchInit } = init as RequestInit & {
     timeout?: number;
     connectTimeout?: number;
   };

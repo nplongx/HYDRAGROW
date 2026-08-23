@@ -91,7 +91,7 @@ where
 
         let app_state = match req.app_data::<actix_web::web::Data<AppState>>() {
             Some(state) => state.clone(),
-            None => return Box::pin(ready(Err(ErrorUnauthorized("Missing app state")))),
+            None => return Box::pin(ready(Err(actix_web::error::ErrorUnauthorized("Missing app state")))),
         };
 
         // 2. Ưu tiên xác thực bằng Firebase ID token (Authorization: Bearer <token>)

@@ -135,7 +135,7 @@ const RecipeBuilder: React.FC = () => {
         name: templateName.trim(),
         crop: cropType.trim().toLowerCase(),
         description,
-        stages: stages.map(({ id: _id, duration_days, ...stage }) => ({
+        stages: stages.map(({ duration_days, ...stage }) => ({
           ...stage,
           duration_sec: duration_days * 86400,
         })),

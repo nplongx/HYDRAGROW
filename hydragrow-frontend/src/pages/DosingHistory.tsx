@@ -79,7 +79,7 @@ const DosingHistory = () => {
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
       const saved = await saveTextFile(`lich-su-cham-phan-${selectedSeason || 'tat-ca'}.csv`, csvContent);
       if (saved) toast.success("Xuất file Excel/CSV thành công!");
-    } catch (err) {
+    } catch {
       toast.error("Lỗi khi xuất file!");
     }
   };

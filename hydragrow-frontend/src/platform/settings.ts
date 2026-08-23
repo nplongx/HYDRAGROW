@@ -95,7 +95,7 @@ export const forgetStoredApiKey = async (): Promise<void> => {
   if (localRaw) {
     const parsed = parseLocalSettings(localRaw);
     if (parsed) {
-      const { api_key: _, ...safeSettings } = parsed;
+      const { api_key: _, ...safeSettings } = parsed; // unused
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(safeSettings));
     }
   }

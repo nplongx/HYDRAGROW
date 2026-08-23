@@ -140,8 +140,8 @@ const Settings = () => {
       });
       if(!res.ok) throw new Error(await res.text());
       toast.success('Lệnh reboot đã được gửi');
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
     } finally { setRebootLoading(false); }
   }
 
@@ -160,8 +160,8 @@ const Settings = () => {
       if(!res.ok) throw new Error(await res.text());
       setFactoryResetConfirm(false);
       toast.success('Lệnh factory reset đã được gửi');
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error((e as Error).message);
     }
   }
 
@@ -287,7 +287,7 @@ const Settings = () => {
     setIsCapturingPoint(true);
     if (wizardStep === 0) {
       try { await callApi(`/api/devices/${currentDeviceId}/calibration/ph/start`, 'POST', { mode: '2-point' }, currentSettings); }
-      catch (error: any) { toast.error(`Lỗi: ${error.message}`); setIsCapturingPoint(false); return; }
+      catch (error: unknown) { toast.error(`Lỗi: ${(error as Error).message}`); setIsCapturingPoint(false); return; }
     }
     const targetSamples = 5;
     const intervalSec = Number(config.publish_interval || 5000) / 1000;
@@ -345,8 +345,8 @@ const Settings = () => {
     if (!currentDeviceId || !currentSettings?.backend_url) return;
     try {
       await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', {}, currentSettings);
-    } catch (error: any) {
-      console.warn('Finish calibration session error (non-fatal):', error.message);
+    } catch (error: unknown) {
+      console.warn('Finish calibration session error (non-fatal):', (error as Error).message);
     }
     await handleSave(c);
   };
@@ -354,7 +354,7 @@ const Settings = () => {
   const loadConfig = useCallback(async () => {
     try {
       setIsLoading(true);
-      let settings: any = await loadAppSettings();
+      const settings: any = await loadAppSettings();
       if (settings) setAppSettings(settings);
       const currentDeviceId = settings?.device_id || appSettings.device_id || ctxDeviceId;
       if (!currentDeviceId) return;
@@ -473,7 +473,7 @@ const Settings = () => {
       await loadConfig();
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã lưu cấu hình thành công.', { id: toastId });
-    } catch (error: any) { toast.error(`Lỗi: ${error?.message}`, { id: toastId }); }
+    } catch (error: unknown) { toast.error(`Lỗi: ${(error as Error)?.message}`, { id: toastId }); }
     finally { setIsSaving(false); }
   };
 
@@ -483,8 +483,8 @@ const Settings = () => {
       setAppSettings((current) => ({ ...current, api_key: '' }));
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã xóa API key khỏi bộ nhớ an toàn.');
-    } catch (error: any) {
-      toast.error(`Không thể xóa API key: ${error?.message || error}`);
+    } catch (error: unknown) {
+      toast.error(`Không thể xóa API key: ${(error as Error)?.message || error}`);
     }
   };
 

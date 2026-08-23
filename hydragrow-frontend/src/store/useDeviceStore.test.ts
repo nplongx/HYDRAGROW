@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useDeviceStore } from './useDeviceStore';
+import { useDeviceStore, ControllerHealth } from './useDeviceStore';
+import { UnifiedSystemLog } from '../types/models';
 import { setItem } from '../platform/storage';
 
 // Mock the platform storage so tests don't try to use real localStorage/Tauri storage
@@ -82,13 +83,13 @@ describe('useDeviceStore', () => {
   });
 
   it('should set system events with an updater function', () => {
-    useDeviceStore.setState({ systemEvents: [{ id: 1, message: 'Event 1' }] });
+    useDeviceStore.setState({ systemEvents: [{ timestamp_ms: 1, title: 'Event 1' } as unknown as UnifiedSystemLog] });
 
-    useDeviceStore.getState().setSystemEvents((prev: any) => [...prev, { id: 2, message: 'Event 2' }]);
+    useDeviceStore.getState().setSystemEvents((prev: UnifiedSystemLog[]) => [...prev, { timestamp_ms: 2, message: 'Event 2' } as unknown as UnifiedSystemLog]);
 
     expect(useDeviceStore.getState().systemEvents).toEqual([
-      { id: 1, message: 'Event 1' },
-      { id: 2, message: 'Event 2' }
+      { timestamp_ms: 1, title: 'Event 1' } as unknown as UnifiedSystemLog,
+      { timestamp_ms: 2, message: 'Event 2' } as unknown as UnifiedSystemLog
     ]);
   });
 
@@ -101,8 +102,8 @@ describe('useDeviceStore', () => {
     state.setIsControllerStatusKnown(true);
     expect(useDeviceStore.getState().isControllerStatusKnown).toBe(true);
 
-    state.setControllerHealth({ status: 'ok' });
-    expect(useDeviceStore.getState().controllerHealth).toEqual({ status: 'ok' });
+    state.setControllerHealth({ firmware_version: 'ok' } as unknown as ControllerHealth);
+    expect(useDeviceStore.getState().controllerHealth).toEqual({ firmware_version: 'ok' });
 
     state.setFsmState('Active');
     expect(useDeviceStore.getState().fsmState).toBe('Active');

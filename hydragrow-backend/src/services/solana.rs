@@ -49,7 +49,7 @@ impl SolanaTraceability {
             .as_ref()
             .ok_or_else(|| "Solana traceability đang tắt (thiếu keypair hợp lệ)".to_string())?;
         let memo_program_id =
-            Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr").unwrap();
+            Pubkey::from_str("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr").expect("startup: acceptable to panic - const pubkey");
 
         let memo_ix = Instruction {
             program_id: memo_program_id,

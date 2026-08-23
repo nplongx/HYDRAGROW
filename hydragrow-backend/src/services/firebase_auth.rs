@@ -198,8 +198,8 @@ SlsvfTJpHsjN3glG9WeqIB1dOHFR0eXXP/NXbNO1ybthFYtwS3DSGG/dZ/R9lqOm
         let mut header = Header::new(Algorithm::RS256);
         header.kid = Some(TEST_KID.to_string());
         let key = EncodingKey::from_rsa_pem(TEST_PRIVATE_KEY_PEM.as_bytes())
-            .expect("test private key phải parse được");
-        encode(&header, claims, &key).expect("ký test token phải thành công")
+            .expect("startup: acceptable to panic - test private key phải parse được");
+        encode(&header, claims, &key).expect("startup: acceptable to panic - ký test token phải thành công")
     }
 
     fn base_claims() -> FirebaseClaims {
@@ -231,7 +231,7 @@ SlsvfTJpHsjN3glG9WeqIB1dOHFR0eXXP/NXbNO1ybthFYtwS3DSGG/dZ/R9lqOm
         let claims = verifier
             .verify(&token)
             .await
-            .expect("token hợp lệ phải verify được");
+            .expect("startup: acceptable to panic - token hợp lệ phải verify được");
         assert_eq!(claims.sub, "test-uid-123");
         assert_eq!(claims.email.as_deref(), Some("someone@example.com"));
     }

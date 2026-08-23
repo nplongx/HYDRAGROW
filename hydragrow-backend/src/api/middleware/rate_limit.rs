@@ -85,7 +85,10 @@ where
         let mut is_allowed = true;
 
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state = match self.state.lock() {
+            Ok(s) => s,
+            Err(_) => return Box::pin(async { Err(actix_web::error::ErrorInternalServerError("Lock error")) }),
+        };
 
             if state.len() > 10_000 {
                 state

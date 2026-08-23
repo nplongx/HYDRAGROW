@@ -14,7 +14,10 @@ pub async fn register_token(
     req: web::Json<RegisterTokenReq>,
     state: web::Data<AppState>,
 ) -> impl Responder {
-    let mut tokens = state.fcm_tokens.lock().unwrap();
+    let mut tokens = match state.fcm_tokens.lock() {
+        Ok(t) => t,
+        Err(_) => return HttpResponse::InternalServerError().body("Lock error"),
+    };
 
     if !tokens.contains(&req.fcm_token) {
         tokens.push(req.fcm_token.clone());

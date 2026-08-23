@@ -138,7 +138,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         title: log_data.title.clone(),
         message: message_str.clone(),
         reason: None,
-        metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
+        metadata: serde_json::to_value(&log_data.event).ok(),
         timestamp: log_data.timestamp_ms as i64,
     };
 
@@ -176,14 +176,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             device_id: log_data.device_id.clone(),
             timestamp: log_data.timestamp_ms,
             reason: None,
-            metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
+            metadata: serde_json::to_value(&log_data.event).ok(),
         };
         let _ = app_state
             .event_bus
             .send(AppEvent::SystemAlert(alert.clone()));
 
         if is_critical || is_warning {
-            let tokens = app_state.fcm_tokens.lock().unwrap().clone();
+            let tokens = app_state.fcm_tokens.lock().map(|t| t.clone()).unwrap_or_default();
             if !tokens.is_empty() {
                 tokio::spawn(async move {
                     crate::services::fcm::send_push_notification(

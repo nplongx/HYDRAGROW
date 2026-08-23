@@ -1,8 +1,18 @@
+export interface UnifiedSystemLog {
+  device_id: string;
+  level: string;
+  category: string;
+  title: string;
+  event: unknown;
+  timestamp_ms: number;
+}
+
 export interface AppSettings {
+  control_mode?: string;
   backend_url: string;
   api_key: string;
   device_id: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type DeviceState = 'on' | 'off';

@@ -14,7 +14,7 @@ async fn get_oauth_token() -> Result<String, Box<dyn std::error::Error>> {
     let scopes = &["https://www.googleapis.com/auth/firebase.messaging"];
     let token = auth.token(scopes).await?;
 
-    Ok(token.token().unwrap().to_string())
+    Ok(token.token().ok_or("Failed to get FCM token")?.to_string())
 }
 
 pub async fn send_push_notification(title: &str, body: &str, tokens: Vec<String>) {

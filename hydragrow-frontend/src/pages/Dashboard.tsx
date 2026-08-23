@@ -70,7 +70,7 @@ const Dashboard = () => {
   }, [fsmState, isOnline]);
 
   const computedHealth = useMemo(() => {
-    const rawScore = controllerHealth?.health_score_percent ?? controllerHealth?.diagnostics?.health_score_percent;
+    const rawScore = controllerHealth?.health_score_percent ?? (controllerHealth?.diagnostics as any)?.health_score_percent;
     const scoreInt = typeof rawScore === 'number' ? Math.round(rawScore) : -1;
     const res = compute_health_safe(isOnline, scoreInt);
     return { score: res.score, label: res.label, color: res.color, description: res.description };

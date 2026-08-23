@@ -1,0 +1,27 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-shared/**'
+  pull_request:
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-shared/**'
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Check
+        run: cargo check --manifest-path hydragrow-backend/Cargo.toml
+      - name: Run tests
+        run: cargo test --manifest-path hydragrow-backend/Cargo.toml
+      - name: Lint
+        run: cargo clippy --manifest-path hydragrow-backend/Cargo.toml -- -D warnings

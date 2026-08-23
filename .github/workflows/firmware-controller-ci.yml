@@ -1,0 +1,25 @@
+name: Firmware Controller CI
+
+on:
+  push:
+    paths:
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+  pull_request:
+    paths:
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Rust (esp-rs toolchain)
+        uses: esp-rs/xtensa-toolchain@v1.5
+        with:
+          default: true
+          buildtargets: esp32c3
+          ldproxy: true
+      - name: Build Firmware
+        run: |
+          cd ESP32-C3-CONTROLLER-NODE
+          cargo build --release

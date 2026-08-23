@@ -1,0 +1,41 @@
+name: Firmware Sensor CI
+
+on:
+  push:
+    paths:
+      - 'ESP32-C3-SENSOR-NODE/**'
+  pull_request:
+    paths:
+      - 'ESP32-C3-SENSOR-NODE/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      - name: Cache PlatformIO
+        uses: actions/cache@v3
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-${{ hashFiles('**/platformio.ini') }}
+      - name: Set up Python
+        uses: actions/setup-python@v4
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade platformio
+      - name: Copy secrets
+        run: |
+          cd ESP32-C3-SENSOR-NODE
+          cp src/secrets.h.example src/secrets.h
+      - name: Run PlatformIO build
+        run: |
+          cd ESP32-C3-SENSOR-NODE
+          pio run

@@ -1,3 +1,4 @@
+#![warn(clippy::unwrap_used)]
 use actix_web::{App, HttpServer, web};
 use anyhow::Context;
 use dotenvy::dotenv;
@@ -149,17 +150,17 @@ async fn main() -> anyhow::Result<()> {
     let (backend_loki, esp_loki) = if let Ok(loki_url) = Url::parse(&loki_url_str) {
         let b = tracing_loki::builder()
             .label("service", "hydragrow-backend")
-            .unwrap()
+            .expect("startup: acceptable to panic")
             .extra_field("environment", environment.clone())
-            .unwrap()
+            .expect("startup: acceptable to panic")
             .build_url(loki_url.clone())
             .expect("Lỗi cấu hình Loki Layer cho Backend");
 
         let e = tracing_loki::builder()
             .label("service", "hydragrow-controller")
-            .unwrap()
+            .expect("startup: acceptable to panic")
             .extra_field("environment", environment)
-            .unwrap()
+            .expect("startup: acceptable to panic")
             .build_url(loki_url)
             .expect("Lỗi cấu hình Loki Layer cho ESP32");
 
@@ -291,7 +292,7 @@ async fn main() -> anyhow::Result<()> {
             if alert.level != "critical" && alert.level != "warning" {
                 continue;
             }
-            let tokens = fcm_tokens_clone.lock().unwrap().clone();
+            let tokens = fcm_tokens_clone.lock().map(|l| l.clone()).unwrap_or_default();
             if !tokens.is_empty() {
                 crate::services::fcm::send_push_notification(&alert.title, &alert.message, tokens)
                     .await;

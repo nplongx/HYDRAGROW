@@ -139,7 +139,7 @@ async fn handle_system_alert(
 
     // 5. Gửi thông báo đẩy Firebase Cloud Messaging (FCM)
     if level == "warning" || level == "critical" {
-        let tokens = app_state.fcm_tokens.lock().unwrap().clone();
+        let tokens = app_state.fcm_tokens.lock().map(|t| t.clone()).unwrap_or_default();
         if !tokens.is_empty() {
             let notification_message = message.clone();
             tokio::spawn(async move {

@@ -1,6 +1,18 @@
 import { create } from 'zustand';
-import { SensorData, StatusPayload, AppSettings, TankAlert } from '../types/models';
+import { SensorData, StatusPayload, AppSettings, TankAlert, UnifiedSystemLog } from '../types/models';
 import { setItem } from '../platform/storage';
+
+export interface ControllerHealth {
+  device_id: string;
+  free_heap: number;
+  uptime_sec: number;
+  rssi: number;
+  health_score_percent: number;
+  fsm_state_display: string;
+  log_drop_count: number;
+  firmware_version: string;
+  diagnostics?: unknown;
+}
 
 interface DeviceState {
   // --- STATES ---
@@ -10,9 +22,9 @@ interface DeviceState {
   sensorData: SensorData | null;
   deviceStatus: StatusPayload;
   isControllerStatusKnown: boolean;
-  controllerHealth: any;
+  controllerHealth: ControllerHealth | null;
   fsmState: string;
-  systemEvents: any[];
+  systemEvents: UnifiedSystemLog[];
   isLoading: boolean;
   isSensorOnline: boolean;
   pwmPreferences: Record<string, number>;
@@ -26,9 +38,9 @@ interface DeviceState {
   setSensorData: (data: SensorData | null | ((prev: SensorData | null) => SensorData | null)) => void;
   setDeviceStatus: (status: StatusPayload | ((prev: StatusPayload) => StatusPayload)) => void;
   setIsControllerStatusKnown: (known: boolean) => void;
-  setControllerHealth: (health: any) => void;
+  setControllerHealth: (health: ControllerHealth | null) => void;
   setFsmState: (state: string) => void;
-  setSystemEvents: (events: any[] | ((prev: any[]) => any[])) => void;
+  setSystemEvents: (events: UnifiedSystemLog[] | ((prev: UnifiedSystemLog[]) => UnifiedSystemLog[])) => void;
   setIsLoading: (loading: boolean) => void;
   setIsSensorOnline: (online: boolean) => void;
   setPwmPreferences: (prefs: Record<string, number>) => void;

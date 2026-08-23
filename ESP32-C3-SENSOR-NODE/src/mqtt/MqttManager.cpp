@@ -9,6 +9,7 @@
 #include "../config/RootCA.h"
 #include "AppConfig.h"
 #include "CommandSecurity.h"
+#include "../portal/CaptivePortal.h"
 #include "Logger.h"
 #include "SensorManager.h"
 #include "secrets.h"
@@ -43,24 +44,26 @@ void publishStatus(const char* status, const char* message) {
 
 } // namespace
 
-MqttManager::MqttManager(SensorManager& sensors)
-    : sensors_(sensors) {}
+MqttManager::MqttManager(SensorManager& sensors, WifiProvisioner& wifiProvisioner)
+    : sensors_(sensors), wifiProvisioner_(wifiProvisioner) {}
 
 void MqttManager::begin() {
     instance = this;
     sensorManager = &sensors_;
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    connectWifi();
 
-    Logger::debugPrintf("Dang ket noi WiFi: %s\n", WIFI_SSID);
-    unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
-        delay(250);
+    if (WiFi.status() != WL_CONNECTED) {
+        Logger::debugPrintln("[PORTAL] Khong co WiFi. Mo Captive Portal...");
+        bool configured = runCaptivePortal(wifiProvisioner_, 0);
+        if (configured) {
+            Logger::debugPrintln("[PORTAL] Da luu WiFi. Khoi dong lai...");
+            delay(500);
+            ESP.restart();
+        }
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-        Logger::debugPrintf("WiFi da ket noi. IP=%s\n", WiFi.localIP().toString().c_str());
         configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     }
 
@@ -69,6 +72,27 @@ void MqttManager::begin() {
     mqttClient.setCallback(mqttCallback);
     mqttClient.setBufferSize(2048);
     reconnect();
+}
+
+void MqttManager::connectWifi() {
+    auto candidates = wifiProvisioner_.load();
+    WiFi.mode(WIFI_STA);
+    for (const auto& c : candidates) {
+        Logger::debugPrintf("Dang ket noi WiFi: %s\n", c.ssid.c_str());
+        WiFi.begin(c.ssid.c_str(), c.password.c_str());
+        unsigned long start = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - start < 12000) {
+            delay(250);
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+            Logger::debugPrintf("WiFi da ket noi. IP=%s\n", WiFi.localIP().toString().c_str());
+            configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+            return;
+        }
+        Logger::debugPrintf("That bai voi '%s', thu SSID tiep theo...\n", c.ssid.c_str());
+        WiFi.disconnect();
+    }
+    Logger::debugPrintln("Khong ket noi duoc WiFi nao!");
 }
 
 void MqttManager::update() {
@@ -148,7 +172,30 @@ void MqttManager::handleCommand(const String& payload) {
         publishStatus("ok", "restarting");
         delay(100);
         ESP.restart();
+    } else if (strcmp(command, "update_wifi_list") == 0) {
+        handleUpdateWifiList(doc);
     }
+}
+
+void MqttManager::handleUpdateWifiList(JsonDocument& doc) {
+    JsonArray arr = doc["params"]["candidates"].as<JsonArray>();
+    if (arr.isNull()) {
+        publishStatus("error", "update_wifi_list: missing candidates array");
+        return;
+    }
+    std::vector<WifiCandidate> candidates;
+    for (JsonObject obj : arr) {
+        String ssid = obj["ssid"] | "";
+        if (ssid.length() == 0) continue;
+        candidates.push_back({ssid, obj["password"] | "", obj["priority"] | 0});
+    }
+    if (candidates.empty()) {
+        publishStatus("error", "update_wifi_list: no valid SSIDs");
+        return;
+    }
+    wifiProvisioner_.save(candidates);
+    publishStatus("ok", "wifi list updated");
+    Logger::debugPrintf("Saved %d WiFi candidates to NVS\n", (int)candidates.size());
 }
 
 void MqttManager::handleConfig(const String& payload) {

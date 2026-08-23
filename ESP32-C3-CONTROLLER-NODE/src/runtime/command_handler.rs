@@ -128,6 +128,23 @@ pub fn process_mqtt_commands(
             continue;
         }
 
+        if action_lower == "reboot_device" {
+            info!("🔄 [CMD] Nhận lệnh reboot_device. Dừng hardware...");
+            stop_all_hardware(&mut all_events);
+            all_events.push(OrchestratorEvent::RebootDevice);
+            continue;
+        }
+
+        if action_lower == "factory_reset" {
+            info!("⚠️ [CMD] Nhận lệnh factory_reset. Xoá NVS và reboot...");
+            stop_all_hardware(&mut all_events);
+            delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(
+                hydragrow_shared::fsm::FaultCode::EmergencyStop,
+            ));
+            all_events.push(OrchestratorEvent::FactoryReset);
+            continue;
+        }
+
         // Nếu đang ở chế độ AUTO thì bỏ qua lệnh điều khiển tay đơn lẻ
         if config.control_mode == ControlMode::Auto {
             warn!("⚠️ Bỏ qua lệnh thủ công vì hệ thống đang ở chế độ AUTO.");

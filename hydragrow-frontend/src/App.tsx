@@ -29,6 +29,7 @@ const DosingHistory = React.lazy(() => import('./pages/DosingHistory'));
 const CropSeasons = React.lazy(() => import('./pages/CropSeasons'));
 const SystemLog = React.lazy(() => import('./pages/SystemLog'));
 const RecipeBuilder = React.lazy(() => import('./pages/RecipeBuilder'));
+import { DevicePairing } from './pages/DevicePairing';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
@@ -60,6 +61,7 @@ function AppRoutes() {
             <Route path="recipes" element={<RecipeBuilder />} />
             <Route path="settings" element={<Settings />} />
             <Route path="logs" element={<SystemLog />} />
+            <Route path="pairing" element={<DevicePairing />} />
           </Route>
         </Routes>
       </Suspense>

@@ -121,6 +121,50 @@ const Settings = () => {
   const [openSection, setOpenSection] = useState<string | null>('general');
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
 
+  const [rebootLoading, setRebootLoading] = useState(false);
+  const [factoryResetConfirm, setFactoryResetConfirm] = useState(false);
+
+  async function sendReboot() {
+    if (!confirm('Xác nhận reboot thiết bị?')) return;
+    setRebootLoading(true);
+    const settings = runtimeSettings || appSettings;
+    const deviceId = appSettings.device_id || ctxDeviceId;
+    try {
+      const res = await httpFetch(`${settings?.backend_url}/api/devices/${deviceId}/reboot`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': settings?.api_key || '',
+            'X-User-Confirmed': 'true'
+        }
+      });
+      if(!res.ok) throw new Error(await res.text());
+      toast.success('Lệnh reboot đã được gửi');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally { setRebootLoading(false); }
+  }
+
+  async function sendFactoryReset() {
+    const settings = runtimeSettings || appSettings;
+    const deviceId = appSettings.device_id || ctxDeviceId;
+    try {
+      const res = await httpFetch(`${settings?.backend_url}/api/devices/${deviceId}/factory-reset`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': settings?.api_key || '',
+            'X-User-Confirmed': 'true'
+        }
+      });
+      if(!res.ok) throw new Error(await res.text());
+      setFactoryResetConfirm(false);
+      toast.success('Lệnh factory reset đã được gửi');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
   const handleToggleSection = (id: string) => setOpenSection(openSection === id ? null : id);
 
   const [config, setConfig] = useState<any>({
@@ -704,6 +748,41 @@ const Settings = () => {
             </SubCard>
           </div>
         </AccordionSection>
+
+        <section className="mt-8 border-t pt-6">
+          <h2 className="text-lg font-semibold text-red-600 mb-4">Vùng Nguy Hiểm</h2>
+          <div className="flex gap-3">
+            <button
+              onClick={sendReboot}
+              disabled={rebootLoading}
+              className="px-4 py-2 border border-orange-400 text-orange-600 rounded-lg text-sm hover:bg-orange-50"
+            >
+              Reboot Thiết Bị
+            </button>
+            <button
+              onClick={() => setFactoryResetConfirm(true)}
+              className="px-4 py-2 border border-red-400 text-red-600 rounded-lg text-sm hover:bg-red-50"
+            >
+              Factory Reset
+            </button>
+          </div>
+          {factoryResetConfirm && (
+            <div className="mt-3 p-4 bg-red-50 rounded-lg">
+              <p className="text-sm text-red-700 font-medium mb-3">
+                ⚠️ Thao tác này xoá TOÀN BỘ cấu hình (WiFi, recipe, safety budget) và reboot.
+                Không thể hoàn tác!
+              </p>
+              <div className="flex gap-2">
+                <button onClick={sendFactoryReset} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm">
+                  Xác Nhận Factory Reset
+                </button>
+                <button onClick={() => setFactoryResetConfirm(false)} className="px-3 py-1.5 border rounded text-sm">
+                  Huỷ
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
       {/* THANH ĐIỀU KHIỂN FIXED BOTTOM */}

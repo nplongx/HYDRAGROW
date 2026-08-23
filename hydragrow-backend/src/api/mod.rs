@@ -1,7 +1,9 @@
 pub mod admin_users;
 pub mod alert;
 pub mod calibration;
+pub mod device_pairing;
 pub mod config;
+pub mod config_backup;
 pub mod control;
 pub mod crop_season;
 pub mod device_admin;

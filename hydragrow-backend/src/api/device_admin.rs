@@ -184,10 +184,72 @@ pub async fn update_wifi_list(
     }
 }
 
+pub async fn reboot_device(
+    path: web::Path<String>,
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    if !auth_from(&req).has_scope("device:admin") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Missing scope: device:admin"}));
+    }
+    if !has_dangerous_confirmation(&req) {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Requires X-User-Confirmed: true"}));
+    }
+    let command = MqttCommandOut {
+        target: "all".to_string(),
+        action: "reboot_device".to_string(),
+        params: None, ts: None, nonce: None, signature: None,
+    };
+    match publish_command(&app_state, &device_id, &command).await {
+        Ok(()) => HttpResponse::Accepted()
+            .json(serde_json::json!({"status": "reboot_triggered", "device_id": device_id})),
+        Err(e) => {
+            warn!(%device_id, ?e, "Failed to send reboot command");
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "Could not send reboot command"}))
+        }
+    }
+}
+
+pub async fn factory_reset_device(
+    path: web::Path<String>,
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    if !auth_from(&req).has_scope("device:admin") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Missing scope: device:admin"}));
+    }
+    if !has_dangerous_confirmation(&req) {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Requires X-User-Confirmed: true"}));
+    }
+    let command = MqttCommandOut {
+        target: "all".to_string(),
+        action: "factory_reset".to_string(),
+        params: None, ts: None, nonce: None, signature: None,
+    };
+    match publish_command(&app_state, &device_id, &command).await {
+        Ok(()) => HttpResponse::Accepted()
+            .json(serde_json::json!({"status": "factory_reset_triggered", "device_id": device_id})),
+        Err(e) => {
+            warn!(%device_id, ?e, "Failed to send factory_reset command");
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "Could not send factory_reset"}))
+        }
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/ota/status", web::get().to(get_ota_status))
         .route("/ota/trigger", web::post().to(trigger_ota))
-        .route("/wifi", web::post().to(update_wifi_list));
+        .route("/wifi", web::post().to(update_wifi_list))
+        .route("/reboot", web::post().to(reboot_device))
+        .route("/factory-reset", web::post().to(factory_reset_device));
 }
 
 #[cfg(test)]

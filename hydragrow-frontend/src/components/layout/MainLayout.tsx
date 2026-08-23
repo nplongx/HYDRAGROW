@@ -13,7 +13,8 @@ import {
   Leaf,
   ClipboardList,
   Box,
-  LineChart
+  LineChart,
+  Link
 } from 'lucide-react';
 
 // Import Zustand Store & Sync Hook
@@ -64,6 +65,7 @@ const MainLayout: React.FC = () => {
   const moreMenuItems = [
     { path: '/dosing-history', icon: Box, label: 'Lịch Sử Châm' },
     { path: '/analytics', icon: LineChart, label: 'Grafana Metrics' },
+    { path: '/pairing', icon: Link, label: 'Thiết Bị Của Tôi' },
     { path: '/settings', icon: Settings, label: 'Cài Đặt Trạm' }
   ];
 

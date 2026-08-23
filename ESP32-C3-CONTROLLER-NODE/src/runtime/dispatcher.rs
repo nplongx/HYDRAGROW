@@ -191,6 +191,22 @@ impl EventDispatcher {
                     }
                 }
             }
+            OrchestratorEvent::RebootDevice => {
+                log::info!("🔄 [DISPATCHER] Thực hiện reboot...");
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                unsafe { esp_idf_svc::sys::esp_restart(); }
+            }
+            OrchestratorEvent::FactoryReset => {
+                log::warn!("⚠️ [DISPATCHER] Factory Reset: xoá NVS và reboot...");
+                if let Some(nvs) = dc.nvs.as_mut() {
+                    let empty = hydragrow_shared::WifiCredentialList::default();
+                    let _ = crate::hw::save_wifi_list(nvs, &empty);
+                    let _ = nvs.remove("active_recipe");
+                    let _ = nvs.remove("safety_budget");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                unsafe { esp_idf_svc::sys::esp_restart(); }
+            }
             _ => {}
         }
     }

@@ -3,6 +3,9 @@ use thiserror::Error;
 pub mod influx;
 pub mod postgres; // Đổi từ sqlite -> postgres
 pub mod users;
+pub mod device_ownership;
+#[cfg(test)]
+pub mod tests;
 
 #[derive(Error, Debug)]
 pub enum DbError {

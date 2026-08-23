@@ -449,9 +449,14 @@ async fn main() -> anyhow::Result<()> {
                     .configure(api::solana::init_routes)
                     .configure(api::recipe::init_routes)
                     .configure(api::admin_users::init_routes)
+                    .configure(api::device_pairing::init_routes)
                     .service(
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)
+                            .service(
+                                web::scope("/admin")
+                                    .configure(api::config_backup::init_routes)
+                            )
                             .configure(api::device_admin::init_routes)
                             .configure(api::sensor::init_routes)
                             .configure(api::config::init_routes)

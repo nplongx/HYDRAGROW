@@ -209,9 +209,23 @@ const Settings = () => {
   const isPhError = sensorData?.err_ph === true;
   const isCalibrationBlocked = !isSensorOnline || isPhError;
 
-  const callApi = async (path: string, method: string = 'GET', body: any = null, currentSettings: any = appSettings, customTimeoutMs?: number) => {
+  const callApi = async (
+    path: string,
+    method: string = 'GET',
+    body: any = null,
+    currentSettings: any = appSettings,
+    customTimeoutMs?: number,
+    extraHeaders?: Record<string, string>
+  ) => {
     const url = `${currentSettings.backend_url}${path}`;
-    const options: any = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': currentSettings.api_key } };
+    const options: any = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': currentSettings.api_key,
+        ...extraHeaders,
+      },
+    };
     if (customTimeoutMs) { options.connectTimeout = customTimeoutMs; options.timeout = customTimeoutMs; }
     if (body) options.body = JSON.stringify(body);
     const res = await httpFetch(url, options);
@@ -239,7 +253,14 @@ const Settings = () => {
     if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version}?\nThiết bị sẽ khởi động lại và tạm ngừng điều khiển trong quá trình cập nhật.`)) return;
     setIsTriggeringOta(true);
     try {
-      await callApi(`/api/devices/${deviceId}/ota/trigger`, 'POST', {}, settings);
+      await callApi(
+        `/api/devices/${deviceId}/ota/trigger`,
+        'POST',
+        {},
+        settings,
+        undefined,
+        { 'X-User-Confirmed': 'true' }
+      );
       toast.success('Đã gửi lệnh cập nhật. Theo dõi tiến trình trong Nhật ký hệ thống.');
     } catch { toast.error('Không gửi được lệnh cập nhật firmware.'); }
     finally { setIsTriggeringOta(false); }
@@ -258,7 +279,14 @@ const Settings = () => {
     if (!window.confirm(`Gửi ${candidates.length} mạng WiFi xuống thiết bị?\nThông tin sai có thể khiến thiết bị mất kết nối cho tới khi có người kiểm tra tại chỗ.`)) return;
     setIsSavingWifi(true);
     try {
-      await callApi(`/api/devices/${deviceId}/wifi`, 'POST', { candidates }, settings);
+      await callApi(
+        `/api/devices/${deviceId}/wifi`,
+        'POST',
+        { candidates },
+        settings,
+        undefined,
+        { 'X-User-Confirmed': 'true' }
+      );
       toast.success('Đã gửi danh sách WiFi; thiết bị áp dụng sau lần khởi động tiếp theo.');
     } catch { toast.error('Không gửi được danh sách WiFi.'); }
     finally { setIsSavingWifi(false); }

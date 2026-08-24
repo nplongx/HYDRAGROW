@@ -244,8 +244,62 @@ pub async fn factory_reset_device(
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct DeviceStatusResponse {
+    pub is_online: bool,
+    pub firmware_version: String,
+    pub last_seen: Option<String>,
+}
+
+pub async fn get_device_status(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+
+    let states = app_state.device_states.read().await;
+    let raw = states.get(&device_id).cloned();
+    drop(states);
+
+    let (is_online, last_seen) = match raw {
+        Some(s) => {
+            let parsed: serde_json::Value = serde_json::from_str(&s).unwrap_or_default();
+            let ts = parsed
+                .get("controller_status_ts")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            // Online if a heartbeat landed in the last 30s
+            // (firmware publish cycle is 10s — see health.rs run_main_health_loop)
+            let is_online = ts
+                .as_ref()
+                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                .map(|dt| {
+                    chrono::Utc::now().signed_duration_since(dt).num_seconds() < 30
+                })
+                .unwrap_or(false);
+            (is_online, ts)
+        }
+        None => (false, None),
+    };
+
+    let firmware_version = app_state
+        .device_firmware
+        .read()
+        .await
+        .get(&device_id)
+        .cloned()
+        .unwrap_or_else(|| "unknown".to_string());
+
+    HttpResponse::Ok().json(DeviceStatusResponse {
+        is_online,
+        firmware_version,
+        last_seen,
+    })
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/ota/status", web::get().to(get_ota_status))
+    cfg.route("/status", web::get().to(get_device_status))
+        .route("/ota/status", web::get().to(get_ota_status))
         .route("/ota/trigger", web::post().to(trigger_ota))
         .route("/wifi", web::post().to(update_wifi_list))
         .route("/reboot", web::post().to(reboot_device))
@@ -268,5 +322,22 @@ mod tests {
     #[test]
     fn ota_status_does_not_claim_update_without_latest_version() {
         assert!(!build_ota_status_response("v1.2.0".into(), None).update_available);
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn device_status_response_serializes_expected_shape() {
+        let resp = DeviceStatusResponse {
+            is_online: true,
+            firmware_version: "1.2.3".to_string(),
+            last_seen: Some("2026-08-23T10:00:00+00:00".to_string()),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["is_online"], true);
+        assert_eq!(json["firmware_version"], "1.2.3");
     }
 }

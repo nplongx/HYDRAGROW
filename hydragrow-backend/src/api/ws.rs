@@ -162,6 +162,7 @@ pub async fn ws_handler(
                                     serde_json::json!({
                                         "type": "device_status",
                                         "payload": {
+                                            "device_id": status.device_id,
                                             "is_online": status.is_online,
                                             "last_seen": chrono::Utc::now().to_rfc3339()
                                         }

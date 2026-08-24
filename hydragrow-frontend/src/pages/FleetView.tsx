@@ -1,12 +1,36 @@
+import { useState, useEffect } from 'react';
 import { RefreshCw, Wifi, WifiOff, ChevronRight, Cpu } from 'lucide-react';
 import { useFleetStatus } from '../hooks/useFleetStatus';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { useNavigate } from 'react-router-dom';
+import { apiGet } from '../lib/apiClient';
 
 export function FleetView() {
   const { devices, loading, error, refresh } = useFleetStatus();
   const setDeviceId = useDeviceStore((s) => s.setDeviceId);
   const navigate = useNavigate();
+
+  const [recipeStatuses, setRecipeStatuses] = useState<Record<string, string | null>>({});
+
+  useEffect(() => {
+    if (devices.length === 0) return;
+    Promise.all(
+      devices.map(async (d) => {
+        try {
+          const res = await apiGet<{ data: { active_recipe: { stages: any[]; recipe_id: string } | null } }>(
+            `/devices/${d.device_id}/recipe/status`
+          );
+          return { device_id: d.device_id, crop: res.data.active_recipe?.stages?.[0]?.name ?? null };
+        } catch {
+          return { device_id: d.device_id, crop: null };
+        }
+      })
+    ).then((results) => {
+      const map: Record<string, string | null> = {};
+      results.forEach((r) => { map[r.device_id] = r.crop; });
+      setRecipeStatuses(map);
+    });
+  }, [devices]);
 
   function selectDevice(deviceId: string) {
     setDeviceId(deviceId);
@@ -64,7 +88,14 @@ export function FleetView() {
 
                 {/* Device info */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{d.label ?? d.device_id}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium truncate">{d.label ?? d.device_id}</p>
+                    {recipeStatuses[d.device_id] && (
+                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                        🌱 {recipeStatuses[d.device_id]}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400">{d.device_id}</p>
                   {d.firmware_version && (
                     <p className="text-xs text-gray-400">FW: {d.firmware_version}</p>

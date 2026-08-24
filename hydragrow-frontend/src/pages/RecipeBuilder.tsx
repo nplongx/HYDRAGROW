@@ -13,7 +13,9 @@ import {
 import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 import { useDeviceStore } from '../store/useDeviceStore';
-import { CropStage, RecipeTemplate } from '../types/models';
+import { useOwnedDevices } from '../hooks/useOwnedDevices';
+import { apiBulkPost } from '../lib/apiClient';
+import { CropStage, RecipeTemplate, BulkApplyResult } from '../types/models';
 
 type EditableStage = CropStage & {
   id: string;
@@ -48,6 +50,41 @@ const RecipeBuilder: React.FC = () => {
   const settings = useDeviceStore((s) => s.settings);
   const deviceId = useDeviceStore((s) => s.deviceId);
 
+  const { devices } = useOwnedDevices();
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [_bulkResult, setBulkResult] = useState<BulkApplyResult | null>(null);
+
+  function toggleDevice(devId: string) {
+    setSelectedDeviceIds((prev) =>
+      prev.includes(devId) ? prev.filter((id) => id !== devId) : [...prev, devId]
+    );
+  }
+
+  async function handleBulkApply(recipeId: string) {
+    if (selectedDeviceIds.length === 0) {
+      toast.error('Chọn ít nhất một thiết bị');
+      return;
+    }
+    setBulkApplying(true);
+    try {
+      const result = await apiBulkPost<{ data: BulkApplyResult }>('/recipes/bulk-apply', {
+        device_ids: selectedDeviceIds,
+        recipe_id: recipeId,
+      });
+      setBulkResult(result.data);
+      if (result.data.failed.length === 0) {
+        toast.success(`Đã áp recipe cho ${result.data.succeeded.length} thiết bị`);
+      } else {
+        toast.error(`${result.data.failed.length} thiết bị thất bại`);
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBulkApplying(false);
+    }
+  }
+
   const [templateName, setTemplateName] = useState('Xà lách thủy canh thương phẩm');
   const [cropType, setCropType] = useState('lettuce');
   const [description, setDescription] = useState('Quy trình chuẩn dinh dưỡng và vi khí hậu');
@@ -73,12 +110,10 @@ const RecipeBuilder: React.FC = () => {
   }, [stages]);
 
   // Lấy ID của công thức đang được nạp dưới Controller Node
-  // Lấy ID của công thức đang được nạp dưới Controller Node
   const { data: activeRecipeId } = useQuery<string | null>({
     queryKey: ['active-recipe', deviceId],
     enabled: Boolean(settings?.backend_url && deviceId),
     queryFn: async () => {
-      // ĐỔI TỪ /recipe THÀNH /recipe/status
       const res = await httpFetch(`${settings!.backend_url}/api/devices/${deviceId}/recipe/status`, {
         method: 'GET',
         headers,
@@ -86,7 +121,6 @@ const RecipeBuilder: React.FC = () => {
       if (!res.ok) return null;
       const json = await res.json();
       
-      // Lấy đúng đường dẫn data theo định dạng của Backend
       const activeRecipe = json.data?.active_recipe || json.active_recipe;
       return activeRecipe?.recipe_id || null;
     },
@@ -141,7 +175,6 @@ const RecipeBuilder: React.FC = () => {
         })),
       };
 
-      // THUẬT TOÁN ĐIỀU HƯỚNG: Có ID thì PUT, không có thì POST
       const isUpdate = Boolean(selectedTemplateId);
       const url = isUpdate
         ? `${settings.backend_url}/api/recipes/${selectedTemplateId}`
@@ -156,7 +189,6 @@ const RecipeBuilder: React.FC = () => {
       return res.json();
     },
     onSuccess: () => {
-      // BÁO CÁO THÀNH CÔNG ĐÚNG NGỮ CẢNH
       toast.success(selectedTemplateId ? 'Đã cập nhật Công thức mẫu!' : 'Đã tạo Công thức mẫu mới!');
       queryClient.invalidateQueries({ queryKey: ['recipes-templates'] });
     },
@@ -194,7 +226,6 @@ const RecipeBuilder: React.FC = () => {
     },
     onSuccess: () => {
       toast.success('Đã nạp Lộ trình xuống Controller Node thành công!');
-      // Refresh lại trạng thái recipe nếu bạn có query nào đang lắng nghe
       queryClient.invalidateQueries({ queryKey: ['recipe-status'] }); 
     },
     onError: (err: Error) => toast.error(`Lỗi áp dụng: ${err.message}`),
@@ -284,13 +315,12 @@ const RecipeBuilder: React.FC = () => {
                       isSelected
                         ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500'
                         : isApplied
-                        ? 'bg-blue-50/60 border-blue-300' // <--- Bôi nền xanh lơ cho mẫu đang chạy
+                        ? 'bg-blue-50/60 border-blue-300'
                         : 'bg-white border-emerald-100 hover:border-emerald-300'
                     }`}
                   >
                     <div className="flex items-center justify-between font-bold text-emerald-950 pr-16">
                       
-                      {/* HIỂN THỊ TÊN + NHÃN "ĐANG CHẠY" */}
                       <div className="truncate flex items-center gap-1.5">
                         <span className="truncate">{tmpl.name}</span>
                         {isApplied && (
@@ -315,7 +345,6 @@ const RecipeBuilder: React.FC = () => {
                       {tmpl.stages.length} giai đoạn • {tmpl.stages.reduce((sum, s) => sum + Math.round(s.duration_sec / 86400), 0)} ngày
                     </span>
 
-                    {/* NÚT XÓA RECIPE TEMPLATE */}
                     {/* KHU VỰC NÚT BẤM (ÁP DỤNG & XÓA) */}
                     <div className="absolute right-2.5 top-2.5 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                       <button
@@ -334,6 +363,37 @@ const RecipeBuilder: React.FC = () => {
                         <Trash2 size={14} />
                       </button>
                     </div>
+
+                    {/* Bulk apply panel — chỉ hiện khi có >1 thiết bị */}
+                    {devices.length > 1 && (
+                      <div className="mt-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xs font-medium text-gray-600 mb-2">Áp cho nhiều thiết bị:</p>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {devices.map((d) => (
+                            <button
+                              key={d.device_id}
+                              onClick={() => toggleDevice(d.device_id)}
+                              className={`px-2 py-1 rounded text-xs border transition ${
+                                selectedDeviceIds.includes(d.device_id)
+                                  ? 'bg-emerald-600 text-white border-emerald-600'
+                                  : 'border-gray-300 text-gray-600 hover:border-emerald-400'
+                              }`}
+                            >
+                              {d.label ?? d.device_id}
+                            </button>
+                          ))}
+                        </div>
+                        {selectedDeviceIds.length > 0 && (
+                          <button
+                            onClick={() => handleBulkApply(tmpl.id)}
+                            disabled={bulkApplying}
+                            className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded disabled:opacity-50"
+                          >
+                            {bulkApplying ? 'Đang áp...' : `Áp cho ${selectedDeviceIds.length} thiết bị`}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -452,10 +512,7 @@ const RecipeBuilder: React.FC = () => {
                 <p className="text-xs text-emerald-700/80 mt-0.5">Tổng thời gian chu kỳ: <b>{totalDays} ngày</b></p>
               </div>
               
-              {/* GOM 2 NÚT VÀO CHUNG MỘT VÙNG (FLEX) */}
               <div className="flex items-center gap-2">
-                
-                {/* NÚT NHÂN BẢN (Chỉ hiện khi đang sửa mẫu cũ) */}
                 {selectedTemplateId && (
                   <button
                     onClick={() => {
@@ -469,7 +526,6 @@ const RecipeBuilder: React.FC = () => {
                   </button>
                 )}
 
-                {/* NÚT LƯU / CẬP NHẬT */}
                 <button
                   onClick={() => saveRecipeMutation.mutate()}
                   disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}

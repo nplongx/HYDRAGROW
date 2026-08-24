@@ -128,7 +128,7 @@ const Settings = () => {
     if (!confirm('Xác nhận reboot thiết bị?')) return;
     setRebootLoading(true);
     const settings = runtimeSettings || appSettings;
-    const deviceId = appSettings.device_id || ctxDeviceId;
+    const deviceId = ctxDeviceId;
     try {
       const res = await httpFetch(`${settings?.backend_url}/api/devices/${deviceId}/reboot`, {
         method: 'POST',
@@ -147,7 +147,7 @@ const Settings = () => {
 
   async function sendFactoryReset() {
     const settings = runtimeSettings || appSettings;
-    const deviceId = appSettings.device_id || ctxDeviceId;
+    const deviceId = ctxDeviceId;
     try {
       const res = await httpFetch(`${settings?.backend_url}/api/devices/${deviceId}/factory-reset`, {
         method: 'POST',
@@ -193,7 +193,7 @@ const Settings = () => {
     enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
   });
 
-  const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'https://hydragrow.onrender.com', device_id: '' });
+  const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'https://hydragrow.onrender.com' });
   const [otaStatus, setOtaStatus] = useState<OtaStatus | null>(null);
   const [isTriggeringOta, setIsTriggeringOta] = useState(false);
   const [wifiCandidates, setWifiCandidates] = useState<WifiCandidate[]>([{ ssid: '', password: '', priority: 0 }]);
@@ -224,16 +224,16 @@ const Settings = () => {
   };
 
   useEffect(() => {
-    const deviceId = appSettings.device_id || ctxDeviceId;
+    const deviceId = ctxDeviceId;
     const settings = runtimeSettings || appSettings;
     if (!deviceId || !settings?.backend_url || !settings?.api_key) { setOtaStatus(null); return; }
     callApi(`/api/devices/${deviceId}/ota/status`, 'GET', null, settings)
       .then((status) => setOtaStatus(status as OtaStatus))
       .catch(() => setOtaStatus(null));
-  }, [appSettings.device_id, appSettings.api_key, appSettings.backend_url, ctxDeviceId, runtimeSettings]);
+  }, [appSettings.api_key, appSettings.backend_url, ctxDeviceId, runtimeSettings]);
 
   const handleTriggerOta = async () => {
-    const deviceId = appSettings.device_id || ctxDeviceId;
+    const deviceId = ctxDeviceId;
     const settings = runtimeSettings || appSettings;
     if (!deviceId || !otaStatus?.update_available || isTriggeringOta) return;
     if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version}?\nThiết bị sẽ khởi động lại và tạm ngừng điều khiển trong quá trình cập nhật.`)) return;
@@ -250,7 +250,7 @@ const Settings = () => {
   };
 
   const handleSaveWifiList = async () => {
-    const deviceId = appSettings.device_id || ctxDeviceId;
+    const deviceId = ctxDeviceId;
     const settings = runtimeSettings || appSettings;
     const candidates = wifiCandidates.filter((candidate) => candidate.ssid.trim() !== '');
     if (!deviceId) { toast.error('Thiếu Device ID.'); return; }
@@ -281,7 +281,7 @@ const Settings = () => {
 
   const handleCapturePoint = async () => {
     if (!activePoint || isCalibrationBlocked || isCapturingPoint) return;
-    const currentDeviceId = appSettings.device_id || ctxDeviceId;
+    const currentDeviceId = ctxDeviceId;
     const currentSettings = runtimeSettings || appSettings;
     if (!currentDeviceId || !currentSettings?.backend_url) { toast.error('Thiếu Device ID hoặc URL máy chủ.'); return; }
     setIsCapturingPoint(true);
@@ -340,7 +340,7 @@ const Settings = () => {
   const handleFinishAndSaveCalibration = async () => {
     const c = applyCalibrationToConfig();
     if (!c) return;
-    const currentDeviceId = appSettings.device_id || ctxDeviceId;
+    const currentDeviceId = ctxDeviceId;
     const currentSettings = runtimeSettings || appSettings;
     if (!currentDeviceId || !currentSettings?.backend_url) return;
     try {
@@ -356,7 +356,7 @@ const Settings = () => {
       setIsLoading(true);
       const settings: any = await loadAppSettings();
       if (settings) setAppSettings(settings);
-      const currentDeviceId = settings?.device_id || appSettings.device_id || ctxDeviceId;
+      const currentDeviceId = ctxDeviceId;
       if (!currentDeviceId) return;
       const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
       if (unifiedData) {
@@ -382,7 +382,7 @@ const Settings = () => {
         setConfig((prev: any) => ({ ...prev, ...merged, ...ecAliases }));
       }
     } catch { /* ignore config load error */ } finally { setIsLoading(false); }
-  }, [appSettings.device_id, ctxDeviceId]);
+  }, [ctxDeviceId]);
 
   useEffect(() => {
     loadConfig();
@@ -410,13 +410,13 @@ const Settings = () => {
   const hasDosingValidationError = Object.keys(dosingValidationErrors).length > 0;
 
   const handleSave = async (configOverride?: any) => {
-    if (!appSettings.device_id || !appSettings.backend_url) { toast.error('Thiếu thông tin kết nối.'); return; }
+    if (!ctxDeviceId || !appSettings.backend_url) { toast.error('Thiếu thông tin kết nối.'); return; }
     setIsSaving(true);
     const toastId = toast.loading("Đang lưu...");
     try {
       const savingConfig = configOverride || config;
       if (Object.keys(dosingValidationErrors).length > 0) { toast.error('Dữ liệu không hợp lệ.'); return; }
-      const devId = appSettings.device_id;
+      const devId = ctxDeviceId;
 
       await saveAppSettings({ ...appSettings, device_id: devId });
       const ts = new Date().toISOString();
@@ -528,7 +528,13 @@ const Settings = () => {
         {/* NETWORK */}
         <AccordionSection id="network" title="Thiết bị & Kết nối" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
-            <InputGroup label="Device ID" type="text" value={appSettings.device_id} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, device_id: e.target.value })} />
+            {/* Device ID — lấy từ thiết bị đang active, không cho nhập tay */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-emerald-950">Device ID (đang hoạt động)</label>
+              <p className="text-sm text-emerald-800 bg-emerald-50 px-3 py-2 rounded-lg font-mono">
+                {ctxDeviceId ?? <span className="text-gray-400 italic">Chưa chọn thiết bị — vào "Thiết Bị Của Tôi"</span>}
+              </p>
+            </div>
             <div className="space-y-2">
               <InputGroup label="API Key" type="password" value={appSettings.api_key} onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })} />
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

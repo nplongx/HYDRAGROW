@@ -16,7 +16,11 @@ export async function apiGet<T>(url: string): Promise<T> {
     return res.json();
 }
 
-export async function apiPost<T>(url: string, body: any, headers?: Record<string, string>): Promise<T> {
+export async function apiPost<T, B = Record<string, unknown>>(
+    url: string,
+    body: B,
+    headers?: Record<string, string>
+): Promise<T> {
     const settings = useDeviceStore.getState().settings;
     const res = await httpFetch(`${settings?.backend_url}/api${url}`, {
         method: 'POST',
@@ -30,7 +34,7 @@ export async function apiPost<T>(url: string, body: any, headers?: Record<string
     if (!res.ok) {
         throw new Error(`POST ${url} failed with status ${res.status}`);
     }
-    return res.json();
+    return res.json() as Promise<T>;
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {

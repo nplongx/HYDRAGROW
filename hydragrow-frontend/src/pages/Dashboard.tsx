@@ -110,9 +110,9 @@ const Dashboard = () => {
   const modeLabel = settings?.control_mode === 'auto' ? 'Tự động' : 'Thủ công';
 
   const ecStatus = sensorStatus(sensorData?.err_ec, sensorData?.ec, getTdsSetting(settings, 'min_ec_limit', 'min_ec_limit'), getTdsSetting(settings, 'max_ec_limit', 'max_ec_limit'));
-  const phStatus = sensorStatus(sensorData?.err_ph, sensorData?.ph, (settings as any)?.min_ph_limit, (settings as any)?.max_ph_limit);
-  const tempStatus = sensorStatus(sensorData?.err_temp, sensorData?.temp, (settings as any)?.min_temp_limit, (settings as any)?.max_temp_limit);
-  const waterStatus = sensorStatus(sensorData?.err_water, sensorData?.water_level, (settings as any)?.water_level_min, (settings as any)?.water_level_max);
+  const phStatus = sensorStatus(sensorData?.err_ph, sensorData?.ph, settings?.min_ph_limit, settings?.max_ph_limit);
+  const tempStatus = sensorStatus(sensorData?.err_temp, sensorData?.temp, settings?.min_temp_limit, settings?.max_temp_limit);
+  const waterStatus = sensorStatus(sensorData?.err_water, sensorData?.water_level, settings?.water_level_min, settings?.water_level_max);
 
   const nextAction = !isOnline
     ? 'Kiểm tra nguồn Wi-Fi trạm điều khiển.'

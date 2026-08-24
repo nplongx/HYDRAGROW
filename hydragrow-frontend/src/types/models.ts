@@ -2,7 +2,17 @@ export interface AppSettings {
   backend_url: string;
   api_key: string;
   device_id: string;
-  [key: string]: any;
+  control_mode?: 'auto' | 'manual';
+  min_ph_limit?: number;
+  max_ph_limit?: number;
+  min_temp_limit?: number;
+  max_temp_limit?: number;
+  water_level_min?: number;
+  water_level_max?: number;
+  water_level_target?: number;
+  ph_target?: number;
+  ph_tolerance?: number;
+  [key: string]: unknown;
 }
 
 export type DeviceState = 'on' | 'off';
@@ -177,4 +187,57 @@ export interface WifiCandidate {
   ssid: string;
   password: string;
   priority: number;
+}
+
+// --- Types từ hydragrow-shared/src/telemetry/health.rs ---
+export interface KalmanConfidence {
+  nutrient_a: number;
+  nutrient_b: number;
+  ph_up: number;
+  ph_down: number;
+  water_in: number;
+  water_out: number;
+  osaka_mixing: number;
+  misting: number;
+}
+
+export interface DeviceHealthSnapshot {
+  device_id: string;
+  free_heap: number;
+  uptime_sec: number;
+  rssi: number;
+  health_score_percent: number;
+  fsm_state_display: string;
+  log_drop_count: number;
+  firmware_version: string;
+  kalman_confidence?: KalmanConfidence;
+  matrix_update_count: number;
+  matrix_is_warm: boolean;
+  hestia?: unknown;
+  diagnostics?: {
+    health_score_percent?: number;
+  };
+  timestamp_ms: number;
+}
+
+// --- Types từ hydragrow-shared/src/log.rs ---
+export type LogLevel = 'info' | 'success' | 'warning' | 'critical';
+
+export type LogCategory =
+  | 'system'
+  | 'dosing'
+  | 'water'
+  | 'calibration'
+  | 'sensor'
+  | 'alert'
+  | 'user_action';
+
+export interface SystemEvent {
+  id?: string | number;
+  device_id: string;
+  level: LogLevel;
+  category: LogCategory;
+  message: string;
+  timestamp_ms: number;
+  metadata?: Record<string, unknown>;
 }

@@ -82,13 +82,16 @@ describe('useDeviceStore', () => {
   });
 
   it('should set system events with an updater function', () => {
-    useDeviceStore.setState({ systemEvents: [{ id: 1, message: 'Event 1' }] });
+    const sampleEvent1 = { id: 1, device_id: 'd1', level: 'info' as const, category: 'system' as const, message: 'Event 1', timestamp_ms: 100 };
+    const sampleEvent2 = { id: 2, device_id: 'd1', level: 'info' as const, category: 'system' as const, message: 'Event 2', timestamp_ms: 200 };
 
-    useDeviceStore.getState().setSystemEvents((prev: any) => [...prev, { id: 2, message: 'Event 2' }]);
+    useDeviceStore.setState({ systemEvents: [sampleEvent1] });
+
+    useDeviceStore.getState().setSystemEvents((prev) => [...prev, sampleEvent2]);
 
     expect(useDeviceStore.getState().systemEvents).toEqual([
-      { id: 1, message: 'Event 1' },
-      { id: 2, message: 'Event 2' }
+      sampleEvent1,
+      sampleEvent2
     ]);
   });
 
@@ -101,8 +104,21 @@ describe('useDeviceStore', () => {
     state.setIsControllerStatusKnown(true);
     expect(useDeviceStore.getState().isControllerStatusKnown).toBe(true);
 
-    state.setControllerHealth({ status: 'ok' });
-    expect(useDeviceStore.getState().controllerHealth).toEqual({ status: 'ok' });
+    const healthSnapshot = {
+      device_id: 'd1',
+      free_heap: 200000,
+      uptime_sec: 3600,
+      rssi: -60,
+      health_score_percent: 100,
+      fsm_state_display: 'Monitoring',
+      log_drop_count: 0,
+      firmware_version: 'v1.0.0',
+      matrix_update_count: 10,
+      matrix_is_warm: true,
+      timestamp_ms: 1000,
+    };
+    state.setControllerHealth(healthSnapshot);
+    expect(useDeviceStore.getState().controllerHealth).toEqual(healthSnapshot);
 
     state.setFsmState('Active');
     expect(useDeviceStore.getState().fsmState).toBe('Active');

@@ -103,7 +103,7 @@ export const AdvancedDeviceControl = ({
           }
         }, 8000);
       }
-    } catch (error) {
+    } catch {
       pendingTargetRef.current = null;
       setIsToggling(false);
       toast.error("Lỗi khi gửi lệnh.");
@@ -127,7 +127,7 @@ export const AdvancedDeviceControl = ({
       } else {
         await togglePump(pumpId, 'on');
       }
-    } catch (error) {
+    } catch {
       toast.error("Không thể thực thi.");
     } finally {
       setIsProcessing(false);
@@ -146,7 +146,7 @@ export const AdvancedDeviceControl = ({
     try {
       await forceOn(pumpId, time, allowPwm ? pwmValue : undefined);
       if (allowPwm) savePwmPreference(pumpId, pwmValue);
-    } catch (error) {
+    } catch {
       toast.error("Lỗi thực thi lệnh cưỡng chế.");
     } finally {
       setIsProcessing(false);

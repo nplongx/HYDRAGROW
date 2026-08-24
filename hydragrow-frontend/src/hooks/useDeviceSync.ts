@@ -27,7 +27,9 @@ const phaseToString = (phase: any): string | null => {
     if (phase.startsWith('{')) {
       try {
         return phaseToString(JSON.parse(phase));
-      } catch (_) {}
+        } catch {
+          // ignore json parse error
+        }
     }
     return phase;
   }
@@ -123,7 +125,9 @@ export function useDeviceSync() {
               ...(unifiedConfig.dosing_calibration || {}),
             };
           }
-        } catch (_) {}
+        } catch {
+          // ignore fetch error
+        }
       }
       useDeviceStore.getState().setSettings(mergedSettings);
       useDeviceStore.getState().setDeviceId(s.device_id || null);
@@ -196,7 +200,9 @@ export function useDeviceSync() {
         { method: 'GET', headers }
       );
       if (response.ok) applyDeviceSnapshot(normalizeSensorPayload((await response.json()).data));
-    } catch (_) {}
+    } catch {
+      // ignore error
+    }
   }, [applyDeviceSnapshot]);
 
   // Khởi tạo cài đặt ban đầu
@@ -220,14 +226,13 @@ export function useDeviceSync() {
 
     const connectWs = () => {
       const path = `/api/devices/${deviceId}/ws?api_key=${encodeURIComponent(settings.api_key || '')}`;
-      let wsUrl = '';
-      if (!settings.backend_url) {
-          // Tự động suy luận protocol (ws/wss) và domain (Vercel) từ trình duyệt
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          wsUrl = `${protocol}//${window.location.host}${path}`;
+      let wsUrl: string;
+      if (!settings?.backend_url) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}${path}`;
       } else {
-          const cleanBaseUrl = settings.backend_url.replace(/\/$/, '');
-          wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}${path}`;
+        const cleanBaseUrl = settings.backend_url.replace(/\/$/, '');
+        wsUrl = `${cleanBaseUrl.replace(/^http/, 'ws')}${path}`;
       }
 
       ws = new WebSocket(wsUrl);
@@ -342,7 +347,9 @@ export function useDeviceSync() {
               }
             }
           }
-        } catch (_) {}
+        } catch {
+          // ignore message parsing errors
+        }
       };
 
       ws.onclose = () => {

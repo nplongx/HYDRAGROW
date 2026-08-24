@@ -48,10 +48,9 @@ pub fn sign_command_value(device_id: &str, mut value: Value) -> Result<Value> {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
     mac.update(&canonical);
     let signature = hex::encode(mac.finalize().into_bytes());
-    value
-        .as_object_mut()
-        .unwrap()
-        .insert("signature".to_string(), Value::from(signature));
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("signature".to_string(), Value::from(signature));
+    }
     Ok(value)
 }
 

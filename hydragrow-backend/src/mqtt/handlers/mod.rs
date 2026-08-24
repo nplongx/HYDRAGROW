@@ -1,3 +1,5 @@
+#![warn(clippy::unwrap_used)]
+
 pub mod dosing_cycle;
 pub mod events;
 pub mod fsm;

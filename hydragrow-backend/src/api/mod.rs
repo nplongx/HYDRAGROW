@@ -1,3 +1,5 @@
+#![warn(clippy::unwrap_used)]
+
 pub mod admin_users;
 pub mod alert;
 pub mod calibration;

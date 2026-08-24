@@ -131,6 +131,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     }
     // 2. Lưu vào CSDL PostgreSQL
+    let metadata_value = serde_json::to_value(&log_data.event).ok();
     let db_record = NewSystemEventRecord {
         device_id: log_data.device_id.clone(),
         level: level_str.clone(),
@@ -138,7 +139,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         title: log_data.title.clone(),
         message: message_str.clone(),
         reason: None,
-        metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
+        metadata: metadata_value.clone(),
         timestamp: log_data.timestamp_ms as i64,
     };
 
@@ -176,14 +177,17 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             device_id: log_data.device_id.clone(),
             timestamp: log_data.timestamp_ms,
             reason: None,
-            metadata: Some(serde_json::to_value(&log_data.event).unwrap()),
+            metadata: metadata_value,
         };
         let _ = app_state
             .event_bus
             .send(AppEvent::SystemAlert(alert.clone()));
 
         if is_critical || is_warning {
-            let tokens = app_state.fcm_tokens.lock().unwrap().clone();
+            let tokens = match app_state.fcm_tokens.lock() {
+                Ok(guard) => guard.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            };
             if !tokens.is_empty() {
                 tokio::spawn(async move {
                     crate::services::fcm::send_push_notification(

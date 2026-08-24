@@ -36,4 +36,6 @@ jobs:
 
       - name: cargo check (ESP32-C3 target)
         working-directory: ESP32-C3-CONTROLLER-NODE
-        run: cargo check
+        run: |
+            cargo update -p libc
+            cargo check

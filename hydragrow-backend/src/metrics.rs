@@ -369,8 +369,7 @@ mod tests {
         register_metrics();
 
         let families = REGISTRY.gather();
-        let metric_names: Vec<String> =
-            families.iter().map(|f| f.get_name().to_string()).collect();
+        let metric_names: Vec<String> = families.iter().map(|f| f.get_name().to_string()).collect();
 
         assert!(
             metric_names.contains(&"active_ws_connections".to_string()),

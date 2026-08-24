@@ -412,7 +412,9 @@ async fn main() -> anyhow::Result<()> {
                     return false; // If no origins configured, deny all cross-origin requests
                 }
                 let origin_str = origin.as_bytes();
-                allowed_origins.iter().any(|allowed| allowed.as_bytes() == origin_str)
+                allowed_origins
+                    .iter()
+                    .any(|allowed| allowed.as_bytes() == origin_str)
             })
             .allow_any_method()
             .allow_any_header();
@@ -439,8 +441,7 @@ async fn main() -> anyhow::Result<()> {
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)
                             .service(
-                                web::scope("/admin")
-                                    .configure(api::config_backup::init_routes)
+                                web::scope("/admin").configure(api::config_backup::init_routes),
                             )
                             .configure(api::device_admin::init_routes)
                             .configure(api::sensor::init_routes)

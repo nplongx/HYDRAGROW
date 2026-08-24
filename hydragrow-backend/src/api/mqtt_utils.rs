@@ -107,8 +107,8 @@ pub async fn publish_command(
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::env;
     use serial_test::serial;
+    use std::env;
 
     #[test]
     fn test_canonical_payload_removes_signature() {
@@ -121,7 +121,8 @@ mod tests {
         let expected = serde_json::to_vec(&json!({
             "a": 1,
             "b": "test"
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(canonical, expected);
     }
 
@@ -129,15 +130,29 @@ mod tests {
     #[serial]
     fn test_command_secret_resolution() {
         // Test with specific device secret
-        unsafe { env::set_var("MQTT_COMMAND_SECRET_TEST_DEVICE_1", "device_specific_secret"); }
-        assert_eq!(command_secret("test-device-1").unwrap(), "device_specific_secret");
-        unsafe { env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE_1"); }
+        unsafe {
+            env::set_var(
+                "MQTT_COMMAND_SECRET_TEST_DEVICE_1",
+                "device_specific_secret",
+            );
+        }
+        assert_eq!(
+            command_secret("test-device-1").unwrap(),
+            "device_specific_secret"
+        );
+        unsafe {
+            env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE_1");
+        }
 
         // Test with fallback secret
-        unsafe { env::set_var("MQTT_COMMAND_SECRET", "fallback_secret"); }
+        unsafe {
+            env::set_var("MQTT_COMMAND_SECRET", "fallback_secret");
+        }
         assert_eq!(command_secret("test-device-2").unwrap(), "fallback_secret");
-        unsafe { env::remove_var("MQTT_COMMAND_SECRET");
-        env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE"); }
+        unsafe {
+            env::remove_var("MQTT_COMMAND_SECRET");
+            env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE");
+        }
 
         // Test missing secret
         assert!(command_secret("test-device-3").is_err());
@@ -148,14 +163,19 @@ mod tests {
         let value = json!("not an object");
         let result = sign_command_value("test-device", value);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "MQTT command payload must be a JSON object");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "MQTT command payload must be a JSON object"
+        );
     }
 
     #[test]
     #[serial]
     fn test_sign_command_value_adds_fields_and_valid_signature() {
-        unsafe { env::set_var("MQTT_COMMAND_SECRET", "test_secret");
-        env::set_var("MQTT_COMMAND_SECRET_TEST_DEVICE", "test_secret"); }
+        unsafe {
+            env::set_var("MQTT_COMMAND_SECRET", "test_secret");
+            env::set_var("MQTT_COMMAND_SECRET_TEST_DEVICE", "test_secret");
+        }
 
         let value = json!({
             "action": "turn_on"
@@ -179,7 +199,9 @@ mod tests {
 
         assert_eq!(signature, expected_signature);
 
-        unsafe { env::remove_var("MQTT_COMMAND_SECRET");
-        env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE"); }
+        unsafe {
+            env::remove_var("MQTT_COMMAND_SECRET");
+            env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE");
+        }
     }
 }

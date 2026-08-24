@@ -1,8 +1,8 @@
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
-use tracing::{info, warn};
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use tracing::{info, warn};
 
 use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
@@ -19,7 +19,10 @@ pub struct DeviceBackup {
 }
 
 fn auth_from(req: &HttpRequest) -> AuthContext {
-    req.extensions().get::<AuthContext>().cloned().unwrap_or_default()
+    req.extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// GET /device/{id}/admin/backup — Export config + recipe hiện tại.
@@ -45,7 +48,9 @@ pub async fn export_backup(
     .await;
 
     let device_config = match config_row {
-        Ok(Some(row)) => row.try_get::<serde_json::Value, _>("config_json").unwrap_or(serde_json::Value::Null),
+        Ok(Some(row)) => row
+            .try_get::<serde_json::Value, _>("config_json")
+            .unwrap_or(serde_json::Value::Null),
         _ => serde_json::Value::Null,
     };
 
@@ -75,7 +80,10 @@ pub async fn export_backup(
         .content_type("application/json")
         .insert_header((
             "Content-Disposition",
-            format!("attachment; filename=\"hydragrow_backup_{}.json\"", device_id),
+            format!(
+                "attachment; filename=\"hydragrow_backup_{}.json\"",
+                device_id
+            ),
         ))
         .json(backup)
 }
@@ -106,11 +114,16 @@ pub async fn import_backup(
         target: "all".to_string(),
         action: "set_config".to_string(),
         params: Some(MqttCommandParams {
-            pump_id: None, duration_sec: None, pwm: None, state: None,
+            pump_id: None,
+            duration_sec: None,
+            pwm: None,
+            state: None,
             ota_url: Some(serde_json::to_string(&body.device_config).unwrap_or_default()),
             candidates: None,
         }),
-        ts: None, nonce: None, signature: None,
+        ts: None,
+        nonce: None,
+        signature: None,
     };
     if let Err(e) = publish_command(&app_state, &device_id, &config_cmd).await {
         warn!(%device_id, ?e, "Failed to push config via MQTT");
@@ -122,11 +135,16 @@ pub async fn import_backup(
             target: "all".to_string(),
             action: "set_recipe".to_string(),
             params: Some(MqttCommandParams {
-                pump_id: None, duration_sec: None, pwm: None, state: None,
+                pump_id: None,
+                duration_sec: None,
+                pwm: None,
+                state: None,
                 ota_url: Some(serde_json::to_string(recipe).unwrap_or_default()),
                 candidates: None,
             }),
-            ts: None, nonce: None, signature: None,
+            ts: None,
+            nonce: None,
+            signature: None,
         };
         if let Err(e) = publish_command(&app_state, &device_id, &recipe_cmd).await {
             warn!(%device_id, ?e, "Failed to push recipe via MQTT");
@@ -139,5 +157,5 @@ pub async fn import_backup(
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/backup", web::get().to(export_backup))
-       .route("/restore", web::post().to(import_backup));
+        .route("/restore", web::post().to(import_backup));
 }

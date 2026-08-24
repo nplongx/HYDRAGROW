@@ -536,8 +536,28 @@ pub async fn apply_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
     req: web::Json<ApplyRecipeRequest>,
+    http_req: actix_web::HttpRequest,
 ) -> impl Responder {
+    use actix_web::HttpMessage;
     let device_id = path.into_inner();
+
+    // Lấy user_id từ AuthContext để kiểm tra quyền
+    let user_id: Option<i64> = http_req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .and_then(|ctx| ctx.user_id.as_ref())
+        .and_then(|id| id.parse().ok());
+
+    if let Some(uid) = user_id {
+        let owned = crate::db::device_ownership::is_owner(&app_state.pg_pool, uid, &device_id)
+            .await
+            .unwrap_or(false);
+        if !owned {
+            return HttpResponse::Forbidden().json(json!({
+                "error": "Bạn không có quyền áp dụng recipe cho thiết bị này"
+            }));
+        }
+    }
 
     let recipe_template = if let Some(recipe_id) = &req.recipe_id {
         let row = sqlx::query_as::<_, RecipeTemplate>(
@@ -799,9 +819,207 @@ pub async fn recipe_status(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct BulkApplyRecipeRequest {
+    /// Danh sách device_id muốn áp recipe
+    pub device_ids: Vec<String>,
+    /// ID của recipe template đã lưu
+    pub recipe_id: Option<String>,
+    /// Hoặc inline recipe (tương tự apply_recipe đơn)
+    pub recipe: Option<CreateRecipeRequest>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BulkApplyRecipeResponse {
+    pub succeeded: Vec<String>,
+    pub failed: Vec<BulkApplyFailure>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BulkApplyFailure {
+    pub device_id: String,
+    pub reason: String,
+}
+
+/// POST /api/recipes/bulk-apply — Áp dụng recipe cho nhiều thiết bị cùng lúc.
+pub async fn bulk_apply_recipe(
+    req: actix_web::HttpRequest,
+    app_state: web::Data<AppState>,
+    body: web::Json<BulkApplyRecipeRequest>,
+) -> impl Responder {
+    use crate::api::middleware::auth::AuthContext;
+    use crate::db::device_ownership;
+    use actix_web::HttpMessage;
+
+    // Lấy user_id
+    let user_id: Option<i64> = req
+        .extensions()
+        .get::<AuthContext>()
+        .and_then(|ctx| ctx.user_id.as_ref())
+        .and_then(|id| id.parse().ok());
+
+    let Some(user_id) = user_id else {
+        return HttpResponse::Unauthorized().json(json!({"error": "Chưa đăng nhập"}));
+    };
+
+    if body.device_ids.is_empty() {
+        return HttpResponse::BadRequest().json(json!({"error": "device_ids không được rỗng"}));
+    }
+
+    // Kiểm tra user sở hữu tất cả devices
+    let device_id_refs: Vec<&str> = body.device_ids.iter().map(|s| s.as_str()).collect();
+    let all_owned = device_ownership::is_owner_of_all(&app_state.pg_pool, user_id, &device_id_refs)
+        .await
+        .unwrap_or(false);
+
+    if !all_owned {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Bạn không sở hữu một hoặc nhiều thiết bị trong danh sách"
+        }));
+    }
+
+    // Lấy hoặc build recipe template
+    let recipe_template = if let Some(recipe_id) = &body.recipe_id {
+        let row = sqlx::query_as::<_, RecipeTemplate>(
+            "SELECT id, name, crop, description, created_at FROM crop_recipes WHERE id = $1",
+        )
+        .bind(recipe_id)
+        .fetch_optional(&app_state.pg_pool)
+        .await;
+
+        match row {
+            Ok(Some(mut r)) => {
+                r.stages = fetch_stages_for_recipe(&app_state.pg_pool, &r.id).await;
+                r
+            }
+            _ => return HttpResponse::NotFound().json(json!({"error": "recipe_not_found"})),
+        }
+    } else if let Some(inline) = &body.recipe {
+        RecipeTemplate {
+            id: Uuid::new_v4().to_string(),
+            name: inline.name.trim().to_string(),
+            crop: inline.crop.trim().to_string(),
+            description: inline.description.clone(),
+            stages: inline.stages.clone(),
+            created_at: Utc::now(),
+        }
+    } else {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "Cần truyền recipe_id hoặc recipe"
+        }));
+    };
+
+    let mut succeeded = Vec::new();
+    let mut failed = Vec::new();
+    let now_ts = Utc::now().timestamp() as u64;
+
+    // Apply cho từng device
+    for device_id in &body.device_ids {
+        let season_id = match crate::db::postgres::get_active_crop_season(
+            &app_state.pg_pool,
+            device_id,
+        )
+        .await
+        {
+            Ok(Some(s)) => {
+                // Sync plant_type
+                let _ = sqlx::query("UPDATE crop_seasons SET plant_type = $1 WHERE id = $2")
+                    .bind(&recipe_template.crop)
+                    .bind(&s.id)
+                    .execute(&app_state.pg_pool)
+                    .await;
+                s.id
+            }
+            _ => "default_season".to_string(),
+        };
+
+        let snapshot = CropRecipe {
+            schema_version: 1,
+            recipe_id: recipe_template.id.clone(),
+            season_id: season_id.clone(),
+            device_id: device_id.clone(),
+            revision: 1,
+            start_time_sec: now_ts,
+            current_stage_index: 0,
+            stages: recipe_template.stages.clone(),
+        };
+
+        let payload = RecipeMqttPayload {
+            action: "apply",
+            recipe: snapshot.clone(),
+            ts: None,
+            nonce: None,
+            signature: None,
+        };
+
+        let signed = match crate::api::mqtt_utils::sign_command(device_id, &payload) {
+            Ok(v) => v,
+            Err(e) => {
+                failed.push(BulkApplyFailure {
+                    device_id: device_id.clone(),
+                    reason: format!("signing_failed: {}", e),
+                });
+                continue;
+            }
+        };
+
+        let payload_bytes = match serde_json::to_vec(&signed) {
+            Ok(b) => b,
+            Err(e) => {
+                failed.push(BulkApplyFailure {
+                    device_id: device_id.clone(),
+                    reason: format!("serialize_failed: {}", e),
+                });
+                continue;
+            }
+        };
+
+        if let Err(e) = app_state
+            .mqtt_client
+            .publish(
+                topic_recipe_set(device_id),
+                rumqttc::QoS::AtLeastOnce,
+                false,
+                payload_bytes,
+            )
+            .await
+        {
+            failed.push(BulkApplyFailure {
+                device_id: device_id.clone(),
+                reason: format!("mqtt_failed: {}", e),
+            });
+            continue;
+        }
+
+        // Lưu vào DB
+        let _ = sqlx::query(
+            r#"INSERT INTO device_active_recipes (id, device_id, season_id, recipe_id, current_stage_id)
+               VALUES ($1, $2, $3, $4, 'stage_1')
+               ON CONFLICT (device_id) DO UPDATE SET
+                   season_id = EXCLUDED.season_id,
+                   recipe_id = EXCLUDED.recipe_id,
+                   current_stage_id = EXCLUDED.current_stage_id"#,
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(device_id)
+        .bind(&season_id)
+        .bind(&recipe_template.id)
+        .execute(&app_state.pg_pool)
+        .await;
+
+        succeeded.push(device_id.clone());
+    }
+
+    HttpResponse::Ok().json(json!({
+        "status": if failed.is_empty() { "success" } else { "partial" },
+        "data": BulkApplyRecipeResponse { succeeded, failed }
+    }))
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/recipes", web::get().to(list_recipes))
         .route("/recipes", web::post().to(create_recipe))
+        .route("/recipes/bulk-apply", web::post().to(bulk_apply_recipe))
         .route("/recipes/{recipe_id}", web::put().to(update_recipe))
         .route("/recipes/{recipe_id}", web::delete().to(delete_recipe))
         .route(

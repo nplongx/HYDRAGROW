@@ -683,6 +683,7 @@ dependencies = [
  "hmac",
  "hydragrow-shared",
  "lazy_static",
+ "libc",
  "log",
  "one-wire-bus",
  "pcf857x",

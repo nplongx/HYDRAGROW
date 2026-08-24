@@ -241,3 +241,25 @@ export interface SystemEvent {
   timestamp_ms: number;
   metadata?: Record<string, unknown>;
 }
+
+// --- Multi-device types ---
+export interface OwnedDevice {
+  id: number;
+  user_id: number;
+  device_id: string;
+  label: string | null;
+  claimed_at: string;
+}
+
+export interface DeviceRecipeStatus {
+  device_id: string;
+  recipe_id: string | null;
+  recipe_name: string | null;
+  crop: string | null;
+  updated_at: string;
+}
+
+export interface BulkApplyResult {
+  succeeded: string[];
+  failed: { device_id: string; reason: string }[];
+}

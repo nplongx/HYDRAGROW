@@ -6,6 +6,7 @@ on:
     paths:
       - 'ESP32-C3-CONTROLLER-NODE/**'
       - '.github/workflows/firmware-controller-ci.yml'
+
   pull_request:
     paths:
       - 'ESP32-C3-CONTROLLER-NODE/**'
@@ -24,29 +25,68 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
+          set -euo pipefail
+
           curl -L \
             https://github.com/esp-rs/espup/releases/latest/download/espup-x86_64-unknown-linux-gnu \
             -o espup
+
           chmod +x espup
 
           ./espup install \
             --targets esp32c3 \
             --stable-version stable
 
+          # Cargo is configured to build std from source, so rust-src
+          # must be installed for the same stable toolchain.
+          rustup component add rust-src --toolchain stable
+
+          # Load ESP toolchain/environment variables for this shell.
           source "$HOME/export-esp.sh"
 
-          rustup toolchain list
+          echo "=== Rust ==="
           rustc +stable --version
           cargo +stable --version
+
+          echo "=== Installed stable targets ==="
+          rustup target list --installed --toolchain stable
+
+          echo "=== Installed stable components ==="
+          rustup component list --toolchain stable | grep -E 'rust-src|rustc|cargo' || true
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ESP32-C3-CONTROLLER-NODE
+          cache-targets: true
+
+      - name: Verify ESP environment
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          source "$HOME/export-esp.sh"
+
+          echo "=== Toolchain ==="
+          rustc --version
+          cargo --version
+
+          echo "=== Target ==="
+          rustc --print target-list | grep 'riscv32imc-esp-espidf' || true
+
+          echo "=== Cargo config ==="
+          cat .cargo/config.toml
+
+          echo "=== Rust toolchain ==="
+          cat rust-toolchain.toml
 
       - name: cargo check (ESP32-C3 target)
         working-directory: ESP32-C3-CONTROLLER-NODE
         shell: bash
         run: |
+          set -euo pipefail
+
           source "$HOME/export-esp.sh"
-          cargo +stable check
+
+          cargo +stable check --locked

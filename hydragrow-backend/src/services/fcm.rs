@@ -14,7 +14,10 @@ async fn get_oauth_token() -> Result<String, Box<dyn std::error::Error>> {
     let scopes = &["https://www.googleapis.com/auth/firebase.messaging"];
     let token = auth.token(scopes).await?;
 
-    Ok(token.token().unwrap().to_string())
+    let token_str = token
+        .token()
+        .ok_or_else(|| "OAuth token value is missing")?;
+    Ok(token_str.to_string())
 }
 
 pub async fn send_push_notification(title: &str, body: &str, tokens: Vec<String>) {

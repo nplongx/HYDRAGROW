@@ -85,7 +85,10 @@ where
         let mut is_allowed = true;
 
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state = match self.state.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
 
             if state.len() > 10_000 {
                 state

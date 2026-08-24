@@ -89,10 +89,16 @@ where
             });
         }
 
-        let app_state = req
-            .app_data::<actix_web::web::Data<AppState>>()
-            .unwrap()
-            .clone();
+        let app_state = match req.app_data::<actix_web::web::Data<AppState>>() {
+            Some(state) => state.clone(),
+            None => {
+                let response = HttpResponse::InternalServerError()
+                    .json(serde_json::json!({"error": "AppState missing"}))
+                    .map_into_right_body();
+                let (http_req, _payload) = req.into_parts();
+                return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
+            }
+        };
 
         // 2. Ưu tiên xác thực bằng Firebase ID token (Authorization: Bearer <token>)
         if let Some(token) = extract_bearer_token(req.headers()) {

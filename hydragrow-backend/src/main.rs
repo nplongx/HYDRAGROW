@@ -149,19 +149,19 @@ async fn main() -> anyhow::Result<()> {
     let (backend_loki, esp_loki) = if let Ok(loki_url) = Url::parse(&loki_url_str) {
         let b = tracing_loki::builder()
             .label("service", "hydragrow-backend")
-            .unwrap()
+            .unwrap() // startup: acceptable to panic — builder label creation
             .extra_field("environment", environment.clone())
-            .unwrap()
+            .unwrap() // startup: acceptable to panic — builder field configuration
             .build_url(loki_url.clone())
-            .expect("Lỗi cấu hình Loki Layer cho Backend");
+            .expect("Lỗi cấu hình Loki Layer cho Backend"); // startup: acceptable to panic — fail fast if Loki layer config is invalid
 
         let e = tracing_loki::builder()
             .label("service", "hydragrow-controller")
-            .unwrap()
+            .unwrap() // startup: acceptable to panic — builder label creation
             .extra_field("environment", environment)
-            .unwrap()
+            .unwrap() // startup: acceptable to panic — builder field configuration
             .build_url(loki_url)
-            .expect("Lỗi cấu hình Loki Layer cho ESP32");
+            .expect("Lỗi cấu hình Loki Layer cho ESP32"); // startup: acceptable to panic — fail fast if Loki layer config is invalid
 
         (Some(b), Some(e))
     } else {
@@ -199,16 +199,16 @@ async fn main() -> anyhow::Result<()> {
     }
 
     info!("🚀 Khởi động hệ thống IoT Hydroponics Backend với Loki Collector...");
-    let database_url = env::var("DATABASE_URL").expect("Thiếu biến DATABASE_URL");
+    let database_url = env::var("DATABASE_URL").expect("Thiếu biến DATABASE_URL"); // startup: acceptable to panic — fail fast if DATABASE_URL is missing
     let pg_pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await?;
 
-    let influx_url = env::var("INFLUX_URL").expect("Thiếu biến INFLUX_URL");
-    let influx_org = env::var("INFLUX_ORG").expect("Thiếu biến INFLUX_ORG");
-    let influx_token = env::var("INFLUX_TOKEN").expect("Thiếu biến INFLUX_TOKEN");
-    let influx_bucket = env::var("INFLUX_BUCKET").expect("Thiếu biến INFLUX_BUCKET");
+    let influx_url = env::var("INFLUX_URL").expect("Thiếu biến INFLUX_URL"); // startup: acceptable to panic — fail fast if INFLUX_URL is missing
+    let influx_org = env::var("INFLUX_ORG").expect("Thiếu biến INFLUX_ORG"); // startup: acceptable to panic — fail fast if INFLUX_ORG is missing
+    let influx_token = env::var("INFLUX_TOKEN").expect("Thiếu biến INFLUX_TOKEN"); // startup: acceptable to panic — fail fast if INFLUX_TOKEN is missing
+    let influx_bucket = env::var("INFLUX_BUCKET").expect("Thiếu biến INFLUX_BUCKET"); // startup: acceptable to panic — fail fast if INFLUX_BUCKET is missing
     let influx_client = InfluxClient::new(influx_url, influx_org, influx_token);
     info!("Đã khởi tạo client InfluxDB Cloud (v2 API)");
 
@@ -291,7 +291,10 @@ async fn main() -> anyhow::Result<()> {
             if alert.level != "critical" && alert.level != "warning" {
                 continue;
             }
-            let tokens = fcm_tokens_clone.lock().unwrap().clone();
+            let tokens = match fcm_tokens_clone.lock() {
+                Ok(guard) => guard.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            };
             if !tokens.is_empty() {
                 crate::services::fcm::send_push_notification(&alert.title, &alert.message, tokens)
                     .await;
@@ -322,56 +325,56 @@ async fn main() -> anyhow::Result<()> {
             QoS::AtMostOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "status"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "sensor/status"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "fsm/state"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "fsm/events"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "system_log"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "calibration"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     mqtt_client
         .subscribe(
             &format!("{}/+/{}", AGITECH_PREFIX, "controller/status"),
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub");
+        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
     // Trong hydragrow-backend/src/main.rs, thêm sau các subscribe hiện tại:
     mqtt_client
         .subscribe(
@@ -379,7 +382,7 @@ async fn main() -> anyhow::Result<()> {
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub fsm/transition");
+        .expect("Lỗi sub fsm/transition"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
 
     mqtt_client
         .subscribe(
@@ -387,7 +390,7 @@ async fn main() -> anyhow::Result<()> {
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub dosing_cycle");
+        .expect("Lỗi sub dosing_cycle"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
 
     mqtt_client
         .subscribe(
@@ -395,7 +398,7 @@ async fn main() -> anyhow::Result<()> {
             QoS::AtLeastOnce,
         )
         .await
-        .expect("Lỗi sub water_cycle");
+        .expect("Lỗi sub water_cycle"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
 
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let server_port: u16 = env::var("SERVER_PORT")

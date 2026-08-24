@@ -89,7 +89,10 @@ pub async fn handle_device(
         }));
 
     if alert.level == "warning" || alert.level == "critical" {
-        let tokens = app_state.fcm_tokens.lock().unwrap().clone();
+        let tokens = match app_state.fcm_tokens.lock() {
+            Ok(guard) => guard.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
         if !tokens.is_empty() {
             let push_title = alert.title.clone();
             let push_message = alert.message.clone();

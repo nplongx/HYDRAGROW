@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { QrCode, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { apiGet, apiPost, apiDelete } from '../lib/apiClient';
+import QRCode from 'react-qr-code';
 
 interface OwnedDevice {
   device_id: string;
@@ -111,10 +112,21 @@ export function DevicePairing() {
       {/* QR code hiển thị sau khi claim */}
       {qrPayload && (
         <div className="mt-4 p-4 bg-blue-50 rounded-lg text-center">
-          <QrCode className="mx-auto mb-2 text-blue-600" size={24} />
-          <p className="text-sm text-blue-700 font-medium">Quét mã QR này trên app mobile:</p>
-          <code className="text-xs break-all">{qrPayload}</code>
-          <button onClick={() => setQrPayload(null)} className="mt-2 text-xs text-blue-500 underline block">Đóng</button>
+          <p className="text-sm text-blue-700 font-medium mb-3">
+            Quét mã QR này trên app mobile:
+          </p>
+
+          <div className="inline-block bg-white p-4 rounded-lg">
+            <QRCode
+              value={qrPayload}
+              size={200}
+              level="M"
+            />
+          </div>
+
+          <p className="mt-3 text-xs text-gray-500 break-all">
+            {qrPayload}
+          </p>
         </div>
       )}
     </div>

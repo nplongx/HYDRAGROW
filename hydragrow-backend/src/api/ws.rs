@@ -45,7 +45,10 @@ pub async fn ws_handler(
     req: HttpRequest,
     body: web::Payload,
     app_state: web::Data<AppState>,
+    path: web::Path<String>,
 ) -> Result<HttpResponse, Error> {
+    let scoped_device_id = path.into_inner();
+
     // Gọi trực tiếp actix_ws::handle để trả về Handshake Body nguyên bản
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
@@ -123,6 +126,23 @@ pub async fn ws_handler(
                 event_result = event_rx.recv() => {
                     match event_result {
                         Ok(event) => {
+                            // Only forward events for this connection's device_id.
+                            // Events with no device_id (e.g. broad system events) pass through.
+                            let event_device_id: Option<&str> = match &event {
+                                AppEvent::DeviceStatus(p) => Some(p.device_id.as_str()),
+                                AppEvent::SensorUpdate(p) => Some(p.device_id.as_str()),
+                                AppEvent::FsmTransition(p) => Some(p.device_id.as_str()),
+                                AppEvent::ControllerStatus(payload) => {
+                                    payload.get("device_id").and_then(|v| v.as_str())
+                                }
+                                _ => None,
+                            };
+                            if let Some(dev_id) = event_device_id {
+                                if dev_id != scoped_device_id {
+                                    continue;
+                                }
+                            }
+
                             let ws_msg = match event {
                                 AppEvent::SystemAlert(alert_msg) => {
                                     serde_json::json!({

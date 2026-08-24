@@ -1,5 +1,5 @@
-use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng as ArgonOsRng};
 use argon2::Argon2;
+use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng as ArgonOsRng};
 use base64::Engine;
 use rand::RngCore;
 use rand::rngs::OsRng;
@@ -31,7 +31,9 @@ fn generate_mqtt_credentials(device_id: &str) -> (String, String) {
 fn hash_mqtt_password(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut ArgonOsRng);
     let argon2 = Argon2::default();
-    Ok(argon2.hash_password(password.as_bytes(), &salt)?.to_string())
+    Ok(argon2
+        .hash_password(password.as_bytes(), &salt)?
+        .to_string())
 }
 
 /// Gán thiết bị cho user (upsert: cập nhật label nếu đã tồn tại).
@@ -42,16 +44,13 @@ pub async fn claim_device(
     device_id: &str,
     label: Option<&str>,
 ) -> Result<(DeviceOwnershipRecord, Option<ClaimedMqttCredentials>), sqlx::Error> {
-    let existing_username: Option<(Option<String>,)> = sqlx::query_as(
-        "SELECT mqtt_username FROM device_ownership WHERE device_id = $1 LIMIT 1",
-    )
-    .bind(device_id)
-    .fetch_optional(pool)
-    .await?;
+    let existing_username: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT mqtt_username FROM device_ownership WHERE device_id = $1 LIMIT 1")
+            .bind(device_id)
+            .fetch_optional(pool)
+            .await?;
 
-    let already_has_credentials = existing_username
-        .map(|(u,)| u.is_some())
-        .unwrap_or(false);
+    let already_has_credentials = existing_username.map(|(u,)| u.is_some()).unwrap_or(false);
 
     let new_credentials = if already_has_credentials {
         None
@@ -94,12 +93,11 @@ pub async fn claim_device(
         .await?
     };
 
-    let returned_credentials = new_credentials.map(|(mqtt_username, mqtt_password, _)| {
-        ClaimedMqttCredentials {
+    let returned_credentials =
+        new_credentials.map(|(mqtt_username, mqtt_password, _)| ClaimedMqttCredentials {
             mqtt_username,
             mqtt_password,
-        }
-    });
+        });
 
     Ok((record, returned_credentials))
 }
@@ -110,13 +108,11 @@ pub async fn unclaim_device(
     user_id: i64,
     device_id: &str,
 ) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
-        "DELETE FROM device_ownership WHERE user_id = $1 AND device_id = $2",
-    )
-    .bind(user_id)
-    .bind(device_id)
-    .execute(pool)
-    .await?;
+    let result = sqlx::query("DELETE FROM device_ownership WHERE user_id = $1 AND device_id = $2")
+        .bind(user_id)
+        .bind(device_id)
+        .execute(pool)
+        .await?;
     Ok(result.rows_affected())
 }
 
@@ -134,11 +130,7 @@ pub async fn list_devices_for_user(
 }
 
 /// Kiểm tra user có sở hữu device_id không.
-pub async fn is_owner(
-    pool: &PgPool,
-    user_id: i64,
-    device_id: &str,
-) -> Result<bool, sqlx::Error> {
+pub async fn is_owner(pool: &PgPool, user_id: i64, device_id: &str) -> Result<bool, sqlx::Error> {
     let count: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM device_ownership WHERE user_id = $1 AND device_id = $2",
     )
@@ -147,4 +139,37 @@ pub async fn is_owner(
     .fetch_one(pool)
     .await?;
     Ok(count.0 > 0)
+}
+
+/// Kiểm tra user sở hữu TẤT CẢ device_ids được chỉ định.
+/// Trả về false ngay khi có 1 device không thuộc user.
+pub async fn is_owner_of_all(
+    pool: &PgPool,
+    user_id: i64,
+    device_ids: &[&str],
+) -> Result<bool, sqlx::Error> {
+    if device_ids.is_empty() {
+        return Ok(true);
+    }
+    let device_ids_owned: Vec<String> = sqlx::query_scalar(
+        "SELECT device_id FROM device_ownership WHERE user_id = $1 AND device_id = ANY($2)",
+    )
+    .bind(user_id)
+    .bind(device_ids)
+    .fetch_all(pool)
+    .await?;
+    Ok(device_ids_owned.len() == device_ids.len())
+}
+
+/// Trả về danh sách device_id (chỉ ID) của user, dùng cho bulk operations.
+pub async fn list_device_ids_for_user(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT device_id FROM device_ownership WHERE user_id = $1 ORDER BY claimed_at",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
 }

@@ -201,7 +201,10 @@ pub async fn reboot_device(
     let command = MqttCommandOut {
         target: "all".to_string(),
         action: "reboot_device".to_string(),
-        params: None, ts: None, nonce: None, signature: None,
+        params: None,
+        ts: None,
+        nonce: None,
+        signature: None,
     };
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => HttpResponse::Accepted()
@@ -231,7 +234,10 @@ pub async fn factory_reset_device(
     let command = MqttCommandOut {
         target: "all".to_string(),
         action: "factory_reset".to_string(),
-        params: None, ts: None, nonce: None, signature: None,
+        params: None,
+        ts: None,
+        nonce: None,
+        signature: None,
     };
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => HttpResponse::Accepted()
@@ -273,9 +279,7 @@ pub async fn get_device_status(
             let is_online = ts
                 .as_ref()
                 .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                .map(|dt| {
-                    chrono::Utc::now().signed_duration_since(dt).num_seconds() < 30
-                })
+                .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_seconds() < 30)
                 .unwrap_or(false);
             (is_online, ts)
         }

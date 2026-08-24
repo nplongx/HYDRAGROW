@@ -1,7 +1,7 @@
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use hydragrow_shared::ControllerConfig;
-use hydragrow_shared::topics::{topic_controller_config, topic_sensors};
+use hydragrow_shared::topics::topic_controller_config;
 use rumqttc::QoS;
 use serde_json::json;
 use tracing::{error, info, instrument};
@@ -159,38 +159,36 @@ pub async fn sync_config_to_esp32(
     .flatten();
 
     if let Some(sensor_config) = sens {
-        let mqtt_topic_sensor = format!("{}/config", topic_sensors(device_id));
-
         let sensor_payload = json!({
-            "ph_v7": sensor_config.ph_v7,
-            "ph_v4": sensor_config.ph_v4,
-            "ph_v10": sensor_config.ph_v10,
-            "ph_calibration_mode": sensor_config.ph_calibration_mode,
-            "ec_factor": sensor_config.ec_factor,
-            "ec_offset": sensor_config.ec_offset,
-            "temp_offset": sensor_config.temp_offset,
-            "temp_compensation_beta": sensor_config.temp_compensation_beta,
-            "moving_average_window": sensor_config.moving_average_window,
-            "publish_interval": sensor_config.publish_interval,
-            "enable_ph_sensor": sensor_config.enable_ph_sensor,
-            "enable_ec_sensor": sensor_config.enable_ec_sensor,
-            "enable_temp_sensor": sensor_config.enable_temp_sensor,
+            "ph_v7":                   sensor_config.ph_v7,
+            "ph_v4":                   sensor_config.ph_v4,
+            "ph_v10":                  sensor_config.ph_v10,
+            "ph_calibration_mode":     sensor_config.ph_calibration_mode,
+            "ec_factor":               sensor_config.ec_factor,
+            "ec_offset":               sensor_config.ec_offset,
+            "temp_offset":             sensor_config.temp_offset,
+            "temp_compensation_beta":  sensor_config.temp_compensation_beta,
+            "moving_average_window":   sensor_config.moving_average_window,
+            "publish_interval":        sensor_config.publish_interval,
+            "enable_ph_sensor":        sensor_config.enable_ph_sensor,
+            "enable_ec_sensor":        sensor_config.enable_ec_sensor,
+            "enable_temp_sensor":      sensor_config.enable_temp_sensor,
             "enable_water_level_sensor": sensor_config.enable_water_level_sensor,
-            "tank_height": payload.tank_height
         });
 
-        if let Ok(mqtt_bytes_sensor) = serde_json::to_vec(&sensor_payload) {
-            app_state
-                .mqtt_client
-                .publish(
-                    &mqtt_topic_sensor,
-                    QoS::AtLeastOnce,
-                    true,
-                    mqtt_bytes_sensor,
-                )
-                .await
-                .map_err(|e| format!("Lỗi gửi MQTT Sensor: {:?}", e))?;
-        }
+        let sensor_bytes = serde_json::to_vec(&sensor_payload)
+            .map_err(|e| format!("Lỗi serialize sensor config: {:?}", e))?;
+
+        app_state
+            .mqtt_client
+            .publish(
+                hydragrow_shared::topics::topic_sensors_config(device_id),
+                QoS::AtLeastOnce,
+                true, // retain = true để sensor node nhận khi reconnect
+                sensor_bytes,
+            )
+            .await
+            .map_err(|e| format!("Lỗi gửi MQTT Sensor Config: {:?}", e))?;
     }
 
     info!(
@@ -443,6 +441,11 @@ pub async fn update_unified_config(
         return resp;
     }
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let mut payload = req.into_inner();
     let now = Utc::now();
 
@@ -500,8 +503,14 @@ pub async fn update_unified_config(
 pub async fn get_unified_device_config(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let pool = &app_state.pg_pool;
 
     let (dev_res, water_res, safe_res, dose_res, sens_res) = tokio::join!(
@@ -580,8 +589,17 @@ pub async fn get_unified_device_config(
 }
 
 #[instrument(skip(app_state))]
-pub async fn get_config(path: web::Path<String>, app_state: web::Data<AppState>) -> impl Responder {
+pub async fn get_config(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+    http_req: HttpRequest,
+) -> impl Responder {
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     match crate::db::postgres::get_device_config(&app_state.pg_pool, &device_id).await {
         Ok(config) => HttpResponse::Ok().json(config),
         Err(e) => {
@@ -602,6 +620,11 @@ pub async fn update_config(
         return resp;
     }
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let mut config = payload.into_inner();
     config.device_id = device_id.clone();
     config.last_updated = Utc::now();
@@ -643,6 +666,11 @@ pub async fn update_water_config(
         return resp;
     }
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let config = req.into_inner();
     let now = Utc::now();
     if let Err(_) = upsert_water_db(&app_state.pg_pool, &config, &now).await {
@@ -681,6 +709,11 @@ pub async fn update_safety_config(
         return resp;
     }
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let mut config = req.into_inner();
     config.device_id = device_id.clone();
     config.last_updated = Utc::now();
@@ -721,6 +754,11 @@ pub async fn update_sensor_calibration(
         return resp;
     }
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let config = req.into_inner();
     let now = Utc::now();
     if let Err(_) = upsert_sensor_db(&app_state.pg_pool, &config, &now).await {
@@ -918,6 +956,11 @@ pub async fn update_dosing_calibration(
         return resp;
     }
     let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
+    }
     let mut config = req.into_inner();
     config.device_id = device_id.clone();
     if let Err(msg) = validate_dosing_constraints(&config) {

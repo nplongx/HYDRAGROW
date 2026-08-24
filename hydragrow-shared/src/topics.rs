@@ -90,6 +90,9 @@ pub fn topic_controller_status(device_id: &str) -> String {
 pub fn topic_sensor_command(device_id: &str) -> String {
     format!("AGITECH/{}/sensor/command", device_id)
 }
+pub fn topic_sensors_config(device_id: &str) -> String {
+    MqttTopics::sensors_config(device_id)
+}
 pub fn topic_fsm_state(device_id: &str) -> String {
     MqttTopics::fsm_state(device_id)
 }

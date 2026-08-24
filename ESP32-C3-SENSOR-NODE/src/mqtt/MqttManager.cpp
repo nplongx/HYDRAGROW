@@ -29,7 +29,7 @@ const String TOPIC_PREFIX   = String("AGITECH/") + MQTT_CLIENT_ID + "/";
 const String TOPIC_SENSOR   = TOPIC_PREFIX + "sensors";
 const String TOPIC_STATUS   = TOPIC_PREFIX + "sensor/status";
 const String TOPIC_COMMAND  = TOPIC_PREFIX + "command";
-const String TOPIC_CONFIG   = TOPIC_PREFIX + "config";
+const String TOPIC_CONFIG   = TOPIC_PREFIX + "sensors/config";
 
 void publishStatus(const char* status, const char* message) {
     JsonDocument doc;
@@ -208,8 +208,16 @@ void MqttManager::handleConfig(const String& payload) {
 }
 
 void MqttManager::handleConfigDocument(JsonDocument& doc) {
-    Logger::debugPrintln("Da nhan cau hinh tu Backend");
-    publishStatus("ok", "configuration accepted");
+    Logger::debugPrintln("[CONFIG] Nhan cau hinh tu Backend, dang ap dung...");
+    appConfig.applyFromJson(doc);
+
+    // Confirm lại publish interval đang dùng
+    Logger::debugPrintf("[CONFIG] publish_interval=%lu ms, enablePh=%d, enableTds=%d\n",
+        appConfig.publishInterval,
+        (int)appConfig.sensor.enablePh,
+        (int)appConfig.sensor.enableTds);
+
+    publishStatus("ok", "configuration applied");
 }
 
 void MqttManager::publishSensorData() {

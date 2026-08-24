@@ -103,7 +103,6 @@ impl SafetyGuard {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

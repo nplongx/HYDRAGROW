@@ -32,7 +32,8 @@ button{background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointe
 </body></html>
 "#;
 
-const SUCCESS_HTML: &str = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h2>Da luu! Thiet bi se khoi dong lai.</h2>";
+const SUCCESS_HTML: &str =
+    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h2>Da luu! Thiet bi se khoi dong lai.</h2>";
 const FAIL_HTML: &str = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h2>Khong ket noi duoc. Thu lai.</h2><a href='/'>Quay lai</a>";
 
 /// URL-decode a percent-encoded string (+ → space, %XX → char).
@@ -72,9 +73,7 @@ pub fn parse_form_body(body: &str) -> Option<(String, String, u8)> {
         return None;
     }
     let pass = url_decode(extract_field(body, "pass"));
-    let priority = extract_field(body, "priority")
-        .parse::<u8>()
-        .unwrap_or(0);
+    let priority = extract_field(body, "priority").parse::<u8>().unwrap_or(0);
     Some((ssid, pass, priority))
 }
 
@@ -108,8 +107,8 @@ pub fn run_captive_portal(
 ) -> Result<bool> {
     info!("🌐 [PORTAL] Mở AP 'HydraGrow-Setup' tại 192.168.4.1");
 
-    let listener = TcpListener::bind("0.0.0.0:80")
-        .map_err(|e| anyhow!("Cannot bind TCP 80: {e}"))?;
+    let listener =
+        TcpListener::bind("0.0.0.0:80").map_err(|e| anyhow!("Cannot bind TCP 80: {e}"))?;
     listener.set_nonblocking(true)?;
 
     let deadline = timeout.map(|d| Instant::now() + d);
@@ -127,15 +126,26 @@ pub fn run_captive_portal(
             Ok((stream, _)) => {
                 stream.set_read_timeout(Some(Duration::from_secs(2)))?;
                 if let Some((ssid, pass, priority)) = handle_client(stream, &mut buf) {
-                    info!("[PORTAL] Đã nhận credentials SSID='{}', priority={}", ssid, priority);
+                    info!(
+                        "[PORTAL] Đã nhận credentials SSID='{}', priority={}",
+                        ssid, priority
+                    );
                     // Ghi vào NVS
                     let mut current = crate::hw::load_wifi_list(nvs_partition.clone());
                     let candidates = &mut current.candidates;
                     // Không duplicate SSID
                     candidates.retain(|c: &WifiCandidate| c.ssid != ssid);
-                    candidates.push(WifiCandidate { ssid, password: pass, priority });
-                    let new_list = WifiCredentialList { candidates: candidates.clone() };
-                    if let Ok(mut nvs) = esp_idf_svc::nvs::EspNvs::new(nvs_partition.clone(), "agitech", true) {
+                    candidates.push(WifiCandidate {
+                        ssid,
+                        password: pass,
+                        priority,
+                    });
+                    let new_list = WifiCredentialList {
+                        candidates: candidates.clone(),
+                    };
+                    if let Ok(mut nvs) =
+                        esp_idf_svc::nvs::EspNvs::new(nvs_partition.clone(), "agitech", true)
+                    {
                         if let Err(e) = crate::hw::save_wifi_list(&mut nvs, &new_list) {
                             warn!("[PORTAL] Lỗi lưu NVS: {:?}", e);
                         }

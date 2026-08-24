@@ -174,7 +174,9 @@ fn main() -> anyhow::Result<()> {
                 Ok(true) => {
                     info!("✅ [PORTAL] Credentials saved, rebooting...");
                     std::thread::sleep(StdDuration::from_millis(500));
-                    unsafe { esp_idf_svc::sys::esp_restart(); }
+                    unsafe {
+                        esp_idf_svc::sys::esp_restart();
+                    }
                     unreachable!()
                 }
                 Ok(false) | Err(_) => {

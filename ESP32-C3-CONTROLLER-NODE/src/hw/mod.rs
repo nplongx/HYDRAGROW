@@ -1,7 +1,7 @@
 // src/hw/mod.rs
+pub mod captive_portal;
 pub mod mqtt_client;
 pub mod ntp;
-pub mod captive_portal;
 pub use captive_portal::run_captive_portal;
 
 pub mod nvs_store;

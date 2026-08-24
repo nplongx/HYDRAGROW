@@ -3,7 +3,7 @@ use std::vec;
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::info;
 
-use crate::core::fsm::{PeripheralDelta, context::PeripheralState};
+use crate::core::fsm::{context::PeripheralState, PeripheralDelta};
 
 use super::events::OrchestratorEvent;
 
@@ -29,14 +29,16 @@ impl PeripheralController {
                 config.osaka_mixing_pwm_percent as u32
             };
 
-            if !peripherals.pump_status.osaka_pump { // nếu bơm chưa được bật
+            if !peripherals.pump_status.osaka_pump {
+                // nếu bơm chưa được bật
                 info!("🌀 [OSAKA] Bật bơm Osaka {}%", target_pwm);
                 events.push(OrchestratorEvent::StartOsakaSoft {
                     target_pwm_percent: target_pwm,
                 });
                 delta.osaka_pump = Some(true); // bật bơm
                 delta.osaka_pwm = Some(target_pwm); // soft start đến target pwm
-            } else if peripherals.osaka_pwm != target_pwm { // bơm đã được bật (trường hợp đang trộn nhưng cần phun sương -> chỉnh pwm cao hơn)
+            } else if peripherals.osaka_pwm != target_pwm {
+                // bơm đã được bật (trường hợp đang trộn nhưng cần phun sương -> chỉnh pwm cao hơn)
                 events.push(OrchestratorEvent::SetOsakaPump {
                     pwm_percent: target_pwm,
                 });

@@ -35,6 +35,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pio-
 
+      - name: Setup secrets header
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: cp src/secrets.h.example src/secrets.h
+
       - name: Build firmware (esp32-c3-devkitm-1)
         working-directory: ESP32-C3-SENSOR-NODE
         run: pio run --environment esp32-c3-devkitm-1

@@ -217,7 +217,7 @@ const Settings = () => {
     const res = await httpFetch(url, options);
     if (!res.ok) {
       let errDetail = `HTTP ${res.status}`;
-      try { errDetail = `${res.status}: ${await res.text()}`; } catch (_) { }
+      try { errDetail = `${res.status}: ${await res.text()}`; } catch { /* ignore text parse error */ }
       throw new Error(errDetail);
     }
     return await res.json();
@@ -304,7 +304,7 @@ const Settings = () => {
       if (voltage === null) throw new Error('Không nhận được giá trị.');
       setCapturedPoints((prev) => ({ ...prev, [activePoint]: { voltage, confidence: normalizeConfidence(captureRes), capturedAt: new Date().toISOString() } }));
       toast.success(`Đã ghi nhận điểm pH ${activePoint}.`);
-    } catch (error) { toast.error(`Không thể đo pH ${activePoint}.`); }
+    } catch { toast.error(`Không thể đo pH ${activePoint}.`); }
     finally { clearInterval(timer); setIsCapturingPoint(false); setCountdown(0); setStabilityStatus('idle'); }
   };
 
@@ -354,7 +354,7 @@ const Settings = () => {
   const loadConfig = useCallback(async () => {
     try {
       setIsLoading(true);
-      let settings: any = await loadAppSettings();
+      const settings: any = await loadAppSettings();
       if (settings) setAppSettings(settings);
       const currentDeviceId = settings?.device_id || appSettings.device_id || ctxDeviceId;
       if (!currentDeviceId) return;
@@ -381,7 +381,7 @@ const Settings = () => {
         };
         setConfig((prev: any) => ({ ...prev, ...merged, ...ecAliases }));
       }
-    } catch (error) { } finally { setIsLoading(false); }
+    } catch { /* ignore config load error */ } finally { setIsLoading(false); }
   }, [appSettings.device_id, ctxDeviceId]);
 
   useEffect(() => {

@@ -1,8 +1,15 @@
 import { create } from 'zustand';
-import { SensorData, StatusPayload, AppSettings, TankAlert } from '../types/models';
+import {
+  SensorData,
+  StatusPayload,
+  AppSettings,
+  TankAlert,
+  DeviceHealthSnapshot,
+  SystemEvent,
+} from '../types/models';
 import { setItem } from '../platform/storage';
 
-interface DeviceState {
+interface DeviceStoreState {
   // --- STATES ---
   deviceId: string | null;
   settings: AppSettings | null;
@@ -10,9 +17,9 @@ interface DeviceState {
   sensorData: SensorData | null;
   deviceStatus: StatusPayload;
   isControllerStatusKnown: boolean;
-  controllerHealth: any;
+  controllerHealth: DeviceHealthSnapshot | null;
   fsmState: string;
-  systemEvents: any[];
+  systemEvents: SystemEvent[];
   isLoading: boolean;
   isSensorOnline: boolean;
   pwmPreferences: Record<string, number>;
@@ -26,9 +33,9 @@ interface DeviceState {
   setSensorData: (data: SensorData | null | ((prev: SensorData | null) => SensorData | null)) => void;
   setDeviceStatus: (status: StatusPayload | ((prev: StatusPayload) => StatusPayload)) => void;
   setIsControllerStatusKnown: (known: boolean) => void;
-  setControllerHealth: (health: any) => void;
+  setControllerHealth: (health: DeviceHealthSnapshot | null) => void;
   setFsmState: (state: string) => void;
-  setSystemEvents: (events: any[] | ((prev: any[]) => any[])) => void;
+  setSystemEvents: (events: SystemEvent[] | ((prev: SystemEvent[]) => SystemEvent[])) => void;
   setIsLoading: (loading: boolean) => void;
   setIsSensorOnline: (online: boolean) => void;
   setPwmPreferences: (prefs: Record<string, number>) => void;
@@ -37,7 +44,7 @@ interface DeviceState {
 
 const PWM_PREFS_STORE_KEY = 'pump_pwm_prefs';
 
-export const useDeviceStore = create<DeviceState>((set, get) => ({
+export const useDeviceStore = create<DeviceStoreState>((set, get) => ({
   deviceId: null,
   settings: null,
   isMissingConfig: false,

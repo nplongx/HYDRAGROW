@@ -19,7 +19,7 @@ describe('Firebase Configuration Security', () => {
   it('should initialize firebase with environment variables instead of hardcoded secrets', async () => {
     // Import the firebase config indirectly by checking how initializeApp was called
     const firebaseApp = await import('firebase/app');
-    const { app } = await import('../src/lib/firebase');
+    await import('../src/lib/firebase');
 
     const initializeAppMock = vi.mocked(firebaseApp.initializeApp);
 

@@ -21,7 +21,7 @@ const parseLocalSettings = (localRaw: string): any => {
     cachedLocalRaw = localRaw;
     cachedParsedLocal = parsed;
     return parsed;
-  } catch (_) {
+  } catch {
     return null;
   }
 };
@@ -95,7 +95,7 @@ export const forgetStoredApiKey = async (): Promise<void> => {
   if (localRaw) {
     const parsed = parseLocalSettings(localRaw);
     if (parsed) {
-      const { api_key: _, ...safeSettings } = parsed;
+      const { api_key: _apiKey, ...safeSettings } = parsed;
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(safeSettings));
     }
   }

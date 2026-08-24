@@ -14,7 +14,9 @@ export const extractFaultCode = (state?: string): string | null => {
     try {
       const parsed = JSON.parse(state);
       if (parsed.Fault) return String(parsed.Fault).trim();
-    } catch (_) {}
+    } catch {
+      // Ignore JSON parse error if state is not JSON
+    }
   }
   return null;
 };

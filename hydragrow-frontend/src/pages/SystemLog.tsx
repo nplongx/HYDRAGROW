@@ -65,7 +65,7 @@ const SystemLog = () => {
       const csvContent = "\uFEFF" + [headers.join(","), ...csvRows].join("\n");
       const saved = await saveTextFile(`nhat-ky-${deviceId || 'all'}.csv`, csvContent);
       if (saved) toast.success("Xuất CSV thành công!");
-    } catch (err: any) { toast.error("Lỗi khi xuất file!"); }
+    } catch { toast.error("Lỗi khi xuất file!"); }
   };
 
   return (

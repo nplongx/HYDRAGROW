@@ -125,7 +125,7 @@ export const useDeviceControl = (deviceId: string) => {
           toast.error(`Từ chối: ${rejectedStatus}`);
           return false;
         }
-      } catch (error: any) {
+      } catch {
         setCommandStatus((prev) => ({ ...prev, [pumpId]: "network_error" }));
         toast.error("Lỗi mạng khi gửi lệnh!");
         return false;

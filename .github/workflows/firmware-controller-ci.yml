@@ -1,4 +1,3 @@
-# .github/workflows/firmware-controller-ci.yml
 name: firmware-controller-ci
 
 on:
@@ -21,19 +20,46 @@ jobs:
 
       - name: Install Rust nightly + esp-rs toolchain
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
+          set -euo pipefail
+
           curl -L https://github.com/esp-rs/espup/releases/latest/download/espup-x86_64-unknown-linux-gnu -o espup
           chmod +x espup
-          ./espup install --targets esp32c3 --stable-version nightly
-          echo "$HOME/.espressif/tools/xtensa-esp-elf/*/bin" >> $GITHUB_PATH
-          cat $HOME/export-esp.sh >> $GITHUB_ENV
+
+          # Cài đặt target ESP32-C3
+          ./espup install --targets esp32c3
+
+          # Đảm bảo rust-src được cài đặt cho nightly
+          rustup component add rust-src
+
+          # Load các biến môi trường của toolchain ESP
+          source "$HOME/export-esp.sh"
+
+          echo "=== Rust ==="
+          rustc --version
+          cargo --version
+
+          echo "=== Installed targets ==="
+          rustup target list --installed
+
+          echo "=== Installed components ==="
+          rustup component list | grep -E 'rust-src|rustc|cargo' || true
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ESP32-C3-CONTROLLER-NODE
+          cache-targets: true
 
       - name: cargo check (ESP32-C3 target)
         working-directory: ESP32-C3-CONTROLLER-NODE
-        run: cargo check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          source "$HOME/export-esp.sh"
+
+          # Chạy check với nightly theo cấu hình dự án
+          cargo check --locked

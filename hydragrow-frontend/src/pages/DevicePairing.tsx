@@ -8,10 +8,10 @@ import type { OwnedDevice } from '../types/models';
 
 export function DevicePairing() {
   const { devices, loading, error, refresh } = useOwnedDevices();
-  const { deviceId: activeDeviceId, setDeviceId } = useDeviceStore((s) => ({
-    deviceId: s.deviceId,
-    setDeviceId: s.setDeviceId,
-  }));
+  
+  // Sửa lỗi: Lấy riêng từng giá trị từ Zustand store
+  const activeDeviceId = useDeviceStore((s) => s.deviceId);
+  const setDeviceId = useDeviceStore((s) => s.setDeviceId);
 
   const [newDeviceId, setNewDeviceId] = useState('');
   const [newLabel, setNewLabel] = useState('');
@@ -25,20 +25,23 @@ export function DevicePairing() {
 
   async function claimDevice() {
     if (!newDeviceId.trim()) return;
-    setSubmitting(true); setFormError(null);
+    setSubmitting(true);
+    setFormError(null);
     try {
       const res = await apiPost<{ device_id: string; label: string | null; qr_payload: string }>(
         '/devices/claim',
         { device_id: newDeviceId.trim(), label: newLabel.trim() || null }
       );
       setQrPayload(res.qr_payload);
-      setNewDeviceId(''); setNewLabel('');
-      // Auto-select thiết bị vừa claim nếu chưa có thiết bị active
+      setNewDeviceId('');
+      setNewLabel('');
       if (!activeDeviceId) setDeviceId(res.device_id);
       await refresh();
     } catch (e: any) {
       setFormError(e.message);
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function unclaimDevice(deviceId: string) {
@@ -49,7 +52,9 @@ export function DevicePairing() {
       await refresh();
     } catch (e: any) {
       setFormError(e.message);
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function saveRename(deviceId: string) {
@@ -123,7 +128,6 @@ export function DevicePairing() {
             </div>
 
             <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-              {/* Nút chọn thiết bị active */}
               <button
                 onClick={() => setDeviceId(d.device_id)}
                 disabled={activeDeviceId === d.device_id}

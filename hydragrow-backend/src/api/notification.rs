@@ -7,6 +7,7 @@ use tracing::info;
 #[derive(Deserialize)]
 pub struct RegisterTokenReq {
     pub fcm_token: String,
+    pub device_id: String,
 }
 
 // API: POST /api/notifications/register
@@ -18,10 +19,11 @@ pub async fn register_token(
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
+    let entry = tokens.entry(req.device_id.clone()).or_insert_with(Vec::new);
 
-    if !tokens.contains(&req.fcm_token) {
-        tokens.push(req.fcm_token.clone());
-        info!("📱 Đã lưu FCM Token mới của thiết bị Android!");
+    if !entry.contains(&req.fcm_token) {
+        entry.push(req.fcm_token.clone());
+        info!(device_id = %req.device_id, "📱 Registered new FCM token for device");
     }
 
     HttpResponse::Ok().json(serde_json::json!({"status": "success"}))

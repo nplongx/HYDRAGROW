@@ -14,6 +14,8 @@ export function useFCM() {
   const enableNotifications = async () => {
     try {
       if (!settings?.backend_url || !settings?.api_key) return;
+      const deviceId = useDeviceStore.getState().deviceId;
+      if (!deviceId) return;
       const isWeb = !('__TAURI__' in window);
       if (!isWeb) {
         debugLog("Tauri Native");
@@ -38,7 +40,8 @@ export function useFCM() {
             'X-API-Key': settings.api_key
           },
           body: JSON.stringify({
-            fcm_token: token
+            fcm_token: token,
+            device_id: useDeviceStore.getState().deviceId
           })
         }
       );

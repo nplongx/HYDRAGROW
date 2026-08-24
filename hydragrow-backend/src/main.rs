@@ -119,8 +119,8 @@ pub struct AppState {
     // Solana
     pub solana_traceability: SolanaTraceability,
 
-    // FCM tokens
-    pub fcm_tokens: Arc<Mutex<Vec<String>>>,
+    // FCM tokens — keyed by device_id, each device has its own token set
+    pub fcm_tokens: Arc<Mutex<HashMap<String, Vec<String>>>>,
 
     // pH Calibration session state
     pub ph_calibration_sessions: Arc<RwLock<HashMap<String, PhCalibrationSession>>>,
@@ -265,7 +265,6 @@ async fn main() -> anyhow::Result<()> {
     // Spawn retention task: xóa system_events cũ hơn 90 ngày, mỗi 24h
     crate::services::retention::spawn(pg_pool.clone());
 
-    let mut fcm_rx = alert_sender.subscribe();
     let app_state = web::Data::new(AppState {
         pg_pool,
         influx_client,
@@ -277,29 +276,12 @@ async fn main() -> anyhow::Result<()> {
         device_states,
         device_firmware,
         solana_traceability: solana_service,
-        fcm_tokens: Arc::new(Mutex::new(Vec::new())),
+        fcm_tokens: Arc::new(Mutex::new(HashMap::new())),
         event_bus: event_bus.clone(),
         ph_calibration_sessions: Arc::new(RwLock::new(HashMap::new())),
         ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
         dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
         command_rate_limits: Arc::new(Mutex::new(HashMap::new())),
-    });
-
-    let fcm_tokens_clone = app_state.fcm_tokens.clone();
-    tokio::spawn(async move {
-        while let Ok(alert) = fcm_rx.recv().await {
-            if alert.level != "critical" && alert.level != "warning" {
-                continue;
-            }
-            let tokens = match fcm_tokens_clone.lock() {
-                Ok(guard) => guard.clone(),
-                Err(poisoned) => poisoned.into_inner().clone(),
-            };
-            if !tokens.is_empty() {
-                crate::services::fcm::send_push_notification(&alert.title, &alert.message, tokens)
-                    .await;
-            }
-        }
     });
 
     let app_state_for_mqtt = app_state.clone();

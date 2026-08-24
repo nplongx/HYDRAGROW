@@ -185,8 +185,8 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
 
         if is_critical || is_warning {
             let tokens = match app_state.fcm_tokens.lock() {
-                Ok(guard) => guard.clone(),
-                Err(poisoned) => poisoned.into_inner().clone(),
+                Ok(guard) => guard.get(&log_data.device_id).cloned().unwrap_or_default(),
+                Err(poisoned) => poisoned.into_inner().get(&log_data.device_id).cloned().unwrap_or_default(),
             };
             if !tokens.is_empty() {
                 tokio::spawn(async move {

@@ -20,7 +20,7 @@ fn publish_ota_event(
     if let Some(tx) = mqtt_tx {
         let payload = serde_json::json!({
             "type": "system_alert", "device_id": device_id, "level": level,
-            "category": "Firmware", "title": title, "message": message,
+            "category": "system", "title": title, "message": message,
             "timestamp_ms": crate::utils::get_current_time_sec() * 1000,
         });
         let _ = tx.send(payload.to_string());

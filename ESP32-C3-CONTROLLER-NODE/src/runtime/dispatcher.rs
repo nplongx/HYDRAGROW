@@ -181,7 +181,7 @@ impl EventDispatcher {
                         Ok(()) => {
                             let payload = serde_json::json!({
                                 "type": "system_alert", "device_id": dc.device_id, "level": "Success",
-                                "category": "Network", "title": "Đã lưu danh sách WiFi mới",
+                                "category": "system", "title": "Đã lưu danh sách WiFi mới",
                                 "message": format!("{} SSID đã lưu; áp dụng sau lần khởi động tiếp theo.", list.sorted_valid().len()),
                                 "timestamp_ms": dc.now_sec * 1000,
                             });
@@ -194,7 +194,9 @@ impl EventDispatcher {
             OrchestratorEvent::RebootDevice => {
                 log::info!("🔄 [DISPATCHER] Thực hiện reboot...");
                 std::thread::sleep(std::time::Duration::from_millis(200));
-                unsafe { esp_idf_svc::sys::esp_restart(); }
+                unsafe {
+                    esp_idf_svc::sys::esp_restart();
+                }
             }
             OrchestratorEvent::FactoryReset => {
                 log::warn!("⚠️ [DISPATCHER] Factory Reset: xoá NVS và reboot...");
@@ -205,7 +207,9 @@ impl EventDispatcher {
                     let _ = nvs.remove("safety_budget");
                 }
                 std::thread::sleep(std::time::Duration::from_millis(200));
-                unsafe { esp_idf_svc::sys::esp_restart(); }
+                unsafe {
+                    esp_idf_svc::sys::esp_restart();
+                }
             }
             _ => {}
         }

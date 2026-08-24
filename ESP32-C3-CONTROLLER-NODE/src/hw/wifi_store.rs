@@ -14,7 +14,7 @@ pub fn load_wifi_list(nvs_partition: EspDefaultNvsPartition) -> WifiCredentialLi
     };
     let mut buffer = [0u8; WIFI_LIST_BUF_SIZE];
     match nvs.get_str(WIFI_LIST_KEY, &mut buffer) {
-        Ok(Some(raw)) => match serde_json::from_str(raw) {
+        Ok(Some(raw)) => match serde_json::from_str::<WifiCredentialList>(raw) {
             Ok(list) => {
                 info!(
                     "📶 [WIFI] Restored {} configured SSIDs from NVS.",

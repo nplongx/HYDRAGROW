@@ -72,13 +72,40 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     }
 
     // Đọc JSON response
-    let mut buf = [0u8; 4096];
-    let bytes_read = http_client.read(&mut buf)?;
-    let json_str = std::str::from_utf8(&buf[..bytes_read])?;
+    let mut response_buf: Vec<u8> = Vec::with_capacity(8192);
+    let mut chunk = [0u8; 1024];
+    loop {
+        let n = http_client.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+        response_buf.extend_from_slice(&chunk[..n]);
+        if response_buf.len() >= 32768 {
+            warn!("⚠️ [OTA] GitHub API response > 32KB, cắt bớt để tiết kiệm heap");
+            break;
+        }
+    }
+    let json_str = std::str::from_utf8(&response_buf)
+        .map_err(|e| anyhow::anyhow!("GitHub API response không phải UTF-8: {}", e))?;
 
     // Parse JSON tìm browser_download_url
-    let parsed: serde_json::Value = serde_json::from_str(json_str)?;
+    let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        error!(
+            "❌ [OTA] Không parse được GitHub API response ({} bytes): {}",
+            json_str.len(),
+            e
+        );
+        anyhow::anyhow!("JSON parse error: {}", e)
+    })?;
+
     let tag_name = parsed["tag_name"].as_str().unwrap_or("");
+    if tag_name.is_empty() {
+        error!(
+            "❌ [OTA] GitHub API không trả về tag_name. Response preview: {}",
+            &json_str[..json_str.len().min(200)]
+        );
+        return Err(anyhow::anyhow!("tag_name missing in GitHub response"));
+    }
 
     if tag_name == CURRENT_VERSION {
         info!(
@@ -192,4 +219,42 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn detects_truncated_json() {
+        // Mô phỏng JSON bị cắt giữa chừng
+        let truncated =
+            r#"{"tag_name":"v1.2.3","assets":[{"name":"firmware.bin","browser_download_"#;
+        let result = serde_json::from_str::<serde_json::Value>(truncated);
+        // Xác nhận parse fail với JSON không đầy đủ
+        assert!(result.is_err(), "Truncated JSON phải fail parse");
+    }
+
+    #[test]
+    fn extracts_tag_and_download_url_from_full_response() {
+        let full_json = serde_json::json!({
+            "tag_name": "v1.3.0",
+            "assets": [
+                {
+                    "name": "firmware.bin",
+                    "browser_download_url": "https://github.com/nplongx/HYDRAGROW/releases/download/v1.3.0/firmware.bin"
+                }
+            ]
+        });
+        let tag = full_json["tag_name"].as_str().unwrap_or("");
+        assert_eq!(tag, "v1.3.0");
+
+        let url = full_json["assets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["name"].as_str() == Some("firmware.bin"))
+            .and_then(|a| a["browser_download_url"].as_str())
+            .unwrap_or("");
+        assert!(!url.is_empty());
+        assert!(url.ends_with("firmware.bin"));
+    }
 }

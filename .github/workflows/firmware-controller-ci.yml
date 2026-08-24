@@ -1,0 +1,37 @@
+# .github/workflows/firmware-controller-ci.yml
+name: firmware-controller-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+      - '.github/workflows/firmware-controller-ci.yml'
+  pull_request:
+    paths:
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+      - '.github/workflows/firmware-controller-ci.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust nightly + esp-rs toolchain
+        run: |
+          curl -L https://github.com/esp-rs/espup/releases/latest/download/espup-x86_64-unknown-linux-gnu -o espup
+          chmod +x espup
+          ./espup install --targets esp32c3 --toolchain-version nightly
+          echo "$HOME/.espressif/tools/xtensa-esp-elf/*/bin" >> $GITHUB_PATH
+          cat $HOME/export-esp.sh >> $GITHUB_ENV
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ESP32-C3-CONTROLLER-NODE
+
+      - name: cargo check (ESP32-C3 target)
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        run: cargo check

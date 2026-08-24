@@ -60,6 +60,7 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
         }
 
         "/controller/status" => {
+            debug!(device_id = %device_id, "Routing controller_status message");
             handlers::status::handle_controller(device_id, &payload_bytes, app_state).await
         }
 

@@ -23,6 +23,12 @@ pub struct ClaimResponse {
     pub device_id: String,
     pub label: Option<String>,
     pub qr_payload: String,   // base URL để mobile scan
+    /// Only present the first time this device is ever claimed by anyone.
+    /// Show this to the user once — the backend never stores or returns it again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mqtt_username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mqtt_password: Option<String>,
 }
 
 /// POST /api/devices/claim — Gán device_id vào tài khoản đang đăng nhập.
@@ -45,13 +51,15 @@ pub async fn claim_device(
         &device_id,
         body.label.as_deref(),
     ).await {
-        Ok(rec) => {
+        Ok((rec, mqtt_credentials)) => {
             // QR payload cho mobile scan khi cắm điện lần đầu
             let qr_payload = format!("hydragrow://claim/{}", device_id);
             HttpResponse::Ok().json(ClaimResponse {
                 device_id: rec.device_id,
                 label: rec.label,
                 qr_payload,
+                mqtt_username: mqtt_credentials.as_ref().map(|c| c.mqtt_username.clone()),
+                mqtt_password: mqtt_credentials.map(|c| c.mqtt_password),
             })
         }
         Err(e) => {

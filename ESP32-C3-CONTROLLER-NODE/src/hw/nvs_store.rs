@@ -77,6 +77,35 @@ impl NvsStore {
         default_id.to_string()
     }
 
+    pub fn load_or_init_mqtt_credentials(
+        &mut self,
+        default_user: &str,
+        default_pass: &str,
+    ) -> (String, String) {
+        if let Some(nvs) = self.nvs.as_mut() {
+            let mut user_buf = [0u8; 64];
+            let mut pass_buf = [0u8; 128];
+
+            let user = if let Ok(Some(u)) = nvs.get_str("mqtt_user", &mut user_buf) {
+                u.to_string()
+            } else {
+                let _ = nvs.set_str("mqtt_user", default_user);
+                default_user.to_string()
+            };
+
+            let pass = if let Ok(Some(p)) = nvs.get_str("mqtt_pass", &mut pass_buf) {
+                p.to_string()
+            } else {
+                let _ = nvs.set_str("mqtt_pass", default_pass);
+                default_pass.to_string()
+            };
+
+            (user, pass)
+        } else {
+            (default_user.to_string(), default_pass.to_string())
+        }
+    }
+
     pub fn load_runtime_snapshot(&mut self, ctx: &mut SystemContext) {
         if let Some(nvs) = self.nvs.as_mut() {
             let mut buf = [0u8; 2048];

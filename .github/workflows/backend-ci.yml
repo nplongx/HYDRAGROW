@@ -48,3 +48,14 @@ jobs:
       - name: Clippy hydragrow-backend
         working-directory: hydragrow-backend
         run: cargo clippy
+
+  post-deploy-healthcheck:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Render deploy
+        run: sleep 90
+      - name: Healthcheck
+        run: |
+          curl -sf https://hydragrow.onrender.com/metrics || exit 1

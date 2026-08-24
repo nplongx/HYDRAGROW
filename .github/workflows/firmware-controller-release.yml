@@ -38,6 +38,9 @@ jobs:
           ./espup install --targets esp32c3
           rustup component add rust-src
 
+      - name: Install ldproxy
+        run: cargo install ldproxy --locked
+
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
         with:

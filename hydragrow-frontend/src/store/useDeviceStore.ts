@@ -6,6 +6,7 @@ import {
   TankAlert,
   DeviceHealthSnapshot,
   SystemEvent,
+  OwnedDevice,
 } from '../types/models';
 import { setItem } from '../platform/storage';
 
@@ -25,6 +26,8 @@ interface DeviceStoreState {
   pwmPreferences: Record<string, number>;
   tankAlert: TankAlert | null; // <-- Thêm state
   setTankAlert: (tankAlert: TankAlert | null) => void;
+  ownedDevices: OwnedDevice[];
+  setOwnedDevices: (devices: OwnedDevice[]) => void;
 
   // --- ACTIONS ---
   setDeviceId: (id: string | null) => void;
@@ -59,6 +62,8 @@ export const useDeviceStore = create<DeviceStoreState>((set, get) => ({
   pwmPreferences: {},
   tankAlert: null,
   setTankAlert: (tankAlert) => set({ tankAlert }),
+  ownedDevices: [],
+  setOwnedDevices: (ownedDevices) => set({ ownedDevices }),
 
   setDeviceId: (deviceId) => set({ deviceId }),
   setSettings: (settings) => set({ settings }),

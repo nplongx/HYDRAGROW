@@ -113,11 +113,22 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
     if let Ok(parsed) = parse_controller_status_payload(payload) {
         if let Some(health) = parsed.health_snapshot.as_ref() {
             if !health.firmware_version.is_empty() && health.firmware_version != "unknown" {
+                tracing::info!(
+                    device_id = %device_id,
+                    firmware_version = %health.firmware_version,
+                    "Cập nhật firmware version map"
+                );
                 app_state
                     .device_firmware
                     .write()
                     .await
                     .insert(device_id.clone(), health.firmware_version.clone());
+            } else {
+                tracing::debug!(
+                    device_id = %device_id,
+                    received_version = %health.firmware_version,
+                    "Bỏ qua firmware version không hợp lệ"
+                );
             }
         }
         let payload_json = &parsed.raw_json;
@@ -286,6 +297,34 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
 #[cfg(test)]
 mod tests {
     use super::parse_controller_status_payload;
+
+    #[test]
+    fn parses_and_sets_firmware_version() {
+        let raw = br#"{
+            "device_id": "device_001",
+            "free_heap": 120000,
+            "uptime_sec": 3600,
+            "rssi": -48,
+            "health_score_percent": 91,
+            "fsm_state_display": "Monitoring",
+            "log_drop_count": 0,
+            "firmware_version": "v1.2.3",
+            "matrix_update_count": 12,
+            "matrix_is_warm": true,
+            "timestamp_ms": 1748000000000
+        }"#;
+
+        let parsed = parse_controller_status_payload(raw).unwrap();
+        assert_eq!(
+            parsed.health_snapshot.as_ref().unwrap().firmware_version,
+            "v1.2.3"
+        );
+        // Xác nhận không phải "unknown"
+        assert_ne!(
+            parsed.health_snapshot.as_ref().unwrap().firmware_version,
+            "unknown"
+        );
+    }
 
     #[test]
     fn parses_new_device_health_snapshot_payload() {

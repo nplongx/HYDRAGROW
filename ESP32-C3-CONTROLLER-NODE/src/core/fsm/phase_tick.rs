@@ -12,7 +12,7 @@ pub trait PhaseTick {
     fn tick(
         &self,
         now_ms: u64,
-        uptime_ms: u64, 
+        uptime_ms: u64,
         config: &ControllerConfig,
         sensors: &SensorData,
         ctx: &mut SystemContext,

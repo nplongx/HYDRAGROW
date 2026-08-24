@@ -1,0 +1,78 @@
+name: firmware-controller-release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches Cargo.toml version
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        run: |
+          set -euo pipefail
+          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match Cargo.toml version $CARGO_VERSION — bump Cargo.toml before tagging."
+            exit 1
+          fi
+          echo "Tag matches Cargo.toml version: $CARGO_VERSION"
+
+      - name: Install Rust nightly + esp-rs toolchain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L https://github.com/esp-rs/espup/releases/latest/download/espup-x86_64-unknown-linux-gnu -o espup
+          chmod +x espup
+          ./espup install --targets esp32c3
+          rustup component add rust-src
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ESP32-C3-CONTROLLER-NODE
+          cache-targets: true
+
+      - name: Build release firmware
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/export-esp.sh"
+          cargo build --release --locked
+
+      - name: Install espflash
+        run: cargo install espflash --locked
+
+      - name: Produce OTA-flashable firmware.bin
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/export-esp.sh"
+          espflash save-image --chip esp32c3 \
+            target/riscv32imc-esp-espidf/release/esp32-c3-mist-weaver-os \
+            firmware.bin
+          ls -la firmware.bin
+
+      - name: Create GitHub Release with firmware.bin asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" firmware.bin \
+            --title "Firmware $GITHUB_REF_NAME" \
+            --notes "Automated release built from commit $GITHUB_SHA." \
+            --latest

@@ -5,7 +5,13 @@
 //! compiler có thể inline từng on_event() call vì concrete types.
 
 use super::ObserverContext;
-use crate::{core::fsm::events::OrchestratorEvent, runtime::observers::{dosing_analytics::DosingAnalyticsObserver, fault_alarm::FaultAlarmObserver, mqtt_telemetry::MqttTelemetryObserver, system_log::SystemLogObserver}};
+use crate::{
+    core::fsm::events::OrchestratorEvent,
+    runtime::observers::{
+        dosing_analytics::DosingAnalyticsObserver, fault_alarm::FaultAlarmObserver,
+        mqtt_telemetry::MqttTelemetryObserver, system_log::SystemLogObserver,
+    },
+};
 
 pub struct ObserverSet {
     pub mqtt_telemetry: MqttTelemetryObserver,

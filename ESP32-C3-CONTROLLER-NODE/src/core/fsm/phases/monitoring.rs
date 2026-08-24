@@ -178,11 +178,8 @@ fn apply_decision(
                     .commit_hourly_dose("NutrientA", uptime_sec, control.nutrient_a_ml);
             }
             if control.nutrient_b_ml > 0.0 {
-                ctx.safety.commit_hourly_dose(
-                    "NutrientB",
-                    uptime_sec,
-                    control.nutrient_b_ml,
-                );
+                ctx.safety
+                    .commit_hourly_dose("NutrientB", uptime_sec, control.nutrient_b_ml);
             }
             if control.ph_up_ml > 0.0 {
                 let _ = ctx.safety.check_hourly_dose(

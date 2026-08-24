@@ -33,7 +33,12 @@ impl PhaseTick for MimoDosingPhase {
 
         // 2. Hard Timeout toàn Phase -> Chuyển Cooldown
         // SỬA: Dùng `uptime` để so sánh và thiết lập mốc thời gian tương lai
-        if uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000) {
+        if uptime
+            >= ctx
+                .phase_finish_ms
+                .unwrap_or(u64::MAX)
+                .saturating_add(5_000)
+        {
             warn!("⚠️ [FSM] Dosing phase timeout cứng! Chuyển về Cooldown.");
             stop_water_and_misting(ctx, &mut result, &mut peri_delta);
 
@@ -275,7 +280,6 @@ fn transition_to_active_mixing(
     result.delta.reset_stabilizer = true;
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::core::fsm::context::SystemContext;
@@ -291,7 +295,11 @@ mod tests {
     fn hard_timeout_does_not_trigger_when_finish_ms_is_none() {
         let ctx = make_ctx_no_finish_ms();
         let uptime: u64 = 1_000;
-        let timed_out = uptime >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000);
+        let timed_out = uptime
+            >= ctx
+                .phase_finish_ms
+                .unwrap_or(u64::MAX)
+                .saturating_add(5_000);
         assert!(!timed_out, "Không nên timeout khi phase_finish_ms là None");
     }
 
@@ -299,9 +307,17 @@ mod tests {
     fn hard_timeout_triggers_5s_after_finish_ms() {
         let mut ctx = SystemContext::default();
         ctx.phase_finish_ms = Some(10_000);
-        let not_yet = 14_999u64 >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000);
+        let not_yet = 14_999u64
+            >= ctx
+                .phase_finish_ms
+                .unwrap_or(u64::MAX)
+                .saturating_add(5_000);
         assert!(!not_yet);
-        let at_limit = 15_000u64 >= ctx.phase_finish_ms.unwrap_or(u64::MAX).saturating_add(5_000);
+        let at_limit = 15_000u64
+            >= ctx
+                .phase_finish_ms
+                .unwrap_or(u64::MAX)
+                .saturating_add(5_000);
         assert!(at_limit);
     }
 }

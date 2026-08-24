@@ -1,12 +1,12 @@
 // src/hw/ntp.rs
-use esp_idf_svc::sntp::{OperatingMode, SntpConf, SyncStatus, EspSntp};
+use esp_idf_svc::sntp::{EspSntp, OperatingMode, SntpConf, SyncStatus};
 use log::{info, warn};
 use std::thread;
 use std::time::{Duration, Instant};
 
 pub fn sync_sntp_time() -> anyhow::Result<EspSntp<'static>> {
     info!("⏰ Khởi tạo SNTP và thiết lập múi giờ (UTC+7)...");
-    
+
     // Cấu hình các server NTP uy tín & nhanh
     let conf = SntpConf {
         operating_mode: OperatingMode::Poll,

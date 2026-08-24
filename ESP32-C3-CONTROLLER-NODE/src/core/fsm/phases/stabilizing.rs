@@ -406,7 +406,6 @@ fn build_human_message(
     msg
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::core::fsm::context::SystemContext;
@@ -416,7 +415,10 @@ mod tests {
         let ctx = SystemContext::default();
         let uptime_ms: u64 = 100;
         let timeout = uptime_ms >= ctx.phase_finish_ms.unwrap_or(u64::MAX);
-        assert!(!timeout, "Không nên exit ngay khi finish_ms là None — dùng unwrap_or(u64::MAX)");
+        assert!(
+            !timeout,
+            "Không nên exit ngay khi finish_ms là None — dùng unwrap_or(u64::MAX)"
+        );
     }
 
     #[test]

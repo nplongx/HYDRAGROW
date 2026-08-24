@@ -536,7 +536,6 @@ fn pulse_params(
     (pulse_on_ms, pulse_off_ms, max_pulse_count)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,7 +565,10 @@ mod tests {
         let (_event, _hw) = actor.begin_pump_b(b_job, 1000);
         assert!(matches!(actor.sub_state, DosingSubState::PumpingB(_)));
         if let DosingSubState::PumpingB(job) = &actor.sub_state {
-            assert_eq!(job.delivered_ml, 0.0, "delivered_ml phải là 0 khi vừa bắt đầu bơm B");
+            assert_eq!(
+                job.delivered_ml, 0.0,
+                "delivered_ml phải là 0 khi vừa bắt đầu bơm B"
+            );
         }
     }
 }

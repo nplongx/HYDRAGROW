@@ -40,17 +40,23 @@ impl PhaseTick for WaterRefillingPhase {
         // SỬA: Dùng uptime để chạy tick
         let (event, hw_events, sys_log) = ctx.water.tick(uptime_ms, sensors, config);
         result.events.extend(hw_events);
-        
-        result.events.extend(sys_log.into_iter().filter_map(|mut log| {
-            // THỦ THUẬT: Đè lại timestamp bằng giờ thực tế (now_ms) để Log hiển thị đúng ngày giờ
-            log.timestamp_ms = now_ms;
-            
-            serde_json::to_string(&log)
-                .ok()
-                .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
-        }));
 
-        if let WaterEvent::Done { success, duration_sec } = event {
+        result
+            .events
+            .extend(sys_log.into_iter().filter_map(|mut log| {
+                // THỦ THUẬT: Đè lại timestamp bằng giờ thực tế (now_ms) để Log hiển thị đúng ngày giờ
+                log.timestamp_ms = now_ms;
+
+                serde_json::to_string(&log)
+                    .ok()
+                    .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
+            }));
+
+        if let WaterEvent::Done {
+            success,
+            duration_sec,
+        } = event
+        {
             if !success {
                 log::warn!("⚠️ WaterRefilling: timeout sau {}s", duration_sec);
             }
@@ -96,17 +102,23 @@ impl PhaseTick for WaterDrainingPhase {
         // SỬA: Dùng uptime để chạy tick
         let (event, hw_events, sys_log) = ctx.water.tick(uptime_ms, sensors, config);
         result.events.extend(hw_events);
-        
-        result.events.extend(sys_log.into_iter().filter_map(|mut log| {
-            // THỦ THUẬT TƯƠNG TỰ: Vá lại timestamp trước khi đẩy lên MQTT
-            log.timestamp_ms = now_ms;
-            
-            serde_json::to_string(&log)
-                .ok()
-                .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
-        }));
 
-        if let WaterEvent::Done { success, duration_sec } = event {
+        result
+            .events
+            .extend(sys_log.into_iter().filter_map(|mut log| {
+                // THỦ THUẬT TƯƠNG TỰ: Vá lại timestamp trước khi đẩy lên MQTT
+                log.timestamp_ms = now_ms;
+
+                serde_json::to_string(&log)
+                    .ok()
+                    .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
+            }));
+
+        if let WaterEvent::Done {
+            success,
+            duration_sec,
+        } = event
+        {
             if !success {
                 log::warn!("⚠️ WaterDraining: timeout sau {}s", duration_sec);
             }

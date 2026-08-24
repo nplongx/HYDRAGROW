@@ -47,6 +47,9 @@ hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
 jsonwebtoken = "9"
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
 
 # Solana
 validator = { version = "0.20.0", features = ["derive"] }

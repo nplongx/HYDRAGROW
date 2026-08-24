@@ -37,14 +37,6 @@ const MQTT_URL: &str = match option_env!("HYDRAGROW_MQTT_URL") {
     Some(val) => val,
     None => "mqtt://broker.hivemq.com:1883",
 };
-const MQTT_USER: &str = match option_env!("HYDRAGROW_MQTT_USER") {
-    Some(val) => val,
-    None => "",
-};
-const MQTT_PASSWORD: &str = match option_env!("HYDRAGROW_MQTT_PASSWORD") {
-    Some(val) => val,
-    None => "",
-};
 const MQTT_COMMAND_SECRET: &str = match option_env!("HYDRAGROW_MQTT_COMMAND_SECRET") {
     Some(val) => val,
     None => "",
@@ -64,9 +56,14 @@ fn main() -> anyhow::Result<()> {
     let sysloop = EspSystemEventLoop::take()?;
     let nvs_partition = EspDefaultNvsPartition::take()?;
 
+    let default_mqtt_user = option_env!("HYDRAGROW_MQTT_USER").unwrap_or("");
+    let default_mqtt_pass = option_env!("HYDRAGROW_MQTT_PASSWORD").unwrap_or("");
+
     let shared_config = create_shared_config();
     let mut nvs_store = NvsStore::new(nvs_partition.clone());
     let device_id = nvs_store.load_or_init_device_id(DEVICE_ID);
+    let (mqtt_user, mqtt_password) =
+        nvs_store.load_or_init_mqtt_credentials(default_mqtt_user, default_mqtt_pass);
 
     // Đóng ngoặc đúng chỗ để giải phóng Lock
     if let Ok(mut config) = shared_config.write() {
@@ -216,8 +213,8 @@ fn main() -> anyhow::Result<()> {
     // 4. Main Event & Health Loop
     run_main_health_loop(
         MQTT_URL,
-        MQTT_USER,
-        MQTT_PASSWORD,
+        &mqtt_user,
+        &mqtt_password,
         MQTT_COMMAND_SECRET,
         shared_config,
         shared_sensors,

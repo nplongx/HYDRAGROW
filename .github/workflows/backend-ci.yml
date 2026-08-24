@@ -1,0 +1,50 @@
+# .github/workflows/backend-ci.yml
+name: backend-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-shared/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-shared/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            hydragrow-backend
+            hydragrow-shared
+
+      - name: Check hydragrow-shared
+        working-directory: hydragrow-shared
+        run: cargo check
+
+      - name: Check hydragrow-backend
+        working-directory: hydragrow-backend
+        run: cargo check
+
+      - name: Test hydragrow-backend
+        working-directory: hydragrow-backend
+        run: cargo test
+
+      - name: Clippy hydragrow-backend
+        working-directory: hydragrow-backend
+        run: cargo clippy

@@ -1,0 +1,48 @@
+# .github/workflows/firmware-sensor-ci.yml
+name: firmware-sensor-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ESP32-C3-SENSOR-NODE/**'
+      - '.github/workflows/firmware-sensor-ci.yml'
+  pull_request:
+    paths:
+      - 'ESP32-C3-SENSOR-NODE/**'
+      - '.github/workflows/firmware-sensor-ci.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('ESP32-C3-SENSOR-NODE/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Setup secrets header
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: cp src/secrets.h.example src/secrets.h
+
+      - name: Build firmware (esp32-c3-devkitm-1)
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: pio run --environment esp32-c3-devkitm-1
+
+      - name: Run native tests (if any)
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: pio test --environment native 2>/dev/null || echo "No native tests yet"

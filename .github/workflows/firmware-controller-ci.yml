@@ -1,0 +1,35 @@
+name: firmware-controller-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+      - '.github/workflows/firmware-controller-ci.yml'
+  pull_request:
+    paths:
+      - 'ESP32-C3-CONTROLLER-NODE/**'
+      - '.github/workflows/firmware-controller-ci.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2024-05-01
+          targets: riscv32imc-unknown-none-elf
+          components: rust-src
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ESP32-C3-CONTROLLER-NODE
+
+      - name: cargo check (ESP32-C3 target)
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        run: cargo check

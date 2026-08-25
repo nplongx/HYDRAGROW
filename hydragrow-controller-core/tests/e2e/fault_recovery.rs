@@ -1,9 +1,11 @@
 //! E2E: Fault injection và recovery scenarios
 
-use hydragrow_controller_core::core::fsm::{context::SystemContext, events::OrchestratorEvent, orchestrator};
 use hydragrow_controller_core::WaterDirection;
+use hydragrow_controller_core::core::fsm::{
+    context::SystemContext, events::OrchestratorEvent, orchestrator,
+};
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
-use hydragrow_shared::{ControllerConfig, ControlMode, SensorData};
+use hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
 
 fn minimal_config() -> ControllerConfig {
     ControllerConfig {
@@ -130,7 +132,14 @@ fn tick_apply(
     sensor_last_update_ms: u64,
 ) -> Vec<OrchestratorEvent> {
     let now_ms = 1_700_000_000_000u64 + uptime_ms;
-    let mut result = orchestrator::tick(now_ms, uptime_ms, config, sensors, sensor_last_update_ms, ctx);
+    let mut result = orchestrator::tick(
+        now_ms,
+        uptime_ms,
+        config,
+        sensors,
+        sensor_last_update_ms,
+        ctx,
+    );
     ctx.apply_delta(&mut result.delta);
     result.events
 }
@@ -169,7 +178,13 @@ fn e2e_sensor_timeout_fault_and_recovery() {
     let uptime_after = 101_000u64;
     let sensor_update_recent = 100_500u64; // Vừa nhận sensor 500ms trước
 
-    let _events = tick_apply(&mut ctx, &config, &sensor, uptime_after, sensor_update_recent);
+    let _events = tick_apply(
+        &mut ctx,
+        &config,
+        &sensor,
+        uptime_after,
+        sensor_update_recent,
+    );
 
     assert_eq!(
         ctx.phase,

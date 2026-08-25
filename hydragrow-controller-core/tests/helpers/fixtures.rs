@@ -1,8 +1,8 @@
+#![allow(dead_code)]
+
 //! Shared test fixtures — ControllerConfig và SensorData cho tests
 
-use hydragrow_controller_core::hydragrow_shared::{
-    ControlMode, ControllerConfig, SensorData,
-};
+use hydragrow_controller_core::hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
 
 /// Config chuẩn: Auto mode, EC/pH sensor bật, targets trong ngưỡng
 pub fn auto_config() -> ControllerConfig {

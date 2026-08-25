@@ -1,14 +1,14 @@
 //! Tests cho FSM phase transitions: Monitoring → MimoDosing → Cooldown → Monitoring
 
+#![allow(clippy::field_reassign_with_default)]
+
 mod helpers;
 use helpers::fixtures::{auto_config, balanced_sensors, low_ec_sensors};
 
-use hydragrow_controller_core::core::fsm::{
-    context::SystemContext,
-    events::OrchestratorEvent,
-    orchestrator,
-};
 use hydragrow_controller_core::WaterDirection;
+use hydragrow_controller_core::core::fsm::{
+    context::SystemContext, events::OrchestratorEvent, orchestrator,
+};
 use hydragrow_shared::fsm::SystemPhase;
 
 fn one_tick(
@@ -50,7 +50,10 @@ fn monitoring_idle_when_sensors_balanced() {
 
     // Phase không thay đổi hoặc không có delta phase
     let changed_to_dosing = result.delta.phase == Some(SystemPhase::MimoDosing);
-    assert!(!changed_to_dosing, "Sensors balanced phải Idle, không dosing");
+    assert!(
+        !changed_to_dosing,
+        "Sensors balanced phải Idle, không dosing"
+    );
 }
 
 // Test 3: MimoDosing hard timeout → chuyển sang Cooldown
@@ -164,6 +167,9 @@ fn automation_stop_emits_hardware_off_events() {
                 if *direction == WaterDirection::Stop
         )
     });
-    assert!(stops_water, "Chuyển Manual khi đang dosing phải dừng water pump");
+    assert!(
+        stops_water,
+        "Chuyển Manual khi đang dosing phải dừng water pump"
+    );
     assert_eq!(result.delta.phase, Some(SystemPhase::ManualMode));
 }

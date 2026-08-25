@@ -1,6 +1,6 @@
 use crate::core::adaptive::matrix::ControlVector;
 use crate::core::fsm::{DosingPumpTarget, OrchestratorEvent};
-use crate::utils::{effective_flow_ml_per_sec, DosePumpKind};
+use crate::utils::{DosePumpKind, effective_flow_ml_per_sec};
 use hydragrow_shared::fsm::FaultCode;
 use hydragrow_shared::{ControllerConfig, SensorData};
 
@@ -83,6 +83,12 @@ pub struct DosingActor {
     pub pending_ph_job: Option<PulseJob>,
 }
 
+impl Default for DosingActor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DosingActor {
     pub fn new() -> Self {
         Self {
@@ -98,6 +104,7 @@ impl DosingActor {
         matches!(self.sub_state, DosingSubState::Idle)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn start_matrix_cycle(
         &mut self,
         now_ms: u64,
@@ -307,12 +314,11 @@ impl DosingActor {
         mut b_job: PulseJob,
         now_ms: u64,
     ) -> (DosingEvent, Vec<OrchestratorEvent>) {
-        let mut hw_events = Vec::new();
-        hw_events.push(OrchestratorEvent::SetDosingPump {
+        let hw_events = vec![OrchestratorEvent::SetDosingPump {
             pump: DosingPumpTarget::NutrientB,
             on: true,
             pwm_percent: b_job.pwm,
-        });
+        }];
 
         b_job.pulse_on = true;
         b_job.pulse_count += 1;

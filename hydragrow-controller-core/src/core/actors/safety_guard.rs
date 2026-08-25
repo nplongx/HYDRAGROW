@@ -10,6 +10,12 @@ pub struct SafetyGuard {
     pub last_ph_before_dose: Option<f32>,
 }
 
+impl Default for SafetyGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SafetyGuard {
     pub fn new() -> Self {
         Self {
@@ -170,7 +176,10 @@ mod tests {
         assert!(guard.record_drain(1200, max_drains));
 
         // Lần thứ 4 bị block
-        assert!(!guard.record_drain(1300, max_drains), "Drain thứ 4 phải bị block");
+        assert!(
+            !guard.record_drain(1300, max_drains),
+            "Drain thứ 4 phải bị block"
+        );
     }
 
     // Test 6: record_refill giới hạn số lần refill per hour
@@ -181,7 +190,10 @@ mod tests {
 
         assert!(guard.record_refill(1000, max_refills));
         assert!(guard.record_refill(2000, max_refills));
-        assert!(!guard.record_refill(3000, max_refills), "Refill thứ 3 phải bị block");
+        assert!(
+            !guard.record_refill(3000, max_refills),
+            "Refill thứ 3 phải bị block"
+        );
     }
 
     // Test 7: flush_for_reset xóa toàn bộ budget history

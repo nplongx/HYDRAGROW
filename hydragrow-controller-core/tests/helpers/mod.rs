@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Test utility functions
 
 pub mod fixtures;
@@ -27,12 +29,7 @@ pub fn tick_n_times(
         let uptime_ms = start_uptime_ms + (i as u64 * tick_interval_ms);
         let now_ms = uptime_ms + 1_700_000_000_000; // Wall clock offset
         let result = hydragrow_controller_core::core::fsm::orchestrator::tick(
-            now_ms,
-            uptime_ms,
-            config,
-            sensors,
-            uptime_ms,
-            ctx,
+            now_ms, uptime_ms, config, sensors, uptime_ms, ctx,
         );
         ctx.apply_delta(&mut result.delta.clone());
         last_events = result.events;

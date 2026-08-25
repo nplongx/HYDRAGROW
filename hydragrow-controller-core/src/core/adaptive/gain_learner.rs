@@ -106,20 +106,22 @@ impl GainLearner {
 
         // 1. Cập nhật Gain tổng hợp EC
         let observed_total_gain = delta_ec / total_dose;
-        if observed_total_gain >= base_gain * 0.3 && observed_total_gain <= base_gain * 3.0 {
-            if !self.ec.outlier(observed_total_gain) {
-                self.ec.update(observed_total_gain);
-            }
+        if observed_total_gain >= base_gain * 0.3
+            && observed_total_gain <= base_gain * 3.0
+            && !self.ec.outlier(observed_total_gain)
+        {
+            self.ec.update(observed_total_gain);
         }
 
         // 2. Phân tách và cập nhật Gain riêng cho Bơm A
         if dose_a_ml > 0.0 {
             let ec_share_a = delta_ec * (dose_a_ml / total_dose);
             let observed_gain_a = ec_share_a / dose_a_ml;
-            if observed_gain_a >= base_gain * 0.3 && observed_gain_a <= base_gain * 3.0 {
-                if !self.ec_a.outlier(observed_gain_a) {
-                    self.ec_a.update(observed_gain_a);
-                }
+            if observed_gain_a >= base_gain * 0.3
+                && observed_gain_a <= base_gain * 3.0
+                && !self.ec_a.outlier(observed_gain_a)
+            {
+                self.ec_a.update(observed_gain_a);
             }
         }
 
@@ -127,10 +129,11 @@ impl GainLearner {
         if dose_b_ml > 0.0 {
             let ec_share_b = delta_ec * (dose_b_ml / total_dose);
             let observed_gain_b = ec_share_b / dose_b_ml;
-            if observed_gain_b >= base_gain * 0.3 && observed_gain_b <= base_gain * 3.0 {
-                if !self.ec_b.outlier(observed_gain_b) {
-                    self.ec_b.update(observed_gain_b);
-                }
+            if observed_gain_b >= base_gain * 0.3
+                && observed_gain_b <= base_gain * 3.0
+                && !self.ec_b.outlier(observed_gain_b)
+            {
+                self.ec_b.update(observed_gain_b);
             }
         }
     }

@@ -1,10 +1,14 @@
 //! Tests cho sensor timeout và noise detection trong orchestrator
 
+#![allow(clippy::field_reassign_with_default)]
+
 mod helpers;
 use helpers::fixtures::{auto_config, balanced_sensors, noisy_ec_sensors};
 
-use hydragrow_controller_core::core::fsm::{context::SystemContext, events::OrchestratorEvent, orchestrator};
 use hydragrow_controller_core::WaterDirection;
+use hydragrow_controller_core::core::fsm::{
+    context::SystemContext, events::OrchestratorEvent, orchestrator,
+};
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
 
 fn make_ctx_monitoring() -> SystemContext {

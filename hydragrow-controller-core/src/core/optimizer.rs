@@ -54,15 +54,15 @@ pub fn apply_safety_guardrails(
         control.nutrient_a_ml * safe_ec_a_gain + control.nutrient_b_ml * safe_ec_b_gain;
 
     // 2.1. Đã vượt trần độc tính hoặc dự báo sau châm sẽ vượt trần
-    if current_ec >= config.max_ec_limit || (current_ec + predicted_ec_gain) > config.max_ec_limit {
-        if total_nutrient_ml > 0.0 {
-            warn!(
-                "⚠️ [GUARDRAIL] Chặn châm phân A/B: EC hiện tại ({:.2}) + dự tăng ({:.2}) vượt ngưỡng độc tính ({:.2})",
-                current_ec, predicted_ec_gain, config.max_ec_limit
-            );
-            control.nutrient_a_ml = 0.0;
-            control.nutrient_b_ml = 0.0;
-        }
+    if (current_ec >= config.max_ec_limit || (current_ec + predicted_ec_gain) > config.max_ec_limit)
+        && total_nutrient_ml > 0.0
+    {
+        warn!(
+            "⚠️ [GUARDRAIL] Chặn châm phân A/B: EC hiện tại ({:.2}) + dự tăng ({:.2}) vượt ngưỡng độc tính ({:.2})",
+            current_ec, predicted_ec_gain, config.max_ec_limit
+        );
+        control.nutrient_a_ml = 0.0;
+        control.nutrient_b_ml = 0.0;
     }
 
     // 2.2. Kiểm tra mức tăng vượt ngưỡng sốc tối đa trong 1 chu kỳ (max_ec_delta)

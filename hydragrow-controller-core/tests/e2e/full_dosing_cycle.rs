@@ -1,8 +1,10 @@
 //! E2E: Giả lập một chu kỳ dosing hoàn chỉnh từ Monitoring → MimoDosing → Cooldown → Monitoring
 
-use hydragrow_controller_core::core::fsm::{context::SystemContext, events::OrchestratorEvent, orchestrator};
-use hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
+use hydragrow_controller_core::core::fsm::{
+    context::SystemContext, events::OrchestratorEvent, orchestrator,
+};
 use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
 
 /// Config tối ưu cho E2E test: cooldown ngắn, timeout ngắn
 fn e2e_config() -> ControllerConfig {
@@ -17,7 +19,7 @@ fn e2e_config() -> ControllerConfig {
         enable_ph_sensor: true,
         enable_water_level_sensor: false,
         enable_temp_sensor: false,
-        cooldown_sec: 2, // Ngắn để test nhanh
+        cooldown_sec: 2,        // Ngắn để test nhanh
         soft_start_duration: 0, // Bỏ soft start
         max_dose_per_hour: 50.0,
         max_dose_per_cycle: 10.0,
@@ -153,7 +155,10 @@ fn e2e_full_dosing_cycle_monitoring_to_cooldown_to_monitoring() {
     for _step in 1..=5 {
         uptime_ms += 100;
         let events = tick_apply(&mut ctx, &config, &low_ec_sensor, uptime_ms);
-        if events.iter().any(|e| matches!(e, OrchestratorEvent::SetDosingPump { .. })) {
+        if events
+            .iter()
+            .any(|e| matches!(e, OrchestratorEvent::SetDosingPump { .. }))
+        {
             has_dosing = true;
             break;
         }
@@ -229,8 +234,12 @@ fn e2e_dosing_start_emits_correct_hardware_events() {
     }
 
     // Verify events
-    let has_dosing_pump = all_events.iter().any(|e| matches!(e, OrchestratorEvent::SetDosingPump { on: true, .. }));
-    let has_system_log = all_events.iter().any(|e| matches!(e, OrchestratorEvent::PublishSystemLog { .. }));
+    let has_dosing_pump = all_events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetDosingPump { on: true, .. }));
+    let has_system_log = all_events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::PublishSystemLog { .. }));
 
     assert!(has_dosing_pump, "Dosing phải emit SetDosingPump on=true");
     assert!(has_system_log, "Dosing phải emit PublishSystemLog");

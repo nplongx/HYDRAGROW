@@ -4,10 +4,10 @@
 
 use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+use hydragrow_shared::telemetry::DosingCycleEvent;
 use hydragrow_shared::telemetry::cycle::{
     CycleOutcome, DosingDoseRecord, DosingPhaseSnapshot, KalmanLearningData,
 };
-use hydragrow_shared::telemetry::DosingCycleEvent;
 use hydragrow_shared::{ControllerConfig, DoseData, DosingReportPayload, PhaseData, SensorData};
 use log::warn;
 
@@ -145,6 +145,7 @@ impl PhaseTick for StabilizingPhase {
 // HELPER FUNCTIONS
 // ============================================================================
 
+#[allow(clippy::too_many_arguments)]
 fn push_telemetry_events(
     sample: &PendingCalibrationSample,
     sensors: &SensorData,
@@ -202,6 +203,7 @@ fn push_telemetry_events(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_dosing_cycle_event(
     sample: &PendingCalibrationSample,
     final_ec: f32,

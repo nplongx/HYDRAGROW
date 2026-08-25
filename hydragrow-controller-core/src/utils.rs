@@ -1,12 +1,12 @@
 use hydragrow_shared::{
-    log::{emit_system_log_event, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog},
     ControllerConfig,
+    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog, emit_system_log_event},
 };
 use std::{
     sync::{
+        RwLock, RwLockWriteGuard,
         atomic::{AtomicU32, Ordering},
         mpsc::Sender,
-        RwLock, RwLockWriteGuard,
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -183,14 +183,14 @@ pub fn validate_recipe(
         }
     }
 
-    if let Some(current_revision) = current_revision {
-        if recipe.revision < current_revision {
-            anyhow::bail!(
-                "stale_revision: recipe={}, current={}",
-                recipe.revision,
-                current_revision
-            );
-        }
+    if let Some(current_revision) = current_revision
+        && recipe.revision < current_revision
+    {
+        anyhow::bail!(
+            "stale_revision: recipe={}, current={}",
+            recipe.revision,
+            current_revision
+        );
     }
 
     Ok(())

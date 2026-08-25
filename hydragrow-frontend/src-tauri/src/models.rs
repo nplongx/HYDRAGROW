@@ -1,4 +1,5 @@
 // src-tauri/src/models.rs
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 
 // ── Settings ─────────────────────────────────────────────────────────

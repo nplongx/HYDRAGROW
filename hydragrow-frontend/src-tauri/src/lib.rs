@@ -26,7 +26,7 @@ pub fn run() {
             // Tiện ích (Thông báo)
             notification::trigger_os_notification,
         ])
-        .setup(|app| {
+        .setup(|_app| {
             println!("🚀 Core Backend Rust đã khởi động thành công!");
             // Nếu bạn muốn tự động kết nối WS ngay khi mở app, có thể đọc settings và gọi start_ws_listener tại đây.
             // Nhưng thiết kế hiện tại đang để cho React chủ động gọi lệnh `start_ws_listener` khi component mount.

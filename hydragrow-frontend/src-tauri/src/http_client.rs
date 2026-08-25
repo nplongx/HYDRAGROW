@@ -1,10 +1,10 @@
 use crate::models::AppSettings;
 use crate::secret_store;
-use serde::{de::DeserializeOwned, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 /// Helper để lấy cấu hình kết nối từ tauri-plugin-store
+#[allow(dead_code)]
 pub fn get_settings(app: &AppHandle) -> Result<AppSettings, String> {
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
 

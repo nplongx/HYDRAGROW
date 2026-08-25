@@ -21,13 +21,14 @@ export const extractFaultCode = (state?: string): string | null => {
   return null;
 };
 
-export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
+export const FsmStatusBadge: React.FC<{ state?: string; label?: string }> = ({ state, label }) => {
   const [showFaultSheet, setShowFaultSheet] = useState(false);
   const rawState = state || 'Monitoring';
   const faultCode = extractFaultCode(rawState);
   const faultGuide = useMemo(() => getFaultGuide(faultCode || undefined), [faultCode]);
 
   const renderBadge = (tone: 'default' | 'warn' | 'danger' | 'success' | 'info' | 'mist', content: string) => {
+    const textContent = label || content;
     const toneClass =
       tone === 'danger' ? 'bg-red-50 border-red-200 text-red-700'
         : tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800'
@@ -38,9 +39,9 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
 
     const baseClass = `px-2.5 py-0.5 rounded-md text-xs font-medium border ${toneClass}`;
     if (faultCode) {
-      return <button className={`${baseClass} hover:opacity-90`} onClick={() => setShowFaultSheet(true)}>{content}</button>;
+      return <button className={`${baseClass} hover:opacity-90`} onClick={() => setShowFaultSheet(true)}>{textContent}</button>;
     }
-    return <span className={baseClass}>{content}</span>;
+    return <span className={baseClass}>{textContent}</span>;
   };
 
   if (faultCode) return <>{renderBadge('danger', `Lỗi: ${faultCode}`)}{showFaultSheet && faultGuide && <FaultExplanation code={faultCode} onClose={() => setShowFaultSheet(false)} />}</>;

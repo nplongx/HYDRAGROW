@@ -1,7 +1,13 @@
 // src/pages/Analytics.tsx
 import { LineChart as ChartIcon, ExternalLink, Activity, Server, Cpu } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
-import { SubCard } from '../components/ui/SubCard';
+
+export const CHART_COLORS = {
+  ec: '#ea580c', // orange-600
+  ph: '#a21caf', // fuchsia-700
+  temp: '#0369a1', // sky-700
+  water: '#0891b2', // cyan-600
+};
 
 const Analytics = () => {
   return (
@@ -13,7 +19,8 @@ const Analytics = () => {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SubCard title="Trung tâm Giám sát Grafana">
+        <div className="ui-card">
+          <h3 className="text-base font-bold text-emerald-950 mb-3">Trung tâm Giám sát Grafana</h3>
           <div className="space-y-4 text-sm text-emerald-900">
             <p className="leading-relaxed">
               Các biểu đồ chi tiết về biến động EC, pH, nhiệt độ, mực nước, hệ số tự học EMA Gain, ma trận tương tác MIMO và độ tin cậy Kalman hiện được giám sát trực tiếp trên hạ tầng Grafana/Prometheus chuyên dụng.
@@ -28,9 +35,10 @@ const Analytics = () => {
               <span>Mở Grafana Dashboard</span>
             </a>
           </div>
-        </SubCard>
+        </div>
 
-        <SubCard title="Các nhóm Metrics chính trên Grafana">
+        <div className="ui-card">
+          <h3 className="text-base font-bold text-emerald-950 mb-3">Các nhóm Metrics chính trên Grafana</h3>
           <div className="space-y-3 text-xs text-emerald-800">
             <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
               <Activity size={16} className="text-emerald-700 shrink-0" />
@@ -45,7 +53,7 @@ const Analytics = () => {
               <span><b>ESP32 Telemetry:</b> Free Heap, WiFi RSSI, Uptime & Log Drop Count.</span>
             </div>
           </div>
-        </SubCard>
+        </div>
       </div>
     </div>
   );

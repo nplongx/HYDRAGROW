@@ -4,7 +4,7 @@
 //! Output: Alert JSON → mqtt_tx khi phát hiện anomaly pattern
 
 use super::ObserverContext;
-use crate::core::fsm::events::OrchestratorEvent;
+use hydragrow_controller_core::core::fsm::events::OrchestratorEvent;
 use hydragrow_shared::log::{
     BasicSystemLogMetadata, LogCategory, SystemLogEvent, UnifiedSystemLog,
 };

@@ -12,10 +12,8 @@ use log::{info, warn};
 use std::sync::{mpsc, Arc};
 
 mod config;
-mod core;
 mod hw;
 mod runtime;
-mod utils;
 
 use config::create_shared_config;
 use hw::{connect_wifi, create_shared_sensor_data, sync_sntp_time, NvsStore, PumpController};

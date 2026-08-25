@@ -4,7 +4,7 @@
 //! Output: UnifiedSystemLog JSON → mqtt_tx
 
 use super::ObserverContext;
-use crate::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
+use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use hydragrow_shared::log::{
     emit_basic_system_log, emit_system_log_json, LogCategory, LogLevel, SystemLogRecord,
     UnifiedSystemLog,

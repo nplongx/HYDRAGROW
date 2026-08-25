@@ -6,8 +6,8 @@ use hydragrow_shared::ControllerConfig;
 use std::sync::mpsc::Sender;
 use tracing::warn;
 
-use crate::core::fsm::context::{NvsSnapshot, SystemContext};
-use crate::core::fsm::events::OrchestratorEvent;
+use hydragrow_controller_core::core::fsm::context::{NvsSnapshot, SystemContext};
+use hydragrow_controller_core::core::fsm::events::OrchestratorEvent;
 use crate::hw::pump_controller::{PumpController, PumpType};
 use crate::runtime::observers::{ObserverContext, ObserverSet};
 

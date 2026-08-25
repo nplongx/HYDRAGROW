@@ -8,7 +8,7 @@ pub mod system_log;
 pub use observer_set::ObserverSet;
 
 pub struct ObserverContext<'a> {
-    pub ctx: &'a crate::core::fsm::context::SystemContext,
+    pub ctx: &'a hydragrow_controller_core::core::fsm::context::SystemContext,
     pub config: &'a hydragrow_shared::ControllerConfig,
     pub now_ms: u64,
     pub mqtt_tx: &'a std::sync::mpsc::Sender<String>,

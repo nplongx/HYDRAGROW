@@ -21,7 +21,7 @@ fn publish_ota_event(
         let payload = serde_json::json!({
             "type": "system_alert", "device_id": device_id, "level": level,
             "category": "system", "title": title, "message": message,
-            "timestamp_ms": crate::utils::get_current_time_sec() * 1000,
+            "timestamp_ms": hydragrow_controller_core::utils::get_current_time_sec() * 1000,
         });
         let _ = tx.send(payload.to_string());
     }

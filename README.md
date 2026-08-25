@@ -72,11 +72,14 @@ Xem README của từng subsystem để build/run chi tiết. Thứ tự khởi 
 
 | Workflow | Trigger | Kiểm tra |
 |---|---|---|
-| `shared-schema-check` | push/PR chạm `hydragrow-shared/` | cargo test (schema snapshots) |
-| `backend-ci` | push/PR chạm `hydragrow-backend/` hoặc `hydragrow-shared/` | cargo check + test + clippy |
-| `frontend-ci` | push/PR chạm `hydragrow-frontend/` | tsc + eslint + vitest |
-| `firmware-controller-ci` | push/PR chạm `ESP32-C3-CONTROLLER-NODE/` | cargo check (esp-rs) |
-| `firmware-sensor-ci` | push/PR chạm `ESP32-C3-SENSOR-NODE/` | pio run |
+| `shared-schema-check` | push/PR chạm `hydragrow-shared/` | cargo fmt + clippy + test (schema snapshots) |
+| `backend-ci` | push/PR chạm `hydragrow-backend/` hoặc `hydragrow-shared/` | cargo fmt + check + test + clippy (-D warnings) |
+| `controller-core-ci` | push/PR chạm `hydragrow-controller-core/` hoặc `hydragrow-shared/` | cargo fmt + clippy + test |
+| `frontend-ci` | push/PR chạm `hydragrow-frontend/` | tsc + eslint + vitest + cargo check (src-tauri) |
+| `firmware-controller-ci` | push/PR chạm `ESP32-C3-CONTROLLER-NODE/` | cargo check + fmt + clippy (esp-rs nightly) |
+| `firmware-sensor-ci` | push/PR chạm `ESP32-C3-SENSOR-NODE/` | pio run + pio test (native) |
+
+Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy trình PR và [docs/superpowers/specs/module-rules/](docs/superpowers/specs/module-rules/README.md) cho ràng buộc từng subsystem.
 
 ## Không đụng vào
 

@@ -1,18 +1,7 @@
-# HYDRAGROW — Module Contribution Rules
+# HYDRAGROW — Backend Module Contribution Rules
 
-Each section is the authoritative rule for that module.
-When adding or modifying a feature, read the rule for every module your change touches.
-
----
-
-## 📋 General Rules (apply to every module)
-
-1. **One responsibility per file.** A file that changes for two unrelated reasons should be two files.
-2. **No inline SQL in handlers.** All `sqlx::query*` calls must live in `src/db/<module>.rs`. API handlers call DB functions by name only.
-3. **Every new DB function must have a `#[sqlx::test]`.** Add it to `src/db/tests/test_<module>.rs` in the same PR.
-4. **Every new migration is forward-only.** Never edit a merged migration file. If a rollback is needed, create a new migration that undoes the change, with a `_undo_` in the name and a comment block explaining why.
-5. **Migration filenames follow `YYYYMMDDHHMMSS_<slug>.sql`.** Slug is lowercase, underscores only, describes the change (not the date).
-6. **No `unwrap()` in production code paths.** Use `?`, `anyhow::Context`, or explicit match. `unwrap()` is allowed only in `#[cfg(test)]` and `main.rs` startup assertions.
+Rule chung áp dụng cho mọi subsystem: xem [`README.md`](./README.md) (index).
+Phần dưới đây là rule riêng cho `hydragrow-backend`.
 
 ---
 

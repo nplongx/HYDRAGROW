@@ -1,165 +1,206 @@
 @import "tailwindcss";
 
+/* ── Design Tokens ── */
 @theme {
   --color-primary: #15803d;
+  --color-primary-light: #22c55e;
   --color-accent: #ca8a04;
+  --color-accent-light: #fef3c7;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #dc2626;
   --color-water: #0284c7;
   --color-surface: #ffffff;
-  --color-surface-muted: #ecfdf5;
-  --color-border: #bbf7d0;
+  --color-surface-muted: #f0fdf4;
+  --color-surface-hover: #ecfdf5;
+  --color-border: #d1fae5;
+  --color-border-strong: #6ee7b7;
   --color-text: #14532d;
-  --color-text-muted: #4b6354;
+  --color-text-muted: #4b7a5a;
+  --color-text-faint: #86b39a;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
 }
 
+/* ── Base ── */
 :root {
   color: var(--color-text);
-  background-color: #f0fdf4;
+  background-color: var(--color-surface-muted);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
   margin: 0;
   color: var(--color-text);
-  background:
-    radial-gradient(circle at top left, rgba(187, 247, 208, 0.55), transparent 32rem),
-    linear-gradient(180deg, #f0fdf4 0%, #f7fee7 48%, #ecfdf5 100%);
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: #f0fdf4;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-h1 {
-  font-size: 1.75rem;
-  line-height: 2.2rem;
-}
+/* ── Typography ── */
+h1 { font-size: 1.75rem; line-height: 2.2rem; font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.375rem; line-height: 1.9rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; line-height: 1.6rem; font-weight: 600; }
+p { line-height: 1.75; color: var(--color-text-muted); }
 
-h2 {
-  font-size: 1.375rem;
-  line-height: 1.9rem;
-}
+/* ── Scrollbar ── */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #a7f3d0; border-radius: 99px; }
 
-h3 {
-  font-size: 1.125rem;
-  line-height: 1.6rem;
-}
-
-p {
-  line-height: 1.75;
-  color: var(--color-text-muted);
-}
-
+/* ── Page Layout ── */
 @layer components {
   .app-page {
-    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto text-emerald-950;
+    @apply p-4 md:p-6 space-y-5 pb-28 min-h-screen max-w-6xl mx-auto;
   }
 
+  /* ── Page Header ── */
   .page-header {
     @apply relative z-10 flex flex-col gap-3 md:flex-row md:items-start md:justify-between;
   }
-
   .page-header-main {
     @apply flex items-start gap-3;
   }
-
   .page-header-icon {
-    @apply p-2.5 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200;
+    @apply p-2.5 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0;
   }
-
   .page-header-title {
-    @apply text-2xl md:text-3xl font-bold tracking-tight text-emerald-950;
+    @apply text-2xl md:text-3xl font-extrabold tracking-tight text-emerald-950;
   }
-
   .page-header-subtitle {
-    @apply text-xs md:text-sm text-emerald-800/80 mt-1 max-w-2xl;
+    @apply text-xs md:text-sm text-emerald-800/70 mt-1 max-w-2xl leading-relaxed;
   }
 
+  /* ── Cards ── */
   .ui-card {
-    @apply bg-white border border-emerald-100 rounded-2xl p-4 md:p-5 shadow-sm shadow-emerald-950/5;
+    @apply bg-white border border-emerald-100 rounded-2xl p-4 md:p-5 shadow-sm;
+  }
+  .ui-card-hover {
+    @apply bg-white border border-emerald-100 rounded-2xl p-4 md:p-5 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md cursor-pointer;
   }
 
-  .ui-form-row {
-    @apply flex flex-col gap-1.5;
-  }
-
-  .ui-form-label {
-    @apply text-[10px] font-bold uppercase tracking-wider text-emerald-800/75 pl-1;
-  }
-
-  .ui-helper-text {
-    @apply text-[11px] text-emerald-700/75 pl-1 leading-tight;
-  }
-
-  .ui-state {
-    @apply bg-white border border-emerald-200 border-dashed rounded-2xl p-4 md:p-5 text-center py-10 md:py-12 shadow-sm shadow-emerald-950/5;
-  }
-
-  .ui-state-title {
-    @apply text-sm md:text-base font-semibold text-emerald-950 mt-3;
-  }
-
-  .ui-state-desc {
-    @apply text-xs md:text-sm text-emerald-800/75 mt-1 max-w-md mx-auto;
-  }
-
-  .ui-input {
-    @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-
-  .ui-btn-md {
-    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-
-  .ui-loading {
-    @apply flex items-center justify-center p-4;
-  }
-
-  .ui-loading-fullscreen {
-    @apply min-h-screen;
-  }
-
-  .ui-loading-card {
-    @apply flex items-center gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3 shadow-lg shadow-emerald-950/10;
-  }
-
-  .ui-loading-spinner {
-    @apply inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 p-2 text-emerald-700;
-  }
-
-  .ui-loading-message {
-    @apply text-sm font-medium text-emerald-900;
-  }
-
-  .farm-status-pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold;
-  }
-
+  /* ── Section title ── */
   .farm-section-title {
-    @apply flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-800/80;
+    @apply text-xs font-bold uppercase tracking-widest text-emerald-700/70 mb-3;
   }
 
+  /* ── Status Pill ── */
+  .farm-status-pill {
+    @apply flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border;
+  }
+
+  /* ── Muted panel ── */
   .farm-muted-panel {
-    @apply rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4;
+    @apply bg-emerald-50/60 border border-emerald-100 rounded-xl p-3;
+  }
+
+  /* ── Alert banners ── */
+  .ui-alert-danger {
+    @apply bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-700;
+  }
+  .ui-alert-warning {
+    @apply bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-800;
+  }
+  .ui-alert-info {
+    @apply bg-sky-50 border border-sky-200 rounded-2xl p-4 flex gap-3 text-sky-700;
+  }
+  .ui-alert-success {
+    @apply bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex gap-3 text-emerald-700;
+  }
+
+  /* ── Form ── */
+  .ui-form-row {
+    @apply space-y-1.5;
+  }
+  .ui-form-label {
+    @apply block text-xs font-semibold text-emerald-800/80 mb-1;
+  }
+  .ui-helper-text {
+    @apply text-[11px] text-emerald-700/60 mt-1 leading-relaxed;
+  }
+  .ui-input {
+    @apply w-full bg-white border border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm
+      text-emerald-950 placeholder-emerald-700/40
+      focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400
+      disabled:opacity-50 disabled:cursor-not-allowed
+      transition-colors;
+  }
+  .ui-select {
+    @apply w-full bg-white border border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm
+      text-emerald-950 placeholder-emerald-700/40
+      focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400
+      disabled:opacity-50 disabled:cursor-not-allowed
+      transition-colors appearance-none pr-9 bg-no-repeat;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2315803d' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 10px center;
+    background-size: 16px;
+  }
+
+  /* ── Buttons ── */
+  .ui-btn-primary {
+    @apply flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+      bg-emerald-600 text-white text-sm font-bold
+      hover:bg-emerald-700 active:bg-emerald-800
+      disabled:opacity-50 disabled:cursor-not-allowed
+      transition-all shadow-sm;
+  }
+  .ui-btn-secondary {
+    @apply flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+      bg-white text-emerald-900 text-sm font-semibold border border-emerald-200
+      hover:bg-emerald-50 hover:border-emerald-300
+      disabled:opacity-50 disabled:cursor-not-allowed
+      transition-all;
+  }
+  .ui-btn-danger {
+    @apply flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+      bg-red-600 text-white text-sm font-bold
+      hover:bg-red-700 active:bg-red-800
+      disabled:opacity-50 disabled:cursor-not-allowed
+      transition-all shadow-sm;
+  }
+  .ui-btn-md {
+    @apply flex items-center justify-center gap-2 rounded-xl
+      bg-white text-emerald-900 font-semibold border border-emerald-200
+      hover:bg-emerald-50 hover:border-emerald-300
+      disabled:opacity-50 disabled:cursor-not-allowed
+      transition-all text-xs px-3 py-1.5;
+  }
+
+  /* ── Loading ── */
+  .ui-loading-fullscreen {
+    @apply flex flex-col items-center justify-center min-h-screen gap-4;
+  }
+  .ui-loading-card {
+    @apply flex flex-col items-center justify-center p-12 gap-4;
+  }
+  .ui-loading-spinner {
+    @apply w-10 h-10 border-[3px] border-emerald-200 border-t-emerald-600 rounded-full animate-spin;
+  }
+  .ui-loading-message {
+    @apply text-sm text-emerald-700/70 font-medium;
+  }
+
+  /* ── Empty/State ── */
+  .ui-state {
+    @apply flex flex-col items-center justify-center p-10 text-center gap-4;
+  }
+  .ui-state-icon {
+    @apply p-5 bg-emerald-50 rounded-3xl border border-emerald-100;
+  }
+  .ui-state-title {
+    @apply text-lg font-bold text-emerald-950;
+  }
+  .ui-state-desc {
+    @apply text-sm text-emerald-800/60 max-w-xs leading-relaxed;
   }
 }
 
-.toggle-checkbox {
-  @apply appearance-none w-12 h-7 rounded-full relative cursor-pointer outline-none transition-colors duration-300;
-  background-color: #334155;
-}
-
-.toggle-checkbox::before {
-  content: '';
-  @apply absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-sm;
-}
-
-.toggle-checkbox:checked {
-  background-color: #64748b;
-}
-
-.toggle-checkbox:checked::before {
-  @apply transform translate-x-5;
-}
-
+/* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
@@ -167,4 +208,16 @@ p {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Health Ring Animation ── */
+@keyframes ring-fill {
+  from { stroke-dashoffset: 283; }
+  to { stroke-dashoffset: var(--ring-offset); }
+}
+.health-ring-arc {
+  animation: ring-fill 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0.2s;
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
 }

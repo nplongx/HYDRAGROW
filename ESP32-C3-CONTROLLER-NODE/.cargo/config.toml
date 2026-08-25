@@ -14,10 +14,10 @@ MCU = "esp32c3"
 ESP_IDF_VERSION = "v5.5.3"
 ESP_IDF_TOOLS_INSTALL_DIR = "workspace"
 
-HYDRAGROW_WIFI_SSID = "Huynh Hong"
-HYDRAGROW_WIFI_PASSWORD = "123443215"
-HYDRAGROW_MQTT_URL = "mqtt://broker.hivemq.com:1883"
-HYDRAGROW_MQTT_COMMAND_SECRET = ""
-HYDRAGROW_DEVICE_ID = "device_001"
-HYDRAGROW_MQTT_USER = "device_device_001"
-HYDRAGROW_MQTT_PASSWORD = "$argon2id$v=19$m=19456,t=2,p=1$Zw53hBOI99NWgrrMj8fPqQ$QweELZGa6q1Sbsbx29runw0KEJjcgkwtScOp/9GMalc"
+HYDRAGROW_WIFI_SSID = { value = "", force = false }
+HYDRAGROW_WIFI_PASSWORD = { value = "", force = false }
+HYDRAGROW_MQTT_URL = { value = "mqtt://localhost:1883", force = false }
+HYDRAGROW_MQTT_COMMAND_SECRET = { value = "", force = false }
+HYDRAGROW_DEVICE_ID = { value = "device_001", force = false }
+HYDRAGROW_MQTT_USER = { value = "", force = false }
+HYDRAGROW_MQTT_PASSWORD = { value = "", force = false }

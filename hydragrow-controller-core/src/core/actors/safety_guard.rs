@@ -43,15 +43,14 @@ impl SafetyGuard {
 
     /// Kiểm tra xem dose có vượt budget không, KHÔNG ghi vào lịch sử.
     pub fn peek_hourly_dose(&self, pump: &str, now_sec: u64, dose_ml: f32, max_ml: f32) -> bool {
-        let history = match self.hourly_doses.get(pump) {
-            Some(h) => h,
-            None => return true,
+        let total: f32 = match self.hourly_doses.get(pump) {
+            Some(h) => h
+                .iter()
+                .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                .map(|(_, ml)| *ml)
+                .sum(),
+            None => 0.0,
         };
-        let total: f32 = history
-            .iter()
-            .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
-            .map(|(_, ml)| *ml)
-            .sum();
         total + dose_ml <= max_ml
     }
 
@@ -124,5 +123,106 @@ mod tests {
         let mut guard = SafetyGuard::new();
         assert!(guard.check_hourly_dose("PumpA", 1000, 5.0, 10.0));
         assert!(!guard.check_hourly_dose("PumpA", 1000, 6.0, 10.0));
+    }
+
+    // Test 3: Nhiều pump riêng biệt có budget độc lập
+    #[test]
+    fn hourly_budget_is_per_pump_independent() {
+        let mut guard = SafetyGuard::new();
+        let now_sec = 1000u64;
+        let max_ml = 10.0f32;
+
+        // NutrientA dùng full budget
+        assert!(guard.check_hourly_dose("NutrientA", now_sec, 10.0, max_ml));
+        // NutrientB vẫn còn budget riêng
+        assert!(guard.check_hourly_dose("NutrientB", now_sec, 10.0, max_ml));
+        // PhUp cũng budget riêng
+        assert!(guard.check_hourly_dose("PhUp", now_sec, 10.0, max_ml));
+    }
+
+    // Test 4: Dose trong window 1 giờ được tích lũy, cũ hơn 1h bị loại bỏ
+    #[test]
+    fn hourly_budget_expires_after_3600s() {
+        let mut guard = SafetyGuard::new();
+        let max_ml = 10.0f32;
+
+        // Dose cũ: 2 giờ trước
+        guard.commit_hourly_dose("NutrientA", 0, 8.0);
+
+        // Dose mới: trong window 1h
+        let now_sec = 7200u64; // 2h sau
+        // 8ml cũ đã hết hạn, có thể dose thêm
+        assert!(
+            guard.peek_hourly_dose("NutrientA", now_sec, 9.0, max_ml),
+            "Dose cũ hơn 1h phải được expire"
+        );
+    }
+
+    // Test 5: record_drain giới hạn số lần drain per hour
+    #[test]
+    fn drain_limit_enforced_per_hour() {
+        let mut guard = SafetyGuard::new();
+        let max_drains = 3u32;
+
+        // 3 lần đầu pass
+        assert!(guard.record_drain(1000, max_drains));
+        assert!(guard.record_drain(1100, max_drains));
+        assert!(guard.record_drain(1200, max_drains));
+
+        // Lần thứ 4 bị block
+        assert!(!guard.record_drain(1300, max_drains), "Drain thứ 4 phải bị block");
+    }
+
+    // Test 6: record_refill giới hạn số lần refill per hour
+    #[test]
+    fn refill_limit_enforced_per_hour() {
+        let mut guard = SafetyGuard::new();
+        let max_refills = 2u32;
+
+        assert!(guard.record_refill(1000, max_refills));
+        assert!(guard.record_refill(2000, max_refills));
+        assert!(!guard.record_refill(3000, max_refills), "Refill thứ 3 phải bị block");
+    }
+
+    // Test 7: flush_for_reset xóa toàn bộ budget history
+    #[test]
+    fn flush_for_reset_clears_all_budgets() {
+        let mut guard = SafetyGuard::new();
+        let now_sec = 1000u64;
+
+        // Exhaust budgets
+        guard.commit_hourly_dose("NutrientA", now_sec, 10.0);
+        guard.record_drain(now_sec, 4);
+        guard.record_refill(now_sec, 4);
+
+        // Verify blocked
+        assert!(!guard.peek_hourly_dose("NutrientA", now_sec, 1.0, 10.0));
+
+        // Reset
+        guard.flush_for_reset();
+
+        // Sau reset phải fresh
+        assert!(
+            guard.peek_hourly_dose("NutrientA", now_sec, 10.0, 10.0),
+            "Sau flush_for_reset phải fresh budget"
+        );
+    }
+
+    // Test 8: peek không ghi vào history (không commit)
+    #[test]
+    fn peek_does_not_consume_budget() {
+        let guard = SafetyGuard::new();
+        let now_sec = 1000u64;
+
+        // Peek 3 lần, mỗi lần 8ml — nhưng peek không commit
+        for _ in 0..3 {
+            assert!(guard.peek_hourly_dose("NutrientA", now_sec, 8.0, 10.0));
+        }
+
+        // Sau 3 peek, budget vẫn còn
+        assert!(
+            guard.peek_hourly_dose("NutrientA", now_sec, 10.0, 10.0),
+            "Peek không consume budget"
+        );
     }
 }

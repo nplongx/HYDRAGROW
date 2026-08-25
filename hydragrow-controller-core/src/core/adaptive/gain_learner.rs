@@ -56,7 +56,12 @@ impl SingleGainLearner {
             return false;
         }
         let diff = (observed_gain - self.ema).abs();
-        diff > (3.0 * self.variance.sqrt())
+        let std_dev = self.variance.sqrt();
+        if std_dev < 1e-6 {
+            diff > self.ema.abs() * 0.5
+        } else {
+            diff > 3.0 * std_dev
+        }
     }
 
     /// Trộn hệ số đã học với hệ số cấu hình dựa trên độ tin cậy

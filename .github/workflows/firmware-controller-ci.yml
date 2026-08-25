@@ -39,9 +39,8 @@ jobs:
           chmod +x espup
 
           ./espup install --targets esp32c3
-          rustup component add rust-src rustfmt clippy
-
           source "$HOME/export-esp.sh"
+          rustup component add rust-src rustfmt clippy
 
           echo "=== Rust ==="
           rustc --version

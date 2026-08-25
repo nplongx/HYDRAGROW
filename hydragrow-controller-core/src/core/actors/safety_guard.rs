@@ -10,6 +10,12 @@ pub struct SafetyGuard {
     pub last_ph_before_dose: Option<f32>,
 }
 
+impl Default for SafetyGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SafetyGuard {
     pub fn new() -> Self {
         Self {

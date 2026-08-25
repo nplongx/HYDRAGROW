@@ -1,5 +1,7 @@
 //! Tests cho FSM phase transitions: Monitoring → MimoDosing → Cooldown → Monitoring
 
+#![allow(clippy::field_reassign_with_default)]
+
 mod helpers;
 use helpers::fixtures::{auto_config, balanced_sensors, low_ec_sensors};
 

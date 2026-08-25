@@ -183,14 +183,14 @@ pub fn validate_recipe(
         }
     }
 
-    if let Some(current_revision) = current_revision {
-        if recipe.revision < current_revision {
-            anyhow::bail!(
-                "stale_revision: recipe={}, current={}",
-                recipe.revision,
-                current_revision
-            );
-        }
+    if let Some(current_revision) = current_revision
+        && recipe.revision < current_revision
+    {
+        anyhow::bail!(
+            "stale_revision: recipe={}, current={}",
+            recipe.revision,
+            current_revision
+        );
     }
 
     Ok(())

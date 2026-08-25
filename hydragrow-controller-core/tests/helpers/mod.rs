@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Test utility functions
 
 pub mod fixtures;

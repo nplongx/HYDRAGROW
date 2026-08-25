@@ -145,6 +145,7 @@ impl PhaseTick for StabilizingPhase {
 // HELPER FUNCTIONS
 // ============================================================================
 
+#[allow(clippy::too_many_arguments)]
 fn push_telemetry_events(
     sample: &PendingCalibrationSample,
     sensors: &SensorData,
@@ -202,6 +203,7 @@ fn push_telemetry_events(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_dosing_cycle_event(
     sample: &PendingCalibrationSample,
     final_ec: f32,

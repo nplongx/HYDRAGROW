@@ -213,9 +213,9 @@ impl InteractionMatrix {
     /// Tính chuyển vị ma trận (8x4 từ 4x8)
     fn transpose(&self) -> [[f32; 4]; 8] {
         let mut t = [[0.0; 4]; 8];
-        for r in 0..4 {
-            for c in 0..8 {
-                t[c][r] = self.data[r][c];
+        for (r, row) in self.data.iter().enumerate().take(4) {
+            for (c, val) in row.iter().enumerate().take(8) {
+                t[c][r] = *val;
             }
         }
         t
@@ -224,13 +224,13 @@ impl InteractionMatrix {
     /// Nhân ma trận 4x8 với ma trận chuyển vị 8x4 để tạo ra ma trận vuông 4x4 (M * M^T)
     fn multiply_by_transpose(&self, t: &[[f32; 4]; 8]) -> [[f32; 4]; 4] {
         let mut res = [[0.0; 4]; 4];
-        for i in 0..4 {
-            for j in 0..4 {
+        for (i, row_res) in res.iter_mut().enumerate() {
+            for (j, item_res) in row_res.iter_mut().enumerate() {
                 let mut sum = 0.0;
-                for k in 0..8 {
-                    sum += self.data[i][k] * t[k][j];
+                for (k, val_t) in t.iter().enumerate().take(8) {
+                    sum += self.data[i][k] * val_t[j];
                 }
-                res[i][j] = sum;
+                *item_res = sum;
             }
         }
         res
@@ -267,16 +267,17 @@ impl InteractionMatrix {
             }
 
             // Chia hàng hiện tại cho phần tử chốt để đưa phần tử đường chéo chính về 1
-            for j in 0..8 {
-                aug[i][j] /= pivot;
+            for item in &mut aug[i] {
+                *item /= pivot;
             }
 
             // Khử các hàng còn lại
             for k in 0..4 {
                 if k != i {
                     let factor = aug[k][i];
-                    for j in 0..8 {
-                        aug[k][j] -= factor * aug[i][j];
+                    let aug_i = aug[i];
+                    for (aug_k_j, &aug_i_j) in aug[k].iter_mut().zip(aug_i.iter()) {
+                        *aug_k_j -= factor * aug_i_j;
                     }
                 }
             }

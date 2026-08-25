@@ -188,10 +188,10 @@ fn tick_peripheral_systems(
     mut result: TickResult,
     ctx: &SystemContext,
     sensors: &SensorData,
-    now_ms: u64,
+    _now_ms: u64,
     uptime_ms: u64, // SỬA: Nhận uptime_ms
     config: &ControllerConfig,
-    is_dosing_active: bool,
+    _is_dosing_active: bool,
 ) -> TickResult {
     // 1. Rút cái `peripherals` delta hiện tại ra (nếu các pha trước đã có thay đổi thì giữ lại, không thì tạo mới)
     let mut current_peri_delta = result.delta.peripherals.take().unwrap_or_default();
@@ -384,18 +384,18 @@ fn check_sensor_noise(
     let mut peri_delta = PeripheralDelta::default();
 
     if config.enable_ec_sensor && !sensors.err_ec.unwrap_or(false) {
-        if let Some(prev_ec) = ctx.peripherals.previous_ec {
-            if (sensors.ec - prev_ec).abs() > config.max_ec_delta {
-                is_noisy = true;
-            }
+        if let Some(prev_ec) = ctx.peripherals.previous_ec
+            && (sensors.ec - prev_ec).abs() > config.max_ec_delta
+        {
+            is_noisy = true;
         }
         peri_delta.previous_ec = Some(Some(sensors.ec));
     }
     if config.enable_ph_sensor && !sensors.err_ph.unwrap_or(false) {
-        if let Some(prev_ph) = ctx.peripherals.previous_ph {
-            if (sensors.ph - prev_ph).abs() > config.max_ph_delta {
-                is_noisy = true;
-            }
+        if let Some(prev_ph) = ctx.peripherals.previous_ph
+            && (sensors.ph - prev_ph).abs() > config.max_ph_delta
+        {
+            is_noisy = true;
         }
         peri_delta.previous_ph = Some(Some(sensors.ph));
     }

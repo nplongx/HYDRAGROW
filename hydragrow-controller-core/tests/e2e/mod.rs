@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 //! End-to-End simulation tests
 //! Simulate đầy đủ sensor input → FSM decisions → hardware events
 

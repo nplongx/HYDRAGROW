@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 //! Tests cho DosingActor: pulse sequencing, delivery tracking, idle detection
 
 mod helpers;

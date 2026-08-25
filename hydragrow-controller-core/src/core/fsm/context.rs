@@ -333,11 +333,11 @@ impl SystemContext {
     /// Áp dụng ContextDelta vào SystemContext (Nơi DUY NHẤT được phép mutate state của Context).
     pub fn apply_delta(&mut self, delta: &mut ContextDelta) {
         // --- 1. Phase Transition Tracking ---
-        if let Some(ref new_phase) = delta.phase {
-            if *new_phase != self.phase {
-                delta.previous_phase = Some(self.phase.clone());
-                delta.phase_start_before = self.phase_start_ms;
-            }
+        if let Some(ref new_phase) = delta.phase
+            && *new_phase != self.phase
+        {
+            delta.previous_phase = Some(self.phase.clone());
+            delta.phase_start_before = self.phase_start_ms;
         }
 
         if let Some(ref prev) = delta.previous_phase {

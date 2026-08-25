@@ -471,6 +471,7 @@ impl AutoTuner {
         self.state = TunerState::Converging;
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn learn_from_cycle(
         &mut self,
         sample: &PendingCalibrationSample,

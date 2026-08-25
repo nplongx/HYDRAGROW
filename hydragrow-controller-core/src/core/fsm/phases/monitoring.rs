@@ -77,12 +77,12 @@ fn check_scheduled_water_change(
     let mut current_next_trigger = ctx.next_water_change_trigger_sec;
     if ctx.water_change_cron != config.water_change_cron {
         delta.water_change_cron = Some(config.water_change_cron.clone());
-        if let Ok(schedule) = Schedule::from_str(&config.water_change_cron) {
-            if let Some(next) = schedule.upcoming(Local).next() {
-                let ts = next.timestamp() as u64;
-                delta.next_water_change_trigger_sec = Some(Some(ts));
-                current_next_trigger = Some(ts);
-            }
+        if let Ok(schedule) = Schedule::from_str(&config.water_change_cron)
+            && let Some(next) = schedule.upcoming(Local).next()
+        {
+            let ts = next.timestamp() as u64;
+            delta.next_water_change_trigger_sec = Some(Some(ts));
+            current_next_trigger = Some(ts);
         }
     }
 
@@ -105,8 +105,10 @@ fn check_scheduled_water_change(
     delta.peripherals = Some(peri_delta);
     delta.calibration = Some(CalibrationDelta::Invalidate);
 
-    let mut control = ControlVector::default();
-    control.water_out_sec = config.max_drain_duration_sec as f32;
+    let control = ControlVector {
+        water_out_sec: config.max_drain_duration_sec as f32,
+        ..Default::default()
+    };
 
     Some(SolveResult::Execute {
         control,
@@ -117,6 +119,7 @@ fn check_scheduled_water_change(
 }
 
 // Xử lý và áp dụng quyết định từ AI/Solver xuống Hardware
+#[allow(clippy::too_many_arguments)]
 fn apply_decision(
     decision: SolveResult,
     ctx: &mut SystemContext,

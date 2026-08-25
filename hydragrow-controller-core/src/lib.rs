@@ -2,6 +2,8 @@
 //! dosing/water actors. Không phụ thuộc esp-idf — test được 100% bằng `cargo test`
 //! trên host, không cần phần cứng ESP32.
 
+#![allow(clippy::field_reassign_with_default)]
+
 pub mod core;
 pub mod pump_types;
 pub mod utils;

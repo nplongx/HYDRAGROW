@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Shared test fixtures — ControllerConfig và SensorData cho tests
 
 use hydragrow_controller_core::hydragrow_shared::{ControlMode, ControllerConfig, SensorData};

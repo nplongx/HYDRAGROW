@@ -78,7 +78,7 @@ mod tests {
         for _ in 0..5 {
             kalman.predict();
             let gain = kalman.update_and_get_gain(0);
-            assert!(gain >= 0.0 && gain <= 1.0);
+            assert!((0.0..=1.0).contains(&gain));
         }
 
         // Sau khi update nhiều lần, độ tin cậy phải tăng lên

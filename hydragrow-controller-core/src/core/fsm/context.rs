@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::actors::dosing_actor::DosingActor;
 use crate::core::actors::safety_guard::SafetyGuard;
 use crate::core::actors::water_actor::WaterActor;
-use crate::core::adaptive::tuner::{AutoTuner, TunerState};
+use crate::core::adaptive::tuner::AutoTuner;
 use crate::core::fsm::tick_result::{CalibrationDelta, ContextDelta};
 use crate::core::fsm::types::PendingCalibrationSample;
 
@@ -41,6 +41,138 @@ impl Default for SensorStabilizerTracker {
             count: 0,
             head: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hydragrow_shared::ControllerConfig;
+
+    fn test_config() -> ControllerConfig {
+        ControllerConfig::default()
+    }
+
+    // Test 1: Chưa đủ 5 mẫu → không ổn định
+    #[test]
+    fn stabilizer_not_stable_with_fewer_than_5_samples() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let config = test_config();
+
+        // Chỉ push 4 mẫu
+        for _ in 0..4 {
+            tracker.push(1.5, 6.0);
+        }
+
+        assert!(!tracker.is_stable(&config), "Không đủ 5 mẫu phải trả về false");
+    }
+
+    // Test 2: 5 mẫu giống hệt → ổn định
+    #[test]
+    fn stabilizer_stable_with_5_identical_samples() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let mut config = test_config();
+        config.enable_ec_sensor = true;
+        config.enable_ph_sensor = true;
+
+        for _ in 0..5 {
+            tracker.push(1.5, 6.0);
+        }
+
+        assert!(tracker.is_stable(&config), "5 mẫu giống nhau phải ổn định");
+    }
+
+    // Test 3: EC dao động lớn → không ổn định
+    #[test]
+    fn stabilizer_not_stable_when_ec_oscillates() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let mut config = test_config();
+        config.enable_ec_sensor = true;
+        config.enable_ph_sensor = false;
+
+        // EC dao động ±0.1 (> ngưỡng 0.05)
+        tracker.push(1.5, 6.0);
+        tracker.push(1.6, 6.0);
+        tracker.push(1.4, 6.0);
+        tracker.push(1.55, 6.0);
+        tracker.push(1.45, 6.0);
+
+        assert!(!tracker.is_stable(&config), "EC dao động > 0.05 phải không ổn định");
+    }
+
+    // Test 4: pH dao động lớn → không ổn định
+    #[test]
+    fn stabilizer_not_stable_when_ph_oscillates() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let mut config = test_config();
+        config.enable_ec_sensor = false;
+        config.enable_ph_sensor = true;
+
+        tracker.push(1.5, 5.9);
+        tracker.push(1.5, 6.1);
+        tracker.push(1.5, 5.8);
+        tracker.push(1.5, 6.2);
+        tracker.push(1.5, 5.95);
+
+        assert!(!tracker.is_stable(&config), "pH dao động > 0.05 phải không ổn định");
+    }
+
+    // Test 5: EC sensor tắt → ignore EC, chỉ check pH
+    #[test]
+    fn stabilizer_ignores_disabled_ec_sensor() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let mut config = test_config();
+        config.enable_ec_sensor = false;
+        config.enable_ph_sensor = true;
+
+        // EC dao động lớn nhưng sensor bị tắt
+        tracker.push(1.0, 6.0);
+        tracker.push(2.0, 6.0);
+        tracker.push(0.5, 6.0);
+        tracker.push(3.0, 6.0);
+        tracker.push(1.5, 6.0);
+
+        // Chỉ cần pH ổn định
+        assert!(tracker.is_stable(&config), "EC sensor tắt → chỉ check pH ổn định");
+    }
+
+    // Test 6: Reset hoạt động đúng
+    #[test]
+    fn stabilizer_reset_clears_history() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let mut config = test_config();
+        config.enable_ec_sensor = true;
+        config.enable_ph_sensor = true;
+
+        for _ in 0..5 {
+            tracker.push(1.5, 6.0);
+        }
+        assert!(tracker.is_stable(&config));
+
+        tracker.reset();
+        assert_eq!(tracker.count, 0);
+        assert!(!tracker.is_stable(&config), "Sau reset phải không ổn định");
+    }
+
+    // Test 7: Circular buffer hoạt động đúng (push > 5 mẫu)
+    #[test]
+    fn stabilizer_circular_buffer_overwrites_oldest() {
+        let mut tracker = SensorStabilizerTracker::default();
+        let mut config = test_config();
+        config.enable_ec_sensor = true;
+        config.enable_ph_sensor = false;
+
+        // Push 4 mẫu outlier
+        for _ in 0..4 {
+            tracker.push(0.0, 6.0); // EC = 0 là outlier
+        }
+
+        // Push 5 mẫu mới đều nhau → buffer override hết outlier
+        for _ in 0..5 {
+            tracker.push(1.5, 6.0);
+        }
+
+        assert!(tracker.is_stable(&config), "Sau khi override đủ 5 mẫu ổn định phải pass");
     }
 }
 

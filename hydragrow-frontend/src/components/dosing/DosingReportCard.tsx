@@ -29,11 +29,6 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
   else if ((dosing.water_in_sec ?? 0) > 0) summaryTitle = 'Cấp nước pha loãng';
   else if ((dosing.water_out_sec ?? 0) > 0) summaryTitle = 'Xả bớt nước';
 
-  const status = record.payload?.status ?? record.payload?.result ?? 'success';
-  let borderColor = 'border-l-4 border-l-emerald-500';
-  if (status === 'partial' || status === 'warning') borderColor = 'border-l-4 border-l-amber-400';
-  else if (status === 'failed' || status === 'error') borderColor = 'border-l-4 border-l-red-500';
-
   const date = new Date(record.created_at);
 
   return (
@@ -57,7 +52,7 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
       </div>
 
       {/* Thông tin châm tinh gọn */}
-      <div className={`ui-card flex-1 transition-colors ${borderColor}`}>
+      <div className="flex-1 bg-white border border-emerald-100 rounded-2xl p-4 hover:border-emerald-300 transition-colors shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1">
             <h4 className="text-emerald-950 font-bold text-sm tracking-wide">

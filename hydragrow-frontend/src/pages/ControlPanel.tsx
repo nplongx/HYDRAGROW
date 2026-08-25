@@ -1,4 +1,4 @@
-import { Wrench, RefreshCw, Sparkles, AlertTriangle, FlaskConical, Activity, Droplets, Power, Wind } from 'lucide-react';
+import { Settings2, RefreshCw, Sparkles, AlertTriangle, FlaskConical, Activity, Droplets, Power, Wind } from 'lucide-react';
 
 // --- ZUSTAND, GLEAM & HOOKS ---
 import { useDeviceStore } from '../store/useDeviceStore';
@@ -43,15 +43,13 @@ const ControlPanel = () => {
   return (
     <div className="app-page max-w-5xl">
       {/* Header khu vực */}
-      <div className="page-header">
-        <div className="page-header-main">
-          <div className="page-header-icon">
-            <Wrench size={22} />
-          </div>
-          <div>
-            <h1 className="page-header-title">Điều khiển thiết bị</h1>
-            <p className="page-header-subtitle">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
-          </div>
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold tracking-tight text-emerald-950 flex items-center gap-2">
+            <Settings2 size={20} className="text-emerald-700/75" />
+            <span>Điều khiển thiết bị</span>
+          </h1>
+          <p className="text-sm text-emerald-800/75">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
         </div>
         <button
           disabled={!canSendCommands || isProcessing}
@@ -68,7 +66,7 @@ const ControlPanel = () => {
       {/* Cảnh báo sự cố / Mất kết nối */}
       <div className="space-y-3 mt-3">
         {showDisconnected && (
-          <div className="ui-alert-danger bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-700">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-700">
             <AlertTriangle size={18} className="shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <h4 className="font-bold text-sm">Hệ thống Ngoại tuyến</h4>
@@ -77,7 +75,7 @@ const ControlPanel = () => {
           </div>
         )}
         {isEmergency && isOnline && !isAutoMode && (
-          <div className="ui-alert-warning bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-800">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-800">
             <AlertTriangle size={18} className="shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h4 className="font-bold text-sm">Hệ thống đang ngắt khẩn cấp</h4>

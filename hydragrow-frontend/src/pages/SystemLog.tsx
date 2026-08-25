@@ -77,7 +77,7 @@ const SystemLog = () => {
       />
 
       {/* Filter & CSV Export Bar */}
-      <div className="ui-card p-4 mb-8 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10">
+      <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 mb-8 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">
         <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
           {FILTERS.map(btn => {
             const Icon = btn.icon;
@@ -87,7 +87,7 @@ const SystemLog = () => {
                 key={btn.id}
                 onClick={() => setFilter(btn.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border whitespace-nowrap ${
-                  active ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm' : 'bg-white text-emerald-900 border-emerald-200 hover:bg-emerald-50'
+                  active ? 'bg-blue-500 text-white border-transparent shadow-md' : 'bg-white text-emerald-800 border-emerald-100 hover:bg-emerald-50'
                 }`}
               >
                 <Icon size={12} />
@@ -99,7 +99,7 @@ const SystemLog = () => {
         <button
           onClick={handleExportCSV}
           disabled={systemEvents.length === 0}
-          className="ui-btn-secondary text-xs font-bold shrink-0"
+          className="flex items-center justify-center space-x-2 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-40 text-emerald-900 px-4 py-1.5 rounded-xl border border-emerald-200 text-xs font-bold shrink-0"
         >
           <Download size={13} />
           <span>Xuất CSV</span>

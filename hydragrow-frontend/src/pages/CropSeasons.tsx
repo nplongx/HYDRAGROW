@@ -16,7 +16,7 @@ export const CropSeasons = () => {
   const filteredHistory = history.filter((season) => season.id !== activeSeason?.id);
 
   return (
-    <div className="app-page max-w-4xl">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto pb-28">
       {/* Header Trang */}
       <PageHeader
         icon={Sprout}
@@ -24,22 +24,20 @@ export const CropSeasons = () => {
         subtitle="Theo dõi và ghi chép chu kỳ sinh trưởng của cây trồng"
       />
 
-      <div className="space-y-6">
-        {/* Mùa vụ đang chạy HOẶC Form tạo mới */}
-        {activeSeason ? (
-          <ActiveSeasonCard
-            activeSeason={activeSeason}
-            isLoading={isLoading}
-            onEndSeason={endSeason}
-            onUpdateSeason={updateSeason}
-          />
-        ) : (
-          <CreateSeasonForm isLoading={isLoading} onCreateSeason={createSeason} />
-        )}
+      {/* Mùa vụ đang chạy HOẶC Form tạo mới */}
+      {activeSeason ? (
+        <ActiveSeasonCard
+          activeSeason={activeSeason}
+          isLoading={isLoading}
+          onEndSeason={endSeason}
+          onUpdateSeason={updateSeason}
+        />
+      ) : (
+        <CreateSeasonForm isLoading={isLoading} onCreateSeason={createSeason} />
+      )}
 
-        {/* Lịch sử các mùa vụ trước */}
-        <SeasonHistoryList seasons={filteredHistory} />
-      </div>
+      {/* Lịch sử các mùa vụ trước */}
+      <SeasonHistoryList seasons={filteredHistory} />
     </div>
   );
 };

@@ -25,26 +25,11 @@ use utils::get_current_time_sec;
 
 use crate::hw::pcf857x::I2cExpander;
 
-const WIFI_SSID: &str = match option_env!("HYDRAGROW_WIFI_SSID") {
-    Some(val) => val,
-    None => "Huynh Hong",
-};
-const WIFI_PASS: &str = match option_env!("HYDRAGROW_WIFI_PASSWORD") {
-    Some(val) => val,
-    None => "",
-};
-const MQTT_URL: &str = match option_env!("HYDRAGROW_MQTT_URL") {
-    Some(val) => val,
-    None => "mqtt://broker.hivemq.com:1883",
-};
-const MQTT_COMMAND_SECRET: &str = match option_env!("HYDRAGROW_MQTT_COMMAND_SECRET") {
-    Some(val) => val,
-    None => "",
-};
-const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
-    Some(val) => val,
-    None => "device_001",
-};
+const WIFI_SSID: &str = env!("HYDRAGROW_WIFI_SSID", "Lỗi build: Thiếu biến HYDRAGROW_WIFI_SSID");
+const WIFI_PASS: &str = env!("HYDRAGROW_WIFI_PASSWORD", "Lỗi build: Thiếu biến HYDRAGROW_WIFI_PASSWORD");
+const MQTT_URL: &str = env!("HYDRAGROW_MQTT_URL", "Lỗi build: Thiếu biến HYDRAGROW_MQTT_URL");
+const MQTT_COMMAND_SECRET: &str = env!("HYDRAGROW_MQTT_COMMAND_SECRET", "Lỗi build: Thiếu biến HYDRAGROW_MQTT_COMMAND_SECRET");
+const DEVICE_ID: &str = env!("HYDRAGROW_DEVICE_ID", "Lỗi build: Thiếu biến HYDRAGROW_DEVICE_ID");
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -166,6 +151,8 @@ fn main() -> anyhow::Result<()> {
     let wifi_up = match conn_rx.recv_timeout(StdDuration::from_secs(120)) {
         Ok(crate::hw::mqtt_client::ConnectionState::WifiConnected) => {
             info!("✅ WiFi connected normally.");
+            // Bơm lại sự kiện để run_main_health_loop nhận được
+            let _ = conn_tx.send(crate::hw::mqtt_client::ConnectionState::WifiConnected);
             true
         }
         _ => {

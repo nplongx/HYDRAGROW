@@ -13,7 +13,11 @@ use crate::core::adaptive::tuner::{AutoTuner, TunerState};
 use crate::core::fsm::tick_result::{CalibrationDelta, ContextDelta};
 use crate::core::fsm::types::PendingCalibrationSample;
 
-const DEVICE_ID: &str = "device_001";
+const DEVICE_ID: &str = match option_env!("HYDRAGROW_DEVICE_ID") {
+    Some(val) => val,
+    None => "device_001",
+};
+
 pub type CronSchedule = String;
 
 // ============================================================================

@@ -5,9 +5,10 @@
 
 use super::ObserverContext;
 use crate::{
-    core::fsm::events::OrchestratorEvent, hw::mqtt_client::get_uptime_sec,
+    hw::mqtt_client::get_uptime_sec,
     runtime::build_status_msg,
 };
+use hydragrow_controller_core::core::fsm::OrchestratorEvent;
 use hydragrow_shared::topics::{topic_calibration, topic_fsm_state};
 use log::warn;
 

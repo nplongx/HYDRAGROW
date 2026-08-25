@@ -8,6 +8,7 @@ use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::log::EspLogger;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use hydragrow_controller_core::utils::get_current_time_sec;
 use log::{info, warn};
 use std::sync::{mpsc, Arc};
 
@@ -19,7 +20,6 @@ use config::create_shared_config;
 use hw::{connect_wifi, create_shared_sensor_data, sync_sntp_time, NvsStore, PumpController};
 use runtime::fsm_loop::start_fsm_control_loop;
 use runtime::health::run_main_health_loop;
-use utils::get_current_time_sec;
 
 use crate::hw::pcf857x::I2cExpander;
 

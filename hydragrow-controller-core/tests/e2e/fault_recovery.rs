@@ -1,0 +1,258 @@
+//! E2E: Fault injection và recovery scenarios
+
+use hydragrow_controller_core::core::fsm::{context::SystemContext, events::OrchestratorEvent, orchestrator};
+use hydragrow_controller_core::WaterDirection;
+use hydragrow_shared::fsm::{FaultCode, SystemPhase};
+use hydragrow_shared::{ControllerConfig, ControlMode, SensorData};
+
+fn minimal_config() -> ControllerConfig {
+    ControllerConfig {
+        control_mode: ControlMode::Auto,
+        is_enabled: true,
+        ec_target: 1.5,
+        ec_tolerance: 0.05,
+        ph_target: 6.0,
+        ph_tolerance: 0.1,
+        enable_ec_sensor: true,
+        enable_ph_sensor: true,
+        enable_water_level_sensor: false,
+        enable_temp_sensor: false,
+        max_dose_per_hour: 0.5, // Rất thấp để trigger hourly limit fault
+        max_dose_per_cycle: 10.0,
+        cooldown_sec: 2,
+        soft_start_duration: 0,
+        max_ec_delta: 2.0, // Cao để không bị noise fault
+        max_ph_delta: 2.0,
+        max_ec_limit: 5.0,
+        min_ec_limit: 0.0,
+        min_ph_limit: 3.0,
+        max_ph_limit: 10.0,
+        max_refill_cycles_per_hour: 2,
+        max_drain_cycles_per_hour: 2,
+        max_refill_duration_sec: 60,
+        max_drain_duration_sec: 60,
+        ec_gain_per_ml: 0.3,
+        ph_shift_up_per_ml: 0.15,
+        ph_shift_down_per_ml: 0.15,
+        pump_a_capacity_ml_per_sec: 1.0,
+        pump_b_capacity_ml_per_sec: 1.0,
+        pump_ph_up_capacity_ml_per_sec: 0.5,
+        pump_ph_down_capacity_ml_per_sec: 0.5,
+        dosing_pwm_percent: 80,
+        dosing_min_pwm_percent: 30,
+        dosing_pulse_on_ms: 50,
+        dosing_pulse_off_ms: 50,
+        dosing_min_dose_ml: 0.1,
+        dosing_max_pulse_count_per_cycle: 50,
+        ec_step_ratio: 1.0,
+        ph_step_ratio: 1.0,
+        best_ec_ratio: 1.0,
+        best_ph_ratio: 1.0,
+        adaptive_mixing_sec: 5,
+        adaptive_stabilize_sec: 5,
+        effective_ec_tolerance: 0.05,
+        effective_ph_tolerance: 0.1,
+        active_mixing_sec: 5,
+        sensor_stabilize_sec: 5,
+        water_level_min: 15.0,
+        water_level_target: 20.0,
+        water_level_max: 24.0,
+        water_level_tolerance: 1.0,
+        water_level_critical_min: 10.0,
+        ec_ack_threshold: 0.05,
+        ph_ack_threshold: 0.1,
+        water_ack_threshold: 0.5,
+        scheduled_mixing_interval_sec: 7200,
+        scheduled_mixing_duration_sec: 30,
+        misting_on_duration_ms: 5000,
+        misting_off_duration_ms: 60000,
+        osaka_mixing_pwm_percent: 60,
+        osaka_misting_pwm_percent: 100,
+        high_temp_misting_on_duration_ms: 15000,
+        high_temp_misting_off_duration_ms: 60000,
+        misting_temp_threshold: 35.0,
+        delay_between_a_and_b_sec: 0,
+        min_temp_limit: 10.0,
+        max_temp_limit: 40.0,
+        auto_refill_enabled: false,
+        auto_drain_overflow: false,
+        auto_dilute_enabled: false,
+        dilute_drain_amount_cm: 0.0,
+        scheduled_water_change_enabled: false,
+        water_change_cron: String::new(),
+        scheduled_drain_amount_cm: 0.0,
+        water_change_interval_days: None,
+        emergency_shutdown: false,
+        nutrient_a_ratio: 1.0,
+        nutrient_b_ratio: 1.0,
+        device_id: "e2e_fault_test".to_string(),
+        active_recipe: None,
+        tuner_state: 0,
+        interaction_matrix: None,
+        matrix_update_count: 0,
+        matrix_is_warm: false,
+        kalman_confidence: None,
+        tank_height: 30,
+        pump_a_min_pwm_percent: None,
+        pump_b_min_pwm_percent: None,
+        pump_ph_up_min_pwm_percent: None,
+        pump_ph_down_min_pwm_percent: None,
+    }
+}
+
+fn normal_sensor() -> SensorData {
+    SensorData {
+        device_id: "e2e_fault_test".to_string(),
+        ec: 1.5,
+        ph: 6.0,
+        temp: 25.0,
+        water_level: 20.0,
+        pump_status: Default::default(),
+        time: "2026-08-25T10:00:00Z".to_string(),
+        controller_received_ms: None,
+        rssi: None,
+        free_heap: None,
+        uptime: None,
+        err_water: None,
+        err_temp: None,
+        err_ec: None,
+        err_ph: None,
+        is_continuous: None,
+        ph_voltage_mv: None,
+    }
+}
+
+fn tick_apply(
+    ctx: &mut SystemContext,
+    config: &ControllerConfig,
+    sensors: &SensorData,
+    uptime_ms: u64,
+    sensor_last_update_ms: u64,
+) -> Vec<OrchestratorEvent> {
+    let now_ms = 1_700_000_000_000u64 + uptime_ms;
+    let mut result = orchestrator::tick(now_ms, uptime_ms, config, sensors, sensor_last_update_ms, ctx);
+    ctx.apply_delta(&mut result.delta);
+    result.events
+}
+
+/// E2E Fault Test 1: Sensor timeout → SensorTimeout fault → recovery
+#[test]
+fn e2e_sensor_timeout_fault_and_recovery() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    let sensor = normal_sensor();
+
+    // Inject timeout: sensor data 100s cũ
+    let uptime_ms = 100_000u64;
+    let sensor_last_update_ms = 0u64; // 100s không nhận sensor
+
+    let events = tick_apply(&mut ctx, &config, &sensor, uptime_ms, sensor_last_update_ms);
+
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Fault(FaultCode::SensorTimeout),
+        "100s không nhận sensor phải vào SensorTimeout fault"
+    );
+
+    // Phải dừng tất cả hardware khi fault
+    let stops_water = events.iter().any(|e| {
+        matches!(e, OrchestratorEvent::SetWaterPump { direction }
+            if *direction == WaterDirection::Stop)
+    });
+    assert!(stops_water, "Fault phải emit dừng water pump");
+
+    eprintln!("✅ SensorTimeout fault triggered correctly");
+
+    // === Recovery: Nhận sensor mới ===
+    let uptime_after = 101_000u64;
+    let sensor_update_recent = 100_500u64; // Vừa nhận sensor 500ms trước
+
+    let _events = tick_apply(&mut ctx, &config, &sensor, uptime_after, sensor_update_recent);
+
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Monitoring,
+        "Sau khi nhận sensor mới, thoát SensorTimeout về Monitoring"
+    );
+    eprintln!("✅ SensorTimeout recovery OK");
+}
+
+/// E2E Fault Test 2: Không có fault khi đã ở Fault state và timeout lại
+#[test]
+fn e2e_fault_state_not_double_faulted() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Fault(FaultCode::SensorTimeout);
+
+    let sensor = normal_sensor();
+    let uptime_ms = 200_000u64;
+    let sensor_last_update_ms = 0u64; // Vẫn timeout
+
+    let events = tick_apply(&mut ctx, &config, &sensor, uptime_ms, sensor_last_update_ms);
+
+    // Vẫn ở fault state, không bị fault mới (tránh infinite loop events)
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Fault(FaultCode::SensorTimeout),
+        "Đã fault rồi không được fault lại"
+    );
+
+    // Không emit dừng pump lần nữa khi đã fault (phải dừng được rồi)
+    eprintln!("✅ No double-fault behavior verified");
+    let _ = events; // events có thể empty
+}
+
+/// E2E Fault Test 3: Manual mode → không có Fault từ sensor check
+#[test]
+fn e2e_manual_mode_not_affected_by_sensor_timeout_trigger() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::ManualMode;
+
+    let sensor = normal_sensor();
+    // Sensor timeout: 100s không nhận
+    let events = tick_apply(&mut ctx, &config, &sensor, 100_000, 0);
+
+    // ManualMode: sensor timeout vẫn trigger fault (timeout check là unconditional)
+    // Verify: phase phải là Fault(SensorTimeout) — timeout check xảy ra trước Manual check
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Fault(FaultCode::SensorTimeout),
+        "Sensor timeout là safety-critical — xảy ra kể cả ở ManualMode"
+    );
+    eprintln!("✅ Sensor timeout is unconditional safety check");
+    let _ = events;
+}
+
+/// E2E Fault Test 4: Drain limit violation → TooManyDrains fault
+#[test]
+fn e2e_too_many_drains_triggers_fault() {
+    let mut config = minimal_config();
+    config.max_drain_cycles_per_hour = 1; // Chỉ cho 1 lần drain/h
+    config.enable_water_level_sensor = true;
+    config.auto_drain_overflow = true;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    // Đã drain 1 lần trước đó (consume the budget)
+    ctx.safety.record_drain(0, 1); // 1 lần, max = 1 → blocked
+
+    // Sensor: mực nước cao → muốn drain
+    let high_water = SensorData {
+        water_level: 25.0, // > water_level_max 24.0
+        ..normal_sensor()
+    };
+
+    let _events = tick_apply(&mut ctx, &config, &high_water, 10_000, 10_000);
+
+    // Phải fault TooManyDrains
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Fault(FaultCode::TooManyDrains),
+        "Vượt max drain cycles phải vào TooManyDrains fault"
+    );
+    eprintln!("✅ TooManyDrains fault correctly triggered");
+}

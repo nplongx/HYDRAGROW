@@ -6,4 +6,5 @@ pub mod pump_types;
 pub mod utils;
 pub mod core;
 
+pub use hydragrow_shared;
 pub use pump_types::{PumpType, WaterDirection};

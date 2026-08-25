@@ -12,3 +12,6 @@ tracing = { version = "0.1", features = ["log"] }
 hydragrow-shared = { path = "../hydragrow-shared" }
 anyhow = "1.0.104"
 serde_json = "1.0.151"
+
+[dev-dependencies]
+insta = { version = "1.43.2", features = ["json"] }

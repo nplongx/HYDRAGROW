@@ -2,7 +2,8 @@ use thiserror::Error;
 
 pub mod device_ownership;
 pub mod influx;
-pub mod postgres; // Đổi từ sqlite -> postgres
+pub mod postgres;
+pub mod recipes;
 #[cfg(test)]
 pub mod tests;
 pub mod users;
@@ -10,7 +11,7 @@ pub mod users;
 #[derive(Error, Debug)]
 pub enum DbError {
     #[error("PostgreSQL query failed: {0}")]
-    PostgresError(#[from] sqlx::Error), // Đổi tên từ SqliteError
+    PostgresError(#[from] sqlx::Error),
 
     #[error("InfluxDB operation failed: {0}")]
     InfluxError(#[from] influxdb2::BuildError),

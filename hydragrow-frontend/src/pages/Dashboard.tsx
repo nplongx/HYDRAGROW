@@ -63,6 +63,9 @@ const Dashboard = () => {
   const isLoading = useDeviceStore((s) => s.isLoading);
   const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
   const settings = useDeviceStore((s) => s.settings);
+  const tankAlert = useDeviceStore((s) => s.tankAlert);
+
+  const { permission, enableNotifications } = useFCM();
 
   const friendlyState = useMemo(() => {
     const res = friendly_state(fsmState || 'Monitoring', isOnline);
@@ -75,8 +78,6 @@ const Dashboard = () => {
     const res = compute_health_safe(isOnline, scoreInt);
     return { score: res.score, label: res.label, color: res.color, description: res.description };
   }, [controllerHealth, isOnline]);
-
-  const { permission, enableNotifications } = useFCM();
 
   if (isLoading) {
     return <LoadingState message="Đang tải dữ liệu trạm thông minh..." />;
@@ -120,7 +121,6 @@ const Dashboard = () => {
       ? 'Đang mất tín hiệu cảm biến. Kiểm tra nguồn node cảm biến.'
       : faultGuide?.action || (permission !== 'granted' ? 'Bật thông báo để nhận cảnh báo tức thì.' : 'Không cần thao tác. Tiếp tục theo dõi.');
 
-  const tankAlert = useDeviceStore((s) => s.tankAlert);
   const hasTankAlert = Boolean(
     tankAlert && (tankAlert.tank_a_low || tankAlert.tank_b_low || tankAlert.tank_ph_down_low || tankAlert.tank_ph_up_low)
   );

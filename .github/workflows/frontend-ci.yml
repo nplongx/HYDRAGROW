@@ -13,7 +13,7 @@ on:
       - '.github/workflows/frontend-ci.yml'
 
 jobs:
-  ci:
+  web:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,7 +36,37 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        run: npx eslint . || true
+        run: npx eslint .
 
       - name: Test
         run: npx vitest run
+
+  tauri:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hydragrow-frontend/src-tauri
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hydragrow-frontend/src-tauri
+
+      - name: Install Tauri Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Check
+        run: cargo check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings

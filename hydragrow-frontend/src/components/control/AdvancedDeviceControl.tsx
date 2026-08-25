@@ -58,9 +58,9 @@ export const AdvancedDeviceControl = ({
     : isToggling || isProcessing
       ? 'Đang gửi lệnh...'
       : isAutoMode
-        ? 'Không thể thao tác — đang chạy tự động'
+        ? 'Tự động (MIMO) quản lý'
         : isEmergency && !currentStatus
-          ? 'Đang khóa khẩn cấp'
+          ? 'Đang ngắt do sự cố an toàn'
           : '';
 
   useEffect(() => {
@@ -77,11 +77,11 @@ export const AdvancedDeviceControl = ({
 
   const handleToggle = async () => {
     if (isAutoMode) {
-      toast.error("Không thể thao tác — đang chạy tự động");
+      toast.error("Hệ thống đang chạy Tự Động, không thể can thiệp thủ công.");
       return;
     }
     if (isEmergency && !currentStatus) {
-      toast.error("Đang khóa khẩn cấp. Mở cài đặt kỹ thuật để ép chạy.");
+      toast.error("Hệ thống đang ngắt do sự cố. Mở cài đặt kỹ thuật để ép chạy.");
       setShowAdvanced(true);
       return;
     }
@@ -155,8 +155,8 @@ export const AdvancedDeviceControl = ({
   };
 
   return (
-    <div className={`ui-card transition-all duration-300 ${currentStatus ? 'border-emerald-300 bg-emerald-50/40' : ''}`}>
-      <div className="p-1 flex flex-col gap-3.5">
+    <div className={`border rounded-2xl overflow-hidden transition-all duration-300 shadow-sm shadow-emerald-950/5 ${currentStatus ? activeTheme.glow : 'border-emerald-100 bg-white'}`}>
+      <div className="p-4 flex flex-col gap-3.5">
         {/* Nút bật/tắt chính */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -164,8 +164,8 @@ export const AdvancedDeviceControl = ({
               <Icon size={16} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-emerald-900">{title}</h3>
-              <p className="text-xs text-emerald-700/60 font-semibold tracking-wide">{currentStatus ? 'Đang hoạt động' : disabledReason || 'Tắt'}</p>
+              <h3 className={`text-xs font-bold ${currentStatus ? 'text-emerald-950' : 'text-emerald-900'}`}>{title}</h3>
+              <p className="text-[10px] text-emerald-700/75 font-semibold tracking-wide">{currentStatus ? 'Đang hoạt động' : disabledReason || 'Tắt'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

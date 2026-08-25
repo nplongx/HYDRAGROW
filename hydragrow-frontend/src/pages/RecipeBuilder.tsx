@@ -282,7 +282,7 @@ const RecipeBuilder: React.FC = () => {
         </div>
         <button
           onClick={handleResetForm}
-          className="ui-btn-secondary text-xs font-bold"
+          className="ui-btn-md bg-white border border-emerald-200 text-emerald-900 hover:bg-emerald-50 text-xs font-bold"
         >
           <Plus size={14} className="inline mr-1" /> Soạn công thức mới
         </button>
@@ -311,12 +311,12 @@ const RecipeBuilder: React.FC = () => {
                   <div
                     key={tmpl.id}
                     onClick={() => handleSelectTemplate(tmpl)}
-                    className={`ui-card ui-card-hover group relative w-full text-left p-3.5 text-xs flex flex-col gap-1.5 cursor-pointer ${
+                    className={`group relative w-full text-left p-3.5 rounded-xl border transition-all text-xs flex flex-col gap-1.5 cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500'
                         : isApplied
                         ? 'bg-blue-50/60 border-blue-300'
-                        : ''
+                        : 'bg-white border-emerald-100 hover:border-emerald-300'
                     }`}
                   >
                     <div className="flex items-center justify-between font-bold text-emerald-950 pr-16">
@@ -433,7 +433,7 @@ const RecipeBuilder: React.FC = () => {
             <div className="flex items-center justify-between gap-3 border-b border-emerald-100 pb-3">
               <h2 className="text-sm font-bold text-emerald-950">Các giai đoạn sinh trưởng (Stages)</h2>
               <button
-                className="ui-btn-primary py-1.5 px-3 text-xs"
+                className="ui-btn-md bg-emerald-700 text-white hover:bg-emerald-800 py-1.5 px-3 text-xs"
                 onClick={() => setStages((s) => [...s, createDefaultStage(s.length + 1)])}
               >
                 <Plus size={14} className="inline mr-1" /> Thêm giai đoạn
@@ -520,7 +520,7 @@ const RecipeBuilder: React.FC = () => {
                       setTemplateName(`${templateName} (Bản sao)`);
                       toast.success('Đã nhân bản! Hãy bấm Lưu để tạo mới.');
                     }}
-                    className="ui-btn-secondary text-xs font-bold"
+                    className="ui-btn-md bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-900 font-bold text-xs"
                   >
                     Nhân bản
                   </button>
@@ -529,7 +529,7 @@ const RecipeBuilder: React.FC = () => {
                 <button
                   onClick={() => saveRecipeMutation.mutate()}
                   disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
-                  className="ui-btn-primary text-xs font-bold"
+                  className="ui-btn-md bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
                 >
                   <Save size={15} />
                   {saveRecipeMutation.isPending 

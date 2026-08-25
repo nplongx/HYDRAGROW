@@ -20,7 +20,7 @@ use sha2::Sha256;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use crate::config::SharedConfig;
-use crate::utils::{build_recipe_event, validate_recipe, CropRecipe};
+use hydragrow_controller_core::utils::{build_recipe_event, validate_recipe, CropRecipe};
 
 type HmacSha256 = Hmac<Sha256>;
 

@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+serde = "1.0.228"
+chrono = "0.4"
+cron = "0.16.0"
+log = "0.4"
+tracing = { version = "0.1", features = ["log"] }
+hydragrow-shared = { path = "../hydragrow-shared" }

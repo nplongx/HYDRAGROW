@@ -4,7 +4,7 @@
 //! Output: Analytics JSON → dosing_report_tx
 
 use super::ObserverContext;
-use crate::core::fsm::events::OrchestratorEvent;
+use hydragrow_controller_core::core::fsm::events::OrchestratorEvent;
 use log::warn;
 
 /// Thống kê tích lũy trong một cửa sổ thời gian (rolling window)

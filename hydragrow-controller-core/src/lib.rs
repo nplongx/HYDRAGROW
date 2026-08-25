@@ -1,14 +1,9 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Pure-logic core của HYDRAGROW controller: FSM, Kalman filter, MIMO adaptive,
+//! dosing/water actors. Không phụ thuộc esp-idf — test được 100% bằng `cargo test`
+//! trên host, không cần phần cứng ESP32.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod pump_types;
+pub mod utils;
+pub mod core;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use pump_types::{PumpType, WaterDirection};

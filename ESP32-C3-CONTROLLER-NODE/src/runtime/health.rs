@@ -19,12 +19,12 @@ use hydragrow_shared::MqttCommandIn;
 use log::{error, info, warn};
 
 use crate::config::SharedConfig;
-use crate::core::fsm::context::SystemContext;
+use hydragrow_controller_core::core::fsm::context::SystemContext;
 use crate::hw::mqtt_client::{
     get_free_heap, get_uptime_sec, get_wifi_rssi, init_mqtt_client, ConnectionState,
     SharedSensorData,
 };
-use crate::utils::{get_current_time_sec, get_log_drop_count, read_or_recover};
+use hydragrow_controller_core::utils::{get_current_time_sec, get_log_drop_count, read_or_recover};
 
 pub fn build_status_msg(ctx: &SystemContext, now_sec: u64, uptime_sec: u64) -> String {
     let sum_ml = |pump_name: &str| -> f32 {

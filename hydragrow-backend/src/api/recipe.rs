@@ -12,7 +12,7 @@ use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::{AppState, api::mqtt_utils::sign_command, db::postgres};
+use crate::{AppState, api::mqtt_utils::sign_command, db::postgres, db::recipes as db_recipes};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct RecipeTemplate {
@@ -23,6 +23,19 @@ pub struct RecipeTemplate {
     pub created_at: chrono::DateTime<Utc>,
     #[sqlx(skip)]
     pub stages: Vec<CropStage>,
+}
+
+impl From<db_recipes::RecipeRow> for RecipeTemplate {
+    fn from(r: db_recipes::RecipeRow) -> Self {
+        Self {
+            id: r.id,
+            name: r.name,
+            crop: r.crop,
+            description: r.description,
+            created_at: r.created_at,
+            stages: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,35 +131,29 @@ where
 }
 
 async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<CropStage> {
-    let rows = sqlx::query(
-        r#"
-        SELECT
-            name,
-            duration_days,
-            ec_target,
-            ec_tolerance,
-            ph_target,
-            ph_tolerance,
-            nutrient_a_ratio,
-            nutrient_b_ratio,
-            water_level_target,
-            water_change_interval_days,
-            water_change_drain_cm,
-            auto_dilute_ec_trigger,
-            misting_on_duration_ms,
-            misting_off_duration_ms,
-            max_dose_per_cycle_ml
-        FROM crop_recipe_stages
-        WHERE recipe_id = $1
-        ORDER BY stage_order ASC
-        "#,
-    )
-    .bind(recipe_id)
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
+    let rows = db_recipes::list_stages_for_recipe(pool, recipe_id)
+        .await
+        .unwrap_or_default();
 
-    rows.iter().map(map_row_to_crop_stage).collect()
+    rows.into_iter()
+        .map(|r| CropStage {
+            name: r.name,
+            duration_sec: (r.duration_days.max(1) as u64) * 86_400,
+            ec_target: r.ec_target,
+            ec_tolerance: r.ec_tolerance,
+            ph_target: r.ph_target,
+            ph_tolerance: r.ph_tolerance,
+            nutrient_a_ratio: r.nutrient_a_ratio,
+            nutrient_b_ratio: r.nutrient_b_ratio,
+            water_level_target: r.water_level_target,
+            water_change_interval_days: None,
+            water_change_drain_cm: None,
+            auto_dilute_ec_trigger: None,
+            misting_on_duration_ms: r.misting_on_duration_ms,
+            misting_off_duration_ms: r.misting_off_duration_ms,
+            max_dose_per_cycle_ml: None,
+        })
+        .collect()
 }
 
 // CẬP NHẬT RECIPE TEMPLATE TRONG CSDL
@@ -281,17 +288,9 @@ pub async fn update_recipe(
 }
 
 pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
-    let recipes_res = sqlx::query_as::<_, RecipeTemplate>(
-        r#"
-        SELECT id, name, crop, description, created_at
-        FROM crop_recipes
-        ORDER BY created_at DESC
-        "#,
-    )
-    .fetch_all(&app_state.pg_pool)
-    .await;
+    let recipes_res = db_recipes::list_recipes(&app_state.pg_pool).await;
 
-    let mut recipes = match recipes_res {
+    let rows = match recipes_res {
         Ok(r) => r,
         Err(e) => {
             tracing::error!("Lỗi truy vấn crop_recipes: {:?}", e);
@@ -302,6 +301,8 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
             }));
         }
     };
+
+    let mut recipes: Vec<RecipeTemplate> = rows.into_iter().map(RecipeTemplate::from).collect();
 
     if recipes.is_empty() {
         return HttpResponse::Ok().json(json!({
@@ -510,13 +511,10 @@ pub async fn delete_recipe(
 ) -> impl Responder {
     let recipe_id = path.into_inner();
 
-    let res = sqlx::query("DELETE FROM crop_recipes WHERE id = $1")
-        .bind(&recipe_id)
-        .execute(&app_state.pg_pool)
-        .await;
+    let res = db_recipes::delete_recipe(&app_state.pg_pool, &recipe_id).await;
 
     match res {
-        Ok(r) if r.rows_affected() > 0 => HttpResponse::Ok().json(json!({
+        Ok(rows) if rows > 0 => HttpResponse::Ok().json(json!({
             "status": "success",
             "message": "Đã xóa recipe template"
         })),
@@ -560,19 +558,13 @@ pub async fn apply_recipe(
     }
 
     let recipe_template = if let Some(recipe_id) = &req.recipe_id {
-        let row = sqlx::query_as::<_, RecipeTemplate>(
-            "SELECT id, name, crop, description, created_at
-             FROM crop_recipes
-             WHERE id = $1",
-        )
-        .bind(recipe_id)
-        .fetch_optional(&app_state.pg_pool)
-        .await;
+        let row = db_recipes::get_recipe(&app_state.pg_pool, recipe_id).await;
 
         match row {
-            Ok(Some(mut r)) => {
-                r.stages = fetch_stages_for_recipe(&app_state.pg_pool, &r.id).await;
-                r
+            Ok(Some(r)) => {
+                let mut template = RecipeTemplate::from(r);
+                template.stages = fetch_stages_for_recipe(&app_state.pg_pool, &template.id).await;
+                template
             }
 
             _ => {
@@ -880,17 +872,13 @@ pub async fn bulk_apply_recipe(
 
     // Lấy hoặc build recipe template
     let recipe_template = if let Some(recipe_id) = &body.recipe_id {
-        let row = sqlx::query_as::<_, RecipeTemplate>(
-            "SELECT id, name, crop, description, created_at FROM crop_recipes WHERE id = $1",
-        )
-        .bind(recipe_id)
-        .fetch_optional(&app_state.pg_pool)
-        .await;
+        let row = db_recipes::get_recipe(&app_state.pg_pool, recipe_id).await;
 
         match row {
-            Ok(Some(mut r)) => {
-                r.stages = fetch_stages_for_recipe(&app_state.pg_pool, &r.id).await;
-                r
+            Ok(Some(r)) => {
+                let mut template = RecipeTemplate::from(r);
+                template.stages = fetch_stages_for_recipe(&app_state.pg_pool, &template.id).await;
+                template
             }
             _ => return HttpResponse::NotFound().json(json!({"error": "recipe_not_found"})),
         }

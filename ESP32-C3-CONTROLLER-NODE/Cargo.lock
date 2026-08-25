@@ -671,8 +671,6 @@ name = "esp32-c3-mist-weaver-os"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
- "cron",
  "ds18b20",
  "embedded-hal 1.0.0",
  "embuild",
@@ -681,6 +679,7 @@ dependencies = [
  "esp-idf-sys",
  "hex",
  "hmac",
+ "hydragrow-controller-core",
  "hydragrow-shared",
  "lazy_static",
  "libc",
@@ -893,6 +892,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
 dependencies = [
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "hydragrow-controller-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "cron",
+ "hydragrow-shared",
+ "log",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

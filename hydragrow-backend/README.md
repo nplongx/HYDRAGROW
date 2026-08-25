@@ -17,10 +17,10 @@ Copy `.env.example` → `.env` (nếu chưa có, xem `src/main.rs` để biết 
 
 ```bash
 DATABASE_URL=postgres://user:password@localhost:5432/hydragrow
-INFLUXDB_URL=http://localhost:8086
-INFLUXDB_TOKEN=...
-INFLUXDB_ORG=...
-INFLUXDB_BUCKET=...
+INFLUX_URL=http://localhost:8086
+INFLUX_TOKEN=dev_only_token
+INFLUX_ORG=hydragrow
+INFLUX_BUCKET=sensors
 MQTT_HOST=localhost
 MQTT_PORT=8883
 MQTT_USERNAME=...

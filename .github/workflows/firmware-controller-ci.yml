@@ -14,6 +14,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - name: cargo check
+            run: cargo check --locked
+          - name: cargo fmt --check
+            run: cargo fmt --check
+          - name: cargo clippy
+            run: cargo clippy --all-targets --all-features -- -D warnings
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,24 +38,14 @@ jobs:
           curl -L https://github.com/esp-rs/espup/releases/latest/download/espup-x86_64-unknown-linux-gnu -o espup
           chmod +x espup
 
-          # Cài đặt target ESP32-C3
           ./espup install --targets esp32c3
+          rustup component add rust-src rustfmt clippy
 
-          # Đảm bảo rust-src được cài đặt cho nightly
-          rustup component add rust-src
-
-          # Load các biến môi trường của toolchain ESP
           source "$HOME/export-esp.sh"
 
           echo "=== Rust ==="
           rustc --version
           cargo --version
-
-          echo "=== Installed targets ==="
-          rustup target list --installed
-
-          echo "=== Installed components ==="
-          rustup component list | grep -E 'rust-src|rustc|cargo' || true
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
@@ -53,13 +53,10 @@ jobs:
           workspaces: ESP32-C3-CONTROLLER-NODE
           cache-targets: true
 
-      - name: cargo check (ESP32-C3 target)
+      - name: ${{ matrix.check.name }}
         working-directory: ESP32-C3-CONTROLLER-NODE
         shell: bash
         run: |
           set -euo pipefail
-
           source "$HOME/export-esp.sh"
-
-          # Chạy check với nightly theo cấu hình dự án
-          cargo check --locked
+          ${{ matrix.check.run }}

@@ -3,13 +3,13 @@ use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::warn;
 
+use crate::WaterDirection;
 use crate::core::actors::dosing_actor::{DosingEvent, PumpTarget};
 use crate::core::fsm::tick_result::CalibrationDelta;
 use crate::core::fsm::types::PendingCalibrationSample;
 use crate::core::fsm::{
     DosingPumpTarget, OrchestratorEvent, PeripheralDelta, PhaseTick, SystemContext, TickResult,
 };
-use crate::hw::WaterDirection;
 
 pub struct MimoDosingPhase;
 

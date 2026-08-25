@@ -1,10 +1,9 @@
 use hydragrow_shared::{
-    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog, WaterMetadata},
     ControllerConfig, SensorData,
+    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog, WaterMetadata},
 };
 
-use crate::core::fsm::OrchestratorEvent;
-use crate::hw::WaterDirection;
+use crate::{WaterDirection, core::fsm::OrchestratorEvent};
 
 #[derive(Debug, Clone)]
 pub enum WaterSubState {

@@ -1,7 +1,7 @@
 //! OrchestratorEvent — Toàn bộ side effect của FSM được biểu diễn qua enum này.
 //! Không có logic nào ở đây. Đây là "ngôn ngữ" giao tiếp giữa Pure Logic và Hardware.
 
-use crate::hw::{PumpType, WaterDirection};
+use crate::{PumpType, WaterDirection};
 
 /// Tất cả các hành động phần cứng và I/O mà FSM có thể yêu cầu.
 /// Dispatcher sẽ translate enum này thành lệnh thực tế.

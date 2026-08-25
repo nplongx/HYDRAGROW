@@ -5,6 +5,8 @@ use hydragrow_shared::fsm::{FaultCode, SystemPhase};
 use hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
 use tracing::error;
 
+use crate::WaterDirection;
+use crate::core::fsm::ContextDelta;
 use crate::core::fsm::context::SystemContext;
 use crate::core::fsm::events::OrchestratorEvent;
 use crate::core::fsm::peripheral::PeripheralController;
@@ -14,8 +16,6 @@ use crate::core::fsm::phases::{
     WaterDrainingPhase, WaterRefillingPhase,
 };
 use crate::core::fsm::tick_result::{PeripheralDelta, TickResult};
-use crate::core::fsm::ContextDelta;
-use crate::hw::pump_controller::WaterDirection;
 
 pub fn tick(
     now_ms: u64,
@@ -55,7 +55,9 @@ pub fn tick(
         }
         return result;
     } else if matches!(ctx.phase, SystemPhase::Fault(FaultCode::SensorTimeout)) {
-        tracing::info!("✅ [SENSOR RECOVERED] Đã nhận dữ liệu cảm biến mới. Tự động thoát Fault chuyển về Monitoring.");
+        tracing::info!(
+            "✅ [SENSOR RECOVERED] Đã nhận dữ liệu cảm biến mới. Tự động thoát Fault chuyển về Monitoring."
+        );
         result.delta.phase = Some(SystemPhase::Monitoring);
         result.delta.phase_start_ms = Some(None);
         result.delta.phase_finish_ms = Some(None);

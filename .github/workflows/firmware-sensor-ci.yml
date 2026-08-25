@@ -43,6 +43,6 @@ jobs:
         working-directory: ESP32-C3-SENSOR-NODE
         run: pio run --environment esp32-c3-devkitm-1
 
-      - name: Run native tests (if any)
+      - name: Run native tests
         working-directory: ESP32-C3-SENSOR-NODE
-        run: pio test --environment native 2>/dev/null || echo "No native tests yet"
+        run: pio test --environment native

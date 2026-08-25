@@ -95,7 +95,7 @@ const DosingHistory = () => {
       />
 
       {/* Thanh chọn & Xuất Excel */}
-      <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 backdrop-blur-md relative z-20">
+      <div className="ui-card p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 relative z-20">
         <div className="relative flex-1 max-w-xs">
           <label className="text-[10px] font-bold text-emerald-700/75 uppercase tracking-widest flex items-center gap-1.5 mb-1.5 ml-1">
             <Calendar size={12} /> Chọn mùa vụ
@@ -105,7 +105,7 @@ const DosingHistory = () => {
               value={selectedSeason || ''}
               onChange={(e) => setSelectedSeason(e.target.value)}
               disabled={seasons.length === 0}
-              className="w-full bg-white border border-emerald-100 text-emerald-950 text-sm font-semibold rounded-2xl pl-4 pr-10 py-2.5 appearance-none outline-none focus:border-indigo-500 disabled:opacity-50 cursor-pointer shadow-inner"
+              className="ui-select pr-10 font-semibold"
             >
               {seasons.length === 0 && <option value="">Chưa có mùa vụ</option>}
               {seasons.map((ss: any) => (
@@ -119,7 +119,7 @@ const DosingHistory = () => {
         <button
           onClick={handleExportCSV}
           disabled={history.length === 0}
-          className="flex items-center justify-center gap-2 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-40 text-emerald-900 px-5 py-2.5 rounded-2xl border border-emerald-200 transition-all font-bold text-xs uppercase tracking-wider shrink-0 mt-auto shadow-sm active:scale-95"
+          className="ui-btn-secondary text-xs uppercase tracking-wider font-bold shrink-0 mt-auto"
         >
           <Download size={14} className={history.length > 0 ? "text-emerald-700" : "text-emerald-700/75"} />
           <span>Xuất Excel</span>

@@ -105,8 +105,44 @@ p {
     @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
+  .ui-select {
+    @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+  }
+
   .ui-btn-md {
     @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .ui-btn-primary {
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm flex items-center justify-center gap-2;
+  }
+
+  .ui-btn-secondary {
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-900 shadow-sm flex items-center justify-center gap-2;
+  }
+
+  .ui-btn-danger {
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed bg-red-50 border border-red-200 text-red-600 hover:bg-red-600 hover:text-white shadow-sm flex items-center justify-center gap-2;
+  }
+
+  .ui-alert-warning {
+    @apply flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900;
+  }
+
+  .ui-alert-info {
+    @apply flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900;
+  }
+
+  .ui-alert-error {
+    @apply flex items-start gap-3 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900;
+  }
+
+  .ui-alert-success {
+    @apply flex items-start gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900;
+  }
+
+  .ui-card-hover {
+    @apply transition-all duration-200 hover:shadow-md hover:border-emerald-200;
   }
 
   .ui-loading {

@@ -14,9 +14,7 @@ async fn get_oauth_token() -> Result<String, Box<dyn std::error::Error>> {
     let scopes = &["https://www.googleapis.com/auth/firebase.messaging"];
     let token = auth.token(scopes).await?;
 
-    let token_str = token
-        .token()
-        .ok_or_else(|| "OAuth token value is missing")?;
+    let token_str = token.token().ok_or("OAuth token value is missing")?;
     Ok(token_str.to_string())
 }
 

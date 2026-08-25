@@ -14,18 +14,16 @@ use std::{
 };
 use tokio::sync::{
     RwLock,
-    broadcast::{self, Receiver},
+    broadcast::{self},
 };
-use tracing::{Level, error, info};
-use tracing_subscriber::{FmtSubscriber, filter::filter_fn};
+use tracing::{error, info};
+use tracing_subscriber::filter::filter_fn;
 
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
 
 use crate::{
-    models::{alert::AlertMessage, sensor::SensorData},
-    mqtt::process_message,
-    services::solana::SolanaTraceability,
+    models::alert::AlertMessage, mqtt::process_message, services::solana::SolanaTraceability,
 };
 
 pub mod api;

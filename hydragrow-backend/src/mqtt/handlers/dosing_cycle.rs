@@ -345,6 +345,7 @@ pub async fn handle_dosing_cycle(
 // ================================================================
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use hydragrow_shared::telemetry::cycle::{
         CycleOutcome, DosingCycleEvent, DosingDoseRecord, DosingPhaseSnapshot,

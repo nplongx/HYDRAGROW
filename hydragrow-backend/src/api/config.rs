@@ -459,7 +459,7 @@ pub async fn update_unified_config(
     }
 
     payload.safety_config.device_id = device_id.clone();
-    payload.safety_config.last_updated = now.clone();
+    payload.safety_config.last_updated = now;
     if let Err(e) =
         crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &payload.safety_config).await
     {
@@ -673,7 +673,10 @@ pub async fn update_water_config(
     }
     let config = req.into_inner();
     let now = Utc::now();
-    if let Err(_) = upsert_water_db(&app_state.pg_pool, &config, &now).await {
+    if upsert_water_db(&app_state.pg_pool, &config, &now)
+        .await
+        .is_err()
+    {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     let _ = sync_config_to_esp32(&app_state, &device_id).await;
@@ -717,7 +720,10 @@ pub async fn update_safety_config(
     let mut config = req.into_inner();
     config.device_id = device_id.clone();
     config.last_updated = Utc::now();
-    if let Err(_) = crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &config).await {
+    if crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &config)
+        .await
+        .is_err()
+    {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     let _ = sync_config_to_esp32(&app_state, &device_id).await;
@@ -761,7 +767,10 @@ pub async fn update_sensor_calibration(
     }
     let config = req.into_inner();
     let now = Utc::now();
-    if let Err(_) = upsert_sensor_db(&app_state.pg_pool, &config, &now).await {
+    if upsert_sensor_db(&app_state.pg_pool, &config, &now)
+        .await
+        .is_err()
+    {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     let _ = sync_config_to_esp32(&app_state, &device_id).await;
@@ -967,7 +976,10 @@ pub async fn update_dosing_calibration(
         return HttpResponse::BadRequest().json(json!({"error": msg}));
     }
     let now = Utc::now();
-    if let Err(_) = upsert_dosing_db(&app_state.pg_pool, &config, &now).await {
+    if upsert_dosing_db(&app_state.pg_pool, &config, &now)
+        .await
+        .is_err()
+    {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     let _ = sync_config_to_esp32(&app_state, &device_id).await;
@@ -1018,28 +1030,45 @@ mod tests {
     // }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn validate_dosing_constraints_rejects_zero_capacity() {
-        let mut dose = DosingCalibration::default();
-        dose.pump_a_capacity_ml_per_sec = 0.0;
+        let dose = DosingCalibration {
+            pump_a_capacity_ml_per_sec: 0.0,
+            ..Default::default()
+        };
         let result = validate_dosing_constraints(&dose);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("pump_a_capacity_ml_per_sec"));
+        assert!(
+            result
+                .expect_err("expected err")
+                .contains("pump_a_capacity_ml_per_sec")
+        );
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn validate_dosing_constraints_rejects_pwm_zero() {
-        let mut dose = DosingCalibration::default();
-        dose.dosing_pwm_percent = 0;
+        let dose = DosingCalibration {
+            dosing_pwm_percent: 0,
+            ..Default::default()
+        };
         let result = validate_dosing_constraints(&dose);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("dosing_pwm_percent"));
+        assert!(
+            result
+                .expect_err("expected err")
+                .contains("dosing_pwm_percent")
+        );
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn validate_dosing_constraints_rejects_min_pwm_exceeding_dosing_pwm() {
-        let mut dose = DosingCalibration::default();
-        dose.dosing_pwm_percent = 30;
-        dose.dosing_min_pwm_percent = 50;
+        let dose = DosingCalibration {
+            dosing_pwm_percent: 30,
+            dosing_min_pwm_percent: 50,
+            ..Default::default()
+        };
 
         let result = validate_dosing_constraints(&dose);
 

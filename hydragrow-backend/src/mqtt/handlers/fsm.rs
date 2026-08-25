@@ -5,9 +5,7 @@ use tracing::{error, info, warn};
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::metrics::*;
-use hydragrow_shared::{
-    PumpStatus, events::AppEvent, fsm::FsmSnapshot, telemetry::FsmTransitionEvent,
-};
+use hydragrow_shared::{events::AppEvent, fsm::FsmSnapshot, telemetry::FsmTransitionEvent};
 
 pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let snapshot: FsmSnapshot = match serde_json::from_slice(payload) {
@@ -346,7 +344,7 @@ pub async fn handle_calibration_update(
             .bind(update.adaptive_stabilize_sec)
             .bind(update.effective_ec_tolerance)
             .bind(update.effective_ph_tolerance)
-            .bind(&device_id)
+            .bind(device_id)
             .execute(&app_state.pg_pool)
             .await
         {
@@ -368,7 +366,6 @@ pub async fn handle_calibration_update(
     }
 
     // Return luôn vì đây là bản tin cập nhật DB, không phải cập nhật trạng thái hoạt động (current_state)
-    return;
 }
 
 pub async fn handle_fsm_transition(
@@ -388,12 +385,12 @@ pub async fn handle_fsm_transition(
     let state_str = event.to_phase.to_string();
     let mut states = app_state.device_states.write().await;
     if let Some(existing_str) = states.get(&device_id) {
-        if let Ok(mut cached) = serde_json::from_str::<serde_json::Value>(existing_str) {
-            if let Some(obj) = cached.as_object_mut() {
-                obj.insert("fsm_state".into(), serde_json::json!(state_str));
-                if let Ok(s) = serde_json::to_string(&obj) {
-                    states.insert(device_id.clone(), s);
-                }
+        if let Ok(mut cached) = serde_json::from_str::<serde_json::Value>(existing_str)
+            && let Some(obj) = cached.as_object_mut()
+        {
+            obj.insert("fsm_state".into(), serde_json::json!(state_str));
+            if let Ok(s) = serde_json::to_string(&obj) {
+                states.insert(device_id.clone(), s);
             }
         }
     } else {
@@ -404,10 +401,10 @@ pub async fn handle_fsm_transition(
     }
     drop(states);
 
-    if let Some(record) = transition_system_event_record(&event) {
-        if let Err(err) = insert_system_event(&app_state.pg_pool, &record).await {
-            tracing::error!(error = ?err, "Không thể lưu FSM fault transition vào system_events");
-        }
+    if let Some(record) = transition_system_event_record(&event)
+        && let Err(err) = insert_system_event(&app_state.pg_pool, &record).await
+    {
+        tracing::error!(error = ?err, "Không thể lưu FSM fault transition vào system_events");
     }
 
     // Fan-out
@@ -481,6 +478,7 @@ async fn update_device_state_cache(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
         runtime_calibration_update_from_coeffs, transition_system_event_record,

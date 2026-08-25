@@ -48,7 +48,26 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Router>
-      <Toaster position="top-center" />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: '#ffffff',
+            color: '#14532d',
+            borderRadius: '14px',
+            border: '1px solid #d1fae5',
+            boxShadow: '0 8px 32px rgba(20, 83, 45, 0.12)',
+            fontSize: '13px',
+            fontWeight: '600',
+          },
+          success: {
+            iconTheme: { primary: '#16a34a', secondary: '#f0fdf4' },
+          },
+          error: {
+            iconTheme: { primary: '#dc2626', secondary: '#fef2f2' },
+          },
+        }}
+      />
       <Suspense fallback={<LoadingState message="Đang tải trang..." />}>
         <Routes>
           <Route path="/" element={<MainLayout />}>

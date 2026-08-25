@@ -19,38 +19,38 @@ export interface SystemEvent {
 interface EventStyle {
   icon: React.ElementType;
   iconColor: string;
-  borderColor: string;
-  bgColor: string;
+  cardBorder: string;
+  badgeClass: string;
   dot: string;
 }
 
 const getEventStyle = (event: SystemEvent): EventStyle => {
   const { level, category, title } = event;
-  if (level === 'critical' || title.toLowerCase().includes('khẩn') || title.toLowerCase().includes('emergency')) {
-    return { icon: AlertCircle, iconColor: 'text-red-700', borderColor: 'border-red-200', bgColor: 'from-rose-500/5 to-transparent', dot: 'bg-rose-500' };
+  if (level === 'critical' || level === 'error' || title.toLowerCase().includes('khẩn') || title.toLowerCase().includes('emergency')) {
+    return { icon: AlertCircle, iconColor: 'text-red-700', cardBorder: 'border-l-4 border-l-red-500', badgeClass: 'ui-alert-error py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-red-500' };
   }
   if (level === 'warning') {
-    return { icon: AlertTriangle, iconColor: 'text-amber-800', borderColor: 'border-amber-500/10', bgColor: 'from-amber-500/5 to-transparent', dot: 'bg-amber-500' };
+    return { icon: AlertTriangle, iconColor: 'text-amber-800', cardBorder: 'border-l-4 border-l-amber-400', badgeClass: 'ui-alert-warning py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-amber-400' };
   }
   switch (category?.toLowerCase().replace('_', '')) {
-    case 'dosing': return { icon: FlaskConical, iconColor: 'text-cyan-700', borderColor: 'border-cyan-500/10', bgColor: 'from-cyan-500/5 to-transparent', dot: 'bg-cyan-400' };
-    case 'water': return { icon: Waves, iconColor: 'text-blue-700', borderColor: 'border-blue-200', bgColor: 'from-blue-500/5 to-transparent', dot: 'bg-blue-400' };
-    case 'calibration': return { icon: Settings2, iconColor: 'text-purple-700', borderColor: 'border-purple-500/10', bgColor: 'from-purple-500/5 to-transparent', dot: 'bg-purple-400' };
-    case 'sensor': return { icon: Radio, iconColor: 'text-amber-800', borderColor: 'border-amber-500/10', bgColor: 'from-amber-500/5 to-transparent', dot: 'bg-amber-400' };
-    case 'useraction': return { icon: UserCheck, iconColor: 'text-indigo-700', borderColor: 'border-indigo-500/10', bgColor: 'from-indigo-500/5 to-transparent', dot: 'bg-indigo-400' };
+    case 'dosing': return { icon: FlaskConical, iconColor: 'text-cyan-700', cardBorder: 'border-l-4 border-l-cyan-500', badgeClass: 'ui-alert-info py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-cyan-500' };
+    case 'water': return { icon: Waves, iconColor: 'text-blue-700', cardBorder: 'border-l-4 border-l-blue-500', badgeClass: 'ui-alert-info py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-blue-500' };
+    case 'calibration': return { icon: Settings2, iconColor: 'text-purple-700', cardBorder: 'border-l-4 border-l-purple-500', badgeClass: 'ui-alert-info py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-purple-500' };
+    case 'sensor': return { icon: Radio, iconColor: 'text-amber-800', cardBorder: 'border-l-4 border-l-amber-500', badgeClass: 'ui-alert-warning py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-amber-500' };
+    case 'useraction': return { icon: UserCheck, iconColor: 'text-indigo-700', cardBorder: 'border-l-4 border-l-indigo-500', badgeClass: 'ui-alert-info py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-indigo-500' };
     case 'system':
       if (title.includes('Offline') || title.includes('Mất')) {
-        return { icon: Power, iconColor: 'text-emerald-700/75', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-500' };
+        return { icon: Power, iconColor: 'text-emerald-700/75', cardBorder: 'border-l-4 border-l-emerald-500', badgeClass: 'ui-alert-success py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-emerald-500' };
       }
       if (title.includes('Trực tuyến') || title.includes('Online')) {
-        return { icon: Wifi, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-400' };
+        return { icon: Wifi, iconColor: 'text-emerald-700', cardBorder: 'border-l-4 border-l-emerald-500', badgeClass: 'ui-alert-success py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-emerald-500' };
       }
-      return { icon: Cpu, iconColor: 'text-emerald-800/80', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-500' };
+      return { icon: Cpu, iconColor: 'text-emerald-800/80', cardBorder: 'border-l-4 border-l-emerald-500', badgeClass: 'ui-alert-success py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-emerald-500' };
     default:
       if (level === 'success') {
-        return { icon: CheckCircle, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-400' };
+        return { icon: CheckCircle, iconColor: 'text-emerald-700', cardBorder: 'border-l-4 border-l-emerald-500', badgeClass: 'ui-alert-success py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-emerald-500' };
       }
-      return { icon: Info, iconColor: 'text-indigo-700', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-indigo-500' };
+      return { icon: Info, iconColor: 'text-indigo-700', cardBorder: 'border-l-4 border-l-indigo-400', badgeClass: 'ui-alert-info py-0.5 px-2 text-[10px] font-bold rounded-md', dot: 'bg-indigo-400' };
   }
 };
 
@@ -92,12 +92,15 @@ export const EventLogCard = ({ ev, idx }: { ev: SystemEvent; idx: number }) => {
         </div>
       </div>
 
-      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-slate-900/60 to-transparent border-emerald-100 rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-emerald-200 ${style.bgColor}`}>
+      <div className={`ui-card flex-1 min-w-0 transition-all duration-300 ${style.cardBorder}`}>
         <div className="flex items-start justify-between gap-4 mb-2">
           <div className="space-y-1 min-w-0">
-            <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>
-              {ev.title}
-            </h4>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>
+                {ev.title}
+              </h4>
+              <span className={style.badgeClass}>{ev.level.toUpperCase()}</span>
+            </div>
             <div className="flex items-center gap-2 pt-0.5">
               <FsmBadge message={ev.message} />
             </div>

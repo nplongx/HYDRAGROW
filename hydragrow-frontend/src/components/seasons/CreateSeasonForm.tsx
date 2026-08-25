@@ -62,8 +62,8 @@ export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, o
   };
 
   return (
-    <div className="bg-white border border-emerald-100 rounded-xl overflow-hidden mb-6 shadow-sm">
-      <form onSubmit={handleSubmit} className="p-5 md:p-6 flex flex-col gap-5">
+    <div className="ui-card mb-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <h2 className="text-base font-semibold text-emerald-950 flex items-center gap-2 border-b border-emerald-100 pb-4">
           <Sprout size={20} className="text-emerald-500" />
           Bắt đầu Mùa Vụ Mới
@@ -71,15 +71,15 @@ export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, o
 
         <div className="space-y-4">
           {/* Chọn Công thức (Bắt buộc) */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-semibold text-emerald-950 flex items-center gap-2">
+          <div className="ui-form-row">
+            <label className="ui-form-label flex items-center gap-2">
               <Bookmark size={15} className="text-emerald-700" />
               Công thức nuôi trồng (Recipe Template) <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedRecipeId}
               onChange={(e) => handleSelectRecipe(e.target.value)}
-              className="w-full bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 cursor-pointer"
+              className="ui-select"
             >
               <option value="">-- Chọn công thức chuẩn cho cây --</option>
               {recipesList.map((tmpl) => (
@@ -108,21 +108,23 @@ export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, o
             </div>
           )}
 
-          <InputGroup
-            label="Tên mùa vụ"
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
+          <div className="ui-form-row">
+            <InputGroup
+              label="Tên mùa vụ"
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+          </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-emerald-900">Ghi chú ban đầu</label>
+          <div className="ui-form-row">
+            <label className="ui-form-label">Ghi chú ban đầu</label>
             <textarea
               rows={2}
               placeholder="Nguồn hạt giống, thời gian gieo, mục tiêu sản lượng..."
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              className="w-full bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 hover:border-emerald-300 resize-none transition-colors"
+              className="ui-input resize-none"
             />
           </div>
         </div>
@@ -130,7 +132,7 @@ export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, o
         <button
           type="submit"
           disabled={isLoading || !newName.trim() || !selectedRecipeId}
-          className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          className="ui-btn-primary w-full"
         >
           <CheckCircle size={16} />
           {isLoading ? 'Đang khởi tạo...' : 'Bắt đầu Mùa Vụ & Nạp Quy Trình'}

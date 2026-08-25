@@ -19,36 +19,54 @@ export const Switch: React.FC<SwitchProps> = ({
   disabled = false,
   label,
   size = 'md',
-  colorClass,
+  colorClass = 'bg-emerald-600',
 }) => {
-  const isChecked = checkedProp !== undefined ? checkedProp : (isOnProp ?? false);
+  const isChecked =
+    checkedProp !== undefined ? checkedProp : (isOnProp ?? false);
 
-  const handleToggle = (nextVal: boolean) => {
+  const handleToggle = () => {
     if (disabled) return;
-    if (onChange) onChange(nextVal);
-    if (onClick) onClick(nextVal);
+
+    const nextValue = !isChecked;
+
+    onChange?.(nextValue);
+    onClick?.(nextValue);
   };
 
-  const trackW = size === 'sm' ? 'w-9' : 'w-11';
-  const trackH = size === 'sm' ? 'h-5' : 'h-6';
-  const thumbS = size === 'sm' ? 'w-3.5 h-3.5' : 'w-4.5 h-4.5';
-  const translate = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
-
-  const activeColor = colorClass || 'bg-emerald-600';
+  const trackWidth = size === 'sm' ? 'w-9' : 'w-11';
+  const trackHeight = size === 'sm' ? 'h-5' : 'h-6';
+  const thumbSize = size === 'sm' ? 'h-3.5 w-3.5' : 'h-5 w-5';
+  const thumbTranslate =
+    size === 'sm' ? 'translate-x-4' : 'translate-x-5';
 
   return (
-    <label className={`inline-flex items-center gap-2.5 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+    <label
+      className={`inline-flex items-center gap-2.5 ${
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+      }`}
+    >
       <button
         type="button"
         role="switch"
         aria-checked={isChecked}
         disabled={disabled}
-        onClick={() => handleToggle(!isChecked)}
-        className={`relative inline-flex items-center ${trackW} ${trackH} rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-1 ${isChecked ? activeColor : 'bg-emerald-200'}`}
+        onClick={handleToggle}
+        className={`relative inline-flex shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-1 ${trackWidth} ${trackHeight} ${
+          isChecked ? colorClass : 'bg-emerald-200'
+        }`}
       >
-        <span className={`absolute left-0.5 inline-block ${thumbS} bg-white rounded-full shadow-sm transition-transform duration-200 ${isChecked ? translate : 'translate-x-0.5'}`} />
+        <span
+          className={`pointer-events-none absolute left-0.5 inline-block rounded-full bg-white shadow-sm transition-transform duration-200 ${thumbSize} ${
+            isChecked ? thumbTranslate : 'translate-x-0'
+          }`}
+        />
       </button>
-      {label && <span className="text-sm font-medium text-emerald-900">{label}</span>}
+
+      {label && (
+        <span className="text-sm font-medium text-emerald-900">
+          {label}
+        </span>
+      )}
     </label>
   );
 };

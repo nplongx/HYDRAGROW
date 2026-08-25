@@ -4,10 +4,10 @@
 
 use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+use hydragrow_shared::telemetry::DosingCycleEvent;
 use hydragrow_shared::telemetry::cycle::{
     CycleOutcome, DosingDoseRecord, DosingPhaseSnapshot, KalmanLearningData,
 };
-use hydragrow_shared::telemetry::DosingCycleEvent;
 use hydragrow_shared::{ControllerConfig, DoseData, DosingReportPayload, PhaseData, SensorData};
 use log::warn;
 

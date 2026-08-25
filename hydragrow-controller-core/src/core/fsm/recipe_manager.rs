@@ -1,7 +1,7 @@
 //! Recipe Manager — tính stage cây trồng và phát delta/event khi stage thay đổi.
 
-use hydragrow_shared::recipe::{CropRecipe, CropStage};
 use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::recipe::{CropRecipe, CropStage};
 
 use crate::core::fsm::context::SystemContext;
 use crate::core::fsm::events::OrchestratorEvent;

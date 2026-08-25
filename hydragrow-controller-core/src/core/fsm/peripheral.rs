@@ -3,7 +3,7 @@ use std::vec;
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::info;
 
-use crate::core::fsm::{context::PeripheralState, PeripheralDelta};
+use crate::core::fsm::{PeripheralDelta, context::PeripheralState};
 
 use super::events::OrchestratorEvent;
 

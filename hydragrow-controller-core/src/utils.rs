@@ -1,12 +1,12 @@
 use hydragrow_shared::{
-    log::{emit_system_log_event, LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog},
     ControllerConfig,
+    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog, emit_system_log_event},
 };
 use std::{
     sync::{
+        RwLock, RwLockWriteGuard,
         atomic::{AtomicU32, Ordering},
         mpsc::Sender,
-        RwLock, RwLockWriteGuard,
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };

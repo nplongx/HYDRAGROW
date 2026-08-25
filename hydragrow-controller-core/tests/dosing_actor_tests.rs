@@ -47,12 +47,10 @@ fn dosing_cycle_with_zero_dose_stays_idle() {
 
     actor.start_matrix_cycle(
         1000, // uptime_ms
-        &control,
-        1.5, // target_ec
+        &control, 1.5, // target_ec
         6.0, // target_ph
-        80, // pwm
-        &config,
-        &sensors,
+        80,  // pwm
+        &config, &sensors,
     );
 
     // Sau cycle với 0ml, vẫn idle
@@ -127,6 +125,13 @@ fn tick_when_idle_returns_pending_safely() {
 
     let (event, hw_events) = actor.tick(1000, &config);
 
-    assert_eq!(event, DosingEvent::Pending, "Tick khi idle phải trả về Pending");
-    assert!(hw_events.is_empty(), "Tick khi idle không emit hardware events");
+    assert_eq!(
+        event,
+        DosingEvent::Pending,
+        "Tick khi idle phải trả về Pending"
+    );
+    assert!(
+        hw_events.is_empty(),
+        "Tick khi idle không emit hardware events"
+    );
 }

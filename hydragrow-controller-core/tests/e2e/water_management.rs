@@ -1,9 +1,11 @@
 //! E2E: Water refilling và draining scenarios
 
-use hydragrow_controller_core::core::fsm::{context::SystemContext, events::OrchestratorEvent, orchestrator};
 use hydragrow_controller_core::WaterDirection;
+use hydragrow_controller_core::core::fsm::{
+    context::SystemContext, events::OrchestratorEvent, orchestrator,
+};
 use hydragrow_shared::fsm::SystemPhase;
-use hydragrow_shared::{ControllerConfig, ControlMode, SensorData};
+use hydragrow_shared::{ControlMode, ControllerConfig, SensorData};
 
 fn water_config() -> ControllerConfig {
     ControllerConfig {
@@ -146,7 +148,10 @@ fn e2e_low_water_triggers_refilling() {
     let events = tick_apply(&mut ctx, &config, &low_water, 10_000);
 
     assert!(
-        matches!(ctx.phase, SystemPhase::MimoDosing | SystemPhase::WaterRefilling),
+        matches!(
+            ctx.phase,
+            SystemPhase::MimoDosing | SystemPhase::WaterRefilling
+        ),
         "Mực nước thấp hơn min phải trigger WaterRefilling/MimoDosing"
     );
 
@@ -206,7 +211,10 @@ fn e2e_high_water_triggers_draining() {
     let events = tick_apply(&mut ctx, &config, &high_water, 10_000);
 
     assert!(
-        matches!(ctx.phase, SystemPhase::MimoDosing | SystemPhase::WaterDraining),
+        matches!(
+            ctx.phase,
+            SystemPhase::MimoDosing | SystemPhase::WaterDraining
+        ),
         "Mực nước cao hơn max phải trigger WaterDraining/MimoDosing"
     );
 

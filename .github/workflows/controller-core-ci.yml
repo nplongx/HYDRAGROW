@@ -1,0 +1,57 @@
+name: controller-core-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hydragrow-controller-core/**'
+      - 'hydragrow-shared/**'
+      - '.github/workflows/controller-core-ci.yml'
+  pull_request:
+    paths:
+      - 'hydragrow-controller-core/**'
+      - 'hydragrow-shared/**'
+      - '.github/workflows/controller-core-ci.yml'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            hydragrow-controller-core
+            hydragrow-shared
+
+      - name: Check hydragrow-shared
+        working-directory: hydragrow-shared
+        run: cargo check
+
+      - name: Format check hydragrow-controller-core
+        working-directory: hydragrow-controller-core
+        run: cargo fmt --check
+
+      - name: Check hydragrow-controller-core
+        working-directory: hydragrow-controller-core
+        run: cargo check
+
+      - name: Clippy hydragrow-controller-core
+        working-directory: hydragrow-controller-core
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test hydragrow-controller-core
+        working-directory: hydragrow-controller-core
+        run: cargo test
+
+      - name: Test hydragrow-controller-core (e2e)
+        working-directory: hydragrow-controller-core
+        run: cargo test --test e2e

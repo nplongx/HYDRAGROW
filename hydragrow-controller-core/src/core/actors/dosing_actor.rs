@@ -1,6 +1,6 @@
 use crate::core::adaptive::matrix::ControlVector;
 use crate::core::fsm::{DosingPumpTarget, OrchestratorEvent};
-use crate::utils::{effective_flow_ml_per_sec, DosePumpKind};
+use crate::utils::{DosePumpKind, effective_flow_ml_per_sec};
 use hydragrow_shared::fsm::FaultCode;
 use hydragrow_shared::{ControllerConfig, SensorData};
 

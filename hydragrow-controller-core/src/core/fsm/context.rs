@@ -64,7 +64,10 @@ mod tests {
             tracker.push(1.5, 6.0);
         }
 
-        assert!(!tracker.is_stable(&config), "Không đủ 5 mẫu phải trả về false");
+        assert!(
+            !tracker.is_stable(&config),
+            "Không đủ 5 mẫu phải trả về false"
+        );
     }
 
     // Test 2: 5 mẫu giống hệt → ổn định
@@ -97,7 +100,10 @@ mod tests {
         tracker.push(1.55, 6.0);
         tracker.push(1.45, 6.0);
 
-        assert!(!tracker.is_stable(&config), "EC dao động > 0.05 phải không ổn định");
+        assert!(
+            !tracker.is_stable(&config),
+            "EC dao động > 0.05 phải không ổn định"
+        );
     }
 
     // Test 4: pH dao động lớn → không ổn định
@@ -114,7 +120,10 @@ mod tests {
         tracker.push(1.5, 6.2);
         tracker.push(1.5, 5.95);
 
-        assert!(!tracker.is_stable(&config), "pH dao động > 0.05 phải không ổn định");
+        assert!(
+            !tracker.is_stable(&config),
+            "pH dao động > 0.05 phải không ổn định"
+        );
     }
 
     // Test 5: EC sensor tắt → ignore EC, chỉ check pH
@@ -133,7 +142,10 @@ mod tests {
         tracker.push(1.5, 6.0);
 
         // Chỉ cần pH ổn định
-        assert!(tracker.is_stable(&config), "EC sensor tắt → chỉ check pH ổn định");
+        assert!(
+            tracker.is_stable(&config),
+            "EC sensor tắt → chỉ check pH ổn định"
+        );
     }
 
     // Test 6: Reset hoạt động đúng
@@ -172,7 +184,10 @@ mod tests {
             tracker.push(1.5, 6.0);
         }
 
-        assert!(tracker.is_stable(&config), "Sau khi override đủ 5 mẫu ổn định phải pass");
+        assert!(
+            tracker.is_stable(&config),
+            "Sau khi override đủ 5 mẫu ổn định phải pass"
+        );
     }
 }
 

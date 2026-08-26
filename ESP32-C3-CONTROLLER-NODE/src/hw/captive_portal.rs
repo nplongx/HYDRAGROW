@@ -165,12 +165,10 @@ pub fn run_captive_portal(
 
 #[cfg(test)]
 mod tests {
-    use super::parse_form_body;
-
     #[test]
     fn parse_form_body_extracts_ssid_and_password() {
         let body = "ssid=MyNetwork&pass=secret123&priority=1";
-        let (ssid, pass, priority) = parse_form_body(body).unwrap();
+        let (ssid, pass, priority) = super::parse_form_body(body).unwrap();
         assert_eq!(ssid, "MyNetwork");
         assert_eq!(pass, "secret123");
         assert_eq!(priority, 1u8);
@@ -179,7 +177,7 @@ mod tests {
     #[test]
     fn parse_form_body_url_decodes_spaces() {
         let body = "ssid=My+Network&pass=my%20pass&priority=0";
-        let (ssid, pass, _) = parse_form_body(body).unwrap();
+        let (ssid, pass, _) = super::parse_form_body(body).unwrap();
         assert_eq!(ssid, "My Network");
         assert_eq!(pass, "my pass");
     }
@@ -187,6 +185,6 @@ mod tests {
     #[test]
     fn parse_form_body_returns_none_on_empty_ssid() {
         let body = "ssid=&pass=secret&priority=0";
-        assert!(parse_form_body(body).is_none());
+        assert!(super::parse_form_body(body).is_none());
     }
 }

@@ -152,6 +152,7 @@ pub fn get_wifi_rssi() -> i8 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn init_mqtt_client(
     broker_url: &str,
     mqtt_user: &str,

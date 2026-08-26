@@ -6,8 +6,13 @@ edition = "2021"
 resolver = "2"
 rust-version = "1.82"
 
+[lib]
+name = "esp32_c3_sensor_node"
+path = "src/lib.rs"
+
 [[bin]]
 name = "esp32-c3-sensor-node"
+path = "src/main.rs"
 harness = false
 
 [profile.release]

@@ -251,7 +251,7 @@ fn axis(
     let (trend, trend_factor) = match previous_comfort {
         Some(previous) => {
             let projected_30_min_delta = (comfort - previous) * (30.0 / minutes_since_previous);
-            if projected_30_min_delta >= -0.02 && projected_30_min_delta <= 0.02 {
+            if (-0.02..=0.02).contains(&projected_30_min_delta) {
                 (HestiaTrendDirection::Stable, 1.0)
             } else if projected_30_min_delta > 0.02 {
                 (HestiaTrendDirection::Improving, 0.95)

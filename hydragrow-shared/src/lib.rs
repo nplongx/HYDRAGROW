@@ -491,18 +491,22 @@ impl Default for ControllerConfig {
     }
 }
 
+#[allow(dead_code)]
 fn default_adaptive_mixing_sec() -> u32 {
     15
 }
 
+#[allow(dead_code)]
 fn default_adaptive_stabilize_sec() -> u32 {
     10
 }
 
+#[allow(dead_code)]
 fn default_effective_ec_tolerance() -> f32 {
     0.05
 }
 
+#[allow(dead_code)]
 fn default_effective_ph_tolerance() -> f32 {
     0.1
 }

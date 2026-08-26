@@ -165,6 +165,7 @@ pub fn run_captive_portal(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::parse_form_body;
 
     #[test]

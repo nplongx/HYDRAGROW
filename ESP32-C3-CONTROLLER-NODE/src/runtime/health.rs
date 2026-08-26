@@ -26,7 +26,7 @@ use crate::hw::mqtt_client::{
 use hydragrow_controller_core::core::fsm::context::SystemContext;
 use hydragrow_controller_core::utils::{get_current_time_sec, get_log_drop_count, read_or_recover};
 
-pub fn build_status_msg(ctx: &SystemContext, now_sec: u64, uptime_sec: u64) -> String {
+pub fn build_status_msg(ctx: &SystemContext, _now_sec: u64, uptime_sec: u64) -> String {
     let sum_ml = |pump_name: &str| -> f32 {
         ctx.safety
             .hourly_doses()

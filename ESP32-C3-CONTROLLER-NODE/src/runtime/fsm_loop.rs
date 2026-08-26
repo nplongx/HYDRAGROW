@@ -6,7 +6,7 @@ use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::MqttCommandIn;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::config::SharedConfig;
 use crate::hw::mqtt_client::get_uptime_ms; // SỬA: Import đúng module chứa get_uptime_ms
@@ -19,9 +19,7 @@ use crate::runtime::observers::ObserverSet;
 use hydragrow_controller_core::core::fsm::context::SystemContext;
 use hydragrow_controller_core::core::fsm::orchestrator;
 use hydragrow_controller_core::core::fsm::types::SharedSensorData;
-use hydragrow_controller_core::utils::{
-    get_current_time_ms, get_current_time_sec, read_or_recover, write_or_recover,
-};
+use hydragrow_controller_core::utils::{get_current_time_ms, read_or_recover, write_or_recover};
 
 #[allow(clippy::too_many_arguments)]
 pub fn start_fsm_control_loop(

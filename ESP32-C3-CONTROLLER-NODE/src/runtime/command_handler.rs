@@ -152,7 +152,7 @@ pub fn process_mqtt_commands(
         }
 
         match cmd.target.as_deref() {
-            Some(target_lower) if target_lower == "all" => {}
+            Some("all") => {}
             _ => continue,
         }
 
@@ -191,7 +191,7 @@ pub fn process_mqtt_commands(
 
         if is_force_on {
             let duration = duration_sec.unwrap_or(120);
-            delta.safety_override_until = Some(current_time_ms + (duration as u64 * 1000));
+            delta.safety_override_until = Some(current_time_ms + (duration * 1000));
             let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
                 LogLevel::Warning,
@@ -210,10 +210,8 @@ pub fn process_mqtt_commands(
         if is_on {
             if let Some(duration) = duration_sec {
                 if duration > 0 {
-                    delta.manual_pump_timeout = Some((
-                        pump_name.clone(),
-                        current_time_ms + (duration as u64 * 1000),
-                    ));
+                    delta.manual_pump_timeout =
+                        Some((pump_name.clone(), current_time_ms + (duration * 1000)));
                 }
             }
         } else {
@@ -221,7 +219,7 @@ pub fn process_mqtt_commands(
         }
 
         let pwm_val = pwm.unwrap_or(if is_on { 100 } else { 0 });
-        let mut pump_events = build_pump_events(&pump_name, is_on, pwm_val, &mut delta, &ctx);
+        let mut pump_events = build_pump_events(&pump_name, is_on, pwm_val, &mut delta, ctx);
         all_events.append(&mut pump_events);
     }
 
@@ -302,10 +300,10 @@ pub fn build_pump_events(
         "OSAKA_PUMP" | "OSAKA" => {
             let mist_valve_is_open = peri_delta
                 .mist_valve
-                .unwrap_or_else(|| ctx.peripherals.pump_status.mist_valve);
+                .unwrap_or(ctx.peripherals.pump_status.mist_valve);
             let mix_valve_is_open = peri_delta
                 .mix_valve
-                .unwrap_or_else(|| ctx.peripherals.pump_status.mix_valve);
+                .unwrap_or(ctx.peripherals.pump_status.mix_valve);
             if is_on && (mist_valve_is_open || mix_valve_is_open) {
                 peri_delta.osaka_pump = Some(is_on);
                 peri_delta.osaka_pwm = Some(if is_on { pwm_val } else { 0 });

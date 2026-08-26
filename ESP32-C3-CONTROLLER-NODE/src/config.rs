@@ -26,6 +26,7 @@ impl ControllerRuntimeState {
         self.recompute_effective_config();
     }
 
+    #[allow(dead_code)]
     pub fn set_active_recipe(&mut self, active_recipe: Option<CropStage>) {
         self.active_recipe = active_recipe;
         self.recompute_effective_config();

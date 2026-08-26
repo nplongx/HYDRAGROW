@@ -263,7 +263,7 @@ impl SystemLogLayer {
     fn publish_json(&self, json: String) {
         if self.tx.send(json).is_err() {
             let previous = self.drop_count.fetch_add(1, Ordering::Relaxed);
-            if previous % 10 == 0 {
+            if previous.is_multiple_of(10) {
                 tracing::warn!(
                     target: "hydragrow.system_log.layer",
                     dropped_logs = previous + 1,
@@ -577,6 +577,7 @@ impl UnifiedSystemLog {
     }
 
     /// Overload với timestamp_ms — dùng trong firmware có đồng hồ.
+    #[allow(clippy::too_many_arguments)]
     pub fn build_basic_log_json_with_ts(
         device_id: impl Into<String>,
         level: LogLevel,

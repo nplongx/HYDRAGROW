@@ -1,2 +1,0 @@
-    Checking hydragrow-shared v0.1.0 (/home/nplong/HYDRAGROW/hydragrow-shared)
-error: could not compile `hydragrow-shared` (test "schema_roundtrip_and_snapshots") due to 6 previous errors

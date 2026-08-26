@@ -18,10 +18,11 @@ expression: sample_crop_recipe()
       "ec_tolerance": 0.1,
       "ph_target": 6.0,
       "ph_tolerance": 0.2,
+      "nutrient_a_ratio": 1.0,
+      "nutrient_b_ratio": 1.0,
       "water_level_target": 18.0,
-      "light_hours_per_day": 14.0,
-      "temperature_target_c": 24.0,
-      "humidity_target_percent": 70.0
+      "misting_on_duration_ms": 10000,
+      "misting_off_duration_ms": 180000
     },
     {
       "name": "vegetative",
@@ -30,9 +31,11 @@ expression: sample_crop_recipe()
       "ec_tolerance": 0.15,
       "ph_target": 6.1,
       "ph_tolerance": 0.2,
+      "nutrient_a_ratio": 1.0,
+      "nutrient_b_ratio": 1.0,
       "water_level_target": 20.0,
-      "light_hours_per_day": 16.0,
-      "temperature_target_c": 23.5
+      "misting_on_duration_ms": 10000,
+      "misting_off_duration_ms": 180000
     }
   ]
 }

@@ -1,11 +1,11 @@
 use hydragrow_shared::{
+    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
     log::{
         AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
         RecipeAppliedMetadata, RecipeCompletedMetadata, RecipeRejectedMetadata,
         RecipeStageChangedMetadata, SystemLogEvent, UnifiedSystemLog, WaterMetadata,
     },
     recipe::{CropRecipe, CropStage, RecipeStageChangedEvent},
-    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
 };
 
 fn sample_crop_recipe() -> CropRecipe {
@@ -25,10 +25,15 @@ fn sample_crop_recipe() -> CropRecipe {
                 ec_tolerance: 0.1,
                 ph_target: 6.0,
                 ph_tolerance: 0.2,
+                nutrient_a_ratio: 1.0,
+                nutrient_b_ratio: 1.0,
                 water_level_target: 18.0,
-                light_hours_per_day: 14.0,
-                temperature_target_c: Some(24.0),
-                humidity_target_percent: Some(70.0),
+                water_change_interval_days: None,
+                water_change_drain_cm: None,
+                auto_dilute_ec_trigger: None,
+                misting_on_duration_ms: 10_000,
+                misting_off_duration_ms: 180_000,
+                max_dose_per_cycle_ml: None,
             },
             CropStage {
                 name: "vegetative".into(),
@@ -37,10 +42,15 @@ fn sample_crop_recipe() -> CropRecipe {
                 ec_tolerance: 0.15,
                 ph_target: 6.1,
                 ph_tolerance: 0.2,
+                nutrient_a_ratio: 1.0,
+                nutrient_b_ratio: 1.0,
                 water_level_target: 20.0,
-                light_hours_per_day: 16.0,
-                temperature_target_c: Some(23.5),
-                humidity_target_percent: None,
+                water_change_interval_days: None,
+                water_change_drain_cm: None,
+                auto_dilute_ec_trigger: None,
+                misting_on_duration_ms: 10_000,
+                misting_off_duration_ms: 180_000,
+                max_dose_per_cycle_ml: None,
             },
         ],
     }

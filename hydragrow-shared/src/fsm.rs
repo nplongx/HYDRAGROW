@@ -176,6 +176,7 @@ impl Default for FsmDiagnostics {
 
 impl FsmDiagnostics {
     /// TỰ CHẨN ĐOÁN LỖI PHẦN CỨNG VẬT LÝ TOÀN DIỆN (RESIDUAL DIAGNOSTIC)
+    #[allow(clippy::too_many_arguments)]
     pub fn diagnose_hardware_fault(
         &mut self,
         total_nutrient_ml: f32, // Dose A + Dose B

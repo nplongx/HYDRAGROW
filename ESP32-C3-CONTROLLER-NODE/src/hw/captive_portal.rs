@@ -165,7 +165,7 @@ pub fn run_captive_portal(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::parse_form_body;
 
     #[test]
     fn parse_form_body_extracts_ssid_and_password() {

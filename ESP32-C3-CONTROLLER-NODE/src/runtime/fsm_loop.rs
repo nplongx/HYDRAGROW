@@ -9,9 +9,6 @@ use std::time::Duration;
 use tracing::{debug, info};
 
 use crate::config::SharedConfig;
-use hydragrow_controller_core::core::fsm::context::SystemContext;
-use hydragrow_controller_core::core::fsm::orchestrator;
-use hydragrow_controller_core::core::fsm::types::SharedSensorData;
 use crate::hw::mqtt_client::get_uptime_ms; // SỬA: Import đúng module chứa get_uptime_ms
 use crate::hw::pump_controller::PumpController;
 use crate::hw::NvsStore;
@@ -19,7 +16,12 @@ use crate::runtime::command_handler::{build_stop_pump_events, process_mqtt_comma
 use crate::runtime::dispatcher::{DispatchContext, EventDispatcher};
 use crate::runtime::health::build_status_msg;
 use crate::runtime::observers::ObserverSet;
-use hydragrow_controller_core::utils::{get_current_time_ms, get_current_time_sec, read_or_recover, write_or_recover};
+use hydragrow_controller_core::core::fsm::context::SystemContext;
+use hydragrow_controller_core::core::fsm::orchestrator;
+use hydragrow_controller_core::core::fsm::types::SharedSensorData;
+use hydragrow_controller_core::utils::{
+    get_current_time_ms, get_current_time_sec, read_or_recover, write_or_recover,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn start_fsm_control_loop(
@@ -182,11 +184,12 @@ pub fn start_fsm_control_loop(
             let mut state = write_or_recover(&shared_config);
 
             // Cho phép Recipe Engine can thiệp thẳng vào effective_config của hệ thống
-            recipe_result = hydragrow_controller_core::core::fsm::recipe_manager::tick_recipe_engine(
-                &mut state.effective_config,
-                &ctx,
-                current_wall_time_ms / 1000,
-            );
+            recipe_result =
+                hydragrow_controller_core::core::fsm::recipe_manager::tick_recipe_engine(
+                    &mut state.effective_config,
+                    &ctx,
+                    current_wall_time_ms / 1000,
+                );
 
             // [VÁ BUG 4b]: Cập nhật `active_recipe` vào Runtime State.
             // Điều này cực kỳ quan trọng để nếu có lệnh cập nhật cấu hình từ MQTT,

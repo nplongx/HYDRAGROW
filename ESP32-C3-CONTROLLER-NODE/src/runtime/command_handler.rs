@@ -6,10 +6,10 @@ use hydragrow_shared::{ControlMode, ControllerConfig, MqttCommandIn};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
+use crate::hw::pump_controller::WaterDirection;
 use hydragrow_controller_core::core::fsm::context::SystemContext;
 use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use hydragrow_controller_core::core::fsm::tick_result::ContextDelta;
-use crate::hw::pump_controller::WaterDirection;
 
 pub fn process_mqtt_commands(
     cmd_rx: &Receiver<MqttCommandIn>,

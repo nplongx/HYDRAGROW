@@ -30,20 +30,20 @@ pub async fn get_latest(path: web::Path<String>, app_state: web::Data<AppState>)
             let mut json_data = json!(data);
 
             let states = app_state.device_states.read().await;
-            if let Some(cached_str) = states.get(&device_id) {
-                if let Ok(cached_json) = serde_json::from_str::<serde_json::Value>(cached_str) {
-                    if let Some(ps) = cached_json.get("pump_status") {
-                        json_data["pump_status"] = ps.clone();
-                    }
-                    if let Some(ph_voltage_mv) = cached_json.get("ph_voltage_mv") {
-                        json_data["ph_voltage_mv"] = ph_voltage_mv.clone();
-                    }
-                    if let Some(fsm_state) = cached_json.get("fsm_state") {
-                        json_data["fsm_state"] = fsm_state.clone();
-                    }
-                    if let Some(budgets) = cached_json.get("budgets") {
-                        json_data["budgets"] = budgets.clone();
-                    }
+            if let Some(cached_str) = states.get(&device_id)
+                && let Ok(cached_json) = serde_json::from_str::<serde_json::Value>(cached_str)
+            {
+                if let Some(ps) = cached_json.get("pump_status") {
+                    json_data["pump_status"] = ps.clone();
+                }
+                if let Some(ph_voltage_mv) = cached_json.get("ph_voltage_mv") {
+                    json_data["ph_voltage_mv"] = ph_voltage_mv.clone();
+                }
+                if let Some(fsm_state) = cached_json.get("fsm_state") {
+                    json_data["fsm_state"] = fsm_state.clone();
+                }
+                if let Some(budgets) = cached_json.get("budgets") {
+                    json_data["budgets"] = budgets.clone();
                 }
             }
 

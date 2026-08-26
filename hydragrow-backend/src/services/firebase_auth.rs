@@ -78,10 +78,10 @@ impl FirebaseAuthVerifier {
     async fn get_jwks(&self, force_refresh: bool) -> Result<JwkSet, FirebaseAuthError> {
         if !force_refresh {
             let cache = self.cache.read().await;
-            if cache.is_fresh() {
-                if let Some(jwks) = &cache.jwks {
-                    return Ok(jwks.clone());
-                }
+            if cache.is_fresh()
+                && let Some(jwks) = &cache.jwks
+            {
+                return Ok(jwks.clone());
             }
         }
 
@@ -114,7 +114,7 @@ impl FirebaseAuthVerifier {
         })?;
 
         let mut validation = Validation::new(Algorithm::RS256);
-        validation.set_audience(&[self.project_id.clone()]);
+        validation.set_audience(std::slice::from_ref(&self.project_id));
         validation.set_issuer(&[format!(
             "https://securetoken.google.com/{}",
             self.project_id

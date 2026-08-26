@@ -311,6 +311,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     #[test]
@@ -334,6 +335,7 @@ mod status_tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn device_status_response_serializes_expected_shape() {
         let resp = DeviceStatusResponse {
             is_online: true,

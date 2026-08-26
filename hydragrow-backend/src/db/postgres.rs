@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::types::JsonRawValue;
-use sqlx::{Error, Executor, FromRow, PgPool, Row, Value};
+use sqlx::{Executor, FromRow, PgPool, Row};
 use tracing::instrument;
 
-use crate::models::alert::AlertMessage;
 use crate::models::config::{DeviceConfig, SafetyConfig};
 use crate::models::crop_season::{CreateCropSeasonRequest, CropSeason};
 
@@ -111,7 +109,7 @@ pub async fn upsert_device_config(
     .bind(&config.control_mode)
     .bind(config.is_enabled)
     .bind(config.delay_between_a_and_b_sec)
-    .bind(&config.last_updated)
+    .bind(config.last_updated)
     .execute(executor)
     .await
     .context("Failed to upsert device_config")?;
@@ -203,7 +201,7 @@ pub async fn upsert_safety_config(
     .bind(config.ec_ack_threshold)
     .bind(config.ph_ack_threshold)
     .bind(config.water_ack_threshold)
-    .bind(&config.last_updated)
+    .bind(config.last_updated)
     .execute(executor)
     .await?;
 
@@ -234,6 +232,7 @@ pub async fn insert_blockchain_tx(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_dosing_report(
     pool: &PgPool,
     device_id: &str,

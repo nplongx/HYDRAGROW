@@ -165,6 +165,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use actix_web::{App, HttpResponse, Responder, test, web};

@@ -50,9 +50,15 @@ mod tests {
     #[sqlx::test]
     async fn find_active_by_firebase_uid_returns_user(pool: sqlx::PgPool) {
         let scopes = vec!["admin".to_string()];
-        upsert_user(&pool, "firebase-uid-xyz", "charlie@example.com", None, &scopes)
-            .await
-            .unwrap();
+        upsert_user(
+            &pool,
+            "firebase-uid-xyz",
+            "charlie@example.com",
+            None,
+            &scopes,
+        )
+        .await
+        .unwrap();
         let found = find_active_by_firebase_uid(&pool, "firebase-uid-xyz")
             .await
             .unwrap();

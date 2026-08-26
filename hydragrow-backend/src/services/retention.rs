@@ -68,7 +68,7 @@ mod tests {
         };
         let diff_days = (now_ms - cutoff_ms) / (1000 * 60 * 60 * 24);
         assert!(
-            diff_days >= 89 && diff_days <= 91,
+            (89..=91).contains(&diff_days),
             "cutoff phải khoảng 90 ngày trước, thực tế: {} ngày",
             diff_days
         );

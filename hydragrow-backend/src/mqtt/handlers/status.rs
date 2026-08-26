@@ -1,7 +1,7 @@
 use actix_web::web;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, info, instrument};
 
 use crate::AppState;
 use crate::metrics::*;
@@ -257,44 +257,45 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
                     .with_label_values(&[dev, "water_hydraulics"])
                     .set(water_streak);
             }
-            if let Some(snapshot) = parsed.health_snapshot {
-                if let Some(hestia) = snapshot.hestia {
-                    HESTIA_CONFIDENCE
-                        .with_label_values(&[dev])
-                        .set(hestia.confidence as f64);
+            if let Some(snapshot) = parsed.health_snapshot
+                && let Some(hestia) = snapshot.hestia
+            {
+                HESTIA_CONFIDENCE
+                    .with_label_values(&[dev])
+                    .set(hestia.confidence as f64);
 
-                    HESTIA_AXIS_WEIGHT
-                        .with_label_values(&[dev, "ec"])
-                        .set(hestia.axes.ec.weight as f64);
-                    HESTIA_AXIS_WEIGHT
-                        .with_label_values(&[dev, "ph"])
-                        .set(hestia.axes.ph.weight as f64);
-                    HESTIA_AXIS_WEIGHT
-                        .with_label_values(&[dev, "water_level"])
-                        .set(hestia.axes.water_level.weight as f64);
-                    HESTIA_AXIS_WEIGHT
-                        .with_label_values(&[dev, "temp"])
-                        .set(hestia.axes.temp.weight as f64);
+                HESTIA_AXIS_WEIGHT
+                    .with_label_values(&[dev, "ec"])
+                    .set(hestia.axes.ec.weight as f64);
+                HESTIA_AXIS_WEIGHT
+                    .with_label_values(&[dev, "ph"])
+                    .set(hestia.axes.ph.weight as f64);
+                HESTIA_AXIS_WEIGHT
+                    .with_label_values(&[dev, "water_level"])
+                    .set(hestia.axes.water_level.weight as f64);
+                HESTIA_AXIS_WEIGHT
+                    .with_label_values(&[dev, "temp"])
+                    .set(hestia.axes.temp.weight as f64);
 
-                    HESTIA_AXIS_ACTION_FACTOR
-                        .with_label_values(&[dev, "ec"])
-                        .set(hestia.axes.ec.action_factor as f64);
-                    HESTIA_AXIS_ACTION_FACTOR
-                        .with_label_values(&[dev, "ph"])
-                        .set(hestia.axes.ph.action_factor as f64);
-                    HESTIA_AXIS_ACTION_FACTOR
-                        .with_label_values(&[dev, "water_level"])
-                        .set(hestia.axes.water_level.action_factor as f64);
-                    HESTIA_AXIS_ACTION_FACTOR
-                        .with_label_values(&[dev, "temp"])
-                        .set(hestia.axes.temp.action_factor as f64);
-                }
+                HESTIA_AXIS_ACTION_FACTOR
+                    .with_label_values(&[dev, "ec"])
+                    .set(hestia.axes.ec.action_factor as f64);
+                HESTIA_AXIS_ACTION_FACTOR
+                    .with_label_values(&[dev, "ph"])
+                    .set(hestia.axes.ph.action_factor as f64);
+                HESTIA_AXIS_ACTION_FACTOR
+                    .with_label_values(&[dev, "water_level"])
+                    .set(hestia.axes.water_level.action_factor as f64);
+                HESTIA_AXIS_ACTION_FACTOR
+                    .with_label_values(&[dev, "temp"])
+                    .set(hestia.axes.temp.action_factor as f64);
             }
         }
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::parse_controller_status_payload;
 

@@ -137,11 +137,10 @@ pub async fn ws_handler(
                                 }
                                 _ => None,
                             };
-                            if let Some(dev_id) = event_device_id {
-                                if dev_id != scoped_device_id {
+                            if let Some(dev_id) = event_device_id
+                                && dev_id != scoped_device_id {
                                     continue;
                                 }
-                            }
 
                             let ws_msg = match event {
                                 AppEvent::SystemAlert(alert_msg) => {
@@ -219,11 +218,10 @@ pub async fn ws_handler(
                                 }
                             };
 
-                            if let Ok(json_str) = serde_json::to_string(&ws_msg) {
-                                if session.text(json_str).await.is_err() {
+                            if let Ok(json_str) = serde_json::to_string(&ws_msg)
+                                && session.text(json_str).await.is_err() {
                                     break;
                                 }
-                            }
                         }
 
                         Err(RecvError::Lagged(skipped)) => {

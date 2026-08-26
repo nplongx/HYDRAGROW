@@ -5,14 +5,13 @@ use rumqttc::QoS;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
-use std::time::{Duration, Instant};
 use tracing::{error, info, instrument, warn};
 
+use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::config::{DosingCalibration, SafetyConfig};
-use crate::{AppState, CommandRateEntry};
 use hydragrow_shared::events::AppEvent;
 
 #[derive(Debug, Deserialize)]
@@ -175,8 +174,8 @@ pub async fn control_pump(
         }));
     }
 
-    if let (Some(pwm), Some(duration_sec)) = (pwm, duration_sec) {
-        if let Err(resp) = validate_manual_dose_safety(
+    if let (Some(pwm), Some(duration_sec)) = (pwm, duration_sec)
+        && let Err(resp) = validate_manual_dose_safety(
             &app_state.pg_pool,
             &device_id,
             &pump_name,
@@ -185,21 +184,20 @@ pub async fn control_pump(
             req_data.manual_max_allowed_ml,
         )
         .await
-        {
-            audit_control_command(
-                &app_state,
-                &device_id,
-                &auth,
-                &req_data.action,
-                &pump_name,
-                "denied_safety_limit",
-                None,
-                Some(duration_sec),
-                Some(pwm),
-            )
-            .await;
-            return resp;
-        }
+    {
+        audit_control_command(
+            &app_state,
+            &device_id,
+            &auth,
+            &req_data.action,
+            &pump_name,
+            "denied_safety_limit",
+            None,
+            Some(duration_sec),
+            Some(pwm),
+        )
+        .await;
+        return resp;
     }
 
     let mqtt_action = match req_data.action.as_str() {
@@ -329,6 +327,7 @@ pub async fn control_pump(
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn audit_control_command(
     app_state: &web::Data<AppState>,
     device_id: &str,

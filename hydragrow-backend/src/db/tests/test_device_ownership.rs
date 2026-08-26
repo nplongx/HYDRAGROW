@@ -96,7 +96,9 @@ mod tests {
     async fn is_owner_returns_false_for_different_user(pool: sqlx::PgPool) {
         let uid40 = create_test_user(&pool, 40).await;
         let uid41 = create_test_user(&pool, 41).await;
-        let _ = claim_device(&pool, uid40, "dev-shared", None).await.unwrap();
+        let _ = claim_device(&pool, uid40, "dev-shared", None)
+            .await
+            .unwrap();
         assert!(!is_owner(&pool, uid41, "dev-shared").await.unwrap());
     }
 

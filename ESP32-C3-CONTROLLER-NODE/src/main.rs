@@ -23,11 +23,26 @@ use runtime::health::run_main_health_loop;
 
 use crate::hw::pcf857x::I2cExpander;
 
-const WIFI_SSID: &str = env!("HYDRAGROW_WIFI_SSID", "Lỗi build: Thiếu biến HYDRAGROW_WIFI_SSID");
-const WIFI_PASS: &str = env!("HYDRAGROW_WIFI_PASSWORD", "Lỗi build: Thiếu biến HYDRAGROW_WIFI_PASSWORD");
-const MQTT_URL: &str = env!("HYDRAGROW_MQTT_URL", "Lỗi build: Thiếu biến HYDRAGROW_MQTT_URL");
-const MQTT_COMMAND_SECRET: &str = env!("HYDRAGROW_MQTT_COMMAND_SECRET", "Lỗi build: Thiếu biến HYDRAGROW_MQTT_COMMAND_SECRET");
-const DEVICE_ID: &str = env!("HYDRAGROW_DEVICE_ID", "Lỗi build: Thiếu biến HYDRAGROW_DEVICE_ID");
+const WIFI_SSID: &str = env!(
+    "HYDRAGROW_WIFI_SSID",
+    "Lỗi build: Thiếu biến HYDRAGROW_WIFI_SSID"
+);
+const WIFI_PASS: &str = env!(
+    "HYDRAGROW_WIFI_PASSWORD",
+    "Lỗi build: Thiếu biến HYDRAGROW_WIFI_PASSWORD"
+);
+const MQTT_URL: &str = env!(
+    "HYDRAGROW_MQTT_URL",
+    "Lỗi build: Thiếu biến HYDRAGROW_MQTT_URL"
+);
+const MQTT_COMMAND_SECRET: &str = env!(
+    "HYDRAGROW_MQTT_COMMAND_SECRET",
+    "Lỗi build: Thiếu biến HYDRAGROW_MQTT_COMMAND_SECRET"
+);
+const DEVICE_ID: &str = env!(
+    "HYDRAGROW_DEVICE_ID",
+    "Lỗi build: Thiếu biến HYDRAGROW_DEVICE_ID"
+);
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();

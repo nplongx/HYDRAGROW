@@ -44,6 +44,8 @@ lazy_static = "1.5"
 esp-idf-svc = "0.52.1"
 esp-idf-hal = "0.46.2"
 esp-idf-sys = "0.37.2"
+ds18b20 = "0.1.1"
+one-wire-bus = "0.1.1"
 
 [build-dependencies]
 cc = "1.0"

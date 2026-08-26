@@ -1,10 +1,10 @@
 // src/hw/pump_controller.rs
 //! Driver điều khiển Bơm, Van và Xung PWM phần cứng ESP32-C3.
 
-pub use hydragrow_controller_core::{PumpType, WaterDirection};
 use esp_idf_hal::gpio::InterruptType::AnyEdge;
 use esp_idf_hal::gpio::{Output, PinDriver};
 use esp_idf_hal::ledc::LedcDriver;
+pub use hydragrow_controller_core::{PumpType, WaterDirection};
 use log::{info, warn};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,8 +13,6 @@ use std::thread;
 use std::time::Duration;
 
 use crate::hw::pcf857x::{ExpanderPin, I2cExpander, TankAlert};
-
-
 
 pub struct PumpController<'d> {
     pump_a: LedcDriver<'static>,

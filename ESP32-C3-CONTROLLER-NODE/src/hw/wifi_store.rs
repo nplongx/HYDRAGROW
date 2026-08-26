@@ -9,7 +9,7 @@ const WIFI_LIST_KEY: &str = "wifi_list";
 const WIFI_LIST_BUF_SIZE: usize = 2048;
 
 pub fn load_wifi_list(nvs_partition: EspDefaultNvsPartition) -> WifiCredentialList {
-    let Ok(mut nvs) = EspNvs::new(nvs_partition, "agitech", true) else {
+    let Ok(nvs) = EspNvs::new(nvs_partition, "agitech", true) else {
         return WifiCredentialList::default();
     };
     let mut buffer = [0u8; WIFI_LIST_BUF_SIZE];

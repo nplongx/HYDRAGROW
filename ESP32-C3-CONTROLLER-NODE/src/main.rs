@@ -4,7 +4,6 @@ use esp_idf_hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_hal::ledc::config::TimerConfig;
 use esp_idf_hal::ledc::{LedcDriver, LedcTimerDriver};
 use esp_idf_hal::peripherals::Peripherals;
-use esp_idf_hal::units::FromValueType;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::log::EspLogger;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
@@ -161,7 +160,7 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     use std::time::Duration as StdDuration;
-    let wifi_up = match conn_rx.recv_timeout(StdDuration::from_secs(120)) {
+    let _wifi_up = match conn_rx.recv_timeout(StdDuration::from_secs(120)) {
         Ok(crate::hw::mqtt_client::ConnectionState::WifiConnected) => {
             info!("✅ WiFi connected normally.");
             // Bơm lại sự kiện để run_main_health_loop nhận được
@@ -177,7 +176,6 @@ fn main() -> anyhow::Result<()> {
                     unsafe {
                         esp_idf_svc::sys::esp_restart();
                     }
-                    unreachable!()
                 }
                 Ok(false) | Err(_) => {
                     warn!("⚠️ [PORTAL] Không có credentials. Tiếp tục không có WiFi.");

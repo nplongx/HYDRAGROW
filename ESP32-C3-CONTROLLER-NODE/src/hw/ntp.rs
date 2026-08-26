@@ -17,11 +17,7 @@ pub fn sync_sntp_time() -> anyhow::Result<EspSntp<'static>> {
     let sntp = EspSntp::new(&conf)?;
 
     unsafe {
-        esp_idf_svc::sys::setenv(
-            b"TZ\0".as_ptr() as *const _,
-            b"ICT-7\0".as_ptr() as *const _,
-            1,
-        );
+        esp_idf_svc::sys::setenv(c"TZ".as_ptr(), c"ICT-7".as_ptr(), 1);
         esp_idf_svc::sys::tzset();
     }
 

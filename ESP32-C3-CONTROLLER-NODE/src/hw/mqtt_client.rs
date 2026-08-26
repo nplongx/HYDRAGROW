@@ -48,14 +48,14 @@ fn verify_signed_json_payload(
 
     if !object
         .get("ts")
-        .map_or(false, |value| value.is_i64() || value.is_u64())
+        .is_some_and(|value| value.is_i64() || value.is_u64())
     {
         anyhow::bail!("missing MQTT payload timestamp");
     }
     if !object
         .get("nonce")
         .and_then(|value| value.as_str())
-        .map_or(false, |nonce| !nonce.is_empty())
+        .is_some_and(|nonce| !nonce.is_empty())
     {
         anyhow::bail!("missing MQTT payload nonce");
     }

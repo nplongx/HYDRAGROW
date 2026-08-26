@@ -50,10 +50,10 @@ impl<'d> PumpController<'d> {
         // valve_mist.set_low()?;
         let _ = valve
             .set_low(ExpanderPin::ValveMist.mask())
-            .map_err(|e| anyhow::anyhow!("{e:?}"));
-        let _ = valve
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        valve
             .set_low(ExpanderPin::ValveMix.mask())
-            .map_err(|e| anyhow::anyhow!("{e:?}"));
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         water_pump_in.set_low()?;
         water_pump_out.set_low()?;
         osaka_en.set_low()?;
@@ -131,12 +131,12 @@ impl<'d> PumpController<'d> {
             let _ = self
                 .valve
                 .set_high(ExpanderPin::ValveMist.mask())
-                .map_err(|e| anyhow::anyhow!("{e:?}"));
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         } else {
             let _ = self
                 .valve
                 .set_low(ExpanderPin::ValveMist.mask())
-                .map_err(|e| anyhow::anyhow!("{e:?}"));
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         }
         Ok(())
     }
@@ -146,12 +146,12 @@ impl<'d> PumpController<'d> {
             let _ = self
                 .valve
                 .set_high(ExpanderPin::ValveMix.mask())
-                .map_err(|e| anyhow::anyhow!("{e:?}"));
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         } else {
             let _ = self
                 .valve
                 .set_low(ExpanderPin::ValveMix.mask())
-                .map_err(|e| anyhow::anyhow!("{e:?}"));
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         }
         Ok(())
     }

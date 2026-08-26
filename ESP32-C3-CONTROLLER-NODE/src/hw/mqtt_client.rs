@@ -152,7 +152,7 @@ pub fn get_wifi_rssi() -> i8 {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // TODO(follow-up): group broker/auth args into an MqttClientConfig struct
 pub fn init_mqtt_client(
     broker_url: &str,
     mqtt_user: &str,

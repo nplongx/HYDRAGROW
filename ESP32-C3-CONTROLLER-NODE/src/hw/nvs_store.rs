@@ -20,6 +20,7 @@ impl NvsStore {
         Self { nvs }
     }
 
+    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
     #[allow(dead_code)]
     pub fn save_active_recipe(&mut self, recipe: &CropRecipe) -> Result<()> {
         // recipe.validate()?;
@@ -189,6 +190,7 @@ impl NvsStore {
         }
     }
 
+    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
     #[allow(dead_code)]
     pub fn save_snapshot(&mut self, ctx: &SystemContext, now_sec: u64) {
         if let Some(nvs) = self.nvs.as_mut() {
@@ -201,6 +203,7 @@ impl NvsStore {
         }
     }
 
+    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
     #[allow(dead_code)]
     pub fn save_last_water_change(&mut self, timestamp_sec: u64) {
         if let Some(nvs) = self.nvs.as_mut() {

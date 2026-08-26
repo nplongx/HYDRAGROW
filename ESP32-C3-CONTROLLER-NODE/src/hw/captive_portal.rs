@@ -165,6 +165,9 @@ pub fn run_captive_portal(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use super::parse_form_body;
+
     #[test]
     fn parse_form_body_extracts_ssid_and_password() {
         let body = "ssid=MyNetwork&pass=secret123&priority=1";

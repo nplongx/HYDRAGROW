@@ -26,7 +26,7 @@ impl ControllerRuntimeState {
         self.recompute_effective_config();
     }
 
-    #[allow(dead_code)] // Not called today — fsm_loop.rs sets `active_recipe` directly; keep for a future explicit "set recipe" API.
+    #[allow(dead_code)]
     pub fn set_active_recipe(&mut self, active_recipe: Option<CropStage>) {
         self.active_recipe = active_recipe;
         self.recompute_effective_config();

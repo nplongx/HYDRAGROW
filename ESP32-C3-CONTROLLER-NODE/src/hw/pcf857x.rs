@@ -32,6 +32,7 @@ impl ExpanderPin {
         1 << (self as u8)
     }
 
+    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
     #[allow(dead_code)]
     pub fn flag(&self) -> PinFlag {
         match self {

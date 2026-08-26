@@ -1,20 +1,16 @@
 // src/hw/pump_controller.rs
 //! Driver điều khiển Bơm, Van và Xung PWM phần cứng ESP32-C3.
 
-pub use hydragrow_controller_core::{PumpType, WaterDirection};
-use esp_idf_hal::gpio::InterruptType::AnyEdge;
 use esp_idf_hal::gpio::{Output, PinDriver};
 use esp_idf_hal::ledc::LedcDriver;
+pub use hydragrow_controller_core::{PumpType, WaterDirection};
 use log::{info, warn};
-use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use crate::hw::pcf857x::{ExpanderPin, I2cExpander, TankAlert};
-
-
 
 pub struct PumpController<'d> {
     pump_a: LedcDriver<'static>,
@@ -52,10 +48,10 @@ impl<'d> PumpController<'d> {
         pump_ph_up.set_duty(0)?;
         pump_ph_down.set_duty(0)?;
         // valve_mist.set_low()?;
-        valve
+        let _ = valve
             .set_low(ExpanderPin::ValveMist.mask())
             .map_err(|e| anyhow::anyhow!("{e:?}"));
-        valve
+        let _ = valve
             .set_low(ExpanderPin::ValveMix.mask())
             .map_err(|e| anyhow::anyhow!("{e:?}"));
         water_pump_in.set_low()?;
@@ -132,11 +128,13 @@ impl<'d> PumpController<'d> {
 
     pub fn set_mist_valve(&mut self, state: bool) -> anyhow::Result<()> {
         if state {
-            self.valve
+            let _ = self
+                .valve
                 .set_high(ExpanderPin::ValveMist.mask())
                 .map_err(|e| anyhow::anyhow!("{e:?}"));
         } else {
-            self.valve
+            let _ = self
+                .valve
                 .set_low(ExpanderPin::ValveMist.mask())
                 .map_err(|e| anyhow::anyhow!("{e:?}"));
         }
@@ -145,11 +143,13 @@ impl<'d> PumpController<'d> {
 
     pub fn set_mix_valve(&mut self, state: bool) -> anyhow::Result<()> {
         if state {
-            self.valve
+            let _ = self
+                .valve
                 .set_high(ExpanderPin::ValveMix.mask())
                 .map_err(|e| anyhow::anyhow!("{e:?}"));
         } else {
-            self.valve
+            let _ = self
+                .valve
                 .set_low(ExpanderPin::ValveMix.mask())
                 .map_err(|e| anyhow::anyhow!("{e:?}"));
         }

@@ -7,11 +7,9 @@
 use hydragrow_controller_core::core::fsm::OrchestratorEvent;
 
 use super::ObserverContext;
-use crate::{
-    runtime::observers::{
-        dosing_analytics::DosingAnalyticsObserver, fault_alarm::FaultAlarmObserver,
-        mqtt_telemetry::MqttTelemetryObserver, system_log::SystemLogObserver,
-    },
+use crate::runtime::observers::{
+    dosing_analytics::DosingAnalyticsObserver, fault_alarm::FaultAlarmObserver,
+    mqtt_telemetry::MqttTelemetryObserver, system_log::SystemLogObserver,
 };
 
 pub struct ObserverSet {

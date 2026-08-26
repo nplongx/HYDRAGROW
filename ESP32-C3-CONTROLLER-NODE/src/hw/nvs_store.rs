@@ -1,9 +1,9 @@
 // src/hw/nvs_store.rs
 //! Trạng thái và phục hồi persistent snapshot xuống bộ Flash NVS.
 
-use hydragrow_controller_core::core::fsm::context::{NvsSnapshot, SystemContext};
 use anyhow::{anyhow, Result};
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
+use hydragrow_controller_core::core::fsm::context::{NvsSnapshot, SystemContext};
 use hydragrow_shared::recipe::CropRecipe;
 use log::{info, warn};
 
@@ -20,6 +20,7 @@ impl NvsStore {
         Self { nvs }
     }
 
+    #[allow(dead_code)]
     pub fn save_active_recipe(&mut self, recipe: &CropRecipe) -> Result<()> {
         // recipe.validate()?;
         let serialized = serde_json::to_string(recipe)?;
@@ -188,6 +189,7 @@ impl NvsStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn save_snapshot(&mut self, ctx: &SystemContext, now_sec: u64) {
         if let Some(nvs) = self.nvs.as_mut() {
             let snapshot = NvsSnapshot::from_context(ctx, now_sec);
@@ -199,6 +201,7 @@ impl NvsStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn save_last_water_change(&mut self, timestamp_sec: u64) {
         if let Some(nvs) = self.nvs.as_mut() {
             let _ = nvs.set_u64("last_w_change", timestamp_sec);

@@ -32,6 +32,7 @@ impl ExpanderPin {
         1 << (self as u8)
     }
 
+    #[allow(dead_code)]
     pub fn flag(&self) -> PinFlag {
         match self {
             Self::TankA => PinFlag::P0,

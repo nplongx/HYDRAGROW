@@ -4,10 +4,7 @@
 //! Output: JSON payload lên topic fsm_state và calibration
 
 use super::ObserverContext;
-use crate::{
-    hw::mqtt_client::get_uptime_sec,
-    runtime::build_status_msg,
-};
+use crate::{hw::mqtt_client::get_uptime_sec, runtime::build_status_msg};
 use hydragrow_controller_core::core::fsm::OrchestratorEvent;
 use hydragrow_shared::topics::{topic_calibration, topic_fsm_state};
 use log::warn;

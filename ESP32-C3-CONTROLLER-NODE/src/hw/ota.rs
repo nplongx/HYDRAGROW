@@ -217,8 +217,6 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     unsafe {
         esp_idf_sys::esp_restart();
     }
-
-    Ok(())
 }
 
 #[cfg(test)]

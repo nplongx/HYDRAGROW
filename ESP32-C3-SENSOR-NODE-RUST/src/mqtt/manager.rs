@@ -11,8 +11,7 @@ use crate::mqtt::command_security::CommandSecurity;
 use crate::mqtt::payload::{build_sensor_payload, build_status_payload};
 use crate::sensors::sensor_manager::SensorData;
 
-// Root CA được nhúng tại compile time (giống CONTROLLER-NODE)
-const ROOT_CA_PEM: &str = include_str!("../../certs/root_ca.pem");
+const ROOT_CA_PEM: &str = concat!(include_str!("../../certs/root_ca.pem"), "\0");
 
 pub struct MqttTopics {
     pub sensor: String,
@@ -70,11 +69,14 @@ impl MqttManager {
 
     /// Khởi chạy MQTT loop. Blocking — nên chạy trong FreeRTOS task riêng.
     pub fn run(&self) -> Result<()> {
+        let cert_cstr = std::ffi::CStr::from_bytes_with_nul(ROOT_CA_PEM.as_bytes())
+            .expect("Lỗi chứng chỉ: Không đúng chuẩn C string");
+
         let tls_config = MqttClientConfiguration {
             client_id: Some(self.config.client_id),
             username: Some(self.config.username),
             password: Some(self.config.password),
-            server_certificate: Some(X509::pem(ROOT_CA_PEM.as_bytes())),
+            server_certificate: Some(X509::pem(cert_cstr)),
             keep_alive_interval: Some(Duration::from_secs(30)),
             ..Default::default()
         };
@@ -84,8 +86,7 @@ impl MqttManager {
         let shared_config = Arc::clone(&self.shared_app_config);
         let device_id = self.config.client_id.to_string();
 
-        let (mut client, mut connection) =
-            EspMqttClient::new(self.config.broker_url, &tls_config)?;
+        let (mut client, mut connection) = EspMqttClient::new(self.config.broker_url, &tls_config)?;
 
         info!("[MQTT] Kết nối đến {}", self.config.broker_url);
 

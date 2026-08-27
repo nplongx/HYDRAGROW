@@ -395,6 +395,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ds18b20"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9cd37ace0416c30c2874cd67135508de493e34135c67878b01e13aba91b53ce"
+dependencies = [
+ "embedded-hal 0.2.7",
+ "one-wire-bus",
+]
+
+[[package]]
 name = "either"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -648,6 +658,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cc",
+ "ds18b20",
  "embuild",
  "esp-idf-hal",
  "esp-idf-svc",
@@ -656,6 +667,7 @@ dependencies = [
  "hmac",
  "lazy_static",
  "log",
+ "one-wire-bus",
  "serde",
  "serde_json",
  "sha2",
@@ -1092,6 +1104,15 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "one-wire-bus"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9761e13074f8f916702c1a1dbe0eda3fb8478704db00493f5a5c27ed5847710"
+dependencies = [
+ "embedded-hal 0.2.7",
+]
 
 [[package]]
 name = "pin-project-lite"

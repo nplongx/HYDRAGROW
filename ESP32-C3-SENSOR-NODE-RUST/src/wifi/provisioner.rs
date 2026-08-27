@@ -39,7 +39,7 @@ impl WifiProvisioner {
     pub fn load(&self) -> Vec<WifiCandidate> {
         // Đọc JSON string từ NVS
         let mut buf = [0u8; 1024];
-        match self.nvs.get_raw(NVS_KEY, &mut buf) {
+        match self.nvs.get_blob(NVS_KEY, &mut buf) {
             Ok(Some(bytes)) => {
                 if let Ok(s) = std::str::from_utf8(bytes) {
                     if let Ok(mut candidates) = serde_json::from_str::<Vec<WifiCandidate>>(s) {
@@ -66,7 +66,7 @@ impl WifiProvisioner {
     pub fn save(&mut self, candidates: &[WifiCandidate]) -> Result<()> {
         let json = serde_json::to_string(candidates)?;
         self.nvs
-            .set_raw(NVS_KEY, json.as_bytes())
+            .set_blob(NVS_KEY, json.as_bytes())
             .map_err(|e| anyhow!("NVS write error: {:?}", e))?;
         Ok(())
     }

@@ -3,6 +3,7 @@
 
 use anyhow::{anyhow, Result};
 use ds18b20::{Ds18b20, Resolution};
+use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::gpio::PinDriver;
 use esp_idf_hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_hal::peripherals::Peripherals;
@@ -39,10 +40,7 @@ const WIFI_FALLBACK_PASS: &str = env!(
     "HYDRAGROW_WIFI_PASSWORD",
     "Lỗi build: Thiếu HYDRAGROW_WIFI_PASSWORD"
 );
-const MQTT_BROKER_URL: &str = env!(
-    "HYDRAGROW_MQTT_URL",
-    "Lỗi build: Thiếu HYDRAGROW_MQTT_URL"
-);
+const MQTT_BROKER_URL: &str = env!("HYDRAGROW_MQTT_URL", "Lỗi build: Thiếu HYDRAGROW_MQTT_URL");
 const MQTT_CLIENT_ID: &str = env!(
     "HYDRAGROW_DEVICE_ID",
     "Lỗi build: Thiếu HYDRAGROW_DEVICE_ID"
@@ -105,7 +103,11 @@ fn main() -> Result<()> {
     )?;
     let candidates = provisioner.load();
     let mut wifi = BlockingWifi::wrap(
-        EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs_partition.clone()))?,
+        EspWifi::new(
+            peripherals.modem,
+            sysloop.clone(),
+            Some(nvs_partition.clone()),
+        )?,
         sysloop.clone(),
     )?;
     if let Err(e) = connect_wifi(&mut wifi, &candidates) {
@@ -115,7 +117,7 @@ fn main() -> Result<()> {
     // ── SNTP time sync ──
     let _sntp = EspSntp::new_with_callback(
         &SntpConf {
-            servers: ["pool.ntp.org", "time.nist.gov", "", ""],
+            servers: ["pool.ntp.org"],
             ..Default::default()
         },
         |_| {},
@@ -147,7 +149,8 @@ fn main() -> Result<()> {
     mqtt_manager.run()?;
 
     // ── DS18B20 One-Wire init ──
-    let one_wire_pin = PinDriver::input_output_od(peripherals.pins.gpio2)?;
+    let one_wire_pin =
+        PinDriver::input_output_od(peripherals.pins.gpio2, esp_idf_hal::gpio::Pull::Up)?;
     let mut one_wire_bus = OneWire::new(one_wire_pin).map_err(|e| anyhow!("{:?}", e))?;
     let mut delay = esp_idf_hal::delay::FreeRtos;
 
@@ -160,7 +163,7 @@ fn main() -> Result<()> {
         let raw_temp: Option<f32> = {
             // Start conversion
             ds18b20::start_simultaneous_temp_measurement(&mut one_wire_bus, &mut delay).ok();
-            delay.delay_ms(Resolution::Bits12.max_measurement_time_millis());
+            FreeRtos::delay_ms(Resolution::Bits12.max_measurement_time_millis() as u32);
             // Read
             if let Ok(devices) = one_wire_bus
                 .devices(false, &mut delay)

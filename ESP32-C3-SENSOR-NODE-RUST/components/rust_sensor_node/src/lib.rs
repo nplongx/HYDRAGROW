@@ -1,5 +1,6 @@
-//! ESP32-C3 Sensor Node — Rust + C FFI integration
-//! DS18B20: Rust ds18b20 crate | ADS1115 + HC-SR04: C FFI wrapper
+//! ESP32-C3 Sensor Node — biên dịch thành ESP-IDF component (staticlib),
+//! được gọi từ `main/main.c` qua hàm `rust_sensor_node_main()`.
+//! DS18B20: Rust ds18b20 crate | ADS1115 + HC-SR04: C FFI wrapper (component `sensor_ffi`)
 
 use anyhow::{anyhow, Result};
 use ds18b20::{Ds18b20, Resolution};
@@ -12,17 +13,17 @@ use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sntp::{EspSntp, SntpConf};
 use esp_idf_svc::wifi::{BlockingWifi, EspWifi};
-use log::{error, info, warn};
+use log::{error, info};
 use one_wire_bus::{Address, OneWire};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-mod config;
-mod ffi;
-mod filters;
+pub mod config;
+pub mod ffi;
+pub mod filters;
+pub mod sensors;
 mod mqtt;
-mod sensors;
 mod utils;
 mod wifi;
 
@@ -63,12 +64,26 @@ const PIN_DS18B20: i32 = 2;
 const PIN_SDA: u8 = 6;
 const PIN_SCL: u8 = 7;
 
-fn main() -> Result<()> {
+/// Điểm vào được gọi từ `main/main.c` (`extern int rust_sensor_node_main(void);`).
+/// Trả về 0 chỉ khi khởi tạo thành công rồi... không bao giờ thoát (vòng lặp vô hạn).
+/// Trả về khác 0 nếu thất bại ở bước khởi tạo trước vòng lặp.
+#[no_mangle]
+pub extern "C" fn rust_sensor_node_main() -> i32 {
     // Bắt buộc — link ESP-IDF patches cho Rust std
     esp_idf_svc::sys::link_patches();
     utils::logger::init(true);
 
-    info!("🌱 HYDRAGROW Sensor Node (Rust + C FFI) khởi động...");
+    match run() {
+        Ok(()) => 0,
+        Err(e) => {
+            error!("Sensor node dừng vì lỗi nghiêm trọng: {:?}", e);
+            1
+        }
+    }
+}
+
+fn run() -> Result<()> {
+    info!("🌱 HYDRAGROW Sensor Node (Rust component + C FFI) khởi động...");
 
     let peripherals = Peripherals::take().unwrap();
     let sysloop = EspSystemEventLoop::take()?;
@@ -79,7 +94,7 @@ fn main() -> Result<()> {
     let shared_data = Arc::new(Mutex::new(SensorData::default()));
 
     // ── I2C init (I2C0, SDA=6, SCL=7, 100kHz) ──
-    let i2c = I2cDriver::new(
+    let _i2c = I2cDriver::new(
         peripherals.i2c0,
         peripherals.pins.gpio6, // SDA
         peripherals.pins.gpio7, // SCL
@@ -155,7 +170,7 @@ fn main() -> Result<()> {
     let mut delay = esp_idf_hal::delay::FreeRtos;
 
     // Search DS18B20 device
-    let ds18b20_device = Ds18b20::new::<anyhow::Error>(Address(0)).ok(); // sẽ search khi đọc
+    let _ds18b20_device = Ds18b20::new::<anyhow::Error>(Address(0)).ok();
 
     // ── Main sensor loop ──
     let mut last_publish = std::time::Instant::now();

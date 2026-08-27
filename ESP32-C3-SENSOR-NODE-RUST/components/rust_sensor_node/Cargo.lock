@@ -657,7 +657,6 @@ name = "esp32-c3-sensor-node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cc",
  "ds18b20",
  "embuild",
  "esp-idf-hal",

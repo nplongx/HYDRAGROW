@@ -9,10 +9,7 @@ rust-version = "1.82"
 [lib]
 name = "esp32_c3_sensor_node"
 path = "src/lib.rs"
-
-[[bin]]
-name = "esp32-c3-sensor-node"
-path = "src/main.rs"
+crate-type = ["staticlib"]
 harness = false
 
 [profile.release]
@@ -48,5 +45,4 @@ ds18b20 = "0.1.1"
 one-wire-bus = "0.1.1"
 
 [build-dependencies]
-cc = "1.0"
 embuild = "0.33"

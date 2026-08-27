@@ -23,11 +23,6 @@ panic = "abort"
 debug = true
 opt-level = "z"
 
-[patch.crates-io]
-esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys.git" }
-esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal.git" }
-esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git" }
-
 [dependencies]
 log = "0.4"
 anyhow = "1.0"

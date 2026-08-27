@@ -1,8 +1,9 @@
 # Cac component ESP-IDF can bat de cac wrapper Rust (esp-idf-hal/esp-idf-svc)
 # hoat dong day du: WiFi, MQTT, HTTP client, NVS, driver I2C/GPIO...
 set(RUST_DEPS "pthread" "driver" "vfs" "console" "nvs_flash" "spi_flash"
-              "mqtt" "esp_http_client" "esp_driver_gpio" "esp_driver_i2c"
-              "esp_driver_gptimer" "esp_driver_uart")
+    "mqtt" "esp_http_client" "esp_http_server" "espcoredump"
+    "sdmmc" "fatfs" "spiffs" "wear_levelling")
+
 
 idf_component_register(
     SRCS "placeholder.c"

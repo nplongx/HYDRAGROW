@@ -129,6 +129,8 @@ pub struct AppState {
 
     // Manual command rate limits keyed by api_key + device_id + action.
     pub command_rate_limits: Arc<Mutex<HashMap<String, CommandRateEntry>>>,
+
+    pub script_cache: crate::services::script_engine::ScriptCache,
 }
 
 #[tokio::main]
@@ -280,6 +282,10 @@ async fn main() -> anyhow::Result<()> {
         ph_voltage_samples: Arc::new(RwLock::new(HashMap::new())),
         dosing_dynamic_states: Arc::new(RwLock::new(HashMap::new())),
         command_rate_limits: Arc::new(Mutex::new(HashMap::new())),
+        script_cache: {
+            let engine = Arc::new(crate::services::script_engine::ScriptEngine::new());
+            crate::services::script_engine::ScriptCache::new(engine)
+        },
     });
 
     let app_state_for_mqtt = app_state.clone();

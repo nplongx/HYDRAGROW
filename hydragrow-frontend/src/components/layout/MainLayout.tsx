@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, SlidersHorizontal, Settings, Sprout,
   AlignLeft, MoreHorizontal, X, Leaf, ClipboardList,
-  Box, LineChart, Link, Wifi, WifiOff
+  Box, LineChart, Link, Wifi, WifiOff, Workflow
 } from 'lucide-react';
 import { useDeviceStore } from '../../store/useDeviceStore';
 import { useDeviceSync } from '../../hooks/useDeviceSync';
@@ -43,6 +43,7 @@ const MainLayout: React.FC = () => {
   const moreMenuItems = [
     { path: '/dosing-history', icon: Box, label: 'Lịch sử châm' },
     { path: '/analytics', icon: LineChart, label: 'Grafana metrics' },
+    { path: '/automation', icon: Workflow, label: 'Tự động hóa' },
     { path: '/pairing', icon: Link, label: 'Thiết bị của tôi' },
     { path: '/settings', icon: Settings, label: 'Cài đặt trạm' },
   ];

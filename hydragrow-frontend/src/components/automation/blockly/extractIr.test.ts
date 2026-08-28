@@ -27,4 +27,12 @@ describe('extractIr', () => {
     const actions = extractActions(workspace);
     expect(actions).toEqual([{ type: 'alert', level: 'warning', message: 'pH cao' }]);
   });
+
+  it('extracts a single advance_stage action block', () => {
+    const block = workspace.newBlock('hydragrow_advance_stage_action');
+    block.setFieldValue('2', 'OFFSET');
+    block.setFieldValue('Đủ 24h', 'REASON');
+    const actions = extractActions(workspace);
+    expect(actions).toEqual([{ type: 'advance_stage', targetStageOffset: 2, reason: 'Đủ 24h' }]);
+  });
 });

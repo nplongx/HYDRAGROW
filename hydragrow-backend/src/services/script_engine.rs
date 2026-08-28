@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use rhai::{Engine, AST, Dynamic, Map, Scope};
+use rhai::{AST, Dynamic, Engine, Map, Scope};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,11 +37,7 @@ impl ScriptEngine {
 
     /// Eval một alert script với sensor input.
     /// Script phải define `fn main(input)` và return Map hoặc () (unit = no alert).
-    pub fn eval_alert(
-        &self,
-        ast: &AST,
-        input: &ScriptSensorInput,
-    ) -> Result<Option<AlertOutput>> {
+    pub fn eval_alert(&self, ast: &AST, input: &ScriptSensorInput) -> Result<Option<AlertOutput>> {
         let mut map = Map::new();
         map.insert("ph".into(), Dynamic::from_float(input.ph));
         map.insert("ec".into(), Dynamic::from_float(input.ec));
@@ -68,10 +64,7 @@ impl ScriptEngine {
             .map(|v| v.to_string())
             .unwrap_or_else(|| "info".to_string());
 
-        let title = map
-            .get("title")
-            .map(|v| v.to_string())
-            .unwrap_or_default();
+        let title = map.get("title").map(|v| v.to_string()).unwrap_or_default();
 
         let message = map
             .get("message")
@@ -239,7 +232,8 @@ mod tests {
     #[test]
     fn compiles_valid_alert_script() {
         let engine = ScriptEngine::new();
-        let src = r#"fn main(input) { #{level: "warning", title: "pH cao", message: "pH vượt 7.5"} }"#;
+        let src =
+            r#"fn main(input) { #{level: "warning", title: "pH cao", message: "pH vượt 7.5"} }"#;
         assert!(engine.compile(src).is_ok());
     }
 

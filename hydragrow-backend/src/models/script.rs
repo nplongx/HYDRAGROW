@@ -37,6 +37,9 @@ pub struct UserScript {
     pub name: String,
     pub source: String,
     pub enabled: bool,
+    /// Automation IR (JSON) nếu script này được build bằng Blockly/React Flow.
+    /// NULL với script viết tay trực tiếp bằng Rhai.
+    pub ir_json: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -63,6 +66,8 @@ pub struct UpsertScriptRequest {
     pub name: String,
     pub source: String,
     pub enabled: Option<bool>,
+    /// Optional — chỉ set khi request đến từ visual builder.
+    pub ir_json: Option<serde_json::Value>,
 }
 
 /// Response trả về sau validate script (dry-run)

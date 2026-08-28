@@ -270,7 +270,7 @@ mod tests {
         let src = r#"fn main(input { }"#;
         let result = validate_script_source("alert", src);
         assert!(result.is_err());
-        let msg = result.unwrap_err();
+        let msg = result.expect_err("Expected compile or syntax error message");
         assert!(msg.contains("compile") || msg.contains("syntax") || msg.len() > 5);
     }
 

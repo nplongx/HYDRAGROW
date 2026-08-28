@@ -17,6 +17,10 @@ pub const KNOWN_SCOPES: &[&str] = &[
     "device:network",        // Cập nhật WiFi priority list
     "device:admin",          // Reboot, factory reset — quyền cao nhất cho thiết bị
 
+    // User script APIs
+    "script:read",           // Đọc / validate user scripts
+    "script:write",          // Tạo, cập nhật, xóa user scripts
+
     // Wildcard (root only)
     "*",
 ];
@@ -36,6 +40,8 @@ pub fn scope_description(scope: &str) -> &'static str {
         "device:ota"         => "Cập nhật firmware thiết bị qua OTA",
         "device:network"     => "Cập nhật danh sách WiFi trên thiết bị",
         "device:admin"       => "Reboot và factory reset thiết bị (toàn quyền quản trị)",
+        "script:read"        => "Đọc và kiểm tra (validate) các user scripts",
+        "script:write"       => "Tạo, cập nhật và xóa các user scripts",
         "*"                  => "Toàn quyền truy cập (chỉ dành cho admin hệ thống)",
         _                    => "Scope không xác định",
     }

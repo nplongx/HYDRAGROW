@@ -14,6 +14,7 @@ pub mod middleware;
 pub mod mqtt_utils;
 pub mod notification;
 pub mod recipe;
+pub mod script;
 pub mod sensor;
 pub mod solana;
 pub mod ws;

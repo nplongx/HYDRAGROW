@@ -2,8 +2,9 @@
 # hoat dong day du: WiFi, MQTT, HTTP client, NVS, driver I2C/GPIO...
 set(RUST_DEPS "pthread" "driver" "vfs" "console" "nvs_flash" "spi_flash"
     "mqtt" "esp_http_client" "esp_http_server" "espcoredump"
-    "sdmmc" "fatfs" "spiffs" "wear_levelling")
-
+    "sdmmc" "fatfs" "spiffs" "wear_levelling"
+    "esp_wifi" "esp_event" "esp_netif"
+    "wpa_supplicant")    # ← thêm cái này
 
 idf_component_register(
     SRCS "placeholder.c"

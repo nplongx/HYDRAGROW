@@ -35,7 +35,10 @@ pub async fn run(app_state: std::sync::Arc<AppState>) {
             }
             Ok(_) => {} // Chỉ fan-out alert ở giai đoạn đầu — mở rộng dần theo nhu cầu tích hợp thực tế.
             Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
-                warn!(skipped, "integration_bridge bị lag trên event_bus, một số alert có thể đã bị bỏ qua");
+                warn!(
+                    skipped,
+                    "integration_bridge bị lag trên event_bus, một số alert có thể đã bị bỏ qua"
+                );
             }
             Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
         }

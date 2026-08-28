@@ -97,6 +97,32 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     let _ = app_state
         .event_bus
         .send(AppEvent::SensorUpdate(sensor_data));
+
+    // --- Rhai script eval ---
+    // Note: Once ScriptCache is added to AppState in Task 1+2, retrieve scripts via app_state.script_cache.get_alert_scripts(&device_id).await
+    let scripts: Vec<crate::services::script_engine::CachedScript> = Vec::new();
+    if !scripts.is_empty() {
+        let input = crate::services::script_engine::ScriptSensorInput {
+            ph: incoming.ph,
+            ec: incoming.ec,
+            temp: incoming.temp,
+            water_level: incoming.water_level,
+            device_id: device_id.clone(),
+            timestamp_ms: chrono::Utc::now().timestamp_millis(),
+        };
+        let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
+        let alerts = crate::mqtt::handlers::script_eval::eval_alert_scripts(&engine, &scripts, &input);
+        for alert in alerts {
+            let alert_msg = crate::mqtt::handlers::script_eval::alert_output_to_system_alert(
+                alert,
+                &device_id,
+                input.timestamp_ms,
+            );
+            let _ = app_state
+                .event_bus
+                .send(AppEvent::SystemAlert(alert_msg));
+        }
+    }
 }
 
 fn merge_sensor_state_cache(

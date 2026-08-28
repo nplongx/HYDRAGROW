@@ -99,7 +99,8 @@ fn main() -> anyhow::Result<()> {
         peripherals.pins.gpio21,
         &I2cConfig::default(),
     )?;
-    let valve = I2cExpander::new(i2c_driver);
+    let mut valve = I2cExpander::new(i2c_driver);
+    valve.init().map_err(|e| anyhow::anyhow!("PCF8574 init failed: {:?}", e))?;  
 
     let pump_controller = PumpController::new(
         LedcDriver::new(

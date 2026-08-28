@@ -81,6 +81,12 @@ pub fn topic_controller_recipe(device_id: &str) -> String {
 pub fn topic_recipe_events(device_id: &str) -> String {
     MqttTopics::recipe_events(device_id)
 }
+/// Topic một chiều: backend → Node-RED (hoặc bất kỳ subscriber ngoài nào).
+/// KHÔNG có handler nào trong hydragrow-backend subscribe topic này — nó không phải
+/// input cho FSM/Rhai, chỉ là fan-out cho tích hợp bên ngoài (Telegram, email, Home Assistant...).
+pub fn topic_integration_events(device_id: &str) -> String {
+    format!("hydragrow/{device_id}/integrations/out")
+}
 pub fn topic_sensor_status(device_id: &str) -> String {
     format!("AGITECH/{}/sensor/status", device_id)
 }
@@ -197,5 +203,11 @@ mod tests {
 
         assert_eq!(parsed.device_id, "device-01");
         assert_eq!(parsed.suffix, "recipe/events");
+    }
+
+    #[test]
+    fn integration_events_topic_is_scoped_to_device() {
+        let topic = topic_integration_events("device-01");
+        assert_eq!(topic, "hydragrow/device-01/integrations/out");
     }
 }

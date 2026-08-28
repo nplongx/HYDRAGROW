@@ -9,7 +9,7 @@ use crate::{
 
 use hydragrow_shared::topics::parse_agitech_topic;
 
-mod handlers; // Import thư mục con
+pub mod handlers; // Import thư mục con
 
 #[instrument(skip(app_state, publish), fields(topic = %publish.topic))]
 pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {

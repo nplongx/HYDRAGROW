@@ -194,6 +194,17 @@ const Settings = () => {
   });
 
   const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'https://hydragrow.onrender.com' });
+
+  const nodeRedEditorUrl = useMemo(() => {
+    try {
+      const url = new URL(appSettings.backend_url);
+      return `${url.protocol}//${url.hostname}:1880`;
+    } catch {
+      return 'http://localhost:1880';
+    }
+  }, [appSettings.backend_url]);
+
+  const integrationTopic = ctxDeviceId ? `hydragrow/${ctxDeviceId}/integrations/out` : 'hydragrow/<device_id>/integrations/out';
   const [otaStatus, setOtaStatus] = useState<OtaStatus | null>(null);
   const [isTriggeringOta, setIsTriggeringOta] = useState(false);
   const [wifiCandidates, setWifiCandidates] = useState<WifiCandidate[]>([{ ssid: '', password: '', priority: 0 }]);
@@ -552,6 +563,49 @@ const Settings = () => {
             Đăng xuất
           </button>
         </SubCard>
+
+        {/* INTEGRATION & NODE-RED */}
+        <AccordionSection id="integrations" title="Tích hợp & Node-RED" icon={Network} isOpen={openSection === 'integrations'} onToggle={() => handleToggleSection('integrations')}>
+          <div className="space-y-4 p-1">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-emerald-950">Node-RED Editor URL</label>
+              <div className="flex items-center gap-2">
+                <a
+                  href={nodeRedEditorUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-mono text-blue-600 underline hover:text-blue-800 break-all"
+                >
+                  {nodeRedEditorUrl}
+                </a>
+              </div>
+              <p className="text-xs text-emerald-700/75">
+                Truy cập trình thiết kế luồng tự động hoá Node-RED để nhận alert và chuyển tiếp tới Telegram / Email / Home Assistant.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-emerald-950">MQTT Integration Topic (Outbound)</label>
+              <div className="flex items-center gap-2">
+                <p className="flex-1 text-sm text-emerald-800 bg-emerald-50 px-3 py-2 rounded-lg font-mono break-all border border-emerald-100">
+                  {integrationTopic}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(integrationTopic);
+                    toast.success('Đã sao chép topic MQTT tích hợp!');
+                  }}
+                  className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 flex-shrink-0"
+                >
+                  Sao chép
+                </button>
+              </div>
+              <p className="text-xs text-emerald-700/75">
+                Topic một chiều backend → Node-RED dùng để fan-out các cảnh báo hệ thống (SystemAlert).
+              </p>
+            </div>
+          </div>
+        </AccordionSection>
 
         {/* NETWORK */}
         <AccordionSection id="network" title="Thiết bị & Kết nối" icon={Network} isOpen={openSection === 'network'} onToggle={() => handleToggleSection('network')}>

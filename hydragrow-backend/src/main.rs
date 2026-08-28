@@ -288,6 +288,11 @@ async fn main() -> anyhow::Result<()> {
         },
     });
 
+    let app_state_for_bridge = app_state.clone();
+    tokio::spawn(crate::mqtt::handlers::integration_bridge::run(
+        app_state_for_bridge.into_inner(),
+    ));
+
     let app_state_for_mqtt = app_state.clone();
     tokio::spawn(async move {
         info!("Bắt đầu vòng lặp sự kiện MQTT dưới nền...");

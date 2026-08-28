@@ -64,7 +64,9 @@ mod tests {
             id: uuid::Uuid::new_v4(),
             kind: "alert".to_string(),
             name: "test".to_string(),
-            ast: engine.compile(source).unwrap(),
+            ast: engine
+                .compile(source)
+                .expect("Failed to compile test Rhai alert script source"),
         }
     }
 

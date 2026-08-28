@@ -61,10 +61,11 @@ influxdb2-structmap = "0.2.0"
 
 yup-oauth2 = "8.3"
 
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 
 hydragrow-shared = { path = "../hydragrow-shared" }
 lazy_static = "1.5.0"
+rhai = { version = "1.26", features = ["sync", "only_i64", "no_index", "f32_float"] }
 serde_urlencoded = "0.7.1"
 
 prometheus = { version = "0.13", features = ["process"] }

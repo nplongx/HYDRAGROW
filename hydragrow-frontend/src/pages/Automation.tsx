@@ -9,6 +9,7 @@ import { buildIrFromGraph } from '../components/automation/reactflow/buildIr';
 import { BlockLogicEditor } from '../components/automation/BlockLogicEditor';
 import { compileToRhai } from '../lib/automation/compileToRhai';
 import { AutomationIrSchema, type AutomationIr } from '../lib/automation/ir';
+import { ScriptListPanel } from '../components/automation/ScriptListPanel';
 import { useAutomationBuilder } from '../hooks/useAutomationBuilder';
 import { useCreateAutomationScript, useValidateAutomationScript } from '../hooks/useAutomationScripts';
 import { useDeviceStore } from '../store/useDeviceStore';
@@ -117,7 +118,7 @@ export default function Automation() {
           <BlockLogicEditor kind={builder.kind} onChange={builder.setBlocklyResult} className="h-full w-full" />
         </div>
       )}
-      {/* SCRIPT_LIST_SLOT: Task 3 renders <ScriptListPanel deviceId={deviceId} onLoad={builder.loadFromIr} /> here */}
+      <ScriptListPanel deviceId={deviceId} onLoad={builder.loadFromIr} />
     </div>
   );
 }

@@ -13,6 +13,19 @@ services:
     ports: ["1883:1883"]
     volumes: ["./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf"]
 
+  nodered:
+    image: nodered/node-red:3.1
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    volumes:
+      - nodered_data:/data
+      - ./docker/nodered/settings.js:/data/settings.js:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+    depends_on:
+      - mosquitto
+
   influxdb:
     image: influxdb:2
     environment:
@@ -36,3 +49,4 @@ services:
 volumes:
   pg_data:
   influx_data:
+  nodered_data:

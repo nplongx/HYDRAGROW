@@ -105,8 +105,8 @@ pub async fn create_script(
     let id = Uuid::new_v4();
     let enabled = body.enabled.unwrap_or(true);
     let result = sqlx::query_as::<_, UserScript>(
-        r#"INSERT INTO user_scripts (id, device_id, kind, name, source, enabled)
-VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *"#,
     )
     .bind(id)
@@ -115,6 +115,7 @@ RETURNING *"#,
     .bind(&body.name)
     .bind(&body.source)
     .bind(enabled)
+    .bind(&body.ir_json)
     .fetch_one(&app_state.pg_pool)
     .await;
 
@@ -157,14 +158,15 @@ pub async fn update_script(
     let enabled = body.enabled.unwrap_or(true);
     let result = sqlx::query_as::<_, UserScript>(
         r#"UPDATE user_scripts
-SET kind = $1, name = $2, source = $3, enabled = $4, updated_at = NOW()
-WHERE id = $5 AND device_id = $6
+SET kind = $1, name = $2, source = $3, enabled = $4, ir_json = $5, updated_at = NOW()
+WHERE id = $6 AND device_id = $7
 RETURNING *"#,
     )
     .bind(&body.kind)
     .bind(&body.name)
     .bind(&body.source)
     .bind(enabled)
+    .bind(&body.ir_json)
     .bind(script_id)
     .bind(&device_id)
     .fetch_optional(&app_state.pg_pool)

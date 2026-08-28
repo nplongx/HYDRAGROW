@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::models::script::{AlertOutput, ScriptFsmInput, ScriptSensorInput, StageOverride};
+pub use crate::models::script::{AlertOutput, ScriptFsmInput, ScriptSensorInput, StageOverride};
 
 /// Wrapper quanh Rhai Engine, configure một lần khi khởi động.
 /// Clone-safe vì Engine implement Clone + Send + Sync (với feature "sync").

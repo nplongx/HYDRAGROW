@@ -72,6 +72,27 @@ pub struct ScriptValidateResponse {
     pub error: Option<String>,
 }
 
+/// Input truyền vào alert script dưới dạng Rhai Map
+#[derive(Debug, Clone)]
+pub struct ScriptSensorInput {
+    pub ph: f32,
+    pub ec: f32,
+    pub temp: f32,
+    pub water_level: f32,
+    pub device_id: String,
+    pub timestamp_ms: i64,
+}
+
+/// Input truyền vào recipe_override script
+#[derive(Debug, Clone)]
+pub struct ScriptFsmInput {
+    pub phase: String,
+    pub stage_index: i64,
+    pub ec: f32,
+    pub ph: f32,
+    pub elapsed_sec: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

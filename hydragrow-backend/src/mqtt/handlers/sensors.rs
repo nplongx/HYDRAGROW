@@ -99,7 +99,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         .send(AppEvent::SensorUpdate(sensor_data));
 
     // --- Rhai script eval ---
-    // Note: Once ScriptCache is added to AppState in Task 1+2, retrieve scripts via app_state.script_cache.get_alert_scripts(&device_id).await
+    // --- Rhai script eval ---
     let scripts = app_state.script_cache.get_alert_scripts(&device_id).await;
     if !scripts.is_empty() {
         let input = crate::services::script_engine::ScriptSensorInput {

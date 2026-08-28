@@ -288,6 +288,24 @@ async fn main() -> anyhow::Result<()> {
         },
     });
 
+    // Nạp lại toàn bộ script đã enable từ DB vào cache khi khởi động
+    {
+        let pool = app_state.pg_pool.clone();
+        let cache = app_state.script_cache.clone();
+        let device_ids: Vec<String> =
+            sqlx::query_scalar("SELECT DISTINCT device_id FROM user_scripts WHERE enabled = TRUE")
+                .fetch_all(&pool)
+                .await
+                .unwrap_or_default();
+
+        for device_id in device_ids {
+            match cache.reload_device(&pool, &device_id).await {
+                Ok(n) => info!(device_id, count = n, "Đã nạp script cache khi khởi động"),
+                Err(e) => error!(device_id, error = %e, "Lỗi nạp script cache khi khởi động"),
+            }
+        }
+    }
+
     let app_state_for_bridge = app_state.clone();
     tokio::spawn(crate::mqtt::handlers::integration_bridge::run(
         app_state_for_bridge.into_inner(),

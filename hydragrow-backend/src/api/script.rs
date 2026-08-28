@@ -122,6 +122,13 @@ RETURNING *"#,
     match result {
         Ok(script) => {
             info!(device_id, script_id = %script.id, kind = %script.kind, "Script created");
+            if let Err(e) = app_state
+                .script_cache
+                .reload_device(&app_state.pg_pool, &device_id)
+                .await
+            {
+                warn!(device_id, error = %e, "Failed to reload script cache after create");
+            }
             HttpResponse::Created().json(json!({"status": "created", "data": script}))
         }
         Err(e) => {
@@ -173,7 +180,16 @@ RETURNING *"#,
     .await;
 
     match result {
-        Ok(Some(script)) => HttpResponse::Ok().json(json!({"status": "updated", "data": script})),
+        Ok(Some(script)) => {
+            if let Err(e) = app_state
+                .script_cache
+                .reload_device(&app_state.pg_pool, &device_id)
+                .await
+            {
+                warn!(device_id, error = %e, "Failed to reload script cache after update");
+            }
+            HttpResponse::Ok().json(json!({"status": "updated", "data": script}))
+        }
         Ok(None) => HttpResponse::NotFound().json(json!({"error": "Script not found"})),
         Err(e) => {
             warn!(error = %e, "Failed to update script");

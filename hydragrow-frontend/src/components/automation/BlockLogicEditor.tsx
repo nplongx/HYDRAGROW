@@ -3,22 +3,23 @@ import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
 import { registerHydragrowBlocks } from './blockly/blocks';
 import { extractActions, extractConditions } from './blockly/extractIr';
-import type { Action, AutomationIr, Condition } from '../../lib/automation/ir';
+import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type Condition } from '../../lib/automation/ir';
 
 export interface BlockLogicEditorProps {
-  /** Which kind of automation is being built. Task 2 wires this into the toolbox/field list. */
   kind: AutomationIr['kind'];
   onChange: (result: { conditions: Condition[]; actions: Action[] }) => void;
   className?: string;
 }
 
-const TOOLBOX = {
-  kind: 'flyoutToolbox',
-  contents: [
-    { kind: 'block', type: 'hydragrow_sensor_condition' },
-    { kind: 'block', type: 'hydragrow_alert_action' },
-  ],
-};
+function toolboxFor(kind: AutomationIr['kind']) {
+  return {
+    kind: 'flyoutToolbox',
+    contents: [
+      { kind: 'block', type: 'hydragrow_sensor_condition' },
+      { kind: 'block', type: kind === 'alert' ? 'hydragrow_alert_action' : 'hydragrow_advance_stage_action' },
+    ],
+  };
+}
 
 export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -26,8 +27,8 @@ export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditor
 
   useEffect(() => {
     if (!containerRef.current) return;
-    registerHydragrowBlocks();
-    const workspace = Blockly.inject(containerRef.current, { toolbox: TOOLBOX });
+    registerHydragrowBlocks(kind === 'alert' ? SENSOR_FIELDS : FSM_FIELDS);
+    const workspace = Blockly.inject(containerRef.current, { toolbox: toolboxFor(kind) });
     workspaceRef.current = workspace;
 
     const listener = () => {
@@ -42,8 +43,8 @@ export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditor
       workspace.removeChangeListener(listener);
       workspace.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onChange identity churn shouldn't re-mount Blockly
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-mount only when kind changes, not on every onChange
+  }, [kind]);
 
-  return <div ref={containerRef} data-kind={kind} className={className ?? 'h-80 w-full'} />;
+  return <div ref={containerRef} className={className ?? 'h-80 w-full'} />;
 }

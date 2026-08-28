@@ -3,10 +3,11 @@ import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
 import { registerHydragrowBlocks } from './blockly/blocks';
 import { extractActions, extractConditions } from './blockly/extractIr';
-import type { Action, Condition } from '../../lib/automation/ir';
+import type { Action, AutomationIr, Condition } from '../../lib/automation/ir';
 
 export interface BlockLogicEditorProps {
-  /** Called on every workspace change with the current extracted IR fragment. */
+  /** Which kind of automation is being built. Task 2 wires this into the toolbox/field list. */
+  kind: AutomationIr['kind'];
   onChange: (result: { conditions: Condition[]; actions: Action[] }) => void;
   className?: string;
 }
@@ -19,7 +20,7 @@ const TOOLBOX = {
   ],
 };
 
-export function BlockLogicEditor({ onChange, className }: BlockLogicEditorProps) {
+export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
 
@@ -44,5 +45,5 @@ export function BlockLogicEditor({ onChange, className }: BlockLogicEditorProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- onChange identity churn shouldn't re-mount Blockly
   }, []);
 
-  return <div ref={containerRef} className={className ?? 'h-80 w-full'} />;
+  return <div ref={containerRef} data-kind={kind} className={className ?? 'h-80 w-full'} />;
 }

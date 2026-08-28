@@ -102,12 +102,14 @@ mod tests {
     #[test]
     fn script_with_matching_condition_produces_alert() {
         let engine = Arc::new(ScriptEngine::new());
-        let script = make_alert_script(r#"
+        let script = make_alert_script(
+            r#"
 fn main(input) {
     if input.ph <= 7.5 { return (); }
     #{ level: "warning", title: "pH cao", message: `pH=${input.ph}` }
 }
-"#);
+"#,
+        );
         let input = ScriptSensorInput {
             ph: 8.1,
             ec: 1.4,

@@ -1,4 +1,4 @@
-use rhai::{Dynamic, Engine, Map, Scope, AST, EvalAltResult};
+use rhai::{AST, Dynamic, Engine, EvalAltResult, Map, Scope};
 use uuid::Uuid;
 
 use crate::models::script::AlertOutput;

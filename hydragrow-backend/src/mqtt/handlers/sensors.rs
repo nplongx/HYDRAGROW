@@ -111,16 +111,15 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
         let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
-        let alerts = crate::mqtt::handlers::script_eval::eval_alert_scripts(&engine, &scripts, &input);
+        let alerts =
+            crate::mqtt::handlers::script_eval::eval_alert_scripts(&engine, &scripts, &input);
         for alert in alerts {
             let alert_msg = crate::mqtt::handlers::script_eval::alert_output_to_system_alert(
                 alert,
                 &device_id,
                 input.timestamp_ms,
             );
-            let _ = app_state
-                .event_bus
-                .send(AppEvent::SystemAlert(alert_msg));
+            let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert_msg));
         }
     }
 }

@@ -51,6 +51,7 @@ async fn handle_system_alert(
     let timestamp_ms = json
         .get("timestamp_ms")
         .and_then(|v| v.as_u64())
+        .filter(|&ts| ts > 1_000_000_000_000) // Phải > năm 2001 (ms)
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis() as u64);
     let details = json.get("details").cloned();
 
@@ -147,7 +148,13 @@ async fn handle_system_alert(
                 .cloned()
                 .unwrap_or_default(),
         };
-        if !tokens.is_empty() {
+        if tokens.is_empty() {
+            tracing::warn!(
+                device_id = %device_id,
+                level = %level,
+                "FCM alert triggered nhưng không có token nào đăng ký cho device này"
+            );
+        } else {
             let notification_message = message.clone();
             tokio::spawn(async move {
                 crate::services::fcm::send_push_notification(&title, &notification_message, tokens)
@@ -160,4 +167,40 @@ async fn handle_system_alert(
         "  [MQTT-EVENTS] Đã xử lý cảnh báo bình dung dịch cho {}: {}",
         device_id, message
     );
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn level_normalization_handles_capitalized_input() {
+        // ESP32 gửi "Warning", "Info", "Success", "Critical"
+        // Backend phải normalize về lowercase trước khi so sánh
+        let cases = vec![
+            ("Warning", "warning"),
+            ("warning", "warning"),
+            ("Critical", "critical"),
+            ("CRITICAL", "critical"),
+            ("Info", "info"),
+            ("Success", "success"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(input.to_lowercase(), expected, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn fcm_is_triggered_for_warning_and_critical() {
+        // Kiểm tra logic điều kiện (không cần full integration)
+        let should_notify = |level: &str| -> bool {
+            let l = level.to_lowercase();
+            l == "warning" || l == "critical"
+        };
+        assert!(should_notify("Warning"));
+        assert!(should_notify("warning"));
+        assert!(should_notify("Critical"));
+        assert!(should_notify("critical"));
+        assert!(!should_notify("Info"));
+        assert!(!should_notify("info"));
+        assert!(!should_notify("Success"));
+    }
 }

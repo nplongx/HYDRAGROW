@@ -119,7 +119,37 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 &device_id,
                 input.timestamp_ms,
             );
-            let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert_msg));
+            // 1. Persist vào PostgreSQL
+            let db_record = crate::db::postgres::NewSystemEventRecord {
+                device_id: device_id.clone(),
+                level: alert_msg.level.clone(),
+                category: alert_msg.category.clone(),
+                title: alert_msg.title.clone(),
+                message: alert_msg.message.clone(),
+                reason: alert_msg.reason.clone(),
+                metadata: alert_msg.metadata.clone(),
+                timestamp: alert_msg.timestamp as i64,
+            };
+            if let Err(e) = crate::db::postgres::insert_system_event(&app_state.pg_pool, &db_record).await {
+                tracing::error!(error = ?e, device_id = %device_id, "Lỗi persist script alert vào DB");
+            }
+            // 2. Bắn vào event bus (WebSocket)
+            let _ = app_state.event_bus.send(AppEvent::SystemAlert(alert_msg.clone()));
+            // 3. Gửi FCM nếu warning hoặc critical
+            let level_lower = alert_msg.level.to_lowercase();
+            if level_lower == "warning" || level_lower == "critical" {
+                let tokens = match app_state.fcm_tokens.lock() {
+                    Ok(guard) => guard.get(&device_id).cloned().unwrap_or_default(),
+                    Err(poisoned) => poisoned.into_inner().get(&device_id).cloned().unwrap_or_default(),
+                };
+                if !tokens.is_empty() {
+                    let title = alert_msg.title.clone();
+                    let message = alert_msg.message.clone();
+                    tokio::spawn(async move {
+                        crate::services::fcm::send_push_notification(&title, &message, tokens).await;
+                    });
+                }
+            }
         }
     }
 }
@@ -170,6 +200,22 @@ mod tests {
             is_continuous: None,
             ph_voltage_mv: Some(2450.0),
         }
+    }
+
+    #[test]
+    fn alert_output_to_system_alert_sets_correct_category() {
+        use crate::mqtt::handlers::script_eval::alert_output_to_system_alert;
+        use crate::models::script::AlertOutput;
+
+        let alert = AlertOutput {
+            level: "warning".to_string(),
+            title: "pH cao".to_string(),
+            message: "pH = 8.5".to_string(),
+        };
+        let msg = alert_output_to_system_alert(alert, "device_001", 1234567890);
+        assert_eq!(msg.category, "script_alert");
+        assert_eq!(msg.device_id, "device_001");
+        assert_eq!(msg.level, "warning");
     }
 
     #[test]

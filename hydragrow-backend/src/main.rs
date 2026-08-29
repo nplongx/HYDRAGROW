@@ -299,6 +299,33 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // Nạp FCM tokens từ DB vào in-memory cache khi khởi động
+    {
+        use crate::db::postgres::get_fcm_tokens_for_device;
+        let pool = app_state.pg_pool.clone();
+        let fcm_cache = app_state.fcm_tokens.clone();
+        let device_ids: Vec<String> =
+            sqlx::query_scalar("SELECT DISTINCT device_id FROM fcm_tokens")
+                .fetch_all(&pool)
+                .await
+                .unwrap_or_default();
+
+        for device_id in device_ids {
+            match get_fcm_tokens_for_device(&pool, &device_id).await {
+                Ok(tokens) if !tokens.is_empty() => {
+                    info!(device_id = %device_id, count = tokens.len(), "Đã nạp FCM tokens từ DB");
+                    let mut cache = match fcm_cache.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner(),
+                    };
+                    cache.insert(device_id, tokens);
+                }
+                Ok(_) => {}
+                Err(e) => error!(device_id = %device_id, error = %e, "Lỗi nạp FCM tokens từ DB"),
+            }
+        }
+    }
+
     let app_state_for_bridge = app_state.clone();
     tokio::spawn(crate::mqtt::handlers::integration_bridge::run(
         app_state_for_bridge.into_inner(),

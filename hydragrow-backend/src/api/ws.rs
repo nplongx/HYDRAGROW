@@ -312,8 +312,9 @@ mod tests {
         let scoped = "device_B";
         let event_did = event_device_id_for_filter(&event);
         assert!(event_did.is_some());
-        assert!(
-            event_did.unwrap() != scoped,
+        assert_ne!(
+            event_did,
+            Some(scoped),
             "Alert of device_A must be filtered for device_B WS"
         );
     }

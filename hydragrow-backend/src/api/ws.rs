@@ -128,15 +128,7 @@ pub async fn ws_handler(
                         Ok(event) => {
                             // Only forward events for this connection's device_id.
                             // Events with no device_id (e.g. broad system events) pass through.
-                            let event_device_id: Option<&str> = match &event {
-                                AppEvent::DeviceStatus(p) => Some(p.device_id.as_str()),
-                                AppEvent::SensorUpdate(p) => Some(p.device_id.as_str()),
-                                AppEvent::FsmTransition(p) => Some(p.device_id.as_str()),
-                                AppEvent::ControllerStatus(payload) => {
-                                    payload.get("device_id").and_then(|v| v.as_str())
-                                }
-                                _ => None,
-                            };
+                            let event_device_id = event_device_id_for_filter(&event);
                             if let Some(dev_id) = event_device_id
                                 && dev_id != scoped_device_id {
                                     continue;
@@ -278,4 +270,59 @@ pub async fn ws_handler(
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/ws", web::get().to(ws_handler));
+}
+
+fn event_device_id_for_filter(event: &AppEvent) -> Option<&str> {
+    match event {
+        AppEvent::DeviceStatus(p) => Some(p.device_id.as_str()),
+        AppEvent::SensorUpdate(p) => Some(p.device_id.as_str()),
+        AppEvent::FsmTransition(p) => Some(p.device_id.as_str()),
+        AppEvent::SystemAlert(a) => Some(a.device_id.as_str()),
+        AppEvent::DosingCycle(c) => Some(c.device_id.as_str()),
+        AppEvent::WaterCycle(c) => Some(c.device_id.as_str()),
+        AppEvent::HealthSnapshot(s) => Some(s.device_id.as_str()),
+        AppEvent::CalibrationUpdate(c) => Some(c.device_id.as_str()),
+        AppEvent::ControllerStatus(payload) => payload.get("device_id").and_then(|v| v.as_str()),
+        AppEvent::FsmStateUpdate(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::alert::AlertMessage;
+    use hydragrow_shared::events::AppEvent;
+
+    fn make_alert(device_id: &str) -> AppEvent {
+        AppEvent::SystemAlert(AlertMessage {
+            level: "warning".to_string(),
+            category: "dosing".to_string(),
+            title: "Test".to_string(),
+            message: "msg".to_string(),
+            device_id: device_id.to_string(),
+            timestamp: 0,
+            reason: None,
+            metadata: None,
+        })
+    }
+
+    #[test]
+    fn alert_for_device_a_filtered_out_for_device_b_connection() {
+        let event = make_alert("device_A");
+        let scoped = "device_B";
+        let event_did = event_device_id_for_filter(&event);
+        assert!(event_did.is_some());
+        assert!(
+            event_did.unwrap() != scoped,
+            "Alert of device_A must be filtered for device_B WS"
+        );
+    }
+
+    #[test]
+    fn alert_for_device_a_passes_for_device_a_connection() {
+        let event = make_alert("device_A");
+        let scoped = "device_A";
+        let event_did = event_device_id_for_filter(&event);
+        assert_eq!(event_did, Some(scoped));
+    }
 }

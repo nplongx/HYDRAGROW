@@ -100,7 +100,19 @@ fn main() -> anyhow::Result<()> {
         &I2cConfig::default(),
     )?;
     let mut valve = I2cExpander::new(i2c_driver);
-    valve.init().map_err(|e| anyhow::anyhow!("PCF8574 init failed: {:?}", e))?;  
+    let mut pcf_ok = false;
+    for attempt in 1..=3 {
+        match valve.init() {
+            Ok(()) => { pcf_ok = true; break; }
+            Err(e) => {
+                warn!("PCF8574 init attempt {} failed: {:?}", attempt, e);
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
+    if !pcf_ok {
+        warn!("⚠️ PCF8574 không khởi tạo được sau 3 lần thử — tiếp tục boot, valve sẽ không hoạt động.");
+    }  
 
     let pump_controller = PumpController::new(
         LedcDriver::new(

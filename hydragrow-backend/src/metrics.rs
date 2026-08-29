@@ -48,6 +48,11 @@ lazy_static! {
         &["trigger", "outcome"]
     ).expect("metric can be created");
 
+    pub static ref EVENT_BUS_LAGGED_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new("hydragrow_event_bus_lagged_total", "Số lần event bus bị lag (messages dropped)"),
+        &["consumer"]
+    ).expect("metric can be created");
+
     // =========================================================================
     // 2. ADAPTIVE LEARNING & DYNAMIC GAIN / STEP RATIO
     // =========================================================================
@@ -244,6 +249,9 @@ pub fn register_metrics() {
             .unwrap();
         REGISTRY
             .register(Box::new(DOSING_CYCLES_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(EVENT_BUS_LAGGED_TOTAL.clone()))
             .unwrap();
 
         // 2. Adaptive Learning

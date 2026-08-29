@@ -68,4 +68,112 @@ mod tests {
         assert_eq!(stages[0].stage_order, 1);
         assert_eq!(stages[1].stage_order, 2);
     }
+
+    #[sqlx::test]
+    async fn get_active_stage_context_returns_none_when_no_active_recipe(pool: sqlx::PgPool) {
+        let ctx = get_active_stage_context(&pool, "device_without_recipe")
+            .await
+            .expect("query should not error");
+        assert!(ctx.is_none());
+    }
+
+    #[sqlx::test]
+    async fn get_active_stage_context_returns_stage_index_and_elapsed(pool: sqlx::PgPool) {
+        sqlx::query(
+            "INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO crop_recipe_stages (id, recipe_id, stage_order, name)
+             VALUES ('s1', 'r1', 1, 'Seedling'), ('s2', 'r1', 2, 'Vegetative')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO device_active_recipes (id, device_id, season_id, recipe_id, current_stage_id, applied_at)
+             VALUES ('a1', 'dev1', 'season1', 'r1', 's2', NOW() - INTERVAL '90 seconds')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let ctx = get_active_stage_context(&pool, "dev1")
+            .await
+            .expect("query should not error")
+            .expect("expected Some(context)");
+
+        assert_eq!(ctx.recipe_id, "r1");
+        assert_eq!(ctx.stage_index, 1); // stage_order=2 → 0-based index 1
+        assert!(ctx.elapsed_sec >= 90);
+    }
+
+    #[sqlx::test]
+    async fn advance_active_recipe_stage_updates_current_stage_id(pool: sqlx::PgPool) {
+        sqlx::query(
+            "INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO crop_recipe_stages (id, recipe_id, stage_order, name)
+             VALUES ('s1', 'r1', 1, 'Seedling'), ('s2', 'r1', 2, 'Vegetative')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO device_active_recipes (id, device_id, season_id, recipe_id, current_stage_id)
+             VALUES ('a1', 'dev1', 'season1', 'r1', 's1')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let new_stage = advance_active_recipe_stage(&pool, "dev1", 1) // target index 1 → stage_order 2
+            .await
+            .expect("query should not error")
+            .expect("expected Some(stage)");
+        assert_eq!(new_stage.id, "s2");
+        assert_eq!(new_stage.name, "Vegetative");
+
+        let current_id: String = sqlx::query_scalar(
+            "SELECT current_stage_id FROM device_active_recipes WHERE device_id = 'dev1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(current_id, "s2");
+    }
+
+    #[sqlx::test]
+    async fn advance_active_recipe_stage_returns_none_for_out_of_range_index(pool: sqlx::PgPool) {
+        sqlx::query(
+            "INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO crop_recipe_stages (id, recipe_id, stage_order, name) VALUES ('s1', 'r1', 1, 'Seedling')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO device_active_recipes (id, device_id, season_id, recipe_id, current_stage_id)
+             VALUES ('a1', 'dev1', 'season1', 'r1', 's1')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let result = advance_active_recipe_stage(&pool, "dev1", 5)
+            .await
+            .expect("query should not error");
+        assert!(result.is_none());
+    }
 }

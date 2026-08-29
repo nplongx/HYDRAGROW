@@ -8,6 +8,7 @@ pub mod helper;
 pub mod hestia;
 pub mod log;
 pub mod recipe;
+pub mod safety;
 pub mod telemetry;
 pub mod topics;
 

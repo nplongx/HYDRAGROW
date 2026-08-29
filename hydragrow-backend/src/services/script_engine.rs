@@ -6,7 +6,10 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub use crate::models::script::{AlertOutput, ScriptFsmInput, ScriptSensorInput, StageOverride};
+pub use crate::models::script::{
+    ActionCommandOutput, AlertOutput, ScriptActionInput, ScriptFsmInput, ScriptSensorInput,
+    StageOverride,
+};
 
 /// Wrapper quanh Rhai Engine, configure một lần khi khởi động.
 /// Clone-safe vì Engine implement Clone + Send + Sync (với feature "sync").
@@ -123,6 +126,56 @@ impl ScriptEngine {
             reason,
         }))
     }
+
+    pub fn eval_action_command(
+        &self,
+        ast: &AST,
+        input: &ScriptActionInput,
+    ) -> Result<Option<ActionCommandOutput>> {
+        let mut map = Map::new();
+        map.insert("ph".into(), Dynamic::from_float(input.ph));
+        map.insert("ec".into(), Dynamic::from_float(input.ec));
+        map.insert("temp".into(), Dynamic::from_float(input.temp));
+        map.insert("water_level".into(), Dynamic::from_float(input.water_level));
+        map.insert("phase".into(), Dynamic::from(input.phase.clone()));
+        map.insert("device_id".into(), Dynamic::from(input.device_id.clone()));
+        map.insert("timestamp_ms".into(), Dynamic::from_int(input.timestamp_ms));
+
+        let result: Dynamic = self
+            .engine
+            .call_fn(&mut Scope::new(), ast, "main", (Dynamic::from_map(map),))
+            .context("Rhai eval error in action_command script")?;
+
+        if result.is_unit() || result.is::<()>() {
+            return Ok(None);
+        }
+
+        let map = result
+            .try_cast::<Map>()
+            .context("Action command script must return a Map or () (unit)")?;
+
+        let action = map
+            .get("action")
+            .map(|v| v.to_string())
+            .context("Missing 'action' in action_command result")?;
+        let pump = map.get("pump").map(|v| v.to_string());
+        let dose_ml = map.get("dose_ml").and_then(|v| {
+            v.clone()
+                .try_cast::<f32>()
+                .or_else(|| v.clone().try_cast::<f64>().map(|f| f as f32))
+        });
+        let duration_sec = map
+            .get("duration_sec")
+            .and_then(|v| v.clone().try_cast::<i64>())
+            .map(|i| i as u64);
+
+        Ok(Some(ActionCommandOutput {
+            action,
+            pump,
+            dose_ml,
+            duration_sec,
+        }))
+    }
 }
 
 impl Default for ScriptEngine {
@@ -163,20 +216,33 @@ impl ScriptCache {
         // Group theo kind
         let mut alert_scripts = Vec::new();
         let mut override_scripts = Vec::new();
+        let mut action_command_scripts = Vec::new();
         for s in scripts {
             match s.kind.as_str() {
                 "alert" => alert_scripts.push(s),
                 "recipe_override" => override_scripts.push(s),
+                "action_command" => action_command_scripts.push(s),
                 _ => {}
             }
         }
         map.insert(format!("{}:alert", device_id), alert_scripts);
         map.insert(format!("{}:recipe_override", device_id), override_scripts);
+        map.insert(
+            format!("{}:action_command", device_id),
+            action_command_scripts,
+        );
     }
 
     pub async fn get_alert_scripts(&self, device_id: &str) -> Vec<CachedScript> {
         let map = self.inner.read().await;
         map.get(&format!("{}:alert", device_id))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub async fn get_action_command_scripts(&self, device_id: &str) -> Vec<CachedScript> {
+        let map = self.inner.read().await;
+        map.get(&format!("{}:action_command", device_id))
             .cloned()
             .unwrap_or_default()
     }
@@ -309,6 +375,54 @@ fn main(input) {
         };
         let result = engine.eval_recipe_override(&ast, &input).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn eval_action_command_returns_none_when_condition_not_met() {
+        let engine = ScriptEngine::new();
+        let src = r#"
+fn main(input) {
+    if input.ph < 7.5 { return (); }
+    #{ action: "dose", pump: "ph_down", dose_ml: 3.0 }
+}
+"#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptActionInput {
+            ph: 6.8,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        };
+        let result = engine.eval_action_command(&ast, &input).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn eval_action_command_returns_command_when_condition_met() {
+        let engine = ScriptEngine::new();
+        let src = r#"
+fn main(input) {
+    if input.ph < 7.5 { return (); }
+    #{ action: "dose", pump: "ph_down", dose_ml: 3.0 }
+}
+"#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptActionInput {
+            ph: 8.0,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        };
+        let result = engine.eval_action_command(&ast, &input).unwrap().unwrap();
+        assert_eq!(result.action, "dose");
+        assert_eq!(result.pump.as_deref(), Some("ph_down"));
+        assert_eq!(result.dose_ml, Some(3.0));
     }
 
     #[tokio::test]

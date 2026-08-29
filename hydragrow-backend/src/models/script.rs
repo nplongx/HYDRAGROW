@@ -17,6 +17,13 @@ pub enum ScriptKind {
     /// return None/() để giữ stage hiện tại, hoặc Map { target_stage_index, reason }
     #[serde(rename = "recipe_override")]
     RecipeOverride,
+    /// fn main(input: Map) -> Map?
+    /// input fields: ph, ec, temp, water_level, phase, device_id, timestamp_ms
+    /// return None/() để không phát lệnh, hoặc Map { action, pump?, dose_ml?, duration_sec? }.
+    /// MỌI kết quả với action="dose" bắt buộc đi qua `hydragrow_shared::safety::check_dose`
+    /// trước khi publish MQTT — xem Task 6. Script KHÔNG thể bỏ qua bước này.
+    #[serde(rename = "action_command")]
+    ActionCommand,
 }
 
 impl std::fmt::Display for ScriptKind {
@@ -24,6 +31,7 @@ impl std::fmt::Display for ScriptKind {
         match self {
             ScriptKind::Alert => write!(f, "alert"),
             ScriptKind::RecipeOverride => write!(f, "recipe_override"),
+            ScriptKind::ActionCommand => write!(f, "action_command"),
         }
     }
 }
@@ -96,6 +104,30 @@ pub struct ScriptFsmInput {
     pub ec: f32,
     pub ph: f32,
     pub elapsed_sec: i64,
+}
+
+/// Input truyền vào action_command script — hợp nhất sensor + FSM phase vì
+/// action block có thể cần điều kiện dựa trên cả hai (VD: chỉ dose khi phase=Monitoring).
+#[derive(Debug, Clone)]
+pub struct ScriptActionInput {
+    pub ph: f32,
+    pub ec: f32,
+    pub temp: f32,
+    pub water_level: f32,
+    pub phase: String,
+    pub device_id: String,
+    pub timestamp_ms: i64,
+}
+
+/// Kết quả sau khi eval một action_command script.
+/// schema_version không bắt buộc ở đây vì đây là kiểu nội bộ backend (không serialize
+/// qua MQTT/DB trực tiếp — CommandPayload trong services/command.rs mới là kiểu wire).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ActionCommandOutput {
+    pub action: String,
+    pub pump: Option<String>,
+    pub dose_ml: Option<f32>,
+    pub duration_sec: Option<u64>,
 }
 
 #[cfg(test)]

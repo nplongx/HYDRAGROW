@@ -11,9 +11,9 @@ use crate::models::script::{ScriptValidateResponse, UpsertScriptRequest, UserScr
 
 pub fn validate_kind(kind: &str) -> Result<(), String> {
     match kind {
-        "alert" | "recipe_override" => Ok(()),
+        "alert" | "recipe_override" | "action_command" => Ok(()),
         other => Err(format!(
-            "kind phải là 'alert' hoặc 'recipe_override', nhận: '{}'",
+            "kind phải là 'alert', 'recipe_override' hoặc 'action_command', nhận: '{}'",
             other
         )),
     }
@@ -309,5 +309,6 @@ mod tests {
     fn valid_kinds_accepted() {
         assert!(validate_kind("alert").is_ok());
         assert!(validate_kind("recipe_override").is_ok());
+        assert!(validate_kind("action_command").is_ok());
     }
 }

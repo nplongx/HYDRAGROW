@@ -420,7 +420,10 @@ pub async fn handle_fsm_transition(
 /// cập nhật mỗi lần có sensor data mới). Trả (0.0, 0.0) nếu cache trống hoặc thiếu field —
 /// KHÔNG panic, vì recipe_override script vẫn có thể hữu ích chỉ dựa vào `elapsed_sec`.
 fn extract_ph_ec_from_cache(cached: Option<String>) -> (f32, f32) {
-    let value = match cached.as_deref().map(serde_json::from_str::<serde_json::Value>) {
+    let value = match cached
+        .as_deref()
+        .map(serde_json::from_str::<serde_json::Value>)
+    {
         Some(Ok(v)) => v,
         _ => return (0.0, 0.0),
     };
@@ -445,14 +448,15 @@ async fn eval_and_apply_recipe_overrides(
         return;
     }
 
-    let ctx = match crate::db::recipes::get_active_stage_context(&app_state.pg_pool, device_id).await {
-        Ok(Some(ctx)) => ctx,
-        Ok(None) => return, // không có recipe active — không có gì để override
-        Err(e) => {
-            tracing::error!(error = ?e, device_id, "Lỗi đọc active stage context");
-            return;
-        }
-    };
+    let ctx =
+        match crate::db::recipes::get_active_stage_context(&app_state.pg_pool, device_id).await {
+            Ok(Some(ctx)) => ctx,
+            Ok(None) => return, // không có recipe active — không có gì để override
+            Err(e) => {
+                tracing::error!(error = ?e, device_id, "Lỗi đọc active stage context");
+                return;
+            }
+        };
 
     let cached = app_state.device_states.read().await.get(device_id).cloned();
     let (ph, ec) = extract_ph_ec_from_cache(cached);
@@ -469,8 +473,14 @@ async fn eval_and_apply_recipe_overrides(
     for script in &scripts {
         match engine.eval_recipe_override(&script.ast, &script_input) {
             Ok(Some(override_result)) => {
-                apply_recipe_override(app_state, device_id, &ctx.recipe_id, override_result, script)
-                    .await;
+                apply_recipe_override(
+                    app_state,
+                    device_id,
+                    &ctx.recipe_id,
+                    override_result,
+                    script,
+                )
+                .await;
                 break;
             }
             Ok(None) => {}
@@ -519,16 +529,18 @@ async fn apply_recipe_override(
             if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {
                 tracing::error!(error = ?e, device_id, "Không thể lưu recipe_override event");
             }
-            let _ = app_state.event_bus.send(AppEvent::SystemAlert(crate::models::alert::AlertMessage {
-                level: "info".to_string(),
-                category: "recipe_override".to_string(),
-                title,
-                message: override_result.reason,
-                device_id: device_id.to_string(),
-                reason: Some(script.name.clone()),
-                metadata: None,
-                timestamp: timestamp as u64,
-            }));
+            let _ = app_state.event_bus.send(AppEvent::SystemAlert(
+                crate::models::alert::AlertMessage {
+                    level: "info".to_string(),
+                    category: "recipe_override".to_string(),
+                    title,
+                    message: override_result.reason,
+                    device_id: device_id.to_string(),
+                    reason: Some(script.name.clone()),
+                    metadata: None,
+                    timestamp: timestamp as u64,
+                },
+            ));
         }
         Ok(None) => {
             tracing::warn!(

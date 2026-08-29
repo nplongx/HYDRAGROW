@@ -16,9 +16,18 @@ pub struct DoseSafetyLimits {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DoseSafetyViolation {
-    ExceedsPerCycleLimit { requested_ml: f32, max_ml: f32 },
-    ExceedsHourlyBudget { requested_ml: f32, already_dosed_ml: f32, max_ml: f32 },
-    CooldownActive { seconds_remaining: u64 },
+    ExceedsPerCycleLimit {
+        requested_ml: f32,
+        max_ml: f32,
+    },
+    ExceedsHourlyBudget {
+        requested_ml: f32,
+        already_dosed_ml: f32,
+        max_ml: f32,
+    },
+    CooldownActive {
+        seconds_remaining: u64,
+    },
 }
 
 /// Kiểm tra một liều đề xuất so với giới hạn an toàn. Gọi TRƯỚC khi publish bất kỳ
@@ -87,7 +96,10 @@ mod tests {
         let result = check_dose(&limits(), &[], 1_000, None, 15.0);
         assert_eq!(
             result,
-            Err(DoseSafetyViolation::ExceedsPerCycleLimit { requested_ml: 15.0, max_ml: 10.0 })
+            Err(DoseSafetyViolation::ExceedsPerCycleLimit {
+                requested_ml: 15.0,
+                max_ml: 10.0
+            })
         );
     }
 
@@ -96,7 +108,9 @@ mod tests {
         let result = check_dose(&limits(), &[], 1_000, Some(970), 5.0); // 30s trôi qua, cooldown 60s
         assert_eq!(
             result,
-            Err(DoseSafetyViolation::CooldownActive { seconds_remaining: 30 })
+            Err(DoseSafetyViolation::CooldownActive {
+                seconds_remaining: 30
+            })
         );
     }
 

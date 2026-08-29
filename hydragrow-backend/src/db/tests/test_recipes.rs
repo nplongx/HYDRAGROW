@@ -79,10 +79,12 @@ mod tests {
 
     #[sqlx::test]
     async fn get_active_stage_context_returns_stage_index_and_elapsed(pool: sqlx::PgPool) {
-        sqlx::query("INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO crop_recipe_stages (id, recipe_id, stage_order, name)
              VALUES ('s1', 'r1', 1, 'Seedling'), ('s2', 'r1', 2, 'Vegetative')",
@@ -110,10 +112,12 @@ mod tests {
 
     #[sqlx::test]
     async fn advance_active_recipe_stage_updates_current_stage_id(pool: sqlx::PgPool) {
-        sqlx::query("INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO crop_recipe_stages (id, recipe_id, stage_order, name)
              VALUES ('s1', 'r1', 1, 'Seedling'), ('s2', 'r1', 2, 'Vegetative')",
@@ -147,10 +151,12 @@ mod tests {
 
     #[sqlx::test]
     async fn advance_active_recipe_stage_returns_none_for_out_of_range_index(pool: sqlx::PgPool) {
-        sqlx::query("INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO crop_recipes (id, name, crop) VALUES ('r1', 'Recipe 1', 'lettuce')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO crop_recipe_stages (id, recipe_id, stage_order, name) VALUES ('s1', 'r1', 1, 'Seedling')",
         )

@@ -34,7 +34,13 @@ pub fn evaluate_action_safety(
             max_ml: limits.max_dose_per_cycle_ml,
         });
     };
-    match check_dose(limits, hourly_history_ml, now_sec, last_dose_at_sec, dose_ml) {
+    match check_dose(
+        limits,
+        hourly_history_ml,
+        now_sec,
+        last_dose_at_sec,
+        dose_ml,
+    ) {
         Ok(()) => ActionSafetyDecision::Allow,
         Err(violation) => ActionSafetyDecision::Block(violation),
     }
@@ -61,11 +67,19 @@ pub async fn dispatch_action_command(
     now_sec: u64,
     last_dose_at_sec: Option<u64>,
 ) -> Result<(), DoseSafetyViolation> {
-    match evaluate_action_safety(&output, limits, hourly_history_ml, now_sec, last_dose_at_sec) {
+    match evaluate_action_safety(
+        &output,
+        limits,
+        hourly_history_ml,
+        now_sec,
+        last_dose_at_sec,
+    ) {
         ActionSafetyDecision::Block(violation) => Err(violation),
         ActionSafetyDecision::Allow => {
             let payload = to_command_payload(&output);
-            if let Err(e) = crate::services::command::send_command(app_state, device_id, &payload).await {
+            if let Err(e) =
+                crate::services::command::send_command(app_state, device_id, &payload).await
+            {
                 tracing::error!(error = ?e, device_id, action = %output.action, "Lỗi publish action_command MQTT");
             }
             Ok(())

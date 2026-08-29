@@ -159,9 +159,11 @@ impl ScriptEngine {
             .map(|v| v.to_string())
             .context("Missing 'action' in action_command result")?;
         let pump = map.get("pump").map(|v| v.to_string());
-        let dose_ml = map
-            .get("dose_ml")
-            .and_then(|v| v.clone().try_cast::<f32>().or_else(|| v.clone().try_cast::<f64>().map(|f| f as f32)));
+        let dose_ml = map.get("dose_ml").and_then(|v| {
+            v.clone()
+                .try_cast::<f32>()
+                .or_else(|| v.clone().try_cast::<f64>().map(|f| f as f32))
+        });
         let duration_sec = map
             .get("duration_sec")
             .and_then(|v| v.clone().try_cast::<i64>())
@@ -225,7 +227,10 @@ impl ScriptCache {
         }
         map.insert(format!("{}:alert", device_id), alert_scripts);
         map.insert(format!("{}:recipe_override", device_id), override_scripts);
-        map.insert(format!("{}:action_command", device_id), action_command_scripts);
+        map.insert(
+            format!("{}:action_command", device_id),
+            action_command_scripts,
+        );
     }
 
     pub async fn get_alert_scripts(&self, device_id: &str) -> Vec<CachedScript> {

@@ -93,9 +93,7 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handlers::dosing_cycle::handle_dosing_cycle(device_id, &payload_bytes, app_state).await
         }
 
-        "/water_cycle" => {
-            handlers::water_cycle::handle(device_id, &payload_bytes, app_state).await
-        }
+        "/water_cycle" => handlers::water_cycle::handle(device_id, &payload_bytes, app_state).await,
 
         "/fsm/transition" => {
             handlers::fsm::handle_fsm_transition(device_id, &payload_bytes, app_state).await

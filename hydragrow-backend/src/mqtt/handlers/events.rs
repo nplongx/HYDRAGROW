@@ -184,7 +184,12 @@ mod tests {
             ("Success", "success"),
         ];
         for (input, expected) in cases {
-            assert_eq!(input.to_lowercase(), expected, "Failed for input: {}", input);
+            assert_eq!(
+                input.to_lowercase(),
+                expected,
+                "Failed for input: {}",
+                input
+            );
         }
     }
 

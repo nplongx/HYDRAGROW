@@ -508,6 +508,51 @@ pub async fn get_events_by_cycle_id(
         .await
 }
 
+// FCM Tokens
+
+pub async fn upsert_fcm_token(
+    pool: &PgPool,
+    device_id: &str,
+    token: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO fcm_tokens (device_id, token)
+        VALUES ($1, $2)
+        ON CONFLICT (device_id, token) DO NOTHING
+        "#,
+    )
+    .bind(device_id)
+    .bind(token)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_fcm_tokens_for_device(
+    pool: &PgPool,
+    device_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows = sqlx::query_scalar::<_, String>("SELECT token FROM fcm_tokens WHERE device_id = $1")
+        .bind(device_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows)
+}
+
+pub async fn delete_fcm_token(
+    pool: &PgPool,
+    device_id: &str,
+    token: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM fcm_tokens WHERE device_id = $1 AND token = $2")
+        .bind(device_id)
+        .bind(token)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use hydragrow_shared::log::{BasicSystemLogMetadata, SystemLogEvent};

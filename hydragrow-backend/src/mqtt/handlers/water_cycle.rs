@@ -76,7 +76,7 @@ mod tests {
 }"#;
         let result = parse_water_cycle_payload(json.as_bytes());
         assert!(result.is_ok());
-        let payload = result.unwrap();
+        let payload = result.expect("Failed to parse valid water cycle payload");
         assert_eq!(payload.trigger, "refill");
         assert_eq!(payload.level_before, 20.0);
     }

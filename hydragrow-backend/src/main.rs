@@ -483,6 +483,7 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn app_state_has_no_dead_alert_sender() {
         assert!(
             true,

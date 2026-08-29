@@ -484,6 +484,9 @@ async fn main() -> anyhow::Result<()> {
 mod tests {
     #[test]
     fn app_state_has_no_dead_alert_sender() {
-        assert!(true, "Kiểm tra thủ công: không còn alert_sender trong AppState");
+        assert!(
+            true,
+            "Kiểm tra thủ công: không còn alert_sender trong AppState"
+        );
     }
 }

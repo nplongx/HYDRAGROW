@@ -409,6 +409,139 @@ pub async fn handle_fsm_transition(
 
     // Fan-out
     let _ = app_state.event_bus.send(AppEvent::FsmTransition(event));
+
+    // Vá dead wiring: recipe_override scripts được compile/cache nhưng trước đây
+    // không có handler nào gọi eval_recipe_override — dùng state_str đã tính ở trên
+    // (tương đương event.to_phase.to_string()) vì `event` đã bị move vào send() ở trên.
+    eval_and_apply_recipe_overrides(&app_state, &device_id, &state_str).await;
+}
+
+/// Đọc ph/ec gần nhất từ `device_states` cache (được `sensors.rs::merge_sensor_state_cache`
+/// cập nhật mỗi lần có sensor data mới). Trả (0.0, 0.0) nếu cache trống hoặc thiếu field —
+/// KHÔNG panic, vì recipe_override script vẫn có thể hữu ích chỉ dựa vào `elapsed_sec`.
+fn extract_ph_ec_from_cache(cached: Option<String>) -> (f32, f32) {
+    let value = match cached.as_deref().map(serde_json::from_str::<serde_json::Value>) {
+        Some(Ok(v)) => v,
+        _ => return (0.0, 0.0),
+    };
+    let ph = value.get("ph").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+    let ec = value.get("ec").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+    (ph, ec)
+}
+
+/// Eval mọi recipe_override script cho device sau một FSM transition, và áp dụng
+/// kết quả đầu tiên khớp điều kiện (đúng "single authority" contract của
+/// `ScriptEngine::eval_recipe_override`).
+async fn eval_and_apply_recipe_overrides(
+    app_state: &web::Data<AppState>,
+    device_id: &str,
+    to_phase_str: &str,
+) {
+    let scripts = app_state
+        .script_cache
+        .get_recipe_override_scripts(device_id)
+        .await;
+    if scripts.is_empty() {
+        return;
+    }
+
+    let ctx = match crate::db::recipes::get_active_stage_context(&app_state.pg_pool, device_id).await {
+        Ok(Some(ctx)) => ctx,
+        Ok(None) => return, // không có recipe active — không có gì để override
+        Err(e) => {
+            tracing::error!(error = ?e, device_id, "Lỗi đọc active stage context");
+            return;
+        }
+    };
+
+    let cached = app_state.device_states.read().await.get(device_id).cloned();
+    let (ph, ec) = extract_ph_ec_from_cache(cached);
+
+    let script_input = crate::services::script_engine::ScriptFsmInput {
+        phase: to_phase_str.to_string(),
+        stage_index: ctx.stage_index,
+        ec,
+        ph,
+        elapsed_sec: ctx.elapsed_sec,
+    };
+
+    let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
+    for script in &scripts {
+        match engine.eval_recipe_override(&script.ast, &script_input) {
+            Ok(Some(override_result)) => {
+                apply_recipe_override(app_state, device_id, &ctx.recipe_id, override_result, script)
+                    .await;
+                break;
+            }
+            Ok(None) => {}
+            Err(e) => tracing::warn!(
+                script_id = %script.id,
+                script_name = %script.name,
+                device_id,
+                error = %e,
+                "recipe_override script runtime error — skipping"
+            ),
+        }
+    }
+}
+
+async fn apply_recipe_override(
+    app_state: &web::Data<AppState>,
+    device_id: &str,
+    recipe_id: &str,
+    override_result: crate::services::script_engine::StageOverride,
+    script: &crate::services::script_engine::CachedScript,
+) {
+    match crate::db::recipes::advance_active_recipe_stage(
+        &app_state.pg_pool,
+        device_id,
+        override_result.target_stage_index,
+    )
+    .await
+    {
+        Ok(Some(new_stage)) => {
+            let timestamp = chrono::Utc::now().timestamp_millis();
+            let title = format!("Recipe override: chuyển sang stage \"{}\"", new_stage.name);
+            let record = NewSystemEventRecord {
+                device_id: device_id.to_string(),
+                level: "info".to_string(),
+                category: "recipe_override".to_string(),
+                title: title.clone(),
+                message: override_result.reason.clone(),
+                reason: Some(script.name.clone()),
+                metadata: Some(serde_json::json!({
+                    "script_id": script.id,
+                    "target_stage_index": override_result.target_stage_index,
+                    "recipe_id": recipe_id,
+                })),
+                timestamp,
+            };
+            if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {
+                tracing::error!(error = ?e, device_id, "Không thể lưu recipe_override event");
+            }
+            let _ = app_state.event_bus.send(AppEvent::SystemAlert(crate::models::alert::AlertMessage {
+                level: "info".to_string(),
+                category: "recipe_override".to_string(),
+                title,
+                message: override_result.reason,
+                device_id: device_id.to_string(),
+                reason: Some(script.name.clone()),
+                metadata: None,
+                timestamp: timestamp as u64,
+            }));
+        }
+        Ok(None) => {
+            tracing::warn!(
+                device_id,
+                target = override_result.target_stage_index,
+                script_id = %script.id,
+                "recipe_override script chỉ định stage_index không tồn tại — bỏ qua"
+            );
+        }
+        Err(e) => {
+            tracing::error!(error = ?e, device_id, "Lỗi DB khi advance_active_recipe_stage");
+        }
+    }
 }
 
 fn transition_system_event_record(event: &FsmTransitionEvent) -> Option<NewSystemEventRecord> {
@@ -481,11 +614,27 @@ async fn update_device_state_cache(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::{
-        runtime_calibration_update_from_coeffs, transition_system_event_record,
-        validated_runtime_interaction_matrix,
+        extract_ph_ec_from_cache, runtime_calibration_update_from_coeffs,
+        transition_system_event_record, validated_runtime_interaction_matrix,
     };
     use hydragrow_shared::fsm::{FaultCode, SystemPhase};
     use hydragrow_shared::telemetry::transition::{FsmTransitionEvent, TransitionReason};
+
+    #[tokio::test]
+    async fn extract_ph_ec_from_cached_state_returns_defaults_when_missing() {
+        let cached: Option<String> = None;
+        let (ph, ec) = extract_ph_ec_from_cache(cached);
+        assert_eq!(ph, 0.0);
+        assert_eq!(ec, 0.0);
+    }
+
+    #[tokio::test]
+    async fn extract_ph_ec_from_cached_state_parses_existing_json() {
+        let cached = Some(r#"{"ph": 6.2, "ec": 1.4, "fsm_state": "Monitoring"}"#.to_string());
+        let (ph, ec) = extract_ph_ec_from_cache(cached);
+        assert_eq!(ph, 6.2);
+        assert_eq!(ec, 1.4);
+    }
 
     #[test]
     fn runtime_interaction_matrix_accepts_controller_4x8_flat_shape() {

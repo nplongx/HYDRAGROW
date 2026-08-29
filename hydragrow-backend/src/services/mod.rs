@@ -1,3 +1,4 @@
+pub mod action_dispatch;
 pub mod command;
 pub mod fcm;
 pub mod firebase_auth;

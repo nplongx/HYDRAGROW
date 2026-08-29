@@ -6,7 +6,7 @@
 use rumqttc::QoS;
 use tracing::warn;
 
-use crate::AppState;
+use crate::{AppState, metrics::EVENT_BUS_LAGGED_TOTAL};
 use hydragrow_shared::{events::AppEvent, topics::topic_integration_events};
 
 pub async fn run(app_state: std::sync::Arc<AppState>) {
@@ -35,6 +35,9 @@ pub async fn run(app_state: std::sync::Arc<AppState>) {
             }
             Ok(_) => {} // Chỉ fan-out alert ở giai đoạn đầu — mở rộng dần theo nhu cầu tích hợp thực tế.
             Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                EVENT_BUS_LAGGED_TOTAL
+                    .with_label_values(&["integration_bridge"])
+                    .inc_by(skipped);
                 warn!(
                     skipped,
                     "integration_bridge bị lag trên event_bus, một số alert có thể đã bị bỏ qua"

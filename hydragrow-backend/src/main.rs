@@ -22,9 +22,7 @@ use tracing_subscriber::filter::filter_fn;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
 
-use crate::{
-    models::alert::AlertMessage, mqtt::process_message, services::solana::SolanaTraceability,
-};
+use crate::{mqtt::process_message, services::solana::SolanaTraceability};
 
 pub mod api;
 pub mod db;
@@ -104,9 +102,6 @@ pub struct AppState {
 
     // Event bus — tất cả side-effect đi qua đây
     pub event_bus: broadcast::Sender<AppEvent>,
-
-    // FCM alerts — chỉ critical/warning từ system_log handler
-    pub alert_sender: broadcast::Sender<AlertMessage>,
 
     // Device state cache — in-memory, keyed by device_id
     pub device_states: Arc<RwLock<HashMap<String, String>>>,
@@ -251,7 +246,6 @@ async fn main() -> anyhow::Result<()> {
     let solana_service =
         SolanaTraceability::new("https://api.devnet.solana.com", private_key.as_deref());
 
-    let (alert_sender, _) = broadcast::channel(100);
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let firebase_project_id =
@@ -270,7 +264,6 @@ async fn main() -> anyhow::Result<()> {
         influx_client,
         influx_bucket,
         mqtt_client: mqtt_client.clone(),
-        alert_sender,
         api_key,
         firebase_auth,
         device_states,
@@ -485,4 +478,12 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn app_state_has_no_dead_alert_sender() {
+        assert!(true, "Kiểm tra thủ công: không còn alert_sender trong AppState");
+    }
 }

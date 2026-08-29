@@ -8,3 +8,4 @@ pub mod script_eval;
 pub mod sensors;
 pub mod status;
 pub mod system_log;
+pub mod water_cycle;

@@ -39,16 +39,21 @@ pub fn evaluate_action_safety(
     calibration: Option<&DosingCalibration>,
 ) -> Result<ActionSafetyDecision, ActionDispatchError> {
     if output.action == "water_on" || output.action == "water_off" {
-        const VALID_WATER_PUMPS: [&str; 4] =
-            ["WATER_PUMP_IN", "WATER_PUMP_OUT", "MIST_VALVE", "OSAKA_PUMP"];
-        let pump = output
-            .pump
-            .as_deref()
-            .ok_or_else(|| ActionDispatchError::UnknownPump("pump là bắt buộc cho water_on/water_off".to_string()))?;
+        const VALID_WATER_PUMPS: [&str; 4] = [
+            "WATER_PUMP_IN",
+            "WATER_PUMP_OUT",
+            "MIST_VALVE",
+            "OSAKA_PUMP",
+        ];
+        let pump = output.pump.as_deref().ok_or_else(|| {
+            ActionDispatchError::UnknownPump("pump là bắt buộc cho water_on/water_off".to_string())
+        })?;
         if !VALID_WATER_PUMPS.contains(&pump) {
             return Err(ActionDispatchError::UnknownPump(pump.to_string()));
         }
-        return Ok(ActionSafetyDecision::Allow { duration_sec: output.duration_sec });
+        return Ok(ActionSafetyDecision::Allow {
+            duration_sec: output.duration_sec,
+        });
     }
 
     if output.action != "dose" {
@@ -328,6 +333,11 @@ mod tests {
             duration_sec: Some(10),
         };
         let decision = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None).unwrap();
-        assert_eq!(decision, ActionSafetyDecision::Allow { duration_sec: Some(10) });
+        assert_eq!(
+            decision,
+            ActionSafetyDecision::Allow {
+                duration_sec: Some(10)
+            }
+        );
     }
 }

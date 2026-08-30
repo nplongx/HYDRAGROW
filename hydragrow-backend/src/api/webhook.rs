@@ -1,11 +1,11 @@
-use actix_web::{HttpResponse, Responder, web};
 use actix_web::http::StatusCode;
+use actix_web::{HttpResponse, Responder, web};
 use serde_json::{Value, json};
 
 use crate::AppState;
 use crate::models::script::ActionCommandOutput;
-use crate::services::action_dispatch::dispatch_action_command;
 use crate::services::action_dispatch::ActionDispatchError;
+use crate::services::action_dispatch::dispatch_action_command;
 
 /// Webhook cho hệ thống ngoài (Zapier, Home Assistant, v.v.) gửi lệnh điều khiển
 /// trực tiếp. Dùng LẠI đúng pipeline `action_dispatch::dispatch_action_command` mà
@@ -31,14 +31,16 @@ async fn receive_webhook_action(
     let device_id = path.into_inner();
     let output = body.into_inner();
 
-    let safety_config = match crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            tracing::error!(error = ?e, device_id, "Lỗi đọc safety_config cho webhook action");
-            return HttpResponse::InternalServerError()
-                .json(json!({ "error": "Database Error", "message": "Không đọc được safety_config" }));
-        }
-    };
+    let safety_config =
+        match crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                tracing::error!(error = ?e, device_id, "Lỗi đọc safety_config cho webhook action");
+                return HttpResponse::InternalServerError().json(
+                    json!({ "error": "Database Error", "message": "Không đọc được safety_config" }),
+                );
+            }
+        };
     let calibration = crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
         .await
         .unwrap_or(None);
@@ -53,13 +55,23 @@ async fn receive_webhook_action(
     // Phase 1 (sensors.rs) — chưa có nguồn theo dõi lịch sử liều thật cho MỌI
     // đường gọi action_command, không phải thiếu sót riêng của webhook.
     match dispatch_action_command(
-        &app_state, &device_id, output, &limits, &[], now_sec, None, calibration.as_ref(),
+        &app_state,
+        &device_id,
+        output,
+        &limits,
+        &[],
+        now_sec,
+        None,
+        calibration.as_ref(),
     )
     .await
     {
         Ok(()) => HttpResponse::Ok().json(json!({ "status": "success" })),
         Err(e) => {
-            if matches!(e, crate::services::action_dispatch::ActionDispatchError::Mqtt(_)) {
+            if matches!(
+                e,
+                crate::services::action_dispatch::ActionDispatchError::Mqtt(_)
+            ) {
                 tracing::error!(error = ?e, device_id, "Lỗi publish MQTT cho webhook action");
             }
             let (status, body) = dispatch_error_to_response(&e);
@@ -78,9 +90,10 @@ fn dispatch_error_to_response(err: &ActionDispatchError) -> (StatusCode, Value) 
             StatusCode::UNPROCESSABLE_ENTITY,
             json!({ "error": "Safety Check Failed", "message": format!("{violation:?}") }),
         ),
-        ActionDispatchError::UnknownPump(msg) => {
-            (StatusCode::BAD_REQUEST, json!({ "error": "Bad Request", "message": msg }))
-        }
+        ActionDispatchError::UnknownPump(msg) => (
+            StatusCode::BAD_REQUEST,
+            json!({ "error": "Bad Request", "message": msg }),
+        ),
         ActionDispatchError::UnknownAction(action) => (
             StatusCode::BAD_REQUEST,
             json!({ "error": "Bad Request", "message": format!("action không hợp lệ: {action}") }),
@@ -100,9 +113,11 @@ mod tests {
 
     #[test]
     fn safety_violation_maps_to_422() {
-        let err = ActionDispatchError::Safety(hydragrow_shared::safety::DoseSafetyViolation::CooldownActive {
-            seconds_remaining: 10,
-        });
+        let err = ActionDispatchError::Safety(
+            hydragrow_shared::safety::DoseSafetyViolation::CooldownActive {
+                seconds_remaining: 10,
+            },
+        );
         let (status, _) = dispatch_error_to_response(&err);
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }

@@ -18,5 +18,4 @@ pub mod recipe;
 pub mod script;
 pub mod sensor;
 pub mod solana;
-pub mod webhook;
 pub mod ws;

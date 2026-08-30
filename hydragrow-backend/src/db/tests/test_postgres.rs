@@ -43,7 +43,7 @@ mod tests {
             1.0,
             0.0,
             0.0,
-            &serde_json::json!({}),
+            &serde_json::json!({"cycle_id": "c1"}),
         )
         .await
         .unwrap();

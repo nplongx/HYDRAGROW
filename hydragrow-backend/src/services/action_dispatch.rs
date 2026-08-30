@@ -38,24 +38,6 @@ pub fn evaluate_action_safety(
     last_dose_at_sec: Option<u64>,
     calibration: Option<&DosingCalibration>,
 ) -> Result<ActionSafetyDecision, ActionDispatchError> {
-    if output.action == "water_on" || output.action == "water_off" {
-        const VALID_WATER_PUMPS: [&str; 4] = [
-            "WATER_PUMP_IN",
-            "WATER_PUMP_OUT",
-            "MIST_VALVE",
-            "OSAKA_PUMP",
-        ];
-        let pump = output.pump.as_deref().ok_or_else(|| {
-            ActionDispatchError::UnknownPump("pump là bắt buộc cho water_on/water_off".to_string())
-        })?;
-        if !VALID_WATER_PUMPS.contains(&pump) {
-            return Err(ActionDispatchError::UnknownPump(pump.to_string()));
-        }
-        return Ok(ActionSafetyDecision::Allow {
-            duration_sec: output.duration_sec,
-        });
-    }
-
     if output.action != "dose" {
         return Ok(ActionSafetyDecision::Allow {
             duration_sec: output.duration_sec,
@@ -293,51 +275,5 @@ mod tests {
         };
         let result = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None);
         assert!(matches!(result, Err(ActionDispatchError::UnknownPump(_))));
-    }
-
-    #[test]
-    fn water_action_with_unrecognized_pump_is_blocked() {
-        let output = ActionCommandOutput {
-            action: "water_on".into(),
-            pump: Some("NOT_A_REAL_PUMP".into()),
-            dose_ml: None,
-            pwm: None,
-            duration_sec: Some(10),
-        };
-        let result = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None);
-        assert!(matches!(result, Err(ActionDispatchError::UnknownPump(_))));
-    }
-
-    #[test]
-    fn water_action_without_pump_is_blocked() {
-        let output = ActionCommandOutput {
-            action: "water_off".into(),
-            pump: None,
-            dose_ml: None,
-            pwm: None,
-            duration_sec: None,
-        };
-        let result = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None);
-        assert!(matches!(result, Err(ActionDispatchError::UnknownPump(_))));
-    }
-
-    #[test]
-    fn water_action_with_a_recognized_pump_still_allowed() {
-        // Khoá lại hành vi hợp lệ cũ (test Phase 1 `non_dose_action_bypasses_safety_and_calibration`
-        // dùng đúng pump này) — không được để việc thêm validate làm hỏng ca hợp lệ.
-        let output = ActionCommandOutput {
-            action: "water_on".into(),
-            pump: Some("WATER_PUMP_IN".into()),
-            dose_ml: None,
-            pwm: None,
-            duration_sec: Some(10),
-        };
-        let decision = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None).unwrap();
-        assert_eq!(
-            decision,
-            ActionSafetyDecision::Allow {
-                duration_sec: Some(10)
-            }
-        );
     }
 }

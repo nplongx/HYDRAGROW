@@ -28,5 +28,7 @@ jobs:
         run: cd hydragrow-simulator && cargo fmt --check
       - name: Clippy
         run: cd hydragrow-simulator && cargo clippy --all-targets -- -D warnings
+      - name: Start Mosquitto
+        run: docker run -d -p 1883:1883 eclipse-mosquitto:1.6
       - name: Test
         run: cd hydragrow-simulator && cargo test

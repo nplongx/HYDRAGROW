@@ -1,4 +1,8 @@
 // Simulator library root
 
-pub mod dispatcher;
 pub mod telemetry;
+pub mod actuators;
+pub mod dispatcher;
+pub mod harness;
+pub mod plant;
+pub mod sensors;

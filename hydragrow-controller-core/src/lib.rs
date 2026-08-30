@@ -10,3 +10,6 @@ pub mod utils;
 
 pub use hydragrow_shared;
 pub use pump_types::{PumpType, WaterDirection};
+
+#[cfg(any(feature = "test-support", test))]
+pub mod test_support;

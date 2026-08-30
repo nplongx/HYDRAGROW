@@ -21,3 +21,15 @@ pub struct VirtualHardwareState {
     pub mist_valve: bool,
     pub osaka_pwm: u8,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_virtual_pump_initial_state() {
+        let pump = VirtualPump::new();
+        assert!(!pump.on);
+        assert_eq!(pump.pwm, 0);
+    }
+}

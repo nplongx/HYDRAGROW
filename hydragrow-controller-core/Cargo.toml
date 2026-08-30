@@ -3,6 +3,9 @@ name = "hydragrow-controller-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test-support = []
+
 [dependencies]
 serde = "1.0.228"
 chrono = "0.4"

@@ -472,15 +472,24 @@ async fn eval_and_apply_recipe_overrides(
     let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
     for script in &scripts {
         match engine.eval_recipe_override(&script.ast, &script_input) {
-            Ok(Some(override_result)) => {
+            Ok(Some(crate::services::script_engine::RecipeOverrideOutput::AdvanceStage(
+                override_result,
+            ))) => {
                 apply_recipe_override(
                     app_state,
                     device_id,
                     &ctx.recipe_id,
+                    &ctx.season_id,
                     override_result,
                     script,
                 )
                 .await;
+                break;
+            }
+            Ok(Some(crate::services::script_engine::RecipeOverrideOutput::EndSeason {
+                reason,
+            })) => {
+                apply_end_season(app_state, device_id, reason, script).await;
                 break;
             }
             Ok(None) => {}
@@ -495,10 +504,59 @@ async fn eval_and_apply_recipe_overrides(
     }
 }
 
+/// Đóng season hiện tại khi một recipe_override script yêu cầu (`action: "end_season"`).
+/// CHỈ đóng ở DB (`crop_seasons.status = 'completed'`) — KHÔNG reset gain learner
+/// (chưa có action MQTT nào được firmware xác nhận cho việc này, xem roadmap Phase
+/// 4/5). Không tự đoán hành vi firmware chưa xác nhận.
+async fn apply_end_season(
+    app_state: &web::Data<AppState>,
+    device_id: &str,
+    reason: String,
+    script: &crate::services::script_engine::CachedScript,
+) {
+    match crate::db::postgres::end_active_crop_season(&app_state.pg_pool, device_id).await {
+        Ok(()) => {
+            let timestamp = chrono::Utc::now().timestamp_millis();
+            let title = "Mùa vụ đã kết thúc".to_string();
+            let record = NewSystemEventRecord {
+                device_id: device_id.to_string(),
+                level: "info".to_string(),
+                category: "end_season".to_string(),
+                title: title.clone(),
+                message: reason.clone(),
+                reason: Some(script.name.clone()),
+                metadata: Some(serde_json::json!({ "script_id": script.id })),
+                timestamp,
+            };
+            if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {
+                tracing::error!(error = ?e, device_id, "Không thể lưu end_season event");
+            }
+            let _ = app_state.event_bus.send(AppEvent::SystemAlert(
+                crate::models::alert::AlertMessage {
+                    level: "info".to_string(),
+                    category: "end_season".to_string(),
+                    title,
+                    message: reason,
+                    device_id: device_id.to_string(),
+                    reason: Some(script.name.clone()),
+                    metadata: None,
+                    timestamp: timestamp as u64,
+                },
+            ));
+            tracing::info!(
+                device_id, script_id = %script.id,
+                "Season đã đóng bởi recipe_override script — gain-learner reset CHƯA thực hiện (cần xác nhận firmware, xem roadmap)"
+            );
+        }
+        Err(e) => tracing::error!(error = ?e, device_id, "Lỗi end_active_crop_season"),
+    }
+}
+
 async fn apply_recipe_override(
     app_state: &web::Data<AppState>,
     device_id: &str,
     recipe_id: &str,
+    season_id: &str,
     override_result: crate::services::script_engine::StageOverride,
     script: &crate::services::script_engine::CachedScript,
 ) {
@@ -510,6 +568,21 @@ async fn apply_recipe_override(
     .await
     {
         Ok(Some(new_stage)) => {
+            if let Err(e) = crate::api::recipe::republish_active_recipe_at_stage(
+                app_state,
+                device_id,
+                recipe_id,
+                season_id,
+                override_result.target_stage_index,
+            )
+            .await
+            {
+                tracing::error!(
+                    error = ?e, device_id, recipe_id,
+                    "DB đã đổi stage nhưng republish recipe qua MQTT thất bại — firmware CHƯA nhận được target mới"
+                );
+            }
+
             let timestamp = chrono::Utc::now().timestamp_millis();
             let title = format!("Recipe override: chuyển sang stage \"{}\"", new_stage.name);
             let record = NewSystemEventRecord {

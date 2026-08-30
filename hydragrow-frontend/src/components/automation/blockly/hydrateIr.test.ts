@@ -37,7 +37,12 @@ describe("hydrateWorkspace", () => {
     ]);
   });
 
-  it("does nothing on empty input", () => {
+  it('round-trips an end_season action', () => {
+    hydrateWorkspace(workspace, [], [{ type: 'end_season', reason: 'Hoàn thành mùa vụ' }]);
+    expect(extractActions(workspace)).toEqual([{ type: 'end_season', reason: 'Hoàn thành mùa vụ' }]);
+  });
+
+  it('does nothing on empty input', () => {
     hydrateWorkspace(workspace, [], []);
     expect(extractConditions(workspace)).toEqual([]);
     expect(extractActions(workspace)).toEqual([]);

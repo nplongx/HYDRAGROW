@@ -14,7 +14,33 @@ describe("AutomationIrSchema", () => {
     expect(() => AutomationIrSchema.parse(ir)).not.toThrow();
   });
 
-  it("rejects an unknown operator", () => {
+  describe('end_season IR', () => {
+    it('accepts an end_season action under kind=recipe_override', () => {
+      const result = AutomationIrSchema.safeParse({
+        kind: 'recipe_override',
+        trigger: { type: 'fsm' },
+        conditions: [{ sensor: 'stage_index', operator: '==', value: 3 }],
+        actions: [{ type: 'end_season', reason: 'Hoàn thành mùa vụ' }],
+        nodes: [],
+        edges: [],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects end_season action under kind=alert', () => {
+      const result = AutomationIrSchema.safeParse({
+        kind: 'alert',
+        trigger: { type: 'sensor' },
+        conditions: [],
+        actions: [{ type: 'end_season', reason: 'x' }],
+        nodes: [],
+        edges: [],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  it('rejects an unknown operator', () => {
     const ir = {
       kind: "alert",
       trigger: { type: "sensor" },

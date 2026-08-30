@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{AppState, api::mqtt_utils::sign_command, db::postgres, db::recipes as db_recipes};
+use anyhow::Context;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct RecipeTemplate {
@@ -60,15 +61,15 @@ pub struct ApplyRecipeRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct RecipeMqttPayload {
-    action: &'static str,
-    recipe: CropRecipe,
+pub(crate) struct RecipeMqttPayload {
+    pub(crate) action: &'static str,
+    pub(crate) recipe: CropRecipe,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    ts: Option<i64>,
+    pub(crate) ts: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    nonce: Option<String>,
+    pub(crate) nonce: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    signature: Option<String>,
+    pub(crate) signature: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -130,7 +131,10 @@ where
     }
 }
 
-async fn fetch_stages_for_recipe(pool: &sqlx::PgPool, recipe_id: &str) -> Vec<CropStage> {
+pub(crate) async fn fetch_stages_for_recipe(
+    pool: &sqlx::PgPool,
+    recipe_id: &str,
+) -> Vec<CropStage> {
     let rows = db_recipes::list_stages_for_recipe(pool, recipe_id)
         .await
         .unwrap_or_default();
@@ -1002,6 +1006,55 @@ pub async fn bulk_apply_recipe(
         "status": if failed.is_empty() { "success" } else { "partial" },
         "data": BulkApplyRecipeResponse { succeeded, failed }
     }))
+}
+
+/// Re-publish recipe đang active của device qua `topic_recipe_set`, với
+/// `current_stage_index` ép về `target_stage_index` — dùng khi cần ép firmware
+/// nhảy sang stage khác GIỮA CHỪNG (không phải lần apply đầu tiên).
+///
+/// Bắt buộc phải gọi hàm này mỗi khi đổi `device_active_recipes.current_stage_id`
+/// ngoài luồng `apply_recipe` gốc — nếu không, firmware (tự quản lý tiến trình
+/// stage sau khi nhận recipe qua `recipe_set`) sẽ không hề biết gì về thay đổi,
+/// và target pH/EC thật sẽ không đổi dù DB nói đã đổi stage (xem phần Grounding).
+pub(crate) async fn republish_active_recipe_at_stage(
+    app_state: &AppState,
+    device_id: &str,
+    recipe_id: &str,
+    season_id: &str,
+    target_stage_index: i64,
+) -> anyhow::Result<()> {
+    let row = db_recipes::get_recipe(&app_state.pg_pool, recipe_id)
+        .await?
+        .context("recipe không tồn tại — không thể republish")?;
+    let mut template = RecipeTemplate::from(row);
+    template.stages = fetch_stages_for_recipe(&app_state.pg_pool, &template.id).await;
+
+    let snapshot = CropRecipe {
+        schema_version: 1,
+        recipe_id: template.id.clone(),
+        season_id: season_id.to_string(),
+        device_id: device_id.to_string(),
+        revision: 1,
+        start_time_sec: Utc::now().timestamp() as u64,
+        current_stage_index: target_stage_index as usize,
+        stages: template.stages,
+    };
+    let payload = RecipeMqttPayload {
+        action: "apply",
+        recipe: snapshot,
+        ts: None,
+        nonce: None,
+        signature: None,
+    };
+
+    crate::api::mqtt_utils::publish_signed_payload(
+        app_state,
+        device_id,
+        &hydragrow_shared::topics::topic_recipe_set(device_id),
+        &payload,
+    )
+    .await
+    .map(|_| ())
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {

@@ -85,7 +85,18 @@ export function registerHydragrowBlocks(
     },
   };
 
-  Blockly.Blocks["hydragrow_dose_action"] = {
+  Blockly.Blocks['hydragrow_end_season_action'] = {
+    init(this: Blockly.Block) {
+      this.appendDummyInput()
+        .appendField('Kết thúc mùa vụ, lý do')
+        .appendField(new Blockly.FieldTextInput('Hoàn thành'), 'REASON');
+      this.setPreviousStatement(true, 'action');
+      this.setColour(65);
+      this.setTooltip('Đóng mùa vụ hiện tại (crop_seasons.status = completed). Không reset gain learner.');
+    },
+  };
+
+  Blockly.Blocks['hydragrow_dose_action'] = {
     init(this: Blockly.Block) {
       this.appendDummyInput()
         .appendField("Dose")

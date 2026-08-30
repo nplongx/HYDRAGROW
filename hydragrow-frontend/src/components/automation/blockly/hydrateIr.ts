@@ -59,11 +59,15 @@ export function hydrateWorkspace(
       block.setFieldValue(String(action.targetStageOffset), "OFFSET");
       block.setFieldValue(action.reason, "REASON");
       placeAndChain(block);
-    } else if (action.type === "dose") {
-      const block = workspace.newBlock("hydragrow_dose_action");
-      block.setFieldValue(action.pump, "PUMP");
-      block.setFieldValue(String(action.doseMl), "DOSE_ML");
-      block.setFieldValue(String(action.pwm), "PWM");
+    } else if (action.type === 'end_season') {
+      const block = workspace.newBlock('hydragrow_end_season_action');
+      block.setFieldValue(action.reason, 'REASON');
+      placeAndChain(block);
+    } else if (action.type === 'dose') {
+      const block = workspace.newBlock('hydragrow_dose_action');
+      block.setFieldValue(action.pump, 'PUMP');
+      block.setFieldValue(String(action.doseMl), 'DOSE_ML');
+      block.setFieldValue(String(action.pwm), 'PWM');
       placeAndChain(block);
     } else if (action.type === "water_on" || action.type === "water_off") {
       const block = workspace.newBlock("hydragrow_water_action");

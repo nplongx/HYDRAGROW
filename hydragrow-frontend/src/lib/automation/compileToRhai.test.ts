@@ -46,7 +46,35 @@ describe("compileToRhai", () => {
     expect(rhai).toContain('"reason": "Đủ 24h"');
   });
 
-  it("escapes double quotes in user-supplied strings", () => {
+  describe('end_season compilation', () => {
+    it('compiles an end_season action with an explicit action key', () => {
+      const source = compileToRhai({
+        kind: 'recipe_override',
+        trigger: { type: 'fsm' },
+        conditions: [{ sensor: 'stage_index', operator: '==', value: 3 }],
+        actions: [{ type: 'end_season', reason: 'Hoàn thành mùa vụ' }],
+        nodes: [],
+        edges: [],
+      });
+      expect(source).toContain('"action": "end_season"');
+      expect(source).toContain('"reason": "Hoàn thành mùa vụ"');
+    });
+
+    it('still compiles advance_stage with an explicit action key (forward-compat, không đổi hành vi backend)', () => {
+      const source = compileToRhai({
+        kind: 'recipe_override',
+        trigger: { type: 'fsm' },
+        conditions: [],
+        actions: [{ type: 'advance_stage', targetStageOffset: 1, reason: 'x' }],
+        nodes: [],
+        edges: [],
+      });
+      expect(source).toContain('"action": "advance_stage"');
+      expect(source).toContain('"target_stage_index"');
+    });
+  });
+
+  it('escapes double quotes in user-supplied strings', () => {
     const ir: AutomationIr = {
       kind: "alert",
       trigger: { type: "sensor" },

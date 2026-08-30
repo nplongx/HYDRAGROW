@@ -74,6 +74,7 @@ pub async fn insert_recipe(
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct ActiveStageContext {
     pub recipe_id: String,
+    pub season_id: String,
     pub stage_index: i64,
     pub elapsed_sec: i64,
 }
@@ -86,6 +87,7 @@ pub async fn get_active_stage_context(
         r#"
         SELECT
             dar.recipe_id AS recipe_id,
+            dar.season_id AS season_id,
             (s.stage_order - 1)::BIGINT AS stage_index,
             EXTRACT(EPOCH FROM (NOW() - dar.applied_at))::BIGINT AS elapsed_sec
         FROM device_active_recipes dar

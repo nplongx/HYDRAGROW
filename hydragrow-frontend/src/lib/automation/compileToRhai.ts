@@ -37,13 +37,21 @@ function actionToRhaiMap(action: Action): string {
             ? `input.stage_index + ${action.targetStageOffset}`
             : `input.stage_index - ${Math.abs(action.targetStageOffset)}`;
       return [
-        "#{",
+        '#{',
+        ` "action": "advance_stage",`,
         ` "target_stage_index": ${offsetExpr},`,
         ` "reason": "${rhaiString(action.reason)}"`,
         "}",
       ].join("\n ");
     }
-    case "dose":
+    case 'end_season':
+      return [
+        '#{',
+        ` "action": "end_season",`,
+        ` "reason": "${rhaiString(action.reason)}"`,
+        '}',
+      ].join('\n ');
+    case 'dose':
       return [
         "#{",
         ` "action": "dose",`,

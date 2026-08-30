@@ -28,6 +28,11 @@ export const StageOverrideActionSchema = z.object({
   reason: z.string().min(1),
 });
 
+export const EndSeasonActionSchema = z.object({
+  type: z.literal('end_season'),
+  reason: z.string(),
+});
+
 export const DosingPumpSchema = z.enum(['PUMP_A', 'PUMP_B', 'PH_UP', 'PH_DOWN']);
 export const WaterPumpSchema = z.enum(['WATER_PUMP_IN', 'WATER_PUMP_OUT', 'MIST_VALVE', 'OSAKA_PUMP']);
 
@@ -56,6 +61,7 @@ export const EmergencyStopActionSchema = z.object({
 export const ActionSchema = z.discriminatedUnion('type', [
   AlertActionSchema,
   StageOverrideActionSchema,
+  EndSeasonActionSchema,
   DoseActionSchema,
   WaterOnActionSchema,
   WaterOffActionSchema,
@@ -94,7 +100,9 @@ export const AutomationIrSchema = z
   .refine(
     (ir) => {
       if (ir.kind === 'alert') return ir.actions.every((a) => a.type === 'alert');
-      if (ir.kind === 'recipe_override') return ir.actions.every((a) => a.type === 'advance_stage');
+      if (ir.kind === 'recipe_override') {
+        return ir.actions.every((a) => a.type === 'advance_stage' || a.type === 'end_season');
+      }
       return ir.actions.every((a) => ['dose', 'water_on', 'water_off', 'emergency_stop'].includes(a.type));
     },
     { message: 'actions must match kind' },

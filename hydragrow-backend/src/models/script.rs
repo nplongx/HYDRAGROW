@@ -61,10 +61,19 @@ pub struct AlertOutput {
 }
 
 /// Kết quả sau khi eval một recipe_override script
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StageOverride {
     pub target_stage_index: i64,
     pub reason: String,
+}
+
+/// Kết quả eval một recipe_override script — 2 hành động được hỗ trợ. Discriminator
+/// là key "action" trong Map Rhai trả về; vắng key này (script viết trước Phase 3)
+/// mặc định là AdvanceStage — không phải lỗi, giữ nguyên hành vi cũ.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecipeOverrideOutput {
+    AdvanceStage(StageOverride),
+    EndSeason { reason: String },
 }
 
 /// Request body để tạo/update script

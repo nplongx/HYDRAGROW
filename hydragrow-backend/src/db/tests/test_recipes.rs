@@ -106,6 +106,7 @@ mod tests {
             .expect("expected Some(context)");
 
         assert_eq!(ctx.recipe_id, "r1");
+        assert_eq!(ctx.season_id, "season1");
         assert_eq!(ctx.stage_index, 1); // stage_order=2 → 0-based index 1
         assert!(ctx.elapsed_sec >= 90);
     }

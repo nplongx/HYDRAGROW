@@ -20,6 +20,9 @@ export function extractActions(workspace: Blockly.Workspace): Action[] {
     targetStageOffset: Number(block.getFieldValue('OFFSET')),
     reason: block.getFieldValue('REASON'),
   }));
+  const endSeasons: Action[] = workspace
+    .getBlocksByType('hydragrow_end_season_action', false)
+    .map((block) => ({ type: 'end_season' as const, reason: block.getFieldValue('REASON') }));
   const doses: Action[] = workspace.getBlocksByType('hydragrow_dose_action', false).map((block) => ({
     type: 'dose' as const,
     pump: block.getFieldValue('PUMP') as 'PUMP_A' | 'PUMP_B' | 'PH_UP' | 'PH_DOWN',
@@ -36,5 +39,5 @@ export function extractActions(workspace: Blockly.Workspace): Action[] {
   const emergencyStops: Action[] = workspace
     .getBlocksByType('hydragrow_emergency_stop_action', false)
     .map(() => ({ type: 'emergency_stop' as const }));
-  return [...alerts, ...advances, ...doses, ...waters, ...emergencyStops];
+  return [...alerts, ...advances, ...endSeasons, ...doses, ...waters, ...emergencyStops];
 }

@@ -7,8 +7,8 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub use crate::models::script::{
-    ActionCommandOutput, AlertOutput, ScriptActionInput, ScriptFsmInput, ScriptSensorInput,
-    StageOverride,
+    ActionCommandOutput, AlertOutput, RecipeOverrideOutput, ScriptActionInput, ScriptFsmInput,
+    ScriptSensorInput, StageOverride,
 };
 
 /// Wrapper quanh Rhai Engine, configure một lần khi khởi động.
@@ -90,7 +90,7 @@ impl ScriptEngine {
         &self,
         ast: &AST,
         input: &ScriptFsmInput,
-    ) -> Result<Option<StageOverride>> {
+    ) -> Result<Option<RecipeOverrideOutput>> {
         let mut map = Map::new();
         map.insert("phase".into(), Dynamic::from(input.phase.clone()));
         map.insert("stage_index".into(), Dynamic::from_int(input.stage_index));
@@ -111,20 +111,26 @@ impl ScriptEngine {
             .try_cast::<Map>()
             .context("Recipe override script must return a Map or () (unit)")?;
 
+        let action = map
+            .get("action")
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "advance_stage".to_string());
+
+        let reason = map.get("reason").map(|v| v.to_string()).unwrap_or_default();
+
+        if action == "end_season" {
+            return Ok(Some(RecipeOverrideOutput::EndSeason { reason }));
+        }
+
         let target_stage_index = map
             .get("target_stage_index")
             .and_then(|v| v.clone().try_cast::<i64>())
-            .context("Missing target_stage_index in recipe override result")?;
+            .context("Missing target_stage_index for advance_stage action")?;
 
-        let reason = map
-            .get("reason")
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| "Script override".to_string());
-
-        Ok(Some(StageOverride {
+        Ok(Some(RecipeOverrideOutput::AdvanceStage(StageOverride {
             target_stage_index,
             reason,
-        }))
+        })))
     }
 
     pub fn eval_action_command(
@@ -299,6 +305,49 @@ impl ScriptCache {
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    #[test]
+    fn eval_recipe_override_defaults_to_advance_stage_when_action_key_absent() {
+        // Backward-compat: script cũ (trước Phase 3) không có key "action" — vẫn phải
+        // hiểu là advance_stage như trước, không được coi là lỗi hay bỏ qua.
+        let engine = ScriptEngine::new();
+        let src = r#"fn main(input) { #{ target_stage_index: 2, reason: "Đủ 24h" } }"#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptFsmInput {
+            phase: "Monitoring".into(),
+            stage_index: 1,
+            ec: 1.5,
+            ph: 6.5,
+            elapsed_sec: 90000,
+        };
+        let result = engine.eval_recipe_override(&ast, &input).unwrap().unwrap();
+        match result {
+            RecipeOverrideOutput::AdvanceStage(s) => {
+                assert_eq!(s.target_stage_index, 2);
+                assert_eq!(s.reason, "Đủ 24h");
+            }
+            RecipeOverrideOutput::EndSeason { .. } => panic!("expected AdvanceStage"),
+        }
+    }
+
+    #[test]
+    fn eval_recipe_override_reads_explicit_end_season_action() {
+        let engine = ScriptEngine::new();
+        let src = r#"fn main(input) { #{ action: "end_season", reason: "Hết vụ" } }"#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptFsmInput {
+            phase: "Monitoring".into(),
+            stage_index: 3,
+            ec: 1.5,
+            ph: 6.5,
+            elapsed_sec: 90000,
+        };
+        let result = engine.eval_recipe_override(&ast, &input).unwrap().unwrap();
+        match result {
+            RecipeOverrideOutput::EndSeason { reason } => assert_eq!(reason, "Hết vụ"),
+            RecipeOverrideOutput::AdvanceStage(_) => panic!("expected EndSeason"),
+        }
+    }
 
     #[test]
     fn compiles_valid_alert_script() {

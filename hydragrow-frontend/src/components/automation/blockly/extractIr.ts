@@ -12,11 +12,22 @@ export function extractConditions(workspace: Blockly.Workspace): Condition[] {
 }
 
 export function extractActions(workspace: Blockly.Workspace): Action[] {
-  const alerts: Action[] = workspace.getBlocksByType('hydragrow_alert_action', false).map((block) => ({
-    type: 'alert' as const,
-    level: block.getFieldValue('LEVEL') as Action extends { type: 'alert' } ? Action['level'] : never,
-    message: block.getFieldValue('MESSAGE'),
-  }));
+  const alerts: Action[] = workspace.getBlocksByType('hydragrow_alert_action', false).map((block) => {
+    const notifyFcmStr = block.getFieldValue('NOTIFY_FCM');
+    let notifyFcm: boolean | undefined;
+    if (notifyFcmStr === 'TRUE') notifyFcm = true;
+    else if (notifyFcmStr === 'FALSE') notifyFcm = false;
+
+    const action = {
+      type: 'alert' as const,
+      level: block.getFieldValue('LEVEL') as Action extends { type: 'alert' } ? Action['level'] : never,
+      message: block.getFieldValue('MESSAGE'),
+    };
+    if (notifyFcm !== undefined) {
+      Object.assign(action, { notifyFcm });
+    }
+    return action;
+  });
   const advances: Action[] = workspace.getBlocksByType('hydragrow_advance_stage_action', false).map((block) => ({
     type: 'advance_stage' as const,
     targetStageOffset: Number(block.getFieldValue('OFFSET')),

@@ -102,7 +102,7 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-20 flex w-[36rem] flex-col gap-2 border-l bg-white p-4 shadow-xl">
+    <div className="flex h-full flex-col gap-2 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{isNew ? 'Flow mới' : `Sửa: ${script.name}`}</h2>
         <button className="text-sm text-gray-500" onClick={onClose}>

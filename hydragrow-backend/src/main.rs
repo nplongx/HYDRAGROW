@@ -495,7 +495,7 @@ async fn main() -> anyhow::Result<()> {
                             .configure(api::config::init_routes)
                             .configure(api::calibration::init_routes)
                             .configure(api::crop_season::init_routes)
-                            .configure(api::webhook::init_routes)
+                            .configure(api::analytics::init_routes)
                             .configure(api::alert::init_routes)
                             .service(web::scope("/scripts").configure(api::script::init_routes)),
                     ),

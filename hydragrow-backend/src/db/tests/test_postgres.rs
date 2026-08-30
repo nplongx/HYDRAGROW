@@ -34,6 +34,37 @@ mod tests {
     // ── crop_seasons ──────────────────────────────────────────────────────────
 
     #[sqlx::test]
+    async fn get_device_dosing_reports_in_range_filters_by_created_at(pool: sqlx::PgPool) {
+        insert_dosing_report(
+            &pool,
+            "dev-range-1",
+            None,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            &serde_json::json!({"cycle_id": "c1"}),
+        )
+        .await
+        .unwrap();
+
+        let start = chrono::Utc::now() - chrono::Duration::hours(1);
+        let end = chrono::Utc::now() + chrono::Duration::hours(1);
+        let in_range = get_device_dosing_reports_in_range(&pool, "dev-range-1", start, end)
+            .await
+            .unwrap();
+        assert_eq!(in_range.len(), 1);
+
+        let outside_start = chrono::Utc::now() + chrono::Duration::hours(2);
+        let outside_end = chrono::Utc::now() + chrono::Duration::hours(3);
+        let out_of_range =
+            get_device_dosing_reports_in_range(&pool, "dev-range-1", outside_start, outside_end)
+                .await
+                .unwrap();
+        assert_eq!(out_of_range.len(), 0);
+    }
+
+    #[sqlx::test]
     async fn create_and_get_crop_season(pool: sqlx::PgPool) {
         // device_config is a FK prerequisite
         let cfg = DeviceConfig {

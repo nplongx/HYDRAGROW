@@ -2,6 +2,7 @@
 
 pub mod admin_users;
 pub mod alert;
+pub mod analytics;
 pub mod calibration;
 pub mod config;
 pub mod config_backup;
@@ -17,5 +18,4 @@ pub mod recipe;
 pub mod script;
 pub mod sensor;
 pub mod solana;
-pub mod webhook;
 pub mod ws;

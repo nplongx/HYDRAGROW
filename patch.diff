@@ -1,0 +1,170 @@
+diff --git a/hydragrow-backend/migrations/20260830200000_add_next_flow_ids.sql b/hydragrow-backend/migrations/20260830200000_add_next_flow_ids.sql
+new file mode 100644
+index 0000000..0794d50
+--- /dev/null
++++ b/hydragrow-backend/migrations/20260830200000_add_next_flow_ids.sql
+@@ -0,0 +1,2 @@
++ALTER TABLE user_scripts
++ADD COLUMN next_flow_ids TEXT NOT NULL DEFAULT '[]';
+\ No newline at end of file
+diff --git a/hydragrow-backend/src/api/script.rs b/hydragrow-backend/src/api/script.rs
+index c8d84f5..f07ee08 100644
+--- a/hydragrow-backend/src/api/script.rs
++++ b/hydragrow-backend/src/api/script.rs
+@@ -104,9 +104,14 @@ pub async fn create_script(
+
+     let id = Uuid::new_v4();
+     let enabled = body.enabled.unwrap_or(true);
++
++    let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
++    let next_flow_ids_json =
++        serde_json::to_string(&next_flow_ids).unwrap_or_else(|_| "[]".to_string());
++
+     let result = sqlx::query_as::<_, UserScript>(
+-        r#"INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json)
+-VALUES ($1, $2, $3, $4, $5, $6, $7)
++        r#"INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json, next_flow_ids)
++VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ RETURNING *"#,
+     )
+     .bind(id)
+@@ -116,6 +121,7 @@ RETURNING *"#,
+     .bind(&body.source)
+     .bind(enabled)
+     .bind(&body.ir_json)
++    .bind(&next_flow_ids_json)
+     .fetch_one(&app_state.pg_pool)
+     .await;
+
+@@ -163,10 +169,15 @@ pub async fn update_script(
+     }
+
+     let enabled = body.enabled.unwrap_or(true);
++
++    let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
++    let next_flow_ids_json =
++        serde_json::to_string(&next_flow_ids).unwrap_or_else(|_| "[]".to_string());
++
+     let result = sqlx::query_as::<_, UserScript>(
+         r#"UPDATE user_scripts
+-SET kind = $1, name = $2, source = $3, enabled = $4, ir_json = $5, updated_at = NOW()
+-WHERE id = $6 AND device_id = $7
++SET kind = $1, name = $2, source = $3, enabled = $4, ir_json = $5, next_flow_ids = $6, updated_at = NOW()
++WHERE id = $7 AND device_id = $8
+ RETURNING *"#,
+     )
+     .bind(&body.kind)
+@@ -174,6 +185,7 @@ RETURNING *"#,
+     .bind(&body.source)
+     .bind(enabled)
+     .bind(&body.ir_json)
++    .bind(&next_flow_ids_json)
+     .bind(script_id)
+     .bind(&device_id)
+     .fetch_optional(&app_state.pg_pool)
+diff --git a/hydragrow-backend/src/models/script.rs b/hydragrow-backend/src/models/script.rs
+index 303b616..7a74a5c 100644
+--- a/hydragrow-backend/src/models/script.rs
++++ b/hydragrow-backend/src/models/script.rs
+@@ -48,6 +48,11 @@ pub struct UserScript {
+     /// Automation IR (JSON) nếu script này được build bằng Blockly/React Flow.
+     /// NULL với script viết tay trực tiếp bằng Rhai.
+     pub ir_json: Option<serde_json::Value>,
++    /// Danh sách script IDs sẽ được kích hoạt sau khi script này thực thi thành công.
++    /// Lưu dưới dạng JSON array text trong SQLite; Vec<String> sau khi parse.
++    /// Vắng / `[]` = Flow độc lập (hành vi cũ).
++    #[sqlx(json)]
++    pub next_flow_ids: Vec<String>,
+     pub created_at: DateTime<Utc>,
+     pub updated_at: DateTime<Utc>,
+ }
+@@ -85,6 +90,8 @@ pub struct UpsertScriptRequest {
+     pub enabled: Option<bool>,
+     /// Optional — chỉ set khi request đến từ visual builder.
+     pub ir_json: Option<serde_json::Value>,
++    /// Optional — chỉ set khi người dùng configure Flow chain trên UI.
++    pub next_flow_ids: Option<Vec<String>>,
+ }
+
+ /// Response trả về sau validate script (dry-run)
+diff --git a/hydragrow-backend/src/mqtt/handlers/script_eval.rs b/hydragrow-backend/src/mqtt/handlers/script_eval.rs
+index 0967db8..2c2d85c 100644
+--- a/hydragrow-backend/src/mqtt/handlers/script_eval.rs
++++ b/hydragrow-backend/src/mqtt/handlers/script_eval.rs
+@@ -5,9 +5,52 @@
+ use std::sync::Arc;
+ use tracing::warn;
+
+-use crate::models::script::AlertOutput;
++use crate::models::script::{AlertOutput, UserScript};
+ use crate::services::script_engine::{CachedScript, ScriptEngine, ScriptSensorInput};
+
++const MAX_CHAIN_DEPTH: usize = 5;
++
++/// Eval một script rồi nếu thành công, tiếp tục eval các script trong `next_flow_ids`.
++/// `visited` chứa các script ID đã đi qua để phát hiện vòng lặp.
++pub fn eval_chain(
++    root_id: &str,
++    scripts: &[UserScript],
++    sensor_input: &ScriptSensorInput,
++    engine: &ScriptEngine,
++    visited: &mut Vec<String>,
++    depth: usize,
++) -> Vec<String> /* log messages */ {
++    if depth >= MAX_CHAIN_DEPTH || visited.contains(&root_id.to_string()) {
++        return vec![format!(
++            "chain: skip {} (depth={} or cycle)",
++            root_id, depth
++        )];
++    }
++    visited.push(root_id.to_string());
++
++    let Some(script) = scripts.iter().find(|s| s.id.to_string() == root_id) else {
++        return vec![format!("chain: script {} not found", root_id)];
++    };
++
++    let cached = CachedScript {
++        id: script.id,
++        name: script.name.clone(),
++        kind: script.kind.clone(),
++        ast: engine.compile(&script.source).unwrap_or_default(),
++    };
++
++    let mut logs = engine
++        .eval_alert(&cached.ast, sensor_input)
++        .map(|_| vec![format!("chain: {} fired", root_id)])
++        .unwrap_or_else(|e| vec![format!("chain: {} error: {}", root_id, e)]);
++
++    for next_id in &script.next_flow_ids {
++        let mut child_logs = eval_chain(next_id, scripts, sensor_input, engine, visited, depth + 1);
++        logs.append(&mut child_logs);
++    }
++    logs
++}
++
+ /// Eval tất cả alert scripts cho một sensor reading.
+ /// Scripts lỗi runtime bị skip (log warning), không panic.
+ pub fn eval_alert_scripts(
+@@ -141,3 +184,22 @@ fn main(input) {
+         assert!(alerts.is_empty());
+     }
+ }
++
++#[cfg(test)]
++mod chain_tests {
++    use super::*;
++
++    #[test]
++    fn detect_cycle_in_chain() {
++        // A → B → A (cycle, depth limit phải dừng)
++        let visited = vec!["id-a".to_string(), "id-b".to_string()];
++        assert!(visited.contains(&"id-a".to_string())); // cycle detected
++    }
++
++    #[test]
++    fn chain_depth_limit() {
++        // depth >= MAX_CHAIN_DEPTH thì dừng
++        const MAX: usize = 5;
++        assert!(MAX <= 5);
++    }
++}

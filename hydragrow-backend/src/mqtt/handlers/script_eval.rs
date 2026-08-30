@@ -21,7 +21,10 @@ pub fn eval_chain(
     depth: usize,
 ) -> Vec<String> /* log messages */ {
     if depth >= MAX_CHAIN_DEPTH || visited.contains(&root_id.to_string()) {
-        return vec![format!("chain: skip {} (depth={} or cycle)", root_id, depth)];
+        return vec![format!(
+            "chain: skip {} (depth={} or cycle)",
+            root_id, depth
+        )];
     }
     visited.push(root_id.to_string());
 
@@ -36,14 +39,13 @@ pub fn eval_chain(
         ast: engine.compile(&script.source).unwrap_or_default(),
     };
 
-    let mut logs = engine.eval_alert(&cached.ast, sensor_input)
+    let mut logs = engine
+        .eval_alert(&cached.ast, sensor_input)
         .map(|_| vec![format!("chain: {} fired", root_id)])
         .unwrap_or_else(|e| vec![format!("chain: {} error: {}", root_id, e)]);
 
     for next_id in &script.next_flow_ids {
-        let mut child_logs = eval_chain(
-            next_id, scripts, sensor_input, engine, visited, depth + 1,
-        );
+        let mut child_logs = eval_chain(next_id, scripts, sensor_input, engine, visited, depth + 1);
         logs.append(&mut child_logs);
     }
     logs

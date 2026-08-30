@@ -106,8 +106,8 @@ pub async fn create_script(
     let enabled = body.enabled.unwrap_or(true);
 
     let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
-    let next_flow_ids_json = serde_json::to_string(&next_flow_ids)
-        .unwrap_or_else(|_| "[]".to_string());
+    let next_flow_ids_json =
+        serde_json::to_string(&next_flow_ids).unwrap_or_else(|_| "[]".to_string());
 
     let result = sqlx::query_as::<_, UserScript>(
         r#"INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json, next_flow_ids)
@@ -171,8 +171,8 @@ pub async fn update_script(
     let enabled = body.enabled.unwrap_or(true);
 
     let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
-    let next_flow_ids_json = serde_json::to_string(&next_flow_ids)
-        .unwrap_or_else(|_| "[]".to_string());
+    let next_flow_ids_json =
+        serde_json::to_string(&next_flow_ids).unwrap_or_else(|_| "[]".to_string());
 
     let result = sqlx::query_as::<_, UserScript>(
         r#"UPDATE user_scripts

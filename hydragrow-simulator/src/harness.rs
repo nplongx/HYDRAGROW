@@ -1,8 +1,6 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::dispatcher::SimDispatcher;
-use hydragrow_controller_core::{
-    core::fsm::{orchestrator, SystemContext, TickResult},
-};
+use hydragrow_controller_core::core::fsm::{SystemContext, TickResult, orchestrator};
 use hydragrow_shared::{ControllerConfig, SensorData};
 use std::time::{SystemTime, UNIX_EPOCH};
 

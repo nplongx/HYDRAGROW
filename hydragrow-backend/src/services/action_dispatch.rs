@@ -92,6 +92,7 @@ pub fn evaluate_action_safety(
 }
 
 /// Entry point gọi từ MQTT handler.
+#[allow(clippy::too_many_arguments)]
 pub async fn dispatch_action_command(
     app_state: &AppState,
     device_id: &str,

@@ -166,50 +166,48 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         .script_cache
         .get_action_command_scripts(&device_id)
         .await;
-    if !action_scripts.is_empty() {
-        if let Ok(safety_config) =
+    if !action_scripts.is_empty()
+        && let Ok(safety_config) =
             crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await
-        {
-            let calibration =
-                crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
-                    .await
-                    .unwrap_or(None);
-            let limits = hydragrow_shared::safety::DoseSafetyLimits {
-                max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
-                max_dose_per_hour_ml: safety_config.max_dose_per_hour,
-                cooldown_sec: safety_config.cooldown_sec as u64,
-            };
-            let action_input = crate::models::script::ScriptActionInput {
-                ph: incoming.ph,
-                ec: incoming.ec,
-                temp: incoming.temp,
-                water_level: incoming.water_level,
-                phase: "Monitoring".to_string(), // TODO(follow-up, ghi nhận từ Phase 0): lấy phase thật từ device_states cache
-                device_id: device_id.clone(),
-                timestamp_ms: chrono::Utc::now().timestamp_millis(),
-            };
-            let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
-            let now_sec = (action_input.timestamp_ms / 1000) as u64;
-            for script in &action_scripts {
-                if let Ok(Some(output)) = engine.eval_action_command(&script.ast, &action_input) {
-                    if let Err(err) = crate::services::action_dispatch::dispatch_action_command(
-                        &app_state,
-                        &device_id,
-                        output,
-                        &limits,
-                        &[],
-                        now_sec,
-                        None,
-                        calibration.as_ref(),
-                    )
-                    .await
-                    {
-                        tracing::warn!(
-                            script_id = %script.id, device_id, error = ?err,
-                            "action_command bị chặn hoặc lỗi khi dispatch"
-                        );
-                    }
-                }
+    {
+        let calibration =
+            crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
+                .await
+                .unwrap_or(None);
+        let limits = hydragrow_shared::safety::DoseSafetyLimits {
+            max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
+            max_dose_per_hour_ml: safety_config.max_dose_per_hour,
+            cooldown_sec: safety_config.cooldown_sec as u64,
+        };
+        let action_input = crate::models::script::ScriptActionInput {
+            ph: incoming.ph,
+            ec: incoming.ec,
+            temp: incoming.temp,
+            water_level: incoming.water_level,
+            phase: "Monitoring".to_string(), // TODO(follow-up, ghi nhận từ Phase 0): lấy phase thật từ device_states cache
+            device_id: device_id.clone(),
+            timestamp_ms: chrono::Utc::now().timestamp_millis(),
+        };
+        let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
+        let now_sec = (action_input.timestamp_ms / 1000) as u64;
+        for script in &action_scripts {
+            if let Ok(Some(output)) = engine.eval_action_command(&script.ast, &action_input)
+                && let Err(err) = crate::services::action_dispatch::dispatch_action_command(
+                    &app_state,
+                    &device_id,
+                    output,
+                    &limits,
+                    &[],
+                    now_sec,
+                    None,
+                    calibration.as_ref(),
+                )
+                .await
+            {
+                tracing::warn!(
+                    script_id = %script.id, device_id, error = ?err,
+                    "action_command bị chặn hoặc lỗi khi dispatch"
+                );
             }
         }
     }

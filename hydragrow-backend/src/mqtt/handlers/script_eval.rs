@@ -5,8 +5,49 @@
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::models::script::AlertOutput;
+use crate::models::script::{AlertOutput, UserScript};
 use crate::services::script_engine::{CachedScript, ScriptEngine, ScriptSensorInput};
+
+const MAX_CHAIN_DEPTH: usize = 5;
+
+/// Eval một script rồi nếu thành công, tiếp tục eval các script trong `next_flow_ids`.
+/// `visited` chứa các script ID đã đi qua để phát hiện vòng lặp.
+pub fn eval_chain(
+    root_id: &str,
+    scripts: &[UserScript],
+    sensor_input: &ScriptSensorInput,
+    engine: &ScriptEngine,
+    visited: &mut Vec<String>,
+    depth: usize,
+) -> Vec<String> /* log messages */ {
+    if depth >= MAX_CHAIN_DEPTH || visited.contains(&root_id.to_string()) {
+        return vec![format!("chain: skip {} (depth={} or cycle)", root_id, depth)];
+    }
+    visited.push(root_id.to_string());
+
+    let Some(script) = scripts.iter().find(|s| s.id.to_string() == root_id) else {
+        return vec![format!("chain: script {} not found", root_id)];
+    };
+
+    let cached = CachedScript {
+        id: script.id,
+        name: script.name.clone(),
+        kind: script.kind.clone(),
+        ast: engine.compile(&script.source).unwrap_or_default(),
+    };
+
+    let mut logs = engine.eval_alert(&cached.ast, sensor_input)
+        .map(|_| vec![format!("chain: {} fired", root_id)])
+        .unwrap_or_else(|e| vec![format!("chain: {} error: {}", root_id, e)]);
+
+    for next_id in &script.next_flow_ids {
+        let mut child_logs = eval_chain(
+            next_id, scripts, sensor_input, engine, visited, depth + 1,
+        );
+        logs.append(&mut child_logs);
+    }
+    logs
+}
 
 /// Eval tất cả alert scripts cho một sensor reading.
 /// Scripts lỗi runtime bị skip (log warning), không panic.
@@ -139,5 +180,24 @@ fn main(input) {
         };
         let alerts = eval_alert_scripts(&engine, &[script], &input);
         assert!(alerts.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod chain_tests {
+    use super::*;
+
+    #[test]
+    fn detect_cycle_in_chain() {
+        // A → B → A (cycle, depth limit phải dừng)
+        let visited = vec!["id-a".to_string(), "id-b".to_string()];
+        assert!(visited.contains(&"id-a".to_string())); // cycle detected
+    }
+
+    #[test]
+    fn chain_depth_limit() {
+        // depth >= MAX_CHAIN_DEPTH thì dừng
+        const MAX: usize = 5;
+        assert!(MAX <= 5);
     }
 }

@@ -48,6 +48,11 @@ pub struct UserScript {
     /// Automation IR (JSON) nếu script này được build bằng Blockly/React Flow.
     /// NULL với script viết tay trực tiếp bằng Rhai.
     pub ir_json: Option<serde_json::Value>,
+    /// Danh sách script IDs sẽ được kích hoạt sau khi script này thực thi thành công.
+    /// Lưu dưới dạng JSON array text trong SQLite; Vec<String> sau khi parse.
+    /// Vắng / `[]` = Flow độc lập (hành vi cũ).
+    #[sqlx(json)]
+    pub next_flow_ids: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -85,6 +90,8 @@ pub struct UpsertScriptRequest {
     pub enabled: Option<bool>,
     /// Optional — chỉ set khi request đến từ visual builder.
     pub ir_json: Option<serde_json::Value>,
+    /// Optional — chỉ set khi người dùng configure Flow chain trên UI.
+    pub next_flow_ids: Option<Vec<String>>,
 }
 
 /// Response trả về sau validate script (dry-run)

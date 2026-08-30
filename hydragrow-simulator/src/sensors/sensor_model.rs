@@ -9,7 +9,10 @@ pub struct NoiseConfig {
 
 impl NoiseConfig {
     pub fn none() -> Self {
-        Self { ec_noise_std_dev: 0.0, ph_noise_std_dev: 0.0 }
+        Self {
+            ec_noise_std_dev: 0.0,
+            ph_noise_std_dev: 0.0,
+        }
     }
 }
 
@@ -45,7 +48,13 @@ mod tests {
 
     #[test]
     fn test_sensor_read_no_noise() {
-        let tank = Tank { volume_l: 10.0, ec: 1.5, ph: 6.2, temp: 24.5, water_level: 40.0 };
+        let tank = Tank {
+            volume_l: 10.0,
+            ec: 1.5,
+            ph: 6.2,
+            temp: 24.5,
+            water_level: 40.0,
+        };
         let cfg = NoiseConfig::none();
         let sensor = read_sensor(&tank, &cfg);
         assert_eq!(sensor.ec, 1.5);

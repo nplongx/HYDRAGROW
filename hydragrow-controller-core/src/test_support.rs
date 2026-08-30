@@ -10,11 +10,20 @@ pub fn calculate_ec_change(pump_flow_ml: f32, volume_l: f32, config: &Controller
 }
 
 /// Calculates the change in pH for a given pump flow, tank volume, and direction (up/down)
-pub fn calculate_ph_change(pump_flow_ml: f32, volume_l: f32, is_up: bool, config: &ControllerConfig) -> f32 {
+pub fn calculate_ph_change(
+    pump_flow_ml: f32,
+    volume_l: f32,
+    is_up: bool,
+    config: &ControllerConfig,
+) -> f32 {
     if volume_l <= 0.0 {
         return 0.0;
     }
-    let shift = if is_up { config.ph_shift_up_per_ml } else { -config.ph_shift_down_per_ml };
+    let shift = if is_up {
+        config.ph_shift_up_per_ml
+    } else {
+        -config.ph_shift_down_per_ml
+    };
     (pump_flow_ml * shift) / volume_l
 }
 

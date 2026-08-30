@@ -187,12 +187,11 @@ fn main(input) {
 
 #[cfg(test)]
 mod chain_tests {
-    use super::*;
-
+    // Tests for cycle detection and max chain depth limits
     #[test]
     fn detect_cycle_in_chain() {
         // A → B → A (cycle, depth limit phải dừng)
-        let visited = vec!["id-a".to_string(), "id-b".to_string()];
+        let visited = ["id-a".to_string(), "id-b".to_string()];
         assert!(visited.contains(&"id-a".to_string())); // cycle detected
     }
 
@@ -200,6 +199,6 @@ mod chain_tests {
     fn chain_depth_limit() {
         // depth >= MAX_CHAIN_DEPTH thì dừng
         const MAX: usize = 5;
-        assert!(MAX <= 5);
+        const { assert!(MAX <= 5) };
     }
 }

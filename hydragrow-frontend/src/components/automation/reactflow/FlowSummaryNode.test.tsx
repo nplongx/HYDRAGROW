@@ -24,6 +24,7 @@ describe('FlowSummaryNode', () => {
         actions: [{ type: 'alert', level: 'warning', message: 'pH cao' }],
         nodes: [],
         edges: [],
+        next_flow_ids: [],
       },
       created_at: '',
       updated_at: '',

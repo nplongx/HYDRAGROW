@@ -37,6 +37,7 @@ export function buildAutomationIr(
     actions: blocklyResult.actions,
     nodes: [],
     edges: [],
+    next_flow_ids: [],
   };
 }
 

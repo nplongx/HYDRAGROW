@@ -74,6 +74,7 @@ describe('FlowDetailDrawer', () => {
               actions: [{ type: 'alert', level: 'warning', message: 'x' }],
               nodes: [{ id: '1', type: 'sensor', position: { x: 0, y: 0 }, data: {} }],
               edges: [],
+              next_flow_ids: [],
             },
             created_at: '',
             updated_at: '',

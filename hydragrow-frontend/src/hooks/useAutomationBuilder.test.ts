@@ -49,6 +49,7 @@ describe('useAutomationBuilder', () => {
         actions: [{ type: 'alert', level: 'info', message: 'x' }],
         nodes: [{ id: 'a', type: 'sensor', position: { x: 0, y: 0 }, data: {} }],
         edges: [],
+        next_flow_ids: [],
       }),
     );
     expect(result.current.mode).toBe('reactflow');
@@ -65,6 +66,7 @@ describe('useAutomationBuilder', () => {
         actions: [{ type: 'advance_stage', targetStageOffset: 1, reason: 'x' }],
         nodes: [],
         edges: [],
+        next_flow_ids: [],
       }),
     );
     expect(result.current.mode).toBe('blockly');

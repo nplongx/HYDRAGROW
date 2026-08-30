@@ -18,29 +18,58 @@ function guardClause(conditions: Condition[]): string {
 }
 
 function actionToRhaiMap(action: Action): string {
-  if (action.type === 'alert') {
-    const title = action.title ?? action.message;
-    return [
-      '#{',
-      ` "level": "${rhaiString(action.level)}",`,
-      ` "title": "${rhaiString(title)}",`,
-      ` "message": "${rhaiString(action.message)}"`,
-      '}',
-    ].join('\n ');
+  switch (action.type) {
+    case 'alert': {
+      const title = action.title ?? action.message;
+      return [
+        '#{',
+        ` "level": "${rhaiString(action.level)}",`,
+        ` "title": "${rhaiString(title)}",`,
+        ` "message": "${rhaiString(action.message)}"`,
+        '}',
+      ].join('\n ');
+    }
+    case 'advance_stage': {
+      const offsetExpr =
+        action.targetStageOffset === 0
+          ? 'input.stage_index'
+          : action.targetStageOffset > 0
+          ? `input.stage_index + ${action.targetStageOffset}`
+          : `input.stage_index - ${Math.abs(action.targetStageOffset)}`;
+      return [
+        '#{',
+        ` "target_stage_index": ${offsetExpr},`,
+        ` "reason": "${rhaiString(action.reason)}"`,
+        '}',
+      ].join('\n ');
+    }
+    case 'dose':
+      return [
+        '#{',
+        ` "action": "dose",`,
+        ` "pump": "${rhaiString(action.pump)}",`,
+        ` "dose_ml": ${action.doseMl},`,
+        ` "pwm": ${action.pwm}`,
+        '}',
+      ].join('\n ');
+    case 'water_on':
+      return [
+        '#{',
+        ` "action": "water_on",`,
+        ` "pump": "${rhaiString(action.pump)}",`,
+        ` "duration_sec": ${action.durationSec}`,
+        '}',
+      ].join('\n ');
+    case 'water_off':
+      return [
+        '#{',
+        ` "action": "water_off",`,
+        ` "pump": "${rhaiString(action.pump)}"`,
+        '}',
+      ].join('\n ');
+    case 'emergency_stop':
+      return '#{ "action": "emergency_stop" }';
   }
-  // advance_stage
-  const offsetExpr =
-    action.targetStageOffset === 0
-      ? 'input.stage_index'
-      : action.targetStageOffset > 0
-      ? `input.stage_index + ${action.targetStageOffset}`
-      : `input.stage_index - ${Math.abs(action.targetStageOffset)}`;
-  return [
-    '#{',
-    ` "target_stage_index": ${offsetExpr},`,
-    ` "reason": "${rhaiString(action.reason)}"`,
-    '}',
-  ].join('\n ');
 }
 
 /**

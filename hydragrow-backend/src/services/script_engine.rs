@@ -168,11 +168,13 @@ impl ScriptEngine {
             .get("duration_sec")
             .and_then(|v| v.clone().try_cast::<i64>())
             .map(|i| i as u64);
+        let pwm = map.get("pwm").and_then(|v| v.clone().try_cast::<i64>()).map(|i| i as u32);
 
         Ok(Some(ActionCommandOutput {
             action,
             pump,
             dose_ml,
+            pwm,
             duration_sec,
         }))
     }
@@ -423,6 +425,36 @@ fn main(input) {
         assert_eq!(result.action, "dose");
         assert_eq!(result.pump.as_deref(), Some("ph_down"));
         assert_eq!(result.dose_ml, Some(3.0));
+    }
+
+    #[test]
+    fn eval_action_command_reads_pwm_field() {
+        let engine = ScriptEngine::new();
+        let src = r#"
+        fn main(input) {
+            #{ action: "dose", pump: "ph_down", dose_ml: 3.0, pwm: 80 }
+        }
+        "#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptActionInput {
+            ph: 8.0, ec: 1.5, temp: 25.0, water_level: 80.0,
+            phase: "Monitoring".into(), device_id: "d1".into(), timestamp_ms: 0,
+        };
+        let result = engine.eval_action_command(&ast, &input).unwrap().unwrap();
+        assert_eq!(result.pwm, Some(80));
+    }
+
+    #[test]
+    fn eval_action_command_pwm_is_none_when_absent() {
+        let engine = ScriptEngine::new();
+        let src = r#"fn main(input) { #{ action: "water_on", pump: "WATER_PUMP_IN", duration_sec: 10 } }"#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptActionInput {
+            ph: 6.5, ec: 1.5, temp: 25.0, water_level: 80.0,
+            phase: "Monitoring".into(), device_id: "d1".into(), timestamp_ms: 0,
+        };
+        let result = engine.eval_action_command(&ast, &input).unwrap().unwrap();
+        assert_eq!(result.pwm, None);
     }
 
     #[tokio::test]

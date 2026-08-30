@@ -46,4 +46,24 @@ describe('hydrateWorkspace', () => {
     );
     expect(extractConditions(workspace)).toHaveLength(2);
   });
+
+  it('round-trips a dose action', () => {
+    hydrateWorkspace(workspace, [], [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 80 }]);
+    expect(extractActions(workspace)).toEqual([{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 80 }]);
+  });
+
+  it('round-trips a water_on action', () => {
+    hydrateWorkspace(workspace, [], [{ type: 'water_on', pump: 'WATER_PUMP_IN', durationSec: 30 }]);
+    expect(extractActions(workspace)).toEqual([{ type: 'water_on', pump: 'WATER_PUMP_IN', durationSec: 30 }]);
+  });
+
+  it('round-trips a water_off action', () => {
+    hydrateWorkspace(workspace, [], [{ type: 'water_off', pump: 'MIST_VALVE' }]);
+    expect(extractActions(workspace)).toEqual([{ type: 'water_off', pump: 'MIST_VALVE' }]);
+  });
+
+  it('round-trips an emergency_stop action', () => {
+    hydrateWorkspace(workspace, [], [{ type: 'emergency_stop' }]);
+    expect(extractActions(workspace)).toEqual([{ type: 'emergency_stop' }]);
+  });
 });

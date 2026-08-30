@@ -45,10 +45,27 @@ export function hydrateWorkspace(
       block.setFieldValue(action.level, 'LEVEL');
       block.setFieldValue(action.message, 'MESSAGE');
       placeAndChain(block);
-    } else {
+    } else if (action.type === 'advance_stage') {
       const block = workspace.newBlock('hydragrow_advance_stage_action');
       block.setFieldValue(String(action.targetStageOffset), 'OFFSET');
       block.setFieldValue(action.reason, 'REASON');
+      placeAndChain(block);
+    } else if (action.type === 'dose') {
+      const block = workspace.newBlock('hydragrow_dose_action');
+      block.setFieldValue(action.pump, 'PUMP');
+      block.setFieldValue(String(action.doseMl), 'DOSE_ML');
+      block.setFieldValue(String(action.pwm), 'PWM');
+      placeAndChain(block);
+    } else if (action.type === 'water_on' || action.type === 'water_off') {
+      const block = workspace.newBlock('hydragrow_water_action');
+      block.setFieldValue(action.pump, 'PUMP');
+      block.setFieldValue(action.type === 'water_on' ? 'on' : 'off', 'STATE');
+      if (action.type === 'water_on') {
+        block.setFieldValue(String(action.durationSec), 'DURATION_SEC');
+      }
+      placeAndChain(block);
+    } else if (action.type === 'emergency_stop') {
+      const block = workspace.newBlock('hydragrow_emergency_stop_action');
       placeAndChain(block);
     }
   }

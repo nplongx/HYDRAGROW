@@ -21,6 +21,7 @@ export interface FlowDetailDrawerProps {
 const TRIGGER_FOR_KIND: Record<AutomationIr['kind'], AutomationIr['trigger']> = {
   alert: { type: 'sensor' },
   recipe_override: { type: 'fsm' },
+  action_command: { type: 'sensor' },
 };
 
 /** Pure — tách riêng để test không cần mount component hay mock react-query,
@@ -117,6 +118,7 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
         >
           <option value="alert">Alert</option>
           <option value="recipe_override">Recipe Override</option>
+          <option value="action_command">Action Command</option>
         </select>
         <label className="flex items-center gap-1 text-xs">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />

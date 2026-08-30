@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Executor, FromRow, PgPool, Row};
 use tracing::instrument;
 
-use crate::models::config::{DeviceConfig, SafetyConfig};
+use crate::models::config::{DeviceConfig, DosingCalibration, SafetyConfig};
 use crate::models::crop_season::{CreateCropSeasonRequest, CropSeason};
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -120,6 +120,16 @@ pub async fn upsert_device_config(
 // Safety Config
 
 #[instrument(skip(pool))]
+pub async fn fetch_dosing_calibration(
+    pool: &PgPool,
+    device_id: &str,
+) -> Result<Option<DosingCalibration>, sqlx::Error> {
+    sqlx::query_as::<_, DosingCalibration>("SELECT * FROM dosing_calibration WHERE device_id = $1")
+        .bind(device_id)
+        .fetch_optional(pool)
+        .await
+}
+
 pub async fn get_safety_config(pool: &PgPool, device_id: &str) -> Result<SafetyConfig> {
     let config = sqlx::query_as::<_, SafetyConfig>(
         r#"

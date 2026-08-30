@@ -127,6 +127,9 @@ pub struct ActionCommandOutput {
     pub action: String,
     pub pump: Option<String>,
     pub dose_ml: Option<f32>,
+    /// Chỉ có ý nghĩa khi action="dose" — % công suất bơm, dùng cùng
+    /// hydragrow_shared::dosing để quy đổi dose_ml → duration_sec.
+    pub pwm: Option<u32>,
     pub duration_sec: Option<u64>,
 }
 

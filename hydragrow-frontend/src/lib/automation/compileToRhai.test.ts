@@ -51,3 +51,45 @@ describe('compileToRhai', () => {
     expect(rhai).toContain('pH is \\"high\\"');
   });
 });
+
+describe('action_command compilation', () => {
+  it('compiles a dose action with snake_case keys matching eval_action_command', () => {
+    const source = compileToRhai({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
+      actions: [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 80 }],
+      nodes: [],
+      edges: [],
+    });
+    expect(source).toContain('"action": "dose"');
+    expect(source).toContain('"pump": "PH_DOWN"');
+    expect(source).toContain('"dose_ml": 3');
+    expect(source).toContain('"pwm": 80');
+  });
+
+  it('compiles a water_off action without a duration_sec key', () => {
+    const source = compileToRhai({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [],
+      actions: [{ type: 'water_off', pump: 'WATER_PUMP_IN' }],
+      nodes: [],
+      edges: [],
+    });
+    expect(source).toContain('"action": "water_off"');
+    expect(source).not.toContain('duration_sec');
+  });
+
+  it('compiles emergency_stop with no other fields', () => {
+    const source = compileToRhai({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 9.0 }],
+      actions: [{ type: 'emergency_stop' }],
+      nodes: [],
+      edges: [],
+    });
+    expect(source).toContain('"action": "emergency_stop"');
+  });
+});

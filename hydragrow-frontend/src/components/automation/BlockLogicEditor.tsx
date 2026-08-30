@@ -17,6 +17,17 @@ export interface BlockLogicEditorProps {
 }
 
 function toolboxFor(kind: AutomationIr['kind']) {
+  if (kind === 'action_command') {
+    return {
+      kind: 'flyoutToolbox',
+      contents: [
+        { kind: 'block', type: 'hydragrow_sensor_condition' },
+        { kind: 'block', type: 'hydragrow_dose_action' },
+        { kind: 'block', type: 'hydragrow_water_action' },
+        { kind: 'block', type: 'hydragrow_emergency_stop_action' },
+      ],
+    };
+  }
   return {
     kind: 'flyoutToolbox',
     contents: [
@@ -38,7 +49,7 @@ export function BlockLogicEditor({
 
   useEffect(() => {
     if (!containerRef.current) return;
-    registerHydragrowBlocks(kind === 'alert' ? SENSOR_FIELDS : FSM_FIELDS);
+    registerHydragrowBlocks(kind === 'recipe_override' ? FSM_FIELDS : SENSOR_FIELDS);
     const workspace = Blockly.inject(containerRef.current, { toolbox: toolboxFor(kind) });
     workspaceRef.current = workspace;
 

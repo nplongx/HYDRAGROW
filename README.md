@@ -41,6 +41,7 @@ Hệ thống điều khiển và giám sát thủy canh thông minh.
 | Shared types | Rust crate | `hydragrow-shared/` | [README](hydragrow-shared/README.md) |
 | Controller firmware | Rust / esp-rs | `ESP32-C3-CONTROLLER-NODE/` | [README](ESP32-C3-CONTROLLER-NODE/README.md) |
 | Sensor firmware | C++ / PlatformIO | `ESP32-C3-SENSOR-NODE/` | [README](ESP32-C3-SENSOR-NODE/README.md) |
+| Simulator | Rust | `hydragrow-simulator/` | N/A |
 
 ## MQTT Topics chính
 
@@ -74,6 +75,7 @@ Xem README của từng subsystem để build/run chi tiết. Thứ tự khởi 
 |---|---|---|
 | `shared-schema-check` | push/PR chạm `hydragrow-shared/` | cargo fmt + clippy + test (schema snapshots) |
 | `backend-ci` | push/PR chạm `hydragrow-backend/` hoặc `hydragrow-shared/` | cargo fmt + check + test + clippy (-D warnings) |
+| `simulator-ci` | push/PR chạm `hydragrow-simulator/`, `hydragrow-controller-core/` hoặc `hydragrow-shared/` | cargo fmt + check + clippy + test |
 | `controller-core-ci` | push/PR chạm `hydragrow-controller-core/` hoặc `hydragrow-shared/` | cargo fmt + clippy + test |
 | `frontend-ci` | push/PR chạm `hydragrow-frontend/` | tsc + eslint + vitest + cargo check (src-tauri) |
 | `firmware-controller-ci` | push/PR chạm `ESP32-C3-CONTROLLER-NODE/` | cargo check + fmt + clippy (esp-rs nightly) |

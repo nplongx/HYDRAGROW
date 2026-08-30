@@ -1,12 +1,14 @@
-import * as Blockly from 'blockly/core';
-import type { Action, Condition } from '../../../lib/automation/ir';
+import * as Blockly from "blockly/core";
+import type { Action, Condition } from "../../../lib/automation/ir";
 
 export function extractConditions(workspace: Blockly.Workspace): Condition[] {
-  return workspace.getBlocksByType('hydragrow_sensor_condition', false).map((block) => ({
-    sensor: block.getFieldValue('SENSOR'),
-    operator: block.getFieldValue('OPERATOR') as Condition['operator'],
-    value: Number(block.getFieldValue('VALUE')),
-  }));
+  return workspace
+    .getBlocksByType("hydragrow_sensor_condition", false)
+    .map((block) => ({
+      sensor: block.getFieldValue("SENSOR"),
+      operator: block.getFieldValue("OPERATOR") as Condition["operator"],
+      value: Number(block.getFieldValue("VALUE")),
+    }));
 }
 
 export function extractActions(workspace: Blockly.Workspace): Action[] {

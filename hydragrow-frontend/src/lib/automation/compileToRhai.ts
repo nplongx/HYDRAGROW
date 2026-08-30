@@ -1,8 +1,8 @@
-import type { Action, AutomationIr, Condition } from './ir';
+import type { Action, AutomationIr, Condition } from "./ir";
 
 // Rhai string literals: escape backslash first, then double quotes.
 function rhaiString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function conditionToRhai(c: Condition): string {
@@ -13,36 +13,36 @@ function conditionToRhai(c: Condition): string {
 // `if (!(A && B && ...)) { return (); }` guard, matching the hand-written scripts
 // already accepted by ScriptEngine::eval_alert / eval_recipe_override.
 function guardClause(conditions: Condition[]): string {
-  const joined = conditions.map(conditionToRhai).join(' && ');
+  const joined = conditions.map(conditionToRhai).join(" && ");
   return `if !(${joined}) { return (); }`;
 }
 
 function actionToRhaiMap(action: Action): string {
   switch (action.type) {
-    case 'alert': {
+    case "alert": {
       const title = action.title ?? action.message;
       return [
-        '#{',
+        "#{",
         ` "level": "${rhaiString(action.level)}",`,
         ` "title": "${rhaiString(title)}",`,
         ` "message": "${rhaiString(action.message)}"`,
-        '}',
-      ].join('\n ');
+        "}",
+      ].join("\n ");
     }
-    case 'advance_stage': {
+    case "advance_stage": {
       const offsetExpr =
         action.targetStageOffset === 0
-          ? 'input.stage_index'
+          ? "input.stage_index"
           : action.targetStageOffset > 0
-          ? `input.stage_index + ${action.targetStageOffset}`
-          : `input.stage_index - ${Math.abs(action.targetStageOffset)}`;
+            ? `input.stage_index + ${action.targetStageOffset}`
+            : `input.stage_index - ${Math.abs(action.targetStageOffset)}`;
       return [
         '#{',
         ` "action": "advance_stage",`,
         ` "target_stage_index": ${offsetExpr},`,
         ` "reason": "${rhaiString(action.reason)}"`,
-        '}',
-      ].join('\n ');
+        "}",
+      ].join("\n ");
     }
     case 'end_season':
       return [
@@ -53,29 +53,29 @@ function actionToRhaiMap(action: Action): string {
       ].join('\n ');
     case 'dose':
       return [
-        '#{',
+        "#{",
         ` "action": "dose",`,
         ` "pump": "${rhaiString(action.pump)}",`,
         ` "dose_ml": ${action.doseMl},`,
         ` "pwm": ${action.pwm}`,
-        '}',
-      ].join('\n ');
-    case 'water_on':
+        "}",
+      ].join("\n ");
+    case "water_on":
       return [
-        '#{',
+        "#{",
         ` "action": "water_on",`,
         ` "pump": "${rhaiString(action.pump)}",`,
         ` "duration_sec": ${action.durationSec}`,
-        '}',
-      ].join('\n ');
-    case 'water_off':
+        "}",
+      ].join("\n ");
+    case "water_off":
       return [
-        '#{',
+        "#{",
         ` "action": "water_off",`,
         ` "pump": "${rhaiString(action.pump)}"`,
-        '}',
-      ].join('\n ');
-    case 'emergency_stop':
+        "}",
+      ].join("\n ");
+    case "emergency_stop":
       return '#{ "action": "emergency_stop" }';
   }
 }

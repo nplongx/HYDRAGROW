@@ -1,5 +1,5 @@
-import * as Blockly from 'blockly/core';
-import { SENSOR_FIELDS } from '../../../lib/automation/ir';
+import * as Blockly from "blockly/core";
+import { SENSOR_FIELDS } from "../../../lib/automation/ir";
 
 let registeredFields: readonly string[] | null = null;
 
@@ -8,61 +8,80 @@ let registeredFields: readonly string[] | null = null;
  * instances. Re-registering with a *different* field list (e.g. switching
  * kind from alert → recipe_override) rebuilds the sensor dropdown options.
  */
-export function registerHydragrowBlocks(fields: readonly string[] = SENSOR_FIELDS) {
-  if (registeredFields && registeredFields.join(',') === fields.join(',')) return;
+export function registerHydragrowBlocks(
+  fields: readonly string[] = SENSOR_FIELDS,
+) {
+  if (registeredFields && registeredFields.join(",") === fields.join(","))
+    return;
   registeredFields = fields;
 
-  Blockly.Blocks['hydragrow_sensor_condition'] = {
+  Blockly.Blocks["hydragrow_sensor_condition"] = {
     init(this: Blockly.Block) {
       this.appendDummyInput()
-        .appendField(new Blockly.FieldDropdown(fields.map((f) => [f, f])), 'SENSOR')
         .appendField(
-          new Blockly.FieldDropdown([
-            ['>', '>'],
-            ['<', '<'],
-            ['>=', '>='],
-            ['<=', '<='],
-            ['==', '=='],
-            ['!=', '!='],
-          ]),
-          'OPERATOR',
+          new Blockly.FieldDropdown(fields.map((f) => [f, f])),
+          "SENSOR",
         )
-        .appendField(new Blockly.FieldNumber(0), 'VALUE');
-      this.setPreviousStatement(true, 'condition');
-      this.setNextStatement(true, 'condition');
-      this.setColour(210);
-      this.setTooltip('So sánh một giá trị cảm biến với một ngưỡng.');
-    },
-  };
-
-  Blockly.Blocks['hydragrow_alert_action'] = {
-    init(this: Blockly.Block) {
-      this.appendDummyInput()
-        .appendField('Alert')
         .appendField(
           new Blockly.FieldDropdown([
-            ['info', 'info'],
-            ['warning', 'warning'],
-            ['error', 'error'],
+            [">", ">"],
+            ["<", "<"],
+            [">=", ">="],
+            ["<=", "<="],
+            ["==", "=="],
+            ["!=", "!="],
           ]),
-          'LEVEL',
-        );
-      this.appendDummyInput().appendField(new Blockly.FieldTextInput('Message'), 'MESSAGE');
-      this.setPreviousStatement(true, 'action');
-      this.setColour(20);
-      this.setTooltip('Gửi một alert khi điều kiện phía trên đúng.');
+          "OPERATOR",
+        )
+        .appendField(new Blockly.FieldNumber(0), "VALUE");
+      this.setPreviousStatement(true, "condition");
+      this.setNextStatement(true, "condition");
+      this.setColour(210);
+      this.setTooltip("So sánh một giá trị cảm biến với một ngưỡng.");
     },
   };
 
-  Blockly.Blocks['hydragrow_advance_stage_action'] = {
+  Blockly.Blocks["hydragrow_alert_action"] = {
     init(this: Blockly.Block) {
       this.appendDummyInput()
-        .appendField('Advance stage, offset')
-        .appendField(new Blockly.FieldNumber(1), 'OFFSET');
-      this.appendDummyInput().appendField(new Blockly.FieldTextInput('Reason'), 'REASON');
-      this.setPreviousStatement(true, 'action');
+        .appendField("Alert")
+        .appendField(
+          new Blockly.FieldDropdown([
+            ["info", "info"],
+            ["warning", "warning"],
+            ["error", "error"],
+          ]),
+          "LEVEL",
+        );
+      this.appendDummyInput().appendField(
+        new Blockly.FieldTextInput("Message"),
+        "MESSAGE",
+      );
+      this.appendDummyInput()
+        .appendField("Gửi FCM push")
+        .appendField(new Blockly.FieldCheckbox("TRUE"), "NOTIFY_FCM");
+      this.setPreviousStatement(true, "action");
+      this.setColour(20);
+      this.setTooltip(
+        'Gửi một alert khi điều kiện phía trên đúng. Bỏ tick "Gửi FCM push" nếu chỉ muốn ghi log/hiện banner mà không đẩy thông báo.',
+      );
+    },
+  };
+
+  Blockly.Blocks["hydragrow_advance_stage_action"] = {
+    init(this: Blockly.Block) {
+      this.appendDummyInput()
+        .appendField("Advance stage, offset")
+        .appendField(new Blockly.FieldNumber(1), "OFFSET");
+      this.appendDummyInput().appendField(
+        new Blockly.FieldTextInput("Reason"),
+        "REASON",
+      );
+      this.setPreviousStatement(true, "action");
       this.setColour(160);
-      this.setTooltip('Chuyển sang stage khác trong recipe khi điều kiện phía trên đúng.');
+      this.setTooltip(
+        "Chuyển sang stage khác trong recipe khi điều kiện phía trên đúng.",
+      );
     },
   };
 
@@ -80,56 +99,64 @@ export function registerHydragrowBlocks(fields: readonly string[] = SENSOR_FIELD
   Blockly.Blocks['hydragrow_dose_action'] = {
     init(this: Blockly.Block) {
       this.appendDummyInput()
-        .appendField('Dose')
+        .appendField("Dose")
         .appendField(
           new Blockly.FieldDropdown([
-            ['PUMP_A', 'PUMP_A'],
-            ['PUMP_B', 'PUMP_B'],
-            ['PH_UP', 'PH_UP'],
-            ['PH_DOWN', 'PH_DOWN'],
+            ["PUMP_A", "PUMP_A"],
+            ["PUMP_B", "PUMP_B"],
+            ["PH_UP", "PH_UP"],
+            ["PH_DOWN", "PH_DOWN"],
           ]),
-          'PUMP',
+          "PUMP",
         );
       this.appendDummyInput()
-        .appendField('ml')
-        .appendField(new Blockly.FieldNumber(1, 0), 'DOSE_ML')
-        .appendField('PWM %')
-        .appendField(new Blockly.FieldNumber(100, 1, 100), 'PWM');
-      this.setPreviousStatement(true, 'action');
+        .appendField("ml")
+        .appendField(new Blockly.FieldNumber(1, 0), "DOSE_ML")
+        .appendField("PWM %")
+        .appendField(new Blockly.FieldNumber(100, 1, 100), "PWM");
+      this.setPreviousStatement(true, "action");
       this.setColour(0);
-      this.setTooltip('Bơm một liều dung dịch — luôn đi qua safety gate ở backend trước khi publish.');
+      this.setTooltip(
+        "Bơm một liều dung dịch — luôn đi qua safety gate ở backend trước khi publish.",
+      );
     },
   };
 
-  Blockly.Blocks['hydragrow_water_action'] = {
+  Blockly.Blocks["hydragrow_water_action"] = {
     init(this: Blockly.Block) {
       this.appendDummyInput()
-        .appendField('Water')
+        .appendField("Water")
         .appendField(
           new Blockly.FieldDropdown([
-            ['WATER_PUMP_IN', 'WATER_PUMP_IN'],
-            ['WATER_PUMP_OUT', 'WATER_PUMP_OUT'],
-            ['MIST_VALVE', 'MIST_VALVE'],
-            ['OSAKA_PUMP', 'OSAKA_PUMP'],
+            ["WATER_PUMP_IN", "WATER_PUMP_IN"],
+            ["WATER_PUMP_OUT", "WATER_PUMP_OUT"],
+            ["MIST_VALVE", "MIST_VALVE"],
+            ["OSAKA_PUMP", "OSAKA_PUMP"],
           ]),
-          'PUMP',
+          "PUMP",
         )
-        .appendField(new Blockly.FieldDropdown([['on', 'on'], ['off', 'off']]), 'STATE');
+        .appendField(
+          new Blockly.FieldDropdown([
+            ["on", "on"],
+            ["off", "off"],
+          ]),
+          "STATE",
+        );
       this.appendDummyInput()
-        .appendField('giây (chỉ dùng khi bật)')
-        .appendField(new Blockly.FieldNumber(10, 0), 'DURATION_SEC');
-      this.setPreviousStatement(true, 'action');
+        .appendField("giây (chỉ dùng khi bật)")
+        .appendField(new Blockly.FieldNumber(10, 0), "DURATION_SEC");
+      this.setPreviousStatement(true, "action");
       this.setColour(200);
-      this.setTooltip('Bật/tắt bơm nước hoặc van tuần hoàn.');
+      this.setTooltip("Bật/tắt bơm nước hoặc van tuần hoàn.");
     },
   };
 
-  Blockly.Blocks['hydragrow_emergency_stop_action'] = {
+  Blockly.Blocks["hydragrow_emergency_stop_action"] = {
     init(this: Blockly.Block) {
-      this.appendDummyInput().appendField('EMERGENCY STOP — dừng mọi actor');
-      this.setPreviousStatement(true, 'action');
+      this.appendDummyInput().appendField("EMERGENCY STOP — dừng mọi actor");
+      this.setPreviousStatement(true, "action");
       this.setColour(0);
-      this.setTooltip('Publish lệnh dừng khẩn cấp cho toàn bộ thiết bị.');
+      this.setTooltip("Publish lệnh dừng khẩn cấp cho toàn bộ thiết bị.");
     },
   };
 }

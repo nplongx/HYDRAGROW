@@ -20,6 +20,10 @@ export const AlertActionSchema = z.object({
   level: z.enum(['info', 'warning', 'error']),
   title: z.string().optional(),
   message: z.string().min(1),
+  /** Ghi đè tường minh việc có gửi FCM hay không, bất kể level. `undefined` =
+   * ir_json cũ trước tính năng này — backend fallback theo level (xem
+   * script_eval::should_notify_fcm). */
+  notifyFcm: z.boolean().optional(),
 });
 
 export const StageOverrideActionSchema = z.object({

@@ -1,73 +1,87 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
-use hydragrow_controller_core::WaterDirection;
-use hydragrow_controller_core::core::fsm::OrchestratorEvent;
-use hydragrow_controller_core::core::fsm::events::DosingPumpTarget;
+use crate::dispatcher::SimDispatcher;
+use crate::plant::tank::Tank;
+use crate::sensors::sensor_model::{read_sensor, NoiseConfig};
+use hydragrow_controller_core::{
+    core::fsm::tick_result::TickResult,
+    core::fsm::{context::SystemContext, orchestrator},
+};
+use hydragrow_shared::ControllerConfig;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-pub struct SimDispatcher;
+pub struct Harness {
+    pub config: ControllerConfig,
+    pub ctx: SystemContext,
+    pub hw: VirtualHardwareState,
+    pub dispatcher: SimDispatcher,
+    pub tank: Tank,
+    pub noise: NoiseConfig,
+    uptime_ms: u64,
+}
 
-impl Default for SimDispatcher {
-    fn default() -> Self {
-        Self::new()
+impl Harness {
+    pub fn new(config: ControllerConfig, tank: Tank, noise: NoiseConfig) -> Self {
+        Self {
+            config,
+            ctx: SystemContext::default(),
+            hw: VirtualHardwareState::default(),
+            dispatcher: SimDispatcher::new(),
+            tank,
+            noise,
+            uptime_ms: 0,
+        }
+    }
+
+    pub fn uptime_ms(&self) -> u64 {
+        self.uptime_ms
+    }
+
+    pub fn tick(&mut self, dt_ms: u64) -> TickResult {
+        self.tank.step(dt_ms, &self.hw, &self.config);
+        let sensor = read_sensor(&self.tank, &self.noise);
+
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        self.uptime_ms += dt_ms;
+
+        let result = orchestrator::tick(
+            now_ms,
+            self.uptime_ms,
+            &self.config,
+            &sensor,
+            now_ms, // use now_ms as last update time to avoid sensor timeout
+            &mut self.ctx,
+        );
+
+        for event in &result.events {
+            self.dispatcher.dispatch(event, &mut self.hw);
+        }
+
+        result
     }
 }
 
-impl SimDispatcher {
-    pub fn new() -> Self {
-        Self
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plant::tank::Tank;
+    use crate::sensors::sensor_model::NoiseConfig;
+    use hydragrow_shared::ControllerConfig;
 
-    pub fn dispatch(&mut self, event: &OrchestratorEvent, hw: &mut VirtualHardwareState) {
-        match event {
-            OrchestratorEvent::SetDosingPump {
-                pump,
-                on,
-                pwm_percent,
-            } => match pump {
-                DosingPumpTarget::NutrientA => {
-                    hw.pump_a.on = *on;
-                    hw.pump_a.pwm = *pwm_percent as u8;
-                }
-                DosingPumpTarget::NutrientB => {
-                    hw.pump_b.on = *on;
-                    hw.pump_b.pwm = *pwm_percent as u8;
-                }
-                DosingPumpTarget::PhUp => {
-                    hw.pump_ph_up.on = *on;
-                    hw.pump_ph_up.pwm = *pwm_percent as u8;
-                }
-                DosingPumpTarget::PhDown => {
-                    hw.pump_ph_down.on = *on;
-                    hw.pump_ph_down.pwm = *pwm_percent as u8;
-                }
-            },
-            OrchestratorEvent::SetWaterPump { direction } => match direction {
-                WaterDirection::In => {
-                    hw.water_pump_in.on = true;
-                    hw.water_pump_in.pwm = 100;
-                    hw.water_pump_out.on = false;
-                    hw.water_pump_out.pwm = 0;
-                }
-                WaterDirection::Out => {
-                    hw.water_pump_in.on = false;
-                    hw.water_pump_in.pwm = 0;
-                    hw.water_pump_out.on = true;
-                    hw.water_pump_out.pwm = 100;
-                }
-                WaterDirection::Stop => {
-                    hw.water_pump_in.on = false;
-                    hw.water_pump_in.pwm = 0;
-                    hw.water_pump_out.on = false;
-                    hw.water_pump_out.pwm = 0;
-                }
-            },
-            OrchestratorEvent::SetMistValve { on } => {
-                hw.mist_valve = *on;
-            }
-            OrchestratorEvent::SetMixValve { .. } => {}
-            OrchestratorEvent::SetOsakaPump { pwm_percent } => {
-                hw.osaka_pwm = *pwm_percent as u8;
-            }
-            _ => {}
-        }
+    #[test]
+    fn test_harness_single_tick() {
+        let config = ControllerConfig::default();
+        let tank = Tank::default();
+        let noise = NoiseConfig::default();
+
+        let mut harness = Harness::new(config, tank, noise);
+
+        let delta_ms = 100;
+        harness.tick(delta_ms);
+
+        assert_eq!(harness.uptime_ms(), 100);
     }
 }

@@ -1,0 +1,12 @@
+{
+    "initial_tank": {
+        "volume_l": 10.0,
+        "ec": 1.0,
+        "ph": 6.0,
+        "temp": 25.0,
+        "water_level": 50.0
+    },
+    "faults": [
+        { "at_ms": 5000, "kind": "PumpStuckOn", "pump": "PUMP_A" }
+    ]
+}

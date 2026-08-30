@@ -63,3 +63,25 @@ impl Harness {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plant::tank::Tank;
+    use crate::sensors::sensor_model::NoiseConfig;
+    use hydragrow_shared::ControllerConfig;
+
+    #[test]
+    fn test_harness_single_tick() {
+        let config = ControllerConfig::default();
+        let tank = Tank::default();
+        let noise = NoiseConfig::default();
+
+        let mut harness = Harness::new(config, tank, noise);
+
+        let delta_ms = 100;
+        harness.tick(delta_ms);
+
+        assert_eq!(harness.uptime_ms(), 100);
+    }
+}

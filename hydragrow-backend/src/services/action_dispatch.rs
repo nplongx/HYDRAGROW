@@ -39,19 +39,29 @@ pub fn evaluate_action_safety(
     calibration: Option<&DosingCalibration>,
 ) -> Result<ActionSafetyDecision, ActionDispatchError> {
     if output.action != "dose" {
-        return Ok(ActionSafetyDecision::Allow { duration_sec: output.duration_sec });
+        return Ok(ActionSafetyDecision::Allow {
+            duration_sec: output.duration_sec,
+        });
     }
 
     let (Some(dose_ml), Some(pwm), Some(pump)) =
         (output.dose_ml, output.pwm, output.pump.as_deref())
     else {
-        return Ok(ActionSafetyDecision::Block(DoseSafetyViolation::ExceedsPerCycleLimit {
-            requested_ml: f32::INFINITY,
-            max_ml: limits.max_dose_per_cycle_ml,
-        }));
+        return Ok(ActionSafetyDecision::Block(
+            DoseSafetyViolation::ExceedsPerCycleLimit {
+                requested_ml: f32::INFINITY,
+                max_ml: limits.max_dose_per_cycle_ml,
+            },
+        ));
     };
 
-    if let Err(violation) = check_dose(limits, hourly_history_ml, now_sec, last_dose_at_sec, dose_ml) {
+    if let Err(violation) = check_dose(
+        limits,
+        hourly_history_ml,
+        now_sec,
+        last_dose_at_sec,
+        dose_ml,
+    ) {
         return Ok(ActionSafetyDecision::Block(violation));
     }
 
@@ -76,7 +86,9 @@ pub fn evaluate_action_safety(
         )));
     };
 
-    Ok(ActionSafetyDecision::Allow { duration_sec: Some(duration_sec) })
+    Ok(ActionSafetyDecision::Allow {
+        duration_sec: Some(duration_sec),
+    })
 }
 
 /// Entry point gọi từ MQTT handler.
@@ -96,9 +108,18 @@ pub async fn dispatch_action_command(
             .map_err(ActionDispatchError::Mqtt);
     }
 
-    let decision = evaluate_action_safety(&output, limits, hourly_history_ml, now_sec, last_dose_at_sec, calibration)?;
+    let decision = evaluate_action_safety(
+        &output,
+        limits,
+        hourly_history_ml,
+        now_sec,
+        last_dose_at_sec,
+        calibration,
+    )?;
     let duration_sec = match decision {
-        ActionSafetyDecision::Block(violation) => return Err(ActionDispatchError::Safety(violation)),
+        ActionSafetyDecision::Block(violation) => {
+            return Err(ActionDispatchError::Safety(violation));
+        }
         ActionSafetyDecision::Allow { duration_sec } => duration_sec,
     };
 
@@ -117,7 +138,11 @@ pub async fn dispatch_action_command(
         params: Some(MqttCommandParams {
             pump_id: output.pump.clone(),
             duration_sec,
-            pwm: if output.action == "dose" { output.pwm } else { None },
+            pwm: if output.action == "dose" {
+                output.pwm
+            } else {
+                None
+            },
             state: None,
             ota_url: None,
             candidates: None,
@@ -137,7 +162,11 @@ mod tests {
     use super::*;
 
     fn limits() -> DoseSafetyLimits {
-        DoseSafetyLimits { max_dose_per_cycle_ml: 10.0, max_dose_per_hour_ml: 30.0, cooldown_sec: 60 }
+        DoseSafetyLimits {
+            max_dose_per_cycle_ml: 10.0,
+            max_dose_per_hour_ml: 30.0,
+            cooldown_sec: 60,
+        }
     }
 
     fn calibration() -> crate::models::config::DosingCalibration {
@@ -154,29 +183,50 @@ mod tests {
     #[test]
     fn non_dose_action_bypasses_safety_and_calibration() {
         let output = ActionCommandOutput {
-            action: "water_on".into(), pump: Some("WATER_PUMP_IN".into()),
-            dose_ml: None, pwm: None, duration_sec: Some(10),
+            action: "water_on".into(),
+            pump: Some("WATER_PUMP_IN".into()),
+            dose_ml: None,
+            pwm: None,
+            duration_sec: Some(10),
         };
         let decision = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None).unwrap();
-        assert_eq!(decision, ActionSafetyDecision::Allow { duration_sec: Some(10) });
+        assert_eq!(
+            decision,
+            ActionSafetyDecision::Allow {
+                duration_sec: Some(10)
+            }
+        );
     }
 
     #[test]
     fn dose_within_limits_computes_duration_from_calibration() {
         let output = ActionCommandOutput {
-            action: "dose".into(), pump: Some("PH_DOWN".into()),
-            dose_ml: Some(4.0), pwm: Some(100), duration_sec: None,
+            action: "dose".into(),
+            pump: Some("PH_DOWN".into()),
+            dose_ml: Some(4.0),
+            pwm: Some(100),
+            duration_sec: None,
         };
-        let decision = evaluate_action_safety(&output, &limits(), &[], 1_000, None, Some(&calibration())).unwrap();
+        let decision =
+            evaluate_action_safety(&output, &limits(), &[], 1_000, None, Some(&calibration()))
+                .unwrap();
         // capacity=2.0ml/s tại pwm=100% → 4.0ml / 2.0ml/s = 2s
-        assert_eq!(decision, ActionSafetyDecision::Allow { duration_sec: Some(2) });
+        assert_eq!(
+            decision,
+            ActionSafetyDecision::Allow {
+                duration_sec: Some(2)
+            }
+        );
     }
 
     #[test]
     fn dose_exceeding_per_cycle_limit_is_blocked_before_calibration_lookup() {
         let output = ActionCommandOutput {
-            action: "dose".into(), pump: Some("PH_DOWN".into()),
-            dose_ml: Some(50.0), pwm: Some(100), duration_sec: None,
+            action: "dose".into(),
+            pump: Some("PH_DOWN".into()),
+            dose_ml: Some(50.0),
+            pwm: Some(100),
+            duration_sec: None,
         };
         // calibration=None: nếu code lỡ tính calibration TRƯỚC safety check, test này sẽ panic
         // thay vì trả Block — thứ tự đúng là safety-check ml trước, calibration sau.
@@ -187,28 +237,40 @@ mod tests {
     #[test]
     fn dose_missing_pwm_is_blocked_defensively() {
         let output = ActionCommandOutput {
-            action: "dose".into(), pump: Some("PH_DOWN".into()),
-            dose_ml: Some(4.0), pwm: None, duration_sec: None,
+            action: "dose".into(),
+            pump: Some("PH_DOWN".into()),
+            dose_ml: Some(4.0),
+            pwm: None,
+            duration_sec: None,
         };
-        let decision = evaluate_action_safety(&output, &limits(), &[], 1_000, None, Some(&calibration())).unwrap();
+        let decision =
+            evaluate_action_safety(&output, &limits(), &[], 1_000, None, Some(&calibration()))
+                .unwrap();
         assert!(matches!(decision, ActionSafetyDecision::Block(_)));
     }
 
     #[test]
     fn dose_with_unrecognized_pump_name_errors_instead_of_silently_using_zero_capacity() {
         let output = ActionCommandOutput {
-            action: "dose".into(), pump: Some("NOT_A_PUMP".into()),
-            dose_ml: Some(4.0), pwm: Some(100), duration_sec: None,
+            action: "dose".into(),
+            pump: Some("NOT_A_PUMP".into()),
+            dose_ml: Some(4.0),
+            pwm: Some(100),
+            duration_sec: None,
         };
-        let result = evaluate_action_safety(&output, &limits(), &[], 1_000, None, Some(&calibration()));
+        let result =
+            evaluate_action_safety(&output, &limits(), &[], 1_000, None, Some(&calibration()));
         assert!(matches!(result, Err(ActionDispatchError::UnknownPump(_))));
     }
 
     #[test]
     fn dose_without_calibration_row_errors_instead_of_dosing_blind() {
         let output = ActionCommandOutput {
-            action: "dose".into(), pump: Some("PH_DOWN".into()),
-            dose_ml: Some(4.0), pwm: Some(100), duration_sec: None,
+            action: "dose".into(),
+            pump: Some("PH_DOWN".into()),
+            dose_ml: Some(4.0),
+            pwm: Some(100),
+            duration_sec: None,
         };
         let result = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None);
         assert!(matches!(result, Err(ActionDispatchError::UnknownPump(_))));

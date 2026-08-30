@@ -168,7 +168,10 @@ impl ScriptEngine {
             .get("duration_sec")
             .and_then(|v| v.clone().try_cast::<i64>())
             .map(|i| i as u64);
-        let pwm = map.get("pwm").and_then(|v| v.clone().try_cast::<i64>()).map(|i| i as u32);
+        let pwm = map
+            .get("pwm")
+            .and_then(|v| v.clone().try_cast::<i64>())
+            .map(|i| i as u32);
 
         Ok(Some(ActionCommandOutput {
             action,
@@ -437,8 +440,13 @@ fn main(input) {
         "#;
         let ast = engine.compile(src).unwrap();
         let input = ScriptActionInput {
-            ph: 8.0, ec: 1.5, temp: 25.0, water_level: 80.0,
-            phase: "Monitoring".into(), device_id: "d1".into(), timestamp_ms: 0,
+            ph: 8.0,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
         };
         let result = engine.eval_action_command(&ast, &input).unwrap().unwrap();
         assert_eq!(result.pwm, Some(80));
@@ -450,8 +458,13 @@ fn main(input) {
         let src = r#"fn main(input) { #{ action: "water_on", pump: "WATER_PUMP_IN", duration_sec: 10 } }"#;
         let ast = engine.compile(src).unwrap();
         let input = ScriptActionInput {
-            ph: 6.5, ec: 1.5, temp: 25.0, water_level: 80.0,
-            phase: "Monitoring".into(), device_id: "d1".into(), timestamp_ms: 0,
+            ph: 6.5,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
         };
         let result = engine.eval_action_command(&ast, &input).unwrap().unwrap();
         assert_eq!(result.pwm, None);

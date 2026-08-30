@@ -162,12 +162,18 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     }
 
-    let action_scripts = app_state.script_cache.get_action_command_scripts(&device_id).await;
+    let action_scripts = app_state
+        .script_cache
+        .get_action_command_scripts(&device_id)
+        .await;
     if !action_scripts.is_empty() {
-        if let Ok(safety_config) = crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await {
-            let calibration = crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
-                .await
-                .unwrap_or(None);
+        if let Ok(safety_config) =
+            crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await
+        {
+            let calibration =
+                crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
+                    .await
+                    .unwrap_or(None);
             let limits = hydragrow_shared::safety::DoseSafetyLimits {
                 max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
                 max_dose_per_hour_ml: safety_config.max_dose_per_hour,
@@ -187,7 +193,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             for script in &action_scripts {
                 if let Ok(Some(output)) = engine.eval_action_command(&script.ast, &action_input) {
                     if let Err(err) = crate::services::action_dispatch::dispatch_action_command(
-                        &app_state, &device_id, output, &limits, &[], now_sec, None, calibration.as_ref(),
+                        &app_state,
+                        &device_id,
+                        output,
+                        &limits,
+                        &[],
+                        now_sec,
+                        None,
+                        calibration.as_ref(),
                     )
                     .await
                     {

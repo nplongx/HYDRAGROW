@@ -137,7 +137,9 @@ mod tests {
 
     #[sqlx::test]
     async fn fetch_dosing_calibration_returns_none_when_missing(pool: sqlx::PgPool) {
-        let result = fetch_dosing_calibration(&pool, "no-such-device").await.unwrap();
+        let result = fetch_dosing_calibration(&pool, "no-such-device")
+            .await
+            .unwrap();
         assert!(result.is_none());
     }
 
@@ -187,7 +189,10 @@ mod tests {
         .await
         .unwrap();
 
-        let fetched = fetch_dosing_calibration(&pool, "dev-cal-1").await.unwrap().unwrap();
+        let fetched = fetch_dosing_calibration(&pool, "dev-cal-1")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched.device_id, "dev-cal-1");
         assert!((fetched.pump_ph_down_capacity_ml_per_sec - 0.8).abs() < f32::EPSILON);
     }

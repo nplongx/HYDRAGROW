@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::recipe::CropRecipe;
 
+pub mod dosing;
 pub mod events;
 pub mod fsm;
 pub mod helper;
 pub mod hestia;
 pub mod log;
 pub mod recipe;
-pub mod dosing;
 pub mod safety;
 pub mod telemetry;
 pub mod topics;

@@ -16,7 +16,11 @@ pub fn estimate_ml(capacity_ml_per_sec: f32, pwm_percent: u32, duration_sec: u64
 /// thiếu so với yêu cầu (an toàn hơn cho phía "không đủ liều" chứ không phải phía
 /// ngược lại; `check_dose` ở `safety.rs` vẫn chặn nếu tổng vượt ngưỡng).
 /// Trả `None` nếu capacity hoặc pwm bằng 0 (không thể bơm được gì).
-pub fn ml_to_duration_sec(capacity_ml_per_sec: f32, pwm_percent: u32, target_ml: f32) -> Option<u64> {
+pub fn ml_to_duration_sec(
+    capacity_ml_per_sec: f32,
+    pwm_percent: u32,
+    target_ml: f32,
+) -> Option<u64> {
     if capacity_ml_per_sec <= 0.0 || pwm_percent == 0 {
         return None;
     }
@@ -103,7 +107,13 @@ mod tests {
 
     #[test]
     fn capacity_ml_per_sec_for_pump_picks_the_right_field() {
-        assert_eq!(capacity_ml_per_sec_for_pump(1.0, 2.0, 3.0, 4.0, "PH_DOWN"), 4.0);
-        assert_eq!(capacity_ml_per_sec_for_pump(1.0, 2.0, 3.0, 4.0, "UNKNOWN"), 0.0);
+        assert_eq!(
+            capacity_ml_per_sec_for_pump(1.0, 2.0, 3.0, 4.0, "PH_DOWN"),
+            4.0
+        );
+        assert_eq!(
+            capacity_ml_per_sec_for_pump(1.0, 2.0, 3.0, 4.0, "UNKNOWN"),
+            0.0
+        );
     }
 }

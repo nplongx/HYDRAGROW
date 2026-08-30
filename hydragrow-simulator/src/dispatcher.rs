@@ -18,6 +18,7 @@ impl SimDispatcher {
                 pwm_percent,
             } => {
                 let pwm = *pwm_percent as u8;
+
                 match pump {
                     DosingPumpTarget::NutrientA => {
                         hw.pump_a.on = *on;
@@ -37,6 +38,7 @@ impl SimDispatcher {
                     }
                 }
             }
+
             OrchestratorEvent::SetWaterPump { direction } => match direction {
                 WaterDirection::In => {
                     hw.water_pump_in.on = true;
@@ -45,10 +47,10 @@ impl SimDispatcher {
                     hw.water_pump_out.pwm = 0;
                 }
                 WaterDirection::Out => {
-                    hw.water_pump_out.on = true;
-                    hw.water_pump_out.pwm = 100;
                     hw.water_pump_in.on = false;
                     hw.water_pump_in.pwm = 0;
+                    hw.water_pump_out.on = true;
+                    hw.water_pump_out.pwm = 100;
                 }
                 WaterDirection::Stop => {
                     hw.water_pump_in.on = false;
@@ -57,12 +59,17 @@ impl SimDispatcher {
                     hw.water_pump_out.pwm = 0;
                 }
             },
+
             OrchestratorEvent::SetMistValve { on } => {
                 hw.mist_valve = *on;
             }
+
+            OrchestratorEvent::SetMixValve { .. } => {}
+
             OrchestratorEvent::SetOsakaPump { pwm_percent } => {
                 hw.osaka_pwm = *pwm_percent as u8;
             }
+
             _ => {
                 // Ignore other events for now
             }
@@ -80,6 +87,7 @@ mod tests {
     fn test_dispatcher_pump_update() {
         let mut hw = VirtualHardwareState::default();
         let mut dispatcher = SimDispatcher::new();
+
         dispatcher.dispatch(
             &OrchestratorEvent::SetDosingPump {
                 pump: DosingPumpTarget::NutrientA,
@@ -88,6 +96,7 @@ mod tests {
             },
             &mut hw,
         );
+
         assert!(hw.pump_a.on);
         assert_eq!(hw.pump_a.pwm, 50);
     }

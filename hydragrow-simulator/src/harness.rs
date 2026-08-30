@@ -1,7 +1,12 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::dispatcher::SimDispatcher;
-use hydragrow_controller_core::core::fsm::{SystemContext, TickResult, orchestrator};
-use hydragrow_shared::{ControllerConfig, SensorData};
+use crate::plant::tank::Tank;
+use crate::sensors::sensor_model::{read_sensor, NoiseConfig};
+use hydragrow_controller_core::{
+    core::fsm::tick_result::TickResult,
+    core::fsm::{context::SystemContext, orchestrator},
+};
+use hydragrow_shared::ControllerConfig;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Harness {
@@ -9,16 +14,20 @@ pub struct Harness {
     pub ctx: SystemContext,
     pub hw: VirtualHardwareState,
     pub dispatcher: SimDispatcher,
+    pub tank: Tank,
+    pub noise: NoiseConfig,
     uptime_ms: u64,
 }
 
 impl Harness {
-    pub fn new(config: ControllerConfig) -> Self {
+    pub fn new(config: ControllerConfig, tank: Tank, noise: NoiseConfig) -> Self {
         Self {
             config,
             ctx: SystemContext::default(),
             hw: VirtualHardwareState::default(),
             dispatcher: SimDispatcher::new(),
+            tank,
+            noise,
             uptime_ms: 0,
         }
     }
@@ -27,7 +36,10 @@ impl Harness {
         self.uptime_ms
     }
 
-    pub fn tick(&mut self, dt_ms: u64, sensor: SensorData) -> TickResult {
+    pub fn tick(&mut self, dt_ms: u64) -> TickResult {
+        self.tank.step(dt_ms, &self.hw, &self.config);
+        let sensor = read_sensor(&self.tank, &self.noise);
+
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -40,7 +52,7 @@ impl Harness {
             self.uptime_ms,
             &self.config,
             &sensor,
-            self.uptime_ms, // pass uptime_ms as sensor_last_update_ms
+            now_ms, // use now_ms as last update time to avoid sensor timeout
             &mut self.ctx,
         );
 
@@ -55,34 +67,21 @@ impl Harness {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hydragrow_shared::{ControllerConfig, SensorData};
+    use crate::plant::tank::Tank;
+    use crate::sensors::sensor_model::NoiseConfig;
+    use hydragrow_shared::ControllerConfig;
 
     #[test]
     fn test_harness_single_tick() {
         let config = ControllerConfig::default();
-        let sensor = SensorData {
-            device_id: "test_dev".to_string(),
-            ec: 1.0,
-            ph: 6.0,
-            temp: 25.0,
-            water_level: 50.0,
-            pump_status: Default::default(),
-            time: "".to_string(),
-            controller_received_ms: None,
-            rssi: None,
-            free_heap: None,
-            uptime: None,
-            err_water: None,
-            err_temp: None,
-            err_ph: None,
-            err_ec: None,
-            is_continuous: None,
-            ph_voltage_mv: None,
-        };
-        let mut harness = Harness::new(config);
+        let tank = Tank::default();
+        let noise = NoiseConfig::default();
+
+        let mut harness = Harness::new(config, tank, noise);
 
         let delta_ms = 100;
-        harness.tick(delta_ms, sensor);
+        harness.tick(delta_ms);
+
         assert_eq!(harness.uptime_ms(), 100);
     }
 }

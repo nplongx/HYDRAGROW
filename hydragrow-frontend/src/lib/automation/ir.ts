@@ -28,9 +28,38 @@ export const StageOverrideActionSchema = z.object({
   reason: z.string().min(1),
 });
 
+export const DosingPumpSchema = z.enum(['PUMP_A', 'PUMP_B', 'PH_UP', 'PH_DOWN']);
+export const WaterPumpSchema = z.enum(['WATER_PUMP_IN', 'WATER_PUMP_OUT', 'MIST_VALVE', 'OSAKA_PUMP']);
+
+export const DoseActionSchema = z.object({
+  type: z.literal('dose'),
+  pump: DosingPumpSchema,
+  doseMl: z.number().positive(),
+  pwm: z.number().int().min(1).max(100),
+});
+
+export const WaterOnActionSchema = z.object({
+  type: z.literal('water_on'),
+  pump: WaterPumpSchema,
+  durationSec: z.number().int().positive(),
+});
+
+export const WaterOffActionSchema = z.object({
+  type: z.literal('water_off'),
+  pump: WaterPumpSchema,
+});
+
+export const EmergencyStopActionSchema = z.object({
+  type: z.literal('emergency_stop'),
+});
+
 export const ActionSchema = z.discriminatedUnion('type', [
   AlertActionSchema,
   StageOverrideActionSchema,
+  DoseActionSchema,
+  WaterOnActionSchema,
+  WaterOffActionSchema,
+  EmergencyStopActionSchema,
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 
@@ -51,9 +80,11 @@ export const AutomationEdgeSchema = z.object({
   target: z.string(),
 });
 
+export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command']);
+
 export const AutomationIrSchema = z
   .object({
-    kind: z.enum(['alert', 'recipe_override']),
+    kind: AutomationKindSchema,
     trigger: TriggerSchema,
     conditions: z.array(ConditionSchema).min(1),
     actions: z.array(ActionSchema).min(1),
@@ -63,9 +94,10 @@ export const AutomationIrSchema = z
   .refine(
     (ir) => {
       if (ir.kind === 'alert') return ir.actions.every((a) => a.type === 'alert');
-      return ir.actions.every((a) => a.type === 'advance_stage');
+      if (ir.kind === 'recipe_override') return ir.actions.every((a) => a.type === 'advance_stage');
+      return ir.actions.every((a) => ['dose', 'water_on', 'water_off', 'emergency_stop'].includes(a.type));
     },
-    { message: 'actions must match kind: alert→alert actions only, recipe_override→advance_stage only' },
+    { message: 'actions must match kind' },
   );
 
 export type AutomationIr = z.infer<typeof AutomationIrSchema>;

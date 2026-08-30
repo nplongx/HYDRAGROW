@@ -170,6 +170,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         && let Ok(safety_config) =
             crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await
     {
+        let calibration =
+            crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
+                .await
+                .unwrap_or(None);
         let limits = hydragrow_shared::safety::DoseSafetyLimits {
             max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
             max_dose_per_hour_ml: safety_config.max_dose_per_hour,
@@ -180,7 +184,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             ec: incoming.ec,
             temp: incoming.temp,
             water_level: incoming.water_level,
-            phase: "Monitoring".to_string(), // TODO(follow-up): lấy phase thật từ device_states cache
+            phase: "Monitoring".to_string(), // TODO(follow-up, ghi nhận từ Phase 0): lấy phase thật từ device_states cache
             device_id: device_id.clone(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
@@ -188,7 +192,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         let now_sec = (action_input.timestamp_ms / 1000) as u64;
         for script in &action_scripts {
             if let Ok(Some(output)) = engine.eval_action_command(&script.ast, &action_input)
-                && let Err(violation) = crate::services::action_dispatch::dispatch_action_command(
+                && let Err(err) = crate::services::action_dispatch::dispatch_action_command(
                     &app_state,
                     &device_id,
                     output,
@@ -196,14 +200,13 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                     &[],
                     now_sec,
                     None,
+                    calibration.as_ref(),
                 )
                 .await
             {
                 tracing::warn!(
-                    script_id = %script.id,
-                    device_id = %device_id,
-                    violation = ?violation,
-                    "action_command bị chặn bởi safety gate"
+                    script_id = %script.id, device_id, error = ?err,
+                    "action_command bị chặn hoặc lỗi khi dispatch"
                 );
             }
         }

@@ -38,6 +38,14 @@ describe('buildAutomationIr (pure)', () => {
     });
     expect(ir.trigger).toEqual({ type: 'fsm' });
   });
+
+  it('builds a sensor-triggered IR for kind=action_command', () => {
+    const ir = buildAutomationIr('action_command', {
+      conditions: [{ sensor: 'ph', operator: '>', value: 8.0 }],
+      actions: [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 80 }],
+    });
+    expect(ir.trigger).toEqual({ type: 'sensor' });
+  });
 });
 
 describe('FlowDetailDrawer', () => {

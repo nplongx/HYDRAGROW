@@ -11,11 +11,24 @@ function summarizeConditions(conditions: Condition[]): string {
 function summarizeActions(actions: Action[]): string {
   if (actions.length === 0) return 'Chưa cấu hình';
   return actions
-    .map((a) =>
-      a.type === 'alert'
-        ? `alert (${a.level}): ${a.message}`
-        : `advance_stage ${a.targetStageOffset >= 0 ? '+' : ''}${a.targetStageOffset}: ${a.reason}`,
-    )
+    .map((a) => {
+      switch (a.type) {
+        case 'alert':
+          return `alert (${a.level}): ${a.message}`;
+        case 'advance_stage':
+          return `advance_stage ${a.targetStageOffset >= 0 ? '+' : ''}${a.targetStageOffset}: ${a.reason}`;
+        case 'dose':
+          return `dose ${a.doseMl}ml (${a.pump})`;
+        case 'water_on':
+          return `water_on ${a.durationSec}s (${a.pump})`;
+        case 'water_off':
+          return `water_off (${a.pump})`;
+        case 'emergency_stop':
+          return 'emergency_stop';
+        default:
+          return 'unknown_action';
+      }
+    })
     .join(', ');
 }
 

@@ -38,3 +38,65 @@ describe('AutomationIrSchema', () => {
     expect(() => AutomationIrSchema.parse(ir)).toThrow();
   });
 });
+
+describe('action_command IR', () => {
+  it('accepts a valid dose action', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
+      actions: [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 80 }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a valid water_on action', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'water_level', operator: '<', value: 20 }],
+      actions: [{ type: 'water_on', pump: 'WATER_PUMP_IN', durationSec: 30 }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a valid emergency_stop action with no conditions', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 9.0 }],
+      actions: [{ type: 'emergency_stop' }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an alert action under kind=action_command', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects pwm outside 1-100', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'action_command',
+      trigger: { type: 'sensor' },
+      conditions: [],
+      actions: [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 150 }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
+  });
+});

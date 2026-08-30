@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::recipe::CropRecipe;
 
+pub mod dosing;
 pub mod events;
 pub mod fsm;
 pub mod helper;

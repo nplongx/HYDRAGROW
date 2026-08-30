@@ -1,0 +1,32 @@
+name: Simulator CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'hydragrow-simulator/**'
+      - 'hydragrow-controller-core/**'
+      - 'hydragrow-shared/**'
+      - '.github/workflows/simulator-ci.yml'
+  pull_request:
+    paths:
+      - 'hydragrow-simulator/**'
+      - 'hydragrow-controller-core/**'
+      - 'hydragrow-shared/**'
+      - '.github/workflows/simulator-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check format
+        run: cd hydragrow-simulator && cargo fmt --check
+      - name: Clippy
+        run: cd hydragrow-simulator && cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cd hydragrow-simulator && cargo test

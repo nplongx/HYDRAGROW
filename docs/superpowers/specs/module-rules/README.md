@@ -10,6 +10,7 @@ Mỗi subsystem có 1 file rule riêng. Khi thêm/sửa tính năng, đọc rule
 | Frontend (`hydragrow-frontend/`) | [frontend.md](./frontend.md) | Sửa UI, store, WebSocket client, Tauri command |
 | Controller firmware (`ESP32-C3-CONTROLLER-NODE/`) | [firmware-controller.md](./firmware-controller.md) | Sửa firmware Rust/esp-rs chạy trên MCU điều khiển |
 | Sensor firmware (`ESP32-C3-SENSOR-NODE/`) | [firmware-sensor.md](./firmware-sensor.md) | Sửa firmware C++/PlatformIO đọc cảm biến |
+| Simulator (`hydragrow-simulator/`) | [simulator.md](./simulator.md) | Sửa logic mô phỏng, test scenarios, giả lập hardware |
 
 ---
 
@@ -27,5 +28,5 @@ Mỗi subsystem có 1 file rule riêng. Khi thêm/sửa tính năng, đọc rule
 
 | Subsystem | Bộ lệnh kiểm tra (chạy từ repo root) |
 |---|---|
-| Rust workspaces (chạy riêng từng thư mục — không có Cargo workspace gộp) | `(cd hydragrow-shared && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)`<br>`(cd hydragrow-backend && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)`<br>`(cd hydragrow-controller-core && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)` |
+| Rust workspaces (chạy riêng từng thư mục — không có Cargo workspace gộp) | `(cd hydragrow-shared && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)`<br>`(cd hydragrow-backend && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)`<br>`(cd hydragrow-controller-core && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)`<br>`(cd hydragrow-simulator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test)` |
 | Frontend | `(cd hydragrow-frontend && npx tsc --noEmit && npx eslint . && npx vitest run)` |

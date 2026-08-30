@@ -1,37 +1,39 @@
-import { describe, expect, it } from 'vitest';
-import { AutomationIrSchema } from './ir';
+import { describe, expect, it } from "vitest";
+import { AutomationIrSchema } from "./ir";
 
-describe('AutomationIrSchema', () => {
-  it('accepts a minimal valid alert IR', () => {
+describe("AutomationIrSchema", () => {
+  it("accepts a minimal valid alert IR", () => {
     const ir = {
-      kind: 'alert',
-      trigger: { type: 'sensor' },
-      conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
-      actions: [{ type: 'alert', level: 'warning', message: 'pH cao' }],
+      kind: "alert",
+      trigger: { type: "sensor" },
+      conditions: [{ sensor: "ph", operator: ">", value: 7.5 }],
+      actions: [{ type: "alert", level: "warning", message: "pH cao" }],
       nodes: [],
       edges: [],
     };
     expect(() => AutomationIrSchema.parse(ir)).not.toThrow();
   });
 
-  it('rejects an unknown operator', () => {
+  it("rejects an unknown operator", () => {
     const ir = {
-      kind: 'alert',
-      trigger: { type: 'sensor' },
-      conditions: [{ sensor: 'ph', operator: '~=', value: 7.5 }],
-      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      kind: "alert",
+      trigger: { type: "sensor" },
+      conditions: [{ sensor: "ph", operator: "~=", value: 7.5 }],
+      actions: [{ type: "alert", level: "warning", message: "x" }],
       nodes: [],
       edges: [],
     };
     expect(() => AutomationIrSchema.parse(ir)).toThrow();
   });
 
-  it('rejects recipe_override IR with an alert action', () => {
+  it("rejects recipe_override IR with an alert action", () => {
     const ir = {
-      kind: 'recipe_override',
-      trigger: { type: 'fsm' },
-      conditions: [{ sensor: 'elapsed_sec', operator: '>=', value: 86400 }],
-      actions: [{ type: 'alert', level: 'info', message: 'wrong action for this kind' }],
+      kind: "recipe_override",
+      trigger: { type: "fsm" },
+      conditions: [{ sensor: "elapsed_sec", operator: ">=", value: 86400 }],
+      actions: [
+        { type: "alert", level: "info", message: "wrong action for this kind" },
+      ],
       nodes: [],
       edges: [],
     };
@@ -39,61 +41,61 @@ describe('AutomationIrSchema', () => {
   });
 });
 
-describe('action_command IR', () => {
-  it('accepts a valid dose action', () => {
+describe("action_command IR", () => {
+  it("accepts a valid dose action", () => {
     const result = AutomationIrSchema.safeParse({
-      kind: 'action_command',
-      trigger: { type: 'sensor' },
-      conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
-      actions: [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 80 }],
+      kind: "action_command",
+      trigger: { type: "sensor" },
+      conditions: [{ sensor: "ph", operator: ">", value: 7.5 }],
+      actions: [{ type: "dose", pump: "PH_DOWN", doseMl: 3, pwm: 80 }],
       nodes: [],
       edges: [],
     });
     expect(result.success).toBe(true);
   });
 
-  it('accepts a valid water_on action', () => {
+  it("accepts a valid water_on action", () => {
     const result = AutomationIrSchema.safeParse({
-      kind: 'action_command',
-      trigger: { type: 'sensor' },
-      conditions: [{ sensor: 'water_level', operator: '<', value: 20 }],
-      actions: [{ type: 'water_on', pump: 'WATER_PUMP_IN', durationSec: 30 }],
+      kind: "action_command",
+      trigger: { type: "sensor" },
+      conditions: [{ sensor: "water_level", operator: "<", value: 20 }],
+      actions: [{ type: "water_on", pump: "WATER_PUMP_IN", durationSec: 30 }],
       nodes: [],
       edges: [],
     });
     expect(result.success).toBe(true);
   });
 
-  it('accepts a valid emergency_stop action with no conditions', () => {
+  it("accepts a valid emergency_stop action with no conditions", () => {
     const result = AutomationIrSchema.safeParse({
-      kind: 'action_command',
-      trigger: { type: 'sensor' },
-      conditions: [{ sensor: 'ph', operator: '>', value: 9.0 }],
-      actions: [{ type: 'emergency_stop' }],
+      kind: "action_command",
+      trigger: { type: "sensor" },
+      conditions: [{ sensor: "ph", operator: ">", value: 9.0 }],
+      actions: [{ type: "emergency_stop" }],
       nodes: [],
       edges: [],
     });
     expect(result.success).toBe(true);
   });
 
-  it('rejects an alert action under kind=action_command', () => {
+  it("rejects an alert action under kind=action_command", () => {
     const result = AutomationIrSchema.safeParse({
-      kind: 'action_command',
-      trigger: { type: 'sensor' },
+      kind: "action_command",
+      trigger: { type: "sensor" },
       conditions: [],
-      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      actions: [{ type: "alert", level: "warning", message: "x" }],
       nodes: [],
       edges: [],
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects pwm outside 1-100', () => {
+  it("rejects pwm outside 1-100", () => {
     const result = AutomationIrSchema.safeParse({
-      kind: 'action_command',
-      trigger: { type: 'sensor' },
+      kind: "action_command",
+      trigger: { type: "sensor" },
       conditions: [],
-      actions: [{ type: 'dose', pump: 'PH_DOWN', doseMl: 3, pwm: 150 }],
+      actions: [{ type: "dose", pump: "PH_DOWN", doseMl: 3, pwm: 150 }],
       nodes: [],
       edges: [],
     });

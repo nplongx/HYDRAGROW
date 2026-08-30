@@ -68,7 +68,7 @@ export function BlockLogicEditor({
       workspace.removeChangeListener(listener);
       workspace.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ re-mount khi `kind` đổi;
+
     // initialConditions/initialActions/onChange cố tình không nằm trong deps — chúng chỉ
     // dùng để SEED lần mount đầu, không phải để đồng bộ liên tục với parent re-render.
   }, [kind]);

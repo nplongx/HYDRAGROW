@@ -1,5 +1,5 @@
-import * as Blockly from 'blockly/core';
-import type { Action, Condition } from '../../../lib/automation/ir';
+import * as Blockly from "blockly/core";
+import type { Action, Condition } from "../../../lib/automation/ir";
 
 /**
  * Nghịch đảo của `extractConditions`/`extractActions` — vẽ lại block stack mà một
@@ -25,47 +25,56 @@ export function hydrateWorkspace(
     if (previousBlock?.nextConnection && block.previousConnection) {
       previousBlock.nextConnection.connect(block.previousConnection);
     } else {
-      (block as unknown as { moveBy?: (x: number, y: number) => void }).moveBy?.(20, offsetY);
+      (
+        block as unknown as { moveBy?: (x: number, y: number) => void }
+      ).moveBy?.(20, offsetY);
     }
     previousBlock = block;
     offsetY += 40;
   };
 
   for (const condition of conditions) {
-    const block = workspace.newBlock('hydragrow_sensor_condition');
-    block.setFieldValue(condition.sensor, 'SENSOR');
-    block.setFieldValue(condition.operator, 'OPERATOR');
-    block.setFieldValue(String(condition.value), 'VALUE');
+    const block = workspace.newBlock("hydragrow_sensor_condition");
+    block.setFieldValue(condition.sensor, "SENSOR");
+    block.setFieldValue(condition.operator, "OPERATOR");
+    block.setFieldValue(String(condition.value), "VALUE");
     placeAndChain(block);
   }
 
   for (const action of actions) {
-    if (action.type === 'alert') {
-      const block = workspace.newBlock('hydragrow_alert_action');
-      block.setFieldValue(action.level, 'LEVEL');
-      block.setFieldValue(action.message, 'MESSAGE');
+    if (action.type === "alert") {
+      const block = workspace.newBlock("hydragrow_alert_action");
+      block.setFieldValue(action.level, "LEVEL");
+      block.setFieldValue(action.message, "MESSAGE");
+      // ir_json cũ (trước Phase 2) không có notifyFcm — suy ra từ rule severity cũ
+      // (level error/warning ngầm định đã gửi FCM) để checkbox không "nói dối" so
+      // với hành vi backend thật sự đang áp dụng cho bản ghi đó.
+      const notifyFcm =
+        action.notifyFcm ??
+        (action.level === "warning" || action.level === "error");
+      block.setFieldValue(notifyFcm ? "TRUE" : "FALSE", "NOTIFY_FCM");
       placeAndChain(block);
-    } else if (action.type === 'advance_stage') {
-      const block = workspace.newBlock('hydragrow_advance_stage_action');
-      block.setFieldValue(String(action.targetStageOffset), 'OFFSET');
-      block.setFieldValue(action.reason, 'REASON');
+    } else if (action.type === "advance_stage") {
+      const block = workspace.newBlock("hydragrow_advance_stage_action");
+      block.setFieldValue(String(action.targetStageOffset), "OFFSET");
+      block.setFieldValue(action.reason, "REASON");
       placeAndChain(block);
-    } else if (action.type === 'dose') {
-      const block = workspace.newBlock('hydragrow_dose_action');
-      block.setFieldValue(action.pump, 'PUMP');
-      block.setFieldValue(String(action.doseMl), 'DOSE_ML');
-      block.setFieldValue(String(action.pwm), 'PWM');
+    } else if (action.type === "dose") {
+      const block = workspace.newBlock("hydragrow_dose_action");
+      block.setFieldValue(action.pump, "PUMP");
+      block.setFieldValue(String(action.doseMl), "DOSE_ML");
+      block.setFieldValue(String(action.pwm), "PWM");
       placeAndChain(block);
-    } else if (action.type === 'water_on' || action.type === 'water_off') {
-      const block = workspace.newBlock('hydragrow_water_action');
-      block.setFieldValue(action.pump, 'PUMP');
-      block.setFieldValue(action.type === 'water_on' ? 'on' : 'off', 'STATE');
-      if (action.type === 'water_on') {
-        block.setFieldValue(String(action.durationSec), 'DURATION_SEC');
+    } else if (action.type === "water_on" || action.type === "water_off") {
+      const block = workspace.newBlock("hydragrow_water_action");
+      block.setFieldValue(action.pump, "PUMP");
+      block.setFieldValue(action.type === "water_on" ? "on" : "off", "STATE");
+      if (action.type === "water_on") {
+        block.setFieldValue(String(action.durationSec), "DURATION_SEC");
       }
       placeAndChain(block);
-    } else if (action.type === 'emergency_stop') {
-      const block = workspace.newBlock('hydragrow_emergency_stop_action');
+    } else if (action.type === "emergency_stop") {
+      const block = workspace.newBlock("hydragrow_emergency_stop_action");
       placeAndChain(block);
     }
   }

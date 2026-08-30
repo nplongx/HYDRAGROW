@@ -24,13 +24,14 @@ MqttManager* instance = nullptr;
 
 unsigned long lastReconnectAttempt = 0;
 
-// Topic chuẩn khớp Backend: AGITECH/<DEVICE_ID>/...
-const String TOPIC_PREFIX   = String("AGITECH/") + MQTT_CLIENT_ID + "/";
+const String TOPIC_PREFIX   = String("AGITECH/") + DEVICE_ID + "/";
 const String TOPIC_SENSOR   = TOPIC_PREFIX + "sensors";
 const String TOPIC_STATUS   = TOPIC_PREFIX + "sensor/status";
 const String TOPIC_COMMAND  = TOPIC_PREFIX + "command";
 const String TOPIC_CONFIG   = TOPIC_PREFIX + "sensors/config";
 
+// *** KEY FIX: publish KHÔNG được gọi từ bên trong callback ***
+// Dùng flag để defer ra update() loop
 void publishStatus(const char* status, const char* message) {
     JsonDocument doc;
     doc["device_id"] = MQTT_CLIENT_ID;
@@ -67,10 +68,13 @@ void MqttManager::begin() {
         configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     }
 
-    wifiClient.setCACert(ROOT_CA);
+    wifiClient.setInsecure();
+    // wifiClient.setCACert(ROOT_CA);
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
     mqttClient.setBufferSize(2048);
+    mqttClient.setKeepAlive(60);      // FIX: tăng từ default 15s lên 60s
+    mqttClient.setSocketTimeout(15);  // FIX: timeout rõ ràng
     reconnect();
 }
 
@@ -116,6 +120,14 @@ void MqttManager::update() {
     }
 
     mqttClient.loop();
+
+    // *** KEY FIX: flush deferred actions SAU khi loop() hoàn thành ***
+    // Lúc này buffer của PubSubClient đã free, publish an toàn
+    if (pendingStatusOk_) {
+        pendingStatusOk_ = false;
+        publishStatus("ok", "configuration applied");
+    }
+
     publishSensorIfNeeded();
 }
 
@@ -131,8 +143,11 @@ void MqttManager::reconnect() {
     }
 
     Logger::debugPrintln("MQTT da ket noi thanh cong!");
-    mqttClient.subscribe(TOPIC_COMMAND.c_str());
-    mqttClient.subscribe(TOPIC_CONFIG.c_str());
+
+    // FIX: subscribe QoS 0 cho config topic — tránh QoS 1 PUBACK bị corrupt
+    // bởi publish() gọi trong callback (cùng buffer)
+    mqttClient.subscribe(TOPIC_COMMAND.c_str(), 0);
+    mqttClient.subscribe(TOPIC_CONFIG.c_str(), 0);  // ← QoS 0, không cần PUBACK
 
     publishStatus("online", "Sensor node connected");
 }
@@ -150,6 +165,7 @@ void MqttManager::mqttCallback(char* topic, byte* payload, unsigned int length) 
         instance->handleCommand(message);
     } else if (strcmp(topic, TOPIC_CONFIG.c_str()) == 0) {
         instance->handleConfig(message);
+        // KHÔNG publishStatus ở đây — set flag, flush ở update()
     }
 }
 
@@ -201,7 +217,8 @@ void MqttManager::handleUpdateWifiList(JsonDocument& doc) {
 void MqttManager::handleConfig(const String& payload) {
     JsonDocument doc;
     if (deserializeJson(doc, payload)) {
-        publishStatus("error", "invalid config JSON");
+        // Lỗi parse — không publish từ đây, set flag lỗi nếu cần
+        Logger::debugPrintln("[CONFIG] Loi parse JSON config");
         return;
     }
     handleConfigDocument(doc);
@@ -211,13 +228,16 @@ void MqttManager::handleConfigDocument(JsonDocument& doc) {
     Logger::debugPrintln("[CONFIG] Nhan cau hinh tu Backend, dang ap dung...");
     appConfig.applyFromJson(doc);
 
-    // Confirm lại publish interval đang dùng
     Logger::debugPrintf("[CONFIG] publish_interval=%lu ms, enablePh=%d, enableTds=%d\n",
         appConfig.publishInterval,
         (int)appConfig.sensor.enablePh,
         (int)appConfig.sensor.enableTds);
 
-    publishStatus("ok", "configuration applied");
+    // *** KEY FIX: KHÔNG gọi publishStatus() trực tiếp ở đây ***
+    // publishStatus() ghi vào mqttClient buffer, nhưng lúc này
+    // PubSubClient đang dùng buffer đó để gửi PUBACK (nếu QoS 1).
+    // Dù đã subscribe QoS 0, vẫn defer để an toàn tuyệt đối.
+    pendingStatusOk_ = true;
 }
 
 void MqttManager::publishSensorData() {
@@ -233,16 +253,16 @@ void MqttManager::publishSensorData() {
         strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%dT%H:%M:%SZ", timeinfo);
     }
 
-    doc["device_id"]      = MQTT_CLIENT_ID;
-    doc["ec"]            = data.tds;               // EC tính bằng mS/cm
+    doc["device_id"]      = DEVICE_ID;
+    doc["ec"]             = data.tds;
     doc["ph"]             = data.ph;
-    doc["temp"]           = data.temperature;       // Tên trường 'temp'
+    doc["temp"]           = data.temperature;
     doc["water_level"]    = data.waterLevel;
     doc["ph_voltage_mv"]  = data.phVoltageMv;
     doc["time"]           = timeBuffer;
     doc["rssi"]           = WiFi.RSSI();
     doc["free_heap"]      = ESP.getFreeHeap();
-    
+
     doc["err_temp"]       = data.errTemperature;
     doc["err_water"]      = data.errWaterLevel;
     doc["err_ph"]         = data.errPh;

@@ -8,7 +8,7 @@ WifiProvisioner::WifiProvisioner(Preferences& prefs,
     : prefs_(prefs), fallbackSsid_(fallbackSsid), fallbackPass_(fallbackPass) {}
 
 std::vector<WifiCandidate> WifiProvisioner::load() {
-    prefs_.begin(kNamespace, /*readOnly=*/true);
+    prefs_.begin(kNamespace, /*readOnly=*/false);
     String raw = prefs_.getString(kKey, "");
     prefs_.end();
 

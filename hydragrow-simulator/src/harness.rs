@@ -57,7 +57,7 @@ impl Harness {
         );
 
         for event in &result.events {
-            self.dispatcher.dispatch(event, &mut self.hw);
+            self.dispatcher.dispatch(event);
         }
 
         result

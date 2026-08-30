@@ -2,7 +2,7 @@ use crate::actuators::virtual_hw::VirtualHardwareState;
 use hydragrow_controller_core::test_support::{calculate_ec_change, calculate_ph_change};
 use hydragrow_shared::ControllerConfig;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Tank {
     pub volume_l: f32,
     pub ec: f32,

@@ -4,9 +4,9 @@
 
 namespace {
 // Cấu hình chân GPIO ESP32-C3
-constexpr int PIN_DS18B20 = 2;
-constexpr int PIN_TRIG    = 3;
-constexpr int PIN_ECHO    = 5;
+constexpr int PIN_DS18B20 = 3;
+constexpr int PIN_TRIG    = 0;
+constexpr int PIN_ECHO    = 1;
 
 constexpr int PIN_SDA     = 6;
 constexpr int PIN_SCL     = 7;
@@ -23,7 +23,7 @@ SensorManager::SensorManager()
       tdsSensor_(ADS_TDS_ADDR),
       tempFilter_(5.0f, 0.125f),
       waterFilter_(20.0f, 0.125f),
-      phFilter_(1.5f, 0.125f),
+      phFilter_(0.3f, 0.1f),
       tdsFilter_(0.5f, 0.125f) {}
 
 void SensorManager::begin() {

@@ -1,7 +1,7 @@
 use crate::plant::tank::Tank;
 use hydragrow_shared::SensorData;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NoiseConfig {
     pub ec_noise_std_dev: f32,
     pub ph_noise_std_dev: f32,

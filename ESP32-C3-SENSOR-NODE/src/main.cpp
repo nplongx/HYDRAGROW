@@ -14,15 +14,13 @@ WifiProvisioner wifiProvisioner(prefs, WIFI_SSID, WIFI_PASSWORD);
 MqttManager mqttManager(sensorManager, wifiProvisioner);
 
 void setup() {
-    Serial.begin(115200);
-
+      Serial.begin(115200);
+       delay(2000); 
     Logger::begin();
-    Logger::setDebugEnabled(
-        appConfig.debugLog
-    );
+    Logger::setDebugEnabled(appConfig.debugLog);  // ← set true ✅
 
     sensorManager.begin();
-    mqttManager.begin();
+    mqttManager.begin();   // ← connectWifi() chạy ở đây
 }
 
 void loop() {

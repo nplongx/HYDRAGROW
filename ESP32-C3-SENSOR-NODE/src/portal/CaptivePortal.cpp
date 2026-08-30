@@ -50,11 +50,32 @@ static String extractField(const String& body, const String& field) {
     return urlDecode(end < 0 ? body.substring(start) : body.substring(start, end));
 }
 
-bool runCaptivePortal(WifiProvisioner& provisioner, unsigned long timeoutMs) {
+// Khởi động AP, trả về false nếu thất bại
+static bool startAP() {
+    // Disconnect sạch trước khi đổi mode
+    WiFi.disconnect(true);   // ngắt STA, xóa credentials tạm
+    WiFi.mode(WIFI_OFF);     // tắt hẳn
+    delay(200);              // chờ radio reset
+
     WiFi.mode(WIFI_AP);
-    WiFi.softAP("HydraGrow-Setup", "hydragrow");
-    Logger::debugPrintf("[PORTAL] AP started. IP: %s\n",
-                        WiFi.softAPIP().toString().c_str());
+    delay(100);
+
+    bool ok = WiFi.softAP("HydraGrow-Setup", "hydragrow");
+    delay(500);  // chờ AP broadcast ổn định (quan trọng!)
+
+    if (!ok) {
+        Logger::debugPrintln("[PORTAL] softAP() failed!");
+    } else {
+        Logger::debugPrintf("[PORTAL] AP started. IP: %s\n",
+                            WiFi.softAPIP().toString().c_str());
+        Logger::debugPrintf("[PORTAL] softAPIP check: %s\n",
+                    WiFi.softAPIP().toString().c_str());
+    }
+    return ok;
+}
+
+bool runCaptivePortal(WifiProvisioner& provisioner, unsigned long timeoutMs) {
+    if (!startAP()) return false;
 
     WiFiServer server(80);
     server.begin();
@@ -71,40 +92,72 @@ bool runCaptivePortal(WifiProvisioner& provisioner, unsigned long timeoutMs) {
         WiFiClient client = server.available();
         if (!client) { delay(10); continue; }
 
-        String request;
-        while (client.connected() && client.available()) {
-            request += client.readString();
+        // ---- Đọc HTTP request đúng cách (tránh block) ----
+        unsigned long clientStart = millis();
+        String requestLine = "";
+        String body = "";
+
+        // Đọc headers
+        while (client.connected() && (millis() - clientStart) < 3000) {
+            if (!client.available()) { delay(1); continue; }
+            String line = client.readStringUntil('\n');
+            if (requestLine.isEmpty()) requestLine = line; // Dòng đầu: "POST /save HTTP/1.1"
+            if (line == "\r" || line == "") break;         // Hết headers
         }
 
-        bool isPost = request.startsWith("POST");
-        String body = isPost ? request.substring(request.lastIndexOf("\r\n\r\n") + 4) : "";
+        bool isPost = requestLine.startsWith("POST");
+
+        // Đọc body nếu là POST
+        if (isPost) {
+            delay(10); // Chờ data vào buffer
+            while (client.available()) body += (char)client.read();
+        }
+        // ---- Hết đọc request ----
 
         if (isPost && body.indexOf("ssid=") >= 0) {
-            String ssid     = extractField(body, "ssid");
-            String pass     = extractField(body, "pass");
-            uint8_t prio    = (uint8_t)extractField(body, "priority").toInt();
+            String ssid  = extractField(body, "ssid");
+            String pass  = extractField(body, "pass");
+            uint8_t prio = (uint8_t)extractField(body, "priority").toInt();
 
             if (ssid.length() > 0) {
+                Logger::debugPrintf("[PORTAL] Thu ket noi: %s\n", ssid.c_str());
+
                 // Thử kết nối trước khi lưu
                 WiFi.mode(WIFI_AP_STA);
                 WiFi.begin(ssid.c_str(), pass.c_str());
+
                 unsigned long t = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - t < 15000) delay(250);
 
                 if (WiFi.status() == WL_CONNECTED) {
+                    Logger::debugPrintf("[PORTAL] Ket noi thanh cong! IP: %s\n",
+                                        WiFi.localIP().toString().c_str());
+
                     std::vector<WifiCandidate> list = provisioner.load();
                     list.push_back({ssid, pass, prio});
                     provisioner.save(list);
 
-                    client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+                    client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n");
+                    client.println("Connection: close\r\n");
                     client.println("<h2>Ket noi thanh cong! Thiet bi se khoi dong lai.</h2>");
                     client.stop();
                     success = true;
                     break;
                 } else {
-                    WiFi.mode(WIFI_AP);
-                    WiFi.softAP("HydraGrow-Setup", "hydragrow");
-                    client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+                    Logger::debugPrintln("[PORTAL] Ket noi that bai, quay lai AP mode.");
+
+                    // Restart AP sau khi thử kết nối thất bại
+                    WiFi.disconnect(true);
+                    delay(500);
+                    if (!startAP()) {
+                        Logger::debugPrintln("[PORTAL] Khong the restart AP!");
+                        client.stop();
+                        break;
+                    }
+                    server.begin(); // Restart server sau khi đổi mode
+
+                    client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n");
+                    client.println("Connection: close\r\n");
                     client.println("<h2>Khong the ket noi. Vui long thu lai.</h2><a href='/'>Quay lai</a>");
                     client.stop();
                     continue;
@@ -112,8 +165,9 @@ bool runCaptivePortal(WifiProvisioner& provisioner, unsigned long timeoutMs) {
             }
         }
 
-        // Serve HTML form
-        client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n");
+        // Serve HTML form (GET hoặc body không hợp lệ)
+        client.println("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n");
+        client.println("Connection: close\r\n");
         client.println(FPSTR(HTML_PAGE));
         client.stop();
     }

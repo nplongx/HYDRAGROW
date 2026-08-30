@@ -13,10 +13,12 @@ public:
 
 private:
     SensorManager& sensors_;
-
     WifiProvisioner& wifiProvisioner_;
 
-    // Chuyển thành static
+    // Defer publish ra ngoài MQTT callback để tránh buffer corruption
+    bool pendingStatusOk_ = false;
+    bool pendingPublishSensor_ = false;
+
     static void mqttCallback(char* topic, byte* payload, unsigned int length);
 
     void reconnect();

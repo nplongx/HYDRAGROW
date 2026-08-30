@@ -11,8 +11,8 @@ AppConfig appConfig = {
         100.0f,  // tankHeight
         true,    // enablePh
         true,    // enableTds
-        false,    // enableTemp
-        false     // enableWater
+        true,    // enableTemp
+        true     // enableWater
     },
     5000,        // publishInterval
     true,       // debugLog

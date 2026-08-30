@@ -62,6 +62,17 @@ pub async fn get_latest(path: web::Path<String>, app_state: web::Data<AppState>)
     }
 }
 
+fn build_range_clause(query: &HistoryQuery) -> String {
+    if let (Some(start), Some(end)) = (&query.start, &query.end) {
+        format!("start: time(v: \"{}\"), stop: time(v: \"{}\")", start, end)
+    } else if let Some(start) = &query.start {
+        format!("start: time(v: \"{}\")", start)
+    } else {
+        let range_val = query.range.as_deref().unwrap_or("24h");
+        format!("start: -{}", range_val)
+    }
+}
+
 #[instrument(skip(app_state))]
 pub async fn get_history(
     path: web::Path<String>,
@@ -71,14 +82,7 @@ pub async fn get_history(
     let device_id = path.into_inner();
 
     // Xây dựng range clause
-    let range_clause = if let (Some(start), Some(end)) = (&query.start, &query.end) {
-        format!("start: time(v: \"{}\"), stop: time(v: \"{}\")", start, end)
-    } else if let Some(start) = &query.start {
-        format!("start: time(v: \"{}\")", start)
-    } else {
-        let range_val = query.range.as_deref().unwrap_or("24h");
-        format!("start: -{}", range_val)
-    };
+    let range_clause = build_range_clause(&query);
 
     // Lựa chọn chiến lược truy vấn
     let flux_query = if let Some(resolution) = &query.resolution {
@@ -142,7 +146,133 @@ pub async fn get_history(
     }
 }
 
+#[derive(serde::Deserialize, Debug)]
+pub struct RangeStatsQuery {
+    /// "ec" | "ph" | "temp" | "water_level"
+    pub field: String,
+    pub range: Option<String>,
+    pub start: Option<String>,
+    pub end: Option<String>,
+}
+
+#[instrument(skip(app_state))]
+pub async fn get_range_stats(
+    path: web::Path<String>,
+    query: web::Query<RangeStatsQuery>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let allowed_fields = ["ec", "ph", "temp", "water_level"];
+    if !allowed_fields.contains(&query.field.as_str()) {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "Bad Request",
+            "message": format!("field phải là một trong {:?}", allowed_fields)
+        }));
+    }
+
+    let history_query = HistoryQuery {
+        range: query.range.clone(),
+        start: query.start.clone(),
+        end: query.end.clone(),
+        resolution: None, // range-stats luôn dùng dữ liệu gốc, không windowing
+    };
+    let range_clause = build_range_clause(&history_query);
+
+    let flux_query = format!(
+        r#"
+        from(bucket: "{bucket}")
+        |> range({range})
+        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+        |> filter(fn: (r) => r.device_id == "{device}")
+        |> sort(columns: ["_time"], desc: false)
+        |> limit(n: 5000)
+        "#,
+        bucket = app_state.influx_bucket,
+        range = range_clause,
+        device = device_id
+    );
+
+    let query_obj = influxdb2::models::Query::new(flux_query);
+    match app_state
+        .influx_client
+        .query::<SensorDataRow>(Some(query_obj))
+        .await
+    {
+        Ok(rows) => {
+            let values: Vec<f64> = rows
+                .iter()
+                .map(|r| match query.field.as_str() {
+                    "ec" => r.ec,
+                    "ph" => r.ph,
+                    "temp" => r.temp,
+                    _ => r.water_level,
+                })
+                .collect();
+            match crate::services::analytics::compute_range_stats(&values) {
+                Some(stats) => {
+                    HttpResponse::Ok().json(json!({ "status": "success", "data": stats }))
+                }
+                None => HttpResponse::Ok().json(json!({
+                    "status": "success",
+                    "data": serde_json::Value::Null,
+                    "message": "Không có dữ liệu trong khoảng thời gian này"
+                })),
+            }
+        }
+        Err(e) => {
+            tracing::error!("Lỗi range-stats query cho {}: {:?}", device_id, e);
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Database Error",
+                "message": "Không thể truy xuất dữ liệu range-stats"
+            }))
+        }
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/sensors/latest", web::get().to(get_latest))
-        .route("/sensors/history", web::get().to(get_history));
+        .route("/sensors/history", web::get().to(get_history))
+        .route("/sensors/range-stats", web::get().to(get_range_stats));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn range_clause_uses_both_start_and_end_when_given() {
+        let query = HistoryQuery {
+            range: None,
+            start: Some("2026-08-01T00:00:00Z".to_string()),
+            end: Some("2026-08-02T00:00:00Z".to_string()),
+            resolution: None,
+        };
+        let clause = build_range_clause(&query);
+        assert!(clause.contains("start: time(v: \"2026-08-01T00:00:00Z\")"));
+        assert!(clause.contains("stop: time(v: \"2026-08-02T00:00:00Z\")"));
+    }
+
+    #[test]
+    fn range_clause_falls_back_to_relative_range_when_no_dates_given() {
+        let query = HistoryQuery {
+            range: Some("6h".to_string()),
+            start: None,
+            end: None,
+            resolution: None,
+        };
+        let clause = build_range_clause(&query);
+        assert_eq!(clause, "start: -6h");
+    }
+
+    #[test]
+    fn range_clause_defaults_to_24h_when_nothing_given() {
+        let query = HistoryQuery {
+            range: None,
+            start: None,
+            end: None,
+            resolution: None,
+        };
+        let clause = build_range_clause(&query);
+        assert_eq!(clause, "start: -24h");
+    }
 }

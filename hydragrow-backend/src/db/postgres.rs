@@ -272,6 +272,27 @@ pub async fn insert_dosing_report(
     Ok(())
 }
 
+pub async fn get_device_dosing_reports_in_range(
+    pool: &PgPool,
+    device_id: &str,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+) -> Result<Vec<DosingReportRecord>, sqlx::Error> {
+    sqlx::query_as::<_, DosingReportRecord>(
+        r#"
+        SELECT * FROM dosing_reports
+        WHERE device_id = $1 AND created_at >= $2 AND created_at <= $3
+        ORDER BY created_at DESC
+        LIMIT 1000
+        "#,
+    )
+    .bind(device_id)
+    .bind(start)
+    .bind(end)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn get_device_dosing_reports(
     pool: &PgPool,
     device_id: &str,

@@ -28,5 +28,6 @@ export function buildIrFromGraph(params: {
       data: n.data as Record<string, unknown>,
     })),
     edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+    next_flow_ids: [],
   };
 }

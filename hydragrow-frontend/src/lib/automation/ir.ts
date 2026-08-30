@@ -100,6 +100,9 @@ export const AutomationIrSchema = z
     actions: z.array(ActionSchema).min(1),
     nodes: z.array(AutomationNodeSchema),
     edges: z.array(AutomationEdgeSchema),
+    /** IDs của các Flow sẽ được kích hoạt kế tiếp sau khi Flow này thực thi thành công.
+     * Vắng hoặc `[]` = Flow độc lập (hành vi cũ, backward-compat). */
+    next_flow_ids: z.array(z.string()).default([]),
   })
   .refine(
     (ir) => {

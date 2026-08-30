@@ -128,3 +128,18 @@ describe("action_command IR", () => {
     expect(result.success).toBe(false);
   });
 });
+
+it('AutomationIrSchema: next_flow_ids defaults to [] when absent', () => {
+  const ir = {
+    kind: 'alert',
+    trigger: { type: 'sensor' },
+    conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+    actions: [{ type: 'alert', level: 'info', message: 'test' }],
+    nodes: [],
+    edges: [],
+    // next_flow_ids vắng mặt
+  };
+  const result = AutomationIrSchema.safeParse(ir);
+  expect(result.success).toBe(true);
+  expect(result.data?.next_flow_ids).toEqual([]);
+});

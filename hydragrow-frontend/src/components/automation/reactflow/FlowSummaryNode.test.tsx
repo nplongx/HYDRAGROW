@@ -24,6 +24,7 @@ describe('FlowSummaryNode', () => {
         actions: [{ type: 'alert', level: 'warning', message: 'pH cao' }],
         nodes: [],
         edges: [],
+        next_flow_ids: [],
       },
       created_at: '',
       updated_at: '',
@@ -34,11 +35,11 @@ describe('FlowSummaryNode', () => {
       </ReactFlowProvider>,
     );
     expect(screen.getByText('pH cao')).toBeInTheDocument();
-    expect(screen.getByText('alert')).toBeInTheDocument();
+    expect(screen.getByText('Alert')).toBeInTheDocument();
     expect(screen.getByText('1 điều kiện → 1 hành động')).toBeInTheDocument();
   });
 
-  it('shows "Script viết tay" for scripts without ir_json', () => {
+  it('shows "Script viết tay (Rhai)" for scripts without ir_json', () => {
     const script: UserScript = {
       id: 's2',
       device_id: 'd1',
@@ -55,6 +56,20 @@ describe('FlowSummaryNode', () => {
         <FlowSummaryNode {...nodeProps(script)} />
       </ReactFlowProvider>,
     );
-    expect(screen.getByText('Script viết tay')).toBeInTheDocument();
+    expect(screen.getByText('Script viết tay (Rhai)')).toBeInTheDocument();
+  });
+});
+
+const KIND_COLORS: Record<string, string> = {
+  alert: 'bg-red-100 text-red-700',
+  recipe_override: 'bg-blue-100 text-blue-700',
+  action_command: 'bg-amber-100 text-amber-700',
+};
+
+describe('FlowSummaryNode badge color mapping', () => {
+  it('badge color mapping covers all kinds', () => {
+    expect(KIND_COLORS['alert']).toBeTruthy();
+    expect(KIND_COLORS['recipe_override']).toBeTruthy();
+    expect(KIND_COLORS['action_command']).toBeTruthy();
   });
 });

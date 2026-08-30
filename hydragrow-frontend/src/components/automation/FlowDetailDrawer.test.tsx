@@ -74,6 +74,7 @@ describe('FlowDetailDrawer', () => {
               actions: [{ type: 'alert', level: 'warning', message: 'x' }],
               nodes: [{ id: '1', type: 'sensor', position: { x: 0, y: 0 }, data: {} }],
               edges: [],
+              next_flow_ids: [],
             },
             created_at: '',
             updated_at: '',
@@ -85,5 +86,14 @@ describe('FlowDetailDrawer', () => {
     expect(screen.getByDisplayValue('Flow cũ')).toBeInTheDocument();
     expect(screen.getByText(/node-graph cũ/)).toBeInTheDocument();
     expect(screen.getByText('Xóa Flow')).toBeInTheDocument();
+  });
+
+  it('drawer renders as sidebar panel, not fixed overlay', () => {
+    const { container } = render(
+      withQueryClient(<FlowDetailDrawer deviceId="dev1" script="new" onClose={() => {}} />)
+    );
+    const drawer = container.firstChild as HTMLElement;
+    // Không được có class "fixed" — phải là relative/absolute trong split layout
+    expect(drawer.className).not.toMatch(/\bfixed\b/);
   });
 });

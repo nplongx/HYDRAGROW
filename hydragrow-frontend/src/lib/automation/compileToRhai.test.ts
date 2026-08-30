@@ -20,6 +20,7 @@ describe("compileToRhai", () => {
       ],
       nodes: [],
       edges: [],
+      next_flow_ids: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain("fn main(input)");
@@ -39,6 +40,7 @@ describe("compileToRhai", () => {
       ],
       nodes: [],
       edges: [],
+      next_flow_ids: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain("input.elapsed_sec >= 86400");
@@ -55,6 +57,7 @@ describe("compileToRhai", () => {
         actions: [{ type: 'end_season', reason: 'Hoàn thành mùa vụ' }],
         nodes: [],
         edges: [],
+        next_flow_ids: [],
       });
       expect(source).toContain('"action": "end_season"');
       expect(source).toContain('"reason": "Hoàn thành mùa vụ"');
@@ -68,6 +71,7 @@ describe("compileToRhai", () => {
         actions: [{ type: 'advance_stage', targetStageOffset: 1, reason: 'x' }],
         nodes: [],
         edges: [],
+        next_flow_ids: [],
       });
       expect(source).toContain('"action": "advance_stage"');
       expect(source).toContain('"target_stage_index"');
@@ -82,6 +86,7 @@ describe("compileToRhai", () => {
       actions: [{ type: "alert", level: "info", message: 'pH is "high"' }],
       nodes: [],
       edges: [],
+      next_flow_ids: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain('pH is \\"high\\"');
@@ -97,6 +102,7 @@ describe("action_command compilation", () => {
       actions: [{ type: "dose", pump: "PH_DOWN", doseMl: 3, pwm: 80 }],
       nodes: [],
       edges: [],
+      next_flow_ids: [],
     });
     expect(source).toContain('"action": "dose"');
     expect(source).toContain('"pump": "PH_DOWN"');
@@ -112,6 +118,7 @@ describe("action_command compilation", () => {
       actions: [{ type: "water_off", pump: "WATER_PUMP_IN" }],
       nodes: [],
       edges: [],
+      next_flow_ids: [],
     });
     expect(source).toContain('"action": "water_off"');
     expect(source).not.toContain("duration_sec");
@@ -125,6 +132,7 @@ describe("action_command compilation", () => {
       actions: [{ type: "emergency_stop" }],
       nodes: [],
       edges: [],
+      next_flow_ids: [],
     });
     expect(source).toContain('"action": "emergency_stop"');
   });

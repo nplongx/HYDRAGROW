@@ -12,8 +12,24 @@ impl Recorder {
         Self { file }
     }
 
-    pub fn record(&mut self, time: u64, phase: &str, ec: f32, ph: f32, temp: f32, level: f32, pa: bool, pb: bool) {
-        writeln!(self.file, "{},{},{},{},{},{},{},{}", time, phase, ec, ph, temp, level, pa, pb).unwrap();
+    #[allow(clippy::too_many_arguments)]
+    pub fn record(
+        &mut self,
+        time: u64,
+        phase: &str,
+        ec: f32,
+        ph: f32,
+        temp: f32,
+        level: f32,
+        pa: bool,
+        pb: bool,
+    ) {
+        writeln!(
+            self.file,
+            "{},{},{},{},{},{},{},{}",
+            time, phase, ec, ph, temp, level, pa, pb
+        )
+        .unwrap();
     }
 }
 

@@ -2,9 +2,7 @@ use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::dispatcher::SimDispatcher;
 use crate::faults::injector::Injector;
 use crate::telemetry::recorder::Recorder;
-use hydragrow_controller_core::{
-    core::fsm::{orchestrator, SystemContext, TickResult},
-};
+use hydragrow_controller_core::core::fsm::{SystemContext, TickResult, orchestrator};
 use hydragrow_shared::{ControllerConfig, SensorData};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -88,7 +86,7 @@ impl Harness {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hydragrow_shared::{ControllerConfig, SensorData, PumpStatus};
+    use hydragrow_shared::{ControllerConfig, PumpStatus, SensorData};
 
     #[test]
     fn test_harness_single_tick() {

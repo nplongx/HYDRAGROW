@@ -9,10 +9,12 @@ fn test_ec_stagnant_scenario() {
     let json = fs::read_to_string("src/scenario/library/ec_stagnant.json").unwrap();
     let scenario: Scenario = serde_json::from_str(&json).unwrap();
 
-    let mut config = ControllerConfig::default();
-    config.ec_target = 1.5;
-    config.max_ec_delta = 0.5;
-    config.dosing_min_pwm_percent = 50;
+    let config = ControllerConfig {
+        ec_target: 1.5,
+        max_ec_delta: 0.5,
+        dosing_min_pwm_percent: 50,
+        ..Default::default()
+    };
 
     let mut harness = Harness::new(config);
 
@@ -54,7 +56,7 @@ fn test_ec_stagnant_scenario() {
     // of a simple 15 ticks simulation, we just verify the Injector applies the hardware fault correctly.
 
     // Pump A should be forced on by the injector
-    assert_eq!(harness.hw.pump_a.on, true);
+    assert!(harness.hw.pump_a.on);
 
     // In a real environment, we would also verify the phase:
     // assert_eq!(harness.ctx.phase, SystemPhase::Fault(FaultCode::EcStagnant));

@@ -1,0 +1,56 @@
+use crate::actuators::virtual_hw::VirtualHardwareState;
+use crate::dispatcher::SimDispatcher;
+use hydragrow_controller_core::{
+    core::fsm::{orchestrator, context::SystemContext},
+    core::fsm::tick_result::TickResult,
+};
+use hydragrow_shared::{ControllerConfig, SensorData};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub struct Harness {
+    pub config: ControllerConfig,
+    pub ctx: SystemContext,
+    pub hw: VirtualHardwareState,
+    pub dispatcher: SimDispatcher,
+    uptime_ms: u64,
+}
+
+impl Harness {
+    pub fn new(config: ControllerConfig) -> Self {
+        Self {
+            config,
+            ctx: SystemContext::default(),
+            hw: VirtualHardwareState::default(),
+            dispatcher: SimDispatcher::new(),
+            uptime_ms: 0,
+        }
+    }
+
+    pub fn uptime_ms(&self) -> u64 {
+        self.uptime_ms
+    }
+
+    pub fn tick(&mut self, dt_ms: u64, sensor: SensorData) -> TickResult {
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        self.uptime_ms += dt_ms;
+
+        let result = orchestrator::tick(
+            now_ms,
+            self.uptime_ms,
+            &self.config,
+            &sensor,
+            now_ms, // use now_ms as last update time to avoid sensor timeout
+            &mut self.ctx,
+        );
+
+        for event in &result.events {
+            self.dispatcher.dispatch(event, &mut self.hw);
+        }
+
+        result
+    }
+}

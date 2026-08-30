@@ -3,11 +3,16 @@ import * as Blockly from 'blockly/core';
 import 'blockly/blocks';
 import { registerHydragrowBlocks } from './blockly/blocks';
 import { extractActions, extractConditions } from './blockly/extractIr';
+import { hydrateWorkspace } from './blockly/hydrateIr';
 import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type Condition } from '../../lib/automation/ir';
 
 export interface BlockLogicEditorProps {
   kind: AutomationIr['kind'];
   onChange: (result: { conditions: Condition[]; actions: Action[] }) => void;
+  /** Dữ liệu của một Flow đã lưu, dùng để vẽ lại block khi mở chi tiết một Flow có
+   * sẵn (xem hydrateIr.ts). Bỏ trống khi tạo Flow mới. */
+  initialConditions?: Condition[];
+  initialActions?: Action[];
   className?: string;
 }
 
@@ -21,7 +26,13 @@ function toolboxFor(kind: AutomationIr['kind']) {
   };
 }
 
-export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditorProps) {
+export function BlockLogicEditor({
+  kind,
+  onChange,
+  initialConditions,
+  initialActions,
+  className,
+}: BlockLogicEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
 
@@ -31,6 +42,9 @@ export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditor
     const workspace = Blockly.inject(containerRef.current, { toolbox: toolboxFor(kind) });
     workspaceRef.current = workspace;
 
+    if ((initialConditions?.length ?? 0) > 0 || (initialActions?.length ?? 0) > 0) {
+      hydrateWorkspace(workspace, initialConditions ?? [], initialActions ?? []);
+    }
     const listener = () => {
       onChange({
         conditions: extractConditions(workspace),
@@ -43,7 +57,9 @@ export function BlockLogicEditor({ kind, onChange, className }: BlockLogicEditor
       workspace.removeChangeListener(listener);
       workspace.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-mount only when kind changes, not on every onChange
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ re-mount khi `kind` đổi;
+    // initialConditions/initialActions/onChange cố tình không nằm trong deps — chúng chỉ
+    // dùng để SEED lần mount đầu, không phải để đồng bộ liên tục với parent re-render.
   }, [kind]);
 
   return <div ref={containerRef} className={className ?? 'h-80 w-full'} />;

@@ -29,7 +29,7 @@ mod tests {
     #[test]
     fn test_virtual_pump_initial_state() {
         let pump = VirtualPump::new();
-        assert_eq!(pump.on, false);
+        assert!(!pump.on);
         assert_eq!(pump.pwm, 0);
     }
 }

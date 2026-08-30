@@ -2,6 +2,7 @@ use crate::actuators::virtual_hw::VirtualHardwareState;
 use hydragrow_controller_core::WaterDirection;
 use hydragrow_controller_core::core::fsm::{DosingPumpTarget, OrchestratorEvent};
 
+#[derive(Default)]
 pub struct SimDispatcher;
 
 impl SimDispatcher {
@@ -87,7 +88,7 @@ mod tests {
             },
             &mut hw,
         );
-        assert_eq!(hw.pump_a.on, true);
+        assert!(hw.pump_a.on);
         assert_eq!(hw.pump_a.pwm, 50);
     }
 }

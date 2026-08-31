@@ -1,0 +1,4 @@
+# Google Jules Agent Compatibility Manifest
+version: 1
+test_cmd: "cargo test --manifest-path hydragrow-backend/Cargo.toml"
+build_cmd: "cargo build --manifest-path hydragrow-backend/Cargo.toml"

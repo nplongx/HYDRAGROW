@@ -1,0 +1,24 @@
+# Google Jules Orchestrator Kit Config (v0.41.1)
+version: 1
+provider: jules
+tier: pro
+base_branch: main
+branch_prefix: agent/
+
+limits:
+  concurrency: 8
+  daily_tasks: 100
+  stagger_ms: 1500
+  diff_kb: 75
+
+verify:
+  test: "cargo test --manifest-path hydragrow-backend/Cargo.toml"
+  build: "cargo build --manifest-path hydragrow-backend/Cargo.toml"
+  lint: ""
+  typecheck: ""
+
+presets:
+  - nightly-security-audit
+  - flaky-test-quarantine
+  - multi-agent-refactor-swarm
+  - doc-sync-sentinel

@@ -6,4 +6,5 @@ members = [
     "hydragrow-shared",
     "hydragrow-simulator",
     "hydragrow-controller-core",
+    "hydragrow-frontend/src-tauri",
 ]

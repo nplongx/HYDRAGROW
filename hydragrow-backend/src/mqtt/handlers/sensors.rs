@@ -206,20 +206,25 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             let influx_bucket = app_state.influx_bucket.clone();
             let fetcher_device_id = device_id.clone();
             let fetcher = move |field: String, stat: String, range_h: i64| -> f64 {
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        crate::db::influx::query_range_stat(
-                            &influx_client,
-                            &influx_bucket,
-                            &fetcher_device_id,
-                            &field,
-                            &stat,
-                            range_h,
-                        )
-                        .await
-                        .unwrap_or(0.0)
-                    })
-                })
+                std::thread::spawn({
+                    let client = influx_client.clone();
+                    let bucket = influx_bucket.clone();
+                    let dev_id = fetcher_device_id.clone();
+                    move || {
+                        tokio::runtime::Runtime::new().unwrap().block_on(async {
+                            crate::db::influx::query_range_stat(
+                                &client,
+                                &bucket,
+                                &dev_id,
+                                &field,
+                                &stat,
+                                range_h,
+                            )
+                            .await
+                            .unwrap_or(0.0)
+                        })
+                    }
+                }).join().unwrap_or(0.0)
             };
 
             if let Ok(Some(output)) = engine.eval_action_command_with_range_stat(&script.ast, &action_input, fetcher)

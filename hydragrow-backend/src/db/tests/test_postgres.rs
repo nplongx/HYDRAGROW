@@ -167,8 +167,6 @@ mod tests {
     }
 
     #[sqlx::test]
-
-    #[sqlx::test]
     async fn insert_and_fetch_dosing_action_log(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "dev-log-1".to_string(),

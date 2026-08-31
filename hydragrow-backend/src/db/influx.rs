@@ -65,3 +65,52 @@ pub async fn get_latest_sensor_data(
         device_id
     ))
 }
+
+#[instrument(skip(client))]
+pub async fn query_range_stat(
+    client: &Client,
+    bucket: &str,
+    device_id: &str,
+    field: &str,
+    stat: &str,
+    range_h: i64,
+) -> Result<f64> {
+    let stat_fn = match stat {
+        "mean" => "mean()",
+        "min" => "min()",
+        "max" => "max()",
+        _ => return Err(anyhow::anyhow!("Unsupported stat: {}", stat)),
+    };
+
+    let flux_query = format!(
+        r#"
+        from(bucket: "{}")
+        |> range(start: -{}h)
+        |> filter(fn: (r) => r["_measurement"] == "sensor_data")
+        |> filter(fn: (r) => r["_field"] == "{}")
+        |> filter(fn: (r) => r.device_id == "{}")
+        |> {}
+        |> keep(columns: ["_value"])
+        "#,
+        bucket, range_h, field, device_id, stat_fn
+    );
+
+    let query_obj = influxdb2::models::Query::new(flux_query);
+    // Since influxdb2 client doesn't easily expose raw float values, we parse it manually
+    // from a custom struct
+    #[derive(serde::Deserialize, Debug, Default, influxdb2::FromDataPoint)]
+    struct StatRow {
+        _value: f64,
+    }
+
+    let tables = client
+        .query::<StatRow>(Some(query_obj))
+        .await
+        .context("Flux query failed")?;
+
+    if let Some(table) = tables.first() {
+        return Ok(table._value);
+    }
+
+    Ok(0.0)
+}

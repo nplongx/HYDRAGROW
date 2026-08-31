@@ -167,6 +167,48 @@ mod tests {
     }
 
     #[sqlx::test]
+    async fn insert_and_fetch_dosing_action_log(pool: sqlx::PgPool) {
+        let cfg = DeviceConfig {
+            device_id: "dev-log-1".to_string(),
+            ec_target: 1.4,
+            ec_tolerance: 0.1,
+            ph_target: 6.0,
+            ph_tolerance: 0.2,
+            control_mode: "auto".to_string(),
+            is_enabled: true,
+            delay_between_a_and_b_sec: 5,
+            last_updated: chrono::Utc::now(),
+        };
+        upsert_device_config(&pool, &cfg).await.unwrap();
+
+        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 3.0).await.unwrap();
+        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 2.0).await.unwrap();
+
+        let history = get_dosing_history_last_hour(&pool, "dev-log-1").await.unwrap();
+        assert_eq!(history.len(), 2);
+        let total: f32 = history.iter().map(|(_, ml)| ml).sum();
+        assert!((total - 5.0).abs() < 1e-4);
+    }
+
+    #[sqlx::test]
+    async fn get_last_dose_at_returns_none_when_no_history(pool: sqlx::PgPool) {
+        let cfg = DeviceConfig {
+            device_id: "dev-log-2".to_string(),
+            ec_target: 1.4,
+            ec_tolerance: 0.1,
+            ph_target: 6.0,
+            ph_tolerance: 0.2,
+            control_mode: "auto".to_string(),
+            is_enabled: true,
+            delay_between_a_and_b_sec: 5,
+            last_updated: chrono::Utc::now(),
+        };
+        upsert_device_config(&pool, &cfg).await.unwrap();
+        let result = get_last_dose_at(&pool, "dev-log-2").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[sqlx::test]
     async fn fetch_dosing_calibration_returns_none_when_missing(pool: sqlx::PgPool) {
         let result = fetch_dosing_calibration(&pool, "no-such-device")
             .await

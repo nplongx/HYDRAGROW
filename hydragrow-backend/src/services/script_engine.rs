@@ -138,6 +138,25 @@ impl ScriptEngine {
         ast: &AST,
         input: &ScriptActionInput,
     ) -> Result<Option<ActionCommandOutput>> {
+        self.eval_action_command_with_range_stat(ast, input, |_, _, _| 0.0)
+    }
+
+    pub fn eval_action_command_with_range_stat(
+        &self,
+        ast: &AST,
+        input: &ScriptActionInput,
+        range_stat_fetcher: impl Fn(String, String, i64) -> f64 + Send + Sync + 'static,
+    ) -> Result<Option<ActionCommandOutput>> {
+        // We must preserve configuration limits while mutating it to register the function.
+        let mut engine = Engine::new();
+        engine.set_max_operations(50_000);
+        engine.set_max_string_size(1024);
+        engine.set_max_map_size(64);
+        engine.on_print(|_| {});
+        engine.on_debug(|_, _, _| {});
+
+        engine.register_fn("fetch_range_stat", range_stat_fetcher);
+
         let mut map = Map::new();
         map.insert("ph".into(), Dynamic::from_float(input.ph));
         map.insert("ec".into(), Dynamic::from_float(input.ec));
@@ -147,8 +166,7 @@ impl ScriptEngine {
         map.insert("device_id".into(), Dynamic::from(input.device_id.clone()));
         map.insert("timestamp_ms".into(), Dynamic::from_int(input.timestamp_ms));
 
-        let result: Dynamic = self
-            .engine
+        let result: Dynamic = engine
             .call_fn(&mut Scope::new(), ast, "main", (Dynamic::from_map(map),))
             .context("Rhai eval error in action_command script")?;
 
@@ -162,21 +180,21 @@ impl ScriptEngine {
 
         let action = map
             .get("action")
-            .map(|v| v.to_string())
+            .map(|v: &Dynamic| v.to_string())
             .context("Missing 'action' in action_command result")?;
-        let pump = map.get("pump").map(|v| v.to_string());
-        let dose_ml = map.get("dose_ml").and_then(|v| {
+        let pump = map.get("pump").map(|v: &Dynamic| v.to_string());
+        let dose_ml = map.get("dose_ml").and_then(|v: &Dynamic| {
             v.clone()
                 .try_cast::<f32>()
                 .or_else(|| v.clone().try_cast::<f64>().map(|f| f as f32))
         });
         let duration_sec = map
             .get("duration_sec")
-            .and_then(|v| v.clone().try_cast::<i64>())
+            .and_then(|v: &Dynamic| v.clone().try_cast::<i64>())
             .map(|i| i as u64);
         let pwm = map
             .get("pwm")
-            .and_then(|v| v.clone().try_cast::<i64>())
+            .and_then(|v: &Dynamic| v.clone().try_cast::<i64>())
             .map(|i| i as u32);
 
         Ok(Some(ActionCommandOutput {

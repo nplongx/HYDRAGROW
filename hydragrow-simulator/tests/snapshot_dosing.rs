@@ -5,9 +5,11 @@ use hydragrow_simulator::sensors::sensor_model::NoiseConfig;
 
 #[test]
 fn test_dosing_cycle_snapshot() {
-    let mut config = ControllerConfig::default();
-    config.ec_gain_per_ml = 0.5;
-    config.pump_a_capacity_ml_per_sec = 2.0;
+    let config = ControllerConfig {
+        ec_gain_per_ml: 0.5,
+        pump_a_capacity_ml_per_sec: 2.0,
+        ..Default::default()
+    };
 
     let tank = Tank {
         volume_l: 10.0,

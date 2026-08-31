@@ -12,7 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { validate_dosing_config } from '../../gleam_core/build/dev/javascript/gleam_core/settings/validation.mjs';
 import { calculate_summary } from '../../gleam_core/build/dev/javascript/gleam_core/settings/calibration.mjs';
 import { parse_cron_safe } from '../../gleam_core/build/dev/javascript/gleam_core/settings/cron.mjs';
-import { build_unified_payload_json } from '../../gleam_core/build/dev/javascript/gleam_core/settings/payload.mjs';
+import { build_full_unified_payload_json } from '../../gleam_core/build/dev/javascript/gleam_core/settings/payload.mjs';
 
 import { Activity, CalendarClock, FlaskConical, LockKeyhole, Network, Power, Save, Settings2, ShieldAlert, Target, Waves, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -176,7 +176,9 @@ const Settings = () => {
     water_level_tolerance: 5.0, auto_refill_enabled: true, auto_drain_overflow: true, auto_dilute_enabled: false, dilute_drain_amount_cm: 5.0,
     scheduled_water_change_enabled: false, water_change_cron: '0 0 7 * * SUN', scheduled_drain_amount_cm: 10.0,
     ec_gain_per_ml: 0.1, ph_shift_up_per_ml: 0.2, ph_shift_down_per_ml: 0.2,
-    ec_step_ratio: 0.4, ph_step_ratio: 0.1, delay_between_a_and_b_sec: 10,
+    ec_step_ratio: 0.4, ph_step_ratio: 0.1,
+    ec_a_step_ratio: 0.4, ec_b_step_ratio: 0.4, ph_up_step_ratio: 0.2, ph_down_step_ratio: 0.2,
+    delay_between_a_and_b_sec: 10,
     pump_a_capacity_ml_per_sec: 1.2, pump_b_capacity_ml_per_sec: 1.2, pump_ph_up_capacity_ml_per_sec: 1.2, pump_ph_down_capacity_ml_per_sec: 1.2,
     active_mixing_sec: 5, sensor_stabilize_sec: 5, scheduled_mixing_interval_sec: 3600, scheduled_mixing_duration_sec: 300,
     dosing_pwm_percent: 50, osaka_mixing_pwm_percent: 60, osaka_misting_pwm_percent: 100, soft_start_duration: 3000,
@@ -460,39 +462,94 @@ const Settings = () => {
       await saveAppSettings({ ...appSettings, device_id: devId });
       const ts = new Date().toISOString();
 
-      const jsonStringPayload = build_unified_payload_json(
+      const jsonStringPayload = build_full_unified_payload_json(
         devId,
         savingConfig.control_mode || 'manual',
         savingConfig.is_enabled ?? true,
         savingConfig.emergency_shutdown ?? false,
-        String(savingConfig.ec_target ?? ''),
-        String(savingConfig.ec_tolerance ?? ''),
-        String(savingConfig.ph_target ?? ''),
-        String(savingConfig.ph_tolerance ?? ''),
-        String(savingConfig.delay_between_a_and_b_sec ?? ''),
-        String(savingConfig.tank_height ?? ''),
-        String(savingConfig.water_level_min ?? ''),
-        String(savingConfig.water_level_target ?? ''),
-        String(savingConfig.water_level_max ?? ''),
-        String(savingConfig.water_level_tolerance ?? ''),
+        String(savingConfig.ec_target ?? '1.5'),
+        String(savingConfig.ec_tolerance ?? '0.05'),
+        String(savingConfig.ph_target ?? '6.0'),
+        String(savingConfig.ph_tolerance ?? '0.5'),
+        String(savingConfig.delay_between_a_and_b_sec ?? '10'),
+        String(savingConfig.tank_height ?? '50'),
+        String(savingConfig.water_level_min ?? '20'),
+        String(savingConfig.water_level_target ?? '80'),
+        String(savingConfig.water_level_max ?? '90'),
+        String(savingConfig.water_level_tolerance ?? '5'),
         savingConfig.auto_refill_enabled ?? true,
         savingConfig.auto_drain_overflow ?? true,
+        savingConfig.auto_dilute_enabled ?? false,
+        String(savingConfig.dilute_drain_amount_cm ?? '5'),
+        savingConfig.scheduled_water_change_enabled ?? false,
         String(savingConfig.water_change_cron || '0 0 7 * * SUN'),
-        String(savingConfig.misting_on_duration_ms ?? ''),
-        String(savingConfig.misting_off_duration_ms ?? ''),
-        String(savingConfig.min_ec_limit ?? ''),
-        String(savingConfig.max_ec_limit ?? ''),
-        String(savingConfig.min_ph_limit ?? ''),
-        String(savingConfig.max_ph_limit ?? ''),
-        String(savingConfig.max_dose_per_cycle ?? ''),
-        String(savingConfig.max_dose_per_hour ?? ''),
-        String(savingConfig.pump_a_capacity_ml_per_sec ?? ''),
-        String(savingConfig.pump_b_capacity_ml_per_sec ?? ''),
-        String(savingConfig.pump_ph_up_capacity_ml_per_sec ?? ''),
-        String(savingConfig.pump_ph_down_capacity_ml_per_sec ?? ''),
-        String(savingConfig.dosing_pwm_percent ?? ''),
-        String(savingConfig.ph_v7 ?? ''),
-        String(savingConfig.ph_v4 ?? ''),
+        String(savingConfig.scheduled_drain_amount_cm ?? '10'),
+        String(savingConfig.misting_on_duration_ms ?? '10000'),
+        String(savingConfig.misting_off_duration_ms ?? '180000'),
+        String(savingConfig.misting_temp_threshold ?? '30'),
+        String(savingConfig.high_temp_misting_on_duration_ms ?? '15000'),
+        String(savingConfig.high_temp_misting_off_duration_ms ?? '60000'),
+        String(savingConfig.min_ec_limit ?? '0.5'),
+        String(savingConfig.max_ec_limit ?? '3.0'),
+        String(savingConfig.min_ph_limit ?? '4.0'),
+        String(savingConfig.max_ph_limit ?? '8.0'),
+        String(savingConfig.max_ec_delta ?? '0.5'),
+        String(savingConfig.max_ph_delta ?? '0.3'),
+        String(savingConfig.max_dose_per_cycle ?? '50'),
+        String(savingConfig.max_dose_per_hour ?? '200'),
+        String(savingConfig.cooldown_sec ?? '60'),
+        String(savingConfig.water_level_critical_min ?? '10'),
+        String(savingConfig.max_refill_cycles_per_hour ?? '3'),
+        String(savingConfig.max_drain_cycles_per_hour ?? '3'),
+        String(savingConfig.max_refill_duration_sec ?? '120'),
+        String(savingConfig.max_drain_duration_sec ?? '120'),
+        String(savingConfig.min_temp_limit ?? '15'),
+        String(savingConfig.max_temp_limit ?? '35'),
+        String(savingConfig.ec_ack_threshold ?? '0.05'),
+        String(savingConfig.ph_ack_threshold ?? '0.1'),
+        String(savingConfig.water_ack_threshold ?? '0.5'),
+        String(savingConfig.ec_gain_per_ml ?? '0.1'),
+        String(savingConfig.ph_shift_up_per_ml ?? '0.2'),
+        String(savingConfig.ph_shift_down_per_ml ?? '0.2'),
+        String(savingConfig.active_mixing_sec ?? '5'),
+        String(savingConfig.sensor_stabilize_sec ?? '5'),
+        String(savingConfig.ec_step_ratio ?? '0.4'),
+        String(savingConfig.ph_step_ratio ?? '0.1'),
+        String(savingConfig.ec_a_step_ratio ?? savingConfig.ec_step_ratio ?? '0.4'),
+        String(savingConfig.ec_b_step_ratio ?? savingConfig.ec_step_ratio ?? '0.4'),
+        String(savingConfig.ph_up_step_ratio ?? savingConfig.ph_step_ratio ?? '0.2'),
+        String(savingConfig.ph_down_step_ratio ?? savingConfig.ph_step_ratio ?? '0.2'),
+        String(savingConfig.pump_a_capacity_ml_per_sec ?? '1.2'),
+        String(savingConfig.pump_b_capacity_ml_per_sec ?? '1.2'),
+        String(savingConfig.pump_ph_up_capacity_ml_per_sec ?? '1.2'),
+        String(savingConfig.pump_ph_down_capacity_ml_per_sec ?? '1.2'),
+        String(savingConfig.dosing_pwm_percent ?? '50'),
+        String(savingConfig.osaka_mixing_pwm_percent ?? '60'),
+        String(savingConfig.osaka_misting_pwm_percent ?? '100'),
+        String(savingConfig.dosing_min_pwm_percent ?? '20'),
+        String(savingConfig.pump_a_min_pwm_percent ?? savingConfig.dosing_min_pwm_percent ?? '20'),
+        String(savingConfig.pump_b_min_pwm_percent ?? savingConfig.dosing_min_pwm_percent ?? '20'),
+        String(savingConfig.pump_ph_up_min_pwm_percent ?? savingConfig.dosing_min_pwm_percent ?? '20'),
+        String(savingConfig.pump_ph_down_min_pwm_percent ?? savingConfig.dosing_min_pwm_percent ?? '20'),
+        String(savingConfig.dosing_pulse_on_ms ?? '500'),
+        String(savingConfig.dosing_pulse_off_ms ?? '500'),
+        String(savingConfig.dosing_min_dose_ml ?? '1.0'),
+        String(savingConfig.dosing_max_pulse_count_per_cycle ?? '20'),
+        String(savingConfig.soft_start_duration ?? '3000'),
+        String(savingConfig.scheduled_mixing_interval_sec ?? '3600'),
+        String(savingConfig.scheduled_mixing_duration_sec ?? '300'),
+        String(savingConfig.ph_v7 ?? '2.5'),
+        String(savingConfig.ph_v4 ?? '1.428'),
+        String(savingConfig.ec_factor ?? '880.0'),
+        String(savingConfig.ec_offset ?? '0.0'),
+        String(savingConfig.temp_offset ?? '0.0'),
+        String(savingConfig.temp_compensation_beta ?? '0.02'),
+        String(savingConfig.publish_interval ?? '5000'),
+        String(savingConfig.moving_average_window ?? '15'),
+        savingConfig.enable_ph_sensor ?? true,
+        savingConfig.enable_ec_sensor ?? true,
+        savingConfig.enable_temp_sensor ?? true,
+        savingConfig.enable_water_level_sensor ?? true,
         ts
       );
 
@@ -773,38 +830,55 @@ const Settings = () => {
 
         {/* DOSING */}
         <AccordionSection id="dosing" title="Máy châm phân" icon={FlaskConical} isOpen={openSection === 'dosing'} onToggle={() => handleToggleSection('dosing')}>
-          {isAdvancedMode && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <SubCard title="Lưu lượng bơm châm (ml/s)">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <InputGroup label="Bơm Phân A (ml/s)" step="0.1" value={config.pump_a_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_a_capacity_ml_per_sec} />
+              <InputGroup label="Bơm Phân B (ml/s)" step="0.1" value={config.pump_b_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_b_capacity_ml_per_sec} />
+              <InputGroup label="Bơm pH UP (ml/s)" step="0.1" value={config.pump_ph_up_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_up_capacity_ml_per_sec} />
+              <InputGroup label="Bơm pH DOWN (ml/s)" step="0.1" value={config.pump_ph_down_capacity_ml_per_sec} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_capacity_ml_per_sec: e.target.value })} errorText={dosingValidationErrors.pump_ph_down_capacity_ml_per_sec} />
+            </div>
+          </SubCard>
 
-              <SubCard title="Thông số tính toán châm phân (Nâng cao)">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {isAdvancedMode && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 my-4">
+              <SubCard title="Thông số tính toán & Tỷ lệ bước (Per-pump)">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InputGroup label="Max Dose / Chu kỳ (ml)" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
+                  <InputGroup label="Độ trễ bơm A & B (s)" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} />
                   <InputGroup label="EC tăng / ml" step="0.01" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
                   <InputGroup label="pH tăng / ml" step="0.01" value={config.ph_shift_up_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_up_per_ml: e.target.value })} />
                   <InputGroup label="pH giảm / ml" step="0.01" value={config.ph_shift_down_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_down_per_ml: e.target.value })} />
-                  <InputGroup label="Tỷ lệ bước EC" step="0.1" value={config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_step_ratio: e.target.value })} />
-                  <InputGroup label="Tỷ lệ bước pH" step="0.1" value={config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_step_ratio: e.target.value })} />
-                  <InputGroup label="EC Timeout (s)" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
-                  <InputGroup label="pH Timeout (s)" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
+                  <div className="hidden sm:block"></div>
+                  <InputGroup label="Tỷ lệ bước EC A" step="0.05" value={config.ec_a_step_ratio ?? config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_a_step_ratio: e.target.value })} />
+                  <InputGroup label="Tỷ lệ bước EC B" step="0.05" value={config.ec_b_step_ratio ?? config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_b_step_ratio: e.target.value })} />
+                  <InputGroup label="Tỷ lệ bước pH UP" step="0.05" value={config.ph_up_step_ratio ?? config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_up_step_ratio: e.target.value })} />
+                  <InputGroup label="Tỷ lệ bước pH DOWN" step="0.05" value={config.ph_down_step_ratio ?? config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_down_step_ratio: e.target.value })} />
+                  <InputGroup label="EC Ack Threshold (s)" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
+                  <InputGroup label="pH Ack Threshold (s)" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
                 </div>
               </SubCard>
 
-              <SubCard title="Công suất PWM">
+              <SubCard title="Công suất PWM & Khởi động">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputGroup label="Bơm châm (%)" value={config.dosing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_pwm_percent} />
+                  <InputGroup label="Bơm châm chung (%)" value={config.dosing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_pwm_percent} />
                   <InputGroup label="Bơm trộn (%)" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
                   <InputGroup label="Bơm sương (%)" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
                   <InputGroup label="Khởi động mềm (ms)" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} />
+                  <div className="sm:col-span-2 pt-2 pb-1 border-t border-emerald-100"><span className="text-xs font-semibold text-emerald-700/75 uppercase">PWM Tối thiểu từng bơm (%)</span></div>
+                  <InputGroup label="Min PWM Phân A (%)" value={config.pump_a_min_pwm_percent ?? config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_min_pwm_percent: e.target.value })} />
+                  <InputGroup label="Min PWM Phân B (%)" value={config.pump_b_min_pwm_percent ?? config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_min_pwm_percent: e.target.value })} />
+                  <InputGroup label="Min PWM pH UP (%)" value={config.pump_ph_up_min_pwm_percent ?? config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_up_min_pwm_percent: e.target.value })} />
+                  <InputGroup label="Min PWM pH DOWN (%)" value={config.pump_ph_down_min_pwm_percent ?? config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_ph_down_min_pwm_percent: e.target.value })} />
                 </div>
               </SubCard>
-              <SubCard title="Cấu hình xung (Pulse)">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputGroup label="PWM tối thiểu (%)" value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
+
+              <SubCard title="Cấu hình xung (Pulse) & Nhịp châm" className="lg:col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <InputGroup label="PWM tối thiểu chung (%)" value={config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_min_pwm_percent} />
                   <InputGroup label="Mức kích hoạt nhịp (ml)" value={config.dosing_min_dose_ml} onChange={(e: InputEvent) => setConfig({ ...config, dosing_min_dose_ml: e.target.value })} />
-                  <div className="sm:col-span-2 pt-2 pb-1 border-t border-emerald-100"><span className="text-xs font-semibold text-emerald-700/75 uppercase">Thời gian nhịp</span></div>
-                  <InputGroup label="Bật (ms)" value={config.dosing_pulse_on_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_on_ms: e.target.value })} />
-                  <InputGroup label="Tắt (ms)" value={config.dosing_pulse_off_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_off_ms: e.target.value })} />
-                  <div className="sm:col-span-2"><InputGroup label="Max xung / chu kỳ" value={config.dosing_max_pulse_count_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, dosing_max_pulse_count_per_cycle: e.target.value })} /></div>
+                  <InputGroup label="Xung Bật (ms)" value={config.dosing_pulse_on_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_on_ms: e.target.value })} />
+                  <InputGroup label="Xung Tắt (ms)" value={config.dosing_pulse_off_ms} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pulse_off_ms: e.target.value })} />
+                  <InputGroup label="Max xung / chu kỳ" value={config.dosing_max_pulse_count_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, dosing_max_pulse_count_per_cycle: e.target.value })} />
                 </div>
               </SubCard>
             </div>
@@ -822,7 +896,7 @@ const Settings = () => {
         {/* SAFETY */}
         {isAdvancedMode && (
           <AccordionSection id="safety" title="An toàn" icon={ShieldAlert} isOpen={openSection === 'safety'} onToggle={() => handleToggleSection('safety')}>
-            <SubCard title="Ngưỡng cảnh báo">
+            <SubCard title="Ngưỡng cảnh báo & Giới hạn vận hành">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <InputGroup label="Nhiệt độ thấp (°C)" value={config.min_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_temp_limit: e.target.value })} />
                 <InputGroup label="Nhiệt độ cao (°C)" value={config.max_temp_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_temp_limit: e.target.value })} />
@@ -833,7 +907,11 @@ const Settings = () => {
 
                 <InputGroup label="EC thay đổi tối đa / chu kỳ" step="0.1" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
                 <InputGroup label="pH thay đổi tối đa / chu kỳ" step="0.1" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
-                <div className="sm:col-span-2 lg:col-span-3"><InputGroup label="Nước tối thiểu ngắt khẩn (cm)" value={config.water_level_critical_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_critical_min: e.target.value })} /></div>
+                <InputGroup label="Max Dose / Giờ (ml)" value={config.max_dose_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_hour: e.target.value })} />
+                <InputGroup label="Thời gian Cooldown (s)" value={config.cooldown_sec} onChange={(e: InputEvent) => setConfig({ ...config, cooldown_sec: e.target.value })} />
+                <InputGroup label="Nước tối thiểu ngắt khẩn (cm)" value={config.water_level_critical_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_critical_min: e.target.value })} />
+                <InputGroup label="Max chu kỳ bơm / giờ" value={config.max_refill_cycles_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_cycles_per_hour: e.target.value })} />
+                <InputGroup label="Max chu kỳ xả / giờ" value={config.max_drain_cycles_per_hour} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_cycles_per_hour: e.target.value })} />
               </div>
             </SubCard>
           </AccordionSection>
@@ -878,6 +956,19 @@ const Settings = () => {
                 )}
               </div>
             </SubCard>
+
+            {isAdvancedMode && (
+              <SubCard title="Thông số hiệu chuẩn Cảm biến (Nâng cao)" className="h-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <InputGroup label="EC Factor" value={config.ec_factor} onChange={(e: InputEvent) => setConfig({ ...config, ec_factor: e.target.value })} />
+                  <InputGroup label="EC Offset" value={config.ec_offset} onChange={(e: InputEvent) => setConfig({ ...config, ec_offset: e.target.value })} />
+                  <InputGroup label="Temp Offset (°C)" value={config.temp_offset} onChange={(e: InputEvent) => setConfig({ ...config, temp_offset: e.target.value })} />
+                  <InputGroup label="Temp Beta" value={config.temp_compensation_beta} onChange={(e: InputEvent) => setConfig({ ...config, temp_compensation_beta: e.target.value })} />
+                  <InputGroup label="Tần suất gửi MQTT (ms)" value={config.publish_interval} onChange={(e: InputEvent) => setConfig({ ...config, publish_interval: e.target.value })} />
+                  <InputGroup label="Cửa sổ lọc TB (M.A.)" value={config.moving_average_window} onChange={(e: InputEvent) => setConfig({ ...config, moving_average_window: e.target.value })} />
+                </div>
+              </SubCard>
+            )}
           </div>
         </AccordionSection>
 

@@ -1,5 +1,5 @@
 use crate::AppState;
-use actix_web::{web, HttpResponse, Scope};
+use actix_web::{HttpResponse, Scope, web};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -55,11 +55,12 @@ pub async fn create_token(
 }
 
 pub async fn revoke_token(pool: &PgPool, id: Uuid, device_id: &str) -> Result<bool, sqlx::Error> {
-    let result: sqlx::postgres::PgQueryResult = sqlx::query(
-        "UPDATE webhook_tokens SET is_active = false WHERE id = $1 AND device_id = $2",
-    ).bind(id).bind(device_id)
-    .execute(pool)
-    .await?;
+    let result: sqlx::postgres::PgQueryResult =
+        sqlx::query("UPDATE webhook_tokens SET is_active = false WHERE id = $1 AND device_id = $2")
+            .bind(id)
+            .bind(device_id)
+            .execute(pool)
+            .await?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -81,7 +82,8 @@ async fn handle_list_tokens(
         Ok(tokens) => HttpResponse::Ok().json(tokens),
         Err(e) => {
             tracing::error!("Failed to list tokens: {}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Internal server error" }))
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Internal server error" }))
         }
     }
 }
@@ -99,7 +101,8 @@ async fn handle_create_token(
         })),
         Err(e) => {
             tracing::error!("Failed to create token: {}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Internal server error" }))
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Internal server error" }))
         }
     }
 }
@@ -111,10 +114,13 @@ async fn handle_revoke_token(
     let (device_id, token_id) = path.into_inner();
     match revoke_token(&app_state.pg_pool, token_id, &device_id).await {
         Ok(true) => HttpResponse::Ok().json(serde_json::json!({ "success": true })),
-        Ok(false) => HttpResponse::NotFound().json(serde_json::json!({ "error": "Token not found" })),
+        Ok(false) => {
+            HttpResponse::NotFound().json(serde_json::json!({ "error": "Token not found" }))
+        }
         Err(e) => {
             tracing::error!("Failed to revoke token: {}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Internal server error" }))
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Internal server error" }))
         }
     }
 }

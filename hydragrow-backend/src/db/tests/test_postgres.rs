@@ -181,10 +181,16 @@ mod tests {
         };
         upsert_device_config(&pool, &cfg).await.unwrap();
 
-        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 3.0).await.unwrap();
-        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 2.0).await.unwrap();
+        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 3.0)
+            .await
+            .unwrap();
+        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 2.0)
+            .await
+            .unwrap();
 
-        let history = get_dosing_history_last_hour(&pool, "dev-log-1").await.unwrap();
+        let history = get_dosing_history_last_hour(&pool, "dev-log-1")
+            .await
+            .unwrap();
         assert_eq!(history.len(), 2);
         let total: f32 = history.iter().map(|(_, ml)| ml).sum();
         assert!((total - 5.0).abs() < 1e-4);

@@ -191,12 +191,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
         let now_sec = (action_input.timestamp_ms / 1000) as u64;
 
-        let hourly_history_ml = crate::db::postgres::get_dosing_history_last_hour(
-            &app_state.pg_pool, &device_id,
-        ).await.unwrap_or_default();
-        let last_dose_at_sec = crate::db::postgres::get_last_dose_at(
-            &app_state.pg_pool, &device_id,
-        ).await.unwrap_or(None);
+        let hourly_history_ml =
+            crate::db::postgres::get_dosing_history_last_hour(&app_state.pg_pool, &device_id)
+                .await
+                .unwrap_or_default();
+        let last_dose_at_sec =
+            crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
+                .await
+                .unwrap_or(None);
 
         for script in &action_scripts {
             // Rhai evaluation is synchronous, so we can't await `query_range_stat` directly inside the closure.
@@ -213,21 +215,19 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                     move || {
                         tokio::runtime::Runtime::new().unwrap().block_on(async {
                             crate::db::influx::query_range_stat(
-                                &client,
-                                &bucket,
-                                &dev_id,
-                                &field,
-                                &stat,
-                                range_h,
+                                &client, &bucket, &dev_id, &field, &stat, range_h,
                             )
                             .await
                             .unwrap_or(0.0)
                         })
                     }
-                }).join().unwrap_or(0.0)
+                })
+                .join()
+                .unwrap_or(0.0)
             };
 
-            if let Ok(Some(output)) = engine.eval_action_command_with_range_stat(&script.ast, &action_input, fetcher)
+            if let Ok(Some(output)) =
+                engine.eval_action_command_with_range_stat(&script.ast, &action_input, fetcher)
                 && let Err(err) = crate::services::action_dispatch::dispatch_action_command(
                     &app_state,
                     &device_id,

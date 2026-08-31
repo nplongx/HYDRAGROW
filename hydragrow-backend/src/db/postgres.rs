@@ -277,10 +277,7 @@ pub async fn get_dosing_history_last_hour(
     Ok(rows.into_iter().map(|(ts, ml)| (ts as u64, ml)).collect())
 }
 
-pub async fn get_last_dose_at(
-    pool: &PgPool,
-    device_id: &str,
-) -> Result<Option<u64>, sqlx::Error> {
+pub async fn get_last_dose_at(pool: &PgPool, device_id: &str) -> Result<Option<u64>, sqlx::Error> {
     let ts: Option<f64> = sqlx::query_scalar(
         "SELECT EXTRACT(EPOCH FROM MAX(dosed_at))::FLOAT8 FROM dosing_action_log WHERE device_id = $1",
     )

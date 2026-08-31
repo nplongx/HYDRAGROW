@@ -1,4 +1,4 @@
-use actix_web::{web, HttpRequest, HttpResponse, Scope};
+use actix_web::{HttpRequest, HttpResponse, Scope, web};
 use sqlx::PgPool;
 use tracing::{error, info, warn};
 
@@ -7,9 +7,14 @@ use crate::api::webhook_tokens::{find_by_token_hash, sha256_hex};
 use crate::models::script::ActionCommandOutput;
 
 async fn extract_webhook_auth(req: &HttpRequest, pool: &PgPool, device_id: &str) -> bool {
-    if let Some(token) = req.headers().get("X-Webhook-Token").and_then(|h| h.to_str().ok()) {
+    if let Some(token) = req
+        .headers()
+        .get("X-Webhook-Token")
+        .and_then(|h| h.to_str().ok())
+    {
         let hash = sha256_hex(token);
-        return find_by_token_hash(pool, &hash).await
+        return find_by_token_hash(pool, &hash)
+            .await
             .is_some_and(|t| t.device_id == device_id && t.is_active);
     }
     false // caller fallback về X-API-Key nếu cần
@@ -49,23 +54,30 @@ async fn receive_webhook_action(
 
     // Update last_used_at for token
     if is_authorized_webhook {
-        if let Some(token) = req.headers().get("X-Webhook-Token").and_then(|h| h.to_str().ok()) {
+        if let Some(token) = req
+            .headers()
+            .get("X-Webhook-Token")
+            .and_then(|h| h.to_str().ok())
+        {
             let hash = sha256_hex(token);
-            let _ = sqlx::query("UPDATE webhook_tokens SET last_used_at = NOW() WHERE token_hash = $1").bind(hash)
-                .execute(&app_state.pg_pool)
-                .await;
+            let _ =
+                sqlx::query("UPDATE webhook_tokens SET last_used_at = NOW() WHERE token_hash = $1")
+                    .bind(hash)
+                    .execute(&app_state.pg_pool)
+                    .await;
         }
     }
 
-    let safety_config = match crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            error!("Failed to fetch safety config for webhook: {}", e);
-            return HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Internal server error"
-            }));
-        }
-    };
+    let safety_config =
+        match crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                error!("Failed to fetch safety config for webhook: {}", e);
+                return HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": "Internal server error"
+                }));
+            }
+        };
 
     let limits = hydragrow_shared::safety::DoseSafetyLimits {
         max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
@@ -77,9 +89,10 @@ async fn receive_webhook_action(
         .await
         .unwrap_or(None);
 
-    let hourly_history_ml = crate::db::postgres::get_dosing_history_last_hour(&app_state.pg_pool, &device_id)
-        .await
-        .unwrap_or_default();
+    let hourly_history_ml =
+        crate::db::postgres::get_dosing_history_last_hour(&app_state.pg_pool, &device_id)
+            .await
+            .unwrap_or_default();
     let last_dose_at_sec = crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
         .await
         .unwrap_or(None);
@@ -94,18 +107,26 @@ async fn receive_webhook_action(
         now_sec,
         last_dose_at_sec,
         calibration.as_ref(),
-    ).await {
+    )
+    .await
+    {
         Ok(()) => {
-            info!("Successfully dispatched webhook action for device {}", device_id);
+            info!(
+                "Successfully dispatched webhook action for device {}",
+                device_id
+            );
             HttpResponse::Ok().json(serde_json::json!({ "success": true }))
-        },
+        }
         Err(crate::services::action_dispatch::ActionDispatchError::Safety(violation)) => {
-            warn!("Webhook action blocked by safety constraints: {:?}", violation);
+            warn!(
+                "Webhook action blocked by safety constraints: {:?}",
+                violation
+            );
             HttpResponse::BadRequest().json(serde_json::json!({
                 "error": "Safety violation",
                 "details": format!("{:?}", violation)
             }))
-        },
+        }
         Err(e) => {
             error!("Webhook action dispatch failed: {:?}", e);
             HttpResponse::BadRequest().json(serde_json::json!({

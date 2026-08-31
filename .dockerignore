@@ -1,6 +1,5 @@
-# Git / GitHub
+# Git
 .git
-.gitignore
 .github
 .gitmodules
 
@@ -12,12 +11,14 @@
 *.key
 *.crt
 server_wallet.json
+firebase-service-account.json
+*.wallet.json
 
-# Rust build artifacts
+# Rust
 **/target/
 **/*.rs.bk
 
-# Node / frontend dependencies and build output
+# Node / frontend
 **/node_modules/
 **/.vite/
 **/dist/
@@ -25,19 +26,18 @@ server_wallet.json
 **/.turbo/
 **/.cache/
 
-# Tauri artifacts
+# Tauri
 **/src-tauri/target/
 **/src-tauri/gen/
 
-# PlatformIO / firmware artifacts
+# PlatformIO / firmware
 **/.pio/
 **/.pioenvs/
 **/.clangd/
-**/.cache/
 **/firmware/
 **/libdeps/
 
-# IDE / OS files
+# IDE / OS
 .vscode/
 .idea/
 *.swp
@@ -45,20 +45,20 @@ server_wallet.json
 .DS_Store
 Thumbs.db
 
-# Logs / temporary files
+# Logs / temporary / coverage
 *.log
 *.tmp
 *.temp
 coverage/
 
-# Documentation / repo-only content not needed by the backend image
+# Repo-only content not needed by backend image
 docs/
 .agents/
 AGENTS.md
 CONTRIBUTING.md
 README.md
 
-# Database / local runtime files
+# Local database files
 *.sqlite
 *.sqlite3
 *.db

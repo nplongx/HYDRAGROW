@@ -1,6 +1,6 @@
 # [Jules Review] PR #{{PR_NUMBER}} — {{PR_TITLE}}
 
-> **Thay thế `{{PR_NUMBER}}` và `{{PR_TITLE}}` trước khi dispatch.**
+> **Thay thế `{{PR_NUMBER}}` và `{{PR_TITLE}}` trước khi dispatch.**  
 > Dùng: `./scripts/jules review --pr <number>` để tự điền.
 
 ## 🤖 Task type: Code Review

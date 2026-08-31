@@ -9,7 +9,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        > **Lưu ý:** Issue này thường được Jules tạo tự động sau khi review/audit.
+        > **Lưu ý:** Issue này thường được Jules tạo tự động sau khi review/audit.  
         > Dùng `./scripts/jules review` hoặc `./scripts/jules audit` để trigger Jules.
 
   - type: dropdown
@@ -68,8 +68,8 @@ body:
       label: "Mô tả finding"
       description: "Vấn đề cụ thể là gì, tại sao nó là vấn đề"
       placeholder: |
-        `process_sensor_data()` tại line 120 viết SQL trực tiếp bằng `sqlx::query!()`
-        thay vì đi qua `db::sensors::insert()`. Vi phạm layering rule: handler không
+        `process_sensor_data()` tại line 120 viết SQL trực tiếp bằng `sqlx::query!()` 
+        thay vì đi qua `db::sensors::insert()`. Vi phạm layering rule: handler không 
         được biết cấu trúc DB.
     validations:
       required: true

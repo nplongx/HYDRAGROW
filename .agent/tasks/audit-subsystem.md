@@ -1,6 +1,6 @@
 # [Jules Audit] {{SUBSYSTEM}} — {{DATE}}
 
-> **Thay thế `{{SUBSYSTEM}}` (vd: `backend`) và `{{DATE}}` (vd: `2025-09`).**
+> **Thay thế `{{SUBSYSTEM}}` (vd: `backend`) và `{{DATE}}` (vd: `2025-09`).**  
 > Dùng: `./scripts/jules audit --subsystem <name>` để tự điền.
 
 ## 🔍 Task type: Full Audit

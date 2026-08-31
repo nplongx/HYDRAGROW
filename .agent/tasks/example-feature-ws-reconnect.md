@@ -1,12 +1,12 @@
 # [Jules Feature] frontend: Add WebSocket reconnect with exponential backoff
 
-> **Ví dụ task feature hoàn chỉnh.**
+> **Ví dụ task feature hoàn chỉnh.**  
 > Dispatch: `./scripts/jules task .agent/tasks/example-feature-ws-reconnect.md`
 
 ## Task type: Feature — 3-phase protocol
 
-**Subsystem:** `frontend`
-**Scope:** `hydragrow-frontend/src/` (WebSocket client layer)
+**Subsystem:** `frontend`  
+**Scope:** `hydragrow-frontend/src/` (WebSocket client layer)  
 **PR prefix:** `feat/ws-reconnect-backoff`
 
 ---

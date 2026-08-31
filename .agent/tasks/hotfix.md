@@ -4,8 +4,8 @@
 
 ## 🚨 Task type: Hotfix — 3-Phase Protocol bắt buộc
 
-**Subsystem:** `{{SUBSYSTEM}}`
-**Lỗi:** {{DESCRIPTION}}
+**Subsystem:** `{{SUBSYSTEM}}`  
+**Lỗi:** {{DESCRIPTION}}  
 **Gợi ý vị trí:** {{HINT}}
 
 > Jules PHẢI theo đúng 3 phase. Không được bỏ qua Phase 1 để viết code ngay.

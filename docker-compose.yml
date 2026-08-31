@@ -43,7 +43,21 @@ services:
       context: .
       dockerfile: hydragrow-backend/Dockerfile
     env_file: ./hydragrow-backend/.env
-    depends_on: [postgres, mosquitto, influxdb]
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      DATABASE_URL: postgres://hydragrow:dev_only_password@postgres:5432/hydragrow
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_ORG: hydragrow
+      INFLUX_BUCKET: sensors
+      INFLUX_TOKEN: dev_only_token
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      LOKI_URL: http://loki:3100
+    depends_on:
+      - postgres
+      - mosquitto
+      - influxdb
     ports: ["8080:8080"]
 
 volumes:

@@ -1,0 +1,64 @@
+# Git / GitHub
+.git
+.gitignore
+.github
+.gitmodules
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+server_wallet.json
+
+# Rust build artifacts
+**/target/
+**/*.rs.bk
+
+# Node / frontend dependencies and build output
+**/node_modules/
+**/.vite/
+**/dist/
+**/build/
+**/.turbo/
+**/.cache/
+
+# Tauri artifacts
+**/src-tauri/target/
+**/src-tauri/gen/
+
+# PlatformIO / firmware artifacts
+**/.pio/
+**/.pioenvs/
+**/.clangd/
+**/.cache/
+**/firmware/
+**/libdeps/
+
+# IDE / OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs / temporary files
+*.log
+*.tmp
+*.temp
+coverage/
+
+# Documentation / repo-only content not needed by the backend image
+docs/
+.agents/
+AGENTS.md
+CONTRIBUTING.md
+README.md
+
+# Database / local runtime files
+*.sqlite
+*.sqlite3
+*.db

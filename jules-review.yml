@@ -1,0 +1,218 @@
+name: jules-review
+
+# Trigger Jules review tự động khi PR mở/update
+# Jules nhận task qua GitHub issue có label "jules"
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    # Chỉ trigger khi PR không phải draft VÀ có label "needs-review"
+  # Hoặc trigger thủ công
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number để review"
+        required: true
+        type: number
+      subsystem:
+        description: "Subsystem cụ thể (để trống = auto-detect)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - backend
+          - shared
+          - frontend
+          - controller-core
+          - simulator
+          - firmware-controller
+          - firmware-sensor
+
+permissions:
+  issues: write          # Jules tạo issues
+  pull-requests: write   # Jules comment trên PR
+  contents: read
+
+jobs:
+  # ── Job 1: Detect subsystems bị chạm ────────────────────────────────────
+  detect-subsystems:
+    name: "Detect changed subsystems"
+    runs-on: ubuntu-latest
+    outputs:
+      backend:         ${{ steps.detect.outputs.backend }}
+      shared:          ${{ steps.detect.outputs.shared }}
+      frontend:        ${{ steps.detect.outputs.frontend }}
+      controller-core: ${{ steps.detect.outputs.controller_core }}
+      simulator:       ${{ steps.detect.outputs.simulator }}
+      subsystems_list: ${{ steps.detect.outputs.subsystems_list }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed subsystems
+        id: detect
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || 'HEAD~1' }}"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          backend=false; shared=false; frontend=false
+          controller_core=false; simulator=false
+          list=""
+
+          echo "$CHANGED" | grep -q "^hydragrow-backend/"    && backend=true        && list="$list backend"
+          echo "$CHANGED" | grep -q "^hydragrow-shared/"     && shared=true         && list="$list shared"
+          echo "$CHANGED" | grep -q "^hydragrow-frontend/"   && frontend=true       && list="$list frontend"
+          echo "$CHANGED" | grep -q "^hydragrow-controller-core/" && controller_core=true && list="$list controller-core"
+          echo "$CHANGED" | grep -q "^hydragrow-simulator/"  && simulator=true      && list="$list simulator"
+
+          echo "backend=$backend"              >> "$GITHUB_OUTPUT"
+          echo "shared=$shared"               >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend"           >> "$GITHUB_OUTPUT"
+          echo "controller_core=$controller_core" >> "$GITHUB_OUTPUT"
+          echo "simulator=$simulator"         >> "$GITHUB_OUTPUT"
+          echo "subsystems_list=$list"        >> "$GITHUB_OUTPUT"
+
+  # ── Job 2: Tạo Jules review issue ────────────────────────────────────────
+  dispatch-jules-review:
+    name: "Dispatch Jules review"
+    runs-on: ubuntu-latest
+    needs: detect-subsystems
+    # Chỉ dispatch khi PR không phải draft
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.draft == false &&
+       contains(github.event.pull_request.labels.*.name, 'needs-review'))
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff (truncated)
+        id: diff
+        run: |
+          PR_NUM="${{ github.event.inputs.pr_number || github.event.pull_request.number }}"
+          gh pr diff "$PR_NUM" --repo "${{ github.repository }}" 2>/dev/null \
+            | head -300 > /tmp/pr_diff.txt || true
+          echo "diff_lines=$(wc -l < /tmp/pr_diff.txt)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build review issue body
+        id: body
+        run: |
+          PR_NUM="${{ github.event.inputs.pr_number || github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title || format('PR #{0}', env.PR_NUM) }}"
+          SUBSYSTEMS="${{ needs.detect-subsystems.outputs.subsystems_list }}"
+          BRANCH="${{ github.head_ref || 'main' }}"
+          DIFF=$(cat /tmp/pr_diff.txt)
+
+          cat > /tmp/issue_body.md << BODY
+          ## 🤖 Jules Code Review — Auto-dispatched by CI
+
+          **PR:** #${PR_NUM} — ${PR_TITLE}
+          **Branch:** \`${BRANCH}\`
+          **Subsystems touched:** \`${SUBSYSTEMS:-unknown}\`
+
+          ### Review scope
+
+          Jules review theo toàn bộ checklist trong \`.agent/tasks/review-pr.md\`:
+          - [ ] Module-rules compliance cho: \`${SUBSYSTEMS}\`
+          - [ ] \`cargo clippy -- -D warnings\` (0 warnings required)
+          - [ ] \`cargo test --workspace\` (all pass)
+          - [ ] \`npx tsc --noEmit && npx eslint .\` (nếu frontend bị chạm)
+          - [ ] Security checklist
+          - [ ] Test quality
+
+          ### Diff context (${DIFF_LINES} lines)
+
+          <details>
+          <summary>Show diff</summary>
+
+          \`\`\`diff
+          ${DIFF}
+          \`\`\`
+          </details>
+
+          ### Output yêu cầu
+
+          Jules post comment với:
+          1. Review summary (Critical / Warning / Suggestion)
+          2. Verification table (exit codes)
+          3. Verdict: LGTM hoặc Needs changes
+
+          Với mỗi Critical/Warning: tạo sub-issue dùng template \`jules-finding\`.
+
+          ---
+          *Auto-dispatched bởi \`.github/workflows/jules-review.yml\` | $(date -u +"%Y-%m-%dT%H:%M:%SZ")*
+          BODY
+
+          echo "body_file=/tmp/issue_body.md" >> "$GITHUB_OUTPUT"
+        env:
+          DIFF_LINES: ${{ steps.diff.outputs.diff_lines }}
+
+      - name: Create Jules review issue
+        id: create_issue
+        run: |
+          PR_NUM="${{ github.event.inputs.pr_number || github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title || format('PR #{0}', env.PR_NUM) }}"
+
+          ISSUE_URL=$(gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "[Jules Review] PR #${PR_NUM} — ${PR_TITLE}" \
+            --body-file /tmp/issue_body.md \
+            --label "jules,review" \
+            2>&1)
+
+          echo "issue_url=$ISSUE_URL" >> "$GITHUB_OUTPUT"
+          echo "Created Jules review issue: $ISSUE_URL"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on PR with issue link
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          ISSUE_URL="${{ steps.create_issue.outputs.issue_url }}"
+
+          gh pr comment "$PR_NUM" \
+            --repo "${{ github.repository }}" \
+            --body "🤖 **Jules review dispatched!** → ${ISSUE_URL}
+
+          Jules đang review PR này. Kết quả sẽ được comment vào issue trên.
+          Sau khi Jules hoàn thành, issues cho từng finding sẽ được tạo tự động."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Job 3: Tạo issues cho từng subsystem bị chạm ─────────────────────────
+  create-subsystem-checks:
+    name: "Create subsystem-specific checks"
+    runs-on: ubuntu-latest
+    needs: [detect-subsystems, dispatch-jules-review]
+    # Chỉ tạo nếu shared bị chạm (cross-subsystem impact cao nhất)
+    if: needs.detect-subsystems.outputs.shared == 'true'
+
+    steps:
+      - name: Create shared-contract verification issue
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "[Jules] Verify shared contract sync — PR #${{ github.event.pull_request.number }}" \
+            --body "## 🔗 Shared Contract Verification
+
+          PR #${{ github.event.pull_request.number }} chạm \`hydragrow-shared/\`.
+
+          Jules kiểm tra:
+          - [ ] Mọi consumer import topic/struct từ \`hydragrow_shared\` — không redefine local
+          - [ ] Backend handler: \`use hydragrow_shared::topics::*\`
+          - [ ] Schema version tăng nếu payload thay đổi breaking
+          - [ ] \`cargo test --manifest-path hydragrow-shared/Cargo.toml\` — schema roundtrip pass
+
+          ---
+          *Auto-dispatched khi \`hydragrow-shared/\` bị chạm*" \
+            --label "jules,review,shared-contract"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

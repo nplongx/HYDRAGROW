@@ -1,0 +1,107 @@
+# .agent/jules.yml — HYDRAGROW Jules Agent Manifest
+# Đọc bởi Jules và scripts/command-resolver.mjs
+# ─────────────────────────────────────────────────────────────────────────────
+version: 2
+
+# ── Verification commands (Jules chạy sau MỌI thay đổi code) ─────────────────
+# Subsystem-specific commands — Jules dùng lệnh của đúng subsystem bị chạm
+commands:
+  backend:
+    build_cmd: "cargo build --manifest-path hydragrow-backend/Cargo.toml"
+    test_cmd:  "cargo test  --manifest-path hydragrow-backend/Cargo.toml"
+    lint_cmd:  "cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings"
+    fmt_cmd:   "cargo fmt   --manifest-path hydragrow-backend/Cargo.toml -- --check"
+
+  shared:
+    build_cmd: "cargo build --manifest-path hydragrow-shared/Cargo.toml"
+    test_cmd:  "cargo test  --manifest-path hydragrow-shared/Cargo.toml"
+    lint_cmd:  "cargo clippy --manifest-path hydragrow-shared/Cargo.toml --all-targets -- -D warnings"
+    fmt_cmd:   "cargo fmt   --manifest-path hydragrow-shared/Cargo.toml -- --check"
+
+  controller-core:
+    build_cmd: "cargo build --manifest-path hydragrow-controller-core/Cargo.toml"
+    test_cmd:  "cargo test  --manifest-path hydragrow-controller-core/Cargo.toml"
+    lint_cmd:  "cargo clippy --manifest-path hydragrow-controller-core/Cargo.toml --all-targets -- -D warnings"
+    fmt_cmd:   "cargo fmt   --manifest-path hydragrow-controller-core/Cargo.toml -- --check"
+
+  simulator:
+    build_cmd: "cargo build --manifest-path hydragrow-simulator/Cargo.toml"
+    test_cmd:  "cargo test  --manifest-path hydragrow-simulator/Cargo.toml"
+    lint_cmd:  "cargo clippy --manifest-path hydragrow-simulator/Cargo.toml --all-targets -- -D warnings"
+    fmt_cmd:   "cargo fmt   --manifest-path hydragrow-simulator/Cargo.toml -- --check"
+
+  frontend:
+    build_cmd: "cd hydragrow-frontend && npm run build"
+    test_cmd:  "cd hydragrow-frontend && npx vitest run"
+    lint_cmd:  "cd hydragrow-frontend && npx eslint . && npx tsc --noEmit"
+    fmt_cmd:   "cd hydragrow-frontend && npx prettier --check ."
+
+  # Fallback — full workspace
+  default:
+    build_cmd: "bash scripts/build.sh"
+    test_cmd:  "bash scripts/test.sh"
+    lint_cmd:  "bash scripts/verify.sh"
+    fmt_cmd:   "cargo fmt --all -- --check"
+
+# ── Issue label → workflow mapping ────────────────────────────────────────────
+# Jules đọc label của issue để chọn protocol phù hợp
+workflows:
+  review:
+    protocol: "3-phase-review"       # Discovery → Findings → Sub-issues
+    output:   "comment-on-issue"
+    create_sub_issues: true
+    labels_to_add: ["reviewed-by-jules"]
+
+  audit:
+    protocol: "full-audit"
+    output:   "comment-on-issue"
+    create_sub_issues: true
+    severity_threshold: "warning"    # tạo issue từ warning trở lên
+
+  bug:
+    protocol: "3-phase-fix"          # Discovery → Test → Fix
+    branch_prefix: "fix/"
+    pr_draft: false
+    abort_after_failures: 4
+
+  hotfix:
+    protocol: "3-phase-fix"
+    branch_prefix: "hotfix/"
+    pr_draft: false
+    abort_after_failures: 4
+    priority: "high"
+
+  enhancement:
+    protocol: "3-phase-feature"      # Discovery → Test → Implement
+    branch_prefix: "feat/"
+    pr_draft: true                   # Draft PR cho feature, cần human review
+
+  tech-debt:
+    protocol: "refactor"
+    branch_prefix: "chore/"
+    pr_draft: false
+
+# ── Restricted files — Jules không được chỉnh sửa ────────────────────────────
+restricted_files:
+  - ".github/**"
+  - "server_wallet.json"
+  - "**/*.key"
+  - "**/*.pem"
+  - "hydragrow-backend/migrations/**"   # cần migration plan riêng
+  - "Cargo.lock"                         # update tự động bởi cargo
+
+# ── Abort conditions ──────────────────────────────────────────────────────────
+abort:
+  max_test_failures: 4
+  status_tag: "ABORT_UNRESOLVABLE"
+  on_abort: "comment-and-close"       # Jules comment lý do rồi close issue
+
+# ── PR conventions ────────────────────────────────────────────────────────────
+pr:
+  title_format: "{type}({subsystem}): {description}"   # fix(backend): ...
+  required_checks:
+    - "backend-ci"
+    - "shared-schema-check"
+  base_branch: "main"
+  rebase_before_push: true
+  verification_in_description: true   # Jules paste output verify vào PR body

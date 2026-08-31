@@ -1,0 +1,104 @@
+name: "🤖 Jules Task"
+description: "Dispatch một task tới Jules (review, fix, feature, audit). Dùng `./scripts/jules` để tạo tự động."
+title: "[Jules] "
+labels:
+  - jules
+assignees: []
+
+body:
+  - type: dropdown
+    id: task_type
+    attributes:
+      label: "Loại task"
+      description: "Jules sẽ chọn protocol dựa trên loại này"
+      options:
+        - "review — Code review + tạo findings"
+        - "bug — Fix bug (3-phase: discover → test → fix)"
+        - "feature — Implement tính năng mới"
+        - "audit — Full subsystem audit"
+        - "hotfix — Urgent fix (3-phase, high priority)"
+        - "tech-debt — Refactor/cleanup"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: "Subsystem"
+      description: "Subsystem chính bị chạm"
+      options:
+        - "backend"
+        - "shared"
+        - "frontend"
+        - "controller-core"
+        - "simulator"
+        - "firmware-controller"
+        - "firmware-sensor"
+        - "cross-subsystem"
+    validations:
+      required: true
+
+  - type: input
+    id: pr_number
+    attributes:
+      label: "PR number (nếu là review task)"
+      description: "Để trống nếu không phải review PR cụ thể"
+      placeholder: "42"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Mô tả task"
+      description: |
+        Bug: steps to reproduce + expected vs actual
+        Feature: acceptance criteria (binary scoreable)
+        Review: scope + checklist bổ sung
+        Audit: phạm vi + severity threshold
+      placeholder: |
+        **Steps to reproduce:**
+        1. ...
+
+        **Expected:** ...
+        **Actual:** ...
+
+        **Acceptance criteria:**
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: "Gợi ý vị trí / context"
+      description: "File, function, symbol liên quan (giúp Jules tìm nhanh hơn)"
+      placeholder: |
+        - File: `hydragrow-backend/src/mqtt/handler.rs:120`
+        - Symbol: `process_sensor_data`
+        - Related: issue #38
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: "Constraints Jules cần biết"
+      options:
+        - label: "Không được thay đổi public API (backward compat)"
+        - label: "Phải update `hydragrow-shared` nếu thay đổi MQTT contract"
+        - label: "Cần migration plan nếu thay đổi DB schema"
+        - label: "PR draft — cần human review trước merge"
+
+  - type: checkboxes
+    id: jules_protocol
+    attributes:
+      label: "Jules xác nhận sẽ tuân thủ"
+      description: "Jules tự check khi nhận task"
+      options:
+        - label: "Đọc module-rule của subsystem trước khi viết code"
+          required: true
+        - label: "Read-Before-Write: inspect ký tên function trước khi edit"
+          required: true
+        - label: "Chạy verification suite và paste output vào PR"
+          required: true
+        - label: "Không weakening tests để force pass"
+          required: true
+        - label: "Abort sau 4 lần fail liên tiếp"
+          required: true

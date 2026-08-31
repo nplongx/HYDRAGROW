@@ -1,0 +1,101 @@
+name: "🔍 Jules Finding"
+description: "Issue do Jules tạo sau review/audit. Jules tự tạo — người dùng thường không cần điền tay."
+title: "[Finding] "
+labels:
+  - jules
+  - finding
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Lưu ý:** Issue này thường được Jules tạo tự động sau khi review/audit.  
+        > Dùng `./scripts/jules review` hoặc `./scripts/jules audit` để trigger Jules.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      options:
+        - "🔴 Critical — block merge"
+        - "🟡 Warning — should fix before merge"
+        - "🟢 Info — optional improvement"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: "Subsystem"
+      options:
+        - "backend"
+        - "shared"
+        - "frontend"
+        - "controller-core"
+        - "simulator"
+        - "firmware-controller"
+        - "firmware-sensor"
+    validations:
+      required: true
+
+  - type: input
+    id: file_location
+    attributes:
+      label: "File:Line"
+      placeholder: "hydragrow-backend/src/mqtt/handler.rs:120"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rule_violated
+    attributes:
+      label: "Rule vi phạm"
+      description: "Rule trong module-rules bị vi phạm"
+      options:
+        - "no-sql-in-handler — SQL query không được viết trong handler"
+        - "no-unwrap-prod — Không .unwrap()/.expect() trong production path"
+        - "shared-source-of-truth — MQTT topic/struct phải từ hydragrow-shared"
+        - "no-hardcode-secret — Không hardcode credential/key"
+        - "test-quality — Test phải có explicit assertion"
+        - "no-cross-layer — Không call trực tiếp qua layer boundary"
+        - "migration-safety — Migration thiếu down hoặc không idempotent"
+        - "backward-compat — Thay đổi breaking public API"
+        - "other"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Mô tả finding"
+      description: "Vấn đề cụ thể là gì, tại sao nó là vấn đề"
+      placeholder: |
+        `process_sensor_data()` tại line 120 viết SQL trực tiếp bằng `sqlx::query!()` 
+        thay vì đi qua `db::sensors::insert()`. Vi phạm layering rule: handler không 
+        được biết cấu trúc DB.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix_suggestion
+    attributes:
+      label: "Đề xuất fix"
+      description: "Jules đề xuất cách fix cụ thể (không bắt buộc implement ngay)"
+      placeholder: |
+        1. Tạo `hydragrow-backend/src/db/sensors.rs::insert_reading(pool, data)`
+        2. Trong handler: gọi `db::sensors::insert_reading(&pool, &payload).await?`
+        3. Test: `cargo test sensor_insert` — kiểm tra DB roundtrip
+
+  - type: input
+    id: source_issue
+    attributes:
+      label: "Source (review/audit issue)"
+      description: "Issue review/audit đã tạo ra finding này"
+      placeholder: "#42"
+
+  - type: checkboxes
+    id: fix_options
+    attributes:
+      label: "Options"
+      options:
+        - label: "Jules auto-fix ngay (thêm label `jules` để Jules nhận task)"
+        - label: "Fix thủ công bởi team member"
+        - label: "Defer — tạo tech-debt issue thay vì fix ngay"

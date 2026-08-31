@@ -2,7 +2,7 @@ use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::dispatcher::SimDispatcher;
 use crate::faults::injector::Injector;
 use crate::plant::tank::Tank;
-use crate::sensors::sensor_model::{read_sensor, NoiseConfig};
+use crate::sensors::sensor_model::{NoiseConfig, read_sensor};
 use hydragrow_controller_core::{
     core::fsm::tick_result::TickResult,
     core::fsm::{context::SystemContext, orchestrator},

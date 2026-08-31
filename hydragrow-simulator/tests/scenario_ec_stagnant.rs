@@ -1,8 +1,8 @@
+use hydragrow_shared::ControllerConfig;
 use hydragrow_simulator::harness::Harness;
 use hydragrow_simulator::plant::tank::Tank;
 use hydragrow_simulator::scenario::format::Scenario;
 use hydragrow_simulator::sensors::sensor_model::NoiseConfig;
-use hydragrow_shared::ControllerConfig;
 use std::fs;
 
 #[test]

@@ -147,10 +147,14 @@ impl ScriptEngine {
         input: &ScriptActionInput,
         range_stat_fetcher: impl Fn(String, String, i64) -> f64 + Send + Sync + 'static,
     ) -> Result<Option<ActionCommandOutput>> {
+        // We must preserve configuration limits while mutating it to register the function.
         let mut engine = Engine::new();
-        // Since rhai Engine is not clonable, and evaluating with custom environment means we can just
-        // set up a new one for this specific context or rebuild standard configs if needed.
-        // We will just create a new engine for the fetcher logic as we just need basic math and maps.
+        engine.set_max_operations(50_000);
+        engine.set_max_string_size(1024);
+        engine.set_max_map_size(64);
+        engine.on_print(|_| {});
+        engine.on_debug(|_, _, _| {});
+
         engine.register_fn("fetch_range_stat", range_stat_fetcher);
 
         let mut map = Map::new();

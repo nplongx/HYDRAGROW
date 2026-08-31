@@ -243,6 +243,55 @@ pub async fn insert_blockchain_tx(
 }
 
 #[allow(clippy::too_many_arguments)]
+
+pub async fn insert_dosing_action(
+    pool: &PgPool,
+    device_id: &str,
+    pump: &str,
+    dose_ml: f32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO dosing_action_log (device_id, pump, dose_ml) VALUES ($1, $2, $3)")
+        .bind(device_id)
+        .bind(pump)
+        .bind(dose_ml)
+        .execute(pool)
+        .await
+        .map(|_| ())
+}
+
+pub async fn get_dosing_history_last_hour(
+    pool: &PgPool,
+    device_id: &str,
+) -> Result<Vec<(u64, f32)>, sqlx::Error> {
+    let rows: Vec<(f64, f32)> = sqlx::query_as(
+        r#"
+        SELECT EXTRACT(EPOCH FROM dosed_at)::FLOAT8 AS ts, dose_ml
+        FROM dosing_action_log
+        WHERE device_id = $1 AND dosed_at >= NOW() - INTERVAL '1 hour'
+        ORDER BY dosed_at DESC
+        "#,
+    )
+    .bind(device_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(ts, ml)| (ts as u64, ml)).collect())
+}
+
+pub async fn get_last_dose_at(
+    pool: &PgPool,
+    device_id: &str,
+) -> Result<Option<u64>, sqlx::Error> {
+    let ts: Option<f64> = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM MAX(dosed_at))::FLOAT8 FROM dosing_action_log WHERE device_id = $1",
+    )
+    .bind(device_id)
+    .fetch_optional(pool)
+    .await?
+    .flatten();
+    Ok(ts.map(|v| v as u64))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_dosing_report(
     pool: &PgPool,
     device_id: &str,

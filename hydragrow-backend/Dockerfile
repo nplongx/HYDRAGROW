@@ -1,5 +1,6 @@
-# Rust 1.85+ is required because the project uses Rust edition 2024.
-FROM rust:1.85-bookworm AS builder
+# Edition 2024 requires Rust 1.85+, while the newest resolved dependencies
+# in this project currently require Rust 1.88+.
+FROM rust:1.88-bookworm AS builder
 
 WORKDIR /app
 

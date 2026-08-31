@@ -23,7 +23,7 @@ SensorManager::SensorManager()
       tdsSensor_(ADS_TDS_ADDR),
       tempFilter_(5.0f, 0.125f),
       waterFilter_(20.0f, 0.125f),
-      phFilter_(0.3f, 0.1f),
+      phFilter_(1.5f, 0.125f),
       tdsFilter_(0.5f, 0.125f) {}
 
 void SensorManager::begin() {
@@ -94,7 +94,7 @@ void SensorManager::updatePh() {
     float raw = phSensor_.read(data_.temperature);
     data_.rawPh = raw;
     data_.phVoltageMv = phSensor_.getLastVoltageMv();
-    if (isnan(raw)) {
+    if (std::isnan(raw)) {
         data_.errPh = true;
     } else {
         data_.errPh = false;

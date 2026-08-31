@@ -94,7 +94,7 @@ void SensorManager::updatePh() {
     float raw = phSensor_.read(data_.temperature);
     data_.rawPh = raw;
     data_.phVoltageMv = phSensor_.getLastVoltageMv();
-    if (isnan(raw)) {
+    if (std::isnan(raw)) {
         data_.errPh = true;
     } else {
         data_.errPh = false;

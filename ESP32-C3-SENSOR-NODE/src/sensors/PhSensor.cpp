@@ -86,7 +86,7 @@ float PhSensor::read(float currentTemperature) {
     float vccMv = readVccMv();
     lastVccMv_ = vccMv;
 
-    if (isnan(diffMv) || isnan(vccMv) || vccMv <= 1000.0f || diffMv <= 500.0f) { // Kiểm tra sụt áp quá mức, lỗi phần cứng hoặc chưa ready (< 500mV ngoài dải pH 0-14)
+    if (std::isnan(diffMv) || std::isnan(vccMv) || vccMv <= 1000.0f || diffMv <= 500.0f) { // Kiểm tra sụt áp quá mức, lỗi phần cứng hoặc chưa ready (< 500mV ngoài dải pH 0-14)
         lastVoltageMv_ = NAN;
         lastRawPh_ = NAN;
         return NAN;

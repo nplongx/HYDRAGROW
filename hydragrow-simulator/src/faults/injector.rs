@@ -21,15 +21,11 @@ impl Injector {
     pub fn apply_hardware_faults(&self, hw: &mut VirtualHardwareState) {
         for fault in &self.active_faults {
             match fault {
-                FaultEventKind::PumpStuckOn { pump } => {
-                    if pump == "PUMP_A" {
-                        hw.pump_a.on = true;
-                    }
+                FaultEventKind::PumpStuckOn { pump } if pump == "PUMP_A" => {
+                    hw.pump_a.on = true;
                 }
-                FaultEventKind::PumpStuckOff { pump } => {
-                    if pump == "PUMP_A" {
-                        hw.pump_a.on = false;
-                    }
+                FaultEventKind::PumpStuckOff { pump } if pump == "PUMP_A" => {
+                    hw.pump_a.on = false;
                 }
                 _ => {} // Sensor faults handled separately
             }

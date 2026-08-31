@@ -99,9 +99,7 @@ fn load_api_key_with_cmd(cmd: &str) -> Result<String, String> {
     let output = Command::new(cmd)
         .args(["lookup", "service", SERVICE, "account", API_KEY_ACCOUNT])
         .output()
-        .map_err(|e| {
-            format!("Không tìm thấy {cmd}/libsecret để đọc OS credential vault: {e}")
-        })?;
+        .map_err(|e| format!("Không tìm thấy {cmd}/libsecret để đọc OS credential vault: {e}"))?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {

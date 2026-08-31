@@ -73,16 +73,12 @@ mod tests {
             temp: 25.0,
             water_level: 50.0,
         };
-        let config = ControllerConfig {
-            ec_gain_per_ml: 0.5,
-            pump_a_capacity_ml_per_sec: 2.0,
-            ..Default::default()
-        };
+        let mut config = ControllerConfig::default();
+        config.ec_gain_per_ml = 0.5;
+        config.pump_a_capacity_ml_per_sec = 2.0;
 
-        let hw = VirtualHardwareState {
-            pump_a: VirtualPump { on: true, pwm: 100 },
-            ..Default::default()
-        };
+        let mut hw = VirtualHardwareState::default();
+        hw.pump_a = VirtualPump { on: true, pwm: 100 };
 
         tank.step(1000, &hw, &config);
 

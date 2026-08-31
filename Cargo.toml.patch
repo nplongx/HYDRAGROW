@@ -1,0 +1,16 @@
+<<<<<<< SEARCH
+members = [
+    "hydragrow-backend",
+    "hydragrow-shared",
+    "hydragrow-simulator",
+    "hydragrow-controller-core",
+]
+=======
+members = [
+    "hydragrow-backend",
+    "hydragrow-shared",
+    "hydragrow-simulator",
+    "hydragrow-controller-core",
+    "hydragrow-frontend/src-tauri",
+]
+>>>>>>> REPLACE

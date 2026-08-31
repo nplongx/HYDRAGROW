@@ -271,6 +271,13 @@ fn transition_to_active_mixing(
     ctx: &SystemContext,
     result: &mut TickResult,
 ) {
+    result.events.push(OrchestratorEvent::SetMixValve { on: true });
+
+    let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
+    peri_delta.mix_valve = Some(true);
+    peri_delta.mix_valve_started_by_dosing = Some(true);
+    result.delta.peripherals = Some(peri_delta);
+
     result.delta.calibration = Some(CalibrationDelta::Start(sample));
     result.delta.phase = Some(SystemPhase::ActiveMixing);
     result.delta.phase_start_ms = Some(Some(uptime)); // SỬA: Dùng uptime

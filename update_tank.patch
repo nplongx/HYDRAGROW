@@ -1,0 +1,23 @@
+--- hydragrow-simulator/src/plant/tank.rs
++++ hydragrow-simulator/src/plant/tank.rs
+@@ -73,12 +73,16 @@
+     #[test]
+     fn test_tank_step_dosing_ec() {
+         let mut tank = Tank::new(50.0);
+-        let mut config = ControllerConfig::default();
+-        config.ec_gain_per_ml = 0.5;
+-        config.pump_a_capacity_ml_per_sec = 2.0;
++        let config = ControllerConfig {
++            ec_gain_per_ml: 0.5,
++            pump_a_capacity_ml_per_sec: 2.0,
++            ..Default::default()
++        };
+
+-        let mut hw = VirtualHardwareState::default();
+-        hw.pump_a = VirtualPump { on: true, pwm: 100 };
++        let hw = VirtualHardwareState {
++            pump_a: VirtualPump { on: true, pwm: 100 },
++            ..Default::default()
++        };
+
+         tank.step(&hw, &config, 1.0); // 1s at 2ml/s = 2ml * 0.5 = +1.0 EC

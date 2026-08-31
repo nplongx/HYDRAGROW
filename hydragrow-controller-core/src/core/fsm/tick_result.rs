@@ -84,6 +84,7 @@ pub struct PeripheralDelta {
     /// trường này biểu thị cho việc van phun sương đang bị chiếm dụng bời MimoDosingPhase (bao gồm cả việc điều khiển phun sương để giảm nhiệt độ) \
     /// TÓM LẠI: ĐANG DÙNG CHO CHẾ ĐỘ ĐẶT BIỆT, CẤM ĐỤNG!!!
     pub misting_started_by_dosing: Option<bool>,
+    pub mix_valve_started_by_dosing: Option<bool>,
     pub last_mist_toggle_time: Option<u64>,
     pub last_mixing_start_sec: Option<u64>,
     pub last_ec_before_dose: Option<Option<f32>>,

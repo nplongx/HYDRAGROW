@@ -85,7 +85,11 @@ pub async fn forget_api_key(app: AppHandle) -> Result<(), String> {
 /// because commands are sent directly from the React control client rather
 /// than through a Tauri-side HTTP proxy.
 #[tauri::command]
-pub fn check_valve_safety<R: tauri::Runtime>(app: tauri::AppHandle<R>, target_pump: String, is_on: bool) -> Result<(), String> {
+pub fn check_valve_safety<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    target_pump: String,
+    is_on: bool,
+) -> Result<(), String> {
     use tauri::Manager;
 
     app.state::<crate::valve_guard::ValveGuardState>()
@@ -95,8 +99,8 @@ pub fn check_valve_safety<R: tauri::Runtime>(app: tauri::AppHandle<R>, target_pu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::valve_guard::ValveGuardState;
     use crate::models::PumpStatus;
+    use crate::valve_guard::ValveGuardState;
     use tauri::Manager;
 
     fn setup_app() -> tauri::AppHandle<tauri::test::MockRuntime> {

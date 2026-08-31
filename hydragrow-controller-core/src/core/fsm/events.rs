@@ -59,6 +59,10 @@ pub enum OrchestratorEvent {
     PublishRecipeStageChanged {
         payload_json: String,
     },
+    PublishCommandRejected {
+        reason: String,
+        requested: bool,
+    },
 
     // --- CONTROL FLOW: Sensor node ---
     RequestSensorForcePublish,

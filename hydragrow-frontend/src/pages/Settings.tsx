@@ -730,6 +730,12 @@ const Settings = () => {
                     <InputGroup label="Lượng xả pha loãng (cm)" step="0.5" value={config.dilute_drain_amount_cm} onChange={(e: InputEvent) => setConfig({ ...config, dilute_drain_amount_cm: e.target.value })} />
                   )}
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-emerald-100">
+                  <InputGroup label="T.Gian Bơm Max (s)" value={config.max_refill_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_duration_sec: e.target.value })} />
+                  <InputGroup label="T.Gian Xả Max (s)" value={config.max_drain_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_duration_sec: e.target.value })} />
+                  <InputGroup label="Nước Timeout (s)" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} />
+                </div>
               </div>
             </SubCard>
             <SubCard title="Thay nước định kỳ" className="h-full">
@@ -742,12 +748,47 @@ const Settings = () => {
               )}
             </SubCard>
           </div>
+          <SubCard title="Cảm biến hoạt động" className="mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
+                <span className="text-sm text-emerald-900 font-medium">Cảm biến EC</span>
+                <Switch isOn={config.enable_ec_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} />
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
+                <span className="text-sm text-emerald-900 font-medium">Cảm biến pH</span>
+                <Switch isOn={config.enable_ph_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} />
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
+                <span className="text-sm text-emerald-900 font-medium">Cảm biến Mực nước</span>
+                <Switch isOn={config.enable_water_level_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} />
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
+                <span className="text-sm text-emerald-900 font-medium">Cảm biến Nhiệt độ</span>
+                <Switch isOn={config.enable_temp_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} />
+              </div>
+            </div>
+          </SubCard>
+
         </AccordionSection>
 
         {/* DOSING */}
         <AccordionSection id="dosing" title="Máy châm phân" icon={FlaskConical} isOpen={openSection === 'dosing'} onToggle={() => handleToggleSection('dosing')}>
           {isAdvancedMode && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+              <SubCard title="Thông số tính toán châm phân (Nâng cao)">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <InputGroup label="Max Dose / Chu kỳ (ml)" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
+                  <InputGroup label="EC tăng / ml" step="0.01" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
+                  <InputGroup label="pH tăng / ml" step="0.01" value={config.ph_shift_up_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_up_per_ml: e.target.value })} />
+                  <InputGroup label="pH giảm / ml" step="0.01" value={config.ph_shift_down_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_down_per_ml: e.target.value })} />
+                  <InputGroup label="Tỷ lệ bước EC" step="0.1" value={config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_step_ratio: e.target.value })} />
+                  <InputGroup label="Tỷ lệ bước pH" step="0.1" value={config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_step_ratio: e.target.value })} />
+                  <InputGroup label="EC Timeout (s)" value={config.ec_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ec_ack_threshold: e.target.value })} />
+                  <InputGroup label="pH Timeout (s)" value={config.ph_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, ph_ack_threshold: e.target.value })} />
+                </div>
+              </SubCard>
+
               <SubCard title="Công suất PWM">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InputGroup label="Bơm châm (%)" value={config.dosing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, dosing_pwm_percent: e.target.value })} errorText={dosingValidationErrors.dosing_pwm_percent} />
@@ -789,6 +830,9 @@ const Settings = () => {
                 <InputGroup label="EC cao" value={config.max_ec_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_limit: e.target.value })} />
                 <InputGroup label="pH thấp" value={config.min_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, min_ph_limit: e.target.value })} />
                 <InputGroup label="pH cao" value={config.max_ph_limit} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_limit: e.target.value })} />
+
+                <InputGroup label="EC thay đổi tối đa / chu kỳ" step="0.1" value={config.max_ec_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ec_delta: e.target.value })} />
+                <InputGroup label="pH thay đổi tối đa / chu kỳ" step="0.1" value={config.max_ph_delta} onChange={(e: InputEvent) => setConfig({ ...config, max_ph_delta: e.target.value })} />
                 <div className="sm:col-span-2 lg:col-span-3"><InputGroup label="Nước tối thiểu ngắt khẩn (cm)" value={config.water_level_critical_min} onChange={(e: InputEvent) => setConfig({ ...config, water_level_critical_min: e.target.value })} /></div>
               </div>
             </SubCard>

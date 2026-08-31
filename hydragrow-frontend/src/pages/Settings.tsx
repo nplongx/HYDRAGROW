@@ -842,13 +842,12 @@ const Settings = () => {
           {isAdvancedMode && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 my-4">
               <SubCard title="Thông số tính toán & Tỷ lệ bước (Per-pump)">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <InputGroup label="Max Dose / Chu kỳ (ml)" value={config.max_dose_per_cycle} onChange={(e: InputEvent) => setConfig({ ...config, max_dose_per_cycle: e.target.value })} />
                   <InputGroup label="Độ trễ bơm A & B (s)" value={config.delay_between_a_and_b_sec} onChange={(e: InputEvent) => setConfig({ ...config, delay_between_a_and_b_sec: e.target.value })} />
                   <InputGroup label="EC tăng / ml" step="0.01" value={config.ec_gain_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ec_gain_per_ml: e.target.value })} />
                   <InputGroup label="pH tăng / ml" step="0.01" value={config.ph_shift_up_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_up_per_ml: e.target.value })} />
                   <InputGroup label="pH giảm / ml" step="0.01" value={config.ph_shift_down_per_ml} onChange={(e: InputEvent) => setConfig({ ...config, ph_shift_down_per_ml: e.target.value })} />
-                  <div className="hidden sm:block"></div>
                   <InputGroup label="Tỷ lệ bước EC A" step="0.05" value={config.ec_a_step_ratio ?? config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_a_step_ratio: e.target.value })} />
                   <InputGroup label="Tỷ lệ bước EC B" step="0.05" value={config.ec_b_step_ratio ?? config.ec_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ec_b_step_ratio: e.target.value })} />
                   <InputGroup label="Tỷ lệ bước pH UP" step="0.05" value={config.ph_up_step_ratio ?? config.ph_step_ratio} onChange={(e: InputEvent) => setConfig({ ...config, ph_up_step_ratio: e.target.value })} />

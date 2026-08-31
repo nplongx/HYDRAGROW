@@ -85,6 +85,7 @@ pub enum FaultCode {
     PhOscillating,
     WaterLevelCritical,
     EmergencyStop,
+    OsakaRunningWithoutValve,
 }
 
 impl FaultCode {
@@ -103,6 +104,7 @@ impl FaultCode {
             Self::PhOscillating => "PH_OSCILLATING",
             Self::WaterLevelCritical => "WATER_LEVEL_CRITICAL",
             Self::EmergencyStop => "EMERGENCY_STOP",
+            Self::OsakaRunningWithoutValve => "OSAKA_RUNNING_WITHOUT_VALVE",
         }
     }
 }

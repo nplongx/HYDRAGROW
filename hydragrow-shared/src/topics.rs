@@ -148,6 +148,10 @@ pub fn topic_health_snapshot(device_id: &str) -> String {
     format!("AGITECH/{}/controller/status", device_id)
 }
 
+pub fn topic_status_suffix(device_id: &str, suffix: &str) -> String {
+    format!("AGITECH/{}/status/{}", device_id, suffix)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

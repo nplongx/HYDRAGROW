@@ -30,6 +30,21 @@ pub fn tick(
     // Điều này đảm bảo rằng mỗi khi user lưu cấu hình mới, AI sẽ phản hồi ngay lập tức
     ctx.tuner.sync_with_config(config);
 
+    // [NPL-9] Safety watchdog — chạy bất kể mode (Auto/Manual/Fault)
+    let osaka_running = ctx.peripherals.pump_status.osaka_pump;
+    let mist_valve_open = ctx.peripherals.pump_status.mist_valve;
+    let mix_valve_open = ctx.peripherals.pump_status.mix_valve;
+    if osaka_running && !mist_valve_open && !mix_valve_open {
+        result.events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+        let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
+        peri_delta.osaka_pump = Some(false);
+        peri_delta.osaka_pwm = Some(0);
+        result.delta.peripherals = Some(peri_delta);
+
+        result.delta.phase = Some(SystemPhase::Fault(FaultCode::OsakaRunningWithoutValve));
+        return result;
+    }
+
     // 1. Kiểm tra Sensor Timeout
     // SỬA: Dùng uptime_ms để kiểm tra timeout, an toàn tuyệt đối trước Time Jump
     if uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000 {
@@ -206,9 +221,13 @@ fn tick_peripheral_systems(
     }
 
     // 3. Tính toán Van Trộn (Mix)
-    let (mix_delta, mix_events) =
-        PeripheralController::tick_scheduled_mixing(&ctx.peripherals, uptime_ms / 1000, config);
-    result.events.extend(mix_events);
+    let mut mix_delta = PeripheralDelta::default();
+    if !ctx.peripherals.mix_valve_started_by_dosing {
+        let (delta, mix_events) =
+            PeripheralController::tick_scheduled_mixing(&ctx.peripherals, uptime_ms / 1000, config);
+        mix_delta = delta;
+        result.events.extend(mix_events);
+    }
 
     // ---> Gộp state của 2 van vào current_peri_delta
     current_peri_delta = merge_peripheral_deltas(current_peri_delta, mist_delta);
@@ -304,6 +323,7 @@ fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> Tic
         peri_delta.is_misting_active = Some(false);
         peri_delta.is_scheduled_mixing_active = Some(false);
         peri_delta.misting_started_by_dosing = Some(false);
+        peri_delta.mix_valve_started_by_dosing = Some(false);
         peri_delta.osaka_pump = Some(false);
         peri_delta.osaka_pwm = Some(0);
         peri_delta.pump_a = Some(false);
@@ -370,6 +390,9 @@ fn merge_peripheral_deltas(
     }
     if addition.misting_started_by_dosing.is_some() {
         base.misting_started_by_dosing = addition.misting_started_by_dosing;
+    }
+    if addition.mix_valve_started_by_dosing.is_some() {
+        base.mix_valve_started_by_dosing = addition.mix_valve_started_by_dosing;
     }
     base
 }

@@ -249,6 +249,7 @@ pub struct PeripheralState {
     pub previous_ec: Option<f32>,
     pub previous_ph: Option<f32>,
     pub misting_started_by_dosing: bool,
+    pub mix_valve_started_by_dosing: bool,
     pub water_pump_started_uptime_ms: Option<u64>,
 }
 
@@ -449,6 +450,9 @@ impl SystemContext {
             }
             if let Some(v) = pd.misting_started_by_dosing {
                 p.misting_started_by_dosing = v;
+            }
+            if let Some(v) = pd.mix_valve_started_by_dosing {
+                p.mix_valve_started_by_dosing = v;
             }
             if let Some(v) = pd.last_mist_toggle_time {
                 p.last_mist_toggle_time = v;

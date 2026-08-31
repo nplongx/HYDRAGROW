@@ -119,6 +119,16 @@ impl EventDispatcher {
             OrchestratorEvent::PublishRecipeStageChanged { payload_json } => {
                 let _ = dc.mqtt_tx.send(payload_json);
             }
+            OrchestratorEvent::PublishCommandRejected { reason, requested } => {
+                let wrapper = serde_json::json!({
+                    "_mqtt_topic_override": hydragrow_shared::topics::topic_status_suffix(dc.device_id, "osaka_rejected"),
+                    "_payload": {
+                        "reason": reason,
+                        "requested": requested
+                    }
+                });
+                let _ = dc.mqtt_tx.send(wrapper.to_string());
+            }
             OrchestratorEvent::RequestSensorForcePublish => {
                 let _ = dc.sensor_cmd_tx.send(
                     r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string(),

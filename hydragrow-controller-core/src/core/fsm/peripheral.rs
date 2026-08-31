@@ -18,7 +18,10 @@ impl PeripheralController {
         let mut delta = PeripheralDelta::default();
 
         // bơm chỉ chạy khi và chỉ khi 1 trong 2 van điện từ được mở
-        let needs_osaka = mist_valve_is_open.is_some() || mix_valve_is_open.is_some();
+        // [NPL-6] Fix: dùng trạng thái thực tế cuối cùng thay vì is_some()
+        let mist_is_open = mist_valve_is_open.unwrap_or(peripherals.pump_status.mist_valve);
+        let mix_is_open = mix_valve_is_open.unwrap_or(peripherals.pump_status.mix_valve);
+        let needs_osaka = mist_is_open || mix_is_open;
 
         if needs_osaka {
             let target_pwm = if peripherals.is_misting_active {

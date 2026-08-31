@@ -304,7 +304,12 @@ pub fn build_pump_events(
             let mix_valve_is_open = peri_delta
                 .mix_valve
                 .unwrap_or(ctx.peripherals.pump_status.mix_valve);
-            if is_on && (mist_valve_is_open || mix_valve_is_open) {
+            if is_on && !(mist_valve_is_open || mix_valve_is_open) {
+                events.push(OrchestratorEvent::PublishCommandRejected {
+                    reason: "no_valve_open".to_string(),
+                    requested: is_on,
+                });
+            } else if is_on {
                 peri_delta.osaka_pump = Some(is_on);
                 peri_delta.osaka_pwm = Some(if is_on { pwm_val } else { 0 });
                 events.push(OrchestratorEvent::StartOsakaSoft {
@@ -320,10 +325,40 @@ pub fn build_pump_events(
             peri_delta.mist_valve = Some(is_on);
             peri_delta.is_misting_active = Some(is_on);
             events.push(OrchestratorEvent::SetMistValve { on: is_on });
+
+            // [NPL-9] Tắt valve -> nếu Osaka đang chạy và không còn valve nào mở -> Tắt Osaka
+            if !is_on {
+                let mix_valve_is_open = peri_delta
+                    .mix_valve
+                    .unwrap_or(ctx.peripherals.pump_status.mix_valve);
+                let osaka_running = peri_delta
+                    .osaka_pump
+                    .unwrap_or(ctx.peripherals.pump_status.osaka_pump);
+                if osaka_running && !mix_valve_is_open {
+                    peri_delta.osaka_pump = Some(false);
+                    peri_delta.osaka_pwm = Some(0);
+                    events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+                }
+            }
         }
         "MIX_VALVE" | "MIX" => {
             peri_delta.mix_valve = Some(is_on);
             events.push(OrchestratorEvent::SetMixValve { on: is_on });
+
+            // [NPL-9] Tắt valve -> nếu Osaka đang chạy và không còn valve nào mở -> Tắt Osaka
+            if !is_on {
+                let mist_valve_is_open = peri_delta
+                    .mist_valve
+                    .unwrap_or(ctx.peripherals.pump_status.mist_valve);
+                let osaka_running = peri_delta
+                    .osaka_pump
+                    .unwrap_or(ctx.peripherals.pump_status.osaka_pump);
+                if osaka_running && !mist_valve_is_open {
+                    peri_delta.osaka_pump = Some(false);
+                    peri_delta.osaka_pwm = Some(0);
+                    events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+                }
+            }
         }
         "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => {
             peri_delta.water_pump_in = Some(is_on);

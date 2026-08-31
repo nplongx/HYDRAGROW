@@ -12,13 +12,12 @@ limits:
   diff_kb: 75
 
 verify:
-  test: "cargo test --manifest-path hydragrow-backend/Cargo.toml"
-  build: "cargo build --manifest-path hydragrow-backend/Cargo.toml"
-  lint: ""
-  typecheck: ""
+  test: "./scripts/test.sh"
+  build: "./scripts/build.sh"
+  lint: "cd hydragrow-frontend && npm run lint"
+  typecheck: "cd hydragrow-frontend && npx tsc --noEmit"
 
 presets:
   - nightly-security-audit
   - flaky-test-quarantine
-  - multi-agent-refactor-swarm
   - doc-sync-sentinel

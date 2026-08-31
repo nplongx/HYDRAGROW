@@ -1,7 +1,8 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::dispatcher::SimDispatcher;
+use crate::faults::injector::Injector;
 use crate::plant::tank::Tank;
-use crate::sensors::sensor_model::{NoiseConfig, read_sensor};
+use crate::sensors::sensor_model::{read_sensor, NoiseConfig};
 use hydragrow_controller_core::{
     core::fsm::tick_result::TickResult,
     core::fsm::{context::SystemContext, orchestrator},
@@ -16,6 +17,7 @@ pub struct Harness {
     pub dispatcher: SimDispatcher,
     pub tank: Tank,
     pub noise: NoiseConfig,
+    pub injector: Injector,
     uptime_ms: u64,
 }
 
@@ -28,6 +30,7 @@ impl Harness {
             dispatcher: SimDispatcher::new(),
             tank,
             noise,
+            injector: Injector::new(),
             uptime_ms: 0,
         }
     }
@@ -37,8 +40,10 @@ impl Harness {
     }
 
     pub fn tick(&mut self, dt_ms: u64) -> TickResult {
+        self.injector.apply_hardware_faults(&mut self.hw);
         self.tank.step(dt_ms, &self.hw, &self.config);
-        let sensor = read_sensor(&self.tank, &self.noise);
+        let mut sensor = read_sensor(&self.tank, &self.noise);
+        self.injector.apply_sensor_faults(&mut sensor);
 
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -52,7 +57,7 @@ impl Harness {
             self.uptime_ms,
             &self.config,
             &sensor,
-            now_ms, // use now_ms as last update time to avoid sensor timeout
+            now_ms,
             &mut self.ctx,
         );
 

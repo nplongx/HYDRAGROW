@@ -1,4 +1,15 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+content = ""
+with open('hydragrow-frontend/test/firebase.test.ts', 'r') as f:
+    content = f.read()
+
+# We need to set up the mocked import.meta.env values in vitest globals.
+# Alternatively we can just mock them before import or use vi.stubEnv.
+
+# Looking at the test file:
+#   expect(callArgs.apiKey).toMatch(/^AIza/);
+# It's checking that the apiKey is defined and starts with AIza. Since it's undefined, we need to stub the env vars for the test.
+
+new_content = """import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // First, mock the dependencies before they are imported
 vi.mock('firebase/app', () => {
@@ -43,3 +54,7 @@ describe('Firebase Configuration Security', () => {
   expect(callArgs.appId).toBeTruthy();
 });
 });
+"""
+
+with open('hydragrow-frontend/test/firebase.test.ts', 'w') as f:
+    f.write(new_content)

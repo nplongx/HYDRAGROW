@@ -1,9 +1,9 @@
 use hydragrow_shared::SensorData;
 use hydragrow_simulator::telemetry::mqtt_bridge::MqttBridge;
 use rumqttc::{Client, Event, MqttOptions, Packet, QoS};
-use std::time::Duration;
-use std::net::TcpListener;
 use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::time::Duration;
 
 fn spawn_mock_broker() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -29,6 +29,7 @@ fn spawn_mock_broker() -> u16 {
 
                 // 3. Read PUBLISH and forward
                 if let Ok(n) = pub_conn.read(&mut buf) {
+                    #[allow(clippy::collapsible_if)]
                     if n > 0 {
                         let _ = sub_conn.write_all(&buf[..n]);
                         let _ = sub_conn.flush();

@@ -32,7 +32,7 @@ const pumpColors: Record<string, string> = {
   ph_down: 'bg-rose-50 text-rose-700 border-rose-200',
   osaka_pump: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   mist_valve: 'bg-sky-50 text-sky-700 border-sky-200',
-  water_pump_in: 'bg-sky-50 text-sky-700 border-sky-200',
+  water_pump_in: 'bg-blue-50 text-blue-700 border-blue-200',
   water_pump_out: 'bg-cyan-50 text-cyan-700 border-cyan-200'
 };
 
@@ -161,7 +161,7 @@ const Dashboard = () => {
                 {permission !== 'granted' && (
                   <button
                     onClick={enableNotifications}
-                    className="mt-2 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider"
+                    className="mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider"
                   >
                     Bật quyền thông báo
                   </button>

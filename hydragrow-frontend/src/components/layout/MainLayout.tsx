@@ -32,31 +32,21 @@ const MainLayout: React.FC = () => {
 
   useEffect(() => { setIsMenuOpen(false); }, [location.pathname]);
 
-  const navGroups = [
-    { label: 'Tổng quan', items: [{ path: '/dashboard', icon: LayoutDashboard, label: 'Tổng quan' }] },
-    { label: 'Vận hành', items: [
-      { path: '/control', icon: SlidersHorizontal, label: 'Điều khiển' },
-      { path: '/automation', icon: Workflow, label: 'Tự động hóa' },
-    ] },
-    { label: 'Canh tác', items: [
-      { path: '/crop-seasons', icon: Leaf, label: 'Mùa vụ' },
-      { path: '/recipes', icon: ClipboardList, label: 'Công thức' },
-      { path: '/dosing-history', icon: Box, label: 'Lịch sử châm' },
-    ] },
-    { label: 'Nhật ký', items: [
-      { path: '/logs', icon: AlignLeft, label: 'Sự kiện hệ thống', hasBadge: unreadAlertCount > 0 },
-      { path: '/analytics', icon: LineChart, label: 'Grafana metrics' },
-    ] },
-    { label: 'Cài đặt', items: [
-      { path: '/pairing', icon: Link, label: 'Ghép thiết bị' },
-      { path: '/settings', icon: Settings, label: 'Cài đặt trạm' },
-    ] },
+  const mainNavItems = [
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Tổng quan' },
+    { path: '/control', icon: SlidersHorizontal, label: 'Điều khiển' },
+    { path: '/crop-seasons', icon: Leaf, label: 'Mùa vụ' },
+    { path: '/recipes', icon: ClipboardList, label: 'Công thức' },
+    { path: '/logs', icon: AlignLeft, label: 'Nhật ký', hasBadge: unreadAlertCount > 0 },
   ];
 
-  const mainNavItems = [
-    navGroups[0].items[0], navGroups[1].items[0], navGroups[2].items[0], navGroups[3].items[0], navGroups[4].items[0],
+  const moreMenuItems = [
+    { path: '/dosing-history', icon: Box, label: 'Lịch sử châm' },
+    { path: '/analytics', icon: LineChart, label: 'Grafana metrics' },
+    { path: '/automation', icon: Workflow, label: 'Tự động hóa' },
+    { path: '/pairing', icon: Link, label: 'Thiết bị của tôi' },
+    { path: '/settings', icon: Settings, label: 'Cài đặt trạm' },
   ];
-  const moreMenuItems = navGroups.flatMap((group) => group.items).filter((item) => !mainNavItems.some((main) => main.path === item.path));
 
   const isActiveMore = moreMenuItems.some(item => location.pathname === item.path);
   const isActive = (path: string) => location.pathname === path || (path === '/dashboard' && location.pathname === '/');
@@ -106,29 +96,8 @@ const MainLayout: React.FC = () => {
         </div>
       </header>
 
-      {/* ── Desktop Sidebar ── */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col border-r border-emerald-100 bg-white px-4 pb-6 pt-24 shadow-sm">
-        <nav aria-label="Điều hướng chính" className="flex flex-col gap-5">
-          {navGroups.map((group) => (
-            <div key={group.label} className="space-y-1">
-              <p className="farm-section-title px-3 pb-1">{group.label}</p>
-              {group.items.map((item) => {
-                const active = isActive(item.path);
-                return (
-                  <button key={item.path} onClick={() => navigate(item.path)} className={`relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${active ? 'bg-emerald-50 text-emerald-800' : 'text-emerald-800/70 hover:bg-emerald-50/70 hover:text-emerald-900'}`}>
-                    <item.icon size={18} className={active ? 'text-emerald-700' : 'text-emerald-500'} />
-                    <span>{item.label}</span>
-                    {item.hasBadge && <span className="ml-auto h-2 w-2 rounded-full bg-red-600" aria-label="Có cảnh báo mới" />}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </aside>
-
       {/* ── Main Content ── */}
-      <main className="flex-1 overflow-y-auto pb-24 relative z-10 custom-scrollbar scroll-smooth lg:ml-64 lg:pb-6">
+      <main className="flex-1 overflow-y-auto pb-24 relative z-10 custom-scrollbar scroll-smooth">
         <Outlet />
       </main>
 
@@ -141,7 +110,7 @@ const MainLayout: React.FC = () => {
       {/* ── More Menu Popup ── */}
       <div
         ref={menuRef}
-        className={`fixed bottom-[88px] left-3 right-3 z-50 transition-all duration-200 ease-out origin-bottom lg:hidden ${isMenuOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0 pointer-events-none'}`}
+        className={`fixed bottom-[88px] left-3 right-3 z-50 transition-all duration-200 ease-out origin-bottom ${isMenuOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0 pointer-events-none'}`}
       >
         <div className="bg-white border border-emerald-100 rounded-2xl overflow-hidden shadow-xl shadow-emerald-950/10">
           {moreMenuItems.map((item, index) => {
@@ -161,7 +130,7 @@ const MainLayout: React.FC = () => {
       </div>
 
       {/* ── Bottom Navigation ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 lg:hidden backdrop-blur-md border-t border-emerald-100 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(20,83,45,0.07)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-emerald-100 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(20,83,45,0.07)]">
         <div className="flex items-center justify-around h-[60px] px-1">
           {mainNavItems.map((item) => {
             const active = isActive(item.path);

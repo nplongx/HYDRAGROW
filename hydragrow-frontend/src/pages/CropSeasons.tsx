@@ -6,7 +6,7 @@ import { ActiveSeasonCard } from '../components/seasons/ActiveSeasonCard';
 import { CreateSeasonForm } from '../components/seasons/CreateSeasonForm';
 import { SeasonHistoryList } from '../components/seasons/SeasonHistoryList';
 
-export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
+export const CropSeasons = () => {
   const { activeSeason, history, isLoading, createSeason, endSeason, updateSeason } = useCropSeason();
 
   if (isLoading && !activeSeason && history.length === 0) {
@@ -15,9 +15,15 @@ export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone'
 
   const filteredHistory = history.filter((season) => season.id !== activeSeason?.id);
 
+  return (
+    <div className="p-4 md:p-8 max-w-4xl mx-auto pb-28">
+      {/* Header Trang */}
+      <PageHeader
+        icon={Sprout}
+        title="Quản Lý Mùa Vụ"
+        subtitle="Theo dõi và ghi chép chu kỳ sinh trưởng của cây trồng"
+      />
 
-  const contentNode = (
-    <>
       {/* Mùa vụ đang chạy HOẶC Form tạo mới */}
       {activeSeason ? (
         <ActiveSeasonCard
@@ -32,20 +38,6 @@ export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone'
 
       {/* Lịch sử các mùa vụ trước */}
       <SeasonHistoryList seasons={filteredHistory} />
-    </>
-  );
-
-  if (variant === 'embedded') return contentNode;
-
-  return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto pb-28">
-      {/* Header Trang */}
-      <PageHeader
-        icon={Sprout}
-        title="Quản Lý Mùa Vụ"
-        subtitle="Theo dõi và ghi chép chu kỳ sinh trưởng của cây trồng"
-      />
-      {contentNode}
     </div>
   );
 };

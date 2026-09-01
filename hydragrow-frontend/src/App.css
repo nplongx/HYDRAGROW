@@ -22,7 +22,9 @@
 body {
   margin: 0;
   color: var(--color-text);
-  background: linear-gradient(180deg, #f0fdf4 0%, #f7fee7 48%, #ecfdf5 100%);
+  background:
+    radial-gradient(circle at top left, rgba(187, 247, 208, 0.55), transparent 32rem),
+    linear-gradient(180deg, #f0fdf4 0%, #f7fee7 48%, #ecfdf5 100%);
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -48,7 +50,7 @@ p {
 
 @layer components {
   .app-page {
-    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto text-emerald-950 lg:max-w-none;
+    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto text-emerald-950;
   }
 
   .page-header {
@@ -100,15 +102,11 @@ p {
   }
 
   .ui-input {
-    @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-emerald-800/40;
+    @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .ui-btn-md {
     @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-
-  .ui-btn-primary {
-    @apply min-h-11 px-4 py-2.5 rounded-lg text-white bg-emerald-700 hover:bg-emerald-800 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .ui-loading {
@@ -141,18 +139,6 @@ p {
 
   .farm-muted-panel {
     @apply rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4;
-  }
-
-  .ui-tabbar {
-    @apply flex items-center gap-1 rounded-xl bg-emerald-50/70 border border-emerald-100 p-1 overflow-x-auto;
-  }
-
-  .ui-tab {
-    @apply flex-1 min-w-fit whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold text-emerald-800/70 transition-colors hover:text-emerald-900;
-  }
-
-  .ui-tab-active {
-    @apply bg-white text-emerald-800 shadow-sm shadow-emerald-950/5;
   }
 }
 

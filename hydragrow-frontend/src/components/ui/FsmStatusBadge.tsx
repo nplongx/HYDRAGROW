@@ -32,7 +32,7 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
       tone === 'danger' ? 'bg-red-50 border-red-200 text-red-700'
         : tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800'
           : tone === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-            : tone === 'info' ? 'bg-sky-50 border-sky-200 text-sky-700'
+            : tone === 'info' ? 'bg-blue-50 border-blue-200 text-blue-700'
               : tone === 'mist' ? 'bg-cyan-50 border-cyan-200 text-cyan-700'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-800';
 

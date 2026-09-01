@@ -21,7 +21,7 @@ const FILTERS = [
   { id: 'system', label: 'Hệ thống', icon: Cpu },
 ];
 
-const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
+const SystemLog = () => {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
   const [filter, setFilter] = useState<string>('all');
@@ -69,14 +69,12 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
   };
 
   return (
-    <div className={variant === "embedded" ? "max-w-3xl" : "app-page max-w-3xl"}>
-      {variant !== 'embedded' && (
-        <PageHeader
-          icon={Clock}
-          title="Nhật Ký Hành Trình"
-          subtitle={`Dòng thời gian vận hành của trạm ${deviceId || ''}`}
-        />
-      )}
+    <div className="p-4 md:p-8 max-w-3xl mx-auto pb-28 text-emerald-950">
+      <PageHeader
+        icon={Clock}
+        title="Nhật Ký Hành Trình"
+        subtitle={`Dòng thời gian vận hành của trạm ${deviceId || ''}`}
+      />
 
       {/* Filter & CSV Export Bar */}
       <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 mb-8 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">
@@ -89,7 +87,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                 key={btn.id}
                 onClick={() => setFilter(btn.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border whitespace-nowrap ${
-                  active ? 'bg-sky-600 text-white border-transparent shadow-md' : 'bg-white text-emerald-800 border-emerald-100 hover:bg-emerald-50'
+                  active ? 'bg-blue-500 text-white border-transparent shadow-md' : 'bg-white text-emerald-800 border-emerald-100 hover:bg-emerald-50'
                 }`}
               >
                 <Icon size={12} />
@@ -122,7 +120,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         />
       ) : (
         <div className="relative pl-3">
-          <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-emerald-200 via-emerald-300 to-transparent pointer-events-none" />
+          <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-slate-200 via-slate-300 to-transparent pointer-events-none" />
           <div className="space-y-4">
             {systemEvents.map((ev: any, idx: number) => (
               <EventLogCard key={ev.id ?? idx} ev={ev} idx={idx} />

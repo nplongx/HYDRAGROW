@@ -13,7 +13,7 @@ import { DosingReportCard, DosingReportRecord } from '../components/dosing/Dosin
 import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 
-const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
+const DosingHistory = () => {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
@@ -86,9 +86,14 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
 
   const activeSeasonData = seasons.find((s: any) => s.id === selectedSeason);
 
+  return (
+    <div className="p-4 md:p-8 space-y-6 pb-28 max-w-4xl mx-auto text-emerald-950">
+      <PageHeader
+        icon={ShieldCheck}
+        title="Lịch Sử Châm Phân"
+        subtitle="Theo dõi chi tiết lượng phân bón & vi chất đã cấp cho cây trồng"
+      />
 
-  const contentNode = (
-    <>
       {/* Thanh chọn & Xuất Excel */}
       <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 backdrop-blur-md relative z-20">
         <div className="relative flex-1 max-w-xs">
@@ -100,7 +105,7 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
               value={selectedSeason || ''}
               onChange={(e) => setSelectedSeason(e.target.value)}
               disabled={seasons.length === 0}
-              className="w-full bg-white border border-emerald-100 text-emerald-950 text-sm font-semibold rounded-2xl pl-4 pr-10 py-2.5 appearance-none outline-none focus:border-emerald-400 disabled:opacity-50 cursor-pointer shadow-inner"
+              className="w-full bg-white border border-emerald-100 text-emerald-950 text-sm font-semibold rounded-2xl pl-4 pr-10 py-2.5 appearance-none outline-none focus:border-indigo-500 disabled:opacity-50 cursor-pointer shadow-inner"
             >
               {seasons.length === 0 && <option value="">Chưa có mùa vụ</option>}
               {seasons.map((ss: any) => (
@@ -123,10 +128,10 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
 
       {/* Banner thông tin mùa active */}
       {activeSeasonData && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-4 farm-muted-panel rounded-2xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/10 rounded-xl">
-              <Calendar size={20} className="text-emerald-700" />
+            <div className="p-2.5 bg-indigo-500/10 rounded-xl">
+              <Calendar size={20} className="text-indigo-700" />
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -151,10 +156,10 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
 
       {/* Dòng thời gian các chu kỳ châm */}
       <div className="relative pt-4 pl-1">
-        <div className="absolute left-[29px] top-8 bottom-0 w-0.5 bg-gradient-to-b from-emerald-200 to-transparent -z-10" />
+        <div className="absolute left-[29px] top-8 bottom-0 w-0.5 bg-gradient-to-b from-slate-200 to-transparent -z-10" />
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-emerald-700/75">
-            <div className="w-5 h-5 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-emerald-200 border-t-indigo-500 rounded-full animate-spin" />
             <span className="text-xs font-bold tracking-widest uppercase">Đang tải nhật ký châm...</span>
           </div>
         ) : history.length === 0 && !isError ? (
@@ -167,19 +172,6 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
           </div>
         )}
       </div>
-    </>
-  );
-
-  if (variant === 'embedded') return contentNode;
-
-  return (
-    <div className="p-4 md:p-8 space-y-6 pb-28 max-w-4xl mx-auto text-emerald-950">
-      <PageHeader
-        icon={ShieldCheck}
-        title="Lịch Sử Châm Phân"
-        subtitle="Theo dõi chi tiết lượng phân bón & vi chất đã cấp cho cây trồng"
-      />
-      {contentNode}
     </div>
   );
 };

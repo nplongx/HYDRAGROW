@@ -82,7 +82,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
           <div className="flex items-center gap-3">
             <button
               onClick={setEveryDay}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isEveryDay ? 'bg-sky-600 text-white' : 'bg-emerald-100 text-emerald-800/80 hover:bg-emerald-200'}`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isEveryDay ? 'bg-blue-600 text-white' : 'bg-emerald-100 text-emerald-800/80 hover:bg-emerald-200'}`}
             >
               Hằng ngày
             </button>
@@ -95,7 +95,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
                 <button
                   key={day.val}
                   onClick={() => toggleDay(day.val)}
-                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-sky-500/20 border-sky-500 text-sky-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800/80 hover:border-emerald-400 hover:text-emerald-950'}`}
+                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-blue-500/20 border-blue-500 text-blue-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800/80 hover:border-emerald-400 hover:text-emerald-950'}`}
                 >
                   {day.label}
                 </button>
@@ -631,7 +631,7 @@ const Settings = () => {
                   href={nodeRedEditorUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-mono text-sky-600 underline hover:text-sky-800 break-all"
+                  className="text-sm font-mono text-blue-600 underline hover:text-blue-800 break-all"
                 >
                   {nodeRedEditorUrl}
                 </a>
@@ -716,9 +716,9 @@ const Settings = () => {
         {/* GENERAL */}
         <AccordionSection id="general" title="Tổng quan" icon={Power} isOpen={openSection === 'general'} onToggle={() => handleToggleSection('general')}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.is_enabled ? 'bg-sky-50 border-sky-500/30' : 'bg-white/85 border-emerald-100'}`}>
-              <p className={`text-sm font-medium ${config.is_enabled ? 'text-sky-700' : 'text-emerald-900'}`}>Kích hoạt hệ thống</p>
-              <Switch isOn={config.is_enabled} onClick={(val) => setConfig({ ...config, is_enabled: val })} colorClass="bg-sky-500" />
+            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.is_enabled ? 'bg-blue-50 border-blue-500/30' : 'bg-white/85 border-emerald-100'}`}>
+              <p className={`text-sm font-medium ${config.is_enabled ? 'text-blue-700' : 'text-emerald-900'}`}>Kích hoạt hệ thống</p>
+              <Switch isOn={config.is_enabled} onClick={(val) => setConfig({ ...config, is_enabled: val })} colorClass="bg-blue-500" />
             </div>
             <div className={`flex items-center justify-between p-4 rounded-xl border transition-all ${config.emergency_shutdown ? 'bg-red-500/10 border-red-500/30' : 'bg-white/85 border-emerald-100'}`}>
               <div className="flex items-center gap-3">
@@ -929,10 +929,10 @@ const Settings = () => {
                 )}
                 {wizardStep < calibrationPoints.length ? (
                   <div className="p-5 rounded-xl bg-white border border-emerald-100 shadow-inner">
-                    <p className="text-xs text-sky-700 font-bold tracking-wider mb-1">BƯỚC {wizardStep + 1}/{calibrationPoints.length}</p>
+                    <p className="text-xs text-blue-700 font-bold tracking-wider mb-1">BƯỚC {wizardStep + 1}/{calibrationPoints.length}</p>
                     <p className="text-sm text-emerald-950 mb-4">Nhúng vào dung dịch <span className="font-bold text-emerald-800">pH {activePoint}</span></p>
                     <div className="flex items-center gap-3">
-                      <button onClick={handleCapturePoint} disabled={isCalibrationBlocked || isCapturingPoint} className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium disabled:opacity-50 transition-all">
+                      <button onClick={handleCapturePoint} disabled={isCalibrationBlocked || isCapturingPoint} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50 transition-all">
                         {isCapturingPoint ? 'ĐANG ĐO...' : 'BẮT ĐẦU ĐO'}
                       </button>
                       {isCapturingPoint && <span className="text-sm font-mono text-emerald-900 bg-white px-3 py-1.5 rounded-md">{countdown}s</span>}
@@ -948,7 +948,7 @@ const Settings = () => {
                       <div className="p-2 bg-white rounded-lg border border-emerald-100"><p className="text-[10px] text-emerald-700/75 mb-0.5">V4</p><p className="text-sm font-mono text-emerald-950">{calibrationSummary.ph_v4}V</p></div>
                       <div className="col-span-2 p-2 bg-white rounded-lg border border-emerald-100"><p className="text-[10px] text-emerald-700/75 mb-0.5">Độ tin cậy</p><p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-green-600' : 'text-yellow-600'}`}>{calibrationSummary.reliability}%</p></div>
                     </div>
-                    <button onClick={handleFinishAndSaveCalibration} className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-medium rounded-lg transition-all text-sm">
+                    <button onClick={handleFinishAndSaveCalibration} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-all text-sm">
                       XÁC NHẬN & LƯU HIỆU CHUẨN
                     </button>
                   </div>
@@ -1012,7 +1012,7 @@ const Settings = () => {
         <button
           onClick={() => handleSave()}
           disabled={isSaving || hasDosingValidationError}
-          className="w-full md:w-auto pointer-events-auto px-8 py-3.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-medium shadow-[0_10px_30px_-10px_rgba(2,132,199,0.8)] transition-all hover:-translate-y-1 disabled:opacity-50 disabled:hover:translate-y-0 flex items-center justify-center gap-2"
+          className="w-full md:w-auto pointer-events-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium shadow-[0_10px_30px_-10px_rgba(37,99,235,0.8)] transition-all hover:-translate-y-1 disabled:opacity-50 disabled:hover:translate-y-0 flex items-center justify-center gap-2"
         >
           {isSaving ? (
             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>

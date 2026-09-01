@@ -9,7 +9,7 @@ const KIND_LABEL: Record<string, string> = {
 
 const KIND_COLOR: Record<string, string> = {
   alert: 'bg-red-100 text-red-700',
-  recipe_override: 'bg-sky-100 text-sky-700',
+  recipe_override: 'bg-blue-100 text-blue-700',
   action_command: 'bg-amber-100 text-amber-700',
 };
 
@@ -19,7 +19,7 @@ export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
   const { script } = data;
   const conditionCount = script.ir_json?.conditions.length ?? 0;
   const actionCount = script.ir_json?.actions.length ?? 0;
-  const badgeColor = KIND_COLOR[script.kind] ?? 'bg-emerald-50 text-emerald-800/70';
+  const badgeColor = KIND_COLOR[script.kind] ?? 'bg-slate-100 text-slate-600';
 
   return (
     <div

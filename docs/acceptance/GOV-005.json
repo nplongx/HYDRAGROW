@@ -1,0 +1,26 @@
+{
+  "requirement_id": "GOV-005",
+  "objective": "Prove the delivery governance mechanism rejects invalid acceptance evidence and accepts valid evidence.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "A valid quantitative evidence sample is accepted when actual satisfies the declared target and unit.",
+      "metric": "sample_latency",
+      "operator": "<=",
+      "target": 10,
+      "unit": "seconds",
+      "verification": "governance self-test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "An invalid quantitative evidence sample is rejected when actual violates the declared target.",
+      "metric": "sample_latency",
+      "operator": "<=",
+      "target": 10,
+      "unit": "seconds",
+      "verification": "governance self-test",
+      "evidence_required": true
+    }
+  ]
+}

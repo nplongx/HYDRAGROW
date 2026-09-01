@@ -7,6 +7,7 @@ This register connects product/system requirements to implementation, verificati
 | Requirement | Acceptance criteria | Implementation | Verification / evidence | Deployment | Docs | Status |
 |---|---|---|---|---|---|---|
 | Governance foundation | Delivery contract and status artifacts exist | `docs/DELIVERY-GOVERNANCE.md` | Governance workflow | N/A | Project-state docs | VERIFIED |
+| GOV-002 | AC-1 machine-readable contract; AC-2 schema validation; AC-3 traceability enforcement | `docs/acceptance/GOVERNANCE-001.json`, `.github/workflows/acceptance-contract.yml` | Acceptance contract gate + delivery governance gate | GitHub Actions / PR validation | Acceptance contract docs | VERIFIED |
 | Project requirements | Add project-specific rows as requirements are defined | Pending | Pending | Pending | Pending | NOT_STARTED |
 
 ## Rules

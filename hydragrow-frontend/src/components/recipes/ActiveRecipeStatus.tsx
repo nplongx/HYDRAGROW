@@ -86,7 +86,7 @@ export const ActiveRecipeStatus: React.FC = () => {
           {currentStage && (
             <div className="bg-white border border-emerald-100 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
-                <Droplets size={14} className="text-blue-600" />
+                <Droplets size={14} className="text-sky-600" />
                 <span>EC: <b>{currentStage.ec_target} ± {currentStage.ec_tolerance}</b></span>
                 <span className="text-emerald-300">|</span>
                 <span>pH: <b>{currentStage.ph_target} ± {currentStage.ph_tolerance}</b></span>

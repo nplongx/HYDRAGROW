@@ -1,60 +1,38 @@
 # HYDRAGROW Delivery Governance
 
-## Purpose
+The purpose of delivery governance is simple: a change is not finished when the code merely compiles. It is finished when the intended outcome is verified and the project documentation reflects what actually happened.
 
-A task is not complete because the code compiles or tests pass. A change is complete only when the requested outcome is verified and the project knowledge is synchronized.
+## Standard flow
 
-## Definition of Done
+**Plan → Implement → Verify → Update project state/docs → Review → Merge**
 
-Every non-trivial task must satisfy all applicable items:
+### Before implementation
 
-1. Scope implemented and reviewed.
-2. Automated verification passes.
-3. Every acceptance criterion has a binary PASS/FAIL result.
-4. Quantitative targets have baseline, target, actual value, and evidence when applicable.
-5. Integration, staging, hardware, or deployment verification is attached when the requirement depends on a real environment.
-6. Required documentation is updated in the same change.
-7. `docs/project-state/CURRENT-STATUS.md` is updated when project state changes.
-8. Risks, rollback considerations, and known gaps are recorded.
-9. Evidence is attached to the PR or linked from a durable artifact.
+- Read the complete implementation plan or requirement.
+- Identify the intended outcome, tasks, affected systems, and documentation that will become stale.
+- Start/update `docs/project-state/CURRENT-STATUS.md`.
 
-## Status Vocabulary
+### During implementation
 
-- `PROPOSED`: requirement exists, implementation has not started.
-- `IMPLEMENTING`: work is in progress.
-- `VERIFIED`: implementation and acceptance criteria are verified in the appropriate environment.
-- `DEPLOYED`: change has been deployed to the declared target environment.
-- `ACCEPTED`: deployment/outcome is verified and documentation is synchronized.
-- `BLOCKED`: a required criterion or environment is unavailable; do not claim completion.
+- Follow the plan's task order unless a documented dependency requires a deviation.
+- Keep tests and verification close to the change.
+- Update `CURRENT-STATUS.md` as meaningful milestones are completed.
+- Update affected architecture, API, operations, runbook, or user-facing documentation in the same change.
 
-## Change Classes
+### Before completion
 
-- `C0` Docs/comment-only: documentation consistency review.
-- `C1` Isolated implementation: code + tests.
-- `C2` API/contract/schema: code + contract compatibility + docs.
-- `C3` Database/migration: design review + migration evidence + rollback plan.
-- `C4` Cross-subsystem: integration verification + traceability update.
-- `C5` CI/CD/infrastructure: operational verification + runbook/docs update.
-- `C6` Behavior/performance: benchmark or scenario evidence with baseline/target.
-- `C7` Security-sensitive: security review and evidence.
+- Verify every task and stated acceptance criterion.
+- Record actual results, not intentions.
+- Record blockers or deviations explicitly.
+- Ensure `CURRENT-STATUS.md` and other affected documentation describe the resulting state.
+- The PR description must summarize completion, remaining work, verification, and documentation changes.
 
-## Requirement Traceability
+## What CI can enforce
 
-Each feature or material fix should be traceable as:
+CI can reliably enforce repository artifacts and explicit PR declarations. It cannot reliably infer the full task list or determine whether arbitrary prose documentation is semantically complete.
 
-`Requirement -> Acceptance Criteria -> Implementation -> Test/Evidence -> Deployment -> Documentation`
+Therefore the repository treats `CURRENT-STATUS.md` and the PR checklist as the lightweight human-readable delivery record, while automated acceptance/evidence gates remain focused on machine-verifiable requirements.
 
-The canonical project-level view is `docs/project-state/TRACEABILITY.md`.
+## Completion rule
 
-## Documentation Sync Rule
-
-Changes that affect behavior, contracts, architecture, operations, deployment, or project status MUST update the corresponding documentation in the same PR. A passing CI build does not waive this rule.
-
-## Jules Review Rule
-
-Jules must perform two separate assessments:
-
-- **Code review:** correctness, architecture, security, tests, regressions.
-- **Delivery review:** requirement coverage, measurable outcome, integration/deployment evidence, and documentation synchronization.
-
-`LGTM` is not a valid delivery verdict when acceptance evidence or required documentation is missing.
+Do not claim a material implementation is complete when required project-state or affected documentation is missing. Continue the work or report it as blocked.

@@ -13,7 +13,7 @@ import { DosingReportCard, DosingReportRecord } from '../components/dosing/Dosin
 import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 
-const DosingHistory = () => {
+const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
@@ -86,14 +86,9 @@ const DosingHistory = () => {
 
   const activeSeasonData = seasons.find((s: any) => s.id === selectedSeason);
 
-  return (
-    <div className="p-4 md:p-8 space-y-6 pb-28 max-w-4xl mx-auto text-emerald-950">
-      <PageHeader
-        icon={ShieldCheck}
-        title="Lịch Sử Châm Phân"
-        subtitle="Theo dõi chi tiết lượng phân bón & vi chất đã cấp cho cây trồng"
-      />
 
+  const contentNode = (
+    <>
       {/* Thanh chọn & Xuất Excel */}
       <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 backdrop-blur-md relative z-20">
         <div className="relative flex-1 max-w-xs">
@@ -172,6 +167,19 @@ const DosingHistory = () => {
           </div>
         )}
       </div>
+    </>
+  );
+
+  if (variant === 'embedded') return contentNode;
+
+  return (
+    <div className="p-4 md:p-8 space-y-6 pb-28 max-w-4xl mx-auto text-emerald-950">
+      <PageHeader
+        icon={ShieldCheck}
+        title="Lịch Sử Châm Phân"
+        subtitle="Theo dõi chi tiết lượng phân bón & vi chất đã cấp cho cây trồng"
+      />
+      {contentNode}
     </div>
   );
 };

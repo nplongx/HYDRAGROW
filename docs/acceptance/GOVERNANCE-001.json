@@ -1,0 +1,24 @@
+{
+  "requirement_id": "GOVERNANCE-001",
+  "objective": "Require material system changes to declare verifiable outcomes and keep project knowledge synchronized.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "A material PR declares a machine-readable acceptance contract.",
+      "verification": "GitHub Actions acceptance-contract gate",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "The acceptance contract is valid against the repository schema.",
+      "verification": "Python standard-library validator",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Material subsystem changes update requirement traceability.",
+      "verification": "Git diff enforcement in delivery-governance workflow",
+      "evidence_required": true
+    }
+  ]
+}

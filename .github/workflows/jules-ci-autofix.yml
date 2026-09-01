@@ -1,0 +1,97 @@
+name: jules-ci-autofix
+
+# Khi 1 trong các CI workflow fail trên `main`, tự động tạo issue
+# hotfix cho Jules xử lý — không cần người phát hiện rồi chạy
+# `./scripts/jules hotfix` bằng tay.
+#
+# Dùng workflow_run vì CI workflows hiện tại chạy trên `push` trực
+# tiếp, không có success/failure output nào khác để hook vào.
+
+on:
+  workflow_run:
+    workflows:
+      - "backend-ci"
+      - "controller-core-ci"
+      - "firmware-controller-ci"
+      - "firmware-sensor-ci"
+      - "frontend-ci"
+      - "shared-schema-check"
+      - "Simulator CI"
+    types: [completed]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  autofix:
+    name: "File Jules hotfix issue on CI failure"
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == 'main'
+    steps:
+      - name: Compute identifiers
+        id: ids
+        run: |
+          SHA_SHORT="${WORKFLOW_SHA:0:7}"
+          echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+          echo "title=[Jules Hotfix] CI failure: ${WORKFLOW_NAME} on main (${SHA_SHORT})" >> "$GITHUB_OUTPUT"
+        env:
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+
+      - name: Skip if a matching hotfix issue is already open
+        id: dedup
+        run: |
+          EXISTING=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --label "jules,hotfix" \
+            --search "in:title \"${{ steps.ids.outputs.title }}\"" \
+            --json number -q '.[0].number' || true)
+          echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build issue body
+        if: steps.dedup.outputs.existing == ''
+        run: |
+          cat > /tmp/hotfix_body.md << BODY
+          ## 🔴 CI failure on \`main\` — auto-filed
+
+          **Workflow:** \`${{ github.event.workflow_run.name }}\`
+          **Commit:** \`${{ github.event.workflow_run.head_sha }}\`
+          **Run:** ${{ github.event.workflow_run.html_url }}
+
+          ### Task type: Hotfix (priority: high)
+
+          Jules thực hiện theo \`.agent/tasks/hotfix.md\` — 3-phase protocol
+          (Discovery → Test → Fix), branch prefix \`hotfix/\`.
+
+          1. Checkout commit \`${{ github.event.workflow_run.head_sha }}\`,
+             mở run log ở trên để xem lỗi cụ thể.
+          2. Reproduce lỗi bằng đúng lệnh verify của subsystem liên quan
+             (xem \`.agent/jules.yml\` → \`commands\`).
+          3. Viết/khôi phục test tái hiện lỗi trước khi fix.
+          4. Fix tối thiểu, chạy lại toàn bộ verify commands, đảm bảo
+             exit code 0.
+          5. Mở PR, base \`main\`, paste output verify vào PR description.
+
+          **Abort condition:** > 4 lần fix không qua test → comment
+          \`ABORT_UNRESOLVABLE\` và dừng.
+
+          ---
+          *Auto-filed bởi \`.github/workflows/jules-ci-autofix.yml\`*
+          BODY
+
+      - name: Create hotfix issue
+        if: steps.dedup.outputs.existing == ''
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "${{ steps.ids.outputs.title }}" \
+            --body-file /tmp/hotfix_body.md \
+            --label "jules,hotfix"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

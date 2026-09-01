@@ -1,0 +1,94 @@
+name: jules-nightly-audit
+
+# Tạo issue audit tự động mỗi đêm cho Jules, theo đúng 3 preset đã
+# khai báo sẵn trong .agent/config.yml (presets: nightly-security-audit,
+# flaky-test-quarantine, doc-sync-sentinel) — trước đây các preset này
+# chỉ nằm trong config, chưa có workflow nào thực sự dùng tới.
+#
+# Dedup: nếu preset đó đang có issue "jules,audit" nào còn mở thì bỏ
+# qua đêm đó, tránh chồng chất issue khi audit trước chưa xử lý xong.
+
+on:
+  schedule:
+    - cron: "0 19 * * *"   # 19:00 UTC = 02:00 giờ VN
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  audit:
+    name: "Dispatch nightly audit — ${{ matrix.preset }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        preset:
+          - nightly-security-audit
+          - flaky-test-quarantine
+          - doc-sync-sentinel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if this preset already has an open audit issue
+        id: dedup
+        run: |
+          EXISTING=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --label "jules,audit" \
+            --search "in:title \"[Jules Audit] ${{ matrix.preset }}\"" \
+            --json number -q '.[0].number' || true)
+          echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build audit issue body
+        if: steps.dedup.outputs.existing == ''
+        id: body
+        run: |
+          case "${{ matrix.preset }}" in
+            nightly-security-audit)
+              SCOPE="Toàn bộ workspace (backend, shared, controller-core, simulator, frontend)."
+              CHECKLIST=$'- [ ] Không hardcode secret/API key/credential\n- [ ] Auth middleware áp dụng đúng cho mọi protected route\n- [ ] Input validation trước khi write DB\n- [ ] Không `unwrap()`/`.expect()` trên production code path\n- [ ] Dependency có CVE đã biết (`cargo audit`, `npm audit`)'
+              SEVERITY="warning"
+              ;;
+            flaky-test-quarantine)
+              SCOPE="Toàn bộ test suite Rust + frontend."
+              CHECKLIST=$'- [ ] Chạy `cargo test --workspace` và `npx vitest run` lặp lại 5 lần\n- [ ] Xác định test nào fail không nhất quán (flaky)\n- [ ] Đánh dấu quarantine (`#[ignore]` / `.skip`) kèm issue tracking riêng, KHÔNG xoá test\n- [ ] Không sửa production code chỉ để "fix" flaky test hạ tầng'
+              SEVERITY="warning"
+              ;;
+            doc-sync-sentinel)
+              SCOPE="docs/superpowers/specs/module-rules/ đối chiếu với code hiện tại."
+              CHECKLIST=$'- [ ] Module-rules còn khớp với implementation thật không\n- [ ] API/contract đổi trong code nhưng doc chưa cập nhật\n- [ ] `.agent/tasks/*.md` còn trỏ đúng path/script tồn tại\n- [ ] README/JULES-CLI.md còn khớp với workflow thật'
+              SEVERITY="info"
+              ;;
+          esac
+
+          cat > /tmp/audit_body.md << BODY
+          ## 🌙 Nightly audit — \`${{ matrix.preset }}\`
+
+          **Scope:** ${SCOPE}
+          **Severity threshold để tạo sub-issue:** \`${SEVERITY}\`
+
+          ### Checklist
+          ${CHECKLIST}
+
+          Với mỗi phát hiện ≥ severity threshold: tạo sub-issue dùng
+          template \`jules-finding\`, label \`jules,finding\`.
+
+          ---
+          *Auto-dispatched bởi \`.github/workflows/jules-nightly-audit.yml\` | $(date -u +"%Y-%m-%dT%H:%M:%SZ")*
+          BODY
+
+      - name: Create audit issue
+        if: steps.dedup.outputs.existing == ''
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "[Jules Audit] ${{ matrix.preset }} — $(date -u +%Y-%m-%d)" \
+            --body-file /tmp/audit_body.md \
+            --label "jules,audit"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

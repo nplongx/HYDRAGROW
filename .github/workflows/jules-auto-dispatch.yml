@@ -1,0 +1,99 @@
+name: jules-auto-dispatch
+
+# Tự động dispatch issue cho Jules khi issue được mở/gắn label
+# mà KHÔNG cần ai chạy `./scripts/jules issue ...` bằng tay.
+#
+# Trigger: issue mới mở, hoặc được gắn thêm label, với 1 trong các
+# label "actionable" mà .agent/jules.yml đã định nghĩa workflow
+# (bug, enhancement, hotfix, tech-debt).
+#
+# Idempotent: nếu issue đã có label "jules" rồi thì bỏ qua, tránh
+# dispatch lặp lại khi có người gắn thêm label khác sau đó.
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: "Auto-dispatch issue to Jules"
+    runs-on: ubuntu-latest
+    if: >
+      !contains(github.event.issue.labels.*.name, 'jules') &&
+      (
+        contains(github.event.issue.labels.*.name, 'bug') ||
+        contains(github.event.issue.labels.*.name, 'enhancement') ||
+        contains(github.event.issue.labels.*.name, 'hotfix') ||
+        contains(github.event.issue.labels.*.name, 'tech-debt')
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve task type + protocol
+        id: resolve
+        run: |
+          LABELS='${{ toJson(github.event.issue.labels.*.name) }}'
+          echo "Labels: $LABELS"
+
+          TYPE=""
+          echo "$LABELS" | grep -q '"hotfix"'     && TYPE="hotfix"
+          [[ -z "$TYPE" ]] && echo "$LABELS" | grep -q '"bug"'         && TYPE="bug"
+          [[ -z "$TYPE" ]] && echo "$LABELS" | grep -q '"tech-debt"'   && TYPE="tech-debt"
+          [[ -z "$TYPE" ]] && echo "$LABELS" | grep -q '"enhancement"' && TYPE="enhancement"
+
+          case "$TYPE" in
+            hotfix)      PROTOCOL="3-phase-fix";      BRANCH_PREFIX="hotfix/" ;;
+            bug)         PROTOCOL="3-phase-fix";      BRANCH_PREFIX="fix/" ;;
+            tech-debt)   PROTOCOL="refactor";         BRANCH_PREFIX="chore/" ;;
+            enhancement) PROTOCOL="3-phase-feature";  BRANCH_PREFIX="feat/" ;;
+          esac
+
+          echo "type=$TYPE"           >> "$GITHUB_OUTPUT"
+          echo "protocol=$PROTOCOL"   >> "$GITHUB_OUTPUT"
+          echo "branch_prefix=$BRANCH_PREFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Build dispatch comment
+        id: body
+        run: |
+          cat > /tmp/dispatch_comment.md << BODY
+          ## 🤖 Auto-dispatched to Jules
+
+          Issue này được **tự động** gắn label \`jules\` bởi \`jules-auto-dispatch.yml\`
+          (không cần chạy \`scripts/jules\` thủ công).
+
+          **Task type:** \`${{ steps.resolve.outputs.type }}\`
+          **Protocol:** \`${{ steps.resolve.outputs.protocol }}\` (xem \`.agent/jules.yml\`)
+          **Branch prefix khi tạo PR:** \`${{ steps.resolve.outputs.branch_prefix }}\`
+
+          ### Jules cần đọc trước khi bắt đầu
+          - \`AGENTS.md\` — operational directives
+          - \`.agent/jules.yml\` — commands/workflows/restricted_files cho task type này
+          - \`.agent/rules/jules-protocol.md\` — hard constraints & guardrails
+
+          ### Restricted files (không được sửa)
+          \`.github/**\`, \`server_wallet.json\`, \`**/*.key\`, \`**/*.pem\`,
+          \`hydragrow-backend/migrations/**\`, \`Cargo.lock\`
+
+          ### Abort condition
+          Nếu quá \`max_test_failures: 4\` lần fix không qua test → comment
+          \`ABORT_UNRESOLVABLE\` và dừng, không tự đoán tiếp.
+
+          ---
+          *Auto-dispatched bởi \`.github/workflows/jules-auto-dispatch.yml\` | $(date -u +"%Y-%m-%dT%H:%M:%SZ")*
+          BODY
+
+      - name: Add "jules" label + comment
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --add-label "jules"
+
+          gh issue comment "${{ github.event.issue.number }}" \
+            --repo "${{ github.repository }}" \
+            --body-file /tmp/dispatch_comment.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

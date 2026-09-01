@@ -21,7 +21,7 @@ const FILTERS = [
   { id: 'system', label: 'Hệ thống', icon: Cpu },
 ];
 
-const SystemLog = () => {
+const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
   const [filter, setFilter] = useState<string>('all');
@@ -69,12 +69,14 @@ const SystemLog = () => {
   };
 
   return (
-    <div className="app-page max-w-3xl">
-      <PageHeader
-        icon={Clock}
-        title="Nhật Ký Hành Trình"
-        subtitle={`Dòng thời gian vận hành của trạm ${deviceId || ''}`}
-      />
+    <div className={variant === "embedded" ? "max-w-3xl" : "app-page max-w-3xl"}>
+      {variant !== 'embedded' && (
+        <PageHeader
+          icon={Clock}
+          title="Nhật Ký Hành Trình"
+          subtitle={`Dòng thời gian vận hành của trạm ${deviceId || ''}`}
+        />
+      )}
 
       {/* Filter & CSV Export Bar */}
       <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 mb-8 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">

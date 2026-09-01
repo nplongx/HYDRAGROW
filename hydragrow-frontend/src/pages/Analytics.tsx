@@ -3,14 +3,16 @@ import { LineChart as ChartIcon, ExternalLink, Activity, Server, Cpu } from 'luc
 import { PageHeader } from '../components/ui/PageHeader';
 import { SubCard } from '../components/ui/SubCard';
 
-const Analytics = () => {
+const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
   return (
-    <div className="app-page max-w-4xl">
-      <PageHeader
-        icon={ChartIcon}
-        title="Grafana & Prometheus Observability"
-        subtitle="Hệ thống phân tích chuỗi thời gian, thuật toán tự học MIMO/Kalman và tài nguyên phần cứng đã được chuyển đổi tập trung sang Grafana."
-      />
+    <div className={variant === "embedded" ? "max-w-4xl" : "app-page max-w-4xl"}>
+      {variant !== 'embedded' && (
+        <PageHeader
+          icon={ChartIcon}
+          title="Grafana & Prometheus Observability"
+          subtitle="Hệ thống phân tích chuỗi thời gian, thuật toán tự học MIMO/Kalman và tài nguyên phần cứng đã được chuyển đổi tập trung sang Grafana."
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SubCard title="Trung tâm Giám sát Grafana">

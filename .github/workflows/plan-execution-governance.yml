@@ -1,0 +1,56 @@
+name: plan-execution-governance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  plan-execution:
+    name: Plan execution governance gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Locate plan execution record
+        id: record
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          path=$(printf '%s\n' "${PR_BODY:-}" | sed -n 's/^- Plan execution record: `\([^`]*\)`.*/\1/p' | head -n 1)
+          if [ -z "$path" ]; then
+            echo "Missing plan execution record declaration."
+            echo 'Add: - Plan execution record: `docs/project-state/plan-execution/<requirement-id>.json`'
+            exit 1
+          fi
+          case "$path" in
+            docs/project-state/plan-execution/*.json) ;;
+            *) echo "Invalid plan execution record path: $path"; exit 1 ;;
+          esac
+          test -f "$path" || { echo "Missing plan execution record file: $path"; exit 1; }
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Validate plan execution record
+        run: python3 .github/scripts/validate_plan_execution.py "${{ steps.record.outputs.path }}"
+
+      - name: Require execution record for material changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RECORD_PATH: ${{ steps.record.outputs.path }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          if grep -Eq '^hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/' <<< "$changed"; then
+            grep -Fq "$RECORD_PATH" <<< "$changed" || {
+              echo "Material product change detected but the declared plan execution record was not updated."
+              exit 1
+            }
+          fi
+          echo "Plan execution governance gate passed."

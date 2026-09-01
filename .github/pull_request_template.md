@@ -22,8 +22,8 @@ What user/system outcome is this change intended to achieve?
 - [ ] Hardware / staging / deployment verification (if applicable)
 - [ ] Delivery / outcome review completed
 
-## Documentation / Project Progress
-- [ ] `docs/project-state/CURRENT-STATUS.md` updated with progress / status / blockers
+## Documentation
+- [ ] `docs/project-state/CURRENT-STATUS.md` updated if project state changed
 - [ ] `docs/project-state/TRACEABILITY.md` updated for material requirements
 - [ ] Other affected architecture/API/operations docs updated
 

@@ -1,0 +1,56 @@
+name: acceptance-contract
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  acceptance:
+    name: Acceptance contract gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Locate contract from PR body
+        id: contract
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          body="${PR_BODY:-}"
+          path=$(printf '%s\n' "$body" | sed -n 's/^Acceptance contract: `\([^`]*\)`.*/\1/p' | head -n 1)
+          if [ -z "$path" ]; then
+            echo "Missing machine-readable acceptance contract declaration."
+            echo "Add: Acceptance contract: \`docs/acceptance/<requirement-id>.json\`"
+            exit 1
+          fi
+          case "$path" in
+            docs/acceptance/*.json) ;;
+            *) echo "Contract must live under docs/acceptance/ as JSON: $path"; exit 1 ;;
+          esac
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Validate contract structure
+        run: python3 .github/scripts/validate_acceptance_contract.py "${{ steps.contract.outputs.path }}"
+
+      - name: Require contract change for material system changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CONTRACT_PATH: ${{ steps.contract.outputs.path }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)|\.github/workflows/)' <<< "$changed"; then
+            grep -Fq "$CONTRACT_PATH" <<< "$changed" || {
+              echo "Material system change detected but the declared acceptance contract was not changed."
+              exit 1
+            }
+          fi
+          echo "Acceptance contract gate passed."

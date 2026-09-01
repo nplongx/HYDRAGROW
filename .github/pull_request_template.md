@@ -5,6 +5,11 @@
 ## Objective
 What user/system outcome is this change intended to achieve?
 
+## Implementation Plan
+- Plan: `docs/plans/<plan-file>` (or external plan URL)
+- Plan execution record: `docs/project-state/plan-execution/<requirement-id>.json`
+- For non-trivial plan-driven changes, the execution record is mandatory and must contain one `TASK-*` entry for every numbered task/phase in the plan.
+
 ## Acceptance Contract
 - Acceptance contract: `docs/acceptance/<requirement-id>.json`
 - Evidence contract: `docs/evidence/<requirement-id>.json`
@@ -17,9 +22,16 @@ What user/system outcome is this change intended to achieve?
 |---|---|---|---|---|
 | AC-1 |  |  |  |  |
 
+## Plan Task Matrix
+
+| Task | Status | Evidence |
+|---|---|---|
+| TASK-1 | NOT_STARTED | |
+
 ## Verification
 - [ ] Acceptance contract gate
 - [ ] Evidence contract gate
+- [ ] Plan execution governance gate
 - [ ] Delivery governance gate
 - [ ] Unit / integration tests
 - [ ] E2E / scenario test
@@ -30,6 +42,7 @@ What user/system outcome is this change intended to achieve?
 - [ ] Required architecture/API/operations docs updated
 - [ ] `docs/project-state/CURRENT-STATUS.md` updated if project state changed
 - [ ] `docs/project-state/TRACEABILITY.md` updated for material requirements
+- [ ] Plan execution record updated after each task/checkpoint
 
 ## Deployment
 - Environment:
@@ -42,6 +55,7 @@ What user/system outcome is this change intended to achieve?
 ## Final Acceptance
 - [ ] Code verification passed
 - [ ] Acceptance criteria passed
+- [ ] All planned tasks completed or explicitly blocked with rationale
 - [ ] Required deployment/integration evidence attached
 - [ ] Documentation synchronized
 - [ ] Project state synchronized

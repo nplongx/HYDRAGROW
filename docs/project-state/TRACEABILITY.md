@@ -9,6 +9,7 @@ This register connects product/system requirements to implementation, verificati
 | Governance foundation | Delivery contract and status artifacts exist | `docs/DELIVERY-GOVERNANCE.md` | Governance workflow | N/A | Project-state docs | VERIFIED |
 | GOV-002 | AC-1 machine-readable contract; AC-2 schema validation; AC-3 traceability enforcement | `docs/acceptance/GOVERNANCE-001.json`, `.github/workflows/acceptance-contract.yml` | Acceptance contract gate + delivery governance gate | GitHub Actions / PR validation | Acceptance contract docs | VERIFIED |
 | GOV-003 | AC-1 evidence contract required; AC-2 evidence is attributable; AC-3 quantitative target comparison is deterministic | `docs/schemas/evidence-contract.schema.json`, `.github/scripts/validate_evidence_contract.py`, `.github/workflows/evidence-contract.yml` | Evidence contract gate | GitHub Actions / PR validation | Evidence contract docs | VERIFIED |
+| GOV-005 | AC-1 valid quantitative evidence is accepted; AC-2 invalid quantitative evidence is rejected | `.github/scripts/governance_selftest.py`, `.github/workflows/governance-selftest.yml` | Governance evaluator self-test | GitHub Actions | `docs/acceptance/GOV-005.json`, `docs/evidence/GOV-005.json` | VERIFIED |
 | Project requirements | Add project-specific rows as requirements are defined | Pending | Pending | Pending | Pending | NOT_STARTED |
 
 ## Rules

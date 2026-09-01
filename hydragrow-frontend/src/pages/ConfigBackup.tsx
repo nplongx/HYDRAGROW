@@ -59,7 +59,7 @@ export function ConfigBackup() {
       <div className="space-y-4">
         <div className="p-6 border rounded-xl">
           <div className="flex items-center gap-3 mb-3">
-            <Download className="text-blue-500" size={20} />
+            <Download className="text-sky-600" size={20} />
             <h2 className="font-semibold">Xuất Backup</h2>
           </div>
           <p className="text-sm text-gray-500 mb-4">
@@ -67,7 +67,7 @@ export function ConfigBackup() {
           </p>
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+            className="flex items-center gap-2 px-4 py-2 ui-btn-primary"
           >
             <Download size={16} /> Xuất Backup
           </button>

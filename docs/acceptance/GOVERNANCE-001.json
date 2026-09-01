@@ -1,23 +1,17 @@
 {
   "requirement_id": "GOVERNANCE-001",
-  "objective": "Require material system changes to declare verifiable outcomes and keep project knowledge synchronized.",
+  "objective": "Migrate user_scripts next_flow_ids column from TEXT to JSONB in PostgreSQL and update script API handlers.",
   "acceptance": [
     {
       "id": "AC-1",
-      "criterion": "A material PR declares a machine-readable acceptance contract.",
-      "verification": "GitHub Actions acceptance-contract gate",
+      "criterion": "Database migration changes user_scripts.next_flow_ids column to JSONB with default '[]'::jsonb.",
+      "verification": "PostgreSQL schema migration 20260901000000_fix_next_flow_ids_to_jsonb.sql",
       "evidence_required": true
     },
     {
       "id": "AC-2",
-      "criterion": "The acceptance contract is valid against the repository schema.",
-      "verification": "Python standard-library validator",
-      "evidence_required": true
-    },
-    {
-      "id": "AC-3",
-      "criterion": "Material subsystem changes update requirement traceability.",
-      "verification": "Git diff enforcement in delivery-governance workflow",
+      "criterion": "Script API handlers create_script and update_script bind sqlx::types::Json<Vec<String>>.",
+      "verification": "Cargo test in hydragrow-backend",
       "evidence_required": true
     }
   ]

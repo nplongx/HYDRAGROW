@@ -1,0 +1,19 @@
+{
+  "requirement_id": "GOVERNANCE-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "hydragrow-backend/migrations/20260901000000_fix_next_flow_ids_to_jsonb.sql",
+      "environment": "PostgreSQL / GitHub Actions CI",
+      "verified_at": "2026-09-01"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test api::script",
+      "environment": "hydragrow-backend / local sandbox",
+      "verified_at": "2026-09-01"
+    }
+  ]
+}

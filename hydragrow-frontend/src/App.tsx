@@ -22,14 +22,10 @@ const queryClient = new QueryClient({
 });
 
 import Dashboard from './pages/Dashboard';
-const ControlPanel = React.lazy(() => import('./pages/ControlPanel'));
-const Analytics = React.lazy(() => import('./pages/Analytics'));
+import Operations from './pages/Operations';
+import Cultivation from './pages/Cultivation';
+import Journal from './pages/Journal';
 const Settings = React.lazy(() => import('./pages/Settings'));
-const DosingHistory = React.lazy(() => import('./pages/DosingHistory'));
-const CropSeasons = React.lazy(() => import('./pages/CropSeasons'));
-const SystemLog = React.lazy(() => import('./pages/SystemLog'));
-const RecipeBuilder = React.lazy(() => import('./pages/RecipeBuilder'));
-const Automation = React.lazy(() => import('./pages/Automation'));
 import { DevicePairing } from './pages/DevicePairing';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -55,15 +51,19 @@ function AppRoutes() {
           <Route path="/" element={<MainLayout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="control" element={<ControlPanel />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="dosing-history" element={<DosingHistory />} />
-            <Route path="crop-seasons" element={<CropSeasons />} />
-            <Route path="recipes" element={<RecipeBuilder />} />
-            <Route path="automation" element={<Automation />} />
+            <Route path="operations" element={<Operations />} />
+            <Route path="cultivation" element={<Cultivation />} />
+            <Route path="journal" element={<Journal />} />
             <Route path="settings" element={<Settings />} />
-            <Route path="logs" element={<SystemLog />} />
             <Route path="pairing" element={<DevicePairing />} />
+            {/* legacy deep links redirect into the merged tab pages */}
+            <Route path="control" element={<Navigate to="/operations" replace />} />
+            <Route path="automation" element={<Navigate to="/operations" replace />} />
+            <Route path="crop-seasons" element={<Navigate to="/cultivation" replace />} />
+            <Route path="recipes" element={<Navigate to="/cultivation" replace />} />
+            <Route path="dosing-history" element={<Navigate to="/cultivation" replace />} />
+            <Route path="logs" element={<Navigate to="/journal" replace />} />
+            <Route path="analytics" element={<Navigate to="/journal" replace />} />
           </Route>
         </Routes>
       </Suspense>

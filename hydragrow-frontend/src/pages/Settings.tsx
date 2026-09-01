@@ -621,6 +621,12 @@ const Settings = () => {
           </button>
         </SubCard>
 
+        <SubCard title="Ghép nối">
+            <button type="button" onClick={() => window.location.href = '/pairing'} className="ui-btn-primary w-full mt-4 flex items-center justify-center gap-2">
+                Ghép thiết bị mới
+            </button>
+        </SubCard>
+
         {/* INTEGRATION & NODE-RED */}
         <AccordionSection id="integrations" title="Tích hợp & Node-RED" icon={Network} isOpen={openSection === 'integrations'} onToggle={() => handleToggleSection('integrations')}>
           <div className="space-y-4 p-1">

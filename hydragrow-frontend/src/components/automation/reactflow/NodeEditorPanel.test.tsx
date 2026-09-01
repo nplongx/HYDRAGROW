@@ -29,6 +29,6 @@ describe('NodeEditorPanel', () => {
         onClose={() => {}}
       />,
     );
-    expect(screen.getByText('Action — Advance Stage')).toBeInTheDocument();
+    expect(screen.getByText('Action — Recipe')).toBeInTheDocument();
   });
 });

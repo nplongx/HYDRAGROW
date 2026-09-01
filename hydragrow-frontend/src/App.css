@@ -1,30 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #15803d;
-  --color-accent: #ca8a04;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
-  --color-water: #0284c7;
-  --color-surface: #ffffff;
-  --color-surface-muted: #ecfdf5;
-  --color-border: #bbf7d0;
-  --color-text: #14532d;
-  --color-text-muted: #4b6354;
+  --color-primary: #28d7f5;
+  --color-accent: #f5b84b;
+  --color-success: #38d39f;
+  --color-warning: #f5b84b;
+  --color-error: #f06d7b;
+  --color-water: #28d7f5;
+  --color-surface: #17243a;
+  --color-surface-muted: #1d2d46;
+  --color-border: #30435f;
+  --color-text: #e8f1fb;
+  --color-text-muted: #9fb2c9;
 }
 
 :root {
   color: var(--color-text);
-  background-color: #f0fdf4;
+  background-color: #0b1424;
 }
 
 body {
   margin: 0;
   color: var(--color-text);
-  background:
-    radial-gradient(circle at top left, rgba(187, 247, 208, 0.55), transparent 32rem),
-    linear-gradient(180deg, #f0fdf4 0%, #f7fee7 48%, #ecfdf5 100%);
+  background: linear-gradient(135deg, #0b1424 0%, #101d31 52%, #0d192b 100%);
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
@@ -50,7 +48,7 @@ p {
 
 @layer components {
   .app-page {
-    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto text-emerald-950 lg:max-w-none;
+    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto text-slate-100 lg:max-w-none;
   }
 
   .page-header {
@@ -74,7 +72,7 @@ p {
   }
 
   .ui-card {
-    @apply bg-white border border-emerald-100 rounded-2xl p-4 md:p-5 shadow-sm shadow-emerald-950/5;
+    @apply bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-5 shadow-sm shadow-slate-950/30;
   }
 
   .ui-form-row {
@@ -102,7 +100,7 @@ p {
   }
 
   .ui-input {
-    @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply w-full min-h-11 bg-slate-950 border border-slate-700 text-slate-100 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 focus:border-cyan-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .ui-btn-md {
@@ -110,7 +108,7 @@ p {
   }
 
   .ui-btn-primary {
-    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-slate-950 bg-cyan-300 hover:bg-cyan-200 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-300/30 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .ui-loading {

@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { BlockLogicEditor } from './BlockLogicEditor';
+import { ReactFlow, Background, Controls } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { AUTOMATION_NODE_TYPES } from './reactflow/nodeTypes';
+import { NodePalette } from './reactflow/NodePalette';
+import { NodeEditorPanel } from './reactflow/NodeEditorPanel';
+import { buildIrFromGraph } from './reactflow/buildIr';
+import { useAutomationBuilder } from '../../hooks/useAutomationBuilder';
+import { AutomationIrSchema, type AutomationIr } from '../../lib/automation/ir';
 import { compileToRhai } from '../../lib/automation/compileToRhai';
-import { AutomationIrSchema, type Action, type AutomationIr, type Condition } from '../../lib/automation/ir';
 import type { UserScript } from '../../types/automation';
 import {
   useCreateAutomationScript,
@@ -18,59 +24,30 @@ export interface FlowDetailDrawerProps {
   onClose: () => void;
 }
 
-const TRIGGER_FOR_KIND: Record<AutomationIr['kind'], AutomationIr['trigger']> = {
-  alert: { type: 'sensor' },
-  recipe_override: { type: 'fsm' },
-  action_command: { type: 'sensor' },
-};
-
-/** Pure — tách riêng để test không cần mount component hay mock react-query,
- * theo đúng pattern `canLoadIntoBuilder` đã có trong ScriptListPanel.tsx. */
-export function buildAutomationIr(
-  kind: AutomationIr['kind'],
-  blocklyResult: { conditions: Condition[]; actions: Action[] },
-): AutomationIr {
-  return {
-    kind,
-    trigger: TRIGGER_FOR_KIND[kind],
-    conditions: blocklyResult.conditions,
-    actions: blocklyResult.actions,
-    nodes: [],
-    edges: [],
-    next_flow_ids: [],
-  };
-}
-
 export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawerProps) {
   const isNew = script === 'new';
   const [name, setName] = useState(isNew ? 'Flow mới' : script.name);
-  const [kind, setKind] = useState<AutomationIr['kind']>(isNew ? 'alert' : script.kind);
   const [enabled, setEnabled] = useState(isNew ? true : script.enabled);
-  const [blocklyResult, setBlocklyResult] = useState<{ conditions: Condition[]; actions: Action[] }>(
-    !isNew && script.ir_json
-      ? { conditions: script.ir_json.conditions, actions: script.ir_json.actions }
-      : { conditions: [], actions: [] },
-  );
+
+  const builder = useAutomationBuilder();
+
+  useEffect(() => {
+    if (!isNew && script.ir_json) {
+      builder.loadFromIr(script.ir_json);
+    } else {
+      builder.setKind('alert');
+    }
+    // Seed once per Flow opened — not on every builder state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, !isNew && (script as UserScript).id]);
 
   const validateScript = useValidateAutomationScript(deviceId);
   const createScript = useCreateAutomationScript(deviceId);
-  // Luôn gọi hook (Rules of Hooks) — id rỗng vô hại vì nhánh isNew không dùng updateScript.
   const updateScript = useUpdateAutomationScript(deviceId, isNew ? '' : script.id);
   const deleteScript = useDeleteAutomationScript(deviceId);
 
-  const hasLegacyGraph = !isNew && (script.ir_json?.nodes.length ?? 0) > 0;
-
-  const initialConditions = useMemo(
-    () => (!isNew && script.ir_json ? script.ir_json.conditions : []),
-    [isNew, script],
-  );
-  const initialActions = useMemo(
-    () => (!isNew && script.ir_json ? script.ir_json.actions : []),
-    [isNew, script],
-  );
-
   const handleSave = async () => {
-    const ir = buildAutomationIr(kind, blocklyResult);
+    const ir: AutomationIr = buildIrFromGraph({ kind: builder.kind, nodes: builder.nodes, edges: builder.edges });
     const parsed = AutomationIrSchema.safeParse(ir);
     if (!parsed.success) {
       toast.error(`IR không hợp lệ: ${parsed.error.issues[0]?.message}`);
@@ -105,55 +82,62 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   return (
     <div className="flex h-full flex-col gap-2 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{isNew ? 'Flow mới' : `Sửa: ${script.name}`}</h2>
-        <button className="text-sm text-gray-500" onClick={onClose}>
+        <h2 className="text-lg font-semibold text-emerald-950">{isNew ? 'Flow mới' : `Sửa: ${script.name}`}</h2>
+        <button className="text-sm text-emerald-700/70" onClick={onClose}>
           Đóng
         </button>
       </div>
       <div className="flex items-center gap-2">
-        <input className="flex-1 rounded border px-2 py-1" value={name} onChange={(e) => setName(e.target.value)} />
-        <select
-          className="rounded border px-2 py-1 text-sm"
-          value={kind}
-          onChange={(e) => setKind(e.target.value as AutomationIr['kind'])}
-        >
+        <input className="ui-input flex-1" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="ui-input w-auto" value={builder.kind} onChange={(e) => builder.setKind(e.target.value as AutomationIr['kind'])}>
           <option value="alert">Alert</option>
           <option value="recipe_override">Recipe Override</option>
           <option value="action_command">Action Command</option>
         </select>
-        <label className="flex items-center gap-1 text-xs">
+        <label className="flex items-center gap-1 text-xs text-emerald-800/75">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           Bật
         </label>
       </div>
-      {hasLegacyGraph && (
-        <div className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-          Flow này được tạo bằng chế độ node-graph cũ. Lưu lại từ đây sẽ chuyển nó sang Blockly —
-          bố cục node-graph gốc sẽ không còn dùng được sau khi lưu.
+
+      <NodePalette onAddNode={builder.addNode} />
+
+      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-100 lg:flex-row">
+        <div className="min-h-[16rem] flex-1">
+          <ReactFlow
+            nodes={builder.nodes}
+            edges={builder.edges}
+            nodeTypes={AUTOMATION_NODE_TYPES}
+            onNodesChange={builder.onNodesChange}
+            onEdgesChange={builder.onEdgesChange}
+            onConnect={builder.onConnect}
+            onNodeClick={(_, node) => builder.setSelectedNodeId(node.id)}
+            fitView
+            className="h-full w-full"
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
         </div>
-      )}
-      <div className="flex-1 rounded border p-2">
-        <BlockLogicEditor
-          kind={kind}
-          onChange={setBlocklyResult}
-          initialConditions={initialConditions}
-          initialActions={initialActions}
-          className="h-full w-full"
-        />
+        {builder.selectedNode && (
+          <NodeEditorPanel
+            kind={builder.kind}
+            node={builder.selectedNode}
+            onChange={builder.updateNodeData}
+            onClose={() => builder.setSelectedNodeId(null)}
+          />
+        )}
       </div>
+
       <div className="flex justify-between">
         {!isNew ? (
-          <button className="rounded bg-red-50 px-3 py-1 text-sm text-red-600" onClick={handleDelete}>
+          <button className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700" onClick={handleDelete}>
             Xóa Flow
           </button>
         ) : (
           <span />
         )}
-        <button
-          className="rounded bg-emerald-600 px-3 py-1 text-white disabled:opacity-50"
-          disabled={createScript.isPending || updateScript.isPending}
-          onClick={handleSave}
-        >
+        <button className="ui-btn-primary" disabled={createScript.isPending || updateScript.isPending} onClick={handleSave}>
           Lưu Flow
         </button>
       </div>

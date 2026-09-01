@@ -1,0 +1,26 @@
+{
+  "requirement_id": "GOV-006",
+  "plan": "Plan Execution Governance v1",
+  "tasks": [
+    {
+      "id": "TASK-1",
+      "title": "Define plan execution record schema and lifecycle",
+      "status": "DONE",
+      "evidence": "docs/schemas/plan-execution-record.schema.json and docs/PLAN-EXECUTION-GOVERNANCE.md"
+    },
+    {
+      "id": "TASK-2",
+      "title": "Add CI validation and material-change enforcement",
+      "status": "DONE",
+      "evidence": ".github/workflows/plan-execution-governance.yml and .github/scripts/validate_plan_execution.py"
+    },
+    {
+      "id": "TASK-3",
+      "title": "Make Jules directives require the execution record before implementation and completion",
+      "status": "DONE",
+      "evidence": "AGENTS.md Delivery Plan Execution — MANDATORY section"
+    }
+  ],
+  "status": "VERIFIED",
+  "last_updated": "2026-09-01"
+}

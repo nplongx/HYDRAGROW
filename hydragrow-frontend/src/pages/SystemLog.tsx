@@ -122,7 +122,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         />
       ) : (
         <div className="relative pl-3">
-          <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-slate-200 via-slate-300 to-transparent pointer-events-none" />
+          <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-emerald-200 via-emerald-300 to-transparent pointer-events-none" />
           <div className="space-y-4">
             {systemEvents.map((ev: any, idx: number) => (
               <EventLogCard key={ev.id ?? idx} ev={ev} idx={idx} />

@@ -298,7 +298,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                       isSelected
                         ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500'
                         : isApplied
-                        ? 'bg-blue-50/60 border-blue-300'
+                        ? 'bg-emerald-50/60 border-emerald-300'
                         : 'bg-white border-emerald-100 hover:border-emerald-300'
                     }`}
                   >
@@ -309,9 +309,9 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                         {isApplied && (
                           <span 
                             title="Đang được áp dụng trên thiết bị" 
-                            className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0"
+                            className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span> 
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             Đang chạy
                           </span>
                         )}
@@ -334,7 +334,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                         title="Áp dụng công thức này cho trạm"
                         onClick={(e) => handleApplyTemplate(e, tmpl)}
                         disabled={applyRecipeMutation.isPending}
-                        className="p-1.5 rounded-lg text-blue-600 hover:text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-lg text-emerald-700 hover:text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
                       >
                         <Play size={14} />
                       </button>
@@ -476,11 +476,11 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Chu kỳ thay nước (ngày)</span>
-                      <input className="ui-input bg-blue-50/50 border-blue-200" type="number" min={1} placeholder="VD: 7" value={stage.water_change_interval_days ?? ''} onChange={(e) => updateStage(stage.id, { water_change_interval_days: e.target.value ? toNumber(e.target.value) : undefined })} />
+                      <input className="ui-input bg-sky-50/50 border-sky-200" type="number" min={1} placeholder="VD: 7" value={stage.water_change_interval_days ?? ''} onChange={(e) => updateStage(stage.id, { water_change_interval_days: e.target.value ? toNumber(e.target.value) : undefined })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Mực nước mục tiêu (cm)</span>
-                      <input className="ui-input bg-blue-50/50 border-blue-200" type="number" step="0.5" value={stage.water_level_target} onChange={(e) => updateStage(stage.id, { water_level_target: toNumber(e.target.value, 20) })} />
+                      <input className="ui-input bg-sky-50/50 border-sky-200" type="number" step="0.5" value={stage.water_level_target} onChange={(e) => updateStage(stage.id, { water_level_target: toNumber(e.target.value, 20) })} />
                     </label>
                   </div>
                 </div>

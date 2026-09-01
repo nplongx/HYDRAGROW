@@ -173,7 +173,7 @@ export function DevicePairing() {
         <button
           onClick={claimDevice}
           disabled={submitting || !newDeviceId.trim()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 ui-btn-primary disabled:opacity-50"
         >
           <Plus size={16} /> Liên Kết
         </button>
@@ -181,8 +181,8 @@ export function DevicePairing() {
 
       {/* QR code */}
       {qrPayload && (
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg text-center">
-          <p className="text-sm text-blue-700 font-medium mb-3">Quét mã QR trên app mobile:</p>
+        <div className="mt-4 p-4 bg-sky-50 rounded-lg text-center">
+          <p className="text-sm text-sky-700 font-medium mb-3">Quét mã QR trên app mobile:</p>
           <div className="inline-block bg-white p-4 rounded-lg">
             <QRCode value={qrPayload} size={200} level="M" />
           </div>

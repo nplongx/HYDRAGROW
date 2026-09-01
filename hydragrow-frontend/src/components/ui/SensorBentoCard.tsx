@@ -15,7 +15,7 @@ interface SensorBentoCardProps {
 }
 
 const themeClasses: Record<string, string> = {
-  blue: 'text-blue-700 bg-blue-50 border-blue-100',
+  blue: 'text-sky-700 bg-sky-50 border-sky-100',
   fuchsia: 'text-fuchsia-700 bg-fuchsia-50 border-fuchsia-100',
   orange: 'text-orange-700 bg-orange-50 border-orange-100',
   cyan: 'text-cyan-700 bg-cyan-50 border-cyan-100',

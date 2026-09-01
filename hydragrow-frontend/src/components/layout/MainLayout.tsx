@@ -83,9 +83,9 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-emerald-50/60 text-emerald-950 font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
       {/* ── Header ── */}
-      <header className="flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur-md border-b border-emerald-100 z-30 pt-[calc(env(safe-area-inset-top)+12px)]">
+      <header className="flex items-center justify-between px-4 py-3 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 z-30 pt-[calc(env(safe-area-inset-top)+12px)]">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-sm shadow-emerald-500/30">
             <Sprout size={16} className="text-white" strokeWidth={2.5} />
@@ -107,7 +107,7 @@ const MainLayout: React.FC = () => {
       </header>
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col border-r border-emerald-100 bg-white px-4 pb-6 pt-24 shadow-sm">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col border-r border-slate-800 bg-slate-900 px-4 pb-6 pt-24 shadow-sm">
         <nav aria-label="Điều hướng chính" className="flex flex-col gap-5">
           {navGroups.map((group) => (
             <div key={group.label} className="space-y-1">
@@ -143,7 +143,7 @@ const MainLayout: React.FC = () => {
         ref={menuRef}
         className={`fixed bottom-[88px] left-3 right-3 z-50 transition-all duration-200 ease-out origin-bottom lg:hidden ${isMenuOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0 pointer-events-none'}`}
       >
-        <div className="bg-white border border-emerald-100 rounded-2xl overflow-hidden shadow-xl shadow-emerald-950/10">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl shadow-slate-950/40">
           {moreMenuItems.map((item, index) => {
             const active = location.pathname === item.path;
             return (

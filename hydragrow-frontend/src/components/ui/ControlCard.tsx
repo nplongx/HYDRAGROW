@@ -6,8 +6,8 @@ import { toast } from 'react-hot-toast';
 interface ControlCardProps {
   title: string;
   icon: React.ElementType;
-  colorClass: string; // Tailwind text color class (e.g., text-blue-500)
-  borderClass: string; // Tailwind border color class (e.g., border-blue-500)
+  colorClass: string; // Tailwind text color class (e.g., text-sky-600)
+  borderClass: string; // Tailwind border color class (e.g., border-sky-600)
   isOn: boolean;
   pumpId: string;
   lockedMessage?: string;

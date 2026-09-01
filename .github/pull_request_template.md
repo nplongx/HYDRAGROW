@@ -1,15 +1,13 @@
 ## Requirement
-- Issue / Requirement ID: 
-- Change class (`C0`-`C7`): 
+- Issue / Requirement ID:
+- Change class (`C0`-`C7`):
+
+## Implementation Plan
+- Plan / source document (if applicable):
+- Progress document updated: `docs/project-state/CURRENT-STATUS.md`
 
 ## Objective
 What user/system outcome is this change intended to achieve?
-
-## Acceptance Contract
-- Acceptance contract: `docs/acceptance/<requirement-id>.json`
-- Evidence contract: `docs/evidence/<requirement-id>.json`
-- For C1-C7 changes, commit both contracts in the same PR.
-- Schemas: `docs/schemas/acceptance-contract.schema.json`, `docs/schemas/evidence-contract.schema.json`
 
 ## Acceptance Criteria
 
@@ -18,18 +16,16 @@ What user/system outcome is this change intended to achieve?
 | AC-1 |  |  |  |  |
 
 ## Verification
-- [ ] Acceptance contract gate
-- [ ] Evidence contract gate
-- [ ] Delivery governance gate
-- [ ] Unit / integration tests
-- [ ] E2E / scenario test
+- [ ] Relevant unit / integration tests
+- [ ] E2E / scenario test (if applicable)
 - [ ] Benchmark / performance evidence (if applicable)
 - [ ] Hardware / staging / deployment verification (if applicable)
+- [ ] Delivery / outcome review completed
 
-## Documentation
-- [ ] Required architecture/API/operations docs updated
-- [ ] `docs/project-state/CURRENT-STATUS.md` updated if project state changed
+## Documentation / Project Progress
+- [ ] `docs/project-state/CURRENT-STATUS.md` updated with progress / status / blockers
 - [ ] `docs/project-state/TRACEABILITY.md` updated for material requirements
+- [ ] Other affected architecture/API/operations docs updated
 
 ## Deployment
 - Environment:

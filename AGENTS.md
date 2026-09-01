@@ -4,6 +4,33 @@ These guidelines govern all automated coding tasks executed by Google Jules (`ju
 
 ---
 
+## Delivery Plan Execution — MANDATORY
+
+For every non-trivial task that is based on an implementation plan, Jules MUST treat the plan as an executable delivery contract.
+
+**BEFORE writing product code:**
+1. Identify the requirement ID and plan name.
+2. Create or update `docs/project-state/plan-execution/<requirement-id>.json`.
+3. Create one `TASK-*` entry for **every numbered task/phase in the supplied plan**.
+4. Record acceptance criteria, affected docs, and required evidence.
+
+**DURING implementation:**
+5. Mark the current task `IN_PROGRESS` before working on it.
+6. Mark it `DONE` only after verification and record concrete evidence in the execution record.
+7. Keep the execution record synchronized after each task/checkpoint; do not postpone all documentation until the end.
+8. If a task cannot be completed, mark it `BLOCKED` and explain the blocker. Never silently omit it.
+
+**BEFORE opening/declaring the PR complete:**
+9. Every planned task must be `DONE` for a `VERIFIED`/`ACCEPTED` plan.
+10. Every `DONE` task must have evidence.
+11. Update affected `CURRENT-STATUS.md` and `TRACEABILITY.md`.
+12. The PR body must link the plan and the execution record and report the task matrix.
+13. A green test suite does NOT substitute for the execution record or documentation.
+
+If these artifacts cannot be created or updated, STOP and report `BLOCKED_BY_DELIVERY_GOVERNANCE`; do not claim the implementation is complete.
+
+---
+
 ## 1. Triage Directive (When to use Jules)
 
 Dispatch tasks to Jules when ALL of the following apply:
@@ -114,7 +141,7 @@ To maximize the ratio of mergeable PRs vs. failed or hallucinated sessions, adhe
   ```bash
   agentctl lock acquire <agent_name> <task_id> <file_path...>
   ```
-  Inspect holders with `agentctl lock status` and hand back with `agentctl lock release <task_id>`. A conflicting acquire exits `1` and names the current holder.
+  Inspect holders with `agentctl lock status` and hand back with `agentctl lock release <task_id>`.
 - **The Baton Pass Protocol**: Write handover documents when a session pauses or hands off work (e.g. `.agent/history/YYYY-MM-DD-handover-[task_id].md`).
 
 ### Standard Jules Guardrails Footer

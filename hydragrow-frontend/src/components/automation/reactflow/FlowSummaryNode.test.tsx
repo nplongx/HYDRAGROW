@@ -62,7 +62,7 @@ describe('FlowSummaryNode', () => {
 
 const KIND_COLORS: Record<string, string> = {
   alert: 'bg-red-100 text-red-700',
-  recipe_override: 'bg-blue-100 text-blue-700',
+  recipe_override: 'bg-sky-100 text-sky-700',
   action_command: 'bg-amber-100 text-amber-700',
 };
 

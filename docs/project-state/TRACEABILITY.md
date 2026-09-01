@@ -10,6 +10,7 @@ This register connects product/system requirements to implementation, verificati
 | GOV-002 | AC-1 machine-readable contract; AC-2 schema validation; AC-3 traceability enforcement | `docs/acceptance/GOVERNANCE-001.json`, `.github/workflows/acceptance-contract.yml` | Acceptance contract gate + delivery governance gate | GitHub Actions / PR validation | Acceptance contract docs | VERIFIED |
 | GOV-003 | AC-1 evidence contract required; AC-2 evidence is attributable; AC-3 quantitative target comparison is deterministic | `docs/schemas/evidence-contract.schema.json`, `.github/scripts/validate_evidence_contract.py`, `.github/workflows/evidence-contract.yml` | Evidence contract gate | GitHub Actions / PR validation | Evidence contract docs | VERIFIED |
 | Project requirements | Add project-specific rows as requirements are defined | Pending | Pending | Pending | Pending | NOT_STARTED |
+| MIX valve control | Support MIX and MIX_VALVE as accepted non-dosing pump names in control API and fallback pump status | `hydragrow-backend/src/api/control.rs` | `cargo test --bin hydragrow-backend api::control` | Render / Production | `hydragrow-backend/src/api/control.rs` | VERIFIED |
 
 ## Rules
 

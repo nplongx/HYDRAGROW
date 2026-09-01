@@ -1,0 +1,27 @@
+{
+  "requirement_id": "GOVERNANCE-002",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "PR template and evidence-contract.yml",
+      "environment": "GitHub Actions / PR validation",
+      "verified_at": "2026-09-01"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": ".github/scripts/validate_evidence_contract.py",
+      "environment": "GitHub Actions / ubuntu-latest",
+      "verified_at": "2026-09-01"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Validator comparison implementation; exercised by evidence-contract gate",
+      "environment": "GitHub Actions / ubuntu-latest",
+      "verified_at": "2026-09-01",
+      "notes": "This governance contract contains non-quantitative criteria; quantitative comparator logic is covered by the validator implementation and is ready for product contracts that declare metric/operator/target/unit."
+    }
+  ]
+}

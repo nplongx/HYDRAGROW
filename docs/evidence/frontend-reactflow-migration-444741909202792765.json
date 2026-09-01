@@ -1,0 +1,9 @@
+{
+  "requirement": "Remove Blockly, Unify on the React Flow Automation Editor",
+  "verification": [
+    "V-1: AC-1 verified via NodeEditorPanel.test.tsx.",
+    "V-2: AC-2 verified via package.json diff.",
+    "V-3: AC-3 verified via useAutomationBuilder.test.ts.",
+    "V-4: AC-4 verified via npx vitest run (88/88 passed)."
+  ]
+}

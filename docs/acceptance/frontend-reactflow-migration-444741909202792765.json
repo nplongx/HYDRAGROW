@@ -1,0 +1,10 @@
+{
+  "requirement": "Remove Blockly, Unify on the React Flow Automation Editor",
+  "objective": "Delete the Blockly-based automation logic editor and replace it with the React Flow node editor.",
+  "acceptance_criteria": [
+    "AC-1: The React Flow editor supports action_command and recipe_override nodes.",
+    "AC-2: The Blockly dependency is removed.",
+    "AC-3: Legacy flat IR scripts are synthesized into starter graphs when opened.",
+    "AC-4: All automated tests pass."
+  ]
+}

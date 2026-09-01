@@ -2,14 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import type { UpsertScriptRequest, UserScript } from '../types/automation';
 
-export function useAutomationScripts(deviceId: string) {
+export function useAutomationScripts(deviceId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['automation-scripts', deviceId],
     queryFn: () =>
       apiGet<{ status: string; data: UserScript[] }>(`/devices/${deviceId}/scripts`).then(
         (r) => r.data,
       ),
-    enabled: !!deviceId,
+    enabled: options?.enabled !== undefined ? options.enabled && !!deviceId : !!deviceId,
   });
 }
 

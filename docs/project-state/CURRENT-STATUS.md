@@ -22,7 +22,7 @@ Last updated: 2026-09-01
 | Frontend | IMPLEMENTING | Require E2E evidence for material behavior changes. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
-| CI / automation | IMPLEMENTING | Delivery governance is enforced by GitHub Actions. |
+| CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 
 ## Active blockers
 

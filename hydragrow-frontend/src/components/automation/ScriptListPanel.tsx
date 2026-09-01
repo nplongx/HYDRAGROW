@@ -24,7 +24,7 @@ function ScriptRow({ deviceId, script, onLoad }: { deviceId: string; script: Use
       </span>
       <div className="flex gap-2">
         <button
-          className="text-xs text-blue-600 disabled:text-gray-300"
+          className="text-xs text-emerald-700 disabled:text-emerald-800/30"
           disabled={!canLoadIntoBuilder(script)}
           title={canLoadIntoBuilder(script) ? undefined : 'Script viết tay, không thể mở lại trong visual builder'}
           onClick={() => script.ir_json && onLoad(script.ir_json)}

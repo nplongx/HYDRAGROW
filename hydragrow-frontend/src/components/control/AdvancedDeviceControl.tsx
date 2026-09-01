@@ -16,7 +16,7 @@ interface AdvancedDeviceControlProps {
   canSendCommands: boolean;
   isEmergency: boolean;
   isAutoMode: boolean;
-  colorTheme: 'orange' | 'fuchsia' | 'blue' | 'indigo' | 'sky' | string;
+  colorTheme: 'orange' | 'fuchsia' | 'water' | 'sky' | string;
 }
 
 export const AdvancedDeviceControl = ({
@@ -47,11 +47,10 @@ export const AdvancedDeviceControl = ({
   const themeClasses: Record<string, { activeIcon: string; glow: string; border: string }> = {
     orange: { activeIcon: 'bg-orange-600 text-white', glow: 'border-orange-200 bg-orange-50', border: 'border-orange-300' },
     fuchsia: { activeIcon: 'bg-fuchsia-600 text-white', glow: 'border-fuchsia-200 bg-fuchsia-50', border: 'border-fuchsia-300' },
-    blue: { activeIcon: 'bg-blue-600 text-white', glow: 'border-blue-200 bg-blue-50', border: 'border-blue-300' },
-    indigo: { activeIcon: 'bg-indigo-600 text-white', glow: 'border-indigo-200 bg-indigo-50', border: 'border-indigo-300' },
+    water: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
     sky: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
   };
-  const activeTheme = themeClasses[colorTheme] || themeClasses.blue;
+  const activeTheme = themeClasses[colorTheme] || themeClasses.water;
 
   const disabledReason = !canSendCommands
     ? 'Chưa kết nối máy chủ'

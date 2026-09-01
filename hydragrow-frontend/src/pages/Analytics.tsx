@@ -5,7 +5,7 @@ import { SubCard } from '../components/ui/SubCard';
 
 const Analytics = () => {
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6 pb-28 text-emerald-950">
+    <div className="app-page max-w-4xl">
       <PageHeader
         icon={ChartIcon}
         title="Grafana & Prometheus Observability"
@@ -22,7 +22,7 @@ const Analytics = () => {
               href="http://localhost:3000"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-medium transition-all shadow-sm"
             >
               <ExternalLink size={16} />
               <span>Mở Grafana Dashboard</span>
@@ -37,7 +37,7 @@ const Analytics = () => {
               <span><b>Adaptive Learning:</b> Gain, Step Ratio, Tuner State & Tolerance.</span>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
-              <Server size={16} className="text-blue-700 shrink-0" />
+              <Server size={16} className="text-sky-700 shrink-0" />
               <span><b>MIMO Matrix & Kalman:</b> Độ tin cậy cơ cấu chấp hành & trạng thái ma trận.</span>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">

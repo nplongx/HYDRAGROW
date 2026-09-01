@@ -69,7 +69,7 @@ const SystemLog = () => {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto pb-28 text-emerald-950">
+    <div className="app-page max-w-3xl">
       <PageHeader
         icon={Clock}
         title="Nhật Ký Hành Trình"
@@ -87,7 +87,7 @@ const SystemLog = () => {
                 key={btn.id}
                 onClick={() => setFilter(btn.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border whitespace-nowrap ${
-                  active ? 'bg-blue-500 text-white border-transparent shadow-md' : 'bg-white text-emerald-800 border-emerald-100 hover:bg-emerald-50'
+                  active ? 'bg-sky-600 text-white border-transparent shadow-md' : 'bg-white text-emerald-800 border-emerald-100 hover:bg-emerald-50'
                 }`}
               >
                 <Icon size={12} />

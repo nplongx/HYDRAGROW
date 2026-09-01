@@ -24,10 +24,10 @@ jobs:
         run: |
           set -euo pipefail
           body="${PR_BODY:-}"
-          path=$(printf '%s\n' "$body" | sed -n 's/^Acceptance contract: `\([^`]*\)`.*/\1/p' | head -n 1)
+          path=$(printf '%s\n' "$body" | sed -n 's/^- Acceptance contract: `\([^`]*\)`.*/\1/p' | head -n 1)
           if [ -z "$path" ]; then
             echo "Missing machine-readable acceptance contract declaration."
-            echo "Add: Acceptance contract: \`docs/acceptance/<requirement-id>.json\`"
+            echo "Add: - Acceptance contract: `docs/acceptance/<requirement-id>.json`"
             exit 1
           fi
           case "$path" in

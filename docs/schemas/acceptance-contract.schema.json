@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nplongx/HYDRAGROW/blob/main/docs/schemas/acceptance-contract.schema.json",
+  "title": "HYDRAGROW Acceptance Contract",
+  "type": "object",
+  "required": ["requirement_id", "objective", "acceptance"],
+  "properties": {
+    "requirement_id": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "criterion", "verification"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^AC-[0-9]+$" },
+          "criterion": { "type": "string", "minLength": 1 },
+          "metric": { "type": "string" },
+          "operator": { "enum": ["=", "!=", "<", "<=", ">", ">=", "contains", "exists"] },
+          "target": {},
+          "unit": { "type": "string" },
+          "verification": { "type": "string", "minLength": 1 },
+          "evidence_required": { "type": "boolean", "default": true }
+        },
+        "allOf": [
+          {
+            "if": { "required": ["metric"] },
+            "then": { "required": ["operator", "target"] }
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -3,6 +3,13 @@ name: acceptance-contract
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-shared/**'
+      - 'hydragrow-frontend/**'
+      - 'hydragrow-controller-core/**'
+      - 'hydragrow-simulator/**'
+      - 'hydragrow-firmware/**'
 
 permissions:
   contents: read
@@ -27,13 +34,9 @@ jobs:
           path=$(printf '%s\n' "$body" | sed -n 's/^- Acceptance contract: `\([^`]*\)`.*/\1/p' | head -n 1)
           if [ -z "$path" ]; then
             echo "Missing machine-readable acceptance contract declaration."
-            echo "Add: - Acceptance contract: `docs/acceptance/<requirement-id>.json`"
             exit 1
           fi
-          case "$path" in
-            docs/acceptance/*.json) ;;
-            *) echo "Contract must live under docs/acceptance/ as JSON: $path"; exit 1 ;;
-          esac
+          case "$path" in docs/acceptance/*.json) ;; *) echo "Acceptance contract must be under docs/acceptance/: $path"; exit 1;; esac
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Validate contract structure
@@ -47,10 +50,8 @@ jobs:
         run: |
           set -euo pipefail
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
-          if grep -Eq '^hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/' <<< "$changed"; then
-            grep -Fq "$CONTRACT_PATH" <<< "$changed" || {
-              echo "Material product change detected but the declared acceptance contract was not changed."
-              exit 1
-            }
-          fi
+          grep -Fq "$CONTRACT_PATH" <<< "$changed" || {
+            echo "Material product change did not update the declared acceptance contract."
+            exit 1
+          }
           echo "Acceptance contract gate passed."

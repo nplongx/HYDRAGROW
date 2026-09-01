@@ -5,6 +5,11 @@
 ## Objective
 What user/system outcome is this change intended to achieve?
 
+## Acceptance Contract
+- Acceptance contract: `docs/acceptance/<requirement-id>.json`
+- For C1-C7 changes, commit the contract in the same PR.
+- Schema: `docs/schemas/acceptance-contract.schema.json`
+
 ## Acceptance Criteria
 
 | ID | Criterion | Target / Expected | Actual | Evidence |

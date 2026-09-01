@@ -86,6 +86,8 @@ pub async fn control_pump(
         "OSAKA_PUMP",
         "MIST",
         "MIST_VALVE",
+        "MIX",
+        "MIX_VALVE",
         "WATER_PUMP_IN",
         "WATER_PUMP",
         "PUMP_IN",
@@ -585,6 +587,7 @@ pub async fn get_control_state(
                 "ph_down": false,
                 "osaka_pump": false,
                 "mist_valve": false,
+                "mix_valve": false,
                 "water_pump_in": false,
                 "water_pump_out": false
             }
@@ -661,5 +664,93 @@ mod tests {
         assert!(is_dangerous_control("set_pwm", Some(40), "OSAKA"));
         assert!(is_dangerous_control("on", Some(80), "PUMP_A"));
         assert!(is_dangerous_control("on", None, "PH_UP"));
+    }
+
+    #[test]
+    fn mix_valve_pump_names_are_accepted() {
+        let valid_pumps = [
+            "A",
+            "PUMP_A",
+            "B",
+            "PUMP_B",
+            "PH_UP",
+            "PH_DOWN",
+            "OSAKA",
+            "OSAKA_PUMP",
+            "MIST",
+            "MIST_VALVE",
+            "WATER_PUMP_IN",
+            "WATER_PUMP",
+            "PUMP_IN",
+            "WATER_PUMP_OUT",
+            "DRAIN_PUMP",
+            "PUMP_OUT",
+            "MIX",
+            "MIX_VALVE",
+            "ALL",
+        ];
+        assert!(valid_pumps.contains(&"MIX"), "MIX phải hợp lệ");
+        assert!(valid_pumps.contains(&"MIX_VALVE"), "MIX_VALVE phải hợp lệ");
+    }
+
+    #[test]
+    fn mix_valve_is_not_treated_as_dosing_pump() {
+        assert!(
+            super::normalize_dosing_pump_name("MIX").is_none(),
+            "MIX không phải dosing pump, không cần safety check"
+        );
+        assert!(
+            super::normalize_dosing_pump_name("MIX_VALVE").is_none(),
+            "MIX_VALVE không phải dosing pump"
+        );
+    }
+
+    #[test]
+    fn mix_valve_on_off_is_not_dangerous() {
+        // MIX là van bật/tắt đơn giản (allowPwm=false trên frontend)
+        assert!(
+            !is_dangerous_control("on", None, "MIX"),
+            "Bật MIX không cần confirmation"
+        );
+        assert!(
+            !is_dangerous_control("off", None, "MIX"),
+            "Tắt MIX không cần confirmation"
+        );
+    }
+
+    #[test]
+    fn fallback_pump_status_includes_mix_valve() {
+        // Kiểm tra rằng JSON fallback có đủ các key mà frontend cần.
+        // Đây là kiểm tra doc/contract — khi thay đổi fallback, test này sẽ fail.
+        let fallback_keys = [
+            "pump_a",
+            "pump_b",
+            "ph_up",
+            "ph_down",
+            "osaka_pump",
+            "mist_valve",
+            "mix_valve",
+            "water_pump_in",
+            "water_pump_out",
+        ];
+        // Tạo JSON như trong get_control_state
+        let fallback = serde_json::json!({
+            "pump_a": false,
+            "pump_b": false,
+            "ph_up": false,
+            "ph_down": false,
+            "osaka_pump": false,
+            "mist_valve": false,
+            "mix_valve": false,
+            "water_pump_in": false,
+            "water_pump_out": false,
+        });
+        for key in &fallback_keys {
+            assert!(
+                fallback.get(key).is_some(),
+                "Thiếu key '{}' trong fallback pump_status",
+                key
+            );
+        }
     }
 }

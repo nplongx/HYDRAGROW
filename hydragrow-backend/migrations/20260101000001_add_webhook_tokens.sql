@@ -1,6 +1,6 @@
 CREATE TABLE webhook_tokens (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id   TEXT NOT NULL REFERENCES device_config(device_id) ON DELETE CASCADE,
+    device_id   TEXT NOT NULL REFERENCES device_configs(device_id) ON DELETE CASCADE,
     label       TEXT NOT NULL,
     token_hash  TEXT NOT NULL UNIQUE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -1,0 +1,23 @@
+{
+  "requirement_id": "GOV-005",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": 6.4,
+      "unit": "seconds",
+      "source": "governance self-test fixture: valid sample",
+      "environment": "GitHub Actions / ubuntu-latest",
+      "verified_at": "2026-09-01"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": 13.7,
+      "unit": "seconds",
+      "source": "governance self-test fixture: invalid sample is expected to be rejected",
+      "environment": "GitHub Actions / ubuntu-latest",
+      "verified_at": "2026-09-01"
+    }
+  ]
+}

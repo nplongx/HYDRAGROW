@@ -7,8 +7,9 @@ What user/system outcome is this change intended to achieve?
 
 ## Acceptance Contract
 - Acceptance contract: `docs/acceptance/<requirement-id>.json`
-- For C1-C7 changes, commit the contract in the same PR.
-- Schema: `docs/schemas/acceptance-contract.schema.json`
+- Evidence contract: `docs/evidence/<requirement-id>.json`
+- For C1-C7 changes, commit both contracts in the same PR.
+- Schemas: `docs/schemas/acceptance-contract.schema.json`, `docs/schemas/evidence-contract.schema.json`
 
 ## Acceptance Criteria
 
@@ -17,6 +18,9 @@ What user/system outcome is this change intended to achieve?
 | AC-1 |  |  |  |  |
 
 ## Verification
+- [ ] Acceptance contract gate
+- [ ] Evidence contract gate
+- [ ] Delivery governance gate
 - [ ] Unit / integration tests
 - [ ] E2E / scenario test
 - [ ] Benchmark / performance evidence (if applicable)

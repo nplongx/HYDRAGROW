@@ -51,7 +51,7 @@ Jules automatically infers test and build verification commands via `scripts/com
 - **Read Before Write**: Always inspect target files and surrounding symbol signatures (via grep or view tools) before applying changes.
 - **Scope Locks**: Strictly adhere to designated file bounds. Do NOT modify files outside the explicit task scope or alter shared infrastructural components unless assigned.
 - **Falsifiable Criteria**: Never use unfalsifiable goals ("utterly perfect", "complete refactor"). Define tasks with binary scoreable criteria (e.g. passing test counts, 0 lint errors, explicit hard-fails).
-- **Carry Evidence with Claims**: "It works" means pasting terminal verification output. Exit code 0 alone proves only process survival; inspect outputs/artifacts to prove function.
+- **Carry Evidence with Claims**: "It works" means pasting terminal verification output to the PR. Exit code 0 alone proves only process survival; inspect outputs/artifacts to prove function.
 - **No Test Weakening Rule**: Never make a test pass by deleting assertions, commenting out checks, or weakening requirements. Leave unmet requirements RED with clear fix rationale.
 - **Explicit File Ownership**: Sequence parallel swarm agents with explicit non-overlapping file ownership to prevent concurrent drift.
 - **Rebase Before PR**: Fetch latest `main`, rebase onto `origin/main`, re-execute verification suite. If the resulting diff is empty, close/abort PR without pushing.
@@ -76,6 +76,9 @@ The repository delivery lifecycle is defined by `docs/DELIVERY-GOVERNANCE.md`. J
 - **Documentation is part of the change:** synchronize architecture/API/operations docs and project-state artifacts when affected.
 - **Project state is explicit:** update `docs/project-state/CURRENT-STATUS.md` when implementation or deployment status changes and `docs/project-state/TRACEABILITY.md` for material requirements.
 - **Jules verdicts:** `ACCEPTED` only when code, outcome, evidence, and docs pass; otherwise `NEEDS CHANGES` or `BLOCKED`. `LGTM` alone is never a delivery acceptance.
+- **Acceptance contract:** C1-C7 changes must declare and commit `docs/acceptance/<requirement-id>.json` in the same PR.
+- **Evidence contract:** C1-C7 changes must declare and commit `docs/evidence/<requirement-id>.json` in the same PR. Quantitative PASS results must include actual value, matching unit, and a reproducible source.
+- **Machine evidence is authoritative:** do not mark a quantitative acceptance criterion PASS when the evidence contract's comparison fails.
 
 ---
 

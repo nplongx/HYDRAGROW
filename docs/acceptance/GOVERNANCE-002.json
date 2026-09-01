@@ -1,0 +1,24 @@
+{
+  "requirement_id": "GOVERNANCE-002",
+  "objective": "Require reproducible evidence for acceptance decisions and automatically validate quantitative outcomes when targets are declared.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "A material PR declares both acceptance and evidence contracts.",
+      "verification": "GitHub Actions evidence-contract gate",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Evidence contains a PASS/FAIL/BLOCKED result, source, and acceptance criterion identifier.",
+      "verification": "Python standard-library evidence validator",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Quantitative evidence satisfies the declared target and unit.",
+      "verification": "Deterministic comparison in evidence validator",
+      "evidence_required": true
+    }
+  ]
+}

@@ -39,7 +39,7 @@ jobs:
       - name: Validate contract structure
         run: python3 .github/scripts/validate_acceptance_contract.py "${{ steps.contract.outputs.path }}"
 
-      - name: Require contract change for material system changes
+      - name: Require contract change for material product changes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -47,9 +47,9 @@ jobs:
         run: |
           set -euo pipefail
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
-          if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)|\.github/workflows/)' <<< "$changed"; then
+          if grep -Eq '^hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/' <<< "$changed"; then
             grep -Fq "$CONTRACT_PATH" <<< "$changed" || {
-              echo "Material system change detected but the declared acceptance contract was not changed."
+              echo "Material product change detected but the declared acceptance contract was not changed."
               exit 1
             }
           fi

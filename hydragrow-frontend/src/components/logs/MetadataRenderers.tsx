@@ -74,7 +74,7 @@ export const GenericMetadata = ({ meta, title = 'Thông số kỹ thuật' }: { 
     .map(([key, value]) => ({
       label: formatMetadataLabel(key),
       value: formatMetadataValue(value),
-      accent: key === 'event_type' || key === 'cycle_id' ? 'text-indigo-700 font-mono font-bold' : undefined,
+      accent: key === 'event_type' || key === 'cycle_id' ? 'text-emerald-800 font-mono font-bold' : undefined,
     }));
 
   if (rows.length === 0) return null;

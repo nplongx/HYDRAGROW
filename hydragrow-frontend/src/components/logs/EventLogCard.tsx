@@ -34,10 +34,10 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
   }
   switch (category?.toLowerCase().replace('_', '')) {
     case 'dosing': return { icon: FlaskConical, iconColor: 'text-cyan-700', borderColor: 'border-cyan-500/10', bgColor: 'from-cyan-500/5 to-transparent', dot: 'bg-cyan-400' };
-    case 'water': return { icon: Waves, iconColor: 'text-blue-700', borderColor: 'border-blue-200', bgColor: 'from-blue-500/5 to-transparent', dot: 'bg-blue-400' };
+    case 'water': return { icon: Waves, iconColor: 'text-sky-700', borderColor: 'border-sky-200', bgColor: 'from-sky-500/5 to-transparent', dot: 'bg-sky-400' };
     case 'calibration': return { icon: Settings2, iconColor: 'text-purple-700', borderColor: 'border-purple-500/10', bgColor: 'from-purple-500/5 to-transparent', dot: 'bg-purple-400' };
     case 'sensor': return { icon: Radio, iconColor: 'text-amber-800', borderColor: 'border-amber-500/10', bgColor: 'from-amber-500/5 to-transparent', dot: 'bg-amber-400' };
-    case 'useraction': return { icon: UserCheck, iconColor: 'text-indigo-700', borderColor: 'border-indigo-500/10', bgColor: 'from-indigo-500/5 to-transparent', dot: 'bg-indigo-400' };
+    case 'useraction': return { icon: UserCheck, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-500' };
     case 'system':
       if (title.includes('Offline') || title.includes('Mất')) {
         return { icon: Power, iconColor: 'text-emerald-700/75', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-500' };
@@ -50,13 +50,13 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
       if (level === 'success') {
         return { icon: CheckCircle, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-400' };
       }
-      return { icon: Info, iconColor: 'text-indigo-700', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-indigo-500' };
+      return { icon: Info, iconColor: 'text-emerald-700', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-600' };
   }
 };
 
 const FsmBadge = ({ message }: { message: string }) => {
   const stateMap: Record<string, { label: string; color: string }> = {
-    'WaterRefilling': { label: 'Đang cấp nước', color: 'text-blue-700 bg-blue-50 border-blue-200' },
+    'WaterRefilling': { label: 'Đang cấp nước', color: 'text-sky-700 bg-sky-50 border-sky-200' },
     'WaterDraining': { label: 'Đang xả nước', color: 'text-sky-700 bg-sky-50 border-sky-200' },
     'MimoDosing': { label: 'Đang châm MIMO', color: 'text-cyan-700 bg-cyan-50 border-cyan-200' },
     'ActiveMixing': { label: 'Trộn tuần hoàn', color: 'text-purple-700 bg-purple-50 border-purple-200' },
@@ -92,7 +92,7 @@ export const EventLogCard = ({ ev, idx }: { ev: SystemEvent; idx: number }) => {
         </div>
       </div>
 
-      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-slate-900/60 to-transparent border-emerald-100 rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-emerald-200 ${style.bgColor}`}>
+      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-emerald-950/5 to-transparent border-emerald-100 rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-emerald-200 ${style.bgColor}`}>
         <div className="flex items-start justify-between gap-4 mb-2">
           <div className="space-y-1 min-w-0">
             <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>

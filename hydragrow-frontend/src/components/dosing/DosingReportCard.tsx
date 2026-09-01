@@ -44,7 +44,7 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
               ? 'bg-orange-500 text-white'
               : hasPhUp || hasPhDown
               ? 'bg-fuchsia-600 text-white'
-              : 'bg-blue-600 text-white'
+              : 'bg-sky-600 text-white'
           }`}
         >
           <FlaskConical size={14} strokeWidth={2.5} />
@@ -80,7 +80,7 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
                 </span>
               )}
               {(dosing.water_in_sec ?? 0) > 0 && (
-                <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                <span className="text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200 flex items-center gap-1">
                   <Waves size={10} /> Cấp nước {dosing.water_in_sec?.toFixed(1)}s
                 </span>
               )}

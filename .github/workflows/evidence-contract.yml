@@ -3,6 +3,13 @@ name: evidence-contract
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'hydragrow-backend/**'
+      - 'hydragrow-shared/**'
+      - 'hydragrow-frontend/**'
+      - 'hydragrow-controller-core/**'
+      - 'hydragrow-simulator/**'
+      - 'hydragrow-firmware/**'
 
 permissions:
   contents: read
@@ -26,8 +33,8 @@ jobs:
           body="${PR_BODY:-}"
           acceptance=$(printf '%s\n' "$body" | sed -n 's/^- Acceptance contract: `\([^`]*\)`.*/\1/p' | head -n 1)
           evidence=$(printf '%s\n' "$body" | sed -n 's/^- Evidence contract: `\([^`]*\)`.*/\1/p' | head -n 1)
-          [ -n "$acceptance" ] || { echo "Missing: - Acceptance contract: `docs/acceptance/<requirement-id>.json`"; exit 1; }
-          [ -n "$evidence" ] || { echo "Missing: - Evidence contract: `docs/evidence/<requirement-id>.json`"; exit 1; }
+          [ -n "$acceptance" ] || { echo "Missing acceptance contract declaration."; exit 1; }
+          [ -n "$evidence" ] || { echo "Missing evidence contract declaration."; exit 1; }
           case "$acceptance" in docs/acceptance/*.json) ;; *) echo "Acceptance contract must be under docs/acceptance/: $acceptance"; exit 1;; esac
           case "$evidence" in docs/evidence/*.json) ;; *) echo "Evidence contract must be under docs/evidence/: $evidence"; exit 1;; esac
           echo "acceptance=$acceptance" >> "$GITHUB_OUTPUT"
@@ -45,8 +52,6 @@ jobs:
         run: |
           set -euo pipefail
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
-          if grep -Eq '^hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/' <<< "$changed"; then
-            grep -Fq "$ACCEPTANCE_PATH" <<< "$changed" || { echo "Material product change did not update acceptance contract."; exit 1; }
-            grep -Fq "$EVIDENCE_PATH" <<< "$changed" || { echo "Material product change did not update evidence contract."; exit 1; }
-          fi
+          grep -Fq "$ACCEPTANCE_PATH" <<< "$changed" || { echo "Material product change did not update the declared acceptance contract."; exit 1; }
+          grep -Fq "$EVIDENCE_PATH" <<< "$changed" || { echo "Material product change did not update the declared evidence contract."; exit 1; }
           echo "Evidence contract gate passed."

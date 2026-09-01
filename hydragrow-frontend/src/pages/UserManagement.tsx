@@ -52,7 +52,7 @@ export function UserManagement() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Shield className="text-blue-600" size={24} />
+        <Shield className="text-emerald-700" size={24} />
         <h1 className="text-2xl font-bold">Quản Lý Người Dùng & Quyền</h1>
       </div>
 
@@ -116,7 +116,7 @@ export function UserManagement() {
         <button
           onClick={provision}
           disabled={loading}
-          className="flex items-center gap-2 w-full justify-center px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50"
+          className="ui-btn-primary flex items-center gap-2 w-full justify-center"
         >
           <Save size={16} /> {loading ? 'Đang lưu...' : 'Cấp Quyền / Cập Nhật'}
         </button>

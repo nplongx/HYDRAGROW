@@ -108,7 +108,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
               <button
                 onClick={handleUpdate}
                 disabled={isLoading || !editName.trim()}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
               >
                 <Save size={16} /> {isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
               </button>

@@ -100,7 +100,7 @@ export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, o
               <div className="flex flex-wrap gap-2 pt-1">
                 {selectedRecipe.stages.map((st, i) => (
                   <span key={i} className="inline-flex items-center gap-1 bg-white border border-emerald-200 px-2 py-1 rounded-md">
-                    <Droplets size={11} className="text-blue-600" />
+                    <Droplets size={11} className="text-sky-600" />
                     <b>{st.name}:</b> EC {st.ec_target} | pH {st.ph_target}
                   </span>
                 ))}

@@ -1,0 +1,86 @@
+name: delivery-governance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  governance:
+    name: Delivery governance gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate required governance artifacts
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          required=(
+            "docs/DELIVERY-GOVERNANCE.md"
+            "docs/project-state/CURRENT-STATUS.md"
+            "docs/project-state/TRACEABILITY.md"
+          )
+
+          for file in "${required[@]}"; do
+            test -f "$file" || { echo "Missing required governance artifact: $file"; exit 1; }
+          done
+
+          echo "Governance artifacts present."
+
+      - name: Validate PR contract
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          body="${PR_BODY:-}"
+
+          required_sections=(
+            "## Requirement"
+            "## Objective"
+            "## Acceptance Criteria"
+            "## Verification"
+            "## Documentation"
+            "## Risks / Known Gaps"
+            "## Final Acceptance"
+          )
+
+          for section in "${required_sections[@]}"; do
+            grep -Fq "$section" <<< "$body" || {
+              echo "PR contract is incomplete: missing '$section'"
+              exit 1
+            }
+          done
+
+          echo "PR contract sections present."
+
+      - name: Detect material changes requiring traceability
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          echo "$changed"
+
+          if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)|\.github/workflows/)' <<< "$changed"; then
+            grep -Fq 'docs/project-state/TRACEABILITY.md' <<< "$changed" || {
+              echo "Material system change detected but TRACEABILITY.md was not updated."
+              echo "If this change truly has no requirement impact, document that explicitly in the PR and update TRACEABILITY.md accordingly."
+              exit 1
+            }
+          fi
+
+      - name: Report gate
+        run: |
+          echo "Delivery governance gate passed."
+          echo "Code correctness remains the responsibility of the existing CI/Jules review."
+          echo "This gate verifies the delivery contract and project knowledge artifacts."

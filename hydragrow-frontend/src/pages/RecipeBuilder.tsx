@@ -45,7 +45,7 @@ const toNumber = (value: string, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const RecipeBuilder: React.FC = () => {
+const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ variant = 'standalone' }) => {
   const queryClient = useQueryClient();
   const settings = useDeviceStore((s) => s.settings);
   const deviceId = useDeviceStore((s) => s.deviceId);
@@ -268,26 +268,9 @@ const RecipeBuilder: React.FC = () => {
     });
   };
 
-  return (
-    <div className="app-page max-w-6xl">
-      <div className="page-header">
-        <div className="page-header-main">
-          <div className="page-header-icon"><ClipboardList size={22} /></div>
-          <div>
-            <h1 className="page-header-title">Thư Viện Công Thức (Recipe Templates)</h1>
-            <p className="page-header-subtitle">
-              Thiết lập quy trình dinh dưỡng, tỷ lệ A:B và chu kỳ thay nước chuẩn để áp dụng khi bắt đầu mùa vụ mới.
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={handleResetForm}
-          className="ui-btn-md bg-white border border-emerald-200 text-emerald-900 hover:bg-emerald-50 text-xs font-bold"
-        >
-          <Plus size={14} className="inline mr-1" /> Soạn công thức mới
-        </button>
-      </div>
 
+  const contentNode = (
+    <>
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Danh sách mẫu có sẵn & Nút Xóa */}
         <div className="ui-card space-y-4 h-fit">
@@ -558,6 +541,31 @@ const RecipeBuilder: React.FC = () => {
           </section>
         </div>
       </div>
+    </>
+  );
+
+  if (variant === 'embedded') return contentNode;
+
+  return (
+    <div className="app-page max-w-6xl">
+      <div className="page-header">
+        <div className="page-header-main">
+          <div className="page-header-icon"><ClipboardList size={22} /></div>
+          <div>
+            <h1 className="page-header-title">Thư Viện Công Thức (Recipe Templates)</h1>
+            <p className="page-header-subtitle">
+              Thiết lập quy trình dinh dưỡng, tỷ lệ A:B và chu kỳ thay nước chuẩn để áp dụng khi bắt đầu mùa vụ mới.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleResetForm}
+          className="ui-btn-md bg-white border border-emerald-200 text-emerald-900 hover:bg-emerald-50 text-xs font-bold"
+        >
+          <Plus size={14} className="inline mr-1" /> Soạn công thức mới
+        </button>
+      </div>
+      {contentNode}
     </div>
   );
 };

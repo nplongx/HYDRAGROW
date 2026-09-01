@@ -1,0 +1,52 @@
+name: evidence-contract
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  evidence:
+    name: Evidence contract gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Locate contracts from PR body
+        id: contracts
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          body="${PR_BODY:-}"
+          acceptance=$(printf '%s\n' "$body" | sed -n 's/^- Acceptance contract: `\([^`]*\)`.*/\1/p' | head -n 1)
+          evidence=$(printf '%s\n' "$body" | sed -n 's/^- Evidence contract: `\([^`]*\)`.*/\1/p' | head -n 1)
+          [ -n "$acceptance" ] || { echo "Missing: - Acceptance contract: `docs/acceptance/<requirement-id>.json`"; exit 1; }
+          [ -n "$evidence" ] || { echo "Missing: - Evidence contract: `docs/evidence/<requirement-id>.json`"; exit 1; }
+          case "$acceptance" in docs/acceptance/*.json) ;; *) echo "Acceptance contract must be under docs/acceptance/: $acceptance"; exit 1;; esac
+          case "$evidence" in docs/evidence/*.json) ;; *) echo "Evidence contract must be under docs/evidence/: $evidence"; exit 1;; esac
+          echo "acceptance=$acceptance" >> "$GITHUB_OUTPUT"
+          echo "evidence=$evidence" >> "$GITHUB_OUTPUT"
+
+      - name: Validate evidence against acceptance targets
+        run: python3 .github/scripts/validate_evidence_contract.py "${{ steps.contracts.outputs.acceptance }}" "${{ steps.contracts.outputs.evidence }}"
+
+      - name: Require both contracts to change for material system changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ACCEPTANCE_PATH: ${{ steps.contracts.outputs.acceptance }}
+          EVIDENCE_PATH: ${{ steps.contracts.outputs.evidence }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          if grep -Eq '^hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/' <<< "$changed"; then
+            grep -Fq "$ACCEPTANCE_PATH" <<< "$changed" || { echo "Material product change did not update acceptance contract."; exit 1; }
+            grep -Fq "$EVIDENCE_PATH" <<< "$changed" || { echo "Material product change did not update evidence contract."; exit 1; }
+          fi
+          echo "Evidence contract gate passed."

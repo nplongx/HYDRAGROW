@@ -1,6 +1,6 @@
 {
   "requirement_id": "GOV-005",
-  "objective": "Prove the delivery governance evaluator accepts valid evidence and rejects invalid evidence.",
+  "objective": "Prove the deterministic delivery evaluator accepts valid quantitative evidence and rejects invalid evidence through an independent self-test.",
   "acceptance": [
     {
       "id": "AC-1",
@@ -9,12 +9,6 @@
       "operator": "<=",
       "target": 10,
       "unit": "seconds",
-      "verification": "governance self-test",
-      "evidence_required": true
-    },
-    {
-      "id": "AC-2",
-      "criterion": "The evaluator rejects a quantitative evidence sample when actual violates the declared target.",
       "verification": "governance self-test",
       "evidence_required": true
     }

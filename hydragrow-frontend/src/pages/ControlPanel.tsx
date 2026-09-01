@@ -12,7 +12,7 @@ import { ActiveRecipeStatus } from '../components/recipes/ActiveRecipeStatus';
 import { LoadingState } from '../components/ui/LoadingState';
 import { PumpStatus } from '../types/models';
 
-const ControlPanel = () => {
+const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const sensorData = useDeviceStore((s) => s.sensorData);
   const deviceStatus = useDeviceStore((s) => s.deviceStatus);
@@ -40,29 +40,8 @@ const ControlPanel = () => {
   const faultGuideOpt = faultCode ? get_fault_guide(faultCode) : null;
   const faultGuide = faultGuideOpt && (faultGuideOpt as any)[0] ? (faultGuideOpt as any)[0] : null;
 
-  return (
-    <div className="app-page max-w-5xl">
-      {/* Header khu vực */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-emerald-950 flex items-center gap-2">
-            <Settings2 size={20} className="text-emerald-700/75" />
-            <span>Điều khiển thiết bị</span>
-          </h1>
-          <p className="text-sm text-emerald-800/75">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
-        </div>
-        <button
-          disabled={!canSendCommands || isProcessing}
-          onClick={async () => {
-            if (window.confirm("Khôi phục trạng thái hoạt động của hệ thống?")) await resetFault();
-          }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-900 border border-emerald-100 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all disabled:opacity-50"
-        >
-          <RefreshCw size={12} className={isProcessing ? "animate-spin" : "text-emerald-700"} />
-          <span>Khôi phục</span>
-        </button>
-      </div>
-
+  const content = (
+    <>
       {/* Cảnh báo sự cố / Mất kết nối */}
       <div className="space-y-3 mt-3">
         {showDisconnected && (
@@ -133,6 +112,37 @@ const ControlPanel = () => {
           </div>
         </div>
       </div>
+    </>
+  );
+
+  if (variant === 'embedded') {
+    return content;
+  }
+
+  return (
+    <div className="app-page max-w-5xl">
+      {/* Header khu vực */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold tracking-tight text-emerald-950 flex items-center gap-2">
+            <Settings2 size={20} className="text-emerald-700/75" />
+            <span>Điều khiển thiết bị</span>
+          </h1>
+          <p className="text-sm text-emerald-800/75">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
+        </div>
+        <button
+          disabled={!canSendCommands || isProcessing}
+          onClick={async () => {
+            if (window.confirm("Khôi phục trạng thái hoạt động của hệ thống?")) await resetFault();
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-900 border border-emerald-100 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={isProcessing ? "animate-spin" : "text-emerald-700"} />
+          <span>Khôi phục</span>
+        </button>
+      </div>
+
+      {content}
     </div>
   );
 };

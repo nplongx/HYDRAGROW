@@ -112,6 +112,9 @@ just documented.
   that the file exists. When a PR touches `hydragrow-*/` or `.github/workflows/`, the
   PR must also touch `docs/project-state/TRACEABILITY.md` and
   `docs/project-state/CURRENT-STATUS.md`, or the delivery-governance gate fails.
+- **PR body must be `.github/pull_request_template.md`, copied verbatim and filled in**
+  — not a paraphrase, not a custom set of headings. A well-written free-form PR
+  description does not satisfy this: CI parses the literal section headers.
 - **Jules verdicts:** `ACCEPTED` only when code, outcome, evidence, and docs pass;
   otherwise `NEEDS CHANGES` or `BLOCKED`. `LGTM` alone is never a delivery acceptance.
 - **Acceptance contract:** C1–C7 changes must declare and commit

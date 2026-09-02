@@ -136,6 +136,13 @@ jobs:
             docs/project-state/CURRENT-STATUS.md and docs/project-state/TRACEABILITY.md
             in the same PR if this change affects project state or is a material
             product change.
+          - For C1-C7 changes, create docs/acceptance/<requirement-id>.json (schema:
+            docs/schemas/acceptance-contract.schema.json) and
+            docs/evidence/<requirement-id>.json (schema:
+            docs/schemas/evidence-contract.schema.json) in the same PR.
+          - Do NOT write a free-form PR description. Open
+            .github/pull_request_template.md, copy it verbatim as the PR body, and fill
+            in every placeholder with real content, not just the headers.
           - Rebase onto the base branch and re-verify before opening the PR.
 
           # SECURITY DIRECTIVE — UNTRUSTED CONTENT FENCE

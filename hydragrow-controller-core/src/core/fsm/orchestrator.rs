@@ -35,7 +35,9 @@ pub fn tick(
     let mist_valve_open = ctx.peripherals.pump_status.mist_valve;
     let mix_valve_open = ctx.peripherals.pump_status.mix_valve;
     if osaka_running && !mist_valve_open && !mix_valve_open {
-        result.events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+        result
+            .events
+            .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
         let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
         peri_delta.osaka_pump = Some(false);
         peri_delta.osaka_pwm = Some(0);

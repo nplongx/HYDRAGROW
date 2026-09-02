@@ -49,7 +49,8 @@ vi.mock('./reactflow/buildIr', () => ({
 vi.mock('../../hooks/useAutomationScripts', () => ({
   useAutomationScripts: () => ({
     data: [
-      { id: 'other-1', name: 'Flow khác', kind: 'alert', enabled: true, source: '', ir_json: null },
+      { id: 'other-1', name: 'Flow alert khác', kind: 'alert', enabled: true, source: '', ir_json: null },
+      { id: 'other-2', name: 'Flow action command', kind: 'action_command', enabled: true, source: '', ir_json: null },
     ],
   }),
   useCreateAutomationScript: () => ({ mutateAsync: mockCreateScript, isPending: false }),
@@ -91,7 +92,7 @@ describe('FlowDetailDrawer', () => {
   it('lets the user pick next flows and includes them when saving', async () => {
     render(withQueryClient(<FlowDetailDrawer deviceId="dev1" script="new" onClose={vi.fn()} />));
 
-    const checkbox = await screen.findByLabelText('Flow khác');
+    const checkbox = await screen.findByLabelText('Flow alert khác');
     fireEvent.click(checkbox);
 
     fireEvent.click(screen.getByText('Lưu Flow'));
@@ -103,5 +104,12 @@ describe('FlowDetailDrawer', () => {
         }),
       );
     });
+  });
+
+  it('filters next flow options to matching kind only', async () => {
+    render(withQueryClient(<FlowDetailDrawer deviceId="dev1" script="new" onClose={vi.fn()} />));
+
+    expect(await screen.findByLabelText('Flow alert khác')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Flow action command')).not.toBeInTheDocument();
   });
 });

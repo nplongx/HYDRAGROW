@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Action, AutomationIr, ComparisonOperator, Condition } from '../../../lib/automation/ir';
 import { fieldsForKind } from '../../../hooks/useAutomationBuilder';
 
@@ -43,6 +44,50 @@ export interface NodeEditorPanelProps {
 
 export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPanelProps) {
   const fields = fieldsForKind(kind);
+  const [triggerTab, setTriggerTab] = useState<'sensor' | 'fsm' | 'cron' | 'webhook'>('sensor');
+
+  if (node.type === 'trigger') {
+    return (
+      <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-emerald-950">Trigger</h3>
+          <button className="text-xs text-emerald-700/70" onClick={onClose}>
+            Đóng
+          </button>
+        </div>
+        <div className="mb-3 flex border-b border-emerald-100 text-xs">
+          {(['sensor', 'fsm', 'cron', 'webhook'] as const).map((tab) => (
+            <button
+              key={tab}
+              className={`flex-1 py-1 text-center font-medium capitalize ${
+                triggerTab === tab
+                  ? 'border-b-2 border-emerald-600 text-emerald-900'
+                  : 'text-emerald-700/60 hover:text-emerald-800'
+              }`}
+              onClick={() => setTriggerTab(tab)}
+            >
+              {tab === 'sensor' ? 'Sensor' : tab === 'fsm' ? 'FSM' : tab === 'cron' ? 'Cron' : 'Webhook'}
+            </button>
+          ))}
+        </div>
+        {triggerTab === 'sensor' && (
+          <p className="text-xs text-emerald-800/80">
+            Kích hoạt dựa trên dữ liệu cảm biến MQTT từ thiết bị ({kind === 'recipe_override' ? 'FSM Mode' : 'Continuous'}).
+          </p>
+        )}
+        {triggerTab === 'fsm' && (
+          <p className="text-xs text-emerald-800/80">
+            Kích hoạt khi chuyển đổi trạng thái FSM (chuyển phase).
+          </p>
+        )}
+        {(triggerTab === 'cron' || triggerTab === 'webhook') && (
+          <p className="text-xs text-amber-700 bg-amber-50 rounded p-2 border border-amber-200">
+            Sắp có ở Phase 4/5
+          </p>
+        )}
+      </div>
+    );
+  }
 
   if (node.type === 'condition') {
     const conditions = (node.data.conditions as Condition[] | undefined) ?? [];

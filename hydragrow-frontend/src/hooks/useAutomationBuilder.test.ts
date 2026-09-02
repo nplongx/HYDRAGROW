@@ -17,7 +17,7 @@ describe('useAutomationBuilder', () => {
     const { result } = renderHook(() => useAutomationBuilder());
     expect(result.current.kind).toBe('alert');
     expect(result.current.nodes).toHaveLength(3);
-    expect(result.current.nodes.map((n) => n.type)).toEqual(['sensor', 'condition', 'action']);
+    expect(result.current.nodes.map((n) => n.type)).toEqual(['trigger', 'condition', 'action']);
   });
 
   it('setKind resets the graph so no stale action survives a kind switch', () => {
@@ -39,7 +39,7 @@ describe('useAutomationBuilder', () => {
     expect(result.current.nodes[result.current.nodes.length - 1]).toMatchObject({ type: 'condition', data: { conditions: [] } });
   });
 
-    it('loadFromIr with nodes restores the graph', () => {
+  it('loadFromIr with nodes restores the graph and ensures trigger node exists', () => {
     const { result } = renderHook(() => useAutomationBuilder());
     act(() =>
       result.current.loadFromIr({
@@ -47,12 +47,12 @@ describe('useAutomationBuilder', () => {
         trigger: { type: 'fsm' },
         conditions: [],
         actions: [],
-        nodes: [{ id: 'a', type: 'sensor', position: { x: 0, y: 0 }, data: {} }],
+        nodes: [{ id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} }],
         edges: [],
         next_flow_ids: [],
       }),
     );
-    expect(result.current.nodes).toEqual([{ id: 'a', type: 'sensor', position: { x: 0, y: 0 }, data: {} }]);
+    expect(result.current.nodes).toEqual([{ id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} }]);
   });
 
   it('synthesizes a starter graph from flat conditions/actions when loading a legacy (nodes-less) IR', () => {

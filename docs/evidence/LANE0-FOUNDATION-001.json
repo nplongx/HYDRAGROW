@@ -1,0 +1,29 @@
+{
+  "requirement_id": "LANE0-FOUNDATION-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Cargo test sensors_handler_reads_fsm_phase_from_cache in hydragrow-backend/src/mqtt/handlers/sensors.rs",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-02T04:47:30Z",
+      "notes": "ScriptActionInput.phase verified reading 'Dosing' state from cached device_states."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest test filters next flow options to matching kind only in FlowDetailDrawer.test.tsx",
+      "environment": "Local Vitest",
+      "verified_at": "2026-09-02T04:48:51Z",
+      "notes": "FlowDetailDrawer filters candidate next flows strictly to matching automation kind."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Vitest test renders trigger node tab bar and shows placeholder for cron/webhook in NodeEditorPanel.test.tsx",
+      "environment": "Local Vitest",
+      "verified_at": "2026-09-02T04:50:20Z",
+      "notes": "NodeEditorPanel renders Sensor/FSM/Cron/Webhook tabs for trigger nodes with placeholder messages for Phase 4/5."
+    }
+  ]
+}

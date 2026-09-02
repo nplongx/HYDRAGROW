@@ -78,7 +78,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     {
         sensor_data.pump_status = cached_pump_status;
     }
-    let merged_state = merge_sensor_state_cache(cached_state, &sensor_data);
+    let merged_state = merge_sensor_state_cache(cached_state.clone(), &sensor_data);
     if let Ok(json_str) = serde_json::to_string(&merged_state) {
         let mut states = app_state.device_states.write().await;
         states.insert(device_id.clone(), json_str);
@@ -180,12 +180,23 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             max_dose_per_hour_ml: safety_config.max_dose_per_hour,
             cooldown_sec: safety_config.cooldown_sec as u64,
         };
+        let current_phase = cached_state
+            .as_ref()
+            .and_then(|cached| {
+                cached
+                    .get("fsm_state")
+                    .or_else(|| cached.get("fsm_phase"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("Monitoring")
+            .to_string();
+
         let action_input = crate::models::script::ScriptActionInput {
             ph: incoming.ph,
             ec: incoming.ec,
             temp: incoming.temp,
             water_level: incoming.water_level,
-            phase: "Monitoring".to_string(), // TODO(follow-up, ghi nhận từ Phase 0): lấy phase thật từ device_states cache
+            phase: current_phase,
             device_id: device_id.clone(),
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
@@ -314,6 +325,29 @@ mod tests {
         assert_eq!(msg.category, "script_alert");
         assert_eq!(msg.device_id, "device_001");
         assert_eq!(msg.level, "warning");
+    }
+
+    #[test]
+    fn sensors_handler_reads_fsm_phase_from_cache() {
+        let existing = json!({
+            "device_id": "device_001",
+            "fsm_state": "Dosing",
+            "fsm_phase": "Dosing"
+        });
+
+        let cached_state = Some(existing);
+        let current_phase = cached_state
+            .as_ref()
+            .and_then(|cached| {
+                cached
+                    .get("fsm_state")
+                    .or_else(|| cached.get("fsm_phase"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("Monitoring")
+            .to_string();
+
+        assert_eq!(current_phase, "Dosing");
     }
 
     #[test]

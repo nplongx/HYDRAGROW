@@ -80,9 +80,6 @@ Xem README của từng subsystem để build/run chi tiết. Thứ tự khởi 
 | `frontend-ci` | push/PR chạm `hydragrow-frontend/` | tsc + eslint + vitest + cargo check (src-tauri) |
 | `firmware-controller-ci` | push/PR chạm `ESP32-C3-CONTROLLER-NODE/` | cargo check + fmt + clippy (esp-rs nightly) |
 | `firmware-sensor-ci` | push/PR chạm `ESP32-C3-SENSOR-NODE/` | pio run + pio test (native) |
-| `code-quality` | mọi PR; push `main` (trừ docs-only) | Rust fmt + locked check + clippy `-D warnings` + tests; frontend TypeScript + ESLint `--max-warnings=0` + tests + production build |
-
-`code-quality` là quality gate bổ sung ở cấp repository: PR không đạt các tiêu chí chất lượng code sẽ fail CI. Các workflow subsystem hiện hữu vẫn giữ vai trò kiểm tra chuyên biệt.
 
 Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy trình PR và [docs/superpowers/specs/module-rules/](docs/superpowers/specs/module-rules/README.md) cho ràng buộc từng subsystem.
 

@@ -3,6 +3,80 @@ import { compileToRhai } from "./compileToRhai";
 import type { AutomationIr } from "./ir";
 
 describe("compileToRhai", () => {
+  it('produces the exact same guard string as before groups existed (regression)', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [
+        { sensor: 'ph', operator: '>', value: 7.5 },
+        { sensor: 'ec', operator: '<', value: 1.2 },
+      ],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    };
+    const rhai = compileToRhai(ir);
+    expect(rhai).toContain('if !(input.ph > 7.5 && input.ec < 1.2) { return (); }');
+  });
+
+  it('compiles a nested OR-inside-AND group matching the Figma frame-03 example', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [
+        {
+          op: 'or',
+          children: [
+            { sensor: 'ph', operator: '<', value: 5.5 },
+            { sensor: 'ph', operator: '>', value: 7.5 },
+          ],
+        },
+        { sensor: 'ec', operator: '>', value: 3.0 },
+      ],
+      actions: [{ type: 'alert', level: 'warning', message: 'pH bất thường' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    };
+    const rhai = compileToRhai(ir);
+    expect(rhai).toContain(
+      'if !((input.ph < 5.5 || input.ph > 7.5) && input.ec > 3) { return (); }',
+    );
+  });
+
+  it('compiles a group nested 3 levels deep without losing parens', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [
+        {
+          op: 'and',
+          children: [
+            {
+              op: 'or',
+              children: [
+                { sensor: 'ph', operator: '<', value: 5.5 },
+                { op: 'and', children: [
+                  { sensor: 'ph', operator: '>', value: 8.0 },
+                  { sensor: 'temp', operator: '>', value: 35 },
+                ] },
+              ],
+            },
+          ],
+        },
+      ],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    };
+    const rhai = compileToRhai(ir);
+    expect(rhai).toContain(
+      '((input.ph < 5.5 || (input.ph > 8 && input.temp > 35)))',
+    );
+  });
+
   it("compiles an alert IR with AND-joined conditions", () => {
     const ir: AutomationIr = {
       kind: "alert",

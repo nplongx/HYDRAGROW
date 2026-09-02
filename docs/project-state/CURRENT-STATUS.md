@@ -2,7 +2,7 @@
 
 > This file is the canonical project-state snapshot. Update it in the same PR when a material change alters implementation status, capability, deployment state, or blockers.
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Status vocabulary
 
@@ -19,7 +19,7 @@ Last updated: 2026-09-01
 |---|---|---|
 | Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 cross-kind chain selection and cycle prevention badge verified with Vitest tests and evidence contract. |
+| Frontend | VERIFIED | CONDITION-GROUPS-001 nested AND/OR condition groups, recursive Rhai compilation, ConditionGroupEditor UI, and recursive leaf counting verified with Vitest tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

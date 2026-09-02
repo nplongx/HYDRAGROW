@@ -1,4 +1,4 @@
-import type { Action, AutomationIr, Condition } from "./ir";
+import type { Action, AutomationIr, Condition, ConditionOrGroup } from "./ir";
 
 // Rhai string literals: escape backslash first, then double quotes.
 function rhaiString(s: string): string {
@@ -9,11 +9,25 @@ function conditionToRhai(c: Condition): string {
   return `input.${c.sensor} ${c.operator} ${c.value}`;
 }
 
+function isGroup(c: ConditionOrGroup): c is import("./ir").ConditionGroup {
+  return "op" in c;
+}
+
+function conditionOrGroupToRhai(c: ConditionOrGroup): string {
+  if (isGroup(c)) {
+    const inner = c.children
+      .map(conditionOrGroupToRhai)
+      .join(c.op === "and" ? " && " : " || ");
+    return `(${inner})`;
+  }
+  return conditionToRhai(c);
+}
+
 // Rhai has no `&&`-free early-exit guard clause style here — we build a single
 // `if (!(A && B && ...)) { return (); }` guard, matching the hand-written scripts
 // already accepted by ScriptEngine::eval_alert / eval_recipe_override.
-function guardClause(conditions: Condition[]): string {
-  const joined = conditions.map(conditionToRhai).join(" && ");
+function guardClause(conditions: ConditionOrGroup[]): string {
+  const joined = conditions.map(conditionOrGroupToRhai).join(" && ");
   return `if !(${joined}) { return (); }`;
 }
 

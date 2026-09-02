@@ -1,0 +1,37 @@
+{
+  "requirement_id": "CONDITION-GROUPS-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "safeParse returns success=true for legacy flat Condition[] arrays and recursive ConditionGroup trees matching Figma specs",
+      "source": "Vitest tests in src/lib/automation/ir.test.ts (16/16 passed)",
+      "environment": "Vitest Node environment",
+      "verified_at": "2026-09-02T06:26:10Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "compileToRhai compiles nested ConditionGroups into Rhai expressions with correct parenthesis grouping: if !((input.ph < 5.5 || input.ph > 7.5) && input.ec > 3) { return (); }",
+      "source": "Vitest tests in src/lib/automation/compileToRhai.test.ts (11/11 passed)",
+      "environment": "Vitest Node environment",
+      "verified_at": "2026-09-02T06:26:10Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "ConditionGroupEditor renders AND/OR toggles and child groups; FlowSummaryNode counts leaf conditions recursively",
+      "source": "Vitest component tests in ConditionGroupEditor.test.tsx, NodeEditorPanel.test.tsx, FlowSummaryNode.test.tsx",
+      "environment": "Vitest jsdom environment",
+      "verified_at": "2026-09-02T06:26:10Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": "Zero errors or warnings in cargo test, cargo clippy -D warnings, tsc, eslint --max-warnings=0, vitest (124 passed), and vite build",
+      "source": "Terminal verification output",
+      "environment": "Ubuntu Linux sandbox",
+      "verified_at": "2026-09-02T06:26:10Z"
+    }
+  ]
+}

@@ -2,6 +2,72 @@ import { describe, expect, it } from "vitest";
 import { AutomationIrSchema, AutomationNodeSchema } from "./ir";
 
 describe("AutomationIrSchema", () => {
+  it('parses a legacy flat Condition[] (no groups) exactly as before', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [
+        { sensor: 'ph', operator: '>', value: 7.5 },
+        { sensor: 'ec', operator: '<', value: 1.2 },
+      ],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+    };
+    const result = AutomationIrSchema.safeParse(ir);
+    expect(result.success).toBe(true);
+    expect(result.data?.conditions).toEqual([
+      { sensor: 'ph', operator: '>', value: 7.5 },
+      { sensor: 'ec', operator: '<', value: 1.2 },
+    ]);
+  });
+
+  it('accepts a nested AND/OR condition group matching the Figma example', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [
+        {
+          op: 'or',
+          children: [
+            { sensor: 'ph', operator: '<', value: 5.5 },
+            { sensor: 'ph', operator: '>', value: 7.5 },
+          ],
+        },
+        { sensor: 'ec', operator: '>', value: 3.0 },
+      ],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+    };
+    const result = AutomationIrSchema.safeParse(ir);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a group with an empty children array', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ op: 'and', children: [] }],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown op value', () => {
+    const result = AutomationIrSchema.safeParse({
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ op: 'xor', children: [{ sensor: 'ph', operator: '>', value: 7 }] }],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("accepts a minimal valid alert IR", () => {
     const ir = {
       kind: "alert",

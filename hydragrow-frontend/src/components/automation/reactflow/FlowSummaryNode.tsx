@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { FlowNodeData } from '../../../hooks/useFlowCanvas';
+import { countLeafConditions } from '../../../lib/automation/conditionTree';
 
 const KIND_LABEL: Record<string, string> = {
   alert: 'Alert',
@@ -17,7 +18,7 @@ const KIND_COLOR: Record<string, string> = {
  * component cha xử lý — component này chỉ render nội dung thẻ. */
 export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
   const { script } = data;
-  const conditionCount = script.ir_json?.conditions.length ?? 0;
+  const conditionCount = script.ir_json ? countLeafConditions(script.ir_json.conditions) : 0;
   const actionCount = script.ir_json?.actions.length ?? 0;
   const badgeColor = KIND_COLOR[script.kind] ?? 'bg-emerald-50 text-emerald-800/70';
 
@@ -46,5 +47,3 @@ export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
     </div>
   );
 }
-
-export const AUTOMATION_FLOW_NODE_TYPES = { flowSummary: FlowSummaryNode };

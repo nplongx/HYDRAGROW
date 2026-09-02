@@ -1,13 +1,8 @@
 import { useState } from 'react';
-import type { Action, AutomationIr, ComparisonOperator, Condition } from '../../../lib/automation/ir';
+import type { Action, AutomationIr, ConditionGroup, ConditionOrGroup } from '../../../lib/automation/ir';
 import { fieldsForKind } from '../../../hooks/useAutomationBuilder';
-
-const OPERATORS: ComparisonOperator[] = ['>', '<', '>=', '<=', '==', '!='];
-
-function summarizeConditions(conditions: Condition[]): string {
-  if (conditions.length === 0) return 'Chưa cấu hình';
-  return conditions.map((c) => `${c.sensor} ${c.operator} ${c.value}`).join(' và ');
-}
+import { summarizeConditionTree, toEditorRoot, fromEditorRoot } from '../../../lib/automation/conditionTree';
+import { ConditionGroupEditor } from './ConditionGroupEditor';
 
 function summarizeActions(actions: Action[]): string {
   if (actions.length === 0) return 'Chưa cấu hình';
@@ -90,8 +85,12 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
   }
 
   if (node.type === 'condition') {
-    const conditions = (node.data.conditions as Condition[] | undefined) ?? [];
-    const update = (next: Condition[]) => onChange(node.id, { conditions: next, summary: summarizeConditions(next) });
+    const stored = (node.data.conditions as ConditionOrGroup[] | undefined) ?? [];
+    const root = toEditorRoot(stored);
+    const update = (next: ConditionGroup) => {
+      const flat = fromEditorRoot(next);
+      onChange(node.id, { conditions: flat, summary: summarizeConditionTree(flat) });
+    };
 
     return (
       <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
@@ -101,49 +100,7 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
             Đóng
           </button>
         </div>
-        {conditions.map((c, i) => (
-          <div key={i} className="mb-2 flex gap-1">
-            <select
-              className="ui-input px-1 text-sm"
-              value={c.sensor}
-              onChange={(e) => update(conditions.map((x, j) => (j === i ? { ...x, sensor: e.target.value } : x)))}
-            >
-              {fields.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-            <select
-              className="ui-input px-1 text-sm"
-              value={c.operator}
-              onChange={(e) =>
-                update(conditions.map((x, j) => (j === i ? { ...x, operator: e.target.value as ComparisonOperator } : x)))
-              }
-            >
-              {OPERATORS.map((op) => (
-                <option key={op} value={op}>
-                  {op}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              className="ui-input w-20 px-1 text-sm"
-              value={c.value}
-              onChange={(e) => update(conditions.map((x, j) => (j === i ? { ...x, value: Number(e.target.value) } : x)))}
-            />
-            <button className="text-xs text-red-600" onClick={() => update(conditions.filter((_, j) => j !== i))}>
-              ✕
-            </button>
-          </div>
-        ))}
-        <button
-          className="text-xs text-emerald-700"
-          onClick={() => update([...conditions, { sensor: fields[0], operator: '>', value: 0 }])}
-        >
-          + Thêm điều kiện
-        </button>
+        <ConditionGroupEditor group={root} fields={fields} onChange={update} isRoot />
       </div>
     );
   }

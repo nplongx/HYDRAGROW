@@ -15,6 +15,22 @@ export const ConditionSchema = z.object({
 });
 export type Condition = z.infer<typeof ConditionSchema>;
 
+export interface ConditionGroup {
+  op: 'and' | 'or';
+  children: ConditionOrGroup[];
+}
+export type ConditionOrGroup = Condition | ConditionGroup;
+
+export const ConditionOrGroupSchema: z.ZodType<ConditionOrGroup> = z.lazy(() =>
+  z.union([ConditionSchema, ConditionGroupSchema]),
+);
+export const ConditionGroupSchema: z.ZodType<ConditionGroup> = z.lazy(() =>
+  z.object({
+    op: z.enum(['and', 'or']),
+    children: z.array(ConditionOrGroupSchema).min(1),
+  }),
+);
+
 export const AlertActionSchema = z.object({
   type: z.literal('alert'),
   level: z.enum(['info', 'warning', 'error']),
@@ -96,7 +112,7 @@ export const AutomationIrSchema = z
   .object({
     kind: AutomationKindSchema,
     trigger: TriggerSchema,
-    conditions: z.array(ConditionSchema).min(1),
+    conditions: z.array(ConditionOrGroupSchema).min(1),
     actions: z.array(ActionSchema).min(1),
     nodes: z.array(AutomationNodeSchema),
     edges: z.array(AutomationEdgeSchema),

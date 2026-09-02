@@ -3,6 +3,31 @@ import type { Edge, Node } from '@xyflow/react';
 import { buildIrFromGraph } from './buildIr';
 
 describe('buildIrFromGraph', () => {
+  it('flatMaps a condition-node whose data.conditions already contains a group, unchanged', () => {
+    const nodes: Node[] = [
+      {
+        id: '2',
+        type: 'condition',
+        position: { x: 0, y: 100 },
+        data: {
+          conditions: [
+            {
+              op: 'or',
+              children: [
+                { sensor: 'ph', operator: '<', value: 5.5 },
+                { sensor: 'ph', operator: '>', value: 7.5 },
+              ],
+            },
+            { sensor: 'ec', operator: '>', value: 3.0 },
+          ],
+          summary: '(ph < 5.5 hoặc ph > 7.5) và ec > 3',
+        },
+      },
+    ];
+    const ir = buildIrFromGraph({ kind: 'alert', nodes, edges: [] });
+    expect(ir.conditions).toEqual(nodes[0].data.conditions);
+  });
+
   it('assembles conditions/actions from condition and action nodes, ignoring layout-only nodes', () => {
     const nodes: Node[] = [
       { id: '1', type: 'sensor', position: { x: 0, y: 0 }, data: {} },

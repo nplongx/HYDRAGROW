@@ -69,9 +69,7 @@ fn eval_chain_from(
         Ok(Some(alert)) => {
             fired.push((script.id, alert));
             for next_id in &script.next_flow_ids {
-                let Some(next_script) = all_scripts
-                    .iter()
-                    .find(|s| s.id.to_string() == *next_id)
+                let Some(next_script) = all_scripts.iter().find(|s| s.id.to_string() == *next_id)
                 else {
                     warn!(
                         root_script_id = %script.id,
@@ -80,7 +78,15 @@ fn eval_chain_from(
                     );
                     continue;
                 };
-                eval_chain_from(next_script, all_scripts, engine, input, depth + 1, seen, fired);
+                eval_chain_from(
+                    next_script,
+                    all_scripts,
+                    engine,
+                    input,
+                    depth + 1,
+                    seen,
+                    fired,
+                );
             }
         }
         Ok(None) => {}
@@ -191,7 +197,8 @@ fn main(input) {
         let engine = Arc::new(ScriptEngine::new());
         let child = make_alert_script(FIRING_SCRIPT);
         let root = make_alert_script_with_next(FIRING_SCRIPT, vec![child.id.to_string()]);
-        let alerts = eval_alert_scripts_chained(&engine, &[root.clone(), child.clone()], &make_input());
+        let alerts =
+            eval_alert_scripts_chained(&engine, &[root.clone(), child.clone()], &make_input());
         let ids: Vec<Uuid> = alerts.iter().map(|(id, _)| *id).collect();
         assert_eq!(alerts.len(), 2);
         assert!(ids.contains(&root.id));
@@ -216,14 +223,18 @@ fn main(input) {
             id: a_id,
             kind: "alert".to_string(),
             name: "a".to_string(),
-            ast: engine.compile(FIRING_SCRIPT).expect("test script A compiles"),
+            ast: engine
+                .compile(FIRING_SCRIPT)
+                .expect("test script A compiles"),
             next_flow_ids: vec![b_id.to_string()],
         };
         let b = CachedScript {
             id: b_id,
             kind: "alert".to_string(),
             name: "b".to_string(),
-            ast: engine.compile(FIRING_SCRIPT).expect("test script B compiles"),
+            ast: engine
+                .compile(FIRING_SCRIPT)
+                .expect("test script B compiles"),
             next_flow_ids: vec![a_id.to_string()],
         };
         let alerts = eval_alert_scripts_chained(&engine, &[a, b], &make_input());
@@ -242,7 +253,9 @@ fn main(input) {
                 id: *id,
                 kind: "alert".to_string(),
                 name: format!("s{i}"),
-                ast: engine.compile(FIRING_SCRIPT).expect("test chain script compiles"),
+                ast: engine
+                    .compile(FIRING_SCRIPT)
+                    .expect("test chain script compiles"),
                 next_flow_ids: ids
                     .get(i + 1)
                     .map(|next| vec![next.to_string()])
@@ -254,7 +267,10 @@ fn main(input) {
         // được eval trước khi depth 5 bị chặn — không phải mọi root trong danh sách
         // đều fire tới cuối chuỗi 8, nên assert theo id cụ thể thay vì đếm tổng.
         for id in &ids[0..5] {
-            assert!(alerts.iter().any(|(fid, _)| fid == id), "script {id} should fire");
+            assert!(
+                alerts.iter().any(|(fid, _)| fid == id),
+                "script {id} should fire"
+            );
         }
     }
 }

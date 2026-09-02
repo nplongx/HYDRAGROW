@@ -19,7 +19,7 @@ Last updated: 2026-09-02
 |---|---|---|
 | Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | VERIFIED | LOG-HOOKS-001 useSystemHealthSummary and useCycleTimeline React Query data hooks verified with Vitest tests and evidence contract. |
+| Frontend | VERIFIED | SYSTEM-LOG-ASSEMBLY-001 EventLogCard raw JSON button and SystemLog page assembly verified with Vitest tests, Playwright screenshot, and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

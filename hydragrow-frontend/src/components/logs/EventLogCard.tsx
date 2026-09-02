@@ -12,7 +12,7 @@ export interface SystemEvent {
   title: string;
   message: string;
   reason?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   timestamp: number;
 }
 
@@ -72,7 +72,15 @@ const FsmBadge = ({ message }: { message: string }) => {
   );
 };
 
-export const EventLogCard = ({ ev, idx }: { ev: SystemEvent; idx: number }) => {
+export const EventLogCard = ({
+  ev,
+  idx,
+  onOpenDetail,
+}: {
+  ev: SystemEvent;
+  idx: number;
+  onOpenDetail?: (ev: SystemEvent) => void;
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const style = getEventStyle(ev);
   const Icon = style.icon;
@@ -123,7 +131,7 @@ export const EventLogCard = ({ ev, idx }: { ev: SystemEvent; idx: number }) => {
         )}
 
         {hasMetadata && (
-          <div className="mt-2.5 pt-2 border-t border-emerald-100 flex flex-col items-start">
+          <div className="mt-2.5 pt-2 border-t border-emerald-100 flex flex-wrap items-center gap-3">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className="flex items-center gap-1 text-[10px] font-bold text-emerald-700/75 hover:text-emerald-800 tracking-wide uppercase transition-colors"
@@ -131,6 +139,14 @@ export const EventLogCard = ({ ev, idx }: { ev: SystemEvent; idx: number }) => {
               <span>{isExpanded ? 'Thu nhỏ thông số' : 'Xem thông số kỹ thuật'}</span>
               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
+            {onOpenDetail && (
+              <button
+                onClick={() => onOpenDetail(ev)}
+                className="flex items-center gap-1 text-[10px] font-bold text-sky-700 hover:text-sky-800 tracking-wide uppercase transition-colors"
+              >
+                <span>Xem JSON thô</span>
+              </button>
+            )}
             {isExpanded && <MetadataRenderer metadata={ev.metadata} />}
           </div>
         )}

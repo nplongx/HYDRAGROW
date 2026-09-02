@@ -1,0 +1,23 @@
+{
+  "requirement_id": "SYSTEM-LOG-ASSEMBLY-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "EventLogCard renders 'Xem JSON thô' button when metadata and onOpenDetail prop are provided and triggers onOpenDetail with event object on click.",
+      "unit": "boolean",
+      "source": "hydragrow-frontend/src/components/logs/EventLogCard.test.tsx",
+      "environment": "vitest",
+      "verified_at": "2026-09-02T08:41:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "SystemLog page renders HealthSummaryBar, view mode toggle switch, search input, Grafana external link, CSV export button, and side drawer upon event selection.",
+      "unit": "boolean",
+      "source": "hydragrow-frontend/src/pages/SystemLog.test.tsx",
+      "environment": "vitest",
+      "verified_at": "2026-09-02T08:43:00Z"
+    }
+  ]
+}

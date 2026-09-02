@@ -214,13 +214,15 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                     let bucket = influx_bucket.clone();
                     let dev_id = fetcher_device_id.clone();
                     move || {
-                        tokio::runtime::Runtime::new().unwrap().block_on(async {
-                            crate::db::influx::query_range_stat(
-                                &client, &bucket, &dev_id, &field, &stat, range_h,
-                            )
-                            .await
-                            .unwrap_or(0.0)
-                        })
+                        tokio::runtime::Runtime::new()
+                            .expect("Failed to create tokio runtime for stat fetcher")
+                            .block_on(async {
+                                crate::db::influx::query_range_stat(
+                                    &client, &bucket, &dev_id, &field, &stat, range_h,
+                                )
+                                .await
+                                .unwrap_or(0.0)
+                            })
                     }
                 })
                 .join()

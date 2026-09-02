@@ -53,19 +53,18 @@ async fn receive_webhook_action(
     let output = payload.into_inner();
 
     // Update last_used_at for token
-    if is_authorized_webhook {
-        if let Some(token) = req
+    if is_authorized_webhook
+        && let Some(token) = req
             .headers()
             .get("X-Webhook-Token")
             .and_then(|h| h.to_str().ok())
-        {
-            let hash = sha256_hex(token);
-            let _ =
-                sqlx::query("UPDATE webhook_tokens SET last_used_at = NOW() WHERE token_hash = $1")
-                    .bind(hash)
-                    .execute(&app_state.pg_pool)
-                    .await;
-        }
+    {
+        let hash = sha256_hex(token);
+        let _ =
+            sqlx::query("UPDATE webhook_tokens SET last_used_at = NOW() WHERE token_hash = $1")
+                .bind(hash)
+                .execute(&app_state.pg_pool)
+                .await;
     }
 
     let safety_config =

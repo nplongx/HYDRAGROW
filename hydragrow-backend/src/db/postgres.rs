@@ -243,7 +243,6 @@ pub async fn insert_blockchain_tx(
 }
 
 #[allow(clippy::too_many_arguments)]
-
 pub async fn insert_dosing_action(
     pool: &PgPool,
     device_id: &str,

@@ -3,8 +3,6 @@ import type { Edge, Node } from '@xyflow/react';
 import { addEdge, useEdgesState, useNodesState, type Connection } from '@xyflow/react';
 import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type Condition } from '../lib/automation/ir';
 
-export type BuilderMode = 'reactflow' | 'blockly';
-
 function seedNodes(): Node[] {
   return [
     { id: '1', type: 'sensor', position: { x: 250, y: 0 }, data: {} },
@@ -17,6 +15,55 @@ const SEED_EDGES: Edge[] = [
   { id: 'e2-3', source: '2', target: '3' },
 ];
 
+function summarizeConditions(conditions: Condition[]): string {
+  if (conditions.length === 0) return 'Chưa cấu hình';
+  return conditions.map((c) => `${c.sensor} ${c.operator} ${c.value}`).join(' và ');
+}
+
+/** Mirrors NodeEditorPanel's summarizeActions — kept in sync manually since
+ * duplicating a switch over `Action['type']` here is simpler than exporting
+ * a UI-layer helper into a hook module. */
+function summarizeActions(actions: Action[]): string {
+  if (actions.length === 0) return 'Chưa cấu hình';
+  return actions
+    .map((a) => {
+      switch (a.type) {
+        case 'alert':
+          return `alert (${a.level}): ${a.message}`;
+        case 'advance_stage':
+          return `advance_stage ${a.targetStageOffset >= 0 ? '+' : ''}${a.targetStageOffset}: ${a.reason}`;
+        case 'end_season':
+          return `end_season: ${a.reason}`;
+        case 'dose':
+          return `dose ${a.doseMl}ml (${a.pump})`;
+        case 'water_on':
+          return `water_on ${a.durationSec}s (${a.pump})`;
+        case 'water_off':
+          return `water_off (${a.pump})`;
+        case 'emergency_stop':
+          return 'emergency_stop';
+        default:
+          return 'unknown_action';
+      }
+    })
+    .join(', ');
+}
+
+/** Rebuild the seed graph but with a single condition-node and single
+ * action-node pre-populated from a flat IR that predates the graph canvas
+ * (every script saved via the old Blockly editor has `nodes: []`). Multiple
+ * actions collapse into one action-node's `actions` array — this matches
+ * `buildIrFromGraph`'s own flattening (it concatenates every action-node's
+ * `actions` array), so re-saving without any edits round-trips exactly. */
+function synthesizeGraphFromFlatIr(conditions: Condition[], actions: Action[]): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = [
+    { id: '1', type: 'sensor', position: { x: 250, y: 0 }, data: {} },
+    { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions, summary: summarizeConditions(conditions) } },
+    { id: '3', type: 'action', position: { x: 250, y: 240 }, data: { actions, summary: summarizeActions(actions) } },
+  ];
+  return { nodes, edges: SEED_EDGES };
+}
+
 /** Sensor field list valid for the given automation kind (mirrors backend
  * ScriptSensorInput / ScriptFsmInput). */
 export function fieldsForKind(kind: AutomationIr['kind']): readonly string[] {
@@ -27,29 +74,21 @@ let nextNodeId = 100;
 
 export function useAutomationBuilder() {
   const [kind, setKindState] = useState<AutomationIr['kind']>('alert');
-  const [mode, setMode] = useState<BuilderMode>('reactflow');
   const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(SEED_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [blocklyResult, setBlocklyResult] = useState<{ conditions: Condition[]; actions: Action[] }>({
-    conditions: [],
-    actions: [],
-  });
 
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
     [setEdges],
   );
 
-  /** Switching kind resets the canvas so a stale action from the other kind
-   * never survives to fail AutomationIrSchema's refine rule. */
   const setKind = useCallback(
     (next: AutomationIr['kind']) => {
       setKindState(next);
       setNodes(seedNodes());
       setEdges(SEED_EDGES);
       setSelectedNodeId(null);
-      setBlocklyResult({ conditions: [], actions: [] });
     },
     [setNodes, setEdges],
   );
@@ -70,9 +109,7 @@ export function useAutomationBuilder() {
     [setNodes],
   );
 
-  /** Restore a previously-saved IR into the builder. IRs saved from the
-   * React Flow canvas have `nodes.length > 0`; IRs saved from Blockly don't
-   * (Blockly has no canvas positions), so that's what selects the mode. */
+  /** Restore a previously-saved IR into the builder. */
   const loadFromIr = useCallback(
     (ir: AutomationIr) => {
       setKindState(ir.kind);
@@ -80,12 +117,10 @@ export function useAutomationBuilder() {
       if (ir.nodes.length > 0) {
         setNodes(ir.nodes);
         setEdges(ir.edges);
-        setMode('reactflow');
       } else {
-        setNodes(seedNodes());
-        setEdges(SEED_EDGES);
-        setBlocklyResult({ conditions: ir.conditions, actions: ir.actions });
-        setMode('blockly');
+        const { nodes: synthesized, edges: synthesizedEdges } = synthesizeGraphFromFlatIr(ir.conditions, ir.actions);
+        setNodes(synthesized);
+        setEdges(synthesizedEdges);
       }
     },
     [setNodes, setEdges],
@@ -96,8 +131,6 @@ export function useAutomationBuilder() {
   return {
     kind,
     setKind,
-    mode,
-    setMode,
     nodes,
     edges,
     onNodesChange,
@@ -108,8 +141,6 @@ export function useAutomationBuilder() {
     selectedNode,
     updateNodeData,
     addNode,
-    blocklyResult,
-    setBlocklyResult,
     loadFromIr,
   };
 }

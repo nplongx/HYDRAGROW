@@ -30,6 +30,8 @@ impl TankAlert {
 ///
 /// P0..P3 = INPUT from TTP223 touch sensors
 /// P4..P5 = OUTPUT for valves
+/// P6    = OUTPUT for water pump IN
+/// P7    = OUTPUT for water pump OUT
 /// ---------------------------------------------------------------------------
 
 #[repr(u8)]
@@ -44,6 +46,10 @@ pub enum ExpanderPin {
     // Outputs - valves
     ValveMist = 4,
     ValveMix = 5,
+
+    // Outputs - water pumps
+    WaterPumpIn = 6,
+    WaterPumpOut = 7,
 }
 
 impl ExpanderPin {
@@ -59,6 +65,8 @@ impl ExpanderPin {
             Self::TankPHUp => PinFlag::P3,
             Self::ValveMist => PinFlag::P4,
             Self::ValveMix => PinFlag::P5,
+            Self::WaterPumpIn => PinFlag::P6,
+            Self::WaterPumpOut => PinFlag::P7,
         }
     }
 
@@ -73,9 +81,15 @@ impl ExpanderPin {
         )
     }
 
-    /// True nếu pin này là output điều khiển valve.
+    /// True nếu pin này là output điều khiển valve/bơm nước.
     pub fn is_output(self) -> bool {
-        matches!(self, Self::ValveMist | Self::ValveMix)
+        matches!(
+            self,
+            Self::ValveMist
+                | Self::ValveMix
+                | Self::WaterPumpIn
+                | Self::WaterPumpOut
+        )
     }
 }
 
@@ -89,8 +103,8 @@ impl ExpanderPin {
 /// HIGH ở đây có nghĩa là "release" chân, không phải ép tín hiệu HIGH.
 const INPUT_MASK: u8 = 0b0000_1111;
 
-/// P4..P5 là OUTPUT.
-const OUTPUT_MASK: u8 = 0b0011_0000;
+/// P4..P7 là OUTPUT.
+const OUTPUT_MASK: u8 = 0b1111_0000;
 
 /// ---------------------------------------------------------------------------
 /// I2C Expander
@@ -102,7 +116,7 @@ pub struct I2cExpander<'d> {
     /// Shadow state của output latch PCF8574.
     ///
     /// P0..P3 luôn phải là 1.
-    /// P4..P5 được điều khiển bởi application.
+    /// P4..P7 được điều khiển bởi application.
     state: u8,
 }
 
@@ -111,18 +125,14 @@ impl<'d> I2cExpander<'d> {
     ///
     /// Initial state:
     ///
-    /// P0 = 1 -> input/released
-    /// P1 = 1 -> input/released
-    /// P2 = 1 -> input/released
-    /// P3 = 1 -> input/released
-    /// P4 = 0 -> valve OFF
-    /// P5 = 0 -> valve OFF
+    /// P0..P3 = 1 -> input/released
+    /// P4..P7 = 0 -> outputs OFF
     pub fn new(i2c_driver: I2cDriver<'d>) -> Self {
         Self {
             pcf: Pcf8574::new(i2c_driver, SlaveAddr::Default),
 
             // P0..P3 = 1 (input/released)
-            // P4..P5 = 0 (output LOW)
+            // P4..P7 = 0 (outputs LOW)
             state: INPUT_MASK,
         }
     }
@@ -145,7 +155,7 @@ impl<'d> I2cExpander<'d> {
 
     /// Bật một output.
     ///
-    /// Chỉ cho phép P4/P5.
+    /// Chỉ cho phép P4..P7.
     pub fn set_high(
         &mut self,
         pin: ExpanderPin,
@@ -153,7 +163,6 @@ impl<'d> I2cExpander<'d> {
         (),
         Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
     > {
-        // Không cho phép dùng hàm output để điều khiển P0..P3.
         assert!(
             pin.is_output(),
             "Attempted to drive a PCF8574 input pin as output"
@@ -169,7 +178,7 @@ impl<'d> I2cExpander<'d> {
 
     /// Tắt một output.
     ///
-    /// Chỉ cho phép P4/P5.
+    /// Chỉ cho phép P4..P7.
     pub fn set_low(
         &mut self,
         pin: ExpanderPin,
@@ -177,7 +186,6 @@ impl<'d> I2cExpander<'d> {
         (),
         Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
     > {
-        // Không cho phép dùng hàm output để điều khiển P0..P3.
         assert!(
             pin.is_output(),
             "Attempted to drive a PCF8574 input pin as output"

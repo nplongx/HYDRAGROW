@@ -31,4 +31,47 @@ describe('NodeEditorPanel', () => {
     );
     expect(screen.getByText('Action — Recipe')).toBeInTheDocument();
   });
+
+  it('renders dose/water/emergency-stop action picker for action_command nodes', () => {
+    render(
+      <NodeEditorPanel
+        kind="action_command"
+        node={{ id: '3', type: 'action', data: { actions: [] } }}
+        onChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText('Loại hành động')).toBeInTheDocument();
+  });
+
+  it('emits a dose action with the right shape', () => {
+    const onChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="action_command"
+        node={{ id: '3', type: 'action', data: { actions: [{ type: 'dose', pump: 'PUMP_B', doseMl: 12, pwm: 100 }] } }}
+        onChange={onChange}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('PWM (%)'), { target: { value: '80' } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      '3',
+      expect.objectContaining({ actions: [{ type: 'dose', pump: 'PUMP_B', doseMl: 12, pwm: 80 }] }),
+    );
+  });
+
+  it('offers end_season as an action type for recipe_override nodes', () => {
+    render(
+      <NodeEditorPanel
+        kind="recipe_override"
+        node={{ id: '3', type: 'action', data: { actions: [] } }}
+        onChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const select = screen.getByLabelText('Loại hành động') as HTMLSelectElement;
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toEqual(['advance_stage', 'end_season']);
+  });
 });

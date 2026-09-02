@@ -103,7 +103,7 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
     );
   }
 
-  if (node.type === 'action') {
+    if (node.type === 'action') {
     const actions = (node.data.actions as Action[] | undefined) ?? [];
     const current = actions[0];
     const setAction = (action: Action) => onChange(node.id, { actions: [action], summary: summarizeActions([action]) });
@@ -356,5 +356,5 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
     );
   }
 
-  return null;
+ return null;
 }

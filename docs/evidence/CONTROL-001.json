@@ -1,0 +1,19 @@
+{
+  "requirement_id": "CONTROL-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --bin hydragrow-backend api::control::tests::mix_valve_pump_names_are_accepted",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-01"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --bin hydragrow-backend api::control::tests::fallback_pump_status_includes_mix_valve",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-01"
+    }
+  ]
+}

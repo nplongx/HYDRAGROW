@@ -22,26 +22,11 @@ use runtime::health::run_main_health_loop;
 
 use crate::hw::pcf857x::I2cExpander;
 
-const WIFI_SSID: &str = env!(
-    "HYDRAGROW_WIFI_SSID",
-    "Lỗi build: Thiếu biến HYDRAGROW_WIFI_SSID"
-);
-const WIFI_PASS: &str = env!(
-    "HYDRAGROW_WIFI_PASSWORD",
-    "Lỗi build: Thiếu biến HYDRAGROW_WIFI_PASSWORD"
-);
-const MQTT_URL: &str = env!(
-    "HYDRAGROW_MQTT_URL",
-    "Lỗi build: Thiếu biến HYDRAGROW_MQTT_URL"
-);
-const MQTT_COMMAND_SECRET: &str = env!(
-    "HYDRAGROW_MQTT_COMMAND_SECRET",
-    "Lỗi build: Thiếu biến HYDRAGROW_MQTT_COMMAND_SECRET"
-);
-const DEVICE_ID: &str = env!(
-    "HYDRAGROW_DEVICE_ID",
-    "Lỗi build: Thiếu biến HYDRAGROW_DEVICE_ID"
-);
+const WIFI_SSID: &str = env!("HYDRAGROW_WIFI_SSID", "Lỗi build: Thiếu biến HYDRAGROW_WIFI_SSID");
+const WIFI_PASS: &str = env!("HYDRAGROW_WIFI_PASSWORD", "Lỗi build: Thiếu biến HYDRAGROW_WIFI_PASSWORD");
+const MQTT_URL: &str = env!("HYDRAGROW_MQTT_URL", "Lỗi build: Thiếu biến HYDRAGROW_MQTT_URL");
+const MQTT_COMMAND_SECRET: &str = env!("HYDRAGROW_MQTT_COMMAND_SECRET", "Lỗi build: Thiếu biến HYDRAGROW_MQTT_COMMAND_SECRET");
+const DEVICE_ID: &str = env!("HYDRAGROW_DEVICE_ID", "Lỗi build: Thiếu biến HYDRAGROW_DEVICE_ID");
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -62,7 +47,6 @@ fn main() -> anyhow::Result<()> {
     let (mqtt_user, mqtt_password) =
         nvs_store.load_or_init_mqtt_credentials(default_mqtt_user, default_mqtt_pass);
 
-    // Đóng ngoặc đúng chỗ để giải phóng Lock
     if let Ok(mut config) = shared_config.write() {
         config.base_config.device_id = device_id.clone();
     }
@@ -78,14 +62,13 @@ fn main() -> anyhow::Result<()> {
 
     let shared_sensors = create_shared_sensor_data(&device_id);
 
-    // Channels
     let (conn_tx, conn_rx) = mpsc::channel();
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let (fsm_tx, fsm_rx) = mpsc::channel();
     let health_fsm_tx = fsm_tx.clone();
     let (dosing_report_tx, dosing_report_rx) = mpsc::channel();
     let (sensor_cmd_tx, sensor_cmd_rx) = mpsc::channel();
-    let (int_tx, int_rx) = mpsc::channel::<()>(); // Channel tín hiệu ngắt INT
+    let (int_tx, int_rx) = mpsc::channel::<()>();
 
     // 1. Hardware Drivers
     let timer_driver = Arc::new(LedcTimerDriver::new(
@@ -103,7 +86,10 @@ fn main() -> anyhow::Result<()> {
     let mut pcf_ok = false;
     for attempt in 1..=3 {
         match valve.init() {
-            Ok(()) => { pcf_ok = true; break; }
+            Ok(()) => {
+                pcf_ok = true;
+                break;
+            }
             Err(e) => {
                 warn!("PCF8574 init attempt {} failed: {:?}", attempt, e);
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -111,9 +97,11 @@ fn main() -> anyhow::Result<()> {
         }
     }
     if !pcf_ok {
-        warn!("⚠️ PCF8574 không khởi tạo được sau 3 lần thử — tiếp tục boot, valve sẽ không hoạt động.");
-    }  
+        warn!("⚠️ PCF8574 không khởi tạo được sau 3 lần thử — tiếp tục boot, valve/pump sẽ không hoạt động.");
+    }
 
+    // Water pump IN/OUT no longer consume GPIO5/GPIO1.
+    // They are driven by PCF8574 P6/P7 through PumpController.
     let pump_controller = PumpController::new(
         LedcDriver::new(
             peripherals.ledc.channel1,
@@ -136,8 +124,6 @@ fn main() -> anyhow::Result<()> {
             peripherals.pins.gpio4,
         )?,
         valve,
-        PinDriver::output(peripherals.pins.gpio5)?,
-        PinDriver::output(peripherals.pins.gpio1)?,
         PinDriver::output(peripherals.pins.gpio2)?,
         LedcDriver::new(
             peripherals.ledc.channel0,
@@ -145,11 +131,12 @@ fn main() -> anyhow::Result<()> {
             peripherals.pins.gpio3,
         )?,
     )?;
+
     let mut int_pin = PinDriver::input(peripherals.pins.gpio10, esp_idf_hal::gpio::Pull::Up)?;
     int_pin.set_interrupt_type(esp_idf_hal::gpio::InterruptType::NegEdge)?;
     unsafe {
         int_pin.subscribe(move || {
-            let _ = int_tx.send(()); // Bắt ngắt an toàn, không đọc I2C trực tiếp trong ISR
+            let _ = int_tx.send(());
         })?;
     }
     int_pin.enable_interrupt()?;
@@ -176,7 +163,6 @@ fn main() -> anyhow::Result<()> {
     let _wifi_up = match conn_rx.recv_timeout(StdDuration::from_secs(120)) {
         Ok(crate::hw::mqtt_client::ConnectionState::WifiConnected) => {
             info!("✅ WiFi connected normally.");
-            // Bơm lại sự kiện để run_main_health_loop nhận được
             let _ = conn_tx.send(crate::hw::mqtt_client::ConnectionState::WifiConnected);
             true
         }

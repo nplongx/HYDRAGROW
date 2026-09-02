@@ -413,7 +413,12 @@ fn main(input) {
             device_id: "d1".into(),
             timestamp_ms: 0,
         };
-        assert!(engine.eval_alert(&ast, &input_non_matching).unwrap().is_none());
+        assert!(
+            engine
+                .eval_alert(&ast, &input_non_matching)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

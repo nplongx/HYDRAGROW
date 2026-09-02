@@ -14,7 +14,7 @@
 - **Functional Requirements:** [List specific, non-negotiable functional requirements.]
 - **Hard Constraints:**
   - Do NOT introduce new third-party dependencies without explicit authorization.
-  - Do NOT modify this project's build manifest, lockfile, CI configuration, or agent scope files. Run `agentctl gate` to see the enforced set.
+  - Do NOT modify this project's build manifest, lockfile, CI configuration, or agent scope files. See `restricted_files` in `.agent/jules.yml` for the enforced set.
   - Keep total diff payload strictly under {{DIFF_KB}} KB (`git diff | wc -c`).
 
 ## Verification Loop

@@ -67,4 +67,53 @@ describe('Dashboard component wiring', () => {
     expect(screen.getByText('Châm dinh dưỡng hôm nay')).toBeInTheDocument();
     expect(screen.getByText(/3 lần/)).toBeInTheDocument();
   });
+
+  it('hiển thị chuông cảnh báo AlertBell trong header', () => {
+    useDeviceStore.setState({
+      deviceId: 'dev-001',
+      isLoading: false,
+      isSensorOnline: true,
+      deviceStatus: { is_online: true, last_seen: '2026-09-02T00:00:00Z' },
+      sensorData: {
+        device_id: 'dev-001',
+        time: '2026-09-02T00:00:00Z',
+        ec: 1.2,
+        ph: 6.0,
+        temp: 25.0,
+        water_level: 80,
+        pump_status: {
+          pump_a: false,
+          pump_b: false,
+          ph_up: false,
+          ph_down: false,
+          osaka_pump: false,
+          mist_valve: false,
+          mix_valve: false,
+          water_pump_in: false,
+          water_pump_out: false,
+        },
+      },
+      systemEvents: [
+        {
+          id: 'ev-1',
+          device_id: 'dev-001',
+          category: 'sensor',
+          level: 'warning',
+          message: 'EC thấp',
+          timestamp_ms: Date.now() - 1000,
+        },
+      ],
+      fsmState: 'Monitoring',
+      settings: { backend_url: 'http://localhost:1420', api_key: 'test', device_id: 'dev-001' },
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByLabelText('Xem cảnh báo')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
 });

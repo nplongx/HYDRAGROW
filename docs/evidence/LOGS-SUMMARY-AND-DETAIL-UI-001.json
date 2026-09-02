@@ -1,0 +1,29 @@
+{
+  "requirement_id": "LOGS-SUMMARY-AND-DETAIL-UI-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "HealthSummaryBar renders 4 card stats, search input with label 'Tìm kiếm nhật ký', and switch toggle calling onModeChange with 'all_technical'",
+      "source": "Vitest unit tests in src/components/logs/HealthSummaryBar.test.tsx (4/4 passed)",
+      "environment": "Vitest jsdom environment",
+      "verified_at": "2026-09-02T08:12:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "CycleEventCard orders steps chronologically, renders step dot colors, step titles, and fires onOpenDetail callback on click",
+      "source": "Vitest unit tests in src/components/logs/CycleEventCard.test.tsx (3/3 passed)",
+      "environment": "Vitest jsdom environment",
+      "verified_at": "2026-09-02T08:12:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "EventDetailDrawer renders user-friendly summary card at top and formatted raw JSON inside collapsed AccordionSection at bottom",
+      "source": "Vitest unit tests in src/components/logs/EventDetailDrawer.test.tsx (4/4 passed)",
+      "environment": "Vitest jsdom environment",
+      "verified_at": "2026-09-02T08:12:00Z"
+    }
+  ]
+}

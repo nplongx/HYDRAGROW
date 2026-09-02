@@ -19,7 +19,7 @@ Last updated: 2026-09-02
 |---|---|---|
 | Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | VERIFIED | LAYOUT-SIDEBAR-REDESIGN-001 desktop sidebar redesign and MainLayout unit tests verified with Vitest tests, Playwright screenshot, and evidence contract. |
+| Frontend | VERIFIED | SETTINGS-REFACTOR-001 Settings page refactoring into GeneralSection, ThresholdsSection, ConnectivitySection, and DangerZoneSection verified with Vitest component tests, Playwright screenshot, and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

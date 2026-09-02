@@ -1,0 +1,40 @@
+{
+  "requirement_id": "SETTINGS-REFACTOR-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest unit test 'gọi onLogout khi bấm Đăng xuất' in hydragrow-frontend/src/pages/settings/GeneralSection.test.tsx",
+      "environment": "Frontend / Web",
+      "verified_at": "2026-09-02T12:12:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest unit tests in hydragrow-frontend/src/pages/settings/ThresholdsSection.test.tsx and ConnectivitySection.test.tsx",
+      "environment": "Frontend / Web",
+      "verified_at": "2026-09-02T12:12:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Vitest unit test 'gọi onFactoryResetClick khi bấm nút khôi phục cài đặt gốc' in hydragrow-frontend/src/pages/settings/DangerZoneSection.test.tsx",
+      "environment": "Frontend / Web",
+      "verified_at": "2026-09-02T12:12:00Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Vitest unit test suite execution passing 34 test files (163 tests) including Settings.test.ts",
+      "environment": "Frontend / Web",
+      "verified_at": "2026-09-02T12:12:00Z"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "Execution of npm test, npm run lint, npx tsc --noEmit, npm run build, and Playwright visual screenshot verification in hydragrow-frontend",
+      "environment": "Frontend / Web",
+      "verified_at": "2026-09-02T12:12:00Z"
+    }
+  ]
+}

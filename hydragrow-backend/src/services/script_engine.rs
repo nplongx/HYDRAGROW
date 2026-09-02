@@ -381,6 +381,47 @@ mod tests {
     }
 
     #[test]
+    fn eval_alert_script_with_nested_condition_group_compiled_rhai() {
+        let engine = ScriptEngine::new();
+        let src = r#"
+fn main(input) {
+ if !((input.ph < 5.5 || input.ph > 7.5) && input.ec > 3.0) { return (); }
+ #{
+  "level": "warning",
+  "title": "pH bất thường",
+  "message": "pH bất thường"
+ }
+}
+"#;
+        let ast = engine.compile(src).unwrap();
+        let input_matching = ScriptSensorInput {
+            ph: 8.0,
+            ec: 3.5,
+            temp: 25.0,
+            water_level: 80.0,
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        };
+        let alert = engine.eval_alert(&ast, &input_matching).unwrap().unwrap();
+        assert_eq!(alert.title, "pH bất thường");
+
+        let input_non_matching = ScriptSensorInput {
+            ph: 6.5,
+            ec: 3.5,
+            temp: 25.0,
+            water_level: 80.0,
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        };
+        assert!(
+            engine
+                .eval_alert(&ast, &input_non_matching)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
     fn compile_returns_error_for_syntax_error() {
         let engine = ScriptEngine::new();
         let src = r#"fn main(input { }"#; // missing closing paren

@@ -1,0 +1,24 @@
+{
+  "requirement_id": "LOGS-SUMMARY-AND-DETAIL-UI-001",
+  "objective": "Implement HealthSummaryBar, CycleEventCard, and EventDetailDrawer UI components for event logs with 100% test coverage and CI compliance.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "HealthSummaryBar displays health summary statistics, search input, and view mode toggle (important vs all_technical).",
+      "verification": "Vitest unit tests in HealthSummaryBar.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "CycleEventCard renders a chained sequence of cycle events ordered by timestamp and fires onOpenDetail when clicking a step.",
+      "verification": "Vitest unit tests in CycleEventCard.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "EventDetailDrawer renders user-friendly event summary at top and collapsable raw JSON accordion at bottom.",
+      "verification": "Vitest unit tests in EventDetailDrawer.test.tsx",
+      "evidence_required": true
+    }
+  ]
+}

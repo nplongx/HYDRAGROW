@@ -3,6 +3,28 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { NodeEditorPanel } from './NodeEditorPanel';
 
 describe('NodeEditorPanel', () => {
+  it('renders trigger node tab bar and shows placeholder for cron/webhook', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'trigger', type: 'trigger', data: {} }}
+        onChange={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText('Trigger')).toBeInTheDocument();
+    expect(screen.getByText('Sensor')).toBeInTheDocument();
+    expect(screen.getByText('FSM')).toBeInTheDocument();
+    expect(screen.getByText('Cron')).toBeInTheDocument();
+    expect(screen.getByText('Webhook')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Cron'));
+    expect(screen.getByText('Sắp có ở Phase 4/5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Webhook'));
+    expect(screen.getByText('Sắp có ở Phase 4/5')).toBeInTheDocument();
+  });
+
   it('adds a condition and reports the update via onChange', () => {
     const onChange = vi.fn();
     render(

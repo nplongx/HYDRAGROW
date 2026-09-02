@@ -32,14 +32,15 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const [nextFlowIds, setNextFlowIds] = useState<string[]>(
     isNew ? [] : (script.ir_json?.next_flow_ids ?? []),
   );
+  const builder = useAutomationBuilder();
   const { data: allScripts } = useAutomationScripts(deviceId);
-  const otherScripts = (allScripts ?? []).filter((s) => isNew || s.id !== script.id);
+  const otherScripts = (allScripts ?? []).filter(
+    (s) => (isNew || s.id !== script.id) && s.kind === builder.kind,
+  );
 
   const toggleNextFlow = (id: string) => {
     setNextFlowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
-
-  const builder = useAutomationBuilder();
 
   useEffect(() => {
     if (!isNew && script.ir_json) {

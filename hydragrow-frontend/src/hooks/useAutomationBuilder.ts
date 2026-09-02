@@ -5,13 +5,13 @@ import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type Conditi
 
 function seedNodes(): Node[] {
   return [
-    { id: '1', type: 'sensor', position: { x: 250, y: 0 }, data: {} },
+    { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
     { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions: [], summary: 'Chưa cấu hình' } },
     { id: '3', type: 'action', position: { x: 250, y: 240 }, data: { actions: [], summary: 'Chưa cấu hình' } },
   ];
 }
 const SEED_EDGES: Edge[] = [
-  { id: 'e1-2', source: '1', target: '2' },
+  { id: 'etrigger-2', source: 'trigger', target: '2' },
   { id: 'e2-3', source: '2', target: '3' },
 ];
 
@@ -57,7 +57,7 @@ function summarizeActions(actions: Action[]): string {
  * `actions` array), so re-saving without any edits round-trips exactly. */
 function synthesizeGraphFromFlatIr(conditions: Condition[], actions: Action[]): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
-    { id: '1', type: 'sensor', position: { x: 250, y: 0 }, data: {} },
+    { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
     { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions, summary: summarizeConditions(conditions) } },
     { id: '3', type: 'action', position: { x: 250, y: 240 }, data: { actions, summary: summarizeActions(actions) } },
   ];
@@ -109,13 +109,20 @@ export function useAutomationBuilder() {
     [setNodes],
   );
 
-  /** Restore a previously-saved IR into the builder. */
+  /** Restore a previously-saved IR into the builder. Ensure trigger node always exists. */
   const loadFromIr = useCallback(
     (ir: AutomationIr) => {
       setKindState(ir.kind);
       setSelectedNodeId(null);
       if (ir.nodes.length > 0) {
-        setNodes(ir.nodes);
+        let loadedNodes = ir.nodes as Node[];
+        if (!loadedNodes.some((n) => n.id === 'trigger' || n.type === 'trigger')) {
+          loadedNodes = [
+            { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
+            ...loadedNodes,
+          ];
+        }
+        setNodes(loadedNodes);
         setEdges(ir.edges);
       } else {
         const { nodes: synthesized, edges: synthesizedEdges } = synthesizeGraphFromFlatIr(ir.conditions, ir.actions);

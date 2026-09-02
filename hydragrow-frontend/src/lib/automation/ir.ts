@@ -80,7 +80,7 @@ export const TriggerSchema = z.object({
 // React Flow canvas state — opaque to the compiler, used only to restore the UI.
 export const AutomationNodeSchema = z.object({
   id: z.string(),
-  type: z.enum(['sensor', 'condition', 'delay', 'action']),
+  type: z.enum(['trigger', 'sensor', 'condition', 'delay', 'action']),
   position: z.object({ x: z.number(), y: z.number() }),
   data: z.record(z.string(), z.unknown()),
 });

@@ -17,9 +17,9 @@ Last updated: 2026-09-01
 
 | Area | Status | Evidence / next action |
 |---|---|---|
-| Backend | VERIFIED | Script chaining next_flow_ids preservation and eval_alert_scripts_chained verified with SCRIPT-CHAINING-001 contract. |
+| Backend | VERIFIED | Script chaining next_flow_ids preservation and LANE0-FOUNDATION-001 FSM phase cache reading verified. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | VERIFIED | AUTOMATION-001 action_command trigger type and next flow selection verified with unit tests and evidence contract. |
+| Frontend | VERIFIED | LANE0-FOUNDATION-001 chain action filtering by kind and trigger panel skeleton verified with unit tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutomationIrSchema } from "./ir";
+import { AutomationIrSchema, AutomationNodeSchema } from "./ir";
 
 describe("AutomationIrSchema", () => {
   it("accepts a minimal valid alert IR", () => {
@@ -127,6 +127,24 @@ describe("action_command IR", () => {
     });
     expect(result.success).toBe(false);
   });
+});
+
+it('validates AutomationNodeSchema including trigger type', () => {
+  const node = {
+    id: '1',
+    type: 'sensor',
+    position: { x: 0, y: 0 },
+    data: { key: 'value' },
+  };
+  expect(AutomationNodeSchema.parse(node)).toEqual(node);
+
+  const triggerNode = {
+    id: 'trigger',
+    type: 'trigger',
+    position: { x: 250, y: 0 },
+    data: {},
+  };
+  expect(AutomationNodeSchema.parse(triggerNode)).toEqual(triggerNode);
 });
 
 it('AutomationIrSchema: next_flow_ids defaults to [] when absent', () => {

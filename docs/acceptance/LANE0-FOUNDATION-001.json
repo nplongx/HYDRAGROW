@@ -1,0 +1,21 @@
+{
+  "requirement_id": "LANE0-FOUNDATION-001",
+  "objective": "Lane 0 Foundation — Retrieve real phase from FSM cache in backend sensors handler, filter FlowDetailDrawer chain action list by kind in frontend, and add Trigger panel skeleton with tab-bar in NodeEditorPanel.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "ScriptActionInput.phase reads real FSM phase from device_states cache instead of hard-coded Monitoring string.",
+      "verification": "Cargo unit test sensors_handler_reads_fsm_phase_from_cache in hydragrow-backend/src/mqtt/handlers/sensors.rs"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "FlowDetailDrawer filters next flow selection list to show only scripts with matching kind.",
+      "verification": "Vitest test filters next flow options to matching kind only in FlowDetailDrawer.test.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "NodeEditorPanel renders Trigger tab-bar for trigger nodes with Sensor/FSM/Cron/Webhook tabs and Phase 4/5 placeholders.",
+      "verification": "Vitest test renders trigger node panel with tab bar in NodeEditorPanel.test.tsx"
+    }
+  ]
+}

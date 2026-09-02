@@ -5,8 +5,9 @@ export function buildIrFromGraph(params: {
   kind: AutomationIr['kind'];
   nodes: Node[];
   edges: Edge[];
+  nextFlowIds?: string[];
 }): AutomationIr {
-  const { kind, nodes, edges } = params;
+  const { kind, nodes, edges, nextFlowIds } = params;
 
   const conditions: Condition[] = nodes
     .filter((n) => n.type === 'condition')
@@ -18,7 +19,10 @@ export function buildIrFromGraph(params: {
 
   return {
     kind,
-    trigger: { type: kind === 'alert' ? 'sensor' : 'fsm' },
+    // recipe_override chạy trên FSM transition (fsm.rs); alert và
+    // action_command đều chạy trên sensor MQTT data (sensors.rs) — xem
+    // hydragrow-backend/src/models/script.rs::ScriptKind.
+    trigger: { type: kind === 'recipe_override' ? 'fsm' : 'sensor' },
     conditions,
     actions,
     nodes: nodes.map((n) => ({
@@ -28,6 +32,6 @@ export function buildIrFromGraph(params: {
       data: n.data as Record<string, unknown>,
     })),
     edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
-    next_flow_ids: [],
+    next_flow_ids: nextFlowIds ?? [],
   };
 }

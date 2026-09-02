@@ -34,4 +34,24 @@ describe('buildIrFromGraph', () => {
     expect(ir.nodes).toHaveLength(3);
     expect(ir.edges).toHaveLength(2);
   });
+
+  it('sets trigger type to sensor for action_command kind (not fsm)', () => {
+    const ir = buildIrFromGraph({ kind: 'action_command', nodes: [], edges: [] });
+    expect(ir.trigger.type).toBe('sensor');
+  });
+
+  it('passes nextFlowIds through to the IR', () => {
+    const ir = buildIrFromGraph({
+      kind: 'alert',
+      nodes: [],
+      edges: [],
+      nextFlowIds: ['id-a', 'id-b'],
+    });
+    expect(ir.next_flow_ids).toEqual(['id-a', 'id-b']);
+  });
+
+  it('defaults nextFlowIds to empty array when omitted', () => {
+    const ir = buildIrFromGraph({ kind: 'alert', nodes: [], edges: [] });
+    expect(ir.next_flow_ids).toEqual([]);
+  });
 });

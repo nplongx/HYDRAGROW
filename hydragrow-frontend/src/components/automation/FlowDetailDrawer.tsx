@@ -11,6 +11,7 @@ import { AutomationIrSchema, type AutomationIr } from '../../lib/automation/ir';
 import { compileToRhai } from '../../lib/automation/compileToRhai';
 import type { UserScript } from '../../types/automation';
 import {
+  useAutomationScripts,
   useCreateAutomationScript,
   useDeleteAutomationScript,
   useUpdateAutomationScript,
@@ -28,6 +29,15 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const isNew = script === 'new';
   const [name, setName] = useState(isNew ? 'Flow mới' : script.name);
   const [enabled, setEnabled] = useState(isNew ? true : script.enabled);
+  const [nextFlowIds, setNextFlowIds] = useState<string[]>(
+    isNew ? [] : (script.ir_json?.next_flow_ids ?? []),
+  );
+  const { data: allScripts } = useAutomationScripts(deviceId);
+  const otherScripts = (allScripts ?? []).filter((s) => isNew || s.id !== script.id);
+
+  const toggleNextFlow = (id: string) => {
+    setNextFlowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const builder = useAutomationBuilder();
 
@@ -47,7 +57,12 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const deleteScript = useDeleteAutomationScript(deviceId);
 
   const handleSave = async () => {
-    const ir: AutomationIr = buildIrFromGraph({ kind: builder.kind, nodes: builder.nodes, edges: builder.edges });
+    const ir: AutomationIr = buildIrFromGraph({
+      kind: builder.kind,
+      nodes: builder.nodes,
+      edges: builder.edges,
+      nextFlowIds,
+    });
     const parsed = AutomationIrSchema.safeParse(ir);
     if (!parsed.success) {
       toast.error(`IR không hợp lệ: ${parsed.error.issues[0]?.message}`);
@@ -128,6 +143,22 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
           />
         )}
       </div>
+
+      {otherScripts.length > 0 && (
+        <div className="rounded-lg border border-emerald-100 p-2">
+          <p className="mb-1 text-xs font-semibold text-emerald-950">Flow kế tiếp sau khi chạy xong</p>
+          {otherScripts.map((s) => (
+            <label key={s.id} className="flex items-center gap-1 text-xs text-emerald-800/75">
+              <input
+                type="checkbox"
+                checked={nextFlowIds.includes(s.id)}
+                onChange={() => toggleNextFlow(s.id)}
+              />
+              {s.name}
+            </label>
+          ))}
+        </div>
+      )}
 
       <div className="flex justify-between">
         {!isNew ? (

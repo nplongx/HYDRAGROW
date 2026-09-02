@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "npm run test -- src/components/automation/reactflow/buildIr.test.ts",
+      "verified_at": "2026-09-01",
+      "notes": "sets trigger type to sensor for action_command kind (not fsm) test passed"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "npm run test -- src/components/automation/reactflow/buildIr.test.ts",
+      "verified_at": "2026-09-01",
+      "notes": "passes nextFlowIds through to the IR and defaults nextFlowIds to empty array tests passed"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npm run test -- src/components/automation/FlowDetailDrawer.test.tsx",
+      "verified_at": "2026-09-01",
+      "notes": "lets the user pick next flows and includes them when saving test passed"
+    }
+  ]
+}

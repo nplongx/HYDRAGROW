@@ -19,7 +19,7 @@ Last updated: 2026-09-01
 |---|---|---|
 | Backend | IMPLEMENTING | Maintain module tests and delivery evidence per PR contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | IMPLEMENTING | Require E2E evidence for material behavior changes. |
+| Frontend | VERIFIED | AUTOMATION-001 action_command trigger type and next flow selection verified with unit tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

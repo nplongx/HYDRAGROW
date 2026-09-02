@@ -7,9 +7,13 @@ import { useDeviceStore } from '../store/useDeviceStore';
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
+import { useNavigate } from 'react-router-dom';
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
+import { QuickActionBar } from '../components/ui/QuickActionBar';
+import { DosingSummaryCard } from '../components/ui/DosingSummaryCard';
 import { LoadingState } from '../components/ui/LoadingState';
 import { useFCM } from '../hooks/useFCM';
+import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${color}`}>
@@ -30,7 +34,7 @@ const pumpColors: Record<string, string> = {
   pump_b: 'bg-orange-50 text-orange-700 border-orange-200',
   ph_up: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
   ph_down: 'bg-rose-50 text-rose-700 border-rose-200',
-  osaka_pump: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  osaka_pump: 'bg-sky-50 text-sky-700 border-sky-200',
   mist_valve: 'bg-sky-50 text-sky-700 border-sky-200',
   water_pump_in: 'bg-sky-50 text-sky-700 border-sky-200',
   water_pump_out: 'bg-cyan-50 text-cyan-700 border-cyan-200'
@@ -65,7 +69,10 @@ const Dashboard = () => {
   const settings = useDeviceStore((s) => s.settings);
   const tankAlert = useDeviceStore((s) => s.tankAlert);
 
+  const navigate = useNavigate();
   const { permission, enableNotifications } = useFCM();
+  const { data: healthSummary } = useSystemHealthSummary(deviceId ?? '');
+  const dosingTotalCount = (healthSummary?.ec_dosing_count ?? 0) + (healthSummary?.ph_dosing_count ?? 0);
 
   const friendlyState = useMemo(() => {
     const res = friendly_state(fsmState || 'Monitoring', isOnline);
@@ -205,6 +212,12 @@ const Dashboard = () => {
         </div>
       )}
 
+      <QuickActionBar
+        onDose={() => navigate('/operations')}
+        onPausePumps={() => navigate('/operations')}
+        onViewAlerts={() => navigate('/journal')}
+      />
+
       {/* Sensor Bento Grid */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -277,6 +290,11 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      <DosingSummaryCard
+        totalCount={dosingTotalCount}
+        lastDosedAt={healthSummary?.latest_ph_dosing_at ?? null}
+      />
     </div>
   );
 };

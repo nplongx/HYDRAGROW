@@ -24,6 +24,7 @@
 | Border | `--color-border` `#bbf7d0` | `emerald-100/200` | Viền card, chia khối |
 | Text | `--color-text` `#14532d` | `emerald-950` | Văn bản chính |
 | Text muted | `--color-text-muted` `#4b6354` | `emerald-800/75` | Mô tả phụ, caption |
+| Neutral | `--color-neutral` `#64748b` | `.log-neutral-badge` / `.log-neutral-dot` | Sự kiện kỹ thuật đã gộp dòng (Nhật ký, chế độ Quan trọng) — không dùng `slate-*` trực tiếp, luôn qua 2 class này |
 
 **Quy tắc cứng:**
 - **Cấm** `bg-blue-*`, `text-blue-*`, `border-blue-*`, `indigo-*`, `slate-*` cho UI chính — đây là màu "lạc token" đang tồn tại rải rác trong `Settings.tsx`, `Dashboard.tsx`, `DevicePairing.tsx`, `RecipeBuilder.tsx`, v.v. Chỗ nào cần một màu "thông tin/trung tính khác primary" → dùng **Info/Nước (`sky`)**, không phải `blue`.

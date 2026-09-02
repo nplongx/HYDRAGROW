@@ -12,6 +12,9 @@
   --color-border: #bbf7d0;
   --color-text: #14532d;
   --color-text-muted: #4b6354;
+  --color-neutral: #64748b;
+  --color-neutral-muted: #f1f5f9;
+  --color-neutral-border: #e2e8f0;
 }
 
 :root {
@@ -141,6 +144,17 @@ p {
 
   .farm-muted-panel {
     @apply rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4;
+  }
+
+  .log-neutral-badge {
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold;
+    color: var(--color-neutral);
+    background-color: var(--color-neutral-muted);
+    border-color: var(--color-neutral-border);
+  }
+
+  .log-neutral-dot {
+    background-color: var(--color-neutral);
   }
 
   .ui-tabbar {

@@ -2,7 +2,7 @@
 
 > This file is the canonical project-state snapshot. Update it in the same PR when a material change alters implementation status, capability, deployment state, or blockers.
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Status vocabulary
 
@@ -22,7 +22,7 @@ Last updated: 2026-09-01
 | Frontend | VERIFIED | LANE0-FOUNDATION-001 chain action filtering by kind and trigger panel skeleton verified with unit tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
-| CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
+| CI / automation | IMPLEMENTING | Strict code-quality gate added for Rust and frontend; verify the new workflow on the PR before marking it VERIFIED. |
 
 ## Active blockers
 

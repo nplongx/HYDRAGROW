@@ -1,0 +1,78 @@
+name: code-quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+
+permissions:
+  contents: read
+
+jobs:
+  rust-quality:
+    name: Rust quality (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: shared
+            path: hydragrow-shared
+          - name: backend
+            path: hydragrow-backend
+          - name: controller-core
+            path: hydragrow-controller-core
+          - name: simulator
+            path: hydragrow-simulator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.path }}
+      - name: Format
+        working-directory: ${{ matrix.path }}
+        run: cargo fmt --all -- --check
+      - name: Check locked dependencies
+        working-directory: ${{ matrix.path }}
+        run: cargo check --locked
+      - name: Clippy (warnings are errors)
+        working-directory: ${{ matrix.path }}
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Tests
+        working-directory: ${{ matrix.path }}
+        run: cargo test --locked --all-targets --all-features
+
+  frontend-quality:
+    name: Frontend quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hydragrow-frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: hydragrow-frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm exec tsc -- --noEmit
+      - name: ESLint (warnings are errors)
+        run: npm exec eslint -- . --max-warnings=0
+      - name: Unit tests
+        run: npm test -- --passWithNoTests
+      - name: Production build
+        run: npm run build

@@ -98,88 +98,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         .event_bus
         .send(AppEvent::SensorUpdate(sensor_data));
 
-    // --- Rhai script eval ---
-    // --- Rhai script eval ---
-    let scripts = app_state.script_cache.get_alert_scripts(&device_id).await;
-    if !scripts.is_empty() {
-        let input = crate::services::script_engine::ScriptSensorInput {
-            ph: incoming.ph,
-            ec: incoming.ec,
-            temp: incoming.temp,
-            water_level: incoming.water_level,
-            device_id: device_id.clone(),
-            timestamp_ms: chrono::Utc::now().timestamp_millis(),
-        };
-        let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
-        let alerts = crate::mqtt::handlers::script_eval::eval_alert_scripts_chained(
-            &engine, &scripts, &input,
-        );
-        for (_script_id, alert) in alerts {
-            let alert_msg = crate::mqtt::handlers::script_eval::alert_output_to_system_alert(
-                alert,
-                &device_id,
-                input.timestamp_ms,
-            );
-            // 1. Persist vào PostgreSQL
-            let db_record = crate::db::postgres::NewSystemEventRecord {
-                device_id: device_id.clone(),
-                level: alert_msg.level.clone(),
-                category: alert_msg.category.clone(),
-                title: alert_msg.title.clone(),
-                message: alert_msg.message.clone(),
-                reason: alert_msg.reason.clone(),
-                metadata: alert_msg.metadata.clone(),
-                timestamp: alert_msg.timestamp as i64,
-            };
-            if let Err(e) =
-                crate::db::postgres::insert_system_event(&app_state.pg_pool, &db_record).await
-            {
-                tracing::error!(error = ?e, device_id = %device_id, "Lỗi persist script alert vào DB");
-            }
-            // 2. Bắn vào event bus (WebSocket)
-            let _ = app_state
-                .event_bus
-                .send(AppEvent::SystemAlert(alert_msg.clone()));
-            // 3. Gửi FCM nếu warning hoặc critical
-            let level_lower = alert_msg.level.to_lowercase();
-            if level_lower == "warning" || level_lower == "critical" {
-                let tokens = match app_state.fcm_tokens.lock() {
-                    Ok(guard) => guard.get(&device_id).cloned().unwrap_or_default(),
-                    Err(poisoned) => poisoned
-                        .into_inner()
-                        .get(&device_id)
-                        .cloned()
-                        .unwrap_or_default(),
-                };
-                if !tokens.is_empty() {
-                    let title = alert_msg.title.clone();
-                    let message = alert_msg.message.clone();
-                    tokio::spawn(async move {
-                        crate::services::fcm::send_push_notification(&title, &message, tokens)
-                            .await;
-                    });
-                }
-            }
-        }
-    }
-
+    // --- Rhai script eval (unified flow chain) ---
+    let alert_scripts = app_state.script_cache.get_alert_scripts(&device_id).await;
     let action_scripts = app_state
         .script_cache
         .get_action_command_scripts(&device_id)
         .await;
-    if !action_scripts.is_empty()
-        && let Ok(safety_config) =
-            crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await
-    {
-        let calibration =
-            crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
-                .await
-                .unwrap_or(None);
-        let limits = hydragrow_shared::safety::DoseSafetyLimits {
-            max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
-            max_dose_per_hour_ml: safety_config.max_dose_per_hour,
-            cooldown_sec: safety_config.cooldown_sec as u64,
-        };
+
+    if !alert_scripts.is_empty() || !action_scripts.is_empty() {
         let current_phase = cached_state
             .as_ref()
             .and_then(|cached| {
@@ -191,73 +117,166 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             .unwrap_or("Monitoring")
             .to_string();
 
-        let action_input = crate::models::script::ScriptActionInput {
+        let timestamp_ms = chrono::Utc::now().timestamp_millis();
+        let snapshot = crate::models::script::SensorSnapshot {
             ph: incoming.ph,
             ec: incoming.ec,
             temp: incoming.temp,
             water_level: incoming.water_level,
             phase: current_phase,
             device_id: device_id.clone(),
-            timestamp_ms: chrono::Utc::now().timestamp_millis(),
+            timestamp_ms,
         };
+
+        let mut chain_nodes: Vec<crate::mqtt::handlers::script_eval::ChainNode> = Vec::new();
+        for s in alert_scripts {
+            chain_nodes.push(crate::mqtt::handlers::script_eval::ChainNode {
+                id: s.id,
+                kind: crate::models::script::ScriptKind::Alert,
+                next_flow_ids: s.next_flow_ids,
+                ast: s.ast,
+            });
+        }
+        for s in action_scripts {
+            chain_nodes.push(crate::mqtt::handlers::script_eval::ChainNode {
+                id: s.id,
+                kind: crate::models::script::ScriptKind::ActionCommand,
+                next_flow_ids: s.next_flow_ids,
+                ast: s.ast,
+            });
+        }
+
         let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
-        let now_sec = (action_input.timestamp_ms / 1000) as u64;
+        let results =
+            crate::mqtt::handlers::script_eval::eval_flow_chain(&engine, &chain_nodes, &snapshot);
 
-        let hourly_history_ml =
-            crate::db::postgres::get_dosing_history_last_hour(&app_state.pg_pool, &device_id)
-                .await
-                .unwrap_or_default();
-        let last_dose_at_sec =
-            crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
-                .await
-                .unwrap_or(None);
+        if !results.is_empty() {
+            let has_action_commands = results.iter().any(|(_, r)| {
+                matches!(
+                    r,
+                    crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(_)
+                )
+            });
 
-        for script in &action_scripts {
-            // Rhai evaluation is synchronous, so we can't await `query_range_stat` directly inside the closure.
-            // For now, we block on the async function since we need to wait for the InfluxDB response.
-            // Using tokio::task::block_in_place allows blocking without panicking the async runtime.
-            let influx_client = app_state.influx_client.clone();
-            let influx_bucket = app_state.influx_bucket.clone();
-            let fetcher_device_id = device_id.clone();
-            let fetcher = move |field: String, stat: String, range_h: i64| -> f64 {
-                std::thread::spawn({
-                    let client = influx_client.clone();
-                    let bucket = influx_bucket.clone();
-                    let dev_id = fetcher_device_id.clone();
-                    move || {
-                        tokio::runtime::Runtime::new()
-                            .expect("Failed to create tokio runtime for stat fetcher")
-                            .block_on(async {
-                                crate::db::influx::query_range_stat(
-                                    &client, &bucket, &dev_id, &field, &stat, range_h,
-                                )
-                                .await
-                                .unwrap_or(0.0)
-                            })
-                    }
-                })
-                .join()
-                .unwrap_or(0.0)
+            let safety_ctx = if has_action_commands {
+                if let Ok(safety_config) =
+                    crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await
+                {
+                    let calibration = crate::db::postgres::fetch_dosing_calibration(
+                        &app_state.pg_pool,
+                        &device_id,
+                    )
+                    .await
+                    .unwrap_or(None);
+                    let limits = hydragrow_shared::safety::DoseSafetyLimits {
+                        max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
+                        max_dose_per_hour_ml: safety_config.max_dose_per_hour,
+                        cooldown_sec: safety_config.cooldown_sec as u64,
+                    };
+                    let now_sec = (timestamp_ms / 1000) as u64;
+                    let hourly_history_ml = crate::db::postgres::get_dosing_history_last_hour(
+                        &app_state.pg_pool,
+                        &device_id,
+                    )
+                    .await
+                    .unwrap_or_default();
+                    let last_dose_at_sec =
+                        crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
+                            .await
+                            .unwrap_or(None);
+                    Some((
+                        limits,
+                        calibration,
+                        hourly_history_ml,
+                        now_sec,
+                        last_dose_at_sec,
+                    ))
+                } else {
+                    None
+                }
+            } else {
+                None
             };
 
-            if let Ok(Some(output)) =
-                engine.eval_action_command_with_range_stat(&script.ast, &action_input, fetcher)
-                && let Err(err) = crate::services::action_dispatch::dispatch_action_command(
-                    &app_state,
-                    &device_id,
-                    output,
-                    &limits,
-                    &hourly_history_ml,
-                    now_sec,
-                    last_dose_at_sec,
-                    calibration.as_ref(),
-                )
-                .await
-            {
-                tracing::warn!(
-                    script_id = %script.id, device_id, error = ?err,
-                    "action_command bị chặn hoặc lỗi khi dispatch"
-                );
+            for (script_id, res) in results {
+                match res {
+                    crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
+                        let alert_msg =
+                            crate::mqtt::handlers::script_eval::alert_output_to_system_alert(
+                                alert,
+                                &device_id,
+                                timestamp_ms,
+                            );
+                        let db_record = crate::db::postgres::NewSystemEventRecord {
+                            device_id: device_id.clone(),
+                            level: alert_msg.level.clone(),
+                            category: alert_msg.category.clone(),
+                            title: alert_msg.title.clone(),
+                            message: alert_msg.message.clone(),
+                            reason: alert_msg.reason.clone(),
+                            metadata: alert_msg.metadata.clone(),
+                            timestamp: alert_msg.timestamp as i64,
+                        };
+                        if let Err(e) =
+                            crate::db::postgres::insert_system_event(&app_state.pg_pool, &db_record)
+                                .await
+                        {
+                            tracing::error!(error = ?e, device_id = %device_id, "Lỗi persist script alert vào DB");
+                        }
+                        let _ = app_state
+                            .event_bus
+                            .send(AppEvent::SystemAlert(alert_msg.clone()));
+                        let level_lower = alert_msg.level.to_lowercase();
+                        if level_lower == "warning" || level_lower == "critical" {
+                            let tokens = match app_state.fcm_tokens.lock() {
+                                Ok(guard) => guard.get(&device_id).cloned().unwrap_or_default(),
+                                Err(poisoned) => poisoned
+                                    .into_inner()
+                                    .get(&device_id)
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            };
+                            if !tokens.is_empty() {
+                                let title = alert_msg.title.clone();
+                                let message = alert_msg.message.clone();
+                                tokio::spawn(async move {
+                                    crate::services::fcm::send_push_notification(
+                                        &title, &message, tokens,
+                                    )
+                                    .await;
+                                });
+                            }
+                        }
+                    }
+                    crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(output) => {
+                        if let Some((
+                            ref limits,
+                            ref calibration,
+                            ref hourly_history_ml,
+                            now_sec,
+                            last_dose_at_sec,
+                        )) = safety_ctx
+                            && let Err(err) =
+                                crate::services::action_dispatch::dispatch_action_command(
+                                    &app_state,
+                                    &device_id,
+                                    output,
+                                    limits,
+                                    hourly_history_ml,
+                                    now_sec,
+                                    last_dose_at_sec,
+                                    calibration.as_ref(),
+                                )
+                                .await
+                        {
+                            tracing::warn!(
+                                script_id = %script_id, device_id = %device_id, error = ?err,
+                                "action_command bị chặn hoặc lỗi khi dispatch"
+                            );
+                        }
+                    }
+                    crate::mqtt::handlers::script_eval::ChainFireResult::RecipeOverride(_) => {}
+                }
             }
         }
     }

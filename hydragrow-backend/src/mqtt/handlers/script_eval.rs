@@ -6,100 +6,201 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::models::script::AlertOutput;
+use crate::models::script::{
+    ActionCommandOutput, AlertOutput, RecipeOverrideOutput, ScriptActionInput, ScriptKind,
+    SensorSnapshot,
+};
 use crate::services::script_engine::{CachedScript, ScriptEngine, ScriptSensorInput};
 
 const MAX_CHAIN_DEPTH: usize = 5;
 
-/// Eval mọi alert script "gốc" (toàn bộ script enabled của device) rồi, với mỗi
-/// script fire, tiếp tục eval các script trong `next_flow_ids` của nó — tra cứu
-/// trong CHÍNH `scripts` (chỉ chain trong cùng kind `alert`; nếu next_flow_id
-/// trỏ ra ngoài slice này, bỏ qua và log warning — xem "Quyết định phạm vi"
-/// trong plan). Dedupe theo script id: một script chỉ góp mặt tối đa 1 lần
-/// trong kết quả kể cả khi vừa tự fire vừa được chain tới từ script khác.
-pub fn eval_alert_scripts_chained(
+/// Node trong đồ thị flow chain đa-kind
+#[derive(Clone)]
+pub struct ChainNode {
+    pub id: Uuid,
+    pub kind: ScriptKind,
+    pub next_flow_ids: Vec<String>,
+    pub ast: rhai::AST,
+}
+
+/// Kết quả eval 1 node trong chain, đủ đa hình để caller (sensors.rs) biết làm gì tiếp:
+/// alert -> ghi event bus/DB/FCM
+/// action_command -> dispatch_action_command
+/// recipe_override -> logic ở fsm.rs
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChainFireResult {
+    Alert(AlertOutput),
+    ActionCommand(ActionCommandOutput),
+    RecipeOverride(RecipeOverrideOutput),
+}
+
+/// Eval mọi root node của đồ thị Flow chain (toàn bộ script enabled thuộc device).
+/// Khi một node fire, tiếp tục eval các script trong `next_flow_ids` của nó (kể cả cross-kind).
+/// Dedupe theo script id: một script chỉ góp mặt tối đa 1 lần trong kết quả.
+pub fn eval_flow_chain(
     engine: &Arc<ScriptEngine>,
-    scripts: &[CachedScript],
-    input: &ScriptSensorInput,
-) -> Vec<(Uuid, AlertOutput)> {
-    let mut fired: Vec<(Uuid, AlertOutput)> = Vec::new();
+    all_scripts: &[ChainNode],
+    snapshot: &SensorSnapshot,
+) -> Vec<(Uuid, ChainFireResult)> {
+    let mut fired: Vec<(Uuid, ChainFireResult)> = Vec::new();
     let mut seen: Vec<Uuid> = Vec::new();
 
-    let child_ids: Vec<&str> = scripts
+    let child_ids: Vec<&str> = all_scripts
         .iter()
         .flat_map(|s| s.next_flow_ids.iter().map(|id| id.as_str()))
         .collect();
 
-    let roots: Vec<&CachedScript> = scripts
+    let roots: Vec<&ChainNode> = all_scripts
         .iter()
         .filter(|s| !child_ids.contains(&s.id.to_string().as_str()))
         .collect();
 
     let start_scripts = if roots.is_empty() {
-        scripts.iter().collect::<Vec<&CachedScript>>()
+        all_scripts.iter().collect::<Vec<&ChainNode>>()
     } else {
         roots
     };
 
     for script in start_scripts {
-        eval_chain_from(script, scripts, engine, input, 0, &mut seen, &mut fired);
+        eval_flow_chain_from(
+            script,
+            all_scripts,
+            engine,
+            snapshot,
+            0,
+            &mut seen,
+            &mut fired,
+        );
     }
 
     fired
 }
 
-fn eval_chain_from(
-    script: &CachedScript,
-    all_scripts: &[CachedScript],
+fn eval_flow_chain_from(
+    node: &ChainNode,
+    all_scripts: &[ChainNode],
     engine: &Arc<ScriptEngine>,
-    input: &ScriptSensorInput,
+    snapshot: &SensorSnapshot,
     depth: usize,
     seen: &mut Vec<Uuid>,
-    fired: &mut Vec<(Uuid, AlertOutput)>,
+    fired: &mut Vec<(Uuid, ChainFireResult)>,
 ) {
-    if depth >= MAX_CHAIN_DEPTH || seen.contains(&script.id) {
+    if depth >= MAX_CHAIN_DEPTH || seen.contains(&node.id) {
         if depth >= MAX_CHAIN_DEPTH {
-            warn!(script_id = %script.id, depth, "Flow chain depth limit reached — skipping");
+            warn!(script_id = %node.id, depth, "Flow chain depth limit reached — skipping");
         }
         return;
     }
-    seen.push(script.id);
+    seen.push(node.id);
 
-    match engine.eval_alert(&script.ast, input) {
-        Ok(Some(alert)) => {
-            fired.push((script.id, alert));
-            for next_id in &script.next_flow_ids {
-                let Some(next_script) = all_scripts.iter().find(|s| s.id.to_string() == *next_id)
-                else {
-                    warn!(
-                        root_script_id = %script.id,
-                        next_flow_id = %next_id,
-                        "next_flow_ids trỏ tới script không tồn tại trong cùng kind — bỏ qua"
-                    );
-                    continue;
-                };
-                eval_chain_from(
-                    next_script,
-                    all_scripts,
-                    engine,
-                    input,
-                    depth + 1,
-                    seen,
-                    fired,
-                );
+    let fired_result = match node.kind {
+        ScriptKind::Alert => {
+            let input = ScriptSensorInput {
+                ph: snapshot.ph,
+                ec: snapshot.ec,
+                temp: snapshot.temp,
+                water_level: snapshot.water_level,
+                device_id: snapshot.device_id.clone(),
+                timestamp_ms: snapshot.timestamp_ms,
+            };
+            match engine.eval_alert(&node.ast, &input) {
+                Ok(Some(alert)) => Some(ChainFireResult::Alert(alert)),
+                Ok(None) => None,
+                Err(e) => {
+                    warn!(script_id = %node.id, device_id = %snapshot.device_id, error = %e, "Alert script runtime error — skipping");
+                    None
+                }
             }
         }
-        Ok(None) => {}
-        Err(e) => {
-            warn!(
-                script_id = %script.id,
-                script_name = %script.name,
-                device_id = %input.device_id,
-                error = %e,
-                "Alert script runtime error — skipping"
+        ScriptKind::ActionCommand => {
+            let input = ScriptActionInput {
+                ph: snapshot.ph,
+                ec: snapshot.ec,
+                temp: snapshot.temp,
+                water_level: snapshot.water_level,
+                phase: snapshot.phase.clone(),
+                device_id: snapshot.device_id.clone(),
+                timestamp_ms: snapshot.timestamp_ms,
+            };
+            match engine.eval_action_command(&node.ast, &input) {
+                Ok(Some(cmd)) => Some(ChainFireResult::ActionCommand(cmd)),
+                Ok(None) => None,
+                Err(e) => {
+                    warn!(script_id = %node.id, device_id = %snapshot.device_id, error = %e, "ActionCommand script runtime error — skipping");
+                    None
+                }
+            }
+        }
+        ScriptKind::RecipeOverride => {
+            warn!(script_id = %node.id, "RecipeOverride script in sensor flow chain — skipping");
+            None
+        }
+    };
+
+    if let Some(res) = fired_result {
+        fired.push((node.id, res));
+        for next_id in &node.next_flow_ids {
+            let Some(next_script) = all_scripts.iter().find(|s| s.id.to_string() == *next_id)
+            else {
+                warn!(
+                    root_script_id = %node.id,
+                    next_flow_id = %next_id,
+                    "next_flow_ids trỏ tới script không tồn tại — bỏ qua"
+                );
+                continue;
+            };
+            eval_flow_chain_from(
+                next_script,
+                all_scripts,
+                engine,
+                snapshot,
+                depth + 1,
+                seen,
+                fired,
             );
         }
     }
+}
+
+/// Backward-compatible wrapper cho eval_alert_scripts_chained
+pub fn eval_alert_scripts_chained(
+    engine: &Arc<ScriptEngine>,
+    scripts: &[CachedScript],
+    input: &ScriptSensorInput,
+) -> Vec<(Uuid, AlertOutput)> {
+    let chain_nodes: Vec<ChainNode> = scripts
+        .iter()
+        .map(|s| ChainNode {
+            id: s.id,
+            kind: match s.kind.as_str() {
+                "action_command" => ScriptKind::ActionCommand,
+                "recipe_override" => ScriptKind::RecipeOverride,
+                _ => ScriptKind::Alert,
+            },
+            next_flow_ids: s.next_flow_ids.clone(),
+            ast: s.ast.clone(),
+        })
+        .collect();
+
+    let snapshot = SensorSnapshot {
+        ph: input.ph,
+        ec: input.ec,
+        temp: input.temp,
+        water_level: input.water_level,
+        phase: "Monitoring".to_string(),
+        device_id: input.device_id.clone(),
+        timestamp_ms: input.timestamp_ms,
+    };
+
+    let results = eval_flow_chain(engine, &chain_nodes, &snapshot);
+
+    results
+        .into_iter()
+        .filter_map(|(id, res)| match res {
+            ChainFireResult::Alert(alert) => Some((id, alert)),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Convert AlertOutput thành AlertMessage để gửi vào event bus.
@@ -159,6 +260,37 @@ fn main(input) {
 }
 "#;
     const NON_FIRING_SCRIPT: &str = r#"fn main(input) { () }"#;
+
+    const DOSE_SCRIPT: &str = r#"
+fn main(input) {
+    if input.ph <= 7.5 { return (); }
+    #{ action: "dose", pump: "ph_down", dose_ml: 5.0 }
+}
+"#;
+
+    fn make_action_command_script(source: &str) -> ChainNode {
+        let engine = ScriptEngine::new();
+        ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::ActionCommand,
+            next_flow_ids: vec![],
+            ast: engine
+                .compile(source)
+                .expect("Failed to compile test Rhai action command script source"),
+        }
+    }
+
+    fn make_snapshot() -> SensorSnapshot {
+        SensorSnapshot {
+            ph: 8.1,
+            ec: 1.4,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        }
+    }
 
     #[test]
     fn no_scripts_produces_no_alerts() {
@@ -238,7 +370,6 @@ fn main(input) {
             next_flow_ids: vec![a_id.to_string()],
         };
         let alerts = eval_alert_scripts_chained(&engine, &[a, b], &make_input());
-        // Mỗi script chỉ được đếm 1 lần dù A→B→A tạo vòng lặp.
         assert_eq!(alerts.len(), 2);
     }
 
@@ -263,14 +394,78 @@ fn main(input) {
             })
             .collect();
         let alerts = eval_alert_scripts_chained(&engine, &scripts, &make_input());
-        // MAX_CHAIN_DEPTH = 5: chỉ script[0] (root, depth 0) tới script[4] (depth 4)
-        // được eval trước khi depth 5 bị chặn — không phải mọi root trong danh sách
-        // đều fire tới cuối chuỗi 8, nên assert theo id cụ thể thay vì đếm tổng.
         for id in &ids[0..5] {
             assert!(
                 alerts.iter().any(|(fid, _)| fid == id),
                 "script {id} should fire"
             );
         }
+    }
+
+    #[test]
+    fn alert_chains_into_action_command_cross_kind() {
+        let engine = Arc::new(ScriptEngine::new());
+        let action_child = make_action_command_script(DOSE_SCRIPT);
+        let alert_root_ast = engine.compile(FIRING_SCRIPT).expect("compiles");
+        let alert_root = ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![action_child.id.to_string()],
+            ast: alert_root_ast,
+        };
+
+        let results = eval_flow_chain(
+            &engine,
+            &[alert_root.clone(), action_child.clone()],
+            &make_snapshot(),
+        );
+
+        assert_eq!(results.len(), 2);
+        let child_res = results
+            .iter()
+            .find(|(id, _)| *id == action_child.id)
+            .map(|(_, r)| r)
+            .expect("action_child result present");
+        assert!(matches!(child_res, ChainFireResult::ActionCommand(_)));
+    }
+
+    #[test]
+    fn non_firing_alert_root_does_not_chain_into_action_command() {
+        let engine = Arc::new(ScriptEngine::new());
+        let action_child = make_action_command_script(DOSE_SCRIPT);
+        let alert_root_ast = engine.compile(NON_FIRING_SCRIPT).expect("compiles");
+        let alert_root = ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![action_child.id.to_string()],
+            ast: alert_root_ast,
+        };
+
+        let results = eval_flow_chain(&engine, &[alert_root, action_child], &make_snapshot());
+
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn cross_kind_cycle_still_detected_at_runtime() {
+        let engine = Arc::new(ScriptEngine::new());
+        let a_id = uuid::Uuid::new_v4();
+        let b_id = uuid::Uuid::new_v4();
+
+        let a = ChainNode {
+            id: a_id,
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![b_id.to_string()],
+            ast: engine.compile(FIRING_SCRIPT).expect("compiles"),
+        };
+        let b = ChainNode {
+            id: b_id,
+            kind: ScriptKind::ActionCommand,
+            next_flow_ids: vec![a_id.to_string()],
+            ast: engine.compile(DOSE_SCRIPT).expect("compiles"),
+        };
+
+        let results = eval_flow_chain(&engine, &[a, b], &make_snapshot());
+        assert_eq!(results.len(), 2);
     }
 }

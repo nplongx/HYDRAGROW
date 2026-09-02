@@ -17,9 +17,9 @@ Last updated: 2026-09-01
 
 | Area | Status | Evidence / next action |
 |---|---|---|
-| Backend | VERIFIED | Script chaining next_flow_ids preservation and LANE0-FOUNDATION-001 FSM phase cache reading verified. |
+| Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | VERIFIED | LANE0-FOUNDATION-001 chain action filtering by kind and trigger panel skeleton verified with unit tests and evidence contract. |
+| Frontend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 cross-kind chain selection and cycle prevention badge verified with Vitest tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
 | Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

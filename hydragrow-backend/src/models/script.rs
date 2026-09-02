@@ -58,7 +58,7 @@ pub struct UserScript {
 }
 
 /// Kết quả sau khi eval một alert script
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AlertOutput {
     pub level: String, // "info" | "warning" | "error"
     pub title: String,
@@ -84,6 +84,7 @@ pub enum RecipeOverrideOutput {
 /// Request body để tạo/update script
 #[derive(Debug, Deserialize)]
 pub struct UpsertScriptRequest {
+    pub id: Option<Uuid>,
     pub kind: String,
     pub name: String,
     pub source: String,
@@ -108,6 +109,18 @@ pub struct ScriptSensorInput {
     pub ec: f32,
     pub temp: f32,
     pub water_level: f32,
+    pub device_id: String,
+    pub timestamp_ms: i64,
+}
+
+/// Dữ liệu snapshot cảm biến + phase FSM hợp nhất dùng cho eval_flow_chain
+#[derive(Debug, Clone)]
+pub struct SensorSnapshot {
+    pub ph: f32,
+    pub ec: f32,
+    pub temp: f32,
+    pub water_level: f32,
+    pub phase: String,
     pub device_id: String,
     pub timestamp_ms: i64,
 }

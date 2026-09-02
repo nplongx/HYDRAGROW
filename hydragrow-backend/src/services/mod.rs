@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod command;
 pub mod fcm;
 pub mod firebase_auth;
+pub mod flow_graph;
 pub mod ph_calibration;
 pub mod retention;
 pub mod script_engine;

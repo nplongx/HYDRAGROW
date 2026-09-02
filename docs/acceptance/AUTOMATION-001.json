@@ -1,0 +1,24 @@
+{
+  "requirement_id": "AUTOMATION-001",
+  "objective": "Set trigger.type to sensor for action_command scripts and support user selection of next_flow_ids in FlowDetailDrawer without hardcoding empty arrays.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "buildIrFromGraph sets trigger.type to sensor for action_command kind.",
+      "verification": "Vitest test sets trigger type to sensor for action_command kind in buildIr.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "buildIrFromGraph accepts nextFlowIds parameter and maps it to ir.next_flow_ids, defaulting to empty array if omitted.",
+      "verification": "Vitest tests passes nextFlowIds through to the IR and defaults nextFlowIds to empty array in buildIr.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "FlowDetailDrawer renders checkbox UI for selecting next flows and includes chosen next_flow_ids when saving automation script.",
+      "verification": "Vitest test lets the user pick next flows and includes them when saving in FlowDetailDrawer.test.tsx",
+      "evidence_required": true
+    }
+  ]
+}

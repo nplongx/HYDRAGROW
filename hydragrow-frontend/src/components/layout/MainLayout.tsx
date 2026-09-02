@@ -21,7 +21,8 @@ const MainLayout: React.FC = () => {
   const unreadAlertCount = useMemo(() => {
     if (!systemEvents || !Array.isArray(systemEvents)) return 0;
     return systemEvents.filter((ev: SystemEvent) => {
-      const ts = ev?.timestamp ? new Date(ev.timestamp).getTime() : 0;
+      const rawTs = ev?.timestamp_ms ?? (ev as any)?.timestamp ?? 0;
+      const ts = typeof rawTs === 'number' ? (rawTs > 1e12 ? rawTs : rawTs * 1000) : new Date(rawTs).getTime();
       if (!ts || Number.isNaN(ts)) return false;
       const within24h = Date.now() - ts <= 24 * 60 * 60 * 1000;
       const level = String(ev?.level || '').toLowerCase();

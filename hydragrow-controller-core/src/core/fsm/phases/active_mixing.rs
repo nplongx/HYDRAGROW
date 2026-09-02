@@ -25,7 +25,9 @@ impl PhaseTick for ActiveMixingPhase {
         if (elapsed_ms >= 15_000 && ctx.stabilizer_tracker.is_stable(config)) || max_mixing_timeout
         {
             if ctx.peripherals.mix_valve_started_by_dosing {
-                result.events.push(crate::core::fsm::events::OrchestratorEvent::SetMixValve { on: false });
+                result
+                    .events
+                    .push(crate::core::fsm::events::OrchestratorEvent::SetMixValve { on: false });
                 let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
                 peri_delta.mix_valve = Some(false);
                 peri_delta.mix_valve_started_by_dosing = Some(false);

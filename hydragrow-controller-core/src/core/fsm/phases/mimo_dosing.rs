@@ -271,7 +271,9 @@ fn transition_to_active_mixing(
     ctx: &SystemContext,
     result: &mut TickResult,
 ) {
-    result.events.push(OrchestratorEvent::SetMixValve { on: true });
+    result
+        .events
+        .push(OrchestratorEvent::SetMixValve { on: true });
 
     let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
     peri_delta.mix_valve = Some(true);

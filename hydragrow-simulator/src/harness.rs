@@ -2,7 +2,7 @@ use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::dispatcher::SimDispatcher;
 use crate::faults::injector::Injector;
 use crate::plant::tank::Tank;
-use crate::sensors::sensor_model::{NoiseConfig, read_sensor};
+use crate::sensors::sensor_model::{read_sensor, NoiseConfig};
 use hydragrow_controller_core::{
     core::fsm::tick_result::TickResult,
     core::fsm::{context::SystemContext, orchestrator},
@@ -62,7 +62,7 @@ impl Harness {
         );
 
         for event in &result.events {
-            self.dispatcher.dispatch(event);
+            self.dispatcher.dispatch(event, &mut self.hw);
         }
 
         result

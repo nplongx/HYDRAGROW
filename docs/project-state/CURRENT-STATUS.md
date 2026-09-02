@@ -21,7 +21,7 @@ Last updated: 2026-09-02
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | CONDITION-GROUPS-001 nested AND/OR condition tree editor, recursive Rhai compilation, and leaf condition counter verified with Vitest tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
-| Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
+| Simulator | VERIFIED | SIMULATOR-EVENT-DISPATCHER-001 virtual hardware event dispatcher verified with unit tests and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 
 ## Active blockers

@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Default)]
 pub struct VirtualPump {
     pub on: bool,
-    pub pwm: u8,
+    pub pwm_percent: u8,
 }
 
 impl VirtualPump {
@@ -19,7 +19,8 @@ pub struct VirtualHardwareState {
     pub water_pump_in: VirtualPump,
     pub water_pump_out: VirtualPump,
     pub mist_valve: bool,
-    pub osaka_pwm: u8,
+    pub mix_valve: bool,
+    pub osaka_pwm_percent: u8,
 }
 
 #[cfg(test)]
@@ -30,6 +31,6 @@ mod tests {
     fn test_virtual_pump_initial_state() {
         let pump = VirtualPump::new();
         assert!(!pump.on);
-        assert_eq!(pump.pwm, 0);
+        assert_eq!(pump.pwm_percent, 0);
     }
 }

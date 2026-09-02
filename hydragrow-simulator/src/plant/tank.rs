@@ -24,25 +24,27 @@ impl Tank {
         let mut ph_change = 0.0;
 
         if actuators.pump_a.on {
-            let flow =
-                config.pump_a_capacity_ml_per_sec * dt_sec * (actuators.pump_a.pwm as f32 / 100.0);
+            let flow = config.pump_a_capacity_ml_per_sec
+                * dt_sec
+                * (actuators.pump_a.pwm_percent as f32 / 100.0);
             ec_change += calculate_ec_change(flow, self.volume_l, config);
         }
         if actuators.pump_b.on {
-            let flow =
-                config.pump_b_capacity_ml_per_sec * dt_sec * (actuators.pump_b.pwm as f32 / 100.0);
+            let flow = config.pump_b_capacity_ml_per_sec
+                * dt_sec
+                * (actuators.pump_b.pwm_percent as f32 / 100.0);
             ec_change += calculate_ec_change(flow, self.volume_l, config);
         }
         if actuators.pump_ph_up.on {
             let flow = config.pump_ph_up_capacity_ml_per_sec
                 * dt_sec
-                * (actuators.pump_ph_up.pwm as f32 / 100.0);
+                * (actuators.pump_ph_up.pwm_percent as f32 / 100.0);
             ph_change += calculate_ph_change(flow, self.volume_l, true, config);
         }
         if actuators.pump_ph_down.on {
             let flow = config.pump_ph_down_capacity_ml_per_sec
                 * dt_sec
-                * (actuators.pump_ph_down.pwm as f32 / 100.0);
+                * (actuators.pump_ph_down.pwm_percent as f32 / 100.0);
             ph_change += calculate_ph_change(flow, self.volume_l, false, config);
         }
 
@@ -80,7 +82,10 @@ mod tests {
         };
 
         let hw = VirtualHardwareState {
-            pump_a: VirtualPump { on: true, pwm: 100 },
+            pump_a: VirtualPump {
+                on: true,
+                pwm_percent: 100,
+            },
             ..Default::default()
         };
 

@@ -16,11 +16,13 @@ const TECHNICAL_NOISE_CATEGORIES = new Set(['system', 'sensor', 'calibration']);
  * đang tìm: metadata.cycle_id (top-level) và metadata.dosing_data.cycle_id. */
 export function extractCycleId(event: SystemEvent): string | null {
   const meta = event.metadata;
-  if (!meta) return null;
-  if (typeof meta.cycle_id === 'string' && meta.cycle_id.length > 0) return meta.cycle_id;
-  const dosingData = meta.dosing_data;
-  if (dosingData && typeof dosingData === 'object' && typeof dosingData.cycle_id === 'string') {
-    return dosingData.cycle_id;
+  if (!meta || typeof meta !== 'object') return null;
+  const cycleId = (meta as Record<string, unknown>).cycle_id;
+  if (typeof cycleId === 'string' && cycleId.length > 0) return cycleId;
+  const dosingData = (meta as Record<string, unknown>).dosing_data;
+  if (dosingData && typeof dosingData === 'object') {
+    const dosingCycleId = (dosingData as Record<string, unknown>).cycle_id;
+    if (typeof dosingCycleId === 'string') return dosingCycleId;
   }
   return null;
 }

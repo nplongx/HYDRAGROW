@@ -9,7 +9,7 @@ export interface SystemHealthSummary {
   water_operation_count?: number;
   warning_count?: number;
   critical_count?: number;
-  latest_ph_dosing_at?: string | null;
+  latest_ph_dosing_at?: string | number | null;
 }
 
 export type LogViewMode = 'important' | 'all_technical';

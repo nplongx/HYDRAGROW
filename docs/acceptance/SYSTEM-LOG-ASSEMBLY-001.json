@@ -1,0 +1,18 @@
+{
+  "requirement_id": "SYSTEM-LOG-ASSEMBLY-001",
+  "objective": "Implement raw JSON detail drawer opening in EventLogCard and assemble the SystemLog page with view mode toggling, health summary, and 2-column drawer layout.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "EventLogCard displays 'Xem JSON thô' button when metadata and onOpenDetail prop are provided and invokes callback on click.",
+      "verification": "Vitest unit tests in EventLogCard.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "SystemLog page renders HealthSummaryBar with view mode toggle, search input, Grafana external link, CSV export button, and side drawer upon event selection.",
+      "verification": "Vitest unit tests in SystemLog.test.tsx",
+      "evidence_required": true
+    }
+  ]
+}

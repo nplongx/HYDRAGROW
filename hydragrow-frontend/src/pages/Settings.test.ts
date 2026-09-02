@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { SETTINGS_TABS } from './Settings';
 import { build_full_unified_payload_json } from '../../gleam_core/build/dev/javascript/gleam_core/settings/payload.mjs';
 
 function buildHeaders(
@@ -21,6 +22,14 @@ describe('buildHeaders', () => {
   it('does not include X-User-Confirmed when not provided', () => {
     const headers = buildHeaders('key123');
     expect(headers['X-User-Confirmed']).toBeUndefined();
+  });
+});
+
+describe('settings page design contract', () => {
+  it('uses the Vietnamese system settings labels from the reference layout', () => {
+    expect(SETTINGS_TABS.map((tab) => tab.label)).toEqual([
+      'Tổng quan', 'Ngưỡng & Nước', 'Máy châm phân', 'Cảm biến', 'Kết nối',
+    ]);
   });
 });
 

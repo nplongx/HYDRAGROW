@@ -26,6 +26,14 @@ type DosingFieldKey =
   | 'pump_b_capacity_ml_per_sec' | 'pump_ph_up_capacity_ml_per_sec' | 'pump_ph_down_capacity_ml_per_sec';
 type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 
+export const SETTINGS_TABS = [
+  { id: 'general', label: 'Tổng quan' },
+  { id: 'growth', label: 'Ngưỡng & Nước' },
+  { id: 'dosing', label: 'Máy châm phân' },
+  { id: 'sensor', label: 'Cảm biến' },
+  { id: 'integrations', label: 'Kết nối' },
+] as const;
+
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
   const { user, logout } = useAuth();
@@ -507,21 +515,29 @@ const Settings = () => {
   if (isLoading) return <LoadingState message="Đang tải cấu hình..." />;
 
   return (
-    <div className="app-page max-w-5xl pb-36">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="flex flex-col space-y-1">
-          <h1 className="text-2xl font-bold text-emerald-950 flex items-center gap-2">
-            Cấu hình khí canh
-            <Settings2 size={22} className="text-emerald-700/75" />
-          </h1>
-          <p className="text-sm text-emerald-800/75 max-w-2xl">
-            Điều chỉnh mục tiêu EC, pH, thời gian phun sương. Các thông số nguy hiểm cần được cài đặt cẩn thận.
-          </p>
-        </div>
-      </div>
+  <div className="app-page max-w-5xl pb-36">
+  <header className="flex flex-col gap-4 border-b border-emerald-100 pb-5 md:flex-row md:items-end md:justify-between">
+    <div>
+      <p className="mb-1 text-xs font-medium text-emerald-700/60">Settings / Desktop-1440</p>
+      <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-emerald-950">
+        Cài đặt hệ thống <Settings2 size={22} className="text-emerald-700/75" />
+      </h1>
+      <p className="text-sm text-emerald-800/75">Thiết bị, ngưỡng vận hành, hiệu chuẩn cảm biến và quản trị trạm</p>
+    </div>
+    <button type="button" onClick={() => handleSave()} disabled={isSaving || hasDosingValidationError} className="ui-btn-primary flex items-center justify-center gap-2 self-stretch md:self-auto">
+      <Save size={17} /> {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+    </button>
+  </header>
 
-      <div className="space-y-6">
+  <div className="ui-tabbar grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+    {SETTINGS_TABS.map((tab) => (
+      <button key={tab.id} type="button" onClick={() => setOpenSection(tab.id)} className={`ui-tab ${openSection === tab.id ? 'ui-tab-active' : ''}`}>
+        {tab.label}
+      </button>
+    ))}
+  </div>
+  
+  <div className="space-y-6">
         <GeneralSection
           userEmail={user?.email}
           onLogout={() => logout()}
@@ -579,21 +595,7 @@ const Settings = () => {
         />
       </div>
 
-      {/* THANH ĐIỀU KHIỂN FIXED BOTTOM */}
-      <div className="fixed bottom-[84px] md:bottom-[90px] left-0 right-0 z-40 pointer-events-none p-4 md:p-0 flex justify-center md:justify-end md:right-8">
-        <button
-          type="button"
-          onClick={() => handleSave()}
-          disabled={isSaving || hasDosingValidationError}
-          className="w-full md:w-auto pointer-events-auto px-8 py-3.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-medium shadow-[0_10px_30px_-10px_rgba(2,132,199,0.8)] transition-all hover:-translate-y-1 disabled:opacity-50 disabled:hover:translate-y-0 flex items-center justify-center gap-2"
-        >
-          {isSaving ? (
-            <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-          ) : (
-            <><Save size={18} /> Lưu thay đổi</>
-          )}
-        </button>
-      </div>
+
     </div>
   );
 };

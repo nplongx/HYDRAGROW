@@ -1,0 +1,26 @@
+{
+  "requirement_id": "DASHBOARD-QUICK-ACTION-001",
+  "objective": "Add QuickActionBar and DosingSummaryCard UI components to Dashboard, update osaka_pump design token to sky and SensorBentoCard border radius to rounded-[18px], and enforce frontend quality checks in CI.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "QuickActionBar renders action buttons for Châm dinh dưỡng, Tạm dừng/Tiếp tục bơm, and Xem cảnh báo, invoking appropriate callbacks when clicked.",
+      "verification": "cd hydragrow-frontend && npm test -- QuickActionBar.test.tsx"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "DosingSummaryCard renders total dosing count and last dosed time formatted, or fallback text when lastDosedAt is null.",
+      "verification": "cd hydragrow-frontend && npm test -- DosingSummaryCard.test.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Dashboard component wires QuickActionBar and DosingSummaryCard, eliminates prohibited indigo token for osaka_pump, and SensorBentoCard uses rounded-[18px].",
+      "verification": "cd hydragrow-frontend && npm test -- Dashboard.test.tsx"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Frontend code passes TypeScript compilation, ESLint with zero warnings, Vitest tests, and Vite production build.",
+      "verification": "cd hydragrow-frontend && npx tsc --noEmit && npx eslint . && npm run test && npm run build"
+    }
+  ]
+}

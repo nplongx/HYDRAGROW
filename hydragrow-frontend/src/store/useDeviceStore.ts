@@ -93,3 +93,7 @@ export const useDeviceStore = create<DeviceStoreState>((set, get) => ({
     setItem(PWM_PREFS_STORE_KEY, updated).catch(() => {});
   },
 }));
+
+if (typeof window !== 'undefined') {
+  (window as any).useDeviceStore = useDeviceStore;
+}

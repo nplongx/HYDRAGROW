@@ -39,30 +39,9 @@ jobs:
       - name: Validate PR contract
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          body="${PR_BODY:-}"
+        run: python3 .github/scripts/validate_pr_contract.py
 
-          required_sections=(
-            "## Requirement"
-            "## Objective"
-            "## Acceptance Criteria"
-            "## Verification"
-            "## Documentation"
-            "## Risks / Known Gaps"
-            "## Final Acceptance"
-          )
-
-          for section in "${required_sections[@]}"; do
-            grep -Fq "$section" <<< "$body" || {
-              echo "PR contract is incomplete: missing '$section'"
-              exit 1
-            }
-          done
-
-          echo "PR contract sections present."
-
-      - name: Detect material changes requiring traceability
+      - name: Detect material changes requiring project-state sync
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -72,11 +51,16 @@ jobs:
           echo "$changed"
 
           if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)|\.github/workflows/)' <<< "$changed"; then
-            grep -Fq 'docs/project-state/TRACEABILITY.md' <<< "$changed" || {
-              echo "Material system change detected but TRACEABILITY.md was not updated."
-              echo "If this change truly has no requirement impact, document that explicitly in the PR and update TRACEABILITY.md accordingly."
+            missing=()
+            grep -Fq 'docs/project-state/TRACEABILITY.md' <<< "$changed" || missing+=("docs/project-state/TRACEABILITY.md")
+            grep -Fq 'docs/project-state/CURRENT-STATUS.md' <<< "$changed" || missing+=("docs/project-state/CURRENT-STATUS.md")
+
+            if [ "${#missing[@]}" -gt 0 ]; then
+              echo "Material system change detected but the following were not updated in this PR:"
+              printf ' - %s\n' "${missing[@]}"
+              echo "If this change truly has no requirement/state impact, document that explicitly in the PR's ## Documentation section and update these files accordingly."
               exit 1
-            }
+            fi
           fi
 
       - name: Report gate

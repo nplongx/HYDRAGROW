@@ -17,6 +17,8 @@ function summarizeActions(actions: Action[]): string {
           return `alert (${a.level}): ${a.message}`;
         case 'advance_stage':
           return `advance_stage ${a.targetStageOffset >= 0 ? '+' : ''}${a.targetStageOffset}: ${a.reason}`;
+        case 'end_season':
+          return `end_season: ${a.reason}`;
         case 'dose':
           return `dose ${a.doseMl}ml (${a.pump})`;
         case 'water_on':
@@ -47,17 +49,17 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
     const update = (next: Condition[]) => onChange(node.id, { conditions: next, summary: summarizeConditions(next) });
 
     return (
-      <div className="w-72 shrink-0 border-l p-3">
+      <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Condition</h3>
-          <button className="text-xs text-gray-500" onClick={onClose}>
+          <h3 className="text-sm font-semibold text-emerald-950">Condition</h3>
+          <button className="text-xs text-emerald-700/70" onClick={onClose}>
             Đóng
           </button>
         </div>
         {conditions.map((c, i) => (
           <div key={i} className="mb-2 flex gap-1">
             <select
-              className="rounded border px-1 text-sm"
+              className="ui-input px-1 text-sm"
               value={c.sensor}
               onChange={(e) => update(conditions.map((x, j) => (j === i ? { ...x, sensor: e.target.value } : x)))}
             >
@@ -68,7 +70,7 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
               ))}
             </select>
             <select
-              className="rounded border px-1 text-sm"
+              className="ui-input px-1 text-sm"
               value={c.operator}
               onChange={(e) =>
                 update(conditions.map((x, j) => (j === i ? { ...x, operator: e.target.value as ComparisonOperator } : x)))
@@ -82,7 +84,7 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
             </select>
             <input
               type="number"
-              className="w-20 rounded border px-1 text-sm"
+              className="ui-input w-20 px-1 text-sm"
               value={c.value}
               onChange={(e) => update(conditions.map((x, j) => (j === i ? { ...x, value: Number(e.target.value) } : x)))}
             />

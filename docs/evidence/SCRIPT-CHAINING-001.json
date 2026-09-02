@@ -1,0 +1,37 @@
+{
+  "requirement_id": "SCRIPT-CHAINING-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "script_cache_preserves_next_flow_ids passed",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml script_cache_preserves_next_flow_ids",
+      "environment": "sandbox",
+      "verified_at": "2026-09-02T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "firing_root_chains_into_next_flow_id passed",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml firing_root_chains_into_next_flow_id",
+      "environment": "sandbox",
+      "verified_at": "2026-09-02T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "cycle_is_detected_and_does_not_infinite_loop passed",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml cycle_is_detected_and_does_not_infinite_loop",
+      "environment": "sandbox",
+      "verified_at": "2026-09-02T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": "depth_limit_stops_long_chain passed",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml depth_limit_stops_long_chain",
+      "environment": "sandbox",
+      "verified_at": "2026-09-02T00:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "requirement_id": "LOG-HOOKS-001",
+  "objective": "Provide custom React Query hooks useSystemHealthSummary and useCycleTimeline for system health summary data and cycle event timelines.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "useSystemHealthSummary fetches system health summary counts from /devices/{deviceId}/health-summary and remains disabled when deviceId is empty.",
+      "verification": "Vitest unit tests in hydragrow-frontend/src/hooks/useSystemHealthSummary.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "useCycleTimeline fetches cycle timeline events from /devices/{deviceId}/events/cycle/{cycleId} and remains disabled when cycleId is null.",
+      "verification": "Vitest unit tests in hydragrow-frontend/src/hooks/useCycleTimeline.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Frontend quality gates pass (tsc, eslint --max-warnings=0, vitest, npm run build) with zero errors or warnings.",
+      "verification": "Execution of npm test, npm run lint, and npm run build in hydragrow-frontend",
+      "evidence_required": true
+    }
+  ]
+}

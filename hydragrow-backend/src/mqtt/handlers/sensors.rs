@@ -339,7 +339,8 @@ mod tests {
         let current_phase = cached_state
             .as_ref()
             .and_then(|cached| {
-                cached.get("fsm_state")
+                cached
+                    .get("fsm_state")
                     .or_else(|| cached.get("fsm_phase"))
                     .and_then(|v| v.as_str())
             })

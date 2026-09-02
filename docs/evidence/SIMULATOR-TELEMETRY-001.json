@@ -1,0 +1,35 @@
+{
+  "requirement_id": "SIMULATOR-TELEMETRY-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "recorder_returns_io_errors_instead_of_panicking passed",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml telemetry"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "sensor_payload_uses_shared_topic_and_roundtrips_json passed",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml telemetry"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "fsm_state_payload_is_structured_snapshot passed",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml telemetry"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": "publish_event_routes_shared_topics_and_returns_result passed",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml telemetry"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "actual": "test_mqtt_publish_and_receive passed",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml --test mqtt_integration"
+    }
+  ]
+}

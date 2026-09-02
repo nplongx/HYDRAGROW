@@ -18,7 +18,7 @@ impl SimDispatcher {
 
     pub fn dispatch(&mut self, event: &OrchestratorEvent) {
         if let Some(bridge) = &mut self.mqtt_bridge {
-            bridge.publish_event(event);
+            let _ = bridge.publish_event(event);
         }
     }
 }

@@ -106,6 +106,27 @@ pub async fn create_script(
     let enabled = body.enabled.unwrap_or(true);
 
     let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
+    if !next_flow_ids.is_empty() {
+        let existing_rows = sqlx::query_as::<_, (Uuid, sqlx::types::Json<Vec<String>>)>(
+            "SELECT id, next_flow_ids FROM user_scripts WHERE device_id = $1",
+        )
+        .bind(&device_id)
+        .fetch_all(&app_state.pg_pool)
+        .await
+        .unwrap_or_default();
+
+        let existing: Vec<(String, Vec<String>)> = existing_rows
+            .into_iter()
+            .map(|(id, json_ids)| (id.to_string(), json_ids.0))
+            .collect();
+
+        if let Err(msg) =
+            crate::services::flow_graph::detect_cycle(&id.to_string(), &next_flow_ids, &existing)
+        {
+            return HttpResponse::BadRequest().json(json!({"error": msg, "valid": false}));
+        }
+    }
+
     let next_flow_ids_json = sqlx::types::Json(next_flow_ids);
 
     let result = sqlx::query_as::<_, UserScript>(
@@ -170,6 +191,30 @@ pub async fn update_script(
     let enabled = body.enabled.unwrap_or(true);
 
     let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
+    if !next_flow_ids.is_empty() {
+        let existing_rows = sqlx::query_as::<_, (Uuid, sqlx::types::Json<Vec<String>>)>(
+            "SELECT id, next_flow_ids FROM user_scripts WHERE device_id = $1 AND id != $2",
+        )
+        .bind(&device_id)
+        .bind(script_id)
+        .fetch_all(&app_state.pg_pool)
+        .await
+        .unwrap_or_default();
+
+        let existing: Vec<(String, Vec<String>)> = existing_rows
+            .into_iter()
+            .map(|(id, json_ids)| (id.to_string(), json_ids.0))
+            .collect();
+
+        if let Err(msg) = crate::services::flow_graph::detect_cycle(
+            &script_id.to_string(),
+            &next_flow_ids,
+            &existing,
+        ) {
+            return HttpResponse::BadRequest().json(json!({"error": msg, "valid": false}));
+        }
+    }
+
     let next_flow_ids_json = sqlx::types::Json(next_flow_ids);
 
     let result = sqlx::query_as::<_, UserScript>(
@@ -245,8 +290,9 @@ pub async fn validate_script(
     path: web::Path<String>,
     http_req: HttpRequest,
     body: web::Json<UpsertScriptRequest>,
+    app_state: web::Data<AppState>,
 ) -> impl Responder {
-    let _device_id = path.into_inner();
+    let device_id = path.into_inner();
     let auth = http_req
         .extensions()
         .get::<AuthContext>()
@@ -263,16 +309,46 @@ pub async fn validate_script(
         });
     }
 
-    match validate_script_source(&body.kind, &body.source) {
-        Ok(()) => HttpResponse::Ok().json(ScriptValidateResponse {
-            valid: true,
-            error: None,
-        }),
-        Err(e) => HttpResponse::Ok().json(ScriptValidateResponse {
+    if let Err(e) = validate_script_source(&body.kind, &body.source) {
+        return HttpResponse::Ok().json(ScriptValidateResponse {
             valid: false,
             error: Some(e),
-        }),
+        });
     }
+
+    if let Some(ref next_ids) = body.next_flow_ids
+        && !next_ids.is_empty()
+    {
+        let candidate_id = body.id.unwrap_or_else(Uuid::new_v4);
+        let existing_rows = sqlx::query_as::<_, (Uuid, sqlx::types::Json<Vec<String>>)>(
+            "SELECT id, next_flow_ids FROM user_scripts WHERE device_id = $1 AND id != $2",
+        )
+        .bind(&device_id)
+        .bind(candidate_id)
+        .fetch_all(&app_state.pg_pool)
+        .await
+        .unwrap_or_default();
+
+        let existing: Vec<(String, Vec<String>)> = existing_rows
+            .into_iter()
+            .map(|(id, json_ids)| (id.to_string(), json_ids.0))
+            .collect();
+
+        let candidate_id = "validate_candidate";
+        if let Err(msg) =
+            crate::services::flow_graph::detect_cycle(candidate_id, next_ids, &existing)
+        {
+            return HttpResponse::Ok().json(ScriptValidateResponse {
+                valid: false,
+                error: Some(msg),
+            });
+        }
+    }
+
+    HttpResponse::Ok().json(ScriptValidateResponse {
+        valid: true,
+        error: None,
+    })
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
@@ -337,5 +413,23 @@ mod tests {
         let serialized = serde_json::to_string(&wrapped).expect("serialization works");
         let parsed: Vec<String> = serde_json::from_str(&serialized).expect("deserialization works");
         assert_eq!(parsed, vec!["uuid-1", "uuid-2"]);
+    }
+
+    #[test]
+    fn validate_script_detects_cycle_with_existing_db_script() {
+        let script_a_id = Uuid::new_v4().to_string();
+        let script_b_id = Uuid::new_v4().to_string();
+
+        // Simulate script A -> script B existing in DB
+        let existing: Vec<(String, Vec<String>)> =
+            vec![(script_a_id.clone(), vec![script_b_id.clone()])];
+
+        // Validating script B attempting to chain back to script A (creating cycle A -> B -> A)
+        let result =
+            crate::services::flow_graph::detect_cycle(&script_b_id, &[script_a_id], &existing);
+
+        assert!(result.is_err());
+        let err_msg = result.expect_err("expected cycle error");
+        assert!(err_msg.contains("chu trình") || err_msg.contains("vòng lặp"));
     }
 }

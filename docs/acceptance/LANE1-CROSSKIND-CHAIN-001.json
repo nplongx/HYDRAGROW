@@ -1,0 +1,30 @@
+{
+  "requirement_id": "LANE1-CROSSKIND-CHAIN-001",
+  "objective": "Validate-time cycle detection for next_flow_ids, unified cross-kind script chain evaluation, and UI cycle prevention badges.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "detect_cycle returns error when adding self-references or cyclic next_flow_ids graphs in backend script validation/create/update endpoints.",
+      "verification": "Unit tests in flow_graph.rs and integration tests in script.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "eval_flow_chain evaluates multi-kind script flows (alert -> action_command) in a single unified graph walk with runtime cycle detection and depth limits.",
+      "verification": "Unit tests in script_eval.rs and sensor handler integration",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "FlowDetailDrawer displays all script kinds in chain action selection and disables/badges candidates that would create cycles with 'không cho phép — sẽ tạo vòng lặp'.",
+      "verification": "Vitest tests in FlowDetailDrawer.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "CI quality checks pass for backend and frontend code without warnings or errors.",
+      "verification": "cargo check, cargo test, cargo clippy, tsc, eslint, vitest, and npm build",
+      "evidence_required": true
+    }
+  ]
+}

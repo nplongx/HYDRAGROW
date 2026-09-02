@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { FlowDetailDrawer } from './FlowDetailDrawer';
+import type { UserScript } from '../../types/automation';
 
 
 class ResizeObserverMock {
@@ -45,14 +46,16 @@ vi.mock('./reactflow/buildIr', () => ({
   })),
 }));
 
+const mockUseAutomationScripts = vi.fn().mockReturnValue({
+  data: [
+    { id: 'other-1', name: 'Flow alert khác', kind: 'alert', enabled: true, source: '', ir_json: null },
+    { id: 'other-2', name: 'Flow action command', kind: 'action_command', enabled: true, source: '', ir_json: null },
+  ],
+});
+
 // Minimal mock for the hooks used in the drawer so we don't actually call the network
 vi.mock('../../hooks/useAutomationScripts', () => ({
-  useAutomationScripts: () => ({
-    data: [
-      { id: 'other-1', name: 'Flow alert khác', kind: 'alert', enabled: true, source: '', ir_json: null },
-      { id: 'other-2', name: 'Flow action command', kind: 'action_command', enabled: true, source: '', ir_json: null },
-    ],
-  }),
+  useAutomationScripts: (...args: unknown[]) => mockUseAutomationScripts(...args),
   useCreateAutomationScript: () => ({ mutateAsync: mockCreateScript, isPending: false }),
   useUpdateAutomationScript: () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }),
   useDeleteAutomationScript: () => ({ mutate: vi.fn(), isPending: false }),
@@ -106,10 +109,48 @@ describe('FlowDetailDrawer', () => {
     });
   });
 
-  it('filters next flow options to matching kind only', async () => {
+  it('shows all flow kinds for next flow selection including cross-kind flows', async () => {
     render(withQueryClient(<FlowDetailDrawer deviceId="dev1" script="new" onClose={vi.fn()} />));
 
     expect(await screen.findByLabelText('Flow alert khác')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Flow action command')).not.toBeInTheDocument();
+    expect(await screen.findByLabelText('Flow action command')).toBeInTheDocument();
+  });
+
+  it('disables candidate and displays cycle warning badge when selecting it would create a cycle', async () => {
+    const scriptA: UserScript = {
+      id: 'script-a',
+      device_id: 'dev1',
+      kind: 'alert',
+      name: 'Script A',
+      source: '',
+      enabled: true,
+      ir_json: { kind: 'alert', trigger: { type: 'sensor' }, conditions: [], actions: [], nodes: [], edges: [], next_flow_ids: ['script-b'] },
+      created_at: '',
+      updated_at: '',
+    };
+    const scriptB: UserScript = {
+      id: 'script-b',
+      device_id: 'dev1',
+      kind: 'action_command',
+      name: 'Script B',
+      source: '',
+      enabled: true,
+      ir_json: { kind: 'action_command', trigger: { type: 'sensor' }, conditions: [], actions: [], nodes: [], edges: [], next_flow_ids: [] },
+      created_at: '',
+      updated_at: '',
+    };
+
+    mockUseAutomationScripts.mockReturnValue({
+      data: [scriptA, scriptB],
+    });
+
+    render(
+      withQueryClient(<FlowDetailDrawer deviceId="dev1" script={scriptB} onClose={vi.fn()} />)
+    );
+
+    // Script A points to Script B (A -> B). Editing B and considering A (B -> A) creates cycle (A -> B -> A).
+    const checkboxA = await screen.findByLabelText(/Script A/);
+    expect(checkboxA).toBeDisabled();
+    expect(screen.getByText('không cho phép — sẽ tạo vòng lặp')).toBeInTheDocument();
   });
 });

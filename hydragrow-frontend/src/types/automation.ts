@@ -13,9 +13,11 @@ export interface UserScript {
 }
 
 export interface UpsertScriptRequest {
+  id?: string;
   kind: 'alert' | 'recipe_override' | 'action_command';
   name: string;
   source: string;
   enabled?: boolean;
   ir_json?: AutomationIr;
+  next_flow_ids?: string[];
 }

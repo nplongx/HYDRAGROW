@@ -1,0 +1,37 @@
+{
+  "requirement_id": "LANE1-CROSSKIND-CHAIN-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::script::tests flow_graph::tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-01T05:40:00Z",
+      "notes": "Validate-time cycle detection verified with unit and endpoint tests for self-references, 2-node cycles, and cross-kind graphs."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml script_eval::tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-01T05:40:00Z",
+      "notes": "Unified cross-kind eval_flow_chain verified with 11 unit tests covering alert->action_command flow chains, non-firing root filtering, runtime deduplication, and max chain depth limits."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- FlowDetailDrawer",
+      "environment": "sandbox",
+      "verified_at": "2026-09-01T05:40:00Z",
+      "notes": "FlowDetailDrawer cross-kind selection and cycle prevention badges verified with Vitest tests."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo clippy, cargo fmt --check, tsc, eslint, vitest, npm run build",
+      "environment": "sandbox",
+      "verified_at": "2026-09-01T05:40:00Z",
+      "notes": "All backend and frontend quality checks, compilation, linting, tests, and production build pass with 0 errors and 0 warnings."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
   useUpdateAutomationScript,
   useValidateAutomationScript,
 } from '../../hooks/useAutomationScripts';
+import { wouldCreateCycle } from '../../lib/automation/flowCycle';
 
 export interface FlowDetailDrawerProps {
   deviceId: string;
@@ -35,7 +36,7 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const builder = useAutomationBuilder();
   const { data: allScripts } = useAutomationScripts(deviceId);
   const otherScripts = (allScripts ?? []).filter(
-    (s) => (isNew || s.id !== script.id) && s.kind === builder.kind,
+    (s) => isNew || s.id !== script.id,
   );
 
   const toggleNextFlow = (id: string) => {
@@ -71,10 +72,12 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
     }
     const source = compileToRhai(parsed.data);
     const validation = await validateScript.mutateAsync({
+      id: isNew ? undefined : script.id,
       kind: parsed.data.kind,
       name,
       source,
       ir_json: parsed.data,
+      next_flow_ids: nextFlowIds,
     });
     if (!validation.valid) {
       toast.error(`Script không hợp lệ: ${validation.error}`);
@@ -148,16 +151,28 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
       {otherScripts.length > 0 && (
         <div className="rounded-lg border border-emerald-100 p-2">
           <p className="mb-1 text-xs font-semibold text-emerald-950">Flow kế tiếp sau khi chạy xong</p>
-          {otherScripts.map((s) => (
-            <label key={s.id} className="flex items-center gap-1 text-xs text-emerald-800/75">
-              <input
-                type="checkbox"
-                checked={nextFlowIds.includes(s.id)}
-                onChange={() => toggleNextFlow(s.id)}
-              />
-              {s.name}
-            </label>
-          ))}
+          {otherScripts.map((s) => {
+            const isChecked = nextFlowIds.includes(s.id);
+            const currentScriptId = isNew ? '__new__' : script.id;
+            const isCycle = !isChecked && wouldCreateCycle(currentScriptId, nextFlowIds, s.id, allScripts ?? []);
+
+            return (
+              <label key={s.id} className="flex items-center gap-1 text-xs text-emerald-800/75">
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  disabled={isCycle}
+                  onChange={() => toggleNextFlow(s.id)}
+                />
+                <span>{s.name}</span>
+                {isCycle && (
+                  <span className="ml-1 text-[11px] font-medium text-amber-600">
+                    không cho phép — sẽ tạo vòng lặp
+                  </span>
+                )}
+              </label>
+            );
+          })}
         </div>
       )}
 

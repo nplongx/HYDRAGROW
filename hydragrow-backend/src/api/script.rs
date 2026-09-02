@@ -106,8 +106,7 @@ pub async fn create_script(
     let enabled = body.enabled.unwrap_or(true);
 
     let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
-    let next_flow_ids_json =
-        serde_json::to_string(&next_flow_ids).unwrap_or_else(|_| "[]".to_string());
+    let next_flow_ids_json = sqlx::types::Json(next_flow_ids);
 
     let result = sqlx::query_as::<_, UserScript>(
         r#"INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json, next_flow_ids)
@@ -171,8 +170,7 @@ pub async fn update_script(
     let enabled = body.enabled.unwrap_or(true);
 
     let next_flow_ids = body.next_flow_ids.clone().unwrap_or_default();
-    let next_flow_ids_json =
-        serde_json::to_string(&next_flow_ids).unwrap_or_else(|_| "[]".to_string());
+    let next_flow_ids_json = sqlx::types::Json(next_flow_ids);
 
     let result = sqlx::query_as::<_, UserScript>(
         r#"UPDATE user_scripts
@@ -322,5 +320,22 @@ mod tests {
         assert!(validate_kind("alert").is_ok());
         assert!(validate_kind("recipe_override").is_ok());
         assert!(validate_kind("action_command").is_ok());
+    }
+
+    #[test]
+    fn next_flow_ids_empty_vec_serializes_to_json_array() {
+        let ids: Vec<String> = vec![];
+        let wrapped = sqlx::types::Json(ids.clone());
+        let serialized = serde_json::to_string(&wrapped).unwrap();
+        assert_eq!(serialized, "[]");
+    }
+
+    #[test]
+    fn next_flow_ids_with_values_serializes_correctly() {
+        let ids = vec!["uuid-1".to_string(), "uuid-2".to_string()];
+        let wrapped = sqlx::types::Json(ids);
+        let serialized = serde_json::to_string(&wrapped).unwrap();
+        let parsed: Vec<String> = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(parsed, vec!["uuid-1", "uuid-2"]);
     }
 }

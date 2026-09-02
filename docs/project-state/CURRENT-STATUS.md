@@ -2,7 +2,7 @@
 
 > This file is the canonical project-state snapshot. Update it in the same PR when a material change alters implementation status, capability, deployment state, or blockers.
 
-Last updated: 2026-09-02
+Last updated: 2026-03-31
 
 ## Status vocabulary
 
@@ -21,7 +21,7 @@ Last updated: 2026-09-02
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | CONDITION-GROUPS-001 nested AND/OR condition tree editor, recursive Rhai compilation, and leaf condition counter verified with Vitest tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
-| Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
+| Simulator | VERIFIED | SIMULATOR-001 scenario engine fault timing activation, sensor freeze retention, and target validation verified with Cargo test suite and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 
 ## Active blockers

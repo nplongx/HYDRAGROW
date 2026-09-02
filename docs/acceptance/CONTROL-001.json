@@ -1,0 +1,18 @@
+{
+  "requirement_id": "CONTROL-001",
+  "objective": "Allow MIX and MIX_VALVE as valid non-dosing pump names in control endpoint and state fallback.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "MIX and MIX_VALVE are accepted by control_pump whitelist.",
+      "verification": "Unit test mix_valve_pump_names_are_accepted",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "mix_valve is included in get_control_state fallback pump_status.",
+      "verification": "Unit test fallback_pump_status_includes_mix_valve",
+      "evidence_required": true
+    }
+  ]
+}

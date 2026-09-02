@@ -1,0 +1,31 @@
+{
+  "requirement_id": "SETTINGS-REFACTOR-001",
+  "objective": "Refactor Settings.tsx into modular section components (GeneralSection, ThresholdsSection, ConnectivitySection, DangerZoneSection) while maintaining top-level state and reordering sections to prioritize daily operational thresholds over technical connectivity.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "GeneralSection.tsx is extracted with user account, pairing button, and technical mode toggle wrapped in .ui-card elements, verified by unit tests in GeneralSection.test.tsx.",
+      "verification": "Vitest test 'gọi onLogout khi bấm Đăng xuất' in hydragrow-frontend/src/pages/settings/GeneralSection.test.tsx"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "ThresholdsSection.tsx and ConnectivitySection.tsx are extracted and reordered in Settings.tsx so daily threshold settings appear before connectivity settings, verified by unit tests in ThresholdsSection.test.tsx and ConnectivitySection.test.tsx.",
+      "verification": "Vitest tests in ThresholdsSection.test.tsx and ConnectivitySection.test.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "DangerZoneSection.tsx is extracted with reboot and factory reset controls, verified by unit test in DangerZoneSection.test.tsx.",
+      "verification": "Vitest test 'gọi onFactoryResetClick khi bấm nút khôi phục cài đặt gốc' in hydragrow-frontend/src/pages/settings/DangerZoneSection.test.tsx"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Settings.tsx orchestrates the section components using top-level state without introducing dual sources of truth, with existing Settings.test.ts suite continuing to pass.",
+      "verification": "Vitest test suite execution for Settings.test.ts and new settings section tests"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Frontend CI quality checks pass with zero TypeScript errors, zero ESLint warnings, passing tests, and clean build.",
+      "verification": "Execution of npm test, npm run lint, npx tsc --noEmit, and npm run build in hydragrow-frontend"
+    }
+  ]
+}

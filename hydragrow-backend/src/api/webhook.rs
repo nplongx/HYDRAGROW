@@ -60,11 +60,10 @@ async fn receive_webhook_action(
             .and_then(|h| h.to_str().ok())
     {
         let hash = sha256_hex(token);
-        let _ =
-            sqlx::query("UPDATE webhook_tokens SET last_used_at = NOW() WHERE token_hash = $1")
-                .bind(hash)
-                .execute(&app_state.pg_pool)
-                .await;
+        let _ = sqlx::query("UPDATE webhook_tokens SET last_used_at = NOW() WHERE token_hash = $1")
+            .bind(hash)
+            .execute(&app_state.pg_pool)
+            .await;
     }
 
     let safety_config =

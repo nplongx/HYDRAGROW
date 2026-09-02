@@ -4,34 +4,34 @@
     {
       "acceptance_id": "AC-1",
       "status": "PASS",
-      "actual": "safeParse returns success=true for legacy flat Condition[] arrays and recursive ConditionGroup trees matching Figma specs",
-      "source": "Vitest tests in src/lib/automation/ir.test.ts (16/16 passed)",
-      "environment": "Vitest Node environment",
-      "verified_at": "2026-09-02T06:26:10Z"
+      "actual": "AutomationIrSchema parses legacy flat array and recursive ConditionGroup matching Figma spec",
+      "source": "Vitest output in hydragrow-frontend/src/lib/automation/ir.test.ts (16 tests passed)",
+      "environment": "Vitest / Node v20",
+      "verified_at": "2026-09-02T12:33:44Z"
     },
     {
       "acceptance_id": "AC-2",
       "status": "PASS",
-      "actual": "compileToRhai compiles nested ConditionGroups into Rhai expressions with correct parenthesis grouping: if !((input.ph < 5.5 || input.ph > 7.5) && input.ec > 3) { return (); }",
-      "source": "Vitest tests in src/lib/automation/compileToRhai.test.ts (11/11 passed)",
-      "environment": "Vitest Node environment",
-      "verified_at": "2026-09-02T06:26:10Z"
+      "actual": "compileToRhai compiles nested condition groups with correct parens and exact string match for legacy flat conditions",
+      "source": "Vitest output in hydragrow-frontend/src/lib/automation/compileToRhai.test.ts (11 tests passed)",
+      "environment": "Vitest / Node v20",
+      "verified_at": "2026-09-02T12:34:03Z"
     },
     {
       "acceptance_id": "AC-3",
       "status": "PASS",
-      "actual": "ConditionGroupEditor renders AND/OR toggles and child groups; FlowSummaryNode counts leaf conditions recursively",
-      "source": "Vitest component tests in ConditionGroupEditor.test.tsx, NodeEditorPanel.test.tsx, FlowSummaryNode.test.tsx",
-      "environment": "Vitest jsdom environment",
-      "verified_at": "2026-09-02T06:26:10Z"
+      "actual": "ConditionGroupEditor renders AND/OR controls, updates tree state, and FlowSummaryNode accurately counts leaf conditions",
+      "source": "Vitest output in ConditionGroupEditor.test.tsx, NodeEditorPanel.test.tsx, FlowSummaryNode.test.tsx",
+      "environment": "Vitest / jsdom",
+      "verified_at": "2026-09-02T12:36:39Z"
     },
     {
       "acceptance_id": "AC-4",
       "status": "PASS",
-      "actual": "Zero errors or warnings in cargo test, cargo clippy -D warnings, tsc, eslint --max-warnings=0, vitest (124 passed), and vite build",
-      "source": "Terminal verification output",
-      "environment": "Ubuntu Linux sandbox",
-      "verified_at": "2026-09-02T06:26:10Z"
+      "actual": "30 test files / 159 tests passed in frontend, backend script_engine unit tests passed, npm build succeeded",
+      "source": "Frontend test/build logs and cargo test --bin hydragrow-backend services::script_engine::tests output",
+      "environment": "Linux workspace",
+      "verified_at": "2026-09-02T12:43:07Z"
     }
   ]
 }

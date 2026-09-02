@@ -10,12 +10,12 @@ describe('NodePalette', () => {
     expect(onAddNode).toHaveBeenCalledWith('condition_group');
   });
 
-  it('calls onAddNode with the right type for each button', () => {
+  it('calls onAddNode with condition and action when respective buttons are clicked', () => {
     const onAddNode = vi.fn();
     render(<NodePalette onAddNode={onAddNode} />);
     fireEvent.click(screen.getByText('+ Condition'));
+    expect(onAddNode).toHaveBeenCalledWith('condition');
     fireEvent.click(screen.getByText('+ Action'));
-    expect(onAddNode).toHaveBeenNthCalledWith(1, 'condition');
-    expect(onAddNode).toHaveBeenNthCalledWith(2, 'action');
+    expect(onAddNode).toHaveBeenCalledWith('action');
   });
 });

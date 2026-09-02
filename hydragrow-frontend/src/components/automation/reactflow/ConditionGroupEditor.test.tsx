@@ -10,13 +10,10 @@ describe('ConditionGroupEditor', () => {
     const group: ConditionGroup = {
       op: 'and',
       children: [
-        {
-          op: 'or',
-          children: [
-            { sensor: 'ph', operator: '<', value: 5.5 },
-            { sensor: 'ph', operator: '>', value: 7.5 },
-          ],
-        },
+        { op: 'or', children: [
+          { sensor: 'ph', operator: '<', value: 5.5 },
+          { sensor: 'ph', operator: '>', value: 7.5 },
+        ]},
         { sensor: 'ec', operator: '>', value: 3.0 },
       ],
     };

@@ -220,6 +220,10 @@ pub struct CachedScript {
     pub kind: String,
     pub name: String,
     pub ast: AST,
+    /// Danh sách script IDs (dạng String) sẽ được eval tiếp sau khi script này
+    /// fire thành công. Copy trực tiếp từ `UserScript::next_flow_ids` lúc load —
+    /// xem `ScriptEval::eval_alert_scripts_chained` (script_eval.rs) cho logic dùng nó.
+    pub next_flow_ids: Vec<String>,
 }
 
 /// Thread-safe cache: device_id → Vec<CachedScript>
@@ -302,6 +306,7 @@ impl ScriptCache {
                     kind: row.kind,
                     name: row.name,
                     ast,
+                    next_flow_ids: row.next_flow_ids.clone(),
                 }),
                 Err(e) => {
                     tracing::warn!(
@@ -538,6 +543,24 @@ fn main(input) {
     }
 
     #[tokio::test]
+    async fn script_cache_preserves_next_flow_ids() {
+        let engine = Arc::new(ScriptEngine::new());
+        let cache = ScriptCache::new(engine.clone());
+        let script = CachedScript {
+            id: uuid::Uuid::new_v4(),
+            kind: "alert".to_string(),
+            name: "root".to_string(),
+            ast: engine.compile(r#"fn main(input) { () }"#).unwrap(),
+            next_flow_ids: vec!["child-id".to_string()],
+        };
+        cache.upsert("device_001", vec![script]).await;
+
+        let scripts = cache.get_alert_scripts("device_001").await;
+        assert_eq!(scripts.len(), 1);
+        assert_eq!(scripts[0].next_flow_ids, vec!["child-id".to_string()]);
+    }
+
+    #[tokio::test]
     async fn script_cache_compiles_and_retrieves_by_device() {
         let engine = Arc::new(ScriptEngine::new());
         let cache = ScriptCache::new(engine.clone());
@@ -547,6 +570,7 @@ fn main(input) {
             kind: "alert".to_string(),
             name: "test".to_string(),
             ast: engine.compile(r#"fn main(input) { () }"#).unwrap(),
+            next_flow_ids: vec![],
         };
         cache.upsert("device_001", vec![script]).await;
 

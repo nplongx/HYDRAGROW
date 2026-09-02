@@ -158,16 +158,12 @@ pub async fn dispatch_action_command(
         .map_err(ActionDispatchError::Mqtt)?;
 
     // Ghi log dose để enforce hourly budget lần sau
-    if output.action == "dose" {
-        if let (Some(pump), Some(dose_ml)) = (&output.pump, output.dose_ml) {
-            let _ = crate::db::postgres::insert_dosing_action(
-                &app_state.pg_pool,
-                device_id,
-                pump,
-                dose_ml,
-            )
-            .await;
-        }
+    if output.action == "dose"
+        && let (Some(pump), Some(dose_ml)) = (&output.pump, output.dose_ml)
+    {
+        let _ =
+            crate::db::postgres::insert_dosing_action(&app_state.pg_pool, device_id, pump, dose_ml)
+                .await;
     }
 
     Ok(())

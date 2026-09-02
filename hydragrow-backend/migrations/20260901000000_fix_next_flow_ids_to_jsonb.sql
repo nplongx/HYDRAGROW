@@ -3,6 +3,10 @@
 -- Tất cả giá trị hiện tại là JSON arrays hợp lệ ('[]' hoặc '["id1","id2"]')
 -- nên USING cast an toàn.
 
+-- Drop existing default first before changing type to JSONB
+ALTER TABLE user_scripts
+ALTER COLUMN next_flow_ids DROP DEFAULT;
+
 ALTER TABLE user_scripts
 ALTER COLUMN next_flow_ids TYPE JSONB
 USING next_flow_ids::jsonb;

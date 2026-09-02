@@ -17,7 +17,7 @@ Last updated: 2026-09-01
 
 | Area | Status | Evidence / next action |
 |---|---|---|
-| Backend | IMPLEMENTING | Maintain module tests and delivery evidence per PR contract. |
+| Backend | VERIFIED | Script chaining next_flow_ids preservation and eval_alert_scripts_chained verified with SCRIPT-CHAINING-001 contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | AUTOMATION-001 action_command trigger type and next flow selection verified with unit tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |

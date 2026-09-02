@@ -111,9 +111,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             timestamp_ms: chrono::Utc::now().timestamp_millis(),
         };
         let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
-        let alerts =
-            crate::mqtt::handlers::script_eval::eval_alert_scripts(&engine, &scripts, &input);
-        for alert in alerts {
+        let alerts = crate::mqtt::handlers::script_eval::eval_alert_scripts_chained(
+            &engine, &scripts, &input,
+        );
+        for (_script_id, alert) in alerts {
             let alert_msg = crate::mqtt::handlers::script_eval::alert_output_to_system_alert(
                 alert,
                 &device_id,
@@ -213,13 +214,15 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                     let bucket = influx_bucket.clone();
                     let dev_id = fetcher_device_id.clone();
                     move || {
-                        tokio::runtime::Runtime::new().unwrap().block_on(async {
-                            crate::db::influx::query_range_stat(
-                                &client, &bucket, &dev_id, &field, &stat, range_h,
-                            )
-                            .await
-                            .unwrap_or(0.0)
-                        })
+                        tokio::runtime::Runtime::new()
+                            .expect("Failed to create tokio runtime for stat fetcher")
+                            .block_on(async {
+                                crate::db::influx::query_range_stat(
+                                    &client, &bucket, &dev_id, &field, &stat, range_h,
+                                )
+                                .await
+                                .unwrap_or(0.0)
+                            })
                     }
                 })
                 .join()

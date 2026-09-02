@@ -326,7 +326,7 @@ mod tests {
     fn next_flow_ids_empty_vec_serializes_to_json_array() {
         let ids: Vec<String> = vec![];
         let wrapped = sqlx::types::Json(ids.clone());
-        let serialized = serde_json::to_string(&wrapped).unwrap();
+        let serialized = serde_json::to_string(&wrapped).expect("serialization works");
         assert_eq!(serialized, "[]");
     }
 
@@ -334,8 +334,8 @@ mod tests {
     fn next_flow_ids_with_values_serializes_correctly() {
         let ids = vec!["uuid-1".to_string(), "uuid-2".to_string()];
         let wrapped = sqlx::types::Json(ids);
-        let serialized = serde_json::to_string(&wrapped).unwrap();
-        let parsed: Vec<String> = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&wrapped).expect("serialization works");
+        let parsed: Vec<String> = serde_json::from_str(&serialized).expect("deserialization works");
         assert_eq!(parsed, vec!["uuid-1", "uuid-2"]);
     }
 }

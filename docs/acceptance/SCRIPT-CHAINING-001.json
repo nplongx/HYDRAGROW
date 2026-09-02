@@ -1,0 +1,30 @@
+{
+  "requirement_id": "SCRIPT-CHAINING-001",
+  "objective": "Preserve next_flow_ids in CachedScript and execute alert script chains with deduplication, cycle detection, and depth limiting.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "CachedScript preserves next_flow_ids when cached and retrieved.",
+      "verification": "Unit test script_cache_preserves_next_flow_ids",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "eval_alert_scripts_chained chains execution to child scripts when root script fires.",
+      "verification": "Unit test firing_root_chains_into_next_flow_id",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "eval_alert_scripts_chained detects cycles and evaluates each script at most once.",
+      "verification": "Unit test cycle_is_detected_and_does_not_infinite_loop",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "eval_alert_scripts_chained enforces MAX_CHAIN_DEPTH limit on long flow chains.",
+      "verification": "Unit test depth_limit_stops_long_chain",
+      "evidence_required": true
+    }
+  ]
+}

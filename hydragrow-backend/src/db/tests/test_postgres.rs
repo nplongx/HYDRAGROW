@@ -6,7 +6,7 @@ mod tests {
 
     // ── device_config ─────────────────────────────────────────────────────────
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn upsert_and_get_device_config_roundtrip(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "test-dev-001".to_string(),
@@ -25,7 +25,7 @@ mod tests {
         assert_eq!(fetched.control_mode, "auto");
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_device_config_returns_error_for_unknown(pool: sqlx::PgPool) {
         let result = get_device_config(&pool, "does-not-exist").await;
         assert!(result.is_err());
@@ -33,7 +33,7 @@ mod tests {
 
     // ── crop_seasons ──────────────────────────────────────────────────────────
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_device_dosing_reports_in_range_filters_by_created_at(pool: sqlx::PgPool) {
         insert_dosing_report(
             &pool,
@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(out_of_range.len(), 0);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn create_and_get_crop_season(pool: sqlx::PgPool) {
         // device_config is a FK prerequisite
         let cfg = DeviceConfig {
@@ -95,7 +95,7 @@ mod tests {
 
     // ── system_events ─────────────────────────────────────────────────────────
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_and_query_system_event(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "test-dev-evt".to_string(),
@@ -131,7 +131,7 @@ mod tests {
 
     // ── dosing_reports ────────────────────────────────────────────────────────
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_dosing_report_persists(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "test-dev-dose".to_string(),
@@ -166,7 +166,7 @@ mod tests {
         assert!((reports[0].pump_a_ml - 1.5).abs() < f32::EPSILON);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_and_fetch_dosing_action_log(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "dev-log-1".to_string(),
@@ -196,7 +196,7 @@ mod tests {
         assert!((total - 5.0).abs() < 1e-4);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn get_last_dose_at_returns_none_when_no_history(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "dev-log-2".to_string(),
@@ -214,7 +214,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn fetch_dosing_calibration_returns_none_when_missing(pool: sqlx::PgPool) {
         let result = fetch_dosing_calibration(&pool, "no-such-device")
             .await
@@ -222,7 +222,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrations = "./migrations")]
     async fn fetch_dosing_calibration_returns_row_when_present(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "dev-cal-1".to_string(),

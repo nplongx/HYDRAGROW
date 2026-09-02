@@ -13,6 +13,7 @@ This register connects product/system requirements to implementation, verificati
 | Project requirements | Add project-specific rows as requirements are defined | Pending | Pending | Pending | Pending | NOT_STARTED |
 | MIX valve control | Support MIX and MIX_VALVE as accepted non-dosing pump names in control API and fallback pump status | `hydragrow-backend/src/api/control.rs` | `cargo test --bin hydragrow-backend api::control` | Render / Production | `hydragrow-backend/src/api/control.rs` | VERIFIED |
 | AUTOMATION-001 | AC-1 trigger.type for action_command is sensor; AC-2 buildIrFromGraph passes nextFlowIds; AC-3 FlowDetailDrawer allows user to select next flows | `hydragrow-frontend/src/components/automation/reactflow/buildIr.ts`, `hydragrow-frontend/src/components/automation/FlowDetailDrawer.tsx` | `docs/evidence/AUTOMATION-001.json`, Vitest unit tests | Frontend / Web | Frontend automation docs | VERIFIED |
+| CI-QUALITY-001 | Rust: format/check/clippy with warnings denied/tests; Frontend: TypeScript/ESLint warnings denied/unit tests/production build; all locked dependency checks must pass | `.github/workflows/code-quality.yml` | GitHub Actions `code-quality` PR workflow | GitHub Actions / PR validation | `README.md`, `CONTRIBUTING.md` | IMPLEMENTING |
 
 ## Rules
 

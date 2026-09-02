@@ -10,10 +10,11 @@
 2. Nếu thay đổi chạm nhiều subsystem không phụ thuộc lẫn nhau, cân nhắc tách thành nhiều PR nhỏ theo subsystem — dễ review, CI chạy nhanh hơn (mỗi workflow chỉ trigger khi path của nó bị chạm, xem bảng CI trong README.md).
 3. Trước khi mở PR, chạy bộ lệnh "Kiểm tra chung" ở cuối [module-rules/README.md](docs/superpowers/specs/module-rules/README.md) cho (các) subsystem bạn đã sửa.
 4. Mô tả PR nêu rõ: subsystem nào bị chạm, có đổi hợp đồng MQTT/schema không, có migration DB mới không.
+5. PR phải vượt qua `code-quality`: Rust phải format sạch, build/check với dependency lock, Clippy không warning (`-D warnings`) và test pass; frontend phải TypeScript sạch, ESLint không warning, test pass và production build thành công.
 
 ## CI
 
-Xem bảng ánh xạ workflow → subsystem trong [README.md](README.md#ci). Mỗi workflow chỉ chạy khi PR chạm đúng path của nó — PR chỉ sửa 1 subsystem sẽ không phải chờ CI của subsystem khác.
+Xem bảng ánh xạ workflow → subsystem trong [README.md](README.md#ci). Ngoài các workflow chuyên biệt, `code-quality` chạy ở cấp repository để ngăn code kém chất lượng lọt vào PR. Không được hạ tiêu chuẩn lint/test chỉ để CI xanh.
 
 ## Không đụng vào
 

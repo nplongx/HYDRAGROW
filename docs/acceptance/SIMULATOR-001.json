@@ -1,0 +1,40 @@
+{
+  "requirement_id": "SIMULATOR-001",
+  "objective": "Implement deterministic scenario engine fault timing activation, sensor-freeze sample retention, hardware pump fault targeting, and structured scenario file validation in hydragrow-simulator.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "ScenarioEngine activates fault events exactly once when simulated time window crosses at_ms.",
+      "metric": "activated_fault_count",
+      "operator": "=",
+      "target": 1,
+      "unit": "count",
+      "verification": "cargo test -p hydragrow-simulator --test scenario_runtime a_fault_activates_once_when_simulated_time_crosses_at_ms",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Injector sensor-freeze fault retains the initial sample value across subsequent sensor readings.",
+      "verification": "cargo test -p hydragrow-simulator --test scenario_runtime sensor_frozen_fault_reuses_the_activation_sample",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Injector supports hardware pump faults across all supported pump targets.",
+      "verification": "cargo test -p hydragrow-simulator --lib faults::injector::tests",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Scenario validation rejects invalid pump or sensor target names with structured error message.",
+      "verification": "cargo test -p hydragrow-simulator --lib scenario::format::tests",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Simulator code passes cargo fmt, cargo check, clippy with warnings as errors, and tests.",
+      "verification": "cargo test -p hydragrow-simulator && cargo fmt --check --manifest-path hydragrow-simulator/Cargo.toml && cargo clippy --manifest-path hydragrow-simulator/Cargo.toml --all-targets -- -D warnings",
+      "evidence_required": true
+    }
+  ]
+}

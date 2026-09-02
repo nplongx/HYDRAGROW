@@ -1,0 +1,47 @@
+{
+  "requirement_id": "SIMULATOR-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": 1,
+      "unit": "count",
+      "source": "cargo test -p hydragrow-simulator --test scenario_runtime a_fault_activates_once_when_simulated_time_crosses_at_ms",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "ScenarioEngine successfully activated fault once when time interval crossed at_ms."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-simulator --test scenario_runtime sensor_frozen_fault_reuses_the_activation_sample",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "Sensor-freeze fault retained the first activation reading."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-simulator --lib faults::injector::tests",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "Injector applied hardware pump faults across all supported pumps."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-simulator --lib scenario::format::tests",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "Scenario loader validated pump/sensor targets and reported context errors."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-simulator && cargo fmt --check --manifest-path hydragrow-simulator/Cargo.toml && cargo clippy --manifest-path hydragrow-simulator/Cargo.toml --all-targets -- -D warnings",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "All simulator tests, formatting, and clippy lints passed without error."
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 function BaseNode({ label, color, children }: { label: string; color: string; children?: React.ReactNode }) {
   return (
-    <div className="rounded-lg border-2 bg-white px-3 py-2 shadow-sm" style={{ borderColor: color }}>
+    <div className="rounded-lg border-2 bg-white px-3 py-2 shadow-sm shadow-emerald-950/5" style={{ borderColor: color }}>
       <Handle type="target" position={Position.Top} />
       <div className="text-xs font-semibold" style={{ color }}>
         {label}
@@ -14,7 +14,7 @@ function BaseNode({ label, color, children }: { label: string; color: string; ch
 }
 
 export function SensorNode() {
-  return <BaseNode label="Sensor Input" color="#2563eb" />;
+  return <BaseNode label="Sensor Input" color="#0284c7" />;
 }
 
 export function ConditionNode({ data }: NodeProps) {

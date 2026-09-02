@@ -4,6 +4,7 @@ import { AccordionSection } from '../../components/ui/AccordionSection';
 import { SubCard } from '../../components/ui/SubCard';
 import { InputGroup } from '../../components/ui/InputGroup';
 import { Switch } from '../../components/ui/Switch';
+import { WaterLevelGauge } from '../../components/ui/WaterLevelGauge';
 import { parse_cron_safe } from '../../../gleam_core/build/dev/javascript/gleam_core/settings/cron.mjs';
 
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
@@ -228,6 +229,13 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
       >
         <SubCard title="Mực nước bồn">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="col-span-full">
+              <WaterLevelGauge
+                min={Number(config.water_level_min) || 0}
+                target={Number(config.water_level_target) || 0}
+                max={Number(config.water_level_max) || 0}
+              />
+            </div>
             <InputGroup label="Chiều cao bồn (cm)" value={config.tank_height} onChange={(e: InputEvent) => setConfig({ ...config, tank_height: e.target.value })} />
             <InputGroup label="Mực nước mục tiêu (cm)" value={config.water_level_target} onChange={(e: InputEvent) => setConfig({ ...config, water_level_target: e.target.value })} />
             <InputGroup label="Sai số (cm)" value={config.water_level_tolerance} onChange={(e: InputEvent) => setConfig({ ...config, water_level_tolerance: e.target.value })} />

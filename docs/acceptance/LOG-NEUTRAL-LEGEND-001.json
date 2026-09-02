@@ -1,0 +1,30 @@
+{
+  "requirement_id": "LOG-NEUTRAL-LEGEND-001",
+  "objective": "Add Neutral token and CSS utility classes for merged technical log events and implement EventLegend component with full test coverage.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Neutral design tokens (--color-neutral, --color-neutral-muted, --color-neutral-border) and utility classes (.log-neutral-badge, .log-neutral-dot) are added to App.css and documented in CHUAN-GIAO-DIEN-FRONTEND.md.",
+      "verification": "Inspection of App.css and CHUAN-GIAO-DIEN-FRONTEND.md",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "EventLegend component renders all log legend entries defined in EVENT_LEGEND_ENTRIES, including the merged technical event using log-neutral-dot.",
+      "verification": "Vitest unit tests in hydragrow-frontend/src/components/logs/EventLegend.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "EventLegend unit tests verify that one entry is rendered per item and the 'Kỹ thuật đã gộp' entry utilizes the 'log-neutral-dot' swatch class.",
+      "verification": "Vitest test execution",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "CI frontend quality gates pass cleanly without errors or warnings (tsc, eslint --max-warnings=0, vitest, npm run build).",
+      "verification": "Execution of frontend linting, type-checking, testing, and production build",
+      "evidence_required": true
+    }
+  ]
+}

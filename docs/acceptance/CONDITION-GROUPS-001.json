@@ -1,0 +1,30 @@
+{
+  "requirement_id": "CONDITION-GROUPS-001",
+  "objective": "Support nested AND/OR condition groups in Automation IR, Rhai compilation, and NodeEditorPanel UI while preserving 100% backward-compatibility for flat condition lists.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "AutomationIrSchema.conditions parses recursive ConditionGroup (AND/OR) while maintaining exact backward compatibility for legacy flat Condition[] arrays.",
+      "verification": "Vitest unit tests in ir.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "compileToRhai recursively compiles nested condition groups into Rhai expressions with correct parenthesis grouping, matching Figma frame 03 spec.",
+      "verification": "Vitest unit tests in compileToRhai.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "ConditionGroupEditor renders recursive condition trees with AND/OR toggles, adding child conditions/groups, and FlowSummaryNode accurately counts leaf conditions.",
+      "verification": "Vitest component tests in ConditionGroupEditor.test.tsx, NodeEditorPanel.test.tsx, and FlowSummaryNode.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "CI code quality gates pass cleanly (cargo test, cargo clippy -D warnings, tsc, eslint --max-warnings=0, vitest, npm build).",
+      "verification": "Frontend and backend test run logs and build output",
+      "evidence_required": true
+    }
+  ]
+}

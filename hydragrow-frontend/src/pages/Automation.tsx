@@ -1,7 +1,9 @@
 import { ReactFlow, Background, Controls } from '@xyflow/react';
 import { Workflow } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
-import { AUTOMATION_FLOW_NODE_TYPES } from '../components/automation/reactflow/FlowSummaryNode';
+import { FlowSummaryNode } from '../components/automation/reactflow/FlowSummaryNode';
+
+const AUTOMATION_FLOW_NODE_TYPES = { flowSummary: FlowSummaryNode };
 import { FlowDetailDrawer } from '../components/automation/FlowDetailDrawer';
 import { useFlowCanvas } from '../hooks/useFlowCanvas';
 import { useAutomationScripts } from '../hooks/useAutomationScripts';

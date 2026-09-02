@@ -9,6 +9,43 @@ function nodeProps(script: UserScript) {
 }
 
 describe('FlowSummaryNode', () => {
+  it('counts leaf conditions recursively across nested condition groups', () => {
+    const script: UserScript = {
+      id: 's3',
+      device_id: 'd1',
+      kind: 'alert',
+      name: 'Nested Flow',
+      source: '',
+      enabled: true,
+      ir_json: {
+        kind: 'alert',
+        trigger: { type: 'sensor' },
+        conditions: [
+          {
+            op: 'or',
+            children: [
+              { sensor: 'ph', operator: '<', value: 5.5 },
+              { sensor: 'ph', operator: '>', value: 7.5 },
+            ],
+          },
+          { sensor: 'ec', operator: '>', value: 3.0 },
+        ],
+        actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+        nodes: [],
+        edges: [],
+        next_flow_ids: [],
+      },
+      created_at: '',
+      updated_at: '',
+    };
+    render(
+      <ReactFlowProvider>
+        <FlowSummaryNode {...nodeProps(script)} />
+      </ReactFlowProvider>,
+    );
+    expect(screen.getByText('3 điều kiện → 1 hành động')).toBeInTheDocument();
+  });
+
   it('shows name, kind badge, and condition/action counts for a Blockly-authored flow', () => {
     const script: UserScript = {
       id: 's1',

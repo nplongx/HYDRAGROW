@@ -370,6 +370,12 @@ mod tests {
     }
 
     #[test]
+    fn validates_compiled_rhai_from_nested_condition_group() {
+        let src = r#"fn main(input) { if !((input.ph < 5.5 || input.ph > 7.5) && input.ec > 3.0) { return (); } #{ "level": "warning", "title": "pH", "message": "out of range" } }"#;
+        assert!(validate_script_source("alert", src).is_ok());
+    }
+
+    #[test]
     fn script_with_syntax_error_fails_validation() {
         let src = r#"fn main(input { }"#;
         let result = validate_script_source("alert", src);

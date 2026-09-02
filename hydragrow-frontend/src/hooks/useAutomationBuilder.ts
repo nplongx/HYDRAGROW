@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { addEdge, useEdgesState, useNodesState, type Connection } from '@xyflow/react';
-import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type Condition } from '../lib/automation/ir';
+import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type ConditionOrGroup } from '../lib/automation/ir';
+import { summarizeConditionTree } from '../lib/automation/conditionTree';
 
 function seedNodes(): Node[] {
   return [
@@ -14,11 +15,6 @@ const SEED_EDGES: Edge[] = [
   { id: 'etrigger-2', source: 'trigger', target: '2' },
   { id: 'e2-3', source: '2', target: '3' },
 ];
-
-function summarizeConditions(conditions: Condition[]): string {
-  if (conditions.length === 0) return 'Chưa cấu hình';
-  return conditions.map((c) => `${c.sensor} ${c.operator} ${c.value}`).join(' và ');
-}
 
 /** Mirrors NodeEditorPanel's summarizeActions — kept in sync manually since
  * duplicating a switch over `Action['type']` here is simpler than exporting
@@ -55,10 +51,10 @@ function summarizeActions(actions: Action[]): string {
  * actions collapse into one action-node's `actions` array — this matches
  * `buildIrFromGraph`'s own flattening (it concatenates every action-node's
  * `actions` array), so re-saving without any edits round-trips exactly. */
-function synthesizeGraphFromFlatIr(conditions: Condition[], actions: Action[]): { nodes: Node[]; edges: Edge[] } {
+function synthesizeGraphFromFlatIr(conditions: ConditionOrGroup[], actions: Action[]): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
     { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
-    { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions, summary: summarizeConditions(conditions) } },
+    { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions, summary: summarizeConditionTree(conditions) } },
     { id: '3', type: 'action', position: { x: 250, y: 240 }, data: { actions, summary: summarizeActions(actions) } },
   ];
   return { nodes, edges: SEED_EDGES };
@@ -101,10 +97,16 @@ export function useAutomationBuilder() {
   );
 
   const addNode = useCallback(
-    (type: 'condition' | 'action') => {
+    (type: 'condition' | 'condition_group' | 'action') => {
       const id = String(nextNodeId++);
-      const data = type === 'condition' ? { conditions: [], summary: 'Chưa cấu hình' } : { actions: [], summary: 'Chưa cấu hình' };
-      setNodes((nds) => [...nds, { id, type, position: { x: 250 + nds.length * 40, y: 360 }, data }]);
+      const data =
+        type === 'action'
+          ? { actions: [], summary: 'Chưa cấu hình' }
+          : type === 'condition_group'
+          ? { conditions: [{ op: 'and', children: [] }], summary: 'Chưa cấu hình' }
+          : { conditions: [], summary: 'Chưa cấu hình' };
+      const nodeType = type === 'condition_group' ? 'condition' : type;
+      setNodes((nds) => [...nds, { id, type: nodeType, position: { x: 250 + nds.length * 40, y: 360 }, data }]);
     },
     [setNodes],
   );

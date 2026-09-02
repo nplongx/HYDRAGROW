@@ -1,0 +1,26 @@
+{
+  "requirement_id": "LAYOUT-SIDEBAR-REDESIGN-001",
+  "objective": "Redesign desktop sidebar in MainLayout.tsx matching Figma mockup (brand header with Sprout icon, rounded nav buttons, bottom device status card with deviceId) and add unit test coverage.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "MainLayout.test.tsx verifies active sidebar button for 'Tổng quan' at /dashboard has class bg-emerald-50.",
+      "verification": "Vitest test 'đánh dấu mục Tổng quan là active khi ở /dashboard' in hydragrow-frontend/src/components/layout/MainLayout.test.tsx"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Desktop sidebar renders brand header (Sprout icon + HydraGrow text), nav button items with rounded-[10px], and device status card with deviceId.",
+      "verification": "Source inspection of desktop aside in hydragrow-frontend/src/components/layout/MainLayout.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Main content container layout updated with lg:ml-64 lg:pb-6 without fixed pt-24.",
+      "verification": "Source inspection of main element in hydragrow-frontend/src/components/layout/MainLayout.tsx"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Frontend CI quality checks pass with zero TypeScript errors, zero ESLint warnings, passing tests, and clean build.",
+      "verification": "Execution of npm test, npm run lint, npx tsc --noEmit, and npm run build in hydragrow-frontend"
+    }
+  ]
+}

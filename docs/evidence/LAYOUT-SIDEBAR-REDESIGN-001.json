@@ -1,0 +1,33 @@
+{
+  "requirement_id": "LAYOUT-SIDEBAR-REDESIGN-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest test 'đánh dấu mục Tổng quan là active khi ở /dashboard' in hydragrow-frontend/src/components/layout/MainLayout.test.tsx",
+      "verified_at": "2025-05-18T11:15:00Z",
+      "notes": "Verified active button item retains bg-emerald-50 class name when route matches /dashboard"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Source code hydragrow-frontend/src/components/layout/MainLayout.tsx and Playwright visual screenshot /home/jules/verification/sidebar_desktop.png",
+      "verified_at": "2025-05-18T11:15:00Z",
+      "notes": "Verified desktop sidebar renders brand header, rounded-[10px] buttons, and bottom device status card displaying deviceId"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Source code hydragrow-frontend/src/components/layout/MainLayout.tsx",
+      "verified_at": "2025-05-18T11:15:00Z",
+      "notes": "Verified main element applies lg:ml-64 lg:pb-6 layout classes without fixed pt-24"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Vitest test suite, ESLint, TypeScript compiler, and Vite build execution outputs",
+      "verified_at": "2025-05-18T11:15:00Z",
+      "notes": "Passed 30 test files (159 tests), 0 ESLint warnings on touched files, zero tsc errors, and clean vite build"
+    }
+  ]
+}

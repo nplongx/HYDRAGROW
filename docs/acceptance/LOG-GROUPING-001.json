@@ -1,0 +1,30 @@
+{
+  "requirement_id": "LOG-GROUPING-001",
+  "objective": "Implement event grouping logic to merge consecutive technical noise events and group events by cycle ID for event log views.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "extractCycleId reads cycle_id from metadata top-level or metadata.dosing_data, returning null if not found.",
+      "verification": "Vitest test verifies cycle_id extraction from both paths in eventGrouping.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "filterEventsBySearch filters system events case-insensitively across title, message, category, and reason.",
+      "verification": "Vitest test verifies search filtering matching title and message in eventGrouping.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "buildLogRows in important mode merges consecutive technical info logs with identical title and category, preserving warnings/errors and grouping cycles.",
+      "verification": "Vitest test checks merged rows and cycle grouping in important mode in eventGrouping.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "buildLogRows in all_technical mode preserves individual technical events while still grouping cycle events by cycle_id.",
+      "verification": "Vitest test checks unmerged technical events and cycle grouping in all_technical mode in eventGrouping.test.ts",
+      "evidence_required": true
+    }
+  ]
+}

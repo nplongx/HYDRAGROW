@@ -1,0 +1,41 @@
+{
+  "requirement_id": "LOG-GROUPING-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": true,
+      "source": "Vitest test extractCycleId in src/lib/logs/eventGrouping.test.ts",
+      "environment": "Node.js / Vitest test runner",
+      "verified_at": "2026-09-02T08:08:48Z",
+      "notes": "extractCycleId correctly extracts cycle_id from metadata top-level or metadata.dosing_data"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": true,
+      "source": "Vitest test filterEventsBySearch in src/lib/logs/eventGrouping.test.ts",
+      "environment": "Node.js / Vitest test runner",
+      "verified_at": "2026-09-02T08:08:48Z",
+      "notes": "filterEventsBySearch correctly filters events by query string across title and message"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": true,
+      "source": "Vitest test buildLogRows — chế độ important in src/lib/logs/eventGrouping.test.ts",
+      "environment": "Node.js / Vitest test runner",
+      "verified_at": "2026-09-02T08:08:48Z",
+      "notes": "buildLogRows in important mode merges technical noise and groups cycles"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": true,
+      "source": "Vitest test buildLogRows — chế độ all_technical in src/lib/logs/eventGrouping.test.ts",
+      "environment": "Node.js / Vitest test runner",
+      "verified_at": "2026-09-02T08:08:48Z",
+      "notes": "buildLogRows in all_technical mode preserves individual events while grouping cycles"
+    }
+  ]
+}

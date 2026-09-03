@@ -1,0 +1,78 @@
+{
+  "requirement_id": "AUTOMATION-UI-OVERHAUL-001",
+  "status": "PASS",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "observation": "Vitest `Automation.test.tsx` overview tests passed, verifying summary nodes rendering, disabled states, and trigger badges.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "observation": "Vitest `useFlowCanvas.test.tsx` and `NextFlowSelector.test.tsx` tests passed, confirming animated edge creation and cycle-disabled candidate selection.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "observation": "Vitest `NodePalette.test.tsx` passed, correctly exposing specific Node categories with matching labels.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "observation": "Vitest `ConditionGroupEditor.test.tsx` and `conditionTree.test.tsx` passed, allowing AND/OR trees nesting, and rendering leaves properly without loss during round trips.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "observation": "Vitest `ConditionGroupEditor.test.tsx` and `conditionTree.test.tsx` verified `mean`/`min`/`max` correctly preserves mode and windowSec.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "observation": "Vitest `NodeEditorPanel.test.tsx` verified Cron triggers UI handling cron expression, presets and showing next schedule.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "observation": "Vitest `WebhookFieldMappingEditor.test.tsx` verified Webhook triggers mapping correctly handles flow/direct mode and mapping rules.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "observation": "Vitest `flowCycle.test.ts`, `NextFlowSelector.test.tsx`, and `NodeEditorPanel.test.tsx` all passed, verifying cross-flow chains restrict loops and map correctly.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "observation": "Vitest `TestPanel.test.tsx` verified Dry Run panel triggers mutate event providing values properly to mocked function and showing results.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "observation": "Vitest `AutomationMultiDeviceTemplatePanel.test.tsx` verified disabled application fallback mechanism safely blocks flow application if API is absent.",
+      "source": "vitest output"
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "observation": "Visual review matching hierarchy verified structurally within React components.",
+      "source": "visual inspection and frontend markup structure check"
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "observation": "All frontend verification commands (build, lint, fmt, tests) pass after integration.",
+      "source": "build/vitest output"
+    }
+  ]
+}

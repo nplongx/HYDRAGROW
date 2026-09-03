@@ -1,0 +1,66 @@
+{
+  "requirement_id": "AUTOMATION-UI-OVERHAUL-001",
+  "objective": "Rebuild the Automation page UI around one coherent responsive React Flow experience while preserving existing automation behavior and contracts.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Automation overview renders saved Flow summary nodes with kind, trigger, condition/action summary, enabled state, and chain edges.",
+      "verification": "Vitest automation overview tests"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "next_flow_ids produce directed animated edges and a cycle candidate is not selectable.",
+      "verification": "Vitest useFlowCanvas and chain-selector tests"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Node palette exposes sensor, FSM, Cron, Webhook, condition, condition group, time-window, delay, alert, control, recipe, and chain capabilities.",
+      "verification": "Vitest NodePalette tests"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Nested AND/OR condition groups render, edit, and round-trip without losing leaves, nesting, or operators.",
+      "verification": "Vitest ConditionGroupEditor and conditionTree tests"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "mean/min/max conditions expose a window in minutes and preserve mode/windowSec through editor and compiler round-trip.",
+      "verification": "Vitest time-window editor and compiler tests"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Cron trigger UI stores a cron expression and displays the next scheduled run using the existing timezone context.",
+      "verification": "Vitest Cron trigger tests"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Webhook trigger UI supports flow/direct mode and bodyPath-to-targetField mappings.",
+      "verification": "Vitest WebhookFieldMappingEditor and NodeEditorPanel tests"
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Chain action selects a Flow, displays the chain preview, and blocks self/cyclic targets.",
+      "verification": "Vitest chain selector and flowCycle tests"
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Test Panel accepts sample field values, runs the current IR through the existing validation/dry-run path, and renders trigger/result/trace/action output states.",
+      "verification": "Vitest TestPanel tests"
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Multi-device template UI lets the user select devices and shows override/inherited state; apply is permitted only through a discovered Automation bulk contract that preserves local overrides, otherwise the UI explicitly blocks unsupported apply without issuing a client-side mutation.",
+      "verification": "Vitest multi-device template tests plus the discovered Automation bulk API contract, or a blocked-apply test when that contract is absent"
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Desktop matches the supplied 00-09 information hierarchy and mobile/tablet does not render the draggable desktop canvas.",
+      "verification": "Component tests for responsive branches plus manual visual inspection at 1440x900 and 390x844"
+    },
+    {
+      "id": "AC-12",
+      "criterion": "All frontend verification commands pass after final rebase and documentation is synchronized.",
+      "verification": "jules.yml frontend build/test/lint/fmt commands plus documentation diff inspection"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
 
 export interface DangerZoneSectionProps {
   rebootLoading: boolean;
@@ -17,43 +18,52 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
   onConfirmFactoryReset,
   onCancelFactoryReset,
 }) => (
-  <section className="mt-8 border-t pt-6">
-    <h2 className="text-lg font-semibold text-red-600 mb-4">Vùng Nguy Hiểm</h2>
-    <div className="flex gap-3">
+  <section className="rounded-2xl border border-red-200 bg-red-50/60 p-4 md:p-5 space-y-3">
+    <h3 className="farm-section-title text-red-700">
+      <AlertTriangle size={14} />
+      <span>Vùng nguy hiểm</span>
+    </h3>
+
+    <div className="flex flex-col sm:flex-row gap-3">
       <button
         type="button"
         onClick={onReboot}
         disabled={rebootLoading}
-        className="px-4 py-2 border border-orange-400 text-orange-600 rounded-lg text-sm hover:bg-orange-50 disabled:opacity-50"
+        className="ui-btn-md flex items-center justify-center gap-2 border border-amber-300 bg-white text-amber-700 hover:bg-amber-50"
       >
-        Reboot Thiết Bị
+        <RotateCcw size={15} className={rebootLoading ? 'animate-spin' : ''} />
+        {rebootLoading ? 'Đang gửi lệnh...' : 'Reboot thiết bị'}
       </button>
       <button
         type="button"
         onClick={onFactoryResetClick}
-        className="px-4 py-2 border border-red-400 text-red-600 rounded-lg text-sm hover:bg-red-50"
+        className="ui-btn-md flex items-center justify-center gap-2 border border-red-300 bg-white text-red-700 hover:bg-red-50"
       >
+        <Trash2 size={15} />
         Factory Reset
       </button>
     </div>
+    <p className="text-[11px] text-red-700/80 leading-relaxed">
+      Factory Reset sẽ xoá toàn bộ cấu hình (WiFi, recipe, safety budget) và không thể hoàn tác.
+    </p>
+
     {factoryResetConfirm && (
-      <div className="mt-3 p-4 bg-red-50 rounded-lg">
-        <p className="text-sm text-red-700 font-medium mb-3">
-          ⚠️ Thao tác này xoá TOÀN BỘ cấu hình (WiFi, recipe, safety budget) và reboot.
-          Không thể hoàn tác!
+      <div className="rounded-xl border border-red-300 bg-white p-4 space-y-3">
+        <p className="text-sm font-semibold text-red-700 leading-relaxed">
+          Xác nhận: thao tác này xoá toàn bộ cấu hình (WiFi, recipe, safety budget) và khởi động lại thiết bị. Không thể hoàn tác.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <button
             type="button"
             onClick={onConfirmFactoryReset}
-            className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+            className="ui-btn-md bg-red-600 text-white hover:bg-red-700"
           >
             Xác Nhận Factory Reset
           </button>
           <button
             type="button"
             onClick={onCancelFactoryReset}
-            className="px-3 py-1.5 border rounded text-sm hover:bg-white"
+            className="ui-btn-md border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
           >
             Huỷ
           </button>

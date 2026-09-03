@@ -1,0 +1,37 @@
+{
+  "requirement_id": "DANGER-ZONE-REDESIGN-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest test suites in DangerZoneSection.test.tsx and Playwright screenshot verification",
+      "environment": "node / vitest / playwright",
+      "verified_at": "2026-03-31",
+      "notes": "Verified rounded-2xl panel with bg-red-50/60, border-red-200, AlertTriangle header icon, amber/red outline buttons, and persistent warning text."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest unit tests 'gọi onFactoryResetClick', 'gọi onReboot', and 'gọi onConfirmFactoryReset' in DangerZoneSection.test.tsx",
+      "environment": "node / vitest",
+      "verified_at": "2026-03-31",
+      "notes": "Verified event handlers are called correctly on button clicks."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Vitest unit test 'disable nút reboot khi rebootLoading true' in DangerZoneSection.test.tsx",
+      "environment": "node / vitest",
+      "verified_at": "2026-03-31",
+      "notes": "Verified button disable and 'Đang gửi lệnh...' text when rebootLoading is true."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Frontend verification commands (npm test, npx tsc --noEmit, npm run build) in hydragrow-frontend/",
+      "environment": "node v22.22.1 / vitest / tsc",
+      "verified_at": "2026-03-31",
+      "notes": "Passed all 174 frontend tests, TypeScript typechecking, zero ESLint issues in affected files, and clean Vite production build."
+    }
+  ]
+}

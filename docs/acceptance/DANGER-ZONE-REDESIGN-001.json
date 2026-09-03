@@ -1,0 +1,26 @@
+{
+  "requirement_id": "DANGER-ZONE-REDESIGN-001",
+  "objective": "Rewrite DangerZoneSection in Settings page to use design system tokens (rounded-2xl panel, bg-red-50/60, border-red-200, icon header, outline buttons) and display persistent warning text below buttons.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "DangerZoneSection renders a rounded-2xl panel with bg-red-50/60 and border-red-200 containing AlertTriangle icon header, amber outline Reboot button, red outline Factory Reset button, and persistent warning caption text.",
+      "verification": "Vitest component tests in hydragrow-frontend/src/pages/settings/DangerZoneSection.test.tsx"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "DangerZoneSection handles click events for onReboot, onFactoryResetClick, and onConfirmFactoryReset correctly.",
+      "verification": "Vitest component test cases in DangerZoneSection.test.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "DangerZoneSection disables the Reboot button and displays loading status when rebootLoading is true.",
+      "verification": "Vitest test case 'disable nút reboot khi rebootLoading true' in DangerZoneSection.test.tsx"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Frontend quality checks pass with zero TypeScript errors, zero Vitest test failures, and clean production build.",
+      "verification": "Execution of npm test, npx tsc --noEmit, and npm run build in hydragrow-frontend"
+    }
+  ]
+}

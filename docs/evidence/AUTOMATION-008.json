@@ -1,0 +1,37 @@
+{
+  "requirement_id": "AUTOMATION-008",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "sqlx migrations",
+      "environment": "CI/CD local build",
+      "verified_at": "2026-09-03T10:30:54Z",
+      "notes": "Verified by running cargo check with sqlx macros enabled"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Cargo test",
+      "environment": "CI/CD local build",
+      "verified_at": "2026-09-03T10:30:54Z",
+      "notes": "Backend compiles with new apply_template logic, cargo test passes"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Cargo test",
+      "environment": "CI/CD local build",
+      "verified_at": "2026-09-03T10:30:54Z",
+      "notes": "Backend compiles with sync_template logic merging ir_json, cargo test passes"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Vitest / TS compilation",
+      "environment": "CI/CD local build",
+      "verified_at": "2026-09-03T10:30:54Z",
+      "notes": "MultiDeviceApplyDialog added and all vitest and lint commands pass"
+    }
+  ]
+}

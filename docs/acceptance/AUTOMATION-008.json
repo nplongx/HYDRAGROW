@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-008",
+  "objective": "Support multi-device flow templates with partial overrides.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "flow_template_overrides table is created",
+      "verification": "Check database schema for flow_template_overrides table"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "apply-template endpoint creates copied scripts and associates them",
+      "verification": "Call POST /apply-template and verify target device gets a script and flow_template_overrides entry"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "sync-template endpoint synchronizes source script changes to target except overridden_fields",
+      "verification": "Call POST /sync-template and verify target script is updated with source ir_json except overridden fields"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "UI provides MultiDeviceApplyDialog to apply and sync templates",
+      "verification": "MultiDeviceApplyDialog renders correctly with device list and sync functionality"
+    }
+  ]
+}

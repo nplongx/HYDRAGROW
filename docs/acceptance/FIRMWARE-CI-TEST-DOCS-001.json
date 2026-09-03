@@ -1,0 +1,11 @@
+{
+  "requirement_id": "FIRMWARE-CI-TEST-DOCS-001",
+  "objective": "Document why firmware-controller-ci workflow has no cargo test step",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Comment added to firmware-controller-ci.yml explaining absence of cargo test step",
+      "verification": "YAML safe_load validation"
+    }
+  ]
+}

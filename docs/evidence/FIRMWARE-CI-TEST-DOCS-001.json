@@ -1,0 +1,10 @@
+{
+  "requirement_id": "FIRMWARE-CI-TEST-DOCS-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/firmware-controller-ci.yml'))\""
+    }
+  ]
+}

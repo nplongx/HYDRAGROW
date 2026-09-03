@@ -239,6 +239,7 @@ mod tests {
                 .compile(source)
                 .expect("Failed to compile test Rhai alert script source"),
             next_flow_ids,
+            trigger: crate::services::script_engine::TriggerConfig::Sensor,
         }
     }
 
@@ -359,6 +360,7 @@ fn main(input) {
                 .compile(FIRING_SCRIPT)
                 .expect("test script A compiles"),
             next_flow_ids: vec![b_id.to_string()],
+            trigger: crate::services::script_engine::TriggerConfig::Sensor,
         };
         let b = CachedScript {
             id: b_id,
@@ -368,6 +370,7 @@ fn main(input) {
                 .compile(FIRING_SCRIPT)
                 .expect("test script B compiles"),
             next_flow_ids: vec![a_id.to_string()],
+            trigger: crate::services::script_engine::TriggerConfig::Sensor,
         };
         let alerts = eval_alert_scripts_chained(&engine, &[a, b], &make_input());
         assert_eq!(alerts.len(), 2);
@@ -391,6 +394,7 @@ fn main(input) {
                     .get(i + 1)
                     .map(|next| vec![next.to_string()])
                     .unwrap_or_default(),
+                trigger: crate::services::script_engine::TriggerConfig::Sensor,
             })
             .collect();
         let alerts = eval_alert_scripts_chained(&engine, &scripts, &make_input());

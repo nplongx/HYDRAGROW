@@ -85,6 +85,15 @@ const Settings = () => {
   }
 
   const handleToggleSection = (id: string) => setOpenSection(openSection === id ? null : id);
+  const visibleSections = openSection === 'general'
+    ? ['general']
+    : openSection === 'growth'
+      ? ['growth', 'water']
+      : openSection === 'dosing'
+        ? ['dosing']
+        : openSection === 'sensor'
+          ? ['sensor']
+          : ['integrations', 'network'];
 
   const [config, setConfig] = useState<any>({
     control_mode: 'auto', is_enabled: true,
@@ -508,14 +517,14 @@ const Settings = () => {
   if (isLoading) return <LoadingState message="Đang tải cấu hình..." />;
 
   return (
-  <div className="app-page max-w-5xl pb-36">
-  <header className="flex flex-col gap-4 border-b border-emerald-100 pb-5 md:flex-row md:items-end md:justify-between">
+  <div className="app-page pb-36">
+  <header className="page-header">
     <div>
-      <p className="mb-1 text-xs font-medium text-emerald-700/60">Settings / Desktop-1440</p>
-      <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-emerald-950">
+  <p className="mb-1 text-xs font-medium text-emerald-700/60">Settings / Desktop-1440</p>
+  <h1 className="page-header-title flex items-center gap-2">
         Cài đặt hệ thống <Settings2 size={22} className="text-emerald-700/75" />
       </h1>
-      <p className="text-sm text-emerald-800/75">Thiết bị, ngưỡng vận hành, hiệu chuẩn cảm biến và quản trị trạm</p>
+  <p className="page-header-subtitle">Thiết bị, ngưỡng vận hành, hiệu chuẩn cảm biến và quản trị trạm</p>
     </div>
     <button type="button" onClick={() => handleSave()} disabled={isSaving || hasDosingValidationError} className="ui-btn-primary flex items-center justify-center gap-2 self-stretch md:self-auto">
       <Save size={17} /> {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
@@ -531,16 +540,17 @@ const Settings = () => {
   </div>
   
   <div className="space-y-6">
-        <GeneralSection
+        {openSection === 'general' && <GeneralSection
           userEmail={user?.email}
           onLogout={() => logout()}
           onGoToPairing={() => { window.location.href = '/pairing'; }}
           isAdvancedMode={isAdvancedMode}
           onToggleAdvancedMode={setIsAdvancedMode}
-        />
+        />}
 
         <ThresholdsSection
           openSection={openSection}
+          visibleSections={visibleSections}
           onToggleSection={handleToggleSection}
           config={config}
           setConfig={setConfig}
@@ -559,7 +569,7 @@ const Settings = () => {
           handleFinishAndSaveCalibration={handleFinishAndSaveCalibration}
         />
 
-        <ConnectivitySection
+        {visibleSections.includes('integrations') && <ConnectivitySection
           openSection={openSection}
           onToggleSection={handleToggleSection}
           nodeRedEditorUrl={nodeRedEditorUrl}
@@ -576,16 +586,16 @@ const Settings = () => {
           updateWifiCandidate={updateWifiCandidate}
           isSavingWifi={isSavingWifi}
           handleSaveWifiList={handleSaveWifiList}
-        />
+        />}
 
-        <DangerZoneSection
+        {openSection === 'general' && <DangerZoneSection
           rebootLoading={rebootLoading}
           onReboot={sendReboot}
           factoryResetConfirm={factoryResetConfirm}
           onFactoryResetClick={() => setFactoryResetConfirm(true)}
           onConfirmFactoryReset={sendFactoryReset}
           onCancelFactoryReset={() => setFactoryResetConfirm(false)}
-        />
+        />}
       </div>
 
 

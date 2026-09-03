@@ -11,6 +11,7 @@ interface AccordionSectionProps {
   isOpen?: boolean;
   onToggle?: () => void;
   badge?: string;
+  hidden?: boolean;
 }
 
 export const AccordionSection: React.FC<AccordionSectionProps> = ({
@@ -22,6 +23,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   isOpen: controlledIsOpen,
   onToggle,
   badge,
+  hidden = false,
 }) => {
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const isControlled = controlledIsOpen !== undefined;
@@ -37,7 +39,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   };
 
   return (
-    <div className="ui-card overflow-hidden p-0">
+    <div className={`ui-card overflow-hidden p-0 ${hidden ? 'hidden' : ''}`}>
       <button
         type="button"
         onClick={handleToggle}

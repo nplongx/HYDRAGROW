@@ -13,18 +13,6 @@ on:
 
 jobs:
   build:
-    # NOTE: this workflow intentionally has no `cargo test` step. The
-    # esp32-c3-mist-weaver-os binary crate targets ESP32-C3 with
-    # `harness = false` (see ESP32-C3-CONTROLLER-NODE/Cargo.toml) and links
-    # esp-idf-sys, so `cargo test` cannot run on a standard GitHub Actions
-    # host runner. All pure logic that used to live only in this crate
-    # (MQTT command HMAC verification, health-loop publish-topic routing,
-    # osaka pump soft-start generation tracking, safety-override read-site)
-    # has been extracted into hydragrow-controller-core, which IS
-    # host-testable — see controller-core-ci.yml's `cargo test` step. If you
-    # add new logic to this crate that has no test coverage anywhere, ask
-    # whether it can be extracted into hydragrow-controller-core instead of
-    # adding it here untested.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

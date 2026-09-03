@@ -21,9 +21,9 @@ panic = "abort"   # Xóa code xử lý stack-unwinding khi panic
 debug = true    # Symbols are nice, and they don't increase the size on Flash
 opt-level = "z"
 [patch.crates-io]
-esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys.git", rev = "f616563a87595032f06f1fec95b6816b1c11135c" }
-esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal.git", rev = "04faf8a9221d683615e6b911b2649fa70e85d644" }
-esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git", rev = "3bc7361aade1eb9845a979d06e621a69a3dfbaff" }
+esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys.git" }
+esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal.git" }
+esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git" }
 
 [dependencies]
 log = "0.4"

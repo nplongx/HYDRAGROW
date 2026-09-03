@@ -6,7 +6,7 @@ use esp_idf_hal::ledc::LedcDriver;
 pub use hydragrow_controller_core::{PumpType, WaterDirection};
 
 use log::{info, warn};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -25,7 +25,7 @@ pub struct PumpController<'d> {
     osaka_en: esp_idf_hal::gpio::PinDriver<'static, esp_idf_hal::gpio::Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
 
-    soft_start_generation: Arc<AtomicUsize>,
+    cancel_soft_start: Arc<AtomicBool>,
 }
 
 impl<'d> PumpController<'d> {
@@ -87,7 +87,7 @@ impl<'d> PumpController<'d> {
             valve,
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
-            soft_start_generation: Arc::new(AtomicUsize::new(0)),
+            cancel_soft_start: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -218,14 +218,12 @@ impl<'d> PumpController<'d> {
             "🌀 Điều khiển khởi động mềm Osaka lên {}%...",
             target_pwm_percent
         );
-        self.osaka_en.set_high()?;
 
-        // Bump generation FIRST — any in-flight thread from a previous call
-        // reads a stale generation on its next check and exits on its own,
-        // instead of racing this new thread on the same PWM duty.
-        let my_generation = self.soft_start_generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let generation_flag = Arc::clone(&self.soft_start_generation);
+        self.osaka_en.set_high()?;
+        self.cancel_soft_start.store(false, Ordering::SeqCst);
+
         let rpwm_clone = Arc::clone(&self.osaka_rpwm);
+        let cancel_flag = Arc::clone(&self.cancel_soft_start);
         let safe_percent = target_pwm_percent.clamp(0, 100);
 
         thread::spawn(move || {
@@ -245,11 +243,11 @@ impl<'d> PumpController<'d> {
             let step_delay = Duration::from_millis(100);
 
             for i in 1..=steps {
-                if generation_flag.load(Ordering::SeqCst) != my_generation {
-                    warn!(
-                        "⚠️ Hủy tiến trình khởi động mềm Osaka (generation {} superseded)!",
-                        my_generation
-                    );
+                if cancel_flag.load(Ordering::SeqCst) {
+                    warn!("⚠️ Hủy tiến trình khởi động mềm Osaka!");
+                    if let Ok(mut pump) = rpwm_clone.lock() {
+                        let _ = pump.set_duty(0);
+                    }
                     return;
                 }
 
@@ -272,7 +270,7 @@ impl<'d> PumpController<'d> {
 
     pub fn set_osaka_pump_pwm(&mut self, duty_percent: u32) -> anyhow::Result<()> {
         if duty_percent == 0 {
-            self.soft_start_generation.fetch_add(1, Ordering::SeqCst);
+            self.cancel_soft_start.store(true, Ordering::SeqCst);
             self.osaka_en.set_low()?;
 
             let mut pump = self

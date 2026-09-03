@@ -173,10 +173,7 @@ async fn receive_webhook_flow_event(
         .get_action_command_scripts(&device_id)
         .await;
 
-    let all_cached: Vec<_> = alert_scripts
-        .into_iter()
-        .chain(action_scripts.into_iter())
-        .collect();
+    let all_cached: Vec<_> = alert_scripts.into_iter().chain(action_scripts).collect();
 
     let all_chain_nodes: Vec<crate::mqtt::handlers::script_eval::WebhookChainNode> = all_cached
         .iter()
@@ -214,7 +211,7 @@ async fn receive_webhook_flow_event(
     let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
     let mut fired_total = 0usize;
 
-    for (script, ir) in webhook_scripts {
+    for (_script, ir) in webhook_scripts {
         let mut mapped = serde_json::Map::new();
         if let Some(mappings) = ir
             .get("trigger")

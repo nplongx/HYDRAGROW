@@ -48,6 +48,7 @@ impl ExpanderPin {
         1u8 << (self as u8)
     }
 
+    #[allow(dead_code)]
     pub fn flag(self) -> PinFlag {
         match self {
             Self::TankA => PinFlag::P0,
@@ -62,6 +63,7 @@ impl ExpanderPin {
     }
 
     /// True nếu pin này là input từ TTP223.
+    #[allow(dead_code)]
     pub fn is_input(self) -> bool {
         matches!(
             self,

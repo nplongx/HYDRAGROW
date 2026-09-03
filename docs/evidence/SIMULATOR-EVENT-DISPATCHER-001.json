@@ -1,0 +1,21 @@
+{
+  "requirement_id": "SIMULATOR-EVENT-DISPATCHER-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "All OrchestratorEvent variants mapped and verified via unit tests",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml event_dispatcher",
+      "environment": "sandbox",
+      "verified_at": "2026-09-02T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "SimDispatcher updates VirtualHardwareState prior to MQTT publish",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml dispatcher",
+      "environment": "sandbox",
+      "verified_at": "2026-09-02T00:00:00Z"
+    }
+  ]
+}

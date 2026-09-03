@@ -55,6 +55,7 @@ impl ExpanderPin {
         1u8 << (self as u8)
     }
 
+    #[allow(dead_code)]
     pub fn flag(self) -> PinFlag {
         match self {
             Self::TankA => PinFlag::P0,
@@ -69,6 +70,7 @@ impl ExpanderPin {
     }
 
     /// True nếu pin này là input từ TTP223.
+    #[allow(dead_code)]
     pub fn is_input(self) -> bool {
         matches!(
             self,
@@ -96,6 +98,7 @@ impl ExpanderPin {
 const INPUT_MASK: u8 = 0b0000_1111;
 
 /// P4..P7 là OUTPUT.
+#[allow(dead_code)]
 const OUTPUT_MASK: u8 = 0b1111_0000;
 
 // ---------------------------------------------------------------------------
@@ -183,6 +186,7 @@ impl<'d> I2cExpander<'d> {
     }
 
     /// Bật/tắt output theo bool.
+    #[allow(dead_code)]
     pub fn set_output(
         &mut self,
         pin: ExpanderPin,
@@ -221,6 +225,7 @@ impl<'d> I2cExpander<'d> {
     /// Đọc một input cụ thể.
     ///
     /// Chỉ cho phép TankA/TankB/TankPHDown/TankPHUp.
+    #[allow(dead_code)]
     pub fn read_input(
         &mut self,
         pin: ExpanderPin,
@@ -265,6 +270,7 @@ impl<'d> I2cExpander<'d> {
     // -----------------------------------------------------------------------
 
     /// Trả về shadow state hiện tại của PCF8574.
+    #[allow(dead_code)]
     pub fn state(&self) -> u8 {
         self.state
     }

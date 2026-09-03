@@ -20,19 +20,12 @@ import { GeneralSection } from './settings/GeneralSection';
 import { ThresholdsSection } from './settings/ThresholdsSection';
 import { ConnectivitySection } from './settings/ConnectivitySection';
 import { DangerZoneSection } from './settings/DangerZoneSection';
+import { SETTINGS_TABS } from './settings/settingsData';
 
 type DosingFieldKey =
   | 'dosing_pwm_percent' | 'dosing_min_pwm_percent' | 'pump_a_capacity_ml_per_sec'
   | 'pump_b_capacity_ml_per_sec' | 'pump_ph_up_capacity_ml_per_sec' | 'pump_ph_down_capacity_ml_per_sec';
 type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
-
-export const SETTINGS_TABS = [
-  { id: 'general', label: 'Tổng quan' },
-  { id: 'growth', label: 'Ngưỡng & Nước' },
-  { id: 'dosing', label: 'Máy châm phân' },
-  { id: 'sensor', label: 'Cảm biến' },
-  { id: 'integrations', label: 'Kết nối' },
-] as const;
 
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
@@ -416,7 +409,7 @@ const Settings = () => {
         String(savingConfig.misting_off_duration_ms ?? '180000'),
         String(savingConfig.misting_temp_threshold ?? '30'),
         String(savingConfig.high_temp_misting_on_duration_ms ?? '15000'),
-        String(savingConfig.high_temp_misting_off_duration_ms ?? '60000'),
+        String(savingConfig.high_temp_misting_off_duration_ms ?? '180000'),
         String(savingConfig.min_ec_limit ?? '0.5'),
         String(savingConfig.max_ec_limit ?? '3.0'),
         String(savingConfig.min_ph_limit ?? '4.0'),

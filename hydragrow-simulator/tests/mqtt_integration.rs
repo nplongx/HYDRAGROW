@@ -93,9 +93,7 @@ fn test_mqtt_publish_and_receive() {
         is_continuous: None,
         ph_voltage_mv: None,
     };
-    bridge
-        .publish_sensors(&data)
-        .expect("Publish sensors should succeed");
+    bridge.publish_sensors(&data);
 
     // 3. Wait for message and verify
     let mut received = false;

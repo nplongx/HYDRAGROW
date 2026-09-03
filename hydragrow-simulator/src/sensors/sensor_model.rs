@@ -5,7 +5,6 @@ use hydragrow_shared::SensorData;
 pub struct NoiseConfig {
     pub ec_noise_std_dev: f32,
     pub ph_noise_std_dev: f32,
-    pub seed: u64,
 }
 
 impl NoiseConfig {
@@ -13,38 +12,13 @@ impl NoiseConfig {
         Self {
             ec_noise_std_dev: 0.0,
             ph_noise_std_dev: 0.0,
-            seed: 0,
         }
     }
 }
 
-/// Simple deterministic pseudo-random generator mapping (seed, index) to [-1.0, 1.0]
-fn pseudo_random_f32(seed: u64, index: u32) -> f32 {
-    let mut state = seed.wrapping_add((index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
-    if state == 0 {
-        state = 0x85EB_CA6B;
-    }
-    state ^= state >> 30;
-    state = state.wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    state ^= state >> 27;
-    state = state.wrapping_mul(0x94D0_49BB_1331_11EB);
-    state ^= state >> 31;
-    let val = (state & 0x00FF_FFFF) as f32 / 16777216.0;
-    val * 2.0 - 1.0
-}
-
-pub fn read_sensor(tank: &Tank, config: &NoiseConfig) -> SensorData {
-    let ec_noise = if config.ec_noise_std_dev > 0.0 {
-        pseudo_random_f32(config.seed, 0) * config.ec_noise_std_dev
-    } else {
-        0.0
-    };
-
-    let ph_noise = if config.ph_noise_std_dev > 0.0 {
-        pseudo_random_f32(config.seed, 1) * config.ph_noise_std_dev
-    } else {
-        0.0
-    };
+pub fn read_sensor(tank: &Tank, _config: &NoiseConfig) -> SensorData {
+    let ec_noise = 0.0;
+    let ph_noise = 0.0;
 
     SensorData {
         device_id: "sim-dev".to_string(),

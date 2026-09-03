@@ -1,0 +1,16 @@
+{
+  "requirement_id": "SIMULATOR-EVENT-DISPATCHER-001",
+  "objective": "Dispatch orchestrator events to virtual hardware state in hydragrow-simulator exhaustively without catch-all wildcards.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "apply_event maps every OrchestratorEvent variant to VirtualHardwareState mutation or debug logging without wildcard _ => {}.",
+      "verification": "Cargo test event_dispatcher::tests in hydragrow-simulator"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "SimDispatcher applies events to VirtualHardwareState before forwarding to telemetry sinks.",
+      "verification": "Cargo test dispatcher::tests in hydragrow-simulator"
+    }
+  ]
+}

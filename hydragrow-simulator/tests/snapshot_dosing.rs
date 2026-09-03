@@ -24,7 +24,7 @@ fn test_dosing_cycle_snapshot() {
     let mut history = vec![];
     for _ in 0..10 {
         harness.hw.pump_a.on = true;
-        harness.hw.pump_a.pwm = 100;
+        harness.hw.pump_a.pwm_percent = 100;
         harness.tick(1000); // 1 second per tick
         history.push(harness.tank.ec);
     }

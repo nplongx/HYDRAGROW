@@ -21,7 +21,7 @@ impl SimDispatcher {
     pub fn dispatch(&mut self, event: &OrchestratorEvent, hw: &mut VirtualHardwareState) {
         apply_event(hw, event);
         if let Some(bridge) = &mut self.mqtt_bridge {
-            let _ = bridge.publish_event(event);
+            bridge.publish_event(event);
         }
     }
 }

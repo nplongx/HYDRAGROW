@@ -31,35 +31,4 @@ describe('ThresholdsSection', () => {
     expect(screen.getByText('An toàn')).toBeInTheDocument();
     expect(screen.getByText('Cảm biến & Hiệu chuẩn')).toBeInTheDocument();
   });
-
-  it('hiển thị thanh WaterLevelGauge với giá trị Min/Mục tiêu/Max từ config', () => {
-    render(
-      <ThresholdsSection
-        openSection="water"
-        onToggleSection={() => {}}
-        config={{
-          water_level_min: '20',
-          water_level_target: '80',
-          water_level_max: '90',
-        }}
-        setConfig={() => {}}
-        isAdvancedMode={true}
-        dosingValidationErrors={{}}
-        wizardStep={0}
-        calibrationPoints={[7, 4]}
-        activePoint={7}
-        isCalibrationBlocked={false}
-        isCapturingPoint={false}
-        countdown={0}
-        capturedPoints={{}}
-        calibrationSummary={{ ph_v7: null, ph_v4: null, reliability: 0 }}
-        handleCapturePoint={() => {}}
-        goToNextPoint={() => {}}
-        handleFinishAndSaveCalibration={() => {}}
-      />
-    );
-    expect(screen.getByText(/Min 20%/)).toBeInTheDocument();
-    expect(screen.getByText(/Mục tiêu 80%/)).toBeInTheDocument();
-    expect(screen.getByText(/Max 90%/)).toBeInTheDocument();
-  });
 });

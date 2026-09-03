@@ -1,6 +1,6 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
-use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use hydragrow_controller_core::WaterDirection;
+use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 
 pub fn apply_event(hw: &mut VirtualHardwareState, event: &OrchestratorEvent) {
     match event {
@@ -58,8 +58,8 @@ pub fn apply_event(hw: &mut VirtualHardwareState, event: &OrchestratorEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
     use hydragrow_controller_core::WaterDirection;
+    use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 
     #[test]
     fn set_dosing_pump_updates_target_and_pwm() {

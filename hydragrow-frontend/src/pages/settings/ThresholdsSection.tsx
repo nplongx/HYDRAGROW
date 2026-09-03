@@ -92,6 +92,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
 
 export interface ThresholdsSectionProps {
   openSection: string | null;
+  visibleSections?: string[];
   onToggleSection: (id: string) => void;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   config: any;
@@ -118,6 +119,7 @@ export interface ThresholdsSectionProps {
 
 export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
   openSection,
+  visibleSections = ['growth', 'water', 'dosing', 'safety', 'sensor'],
   onToggleSection,
   config,
   setConfig,
@@ -140,6 +142,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
       {/* GROWTH */}
       <AccordionSection
         id="growth"
+        hidden={!visibleSections.includes('growth')}
         title="Ngưỡng mục tiêu"
         icon={Target}
         isOpen={openSection === 'growth'}
@@ -221,6 +224,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
       {/* WATER */}
       <AccordionSection
         id="water"
+        hidden={!visibleSections.includes('water')}
         title="Quản lý nước"
         icon={Waves}
         isOpen={openSection === 'water'}
@@ -303,6 +307,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
       {/* DOSING */}
       <AccordionSection
         id="dosing"
+        hidden={!visibleSections.includes('dosing')}
         title="Máy châm phân"
         icon={FlaskConical}
         isOpen={openSection === 'dosing'}
@@ -376,6 +381,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
       {isAdvancedMode && (
         <AccordionSection
           id="safety"
+          hidden={!visibleSections.includes('safety')}
           title="An toàn"
           icon={ShieldAlert}
           isOpen={openSection === 'safety'}
@@ -405,6 +411,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
       {/* CALIBRATION / SENSOR */}
       <AccordionSection
         id="sensor"
+        hidden={!visibleSections.includes('sensor')}
         title="Cảm biến & Hiệu chuẩn"
         icon={Activity}
         isOpen={openSection === 'sensor'}

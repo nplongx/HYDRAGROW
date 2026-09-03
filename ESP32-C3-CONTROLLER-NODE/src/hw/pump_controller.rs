@@ -121,11 +121,7 @@ impl<'d> PumpController<'d> {
         Ok(())
     }
 
-    pub fn set_pump_state(
-        &mut self,
-        pump: PumpType,
-        state: bool,
-    ) -> anyhow::Result<()> {
+    pub fn set_pump_state(&mut self, pump: PumpType, state: bool) -> anyhow::Result<()> {
         self.set_dosing_pump_pwm(pump, state, 100)
     }
 
@@ -140,10 +136,7 @@ impl<'d> PumpController<'d> {
     ///
     /// Khi đảo chiều, luôn tắt bơm đang chạy trước, chờ relay nhả 100ms,
     /// rồi mới bật bơm còn lại.
-    pub fn set_water_pump(
-        &mut self,
-        direction: WaterDirection,
-    ) -> anyhow::Result<()> {
+    pub fn set_water_pump(&mut self, direction: WaterDirection) -> anyhow::Result<()> {
         match direction {
             WaterDirection::In => {
                 self.valve
@@ -220,10 +213,7 @@ impl<'d> PumpController<'d> {
     // OSAKA PUMP
     // =========================================================================
 
-    pub fn start_osaka_pump_soft(
-        &mut self,
-        target_pwm_percent: u32,
-    ) -> anyhow::Result<()> {
+    pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
         info!(
             "🌀 Điều khiển khởi động mềm Osaka lên {}%...",
             target_pwm_percent
@@ -233,10 +223,7 @@ impl<'d> PumpController<'d> {
         // Bump generation FIRST — any in-flight thread from a previous call
         // reads a stale generation on its next check and exits on its own,
         // instead of racing this new thread on the same PWM duty.
-        let my_generation = self
-            .soft_start_generation
-            .fetch_add(1, Ordering::SeqCst)
-            + 1;
+        let my_generation = self.soft_start_generation.fetch_add(1, Ordering::SeqCst) + 1;
         let generation_flag = Arc::clone(&self.soft_start_generation);
         let rpwm_clone = Arc::clone(&self.osaka_rpwm);
         let safe_percent = target_pwm_percent.clamp(0, 100);
@@ -283,10 +270,7 @@ impl<'d> PumpController<'d> {
         Ok(())
     }
 
-    pub fn set_osaka_pump_pwm(
-        &mut self,
-        duty_percent: u32,
-    ) -> anyhow::Result<()> {
+    pub fn set_osaka_pump_pwm(&mut self, duty_percent: u32) -> anyhow::Result<()> {
         if duty_percent == 0 {
             self.soft_start_generation.fetch_add(1, Ordering::SeqCst);
             self.osaka_en.set_low()?;

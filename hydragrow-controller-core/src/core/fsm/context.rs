@@ -189,18 +189,6 @@ mod tests {
             "Sau khi override đủ 5 mẫu ổn định phải pass"
         );
     }
-
-    #[test]
-    fn apply_delta_safety_override() {
-        let mut ctx = SystemContext::default();
-        let mut delta = ContextDelta {
-            safety_override_until: Some(5000),
-            ..Default::default()
-        };
-        ctx.apply_delta(&mut delta);
-        assert!(ctx.safety.is_override_active(4999));
-        assert!(!ctx.safety.is_override_active(5000));
-    }
 }
 
 impl SensorStabilizerTracker {

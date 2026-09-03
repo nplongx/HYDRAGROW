@@ -172,6 +172,13 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     download_client.initiate_request(Method::Get, &download_url, &headers)?;
     download_client.initiate_response()?;
 
+    let expected_len: Option<u64> = download_client
+        .header("Content-Length")
+        .and_then(|s| s.parse::<u64>().ok());
+    if expected_len.is_none() {
+        warn!("⚠️ [OTA] Server không trả Content-Length — sẽ không thể kiểm tra file bị cắt cụt.");
+    }
+
     let mut binary_buf = [0u8; 2048];
     let mut total_bytes = 0;
 
@@ -197,6 +204,26 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
         }
     }
 
+    if let Err(e) = validate_download_length(total_bytes, expected_len) {
+        if let Some(expected) = expected_len {
+            error!(
+                "❌ [OTA] Firmware bị cắt cụt: tải {} bytes, kỳ vọng {} bytes. Huỷ cập nhật.",
+                total_bytes, expected
+            );
+            publish_ota_event(
+                &mqtt_tx,
+                device_id,
+                "Critical",
+                "Cập nhật firmware thất bại",
+                &format!(
+                    "File tải về không đủ ({} / {} bytes) — không commit firmware cụt.",
+                    total_bytes, expected
+                ),
+            );
+            return Err(e);
+        }
+    }
+
     info!(
         "✅ [OTA] Hoàn tất tải firmware ({} bytes). Chuyển phân vùng boot...",
         total_bytes
@@ -219,8 +246,45 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     }
 }
 
+fn validate_download_length(total_bytes: usize, expected_len: Option<u64>) -> anyhow::Result<()> {
+    if let Some(expected) = expected_len {
+        if total_bytes as u64 != expected {
+            return Err(anyhow::anyhow!(
+                "OTA download truncated: got {} bytes, expected {}",
+                total_bytes,
+                expected
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_download_length_matching() {
+        let res = validate_download_length(1024, Some(1024));
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn validates_download_length_truncated() {
+        let res = validate_download_length(500, Some(1024));
+        assert!(res.is_err());
+        assert_eq!(
+            res.unwrap_err().to_string(),
+            "OTA download truncated: got 500 bytes, expected 1024"
+        );
+    }
+
+    #[test]
+    fn validates_download_length_none_expected() {
+        let res = validate_download_length(500, None);
+        assert!(res.is_ok());
+    }
+
     #[test]
     fn detects_truncated_json() {
         // Mô phỏng JSON bị cắt giữa chừng

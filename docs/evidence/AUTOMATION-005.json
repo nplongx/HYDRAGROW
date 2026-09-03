@@ -1,0 +1,37 @@
+{
+  "requirement_id": "AUTOMATION-005",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml cron_schedule",
+      "environment": "local-dev",
+      "verified_at": "2026-03-31T08:35:00Z",
+      "notes": "running 3 tests: parses_daily_7am_expression, rejects_malformed_expression_with_clear_error, rejects_six_field_input_to_avoid_double_second_field_confusion"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml is_due",
+      "environment": "local-dev",
+      "verified_at": "2026-03-31T08:35:00Z",
+      "notes": "running 3 tests: is_due_true_when_last_fired_before_last_scheduled_occurrence, is_due_false_when_already_fired_this_occurrence, is_due_true_on_first_ever_check_with_no_last_fired"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml cron_preview",
+      "environment": "local-dev",
+      "verified_at": "2026-03-31T08:35:00Z",
+      "notes": "running 2 tests: cron_preview_returns_400_for_malformed_expression, cron_preview_returns_next_occurrences_for_valid_expression"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm test",
+      "environment": "local-dev",
+      "verified_at": "2026-03-31T08:37:00Z",
+      "notes": "38 test files passed (177 tests passed), including NodeEditorPanel.test.tsx, useCronPreview.test.ts, and buildIr.test.ts"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
-use crate::models::script::{ApplyTemplateRequest, FlowTemplateOverride, UserScript};
-use crate::api::middleware::auth::AuthContext;
 use crate::AppState;
-use actix_web::{web, HttpMessage, HttpRequest, HttpResponse, Responder};
+use crate::api::middleware::auth::AuthContext;
+use crate::models::script::{ApplyTemplateRequest, FlowTemplateOverride, UserScript};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde_json::json;
 use tracing::warn;
 use uuid::Uuid;
@@ -32,7 +32,9 @@ pub async fn apply_template(
     .await
     {
         Ok(Some(s)) => s,
-        Ok(None) => return HttpResponse::NotFound().json(json!({"error": "Source script not found"})),
+        Ok(None) => {
+            return HttpResponse::NotFound().json(json!({"error": "Source script not found"}));
+        }
         Err(e) => {
             warn!(error = %e, "Failed to fetch source script");
             return HttpResponse::InternalServerError().json(json!({"error": "DB error"}));
@@ -86,7 +88,10 @@ pub async fn apply_template(
                 applied_overrides.push(ovr);
                 overrides_ids.push(new_script_id);
                 // Also trigger cache reload for target device
-                let _ = app_state.script_cache.reload_device(&app_state.pg_pool, target_device_id).await;
+                let _ = app_state
+                    .script_cache
+                    .reload_device(&app_state.pg_pool, target_device_id)
+                    .await;
             }
             Err(e) => {
                 warn!(error = %e, "Failed to insert template override");
@@ -126,7 +131,9 @@ pub async fn sync_template(
     .await
     {
         Ok(Some(s)) => s,
-        Ok(None) => return HttpResponse::NotFound().json(json!({"error": "Source script not found"})),
+        Ok(None) => {
+            return HttpResponse::NotFound().json(json!({"error": "Source script not found"}));
+        }
         Err(e) => {
             warn!(error = %e, "Failed to fetch source script");
             return HttpResponse::InternalServerError().json(json!({"error": "DB error"}));
@@ -194,7 +201,10 @@ pub async fn sync_template(
 
         if update_res.is_ok() {
             synced_count += 1;
-            let _ = app_state.script_cache.reload_device(&app_state.pg_pool, &ovr.target_device_id).await;
+            let _ = app_state
+                .script_cache
+                .reload_device(&app_state.pg_pool, &ovr.target_device_id)
+                .await;
         }
     }
 
@@ -205,6 +215,9 @@ pub async fn sync_template(
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/{script_id}/apply-template", web::post().to(apply_template))
-        .route("/{script_id}/sync-template", web::post().to(sync_template));
+    cfg.route(
+        "/{script_id}/apply-template",
+        web::post().to(apply_template),
+    )
+    .route("/{script_id}/sync-template", web::post().to(sync_template));
 }

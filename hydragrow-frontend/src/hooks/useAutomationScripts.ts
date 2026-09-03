@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
-import type { UpsertScriptRequest, UserScript } from '../types/automation';
+import type { ApplyTemplateRequest, FlowTemplateOverride, UpsertScriptRequest, UserScript } from '../types/automation';
 
 export function useAutomationScripts(deviceId: string, options?: { enabled?: boolean }) {
   return useQuery({
@@ -44,5 +44,29 @@ export function useValidateAutomationScript(deviceId: string) {
   return useMutation({
     mutationFn: (body: UpsertScriptRequest) =>
       apiPost<{ valid: boolean; error?: string }, UpsertScriptRequest>(`/devices/${deviceId}/scripts/validate`, body),
+  });
+}
+
+export function useApplyFlowTemplate(deviceId: string, scriptId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplyTemplateRequest) =>
+      apiPost<{ status: string; override_script_ids: string[]; overrides: FlowTemplateOverride[] }, ApplyTemplateRequest>(
+        `/devices/${deviceId}/scripts/${scriptId}/apply-template`,
+        body,
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-scripts'] }),
+  });
+}
+
+export function useSyncFlowTemplate(deviceId: string, scriptId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiPost<{ status: string; synced_devices_count: number }, Record<string, never>>(
+        `/devices/${deviceId}/scripts/${scriptId}/sync-template`,
+        {},
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-scripts'] }),
   });
 }

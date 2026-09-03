@@ -498,6 +498,7 @@ async fn main() -> anyhow::Result<()> {
                             .configure(api::analytics::init_routes)
                             .configure(api::alert::init_routes)
                             .service(web::scope("/scripts").configure(api::script::init_routes))
+                            .service(web::scope("/scripts").configure(api::flow_template::init_routes))
                             .service(api::webhook::routes())
                             .service(api::webhook_tokens::routes()),
                     ),

@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-005",
+  "objective": "Cron trigger support for backend script execution and frontend React Flow editor",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "parse_five_field_cron converts valid 5-field cron expressions to 6-field and rejects malformed or 6-field inputs with error message",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml cron_schedule"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "is_due correctly evaluates schedule occurrences against current time and last fired timestamp",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml is_due"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "GET /cron-preview returns next occurrences for valid 5-field cron expressions",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml cron_preview"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Frontend Cron UI editor and useCronPreview hook allow configuring cron schedules and displaying next run times",
+      "verification": "cd hydragrow-frontend && npm test"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "requirement_id": "AUTOMATION-003",
+  "objective": "AUTOMATION-003 — Chain visualization and trigger badge on Overview Canvas",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "useFlowCanvas derives edges for each valid (script, next_flow_id) pair using green dashed style (#059669) and skips non-existent script IDs.",
+      "verification": "Vitest test suite passes for useFlowCanvas.test.ts verifying edge creation and ghost target filtering.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Automation overview canvas renders edges connecting scripts in ReactFlow.",
+      "verification": "Vitest test suite and build pass verifying edge routing on Overview Canvas.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "FlowSummaryNode displays CRON badge (teal) when trigger.type is cron and WEBHOOK badge (indigo) when trigger.type is webhook, omitting badges for sensor/fsm.",
+      "verification": "Vitest test suite passes for FlowSummaryNode.test.tsx verifying trigger badges.",
+      "evidence_required": true
+    }
+  ]
+}

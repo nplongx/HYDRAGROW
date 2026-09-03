@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-003",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- src/hooks/useFlowCanvas.test.ts",
+      "verified_at": "2026-03-31",
+      "notes": "useFlowCanvas generates green dashed edges for valid next_flow_ids and filters out deleted scripts."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run build",
+      "verified_at": "2026-03-31",
+      "notes": "Overview canvas renders ReactFlow edges between chained flows."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- src/components/automation/reactflow/FlowSummaryNode.test.tsx",
+      "verified_at": "2026-03-31",
+      "notes": "FlowSummaryNode renders CRON (teal) and WEBHOOK (indigo) badges correctly."
+    }
+  ]
+}

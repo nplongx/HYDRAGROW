@@ -1,0 +1,36 @@
+{
+  "requirement_id": "AUTOMATION-004",
+  "objective": "AUTOMATION-004 — Time-window Condition (mean/min/max)",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "query_range_stat in hydragrow-backend/src/db/influx.rs accepts range_sec (i64) instead of range_h.",
+      "verification": "Cargo unit test stat_to_flux_fn passes in hydragrow-backend.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "ConditionSchema in hydragrow-frontend supports mode ('instant', 'mean', 'min', 'max') and windowSec.",
+      "verification": "Vitest test suite passes for ir.test.ts verifying ConditionSchema parsing and windowSec refinement.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "compileToRhai generates fetch_range_stat(sensor, mode, windowSec) calls for non-instant conditions.",
+      "verification": "Vitest test suite passes for compileToRhai.test.ts.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "eval_flow_chain prefetches range stats from InfluxDB before Rhai evaluation instead of returning 0.0 stub.",
+      "verification": "Cargo unit test range_stat_prefetch_tests and eval_flow_chain_uses_real_range_stat_fetcher pass.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "ConditionGroupEditor allows selecting mode and specifying window in minutes.",
+      "verification": "Vitest test suite passes for ConditionGroupEditor.test.tsx.",
+      "evidence_required": true
+    }
+  ]
+}

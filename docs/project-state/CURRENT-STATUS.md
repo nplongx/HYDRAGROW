@@ -17,9 +17,9 @@ Last updated: 2026-03-31
 
 | Area | Status | Evidence / next action |
 |---|---|---|
-| Backend | VERIFIED | AUTOMATION-002 TriggerConfig shared primitive in ScriptCache verified with unit tests and evidence contract. |
-| Shared contracts | VERIFIED | AUTOMATION-002 frontend TriggerSchema expanded with cron and webhook discriminated union variants. |
-| Frontend | VERIFIED | AUTOMATION-002 TriggerSchema discriminated union verified with Vitest tests and evidence contract. |
+| Backend | VERIFIED | AUTOMATION-004 & AUTOMATION-005 prefetching range stats and Cron scheduler verified with Cargo unit tests and evidence contract. |
+| Shared contracts | VERIFIED | AUTOMATION-004 & AUTOMATION-005 Condition time-window mode + windowSec and Cron trigger contracts verified with tests. |
+| Frontend | VERIFIED | AUTOMATION-003 & AUTOMATION-004 & AUTOMATION-005 Overview Canvas edges, FlowSummaryNode trigger badges, ConditionGroupEditor time-window, and Cron preview tab verified with Vitest tests and evidence contract. |
 | Controller / firmware | VERIFIED | OTA-REJECT-TRUNCATED-001 Content-Length truncation rejection before commit in ESP32-C3-CONTROLLER-NODE verified with unit tests and evidence contract. |
 | Simulator | VERIFIED | SIMULATOR-002 deterministic Harness SimClock execution loop, CLI simulation runner, and closed-loop dosing cycle verified with Cargo test suite and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

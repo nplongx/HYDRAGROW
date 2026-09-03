@@ -1,0 +1,30 @@
+{
+  "requirement_id": "AUTOMATION-005",
+  "objective": "AUTOMATION-005 — Cron Trigger implementation",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "parse_five_field_cron converts standard 5-field cron strings to 6-field schedule.",
+      "verification": "Cargo unit tests pass for parse_five_field_cron in hydragrow-backend.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "cron_scheduler background task checks due cron scripts every minute and dispatches flow results.",
+      "verification": "Cargo unit test is_due passes in hydragrow-backend.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "GET /cron-preview endpoint returns next scheduled occurrences for valid 5-field expression.",
+      "verification": "Cargo integration tests pass for cron_preview endpoint.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "NodeEditorPanel provides UI for configuring Cron triggers with next run preview.",
+      "verification": "Vitest test suite passes for NodeEditorPanel and useCronPreview hook.",
+      "evidence_required": true
+    }
+  ]
+}

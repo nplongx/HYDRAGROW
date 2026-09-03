@@ -1,0 +1,40 @@
+{
+  "requirement_id": "AUTOMATION-004",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml stat_to_flux_fn",
+      "verified_at": "2026-03-31",
+      "notes": "query_range_stat signature accepts range_sec (i64)."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- src/lib/automation/ir.test.ts",
+      "verified_at": "2026-03-31",
+      "notes": "ConditionSchema accepts mode (instant/mean/min/max) and windowSec."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- src/lib/automation/compileToRhai.test.ts",
+      "verified_at": "2026-03-31",
+      "notes": "compileToRhai emits fetch_range_stat calls for non-instant conditions."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml range_stat_prefetch_tests",
+      "verified_at": "2026-03-31",
+      "notes": "eval_flow_chain prefetches range stats from InfluxDB before Rhai evaluation."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- src/components/automation/reactflow/ConditionGroupEditor.test.tsx",
+      "verified_at": "2026-03-31",
+      "notes": "ConditionGroupEditor allows selecting mode and specifying window in minutes."
+    }
+  ]
+}

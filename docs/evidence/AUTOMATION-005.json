@@ -1,0 +1,33 @@
+{
+  "requirement_id": "AUTOMATION-005",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml parse_five_field_cron",
+      "verified_at": "2026-03-31",
+      "notes": "parse_five_field_cron parses 5-field expressions into 6-field schedule."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml is_due",
+      "verified_at": "2026-03-31",
+      "notes": "cron_scheduler background task checks due cron scripts."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml cron_preview",
+      "verified_at": "2026-03-31",
+      "notes": "GET /cron-preview endpoint returns next scheduled occurrences."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npm run test -- src/hooks/useCronPreview.test.ts",
+      "verified_at": "2026-03-31",
+      "notes": "NodeEditorPanel provides UI for configuring Cron triggers with next run preview."
+    }
+  ]
+}

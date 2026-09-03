@@ -25,12 +25,11 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   badge,
   hidden = false,
 }) => {
-  const [internalOpen, setInternalOpen] = useState(defaultOpen || controlledIsOpen === true);
   const isControlled = controlledIsOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(defaultOpen || controlledIsOpen === true);
 
-  // Parent controls which Settings tab is active. Accordion open/close stays local.
-  // This prevents opening a child accordion (water/network/firmware/WiFi) from
-  // changing the active tab and hiding the whole section.
+  // In Settings, controlledIsOpen represents active tab, not accordion state.
+  // Sync when tab changes, then let each accordion open/close locally.
   useEffect(() => {
     if (isControlled) setInternalOpen(controlledIsOpen);
   }, [controlledIsOpen, isControlled]);
@@ -39,7 +38,9 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
 
   const handleToggle = () => {
     setInternalOpen((current) => !current);
-    onToggle?.();
+    // Keep legacy uncontrolled callback behavior. Controlled Settings accordions
+    // must not mutate the active tab when a child accordion is clicked.
+    if (!isControlled) onToggle?.();
   };
 
   return (

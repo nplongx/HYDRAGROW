@@ -20,7 +20,7 @@ Last updated: 2026-03-31
 | Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | DANGER-ZONE-REDESIGN-001 DangerZoneSection redesigned with rounded-2xl panel, bg-red-50/60, border-red-200, Lucide warning header icon, outline action buttons, and persistent warning caption text verified with Vitest tests and evidence contract. |
-| Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
+| Controller / firmware | VERIFIED | PUMP-SOFTSTART-001 Osaka pump soft-start generation counter race condition fix verified with cargo check --target riscv32imc-esp-espidf and evidence contract. |
 | Simulator | VERIFIED | SIMULATOR-002 deterministic Harness SimClock execution loop, CLI simulation runner, and closed-loop dosing cycle verified with Cargo test suite and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 

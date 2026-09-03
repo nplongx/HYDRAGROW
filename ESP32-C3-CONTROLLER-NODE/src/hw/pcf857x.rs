@@ -97,7 +97,7 @@ impl ExpanderPin {
 /// HIGH ở đây có nghĩa là "release" chân, không phải ép tín hiệu HIGH.
 const INPUT_MASK: u8 = 0b0000_1111;
 
-// P4..P7 là OUTPUT.
+/// P4..P7 là OUTPUT.
 #[allow(dead_code)]
 const OUTPUT_MASK: u8 = 0b1111_0000;
 

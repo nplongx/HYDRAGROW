@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { AutomationIrSchema, AutomationNodeSchema } from "./ir";
+import { AutomationIrSchema, AutomationNodeSchema, ConditionSchema } from "./ir";
+
+describe("ConditionSchema range mode and windowSec", () => {
+  it('condition instant (mặc định) không cần field mode/windowSec', () => {
+    expect(ConditionSchema.safeParse({ sensor: 'ph', operator: '>', value: 7.5 }).success).toBe(true);
+  });
+
+  it('condition time-window mean yêu cầu windowSec dương', () => {
+    const ok = ConditionSchema.safeParse({ sensor: 'ph', operator: '>', value: 6.5, mode: 'mean', windowSec: 900 });
+    expect(ok.success).toBe(true);
+  });
+
+  it('condition time-window thiếu windowSec bị từ chối', () => {
+    const bad = ConditionSchema.safeParse({ sensor: 'ph', operator: '>', value: 6.5, mode: 'mean' });
+    expect(bad.success).toBe(false);
+  });
+});
 
 describe("AutomationIrSchema", () => {
   it('parses a legacy flat Condition[] (no groups) exactly as before', () => {
@@ -17,8 +33,8 @@ describe("AutomationIrSchema", () => {
     const result = AutomationIrSchema.safeParse(ir);
     expect(result.success).toBe(true);
     expect(result.data?.conditions).toEqual([
-      { sensor: 'ph', operator: '>', value: 7.5 },
-      { sensor: 'ec', operator: '<', value: 1.2 },
+      { sensor: 'ph', operator: '>', value: 7.5, mode: 'instant' },
+      { sensor: 'ec', operator: '<', value: 1.2, mode: 'instant' },
     ]);
   });
 

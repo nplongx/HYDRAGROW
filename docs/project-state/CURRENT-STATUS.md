@@ -17,9 +17,9 @@ Last updated: 2026-03-31
 
 | Area | Status | Evidence / next action |
 |---|---|---|
-| Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
+| Backend | VERIFIED | AUTOMATION-004 InfluxDB range_sec query and eval_flow_chain async prefetching verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
-| Frontend | VERIFIED | DANGER-ZONE-REDESIGN-001 DangerZoneSection redesigned with rounded-2xl panel, bg-red-50/60, border-red-200, Lucide warning header icon, outline action buttons, and persistent warning caption text verified with Vitest tests and evidence contract. |
+| Frontend | VERIFIED | AUTOMATION-004 ConditionSchema time-window mode/windowSec, compileToRhai fetch_range_stat generation, and LeafEditor UI verified with Vitest tests and evidence contract. |
 | Controller / firmware | VERIFIED | COMMAND-AUTH-001 HMAC verification applied to topic_controller_command and force_on emergency bypass removed in ESP32-C3-CONTROLLER-NODE, verified with static inspection, controller-core tests, and evidence contract. |
 | Simulator | VERIFIED | SIMULATOR-002 deterministic Harness SimClock execution loop, CLI simulation runner, and closed-loop dosing cycle verified with Cargo test suite and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |

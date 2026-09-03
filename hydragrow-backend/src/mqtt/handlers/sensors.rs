@@ -135,6 +135,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 kind: crate::models::script::ScriptKind::Alert,
                 next_flow_ids: s.next_flow_ids,
                 ast: s.ast,
+                ir_json: s.ir_json,
             });
         }
         for s in action_scripts {
@@ -143,12 +144,20 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 kind: crate::models::script::ScriptKind::ActionCommand,
                 next_flow_ids: s.next_flow_ids,
                 ast: s.ast,
+                ir_json: s.ir_json,
             });
         }
 
         let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
-        let results =
-            crate::mqtt::handlers::script_eval::eval_flow_chain(&engine, &chain_nodes, &snapshot);
+        let results = crate::mqtt::handlers::script_eval::eval_flow_chain(
+            &engine,
+            &chain_nodes,
+            &snapshot,
+            &device_id,
+            &app_state.influx_client,
+            &app_state.influx_bucket,
+        )
+        .await;
 
         if !results.is_empty() {
             let has_action_commands = results.iter().any(|(_, r)| {

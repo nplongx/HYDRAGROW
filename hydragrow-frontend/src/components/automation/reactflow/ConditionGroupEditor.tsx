@@ -6,6 +6,14 @@ function isGroup(c: ConditionOrGroup): c is ConditionGroup {
   return 'op' in c;
 }
 
+const RANGE_MODES: { value: Condition['mode']; label: string }[] = [
+  { value: 'instant', label: 'Tức thời' },
+  { value: 'mean', label: 'Trung bình (mean)' },
+  { value: 'min', label: 'Nhỏ nhất (min)' },
+  { value: 'max', label: 'Lớn nhất (max)' },
+];
+const DEFAULT_WINDOW_SEC = 900; // 15 phút — khớp mock Figma frame 04
+
 function LeafEditor({
   condition,
   fields,
@@ -17,43 +25,85 @@ function LeafEditor({
   onChange: (c: Condition) => void;
   onRemove: () => void;
 }) {
+  const mode = condition.mode ?? 'instant';
   return (
-    <div className="mb-2 flex items-center gap-1">
-      <select
-        className="ui-input px-1 py-1 text-xs"
-        value={condition.sensor}
-        onChange={(e) => onChange({ ...condition, sensor: e.target.value })}
-      >
-        {fields.map((f) => (
-          <option key={f} value={f}>
-            {f}
-          </option>
-        ))}
-      </select>
-      <select
-        className="ui-input px-1 py-1 text-xs"
-        value={condition.operator}
-        onChange={(e) => onChange({ ...condition, operator: e.target.value as ComparisonOperator })}
-      >
-        {OPERATORS.map((op) => (
-          <option key={op} value={op}>
-            {op}
-          </option>
-        ))}
-      </select>
-      <input
-        type="number"
-        className="ui-input w-20 px-1 py-1 text-xs"
-        value={condition.value}
-        onChange={(e) => onChange({ ...condition, value: Number(e.target.value) })}
-      />
-      <button
-        type="button"
-        className="p-1 text-xs font-bold text-red-600 hover:text-red-800"
-        onClick={onRemove}
-      >
-        ✕
-      </button>
+    <div className="mb-2 flex flex-col gap-1 rounded border border-emerald-100 p-1.5">
+      <div className="flex items-center gap-1">
+        <select
+          aria-label="Cảm biến"
+          className="ui-input px-1 py-1 text-xs"
+          value={condition.sensor}
+          onChange={(e) => onChange({ ...condition, sensor: e.target.value })}
+        >
+          {fields.map((f) => (
+            <option key={f} value={f}>
+              {f}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Toán tử"
+          className="ui-input px-1 py-1 text-xs"
+          value={condition.operator}
+          onChange={(e) => onChange({ ...condition, operator: e.target.value as ComparisonOperator })}
+        >
+          {OPERATORS.map((op) => (
+            <option key={op} value={op}>
+              {op}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="Giá trị"
+          type="number"
+          className="ui-input w-20 px-1 py-1 text-xs"
+          value={condition.value}
+          onChange={(e) => onChange({ ...condition, value: Number(e.target.value) })}
+        />
+        <button
+          type="button"
+          className="p-1 text-xs font-bold text-red-600 hover:text-red-800"
+          onClick={onRemove}
+        >
+          ✕
+        </button>
+      </div>
+      <div className="flex items-center gap-1">
+        <label htmlFor={`mode-${condition.sensor}`} className="sr-only">Chế độ đọc</label>
+        <select
+          id={`mode-${condition.sensor}`}
+          aria-label="Chế độ đọc"
+          className="ui-input px-1 py-1 text-xs"
+          value={mode}
+          onChange={(e) => {
+            const nextMode = e.target.value as Condition['mode'];
+            onChange({
+              ...condition,
+              mode: nextMode,
+              windowSec: nextMode === 'instant' ? undefined : (condition.windowSec ?? DEFAULT_WINDOW_SEC),
+            });
+          }}
+        >
+          {RANGE_MODES.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+        {mode !== 'instant' && (
+          <>
+            <label htmlFor={`window-${condition.sensor}`} className="sr-only">Cửa sổ (phút)</label>
+            <input
+              id={`window-${condition.sensor}`}
+              aria-label="Cửa sổ (phút)"
+              type="number"
+              min={1}
+              className="ui-input w-16 px-1 py-1 text-xs"
+              value={Math.round((condition.windowSec ?? DEFAULT_WINDOW_SEC) / 60)}
+              onChange={(e) => onChange({ ...condition, windowSec: Math.max(1, Number(e.target.value)) * 60 })}
+            />
+            <span className="text-[11px] text-emerald-800/70">phút</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }

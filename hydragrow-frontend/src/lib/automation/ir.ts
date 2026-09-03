@@ -8,12 +8,32 @@ export const FSM_FIELDS = ['ph', 'ec', 'stage_index', 'elapsed_sec'] as const;
 export const ComparisonOperatorSchema = z.enum(['>', '<', '>=', '<=', '==', '!=']);
 export type ComparisonOperator = z.infer<typeof ComparisonOperatorSchema>;
 
-export const ConditionSchema = z.object({
-  sensor: z.string().min(1),
-  operator: ComparisonOperatorSchema,
-  value: z.number(),
-});
-export type Condition = z.infer<typeof ConditionSchema>;
+export const RangeModeSchema = z.enum(['instant', 'mean', 'min', 'max']);
+export type RangeMode = z.infer<typeof RangeModeSchema>;
+
+export const ConditionSchema = z
+  .object({
+    sensor: z.string().min(1),
+    operator: ComparisonOperatorSchema,
+    value: z.number(),
+    /** 'instant' (mặc định, hành vi cũ) = so sánh giá trị tức thời.
+     * 'mean'/'min'/'max' = gọi fetch_range_stat(sensor, mode, windowSec). */
+    mode: RangeModeSchema.default('instant'),
+    /** Bắt buộc khi mode != 'instant'. Đơn vị giây. */
+    windowSec: z.number().int().positive().optional(),
+  })
+  .refine((c) => c.mode === 'instant' || c.windowSec !== undefined, {
+    message: 'windowSec bắt buộc khi mode là mean/min/max',
+    path: ['windowSec'],
+  });
+
+export interface Condition {
+  sensor: string;
+  operator: ComparisonOperator;
+  value: number;
+  mode?: RangeMode;
+  windowSec?: number;
+}
 
 export interface ConditionGroup {
   op: 'and' | 'or';

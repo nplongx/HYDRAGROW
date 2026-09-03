@@ -155,7 +155,12 @@ impl ScriptEngine {
         engine.on_print(|_| {});
         engine.on_debug(|_, _, _| {});
 
-        engine.register_fn("fetch_range_stat", range_stat_fetcher);
+        engine.register_fn(
+            "fetch_range_stat",
+            move |sensor: String, mode: String, window_sec: i64| -> rhai::FLOAT {
+                range_stat_fetcher(sensor, mode, window_sec) as rhai::FLOAT
+            },
+        );
 
         let mut map = Map::new();
         map.insert("ph".into(), Dynamic::from_float(input.ph));
@@ -224,6 +229,9 @@ pub struct CachedScript {
     /// fire thành công. Copy trực tiếp từ `UserScript::next_flow_ids` lúc load —
     /// xem `ScriptEval::eval_alert_scripts_chained` (script_eval.rs) cho logic dùng nó.
     pub next_flow_ids: Vec<String>,
+    /// Mới (AUTOMATION-004): giữ lại ir_json thô để prefetch time-window quét
+    /// conditions[] trước khi eval. `None` cho script viết tay (không qua builder).
+    pub ir_json: Option<serde_json::Value>,
 }
 
 /// Thread-safe cache: device_id → Vec<CachedScript>
@@ -307,6 +315,7 @@ impl ScriptCache {
                     name: row.name,
                     ast,
                     next_flow_ids: row.next_flow_ids.clone(),
+                    ir_json: row.ir_json.clone(),
                 }),
                 Err(e) => {
                     tracing::warn!(
@@ -583,6 +592,38 @@ fn main(input) {
         assert_eq!(result.pwm, None);
     }
 
+    #[test]
+    fn eval_action_command_with_range_stat_calls_registered_fn() {
+        let engine = ScriptEngine::new();
+        let src = r#"
+fn main(input) {
+    if fetch_range_stat("ph", "mean", 900) > 6.5 {
+        return #{ "action": "dose", "pump": "PH_DOWN", "dose_ml": 5.0, "pwm": 100 };
+    }
+    ()
+}
+"#;
+        let ast = engine.compile(src).unwrap();
+        let input = ScriptActionInput {
+            ph: 6.0,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        };
+        let res = engine
+            .eval_action_command_with_range_stat(&ast, &input, |sensor, mode, window_sec| {
+                assert_eq!(sensor, "ph");
+                assert_eq!(mode, "mean");
+                assert_eq!(window_sec, 900);
+                7.0
+            })
+            .unwrap();
+        assert!(res.is_some());
+    }
+
     #[tokio::test]
     async fn script_cache_preserves_next_flow_ids() {
         let engine = Arc::new(ScriptEngine::new());
@@ -593,6 +634,7 @@ fn main(input) {
             name: "root".to_string(),
             ast: engine.compile(r#"fn main(input) { () }"#).unwrap(),
             next_flow_ids: vec!["child-id".to_string()],
+            ir_json: None,
         };
         cache.upsert("device_001", vec![script]).await;
 
@@ -612,6 +654,7 @@ fn main(input) {
             name: "test".to_string(),
             ast: engine.compile(r#"fn main(input) { () }"#).unwrap(),
             next_flow_ids: vec![],
+            ir_json: None,
         };
         cache.upsert("device_001", vec![script]).await;
 

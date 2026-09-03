@@ -66,6 +66,15 @@ pub async fn get_latest_sensor_data(
     ))
 }
 
+fn stat_to_flux_fn(stat: &str) -> Result<&'static str> {
+    match stat {
+        "mean" => Ok("mean()"),
+        "min" => Ok("min()"),
+        "max" => Ok("max()"),
+        other => Err(anyhow::anyhow!("Unsupported stat: {}", other)),
+    }
+}
+
 #[instrument(skip(client))]
 pub async fn query_range_stat(
     client: &Client,
@@ -73,26 +82,21 @@ pub async fn query_range_stat(
     device_id: &str,
     field: &str,
     stat: &str,
-    range_h: i64,
+    range_sec: i64,
 ) -> Result<f64> {
-    let stat_fn = match stat {
-        "mean" => "mean()",
-        "min" => "min()",
-        "max" => "max()",
-        _ => return Err(anyhow::anyhow!("Unsupported stat: {}", stat)),
-    };
+    let stat_fn = stat_to_flux_fn(stat)?;
 
     let flux_query = format!(
         r#"
         from(bucket: "{}")
-        |> range(start: -{}h)
+        |> range(start: -{}s)
         |> filter(fn: (r) => r["_measurement"] == "sensor_data")
         |> filter(fn: (r) => r["_field"] == "{}")
         |> filter(fn: (r) => r.device_id == "{}")
         |> {}
         |> keep(columns: ["_value"])
         "#,
-        bucket, range_h, field, device_id, stat_fn
+        bucket, range_sec, field, device_id, stat_fn
     );
 
     let query_obj = influxdb2::models::Query::new(flux_query);
@@ -113,4 +117,21 @@ pub async fn query_range_stat(
     }
 
     Ok(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stat_to_flux_fn_accepts_known_stats() {
+        assert_eq!(stat_to_flux_fn("mean").unwrap(), "mean()");
+        assert_eq!(stat_to_flux_fn("min").unwrap(), "min()");
+        assert_eq!(stat_to_flux_fn("max").unwrap(), "max()");
+    }
+
+    #[test]
+    fn stat_to_flux_fn_rejects_unknown_stat() {
+        assert!(stat_to_flux_fn("median").is_err());
+    }
 }

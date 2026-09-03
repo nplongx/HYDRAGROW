@@ -57,25 +57,6 @@ pub struct UserScript {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Bảng flow_template_overrides liên kết Flow gốc (template)
-/// với các Flow bản sao áp dụng cho nhiều thiết bị khác.
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct FlowTemplateOverride {
-    pub id: Uuid,
-    pub source_script_id: Uuid,
-    pub target_device_id: String,
-    pub override_script_id: Uuid,
-    #[sqlx(json)]
-    pub overridden_fields: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApplyTemplateRequest {
-    pub target_device_ids: Vec<String>,
-}
-
 /// Kết quả sau khi eval một alert script
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AlertOutput {
@@ -205,4 +186,25 @@ mod tests {
         let deserialized_recipe: ScriptKind = serde_json::from_str(&serialized_recipe).unwrap();
         assert_eq!(deserialized_recipe, ScriptKind::RecipeOverride);
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConditionTraceEntry {
+    pub description: String,
+    pub passed: bool,
+    pub actual_value: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TestScriptRequest {
+    pub ir_json: serde_json::Value,
+    pub sample: std::collections::HashMap<String, f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[derive(Deserialize)]
+pub struct TestScriptResponse {
+    pub will_fire: bool,
+    pub trace: Vec<ConditionTraceEntry>,
+    pub actions_preview: Vec<serde_json::Value>,
 }

@@ -1,0 +1,25 @@
+{
+  "requirement_id": "AUTOMATION-007",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test api::script::tests"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test api::script::tests"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test api::script::tests"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "npm run test"
+    }
+  ]
+}

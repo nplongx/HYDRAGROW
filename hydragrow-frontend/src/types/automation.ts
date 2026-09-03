@@ -22,16 +22,19 @@ export interface UpsertScriptRequest {
   next_flow_ids?: string[];
 }
 
-export interface FlowTemplateOverride {
-  id: string;
-  source_script_id: string;
-  target_device_id: string;
-  override_script_id: string;
-  overridden_fields: string[];
-  created_at: string;
-  updated_at: string;
+export interface ConditionTraceEntry {
+  description: string;
+  passed: boolean;
+  actual_value: number | null;
 }
 
-export interface ApplyTemplateRequest {
-  target_device_ids: string[];
+export interface TestScriptRequest {
+  ir_json: AutomationIr;
+  sample: Record<string, number>;
+}
+
+export interface TestScriptResponse {
+  will_fire: boolean;
+  trace: ConditionTraceEntry[];
+  actions_preview: Record<string, unknown>[];
 }

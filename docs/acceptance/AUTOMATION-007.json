@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-007",
+  "objective": "Test Panel: dry run with sample values",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Endpoint /devices/{device_id}/scripts/test returns true and trace when condition met",
+      "verification": "Unit test in hydragrow-backend"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Endpoint returns false with failing leaf marked",
+      "verification": "Unit test in hydragrow-backend"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "eval_condition_tree agrees with compiled Rhai on random cases",
+      "verification": "Property test in hydragrow-backend"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "UI Test Panel is implemented and can be rendered",
+      "verification": "vitest in hydragrow-frontend"
+    }
+  ]
+}

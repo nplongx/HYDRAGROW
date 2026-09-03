@@ -1,3 +1,4 @@
+import { Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ReactFlow, Background, Controls } from '@xyflow/react';
@@ -6,6 +7,8 @@ import { AUTOMATION_NODE_TYPES } from './reactflow/nodeTypes';
 import { NodePalette } from './reactflow/NodePalette';
 import { NodeEditorPanel } from './reactflow/NodeEditorPanel';
 import { buildIrFromGraph } from './reactflow/buildIr';
+import { TestPanel } from './reactflow/TestPanel';
+import { fieldsForKind } from '../../hooks/useAutomationBuilder';
 import { useAutomationBuilder } from '../../hooks/useAutomationBuilder';
 import { AutomationIrSchema, type AutomationIr } from '../../lib/automation/ir';
 import { compileToRhai } from '../../lib/automation/compileToRhai';
@@ -18,7 +21,6 @@ import {
   useValidateAutomationScript,
 } from '../../hooks/useAutomationScripts';
 import { wouldCreateCycle } from '../../lib/automation/flowCycle';
-import { MultiDeviceApplyDialog } from './MultiDeviceApplyDialog';
 
 export interface FlowDetailDrawerProps {
   deviceId: string;
@@ -31,6 +33,7 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const isNew = script === 'new';
   const [name, setName] = useState(isNew ? 'Flow mới' : script.name);
   const [enabled, setEnabled] = useState(isNew ? true : script.enabled);
+  const [showTestPanel, setShowTestPanel] = useState(false);
   const [nextFlowIds, setNextFlowIds] = useState<string[]>(
     isNew ? [] : (script.ir_json?.next_flow_ids ?? []),
   );
@@ -58,7 +61,6 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const createScript = useCreateAutomationScript(deviceId);
   const updateScript = useUpdateAutomationScript(deviceId, isNew ? '' : script.id);
   const deleteScript = useDeleteAutomationScript(deviceId);
-  const [showMultiDeviceDialog, setShowMultiDeviceDialog] = useState(false);
 
   const handleSave = async () => {
     const ir: AutomationIr = buildIrFromGraph({
@@ -139,6 +141,17 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
             <Background />
             <Controls />
           </ReactFlow>
+
+          {showTestPanel && (
+            <div className="absolute right-0 top-0 h-full w-96 shadow-xl z-20 flex flex-col border-l">
+              <TestPanel
+                deviceId={deviceId}
+                ir={buildIrFromGraph({ kind: builder.kind, nodes: builder.nodes, edges: builder.edges, nextFlowIds })}
+                fields={fieldsForKind(builder.kind)}
+              />
+            </div>
+          )}
+
         </div>
         {builder.selectedNode && (
           <NodeEditorPanel
@@ -178,34 +191,27 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
         </div>
       )}
 
-      <div className="flex justify-between items-center mt-2">
+      <div className="flex justify-between">
         {!isNew ? (
-          <div className="flex gap-2">
-            <button className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100" onClick={handleDelete}>
-              Xóa Flow
-            </button>
-            <button
-              className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
-              onClick={() => setShowMultiDeviceDialog(true)}
-            >
-              Áp dụng nhiều TB
-            </button>
-          </div>
+          <button className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700" onClick={handleDelete}>
+            Xóa Flow
+          </button>
         ) : (
           <span />
         )}
+
+        <button
+          className={`ui-btn-md flex items-center gap-2 ${showTestPanel ? 'bg-emerald-100 text-emerald-800' : 'bg-white border text-slate-700'}`}
+          onClick={() => setShowTestPanel(!showTestPanel)}
+        >
+          <Play className="h-4 w-4" />
+          Chạy thử
+        </button>
+
         <button className="ui-btn-primary" disabled={createScript.isPending || updateScript.isPending} onClick={handleSave}>
           Lưu Flow
         </button>
       </div>
-
-      {showMultiDeviceDialog && !isNew && (
-        <MultiDeviceApplyDialog
-          sourceDeviceId={deviceId}
-          sourceScript={script as UserScript}
-          onClose={() => setShowMultiDeviceDialog(false)}
-        />
-      )}
     </div>
   );
 }

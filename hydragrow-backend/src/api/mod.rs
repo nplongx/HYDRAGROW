@@ -10,7 +10,6 @@ pub mod control;
 pub mod crop_season;
 pub mod device_admin;
 pub mod device_pairing;
-pub mod flow_template;
 pub mod metrics;
 pub mod middleware;
 pub mod mqtt_utils;

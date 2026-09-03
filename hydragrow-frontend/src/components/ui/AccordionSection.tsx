@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronDown, LucideIcon } from 'lucide-react';
 
 interface AccordionSectionProps {
@@ -25,17 +25,21 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   badge,
   hidden = false,
 }) => {
-  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen || controlledIsOpen === true);
   const isControlled = controlledIsOpen !== undefined;
-  const open = isControlled ? controlledIsOpen : internalOpen;
+
+  // Parent controls which Settings tab is active. Accordion open/close stays local.
+  // This prevents opening a child accordion (water/network/firmware/WiFi) from
+  // changing the active tab and hiding the whole section.
+  useEffect(() => {
+    if (isControlled) setInternalOpen(controlledIsOpen);
+  }, [controlledIsOpen, isControlled]);
+
+  const open = internalOpen;
 
   const handleToggle = () => {
-    if (onToggle) {
-      onToggle();
-    }
-    if (!isControlled) {
-      setInternalOpen(!internalOpen);
-    }
+    setInternalOpen((current) => !current);
+    onToggle?.();
   };
 
   return (

@@ -11,9 +11,8 @@ export interface FlowNodeData extends Record<string, unknown> {
 }
 
 /**
- * Layout 1 React Flow node cho mỗi automation đã lưu ("Flow"). Không có edge —
- * mỗi Flow độc lập, click vào node chỉ mở chi tiết Blockly của chính nó (xem
- * `FlowDetailDrawer`), không nối sang Flow khác.
+ * Layout 1 React Flow node cho mỗi automation đã lưu ("Flow"). Mũi tên chain
+ * được tính từ `next_flow_ids` trên canvas tổng quan.
  */
 export function useFlowCanvas(scripts: UserScript[] | undefined) {
   const [selectedFlowId, setSelectedFlowId] = useState<string | 'new' | null>(null);
@@ -29,6 +28,23 @@ export function useFlowCanvas(scripts: UserScript[] | undefined) {
     [scripts],
   );
 
+  const edges: Edge[] = useMemo(() => {
+    const idSet = new Set((scripts ?? []).map((s) => s.id));
+    return (scripts ?? []).flatMap((s) =>
+      (s.ir_json?.next_flow_ids ?? [])
+        .filter((targetId) => idSet.has(targetId))
+        .map((targetId) => ({
+          id: `chain-${s.id}-${targetId}`,
+          source: s.id,
+          target: targetId,
+          animated: true,
+          style: { stroke: '#059669', strokeDasharray: '4 3' },
+          label: 'kích hoạt tiếp',
+          labelStyle: { fontSize: 10, fill: '#059669' },
+        })),
+    );
+  }, [scripts]);
+
   const selectedScript = useMemo(
     () => (scripts ?? []).find((s) => s.id === selectedFlowId) ?? null,
     [scripts, selectedFlowId],
@@ -36,7 +52,7 @@ export function useFlowCanvas(scripts: UserScript[] | undefined) {
 
   return {
     nodes,
-    edges: [] as Edge[],
+    edges,
     selectedFlowId,
     selectedScript,
     isDrawerOpen: selectedFlowId !== null,

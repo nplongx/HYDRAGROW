@@ -14,6 +14,11 @@ const KIND_COLOR: Record<string, string> = {
   action_command: 'bg-amber-100 text-amber-700',
 };
 
+const TRIGGER_BADGE: Record<string, { label: string; className: string }> = {
+  cron: { label: 'CRON', className: 'bg-teal-100 text-teal-700' },
+  webhook: { label: 'WEBHOOK', className: 'bg-indigo-100 text-indigo-700' },
+};
+
 /** Thẻ hiển thị 1 Flow trên canvas tổng quan. `onNodeClick` (React Flow) do
  * component cha xử lý — component này chỉ render nội dung thẻ. */
 export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
@@ -21,6 +26,9 @@ export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
   const conditionCount = script.ir_json ? countLeafConditions(script.ir_json.conditions) : 0;
   const actionCount = script.ir_json?.actions.length ?? 0;
   const badgeColor = KIND_COLOR[script.kind] ?? 'bg-emerald-50 text-emerald-800/70';
+
+  const triggerType = script.ir_json?.trigger?.type;
+  const triggerBadge = triggerType ? TRIGGER_BADGE[triggerType] : undefined;
 
   return (
     <div
@@ -40,6 +48,11 @@ export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
           ? `${conditionCount} điều kiện → ${actionCount} hành động`
           : 'Script viết tay (Rhai)'}
       </div>
+      {triggerBadge && (
+        <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${triggerBadge.className}`}>
+          {triggerBadge.label}
+        </span>
+      )}
       {!script.enabled && (
         <div className="mt-1 text-[10px] text-gray-400 italic">Đã tắt</div>
       )}

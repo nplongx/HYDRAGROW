@@ -8,7 +8,7 @@ use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
 use esp_idf_sys::{
     esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t,
 };
-use hmac::{Hmac, Mac};
+use hydragrow_controller_core::core::security::verify_signed_json_payload;
 use hydragrow_shared::topics::{
     topic_controller_command, topic_controller_config, topic_controller_recipe,
     topic_recipe_events, topic_recipe_set, topic_sensors, topic_status,
@@ -16,67 +16,10 @@ use hydragrow_shared::topics::{
 use hydragrow_shared::{ControllerConfig, MqttCommandIn, PumpStatus, RecipeSetCommand, SensorData};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
-use sha2::Sha256;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use crate::config::SharedConfig;
 use hydragrow_controller_core::utils::{build_recipe_event, validate_recipe, CropRecipe};
-
-type HmacSha256 = Hmac<Sha256>;
-
-// Hàm xác thực payload
-fn verify_signed_json_payload(
-    device_id: &str,
-    data: &[u8],
-    secret: &str,
-) -> anyhow::Result<serde_json::Value> {
-    if secret.is_empty() {
-        anyhow::bail!("missing MQTT command signing secret for {}", device_id);
-    }
-
-    let value: serde_json::Value = serde_json::from_slice(data)?;
-    let mut value_clone = value.clone();
-    let object = value_clone
-        .as_object_mut()
-        .ok_or_else(|| anyhow::anyhow!("signed MQTT payload must be a JSON object"))?;
-
-    let signature = object
-        .get("signature")
-        .and_then(|value| value.as_str())
-        .ok_or_else(|| anyhow::anyhow!("missing MQTT payload signature"))?
-        .to_owned();
-
-    if !object
-        .get("ts")
-        .is_some_and(|value| value.is_i64() || value.is_u64())
-    {
-        anyhow::bail!("missing MQTT payload timestamp");
-    }
-    if !object
-        .get("nonce")
-        .and_then(|value| value.as_str())
-        .is_some_and(|nonce| !nonce.is_empty())
-    {
-        anyhow::bail!("missing MQTT payload nonce");
-    }
-
-    object.remove("signature");
-    let canonical = serde_json::to_vec(&value)?;
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
-    mac.update(&canonical);
-    let expected = hex::encode(mac.finalize().into_bytes());
-
-    if signature != expected {
-        anyhow::bail!("invalid MQTT payload signature");
-    }
-
-    // Đưa signature vào lại để trả về nếu cần thiết
-    object.insert(
-        "signature".to_string(),
-        serde_json::Value::String(signature),
-    );
-    Ok(value)
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -294,14 +237,16 @@ pub fn init_mqtt_client(
                         }
                     }
                 }
-                // 3. Received Command
+                // 3. Received Command — HMAC-verified before parsing.
                 else if topic_str == topic_command_cb {
-                    match serde_json::from_slice::<MqttCommandIn>(data) {
+                    match verify_signed_json_payload(&device_id, data, &command_secret_cb)
+                        .and_then(|payload| Ok(serde_json::from_value::<MqttCommandIn>(payload)?))
+                    {
                         Ok(cmd) => {
                             info!("📥 Command received: {:?}", cmd);
                             let _ = cmd_tx.send(cmd);
                         }
-                        Err(e) => error!("❌ Command JSON parse error: {:?}", e),
+                        Err(e) => warn!("⛔ Rejected unsigned/invalid command payload: {:?}", e),
                     }
                 }
                 // 3. Sensor Data Packet

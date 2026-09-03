@@ -901,10 +901,13 @@ dependencies = [
  "anyhow",
  "chrono",
  "cron",
+ "hex",
+ "hmac",
  "hydragrow-shared",
  "log",
  "serde",
  "serde_json",
+ "sha2",
  "tracing",
 ]
 

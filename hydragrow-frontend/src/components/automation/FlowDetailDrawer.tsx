@@ -21,7 +21,6 @@ import {
   useValidateAutomationScript,
 } from '../../hooks/useAutomationScripts';
 import { wouldCreateCycle } from '../../lib/automation/flowCycle';
-import { MultiDeviceApplyDialog } from './MultiDeviceApplyDialog';
 
 export interface FlowDetailDrawerProps {
   deviceId: string;
@@ -62,7 +61,6 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   const createScript = useCreateAutomationScript(deviceId);
   const updateScript = useUpdateAutomationScript(deviceId, isNew ? '' : script.id);
   const deleteScript = useDeleteAutomationScript(deviceId);
-  const [showMultiDeviceDialog, setShowMultiDeviceDialog] = useState(false);
 
   const handleSave = async () => {
     const ir: AutomationIr = buildIrFromGraph({
@@ -193,19 +191,11 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
         </div>
       )}
 
-      <div className="flex justify-between items-center mt-2">
+      <div className="flex justify-between">
         {!isNew ? (
-          <div className="flex gap-2">
-            <button className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-100" onClick={handleDelete}>
-              Xóa Flow
-            </button>
-            <button
-              className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
-              onClick={() => setShowMultiDeviceDialog(true)}
-            >
-              Áp dụng nhiều TB
-            </button>
-          </div>
+          <button className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700" onClick={handleDelete}>
+            Xóa Flow
+          </button>
         ) : (
           <span />
         )}
@@ -222,14 +212,6 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
           Lưu Flow
         </button>
       </div>
-
-      {showMultiDeviceDialog && !isNew && (
-        <MultiDeviceApplyDialog
-          sourceDeviceId={deviceId}
-          sourceScript={script as UserScript}
-          onClose={() => setShowMultiDeviceDialog(false)}
-        />
-      )}
     </div>
   );
 }

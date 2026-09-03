@@ -38,3 +38,17 @@ export interface TestScriptResponse {
   trace: ConditionTraceEntry[];
   actions_preview: Record<string, unknown>[];
 }
+
+export interface FlowTemplateOverride {
+  id: string;
+  source_script_id: string;
+  target_device_id: string;
+  override_script_id: string;
+  overridden_fields: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApplyTemplateRequest {
+  target_device_ids: string[];
+}

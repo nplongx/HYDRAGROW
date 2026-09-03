@@ -1,0 +1,7 @@
+feat(automation): Multi-device Flow templates (AUTOMATION-008)
+
+- Created `flow_template_overrides` DB table
+- Implemented `apply-template` and `sync-template` backend routes
+- Added `MultiDeviceApplyDialog` to apply flows across fleet
+- Updated `FlowDetailDrawer` to include Apply multiple devices button
+- Recorded evidence and updated project traceability matrices

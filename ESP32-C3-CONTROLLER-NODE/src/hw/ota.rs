@@ -260,6 +260,7 @@ fn validate_download_length(total_bytes: usize, expected_len: Option<u64>) -> an
 }
 
 #[cfg(test)]
+#[allow(unused_imports, dead_code)]
 mod tests {
     use super::validate_download_length;
 

@@ -1,0 +1,12 @@
+{
+  "requirement_id": "CONTROLLER-FACTORY-RESET-001",
+  "objective": "Ensure factory reset on controller node clears identity, MQTT credentials, and runtime state from NVS flash storage.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Factory reset arm in EventDispatcher removes device_id, mqtt_user, mqtt_pass, runtime_snap, crop_recipe, and recipe_rev NVS keys alongside active_recipe, safety_budget, and wifi list.",
+      "verification": "Code inspection and compilation verification in ESP32-C3-CONTROLLER-NODE",
+      "evidence_required": true
+    }
+  ]
+}

@@ -505,11 +505,11 @@ mod tests {
         assert!(!resp.will_fire);
         assert_eq!(resp.trace.len(), 2);
 
-        let ec_trace = resp.trace.iter().find(|t| t.description.contains("ec")).unwrap();
+        let ec_trace = resp.trace.iter().find(|t| t.description.contains("ec")).expect("Value should exist in test");
         assert!(!ec_trace.passed);
         assert_eq!(ec_trace.actual_value, Some(2.1));
 
-        let ph_trace = resp.trace.iter().find(|t| t.description.contains("ph")).unwrap();
+        let ph_trace = resp.trace.iter().find(|t| t.description.contains("ph")).expect("Value should exist in test");
         assert!(ph_trace.passed);
         assert_eq!(ph_trace.actual_value, Some(7.8));
     }
@@ -567,7 +567,7 @@ mod tests {
 
             let mut scope = rhai::Scope::new();
             scope.push("input", rhai_map);
-            let rhai_result: bool = engine.eval_with_scope(&mut scope, rhai_guard).unwrap();
+            let rhai_result: bool = engine.eval_with_scope(&mut scope, rhai_guard).expect("Value should exist in test");
 
             assert_eq!(rust_result, expected);
             assert_eq!(rhai_result, expected);

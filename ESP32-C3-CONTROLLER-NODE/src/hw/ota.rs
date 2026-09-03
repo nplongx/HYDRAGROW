@@ -261,7 +261,7 @@ fn validate_download_length(total_bytes: usize, expected_len: Option<u64>) -> an
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::validate_download_length;
 
     #[test]
     fn validates_download_length_matching() {

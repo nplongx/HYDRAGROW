@@ -8,7 +8,6 @@ pub mod orchestrator;
 pub mod peripheral;
 pub mod phase_tick;
 pub mod phases;
-pub mod publish_routing;
 pub mod recipe_manager;
 pub mod tick_result;
 pub mod types;

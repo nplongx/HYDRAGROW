@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutomationIrSchema, AutomationNodeSchema } from "./ir";
+import { AutomationIrSchema, AutomationNodeSchema, TriggerSchema } from "./ir";
 
 describe("AutomationIrSchema", () => {
   it('parses a legacy flat Condition[] (no groups) exactly as before', () => {
@@ -211,6 +211,47 @@ it('validates AutomationNodeSchema including trigger type', () => {
     data: {},
   };
   expect(AutomationNodeSchema.parse(triggerNode)).toEqual(triggerNode);
+});
+
+describe('TriggerSchema', () => {
+  it('accepts legacy sensor trigger', () => {
+    expect(TriggerSchema.safeParse({ type: 'sensor' }).success).toBe(true);
+  });
+
+  it('accepts legacy fsm trigger', () => {
+    expect(TriggerSchema.safeParse({ type: 'fsm' }).success).toBe(true);
+  });
+
+  it('accepts cron trigger with expression and timezone', () => {
+    const result = TriggerSchema.safeParse({
+      type: 'cron',
+      expression: '0 7 * * *',
+      timezone: 'Asia/Ho_Chi_Minh',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects cron trigger missing expression', () => {
+    const result = TriggerSchema.safeParse({ type: 'cron', timezone: 'Asia/Ho_Chi_Minh' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts webhook trigger with field mappings and mode', () => {
+    const result = TriggerSchema.safeParse({
+      type: 'webhook',
+      mode: 'flow',
+      fieldMappings: [{ bodyPath: 'external_alarm', targetField: 'external_alarm' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('defaults webhook mode to flow when omitted', () => {
+    const result = TriggerSchema.safeParse({ type: 'webhook', fieldMappings: [] });
+    expect(result.success).toBe(true);
+    if (result.success && result.data.type === 'webhook') {
+      expect(result.data.mode).toBe('flow');
+    }
+  });
 });
 
 it('AutomationIrSchema: next_flow_ids defaults to [] when absent', () => {

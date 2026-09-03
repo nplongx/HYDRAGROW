@@ -1,12 +1,13 @@
 // src/hw/pcf857x.rs
+#![allow(dead_code)]
 
 use esp_idf_hal::i2c::I2cDriver;
 use pcf857x::{Error, Pcf8574, PinFlag, SlaveAddr};
 use serde::{Deserialize, Serialize};
 
-/// ---------------------------------------------------------------------------
-/// Tank alert state
-/// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Tank alert state
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct TankAlert {
@@ -18,21 +19,18 @@ pub struct TankAlert {
 
 impl TankAlert {
     pub fn has_alert(&self) -> bool {
-        self.tank_a_low
-            || self.tank_b_low
-            || self.tank_ph_down_low
-            || self.tank_ph_up_low
+        self.tank_a_low || self.tank_b_low || self.tank_ph_down_low || self.tank_ph_up_low
     }
 }
 
-/// ---------------------------------------------------------------------------
-/// PCF8574 pins
-///
-/// P0..P3 = INPUT from TTP223 touch sensors
-/// P4..P5 = OUTPUT for valves
-/// P6    = OUTPUT for water pump IN
-/// P7    = OUTPUT for water pump OUT
-/// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// PCF8574 pins
+//
+// P0..P3 = INPUT from TTP223 touch sensors
+// P4..P5 = OUTPUT for valves
+// P6    = OUTPUT for water pump IN
+// P7    = OUTPUT for water pump OUT
+// ---------------------------------------------------------------------------
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,10 +72,7 @@ impl ExpanderPin {
     pub fn is_input(self) -> bool {
         matches!(
             self,
-            Self::TankA
-                | Self::TankB
-                | Self::TankPHDown
-                | Self::TankPHUp
+            Self::TankA | Self::TankB | Self::TankPHDown | Self::TankPHUp
         )
     }
 
@@ -85,17 +80,14 @@ impl ExpanderPin {
     pub fn is_output(self) -> bool {
         matches!(
             self,
-            Self::ValveMist
-                | Self::ValveMix
-                | Self::WaterPumpIn
-                | Self::WaterPumpOut
+            Self::ValveMist | Self::ValveMix | Self::WaterPumpIn | Self::WaterPumpOut
         )
     }
 }
 
-/// ---------------------------------------------------------------------------
-/// Masks
-/// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Masks
+// ---------------------------------------------------------------------------
 
 /// P0..P3 là INPUT.
 ///
@@ -106,9 +98,9 @@ const INPUT_MASK: u8 = 0b0000_1111;
 /// P4..P7 là OUTPUT.
 const OUTPUT_MASK: u8 = 0b1111_0000;
 
-/// ---------------------------------------------------------------------------
-/// I2C Expander
-/// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// I2C Expander
+// ---------------------------------------------------------------------------
 
 pub struct I2cExpander<'d> {
     pcf: Pcf8574<I2cDriver<'d>>,
@@ -142,10 +134,7 @@ impl<'d> I2cExpander<'d> {
     /// PHẢI gọi hàm này sau khi tạo I2cExpander.
     pub fn init(
         &mut self,
-    ) -> Result<
-        (),
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<(), Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         self.pcf.set(self.state)
     }
 
@@ -159,10 +148,7 @@ impl<'d> I2cExpander<'d> {
     pub fn set_high(
         &mut self,
         pin: ExpanderPin,
-    ) -> Result<
-        (),
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<(), Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         assert!(
             pin.is_output(),
             "Attempted to drive a PCF8574 input pin as output"
@@ -182,10 +168,7 @@ impl<'d> I2cExpander<'d> {
     pub fn set_low(
         &mut self,
         pin: ExpanderPin,
-    ) -> Result<
-        (),
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<(), Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         assert!(
             pin.is_output(),
             "Attempted to drive a PCF8574 input pin as output"
@@ -204,10 +187,7 @@ impl<'d> I2cExpander<'d> {
         &mut self,
         pin: ExpanderPin,
         high: bool,
-    ) -> Result<
-        (),
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<(), Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         if high {
             self.set_high(pin)
         } else {
@@ -227,17 +207,10 @@ impl<'d> I2cExpander<'d> {
     ///     Chạm       -> OUT = HIGH -> bit = 1
     pub fn read_all_input(
         &mut self,
-    ) -> Result<
-        u8,
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<u8, Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         let mut buffer = [0u8; 1];
 
-        let input_mask =
-            PinFlag::P0 |
-            PinFlag::P1 |
-            PinFlag::P2 |
-            PinFlag::P3;
+        let input_mask = PinFlag::P0 | PinFlag::P1 | PinFlag::P2 | PinFlag::P3;
 
         self.pcf.read_array(input_mask, &mut buffer)?;
 
@@ -251,10 +224,7 @@ impl<'d> I2cExpander<'d> {
     pub fn read_input(
         &mut self,
         pin: ExpanderPin,
-    ) -> Result<
-        bool,
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<bool, Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         assert!(
             pin.is_input(),
             "Attempted to read a PCF8574 output pin as input"
@@ -276,10 +246,7 @@ impl<'d> I2cExpander<'d> {
     ///     bit = 0 -> cảm biến LOW       -> không cảnh báo
     pub fn parse_tank_alert(
         &mut self,
-    ) -> Result<
-        TankAlert,
-        Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>,
-    > {
+    ) -> Result<TankAlert, Error<<I2cDriver<'d> as embedded_hal::i2c::ErrorType>::Error>> {
         let raw_byte = self.read_all_input()?;
 
         Ok(TankAlert {
@@ -287,11 +254,9 @@ impl<'d> I2cExpander<'d> {
 
             tank_b_low: (raw_byte & ExpanderPin::TankB.mask()) != 0,
 
-            tank_ph_down_low:
-                (raw_byte & ExpanderPin::TankPHDown.mask()) != 0,
+            tank_ph_down_low: (raw_byte & ExpanderPin::TankPHDown.mask()) != 0,
 
-            tank_ph_up_low:
-                (raw_byte & ExpanderPin::TankPHUp.mask()) != 0,
+            tank_ph_up_low: (raw_byte & ExpanderPin::TankPHUp.mask()) != 0,
         })
     }
 

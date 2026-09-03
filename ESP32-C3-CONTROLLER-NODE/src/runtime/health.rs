@@ -24,7 +24,6 @@ use crate::hw::mqtt_client::{
     SharedSensorData,
 };
 use hydragrow_controller_core::core::fsm::context::SystemContext;
-use hydragrow_controller_core::core::fsm::publish_routing::resolve_override_publish_target;
 use hydragrow_controller_core::utils::{get_current_time_sec, get_log_drop_count, read_or_recover};
 
 pub fn build_status_msg(ctx: &SystemContext, _now_sec: u64, uptime_sec: u64) -> String {
@@ -202,39 +201,40 @@ pub fn run_main_health_loop(
                 if is_mqtt_connected {
                     if let Some(client) = mqtt_client.as_mut() {
                         let device_id = read_or_recover(&shared_config).effective_config.device_id;
-                        if let Some(resolved) = resolve_override_publish_target(&v) {
-                            let actual_payload_str = serde_json::to_string(&resolved.payload_json)
-                                .unwrap_or(payload.clone());
+                        let topic = if let Some(override_topic) =
+                            v.get("_mqtt_topic_override").and_then(|t| t.as_str())
+                        {
+                            let actual_payload = v.get("_payload").cloned().unwrap_or(v.clone());
+                            let actual_payload_str =
+                                serde_json::to_string(&actual_payload).unwrap_or(payload.clone());
                             let _ = client.publish(
-                                &resolved.topic,
+                                override_topic,
                                 QoS::AtLeastOnce,
                                 false,
                                 actual_payload_str.as_bytes(),
                             );
+                            continue;
+                        } else if v.get("level").is_some()
+                            && v.get("category").is_some()
+                            && v.get("title").is_some()
+                        {
+                            // [VÁ BUG]: Nhận diện chính xác gói tin UnifiedSystemLog
+                            // Trả về đúng topic: AGITECH/{device_id}/system_log
+                            hydragrow_shared::topics::topic_system_log(&device_id)
                         } else {
-                            let topic = if v.get("level").is_some()
-                                && v.get("category").is_some()
-                                && v.get("title").is_some()
-                            {
-                                // [VÁ BUG]: Nhận diện chính xác gói tin UnifiedSystemLog
-                                // Trả về đúng topic: AGITECH/{device_id}/system_log
-                                hydragrow_shared::topics::topic_system_log(&device_id)
-                            } else {
-                                // Các gói tin khác phân loại theo trường "type"
-                                match v.get("type").and_then(|t| t.as_str()) {
-                                    Some("water_event") | Some("system_alert")
-                                    | Some("dosing_cycle") => topic_fsm_events(&device_id),
-                                    Some("ema_update")
-                                    | Some("auto_tune")
-                                    | Some("runtime_calibration_update") => {
-                                        topic_calibration(&device_id)
-                                    }
-                                    _ => topic_fsm_state(&device_id),
+                            // Các gói tin khác phân loại theo trường "type"
+                            match v.get("type").and_then(|t| t.as_str()) {
+                                Some("water_event") | Some("system_alert")
+                                | Some("dosing_cycle") => topic_fsm_events(&device_id),
+                                Some("ema_update")
+                                | Some("auto_tune")
+                                | Some("runtime_calibration_update") => {
+                                    topic_calibration(&device_id)
                                 }
-                            };
-                            let _ =
-                                client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
-                        }
+                                _ => topic_fsm_state(&device_id),
+                            }
+                        };
+                        let _ = client.publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes());
                     }
                 }
             }
@@ -243,23 +243,25 @@ pub fn run_main_health_loop(
         if let Ok(report_json) = dosing_report_rx.try_recv() {
             if is_mqtt_connected {
                 if let Some(client) = mqtt_client.as_mut() {
-                    let parsed = serde_json::from_str::<serde_json::Value>(&report_json).ok();
-                    let resolved = parsed.as_ref().and_then(resolve_override_publish_target);
-                    if let Some(resolved) = resolved {
-                        let actual_str = serde_json::to_string(&resolved.payload_json)
-                            .unwrap_or_else(|_| report_json.clone());
-                        let _ = client.publish(
-                            &resolved.topic,
-                            QoS::AtLeastOnce,
-                            false,
-                            actual_str.as_bytes(),
-                        );
-                    } else {
-                        let device_id = read_or_recover(&shared_config).effective_config.device_id;
-                        let topic = topic_dosing_report(&device_id);
-                        let _ =
-                            client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&report_json) {
+                        if let Some(override_topic) =
+                            v.get("_mqtt_topic_override").and_then(|t| t.as_str())
+                        {
+                            let actual_payload = v.get("_payload").cloned().unwrap_or(v.clone());
+                            let actual_str = serde_json::to_string(&actual_payload)
+                                .unwrap_or_else(|_| report_json.clone());
+                            let _ = client.publish(
+                                override_topic,
+                                QoS::AtLeastOnce,
+                                false,
+                                actual_str.as_bytes(),
+                            );
+                            continue;
+                        }
                     }
+                    let device_id = read_or_recover(&shared_config).effective_config.device_id;
+                    let topic = topic_dosing_report(&device_id);
+                    let _ = client.publish(&topic, QoS::AtLeastOnce, false, report_json.as_bytes());
                 }
             }
         }

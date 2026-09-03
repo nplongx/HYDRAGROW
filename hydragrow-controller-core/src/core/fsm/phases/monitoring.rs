@@ -153,14 +153,16 @@ fn apply_decision(
             // =========================================================================
             // KIỂM TRA LƯỚI AN TOÀN (SAFETY BUDGETS) DỰA TRÊN UPTIME_SEC
             // =========================================================================
-            let nutrient_a_ok = control.nutrient_a_ml <= 0.0
+            let nutrient_a_ok = ctx.safety.is_override_active(now_ms)
+                || control.nutrient_a_ml <= 0.0
                 || ctx.safety.peek_hourly_dose(
                     "NutrientA",
                     uptime_sec,
                     control.nutrient_a_ml,
                     config.max_dose_per_hour / 2.0,
                 );
-            let nutrient_b_ok = control.nutrient_b_ml <= 0.0
+            let nutrient_b_ok = ctx.safety.is_override_active(now_ms)
+                || control.nutrient_b_ml <= 0.0
                 || ctx.safety.peek_hourly_dose(
                     "NutrientB",
                     uptime_sec,
@@ -185,24 +187,33 @@ fn apply_decision(
                     .commit_hourly_dose("NutrientB", uptime_sec, control.nutrient_b_ml);
             }
             if control.ph_up_ml > 0.0 {
-                let _ = ctx.safety.check_hourly_dose(
-                    "PhUp",
-                    uptime_sec,
-                    control.ph_up_ml,
-                    config.max_dose_per_hour / 4.0,
-                );
+                if ctx.safety.is_override_active(now_ms) {
+                    // Force-on override active — bypass this safety check.
+                } else {
+                    let _ = ctx.safety.check_hourly_dose(
+                        "PhUp",
+                        uptime_sec,
+                        control.ph_up_ml,
+                        config.max_dose_per_hour / 4.0,
+                    );
+                }
                 peri_delta.ph_up = Some(true);
             }
             if control.ph_down_ml > 0.0 {
-                let _ = ctx.safety.check_hourly_dose(
-                    "PhDown",
-                    uptime_sec,
-                    control.ph_down_ml,
-                    config.max_dose_per_hour / 4.0,
-                );
+                if ctx.safety.is_override_active(now_ms) {
+                    // Force-on override active — bypass this safety check.
+                } else {
+                    let _ = ctx.safety.check_hourly_dose(
+                        "PhDown",
+                        uptime_sec,
+                        control.ph_down_ml,
+                        config.max_dose_per_hour / 4.0,
+                    );
+                }
                 peri_delta.ph_down = Some(true);
             }
             if control.water_in_sec > 0.0
+                && !ctx.safety.is_override_active(now_ms)
                 && !ctx
                     .safety
                     .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32)
@@ -212,6 +223,7 @@ fn apply_decision(
                 return result;
             }
             if control.water_out_sec > 0.0
+                && !ctx.safety.is_override_active(now_ms)
                 && !ctx
                     .safety
                     .record_drain(uptime_sec, config.max_drain_cycles_per_hour as u32)

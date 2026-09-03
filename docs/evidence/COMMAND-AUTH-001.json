@@ -1,0 +1,37 @@
+{
+  "requirement_id": "COMMAND-AUTH-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "ESP32-C3-CONTROLLER-NODE/src/hw/mqtt_client.rs",
+      "environment": "Host Rust / ESP32-C3 Node Source Inspection",
+      "verified_at": "2026-03-31T05:25:00Z",
+      "notes": "Imported verify_signed_json_payload from hydragrow_controller_core and applied in topic_command_cb and topic_recipe_set_cb."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs",
+      "environment": "Host Rust / ESP32-C3 Node Source Inspection",
+      "verified_at": "2026-03-31T05:25:00Z",
+      "notes": "Removed !is_force_on check so that emergency/fault states block all actuator operations including force_on."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs",
+      "environment": "Host Rust / ESP32-C3 Node Source Inspection",
+      "verified_at": "2026-03-31T05:25:00Z",
+      "notes": "Comment above update_wifi_list updated to clarify MQTT client HMAC verification."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo check, test, clippy, fmt on hydragrow-controller-core",
+      "environment": "Host Linux Rust x86_64 Toolchain",
+      "verified_at": "2026-03-31T05:25:00Z",
+      "notes": "Passed all 65 controller-core tests, zero clippy warnings, and clean fmt check."
+    }
+  ]
+}

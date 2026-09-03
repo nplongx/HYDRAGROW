@@ -213,87 +213,6 @@ impl Default for ScriptEngine {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WebhookFieldMapping {
-    pub body_path: String,
-    pub target_field: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WebhookMode {
-    Flow,
-    Direct,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TriggerConfig {
-    Sensor,
-    Fsm,
-    Cron {
-        expression: String,
-        timezone: String,
-    },
-    Webhook {
-        mode: WebhookMode,
-        field_mappings: Vec<WebhookFieldMapping>,
-    },
-}
-
-impl TriggerConfig {
-    /// Parse `ir_json.trigger` một cách khoan dung: bất kỳ hình dạng lạ/thiếu field
-    /// nào cũng fallback về `Sensor` thay vì lỗi — script cũ (ir_json = NULL, hoặc
-    /// ir_json không có key "trigger") vẫn phải chạy đúng như trước Phase 4/5.
-    pub fn from_ir_json(ir_json: Option<&serde_json::Value>) -> Self {
-        let Some(trigger) = ir_json.and_then(|ir| ir.get("trigger")) else {
-            return TriggerConfig::Sensor;
-        };
-        match trigger.get("type").and_then(|v| v.as_str()) {
-            Some("fsm") => TriggerConfig::Fsm,
-            Some("cron") => {
-                let expression = trigger.get("expression").and_then(|v| v.as_str());
-                let timezone = trigger
-                    .get("timezone")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Asia/Ho_Chi_Minh");
-                match expression {
-                    Some(expr) if !expr.trim().is_empty() => TriggerConfig::Cron {
-                        expression: expr.to_string(),
-                        timezone: timezone.to_string(),
-                    },
-                    _ => TriggerConfig::Sensor,
-                }
-            }
-            Some("webhook") => {
-                let mode = match trigger.get("mode").and_then(|v| v.as_str()) {
-                    Some("direct") => WebhookMode::Direct,
-                    _ => WebhookMode::Flow,
-                };
-                let field_mappings = trigger
-                    .get("fieldMappings")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|m| {
-                                let body_path = m.get("bodyPath")?.as_str()?.to_string();
-                                let target_field = m.get("targetField")?.as_str()?.to_string();
-                                Some(WebhookFieldMapping {
-                                    body_path,
-                                    target_field,
-                                })
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                TriggerConfig::Webhook {
-                    mode,
-                    field_mappings,
-                }
-            }
-            _ => TriggerConfig::Sensor,
-        }
-    }
-}
-
 /// Một script đã compile, ready to eval
 #[derive(Clone)]
 pub struct CachedScript {
@@ -305,9 +224,6 @@ pub struct CachedScript {
     /// fire thành công. Copy trực tiếp từ `UserScript::next_flow_ids` lúc load —
     /// xem `ScriptEval::eval_alert_scripts_chained` (script_eval.rs) cho logic dùng nó.
     pub next_flow_ids: Vec<String>,
-    /// Mới (AUTOMATION-002): loại trigger parse từ `ir_json.trigger`.
-    /// Dùng bởi scheduler cron (AUTOMATION-005) và router webhook (AUTOMATION-006).
-    pub trigger: TriggerConfig,
 }
 
 /// Thread-safe cache: device_id → Vec<CachedScript>
@@ -371,40 +287,6 @@ impl ScriptCache {
             .unwrap_or_default()
     }
 
-    /// Trả về (device_id, script) cho MỌI script có trigger Cron, xuyên toàn bộ device.
-    /// Dùng bởi scheduler cron (AUTOMATION-005) — quét mỗi tick thay vì query DB.
-    pub async fn list_cron_scripts(&self) -> Vec<(String, CachedScript)> {
-        let map = self.inner.read().await;
-        map.iter()
-            .flat_map(|(key, scripts)| {
-                let device_id = key
-                    .rsplit_once(':')
-                    .map(|(d, _)| d)
-                    .unwrap_or(key)
-                    .to_string();
-                scripts
-                    .iter()
-                    .filter(|s| matches!(s.trigger, TriggerConfig::Cron { .. }))
-                    .map(move |s| (device_id.clone(), s.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    }
-
-    /// Trả về mọi script có trigger Webhook của 1 device. Dùng bởi
-    /// AUTOMATION-006 khi nhận payload webhook.
-    pub async fn get_webhook_scripts(&self, device_id: &str) -> Vec<CachedScript> {
-        let map = self.inner.read().await;
-        [
-            format!("{}:alert", device_id),
-            format!("{}:action_command", device_id),
-        ]
-        .iter()
-        .flat_map(|key| map.get(key).cloned().unwrap_or_default())
-        .filter(|s| matches!(s.trigger, TriggerConfig::Webhook { .. }))
-        .collect()
-    }
-
     /// Load tất cả enabled scripts cho device từ DB, compile, upsert vào cache.
     pub async fn reload_device(&self, pool: &PgPool, device_id: &str) -> Result<usize> {
         let rows = sqlx::query_as::<_, crate::models::script::UserScript>(
@@ -425,7 +307,6 @@ impl ScriptCache {
                     name: row.name,
                     ast,
                     next_flow_ids: row.next_flow_ids.clone(),
-                    trigger: TriggerConfig::from_ir_json(row.ir_json.as_ref()),
                 }),
                 Err(e) => {
                     tracing::warn!(
@@ -702,99 +583,6 @@ fn main(input) {
         assert_eq!(result.pwm, None);
     }
 
-    #[test]
-    fn trigger_config_defaults_to_sensor_when_ir_json_is_none() {
-        let cfg = TriggerConfig::from_ir_json(None);
-        assert_eq!(cfg, TriggerConfig::Sensor);
-    }
-
-    #[test]
-    fn trigger_config_defaults_to_sensor_when_trigger_field_missing() {
-        let ir = serde_json::json!({ "kind": "alert", "conditions": [], "actions": [] });
-        let cfg = TriggerConfig::from_ir_json(Some(&ir));
-        assert_eq!(cfg, TriggerConfig::Sensor);
-    }
-
-    #[test]
-    fn trigger_config_parses_fsm() {
-        let ir = serde_json::json!({ "trigger": { "type": "fsm" } });
-        assert_eq!(TriggerConfig::from_ir_json(Some(&ir)), TriggerConfig::Fsm);
-    }
-
-    #[test]
-    fn trigger_config_parses_cron_with_expression_and_timezone() {
-        let ir = serde_json::json!({
-            "trigger": { "type": "cron", "expression": "0 7 * * *", "timezone": "Asia/Ho_Chi_Minh" }
-        });
-        assert_eq!(
-            TriggerConfig::from_ir_json(Some(&ir)),
-            TriggerConfig::Cron {
-                expression: "0 7 * * *".to_string(),
-                timezone: "Asia/Ho_Chi_Minh".to_string(),
-            }
-        );
-    }
-
-    #[test]
-    fn trigger_config_falls_back_to_sensor_on_malformed_cron() {
-        let ir = serde_json::json!({ "trigger": { "type": "cron" } });
-        assert_eq!(
-            TriggerConfig::from_ir_json(Some(&ir)),
-            TriggerConfig::Sensor
-        );
-    }
-
-    #[test]
-    fn trigger_config_parses_webhook_with_mappings() {
-        let ir = serde_json::json!({
-            "trigger": {
-                "type": "webhook",
-                "mode": "flow",
-                "fieldMappings": [{ "bodyPath": "external_alarm", "targetField": "external_alarm" }]
-            }
-        });
-        match TriggerConfig::from_ir_json(Some(&ir)) {
-            TriggerConfig::Webhook {
-                mode,
-                field_mappings,
-            } => {
-                assert_eq!(mode, WebhookMode::Flow);
-                assert_eq!(field_mappings.len(), 1);
-                assert_eq!(field_mappings[0].body_path, "external_alarm");
-            }
-            other => panic!("expected Webhook, got {other:?}"),
-        }
-    }
-
-    #[tokio::test]
-    async fn list_cron_scripts_returns_only_cron_triggered_across_devices() {
-        let engine = Arc::new(ScriptEngine::new());
-        let cache = ScriptCache::new(engine.clone());
-        let cron_script = CachedScript {
-            id: Uuid::new_v4(),
-            kind: "alert".to_string(),
-            name: "Tưới sáng".to_string(),
-            ast: engine.compile("fn main(input) { () }").unwrap(),
-            next_flow_ids: vec![],
-            trigger: TriggerConfig::Cron {
-                expression: "0 7 * * *".into(),
-                timezone: "Asia/Ho_Chi_Minh".into(),
-            },
-        };
-        let sensor_script = CachedScript {
-            trigger: TriggerConfig::Sensor,
-            ..cron_script.clone()
-        };
-        cache
-            .upsert("device-a", vec![cron_script.clone(), sensor_script])
-            .await;
-
-        let result = cache.list_cron_scripts().await;
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].0, "device-a");
-        assert_eq!(result[0].1.id, cron_script.id);
-    }
-
     #[tokio::test]
     async fn script_cache_preserves_next_flow_ids() {
         let engine = Arc::new(ScriptEngine::new());
@@ -805,7 +593,6 @@ fn main(input) {
             name: "root".to_string(),
             ast: engine.compile(r#"fn main(input) { () }"#).unwrap(),
             next_flow_ids: vec!["child-id".to_string()],
-            trigger: TriggerConfig::Sensor,
         };
         cache.upsert("device_001", vec![script]).await;
 
@@ -825,7 +612,6 @@ fn main(input) {
             name: "test".to_string(),
             ast: engine.compile(r#"fn main(input) { () }"#).unwrap(),
             next_flow_ids: vec![],
-            trigger: TriggerConfig::Sensor,
         };
         cache.upsert("device_001", vec![script]).await;
 

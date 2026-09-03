@@ -1,0 +1,26 @@
+{
+  "requirement_id": "COMMAND-AUTH-001",
+  "objective": "Verify HMAC on topic_controller_command using shared verify_signed_json_payload, remove duplicate local HMAC code, and block force_on commands during emergency/fault states.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "verify_signed_json_payload from hydragrow_controller_core is imported and used in ESP32-C3-CONTROLLER-NODE/src/hw/mqtt_client.rs for topic_controller_command and topic_recipe_set.",
+      "verification": "Code inspection of ESP32-C3-CONTROLLER-NODE/src/hw/mqtt_client.rs"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs blocks all actuator activation requests (is_on) including force_on when system is in emergency state.",
+      "verification": "Code inspection of ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs contains updated comment clarifying HMAC validation in mqtt_client.rs.",
+      "verification": "Code inspection of ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "All hydragrow-controller-core CI checks pass (cargo check, cargo test, cargo clippy -- -D warnings, cargo fmt --check).",
+      "verification": "Cargo test & lint execution for hydragrow-controller-core"
+    }
+  ]
+}

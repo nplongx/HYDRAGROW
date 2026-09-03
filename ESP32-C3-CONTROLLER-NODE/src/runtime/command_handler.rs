@@ -107,7 +107,9 @@ pub fn process_mqtt_commands(
             continue;
         }
 
-        // The command itself has already passed HMAC/replay validation in the MQTT client.
+        // HMAC/replay validation happens in mqtt_client.rs before cmd_tx.send —
+        // see verify_signed_json_payload. Do not remove that check assuming it's
+        // redundant; commands reaching this function are already verified.
         if action_lower == "update_wifi_list" {
             let candidates = cmd
                 .params
@@ -181,9 +183,9 @@ pub fn process_mqtt_commands(
             is_on = state;
         }
 
-        if is_emergency_state && is_on && !is_force_on {
+        if is_emergency_state && is_on {
             warn!(
-                "⛔ BLOCKED: Không thể điều khiển {} trong trạng thái khẩn cấp.",
+                "⛔ BLOCKED: Không thể điều khiển {} trong trạng thái khẩn cấp (kể cả force_on).",
                 pump_name
             );
             continue;

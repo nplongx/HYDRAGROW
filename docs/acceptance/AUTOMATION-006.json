@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-006",
+  "objective": "Webhook trigger binding into automation flow and dynamic map Rhai evaluation",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "eval_webhook_chain in script_eval evaluates Rhai AST with dynamic payload map and chains execution to next_flow_ids up to depth limit",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml eval_webhook_chain"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "receive_webhook_flow_event route POST /devices/{device_id}/webhook/flow-event maps body fields according to script trigger field_mappings and dispatches results",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml receive_webhook_flow_event"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "eval_with_dynamic_map evaluates Rhai AST with dynamic Map input and returns ChainFireResult for Alert and ActionCommand",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml eval_with_dynamic_map"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "WebhookFieldMappingEditor allows toggling mode ('flow' vs 'direct') and configuring field mappings in NodeEditorPanel",
+      "verification": "cd hydragrow-frontend && npm test"
+    }
+  ]
+}

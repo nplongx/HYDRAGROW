@@ -109,9 +109,23 @@ export const ActionSchema = z.discriminatedUnion('type', [
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 
-export const TriggerSchema = z.object({
-  type: z.enum(['sensor', 'fsm']),
+export const WebhookFieldMappingSchema = z.object({
+  bodyPath: z.string().min(1),
+  targetField: z.string().min(1),
 });
+export type WebhookFieldMapping = z.infer<typeof WebhookFieldMappingSchema>;
+
+export const WebhookTriggerConfigSchema = z.object({
+  type: z.literal('webhook'),
+  mode: z.enum(['flow', 'direct']).default('flow'),
+  fieldMappings: z.array(WebhookFieldMappingSchema).default([]),
+});
+export type WebhookTriggerConfig = z.infer<typeof WebhookTriggerConfigSchema>;
+
+export const TriggerSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.enum(['sensor', 'fsm']) }),
+  WebhookTriggerConfigSchema,
+]);
 
 // React Flow canvas state — opaque to the compiler, used only to restore the UI.
 export const AutomationNodeSchema = z.object({

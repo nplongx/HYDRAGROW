@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { Action, AutomationIr, ConditionGroup, ConditionOrGroup } from '../../../lib/automation/ir';
+import type { Action, AutomationIr, ConditionGroup, ConditionOrGroup, WebhookTriggerConfig } from '../../../lib/automation/ir';
 import { fieldsForKind } from '../../../hooks/useAutomationBuilder';
 import { summarizeConditionTree, toEditorRoot, fromEditorRoot } from '../../../lib/automation/conditionTree';
 import { ConditionGroupEditor } from './ConditionGroupEditor';
+import { WebhookFieldMappingEditor } from './WebhookFieldMappingEditor';
 
 function summarizeActions(actions: Action[]): string {
   if (actions.length === 0) return 'Chưa cấu hình';
@@ -75,10 +76,16 @@ export function NodeEditorPanel({ kind, node, onChange, onClose }: NodeEditorPan
             Kích hoạt khi chuyển đổi trạng thái FSM (chuyển phase).
           </p>
         )}
-        {(triggerTab === 'cron' || triggerTab === 'webhook') && (
+        {triggerTab === 'cron' && (
           <p className="text-xs text-amber-700 bg-amber-50 rounded p-2 border border-amber-200">
             Sắp có ở Phase 4/5
           </p>
+        )}
+        {triggerTab === 'webhook' && (
+          <WebhookFieldMappingEditor
+            config={(node.data.trigger as WebhookTriggerConfig | undefined) ?? { type: 'webhook', mode: 'flow', fieldMappings: [] }}
+            onChange={(cfg) => onChange(node.id, { ...node.data, trigger: cfg })}
+          />
         )}
       </div>
     );

@@ -101,6 +101,7 @@ pub struct I2cExpander<'d> {
     state: u8,
 }
 
+#[allow(dead_code)]
 impl<'d> I2cExpander<'d> {
     /// Tạo PCF8574.
     ///

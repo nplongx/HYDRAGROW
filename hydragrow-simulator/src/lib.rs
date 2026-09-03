@@ -8,4 +8,5 @@ pub mod harness;
 pub mod plant;
 pub mod scenario;
 pub mod sensors;
+pub mod simulation;
 pub mod telemetry;

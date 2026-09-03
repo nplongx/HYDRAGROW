@@ -536,9 +536,9 @@ dependencies = [
 
 [[package]]
 name = "embuild"
-version = "0.33.3"
+version = "0.33.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1767ebe775033ebaed7a04fb02cc2ae7abfdc660656190957403f97594e687c7"
+checksum = "da917eb70489bcdf79deeeaa01a7511e243fad41b432a40a007024075e27634b"
 dependencies = [
  "anyhow",
  "bindgen",
@@ -608,7 +608,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-hal"
 version = "0.46.2"
-source = "git+https://github.com/esp-rs/esp-idf-hal.git#04faf8a9221d683615e6b911b2649fa70e85d644"
+source = "git+https://github.com/esp-rs/esp-idf-hal.git#846cff17f3701b836fe461b6751d9e5c42b4b278"
 dependencies = [
  "atomic-waker",
  "embassy-sync",
@@ -630,7 +630,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-svc"
 version = "0.52.1"
-source = "git+https://github.com/esp-rs/esp-idf-svc.git#3bc7361aade1eb9845a979d06e621a69a3dfbaff"
+source = "git+https://github.com/esp-rs/esp-idf-svc.git#81d64e2b23d8f1984e137e3b9760054e4d2e90e8"
 dependencies = [
  "embassy-futures",
  "embedded-hal-async",
@@ -648,7 +648,7 @@ dependencies = [
 [[package]]
 name = "esp-idf-sys"
 version = "0.37.2"
-source = "git+https://github.com/esp-rs/esp-idf-sys.git#f616563a87595032f06f1fec95b6816b1c11135c"
+source = "git+https://github.com/esp-rs/esp-idf-sys.git#0ffca86e9076fa9d5d8e9b6adbb0fbed4ae29f9f"
 dependencies = [
  "anyhow",
  "build-time",
@@ -901,10 +901,13 @@ dependencies = [
  "anyhow",
  "chrono",
  "cron",
+ "hex",
+ "hmac",
  "hydragrow-shared",
  "log",
  "serde",
  "serde_json",
+ "sha2",
  "tracing",
 ]
 
@@ -967,9 +970,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.14.0"
+version = "2.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
+checksum = "07aa2048142242915a31d35844fb311e0e53fcca590c3a0a40dcf1b841fa09eb"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -1764,9 +1767,9 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "uuid"
-version = "1.25.0"
+version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f053576934f05a761a402421fbbe3d425d9366f75f978806a037b3ca481abecc"
+checksum = "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
 dependencies = [
  "getrandom",
  "js-sys",

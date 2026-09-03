@@ -84,8 +84,9 @@ impl ExpanderPin {
 // HIGH ở đây có nghĩa là "release" chân, không phải ép tín hiệu HIGH.
 const INPUT_MASK: u8 = 0b0000_1111;
 
-/// P4..P7 là OUTPUT.
-const OUTPUT_MASK: u8 = 0b1111_0000;
+// P4..P7 là OUTPUT.
+#[allow(dead_code)]
+pub const OUTPUT_MASK: u8 = 0b1111_0000;
 
 // ---------------------------------------------------------------------------
 // I2C Expander
@@ -101,7 +102,6 @@ pub struct I2cExpander<'d> {
     state: u8,
 }
 
-#[allow(dead_code)]
 impl<'d> I2cExpander<'d> {
     /// Tạo PCF8574.
     ///
@@ -173,6 +173,7 @@ impl<'d> I2cExpander<'d> {
     }
 
     /// Bật/tắt output theo bool.
+    #[allow(dead_code)]
     pub fn set_output(
         &mut self,
         pin: ExpanderPin,
@@ -207,6 +208,7 @@ impl<'d> I2cExpander<'d> {
     /// Đọc một input cụ thể.
     ///
     /// Chỉ cho phép TankA/TankB/TankPHDown/TankPHUp.
+    #[allow(dead_code)]
     pub fn read_input(
         &mut self,
         pin: ExpanderPin,
@@ -242,6 +244,7 @@ impl<'d> I2cExpander<'d> {
 
     // Debug
     /// Trả về shadow state hiện tại của PCF8574.
+    #[allow(dead_code)]
     pub fn state(&self) -> u8 {
         self.state
     }

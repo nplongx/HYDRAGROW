@@ -89,42 +89,9 @@ export const ActionSchema = z.discriminatedUnion('type', [
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 
-export const CronTriggerConfigSchema = z.object({
-  type: z.literal('cron'),
-  /** Biểu thức cron chuẩn 5 field (phút giờ ngày tháng thứ), KHÔNG có field giây —
-   * việc thêm "0 " cho field giây khi gọi crate `cron` (Rust) là việc của backend,
-   * xem AUTOMATION-005 Task 2. */
-  expression: z.string().min(1),
-  /** IANA timezone, mặc định giờ trạm nếu người dùng không đổi. */
-  timezone: z.string().min(1).default('Asia/Ho_Chi_Minh'),
+export const TriggerSchema = z.object({
+  type: z.enum(['sensor', 'fsm']),
 });
-export type CronTriggerConfig = z.infer<typeof CronTriggerConfigSchema>;
-
-export const WebhookFieldMappingSchema = z.object({
-  /** Đường dẫn trong JSON body webhook, vd "external_alarm" hoặc "value". */
-  bodyPath: z.string().min(1),
-  /** Tên field sẽ xuất hiện trong `input.<targetField>` khi Rhai eval —
-   * cho phép Condition leaf dùng thẳng tên này làm `sensor`. */
-  targetField: z.string().min(1),
-});
-export type WebhookFieldMapping = z.infer<typeof WebhookFieldMappingSchema>;
-
-export const WebhookTriggerConfigSchema = z.object({
-  type: z.literal('webhook'),
-  /** 'flow' = đi qua conditions[] như sensor/cron (Phase 5 mới).
-   * 'direct' = giữ hành vi cũ — gọi thẳng dispatch_action_command, bỏ qua Flow. */
-  mode: z.enum(['flow', 'direct']).default('flow'),
-  fieldMappings: z.array(WebhookFieldMappingSchema).default([]),
-});
-export type WebhookTriggerConfig = z.infer<typeof WebhookTriggerConfigSchema>;
-
-export const TriggerSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('sensor') }),
-  z.object({ type: z.literal('fsm') }),
-  CronTriggerConfigSchema,
-  WebhookTriggerConfigSchema,
-]);
-export type Trigger = z.infer<typeof TriggerSchema>;
 
 // React Flow canvas state — opaque to the compiler, used only to restore the UI.
 export const AutomationNodeSchema = z.object({

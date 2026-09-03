@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SETTINGS_TABS } from './Settings';
+import { SETTINGS_TABS } from './settings/settingsData';
 import { build_full_unified_payload_json } from '../../gleam_core/build/dev/javascript/gleam_core/settings/payload.mjs';
 
 function buildHeaders(

@@ -24,6 +24,85 @@ pub struct ChainNode {
     pub ir_json: Option<serde_json::Value>,
 }
 
+#[derive(Clone)]
+pub struct WebhookChainNode {
+    pub id: Uuid,
+    pub kind: ScriptKind,
+    pub next_flow_ids: Vec<String>,
+    pub ast: rhai::AST,
+}
+
+pub fn eval_webhook_chain(
+    engine: &Arc<ScriptEngine>,
+    all_scripts: &[WebhookChainNode],
+    payload: &serde_json::Map<String, serde_json::Value>,
+) -> Vec<(Uuid, ChainFireResult)> {
+    let mut fired = Vec::new();
+    let mut seen = Vec::new();
+
+    let child_ids: Vec<&str> = all_scripts
+        .iter()
+        .flat_map(|s| s.next_flow_ids.iter().map(|id| id.as_str()))
+        .collect();
+
+    let roots: Vec<&WebhookChainNode> = all_scripts
+        .iter()
+        .filter(|s| !child_ids.contains(&s.id.to_string().as_str()))
+        .collect();
+
+    let start = if roots.is_empty() {
+        all_scripts.iter().collect()
+    } else {
+        roots
+    };
+
+    for script in start {
+        eval_webhook_chain_from(
+            script,
+            all_scripts,
+            engine,
+            payload,
+            0,
+            &mut seen,
+            &mut fired,
+        );
+    }
+
+    fired
+}
+
+fn eval_webhook_chain_from(
+    node: &WebhookChainNode,
+    all_scripts: &[WebhookChainNode],
+    engine: &Arc<ScriptEngine>,
+    payload: &serde_json::Map<String, serde_json::Value>,
+    depth: usize,
+    seen: &mut Vec<Uuid>,
+    fired: &mut Vec<(Uuid, ChainFireResult)>,
+) {
+    if depth >= MAX_CHAIN_DEPTH || seen.contains(&node.id) {
+        if depth >= MAX_CHAIN_DEPTH {
+            warn!(script_id = %node.id, depth, "Webhook flow chain depth limit reached — skipping");
+        }
+        return;
+    }
+    seen.push(node.id);
+
+    let fired_result = engine
+        .eval_with_dynamic_map(&node.ast, node.kind.clone(), payload)
+        .ok()
+        .flatten();
+
+    if let Some(res) = fired_result {
+        fired.push((node.id, res));
+        for next_id in &node.next_flow_ids {
+            if let Some(next) = all_scripts.iter().find(|s| s.id.to_string() == *next_id) {
+                eval_webhook_chain_from(next, all_scripts, engine, payload, depth + 1, seen, fired);
+            }
+        }
+    }
+}
+
 /// Key duy nhất cho 1 lần gọi fetch_range_stat: (sensor, mode, window_sec).
 pub type RangeStatKey = (String, String, i64);
 
@@ -417,6 +496,71 @@ fn main(input) {
             device_id: "d1".into(),
             timestamp_ms: 0,
         }
+    }
+
+    #[test]
+    fn eval_webhook_chain_fires_when_mapped_field_matches_condition() {
+        let engine = Arc::new(ScriptEngine::new());
+        let source = r#"fn main(input) { if input.external_alarm == 1 { return #{ "level": "warning", "title": "Cảnh báo ngoài", "message": "external_alarm=1" }; } () }"#;
+        let ast = engine.compile(source).expect("compile succeeds");
+        let node = WebhookChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast,
+        };
+        let mut payload = serde_json::Map::new();
+        payload.insert("external_alarm".to_string(), serde_json::json!(1));
+        let results = eval_webhook_chain(&engine, &[node], &payload);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn eval_webhook_chain_does_not_fire_when_condition_false() {
+        let engine = Arc::new(ScriptEngine::new());
+        let source = r#"fn main(input) { if input.external_alarm == 1 { return #{ "level": "warning", "title": "Cảnh báo ngoài", "message": "external_alarm=1" }; } () }"#;
+        let ast = engine.compile(source).expect("compile succeeds");
+        let node = WebhookChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast,
+        };
+        let mut payload = serde_json::Map::new();
+        payload.insert("external_alarm".to_string(), serde_json::json!(0));
+        let results = eval_webhook_chain(&engine, &[node], &payload);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn eval_webhook_chain_respects_next_flow_ids_cross_kind() {
+        let engine = Arc::new(ScriptEngine::new());
+        let action_source =
+            r#"fn main(input) { #{ "action": "dose", "pump": "PH_DOWN", "dose_ml": 5.0 } }"#;
+        let action_ast = engine.compile(action_source).expect("compile succeeds");
+        let action_node = WebhookChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::ActionCommand,
+            next_flow_ids: vec![],
+            ast: action_ast,
+        };
+
+        let alert_source = r#"fn main(input) { if input.trigger == 1 { return #{ "level": "warning", "title": "Trigger", "message": "Fired" }; } () }"#;
+        let alert_ast = engine.compile(alert_source).expect("compile succeeds");
+        let alert_node = WebhookChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![action_node.id.to_string()],
+            ast: alert_ast,
+        };
+
+        let mut payload = serde_json::Map::new();
+        payload.insert("trigger".to_string(), serde_json::json!(1));
+
+        let results = eval_webhook_chain(&engine, &[alert_node, action_node], &payload);
+        assert_eq!(results.len(), 2);
+        assert!(matches!(results[0].1, ChainFireResult::Alert(_)));
+        assert!(matches!(results[1].1, ChainFireResult::ActionCommand(_)));
     }
 
     #[test]

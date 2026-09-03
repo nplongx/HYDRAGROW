@@ -1,0 +1,37 @@
+{
+  "requirement_id": "AUTOMATION-006",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "eval_webhook_chain evaluates WebhookChainNode array and chains execution through next_flow_ids up to depth limit",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml eval_webhook_chain",
+      "environment": "host",
+      "verified_at": "2026-03-31T09:30:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "receive_webhook_flow_event route maps JSON body fields per trigger fieldMappings and evaluates/dispatches chain results",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml receive_webhook_flow_event",
+      "environment": "host",
+      "verified_at": "2026-03-31T09:30:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "eval_with_dynamic_map successfully maps dynamic JSON numbers, strings, and bools into Rhai Scope and evaluates main(input)",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml eval_webhook_chain",
+      "environment": "host",
+      "verified_at": "2026-03-31T09:30:00Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": "WebhookFieldMappingEditor component renders flow/direct mode selection and allows configuring bodyPath/targetField mappings",
+      "source": "cd hydragrow-frontend && npm test",
+      "environment": "host",
+      "verified_at": "2026-03-31T09:30:00Z"
+    }
+  ]
+}

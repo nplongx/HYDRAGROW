@@ -210,6 +210,105 @@ impl ScriptEngine {
             duration_sec,
         }))
     }
+
+    /// Eval với 1 Map Rhai tuỳ ý làm `input` — dùng cho webhook (field không cố định trước).
+    pub fn eval_with_dynamic_map(
+        &self,
+        ast: &AST,
+        kind: crate::models::script::ScriptKind,
+        payload: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<Option<crate::mqtt::handlers::script_eval::ChainFireResult>> {
+        let mut engine = Engine::new();
+        engine.set_max_operations(50_000);
+        engine.set_max_string_size(1024);
+        engine.set_max_map_size(64);
+        engine.register_fn("fetch_range_stat", |_: String, _: String, _: i64| -> f64 {
+            0.0
+        });
+
+        let mut map = Map::new();
+        for (k, v) in payload {
+            let dynamic = match v {
+                serde_json::Value::Number(n) => n
+                    .as_f64()
+                    .map(|f| Dynamic::from_float(f as rhai::FLOAT))
+                    .unwrap_or(Dynamic::UNIT),
+                serde_json::Value::String(s) => Dynamic::from(s.clone()),
+                serde_json::Value::Bool(b) => Dynamic::from_bool(*b),
+                _ => Dynamic::UNIT,
+            };
+            map.insert(k.as_str().into(), dynamic);
+        }
+
+        let result: Dynamic = engine
+            .call_fn(&mut Scope::new(), ast, "main", (Dynamic::from_map(map),))
+            .context("Rhai eval error (webhook/dynamic map)")?;
+
+        if result.is_unit() || result.is::<()>() {
+            return Ok(None);
+        }
+
+        let result_map = result
+            .try_cast::<Map>()
+            .context("Script phải trả Map hoặc ()")?;
+
+        use crate::mqtt::handlers::script_eval::ChainFireResult;
+        Ok(match kind {
+            crate::models::script::ScriptKind::Alert => {
+                let level = result_map
+                    .get("level")
+                    .map(|v: &Dynamic| v.to_string())
+                    .unwrap_or_else(|| "info".to_string());
+                let title = result_map
+                    .get("title")
+                    .map(|v: &Dynamic| v.to_string())
+                    .unwrap_or_default();
+                let message = result_map
+                    .get("message")
+                    .map(|v: &Dynamic| v.to_string())
+                    .unwrap_or_default();
+                if title.is_empty() {
+                    None
+                } else {
+                    Some(ChainFireResult::Alert(crate::models::script::AlertOutput {
+                        level,
+                        title,
+                        message,
+                    }))
+                }
+            }
+            crate::models::script::ScriptKind::ActionCommand => {
+                let action = result_map
+                    .get("action")
+                    .map(|v: &Dynamic| v.to_string())
+                    .context("Missing 'action' in action_command result")?;
+                let pump = result_map.get("pump").map(|v: &Dynamic| v.to_string());
+                let dose_ml = result_map.get("dose_ml").and_then(|v: &Dynamic| {
+                    v.clone()
+                        .try_cast::<f32>()
+                        .or_else(|| v.clone().try_cast::<f64>().map(|f| f as f32))
+                });
+                let duration_sec = result_map
+                    .get("duration_sec")
+                    .and_then(|v: &Dynamic| v.clone().try_cast::<i64>())
+                    .map(|i| i as u64);
+                let pwm = result_map
+                    .get("pwm")
+                    .and_then(|v: &Dynamic| v.clone().try_cast::<i64>())
+                    .map(|i| i as u32);
+                Some(ChainFireResult::ActionCommand(
+                    crate::models::script::ActionCommandOutput {
+                        action,
+                        pump,
+                        dose_ml,
+                        pwm,
+                        duration_sec,
+                    },
+                ))
+            }
+            crate::models::script::ScriptKind::RecipeOverride => None,
+        })
+    }
 }
 
 impl Default for ScriptEngine {

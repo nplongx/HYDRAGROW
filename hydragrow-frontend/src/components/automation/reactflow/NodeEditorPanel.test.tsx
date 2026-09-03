@@ -22,7 +22,7 @@ describe('NodeEditorPanel', () => {
     expect(screen.getByText('Sắp có ở Phase 4/5')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Webhook'));
-    expect(screen.getByText('Sắp có ở Phase 4/5')).toBeInTheDocument();
+    expect(screen.getByText('Chế độ Webhook')).toBeInTheDocument();
   });
 
   it('adds a condition and reports the update via onChange', () => {

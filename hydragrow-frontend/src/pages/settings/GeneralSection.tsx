@@ -14,18 +14,10 @@ interface GeneralSectionProps {
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
   userEmail,
   onLogout,
-  onGoToPairing,
   isAdvancedMode,
   onToggleAdvancedMode,
 }) => {
   const navigate = useNavigate();
-
-  const goToPairing = () => {
-    // Use React Router navigation. Hard reload via window.location.href breaks
-    // BrowserRouter/Tauri deep links on /pairing in deployed builds.
-    onGoToPairing();
-    navigate('/pairing');
-  };
 
   return (
     <div className="space-y-4">
@@ -47,7 +39,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <h3 className="farm-section-title">Ghép nối thiết bị</h3>
         <button
           type="button"
-          onClick={goToPairing}
+          onClick={() => navigate('/pairing')}
           className="ui-btn-primary w-full flex items-center justify-center gap-2"
         >
           Ghép thiết bị mới

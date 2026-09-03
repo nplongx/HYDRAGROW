@@ -22,7 +22,7 @@ Last updated: 2026-03-31
 | Frontend | VERIFIED | DANGER-ZONE-REDESIGN-001 DangerZoneSection redesigned with rounded-2xl panel, bg-red-50/60, border-red-200, Lucide warning header icon, outline action buttons, and persistent warning caption text verified with Vitest tests and evidence contract. |
 | Controller / firmware | VERIFIED | OTA-REJECT-TRUNCATED-001 Content-Length truncation rejection before commit in ESP32-C3-CONTROLLER-NODE verified with unit tests and evidence contract. |
 | Simulator | VERIFIED | SIMULATOR-002 deterministic Harness SimClock execution loop, CLI simulation runner, and closed-loop dosing cycle verified with Cargo test suite and evidence contract. |
-| CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
+| CI / automation | VERIFIED | FIRMWARE-CI-TEST-DOCS-001 comment documenting cargo test boundary added to firmware-controller-ci.yml. |
 
 ## Active blockers
 

@@ -50,6 +50,7 @@ pub enum ExpanderPin {
     WaterPumpOut = 7,
 }
 
+#[allow(dead_code)]
 impl ExpanderPin {
     pub fn mask(self) -> u8 {
         1u8 << (self as u8)
@@ -112,6 +113,7 @@ pub struct I2cExpander<'d> {
     state: u8,
 }
 
+#[allow(dead_code)]
 impl<'d> I2cExpander<'d> {
     /// Tạo PCF8574.
     ///

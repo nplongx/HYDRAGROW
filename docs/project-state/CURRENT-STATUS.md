@@ -17,10 +17,10 @@ Last updated: 2026-03-31
 
 | Area | Status | Evidence / next action |
 |---|---|---|
-| Backend | VERIFIED | AUTOMATION-002 TriggerConfig shared primitive in ScriptCache verified with unit tests and evidence contract. |
-| Shared contracts | VERIFIED | AUTOMATION-002 frontend TriggerSchema expanded with cron and webhook discriminated union variants. |
-| Frontend | VERIFIED | AUTOMATION-002 TriggerSchema discriminated union verified with Vitest tests and evidence contract. |
-| Controller / firmware | VERIFIED | OTA-REJECT-TRUNCATED-001 Content-Length truncation rejection before commit in ESP32-C3-CONTROLLER-NODE verified with unit tests and evidence contract. |
+| Backend | VERIFIED | LANE1-CROSSKIND-CHAIN-001 validate-time cycle detection and cross-kind eval_flow_chain verified with tests and evidence contract. |
+| Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
+| Frontend | VERIFIED | DANGER-ZONE-REDESIGN-001 DangerZoneSection redesigned with rounded-2xl panel, bg-red-50/60, border-red-200, Lucide warning header icon, outline action buttons, and persistent warning caption text verified with Vitest tests and evidence contract. |
+| Controller / firmware | VERIFIED | CONTROLLER-FACTORY-RESET-001 factory reset arm in EventDispatcher updated to remove device identity, MQTT creds, and runtime state from NVS. |
 | Simulator | VERIFIED | SIMULATOR-002 deterministic Harness SimClock execution loop, CLI simulation runner, and closed-loop dosing cycle verified with Cargo test suite and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 

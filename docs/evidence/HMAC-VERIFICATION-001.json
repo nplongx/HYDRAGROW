@@ -1,0 +1,29 @@
+{
+  "requirement_id": "HMAC-VERIFICATION-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml test_accepts_valid_signature",
+      "environment": "host",
+      "verified_at": "2026-03-31T12:00:00Z",
+      "notes": "verify_signed_json_payload returns Ok(result) when HMAC signature matches secret"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml security::mqtt_signature::tests",
+      "environment": "host",
+      "verified_at": "2026-03-31T12:00:00Z",
+      "notes": "Rejects tampered payload, wrong secret, missing signature, missing timestamp, and empty secret"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo fmt, check, clippy, test across hydragrow-controller-core",
+      "environment": "host",
+      "verified_at": "2026-03-31T12:00:00Z",
+      "notes": "Zero warnings or errors in cargo clippy -D warnings and cargo test"
+    }
+  ]
+}

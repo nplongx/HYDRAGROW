@@ -173,7 +173,10 @@ async fn receive_webhook_flow_event(
         .get_action_command_scripts(&device_id)
         .await;
 
-    let all_cached: Vec<_> = alert_scripts.into_iter().chain(action_scripts.into_iter()).collect();
+    let all_cached: Vec<_> = alert_scripts
+        .into_iter()
+        .chain(action_scripts.into_iter())
+        .collect();
 
     let all_chain_nodes: Vec<crate::mqtt::handlers::script_eval::WebhookChainNode> = all_cached
         .iter()
@@ -233,8 +236,11 @@ async fn receive_webhook_flow_event(
             }
         }
 
-        let results =
-            crate::mqtt::handlers::script_eval::eval_webhook_chain(&engine, &all_chain_nodes, &mapped);
+        let results = crate::mqtt::handlers::script_eval::eval_webhook_chain(
+            &engine,
+            &all_chain_nodes,
+            &mapped,
+        );
         fired_total += results.len();
 
         for (_id, res) in results {

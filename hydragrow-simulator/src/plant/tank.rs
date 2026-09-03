@@ -1,4 +1,5 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
+use crate::scenario::format::InitialTank;
 use hydragrow_controller_core::test_support::{calculate_ec_change, calculate_ph_change};
 use hydragrow_shared::ControllerConfig;
 
@@ -12,6 +13,16 @@ pub struct Tank {
 }
 
 impl Tank {
+    pub fn from_initial(initial: &InitialTank) -> Self {
+        Self {
+            volume_l: initial.volume_l,
+            ec: initial.ec,
+            ph: initial.ph,
+            temp: initial.temp,
+            water_level: initial.water_level,
+        }
+    }
+
     pub fn step(
         &mut self,
         dt_ms: u64,

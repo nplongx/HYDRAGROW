@@ -1,75 +1,141 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-// use std::io::{self, Write};
-// use hydragrow_simulator::harness::Harness;
+use hydragrow_shared::ControllerConfig;
+use hydragrow_simulator::plant::tank::Tank;
+use hydragrow_simulator::scenario::format::load_scenario;
+use hydragrow_simulator::simulation::{
+    RunOptions, list_scenarios, run_interactive_step, run_simulation,
+};
+use std::path::{Path, PathBuf};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "hydragrow-sim")]
 #[command(about = "HydraGrow Simulator Digital Twin", long_about = None)]
-struct Cli {
+pub struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    pub command: Commands,
 }
 
-#[derive(Subcommand)]
-enum Commands {
-    /// Runs a scenario continuously
+#[derive(Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// Runs a scenario continuously or for a fixed number of ticks
     Run {
         #[arg(short, long)]
-        scenario: Option<String>,
+        scenario: Option<PathBuf>,
+        #[arg(long, default_value_t = 100)]
+        ticks: u64,
+        #[arg(long, default_value_t = 1000)]
+        tick_ms: u64,
+        #[arg(long, default_value = "sim-dev")]
+        device_id: String,
         #[arg(short, long)]
         mqtt: Option<String>,
         #[arg(short, long)]
-        device_id: Option<String>,
-        #[arg(short, long)]
-        record: Option<String>,
+        record: Option<PathBuf>,
     },
     /// Starts an interactive step-by-step REPL
     Step {
         #[arg(short, long)]
-        scenario: Option<String>,
+        scenario: Option<PathBuf>,
     },
     /// Lists available scenarios
     ScenarioList,
 }
 
-// fn run_interactive_step(mut harness: Harness) {
-//     println!("Interactive step mode. Type duration in ms (e.g., '100') and press Enter. 'q' to quit.");
-//     loop {
-//         print!("> ");
-//         io::stdout().flush().unwrap();
-//
-//         let mut input = String::new();
-//         io::stdin().read_line(&mut input).unwrap();
-//         let input = input.trim();
-//
-//         if input == "q" || input == "quit" {
-//             break;
-//         }
-//
-//         if let Ok(dt) = input.parse::<u64>() {
-//             let result = harness.tick(dt);
-//             println!("Tick +{}ms. Uptime: {}", dt, harness.uptime_ms());
-//             println!("Events emitted: {:?}", result.events);
-//             println!("Context Delta: {:?}", result.delta);
-//         } else {
-//             println!("Invalid input. Please enter ms as number.");
-//         }
-//     }
-// }
-
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
-    match &cli.command {
-        Commands::Step { scenario: _ } => {
-            // Load config and initial tank...
-            // run_interactive_step(harness);
-            println!("Starting step repl...");
+    let default_config = ControllerConfig {
+        control_mode: hydragrow_shared::ControlMode::Auto,
+        ..Default::default()
+    };
+
+    match cli.command {
+        Commands::Run {
+            scenario,
+            ticks,
+            tick_ms,
+            device_id,
+            mqtt,
+            record,
+        } => {
+            let options = RunOptions {
+                scenario,
+                ticks,
+                tick_ms,
+                device_id,
+                mqtt,
+                record,
+            };
+            run_simulation(default_config, &options)?;
+        }
+        Commands::Step { scenario } => {
+            let tank = if let Some(path) = &scenario {
+                let sc = load_scenario(path)?;
+                Tank::from_initial(&sc.initial_tank)
+            } else {
+                Tank::default()
+            };
+            let mut builder = hydragrow_simulator::harness::Harness::builder(default_config, tank);
+            if let Some(path) = scenario {
+                let sc = load_scenario(&path)?;
+                builder = builder.scenario(sc);
+            }
+            let harness = builder.build()?;
+            run_interactive_step(harness)?;
         }
         Commands::ScenarioList => {
-            println!("Available scenarios: ec_stagnant.json, sensor_timeout.json, etc.");
+            let scenario_dir = Path::new("src/scenario/library");
+            let scenarios = list_scenarios(scenario_dir)?;
+            println!("Available scenarios:");
+            for sc in scenarios {
+                println!(" - {}", sc.file_name().unwrap().to_string_lossy());
+            }
         }
-        Commands::Run { .. } => {
-            println!("Continuous run not fully wired yet");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_run_options() {
+        let cli = Cli::try_parse_from([
+            "hydragrow-sim",
+            "run",
+            "--scenario",
+            "src/scenario/library/ec_stagnant.json",
+            "--ticks",
+            "100",
+            "--tick-ms",
+            "1000",
+            "--device-id",
+            "sim-01",
+            "--record",
+            "out.csv",
+        ])
+        .unwrap();
+
+        match cli.command {
+            Commands::Run {
+                ticks,
+                tick_ms,
+                device_id,
+                scenario,
+                record,
+                ..
+            } => {
+                assert_eq!(ticks, 100);
+                assert_eq!(tick_ms, 1000);
+                assert_eq!(device_id, "sim-01");
+                assert_eq!(
+                    scenario,
+                    Some(PathBuf::from("src/scenario/library/ec_stagnant.json"))
+                );
+                assert_eq!(record, Some(PathBuf::from("out.csv")));
+            }
+            _ => panic!("wrong command"),
         }
     }
 }

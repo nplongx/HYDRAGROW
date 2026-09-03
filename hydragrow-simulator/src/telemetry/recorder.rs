@@ -6,10 +6,10 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn new(path: &str) -> Self {
-        let mut file = File::create(path).unwrap();
-        writeln!(file, "time,phase,ec,ph,temp,level,pump_a,pump_b").unwrap();
-        Self { file }
+    pub fn new(path: &str) -> std::io::Result<Self> {
+        let mut file = File::create(path)?;
+        writeln!(file, "time,phase,ec,ph,temp,level,pump_a,pump_b")?;
+        Ok(Self { file })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -23,13 +23,12 @@ impl Recorder {
         level: f32,
         pa: bool,
         pb: bool,
-    ) {
+    ) -> std::io::Result<()> {
         writeln!(
             self.file,
             "{},{},{},{},{},{},{},{}",
             time, phase, ec, ph, temp, level, pa, pb
         )
-        .unwrap();
     }
 }
 
@@ -40,8 +39,10 @@ mod tests {
 
     #[test]
     fn test_record_csv_line() {
-        let mut recorder = Recorder::new("test_out.csv");
-        recorder.record(100, "Idle", 1.2, 6.0, 25.0, 50.0, true, false);
+        let mut recorder = Recorder::new("test_out.csv").unwrap();
+        recorder
+            .record(100, "Idle", 1.2, 6.0, 25.0, 50.0, true, false)
+            .unwrap();
         drop(recorder);
         let content = fs::read_to_string("test_out.csv").unwrap();
         assert!(content.contains("100,Idle,1.2,6,25,50,true,false"));

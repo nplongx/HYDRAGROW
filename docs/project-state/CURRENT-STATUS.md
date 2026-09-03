@@ -21,7 +21,7 @@ Last updated: 2026-03-31
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | CONDITION-GROUPS-001 nested AND/OR condition tree editor, recursive Rhai compilation, and leaf condition counter verified with Vitest tests and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
-| Simulator | VERIFIED | SIMULATOR-001 scenario engine fault timing activation, sensor freeze retention, and target validation verified with Cargo test suite and evidence contract. |
+| Simulator | VERIFIED | SIMULATOR-002 deterministic Harness SimClock execution loop, CLI simulation runner, and closed-loop dosing cycle verified with Cargo test suite and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 
 ## Active blockers

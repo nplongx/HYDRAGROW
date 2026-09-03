@@ -1,0 +1,26 @@
+{
+  "requirement_id": "SIMULATOR-002",
+  "objective": "Integrate deterministic simulator harness around simulated clock, wire CLI simulation runner, and verify closed-loop controller digital twin execution.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Harness::tick advances SimClock deterministically and executes fault activation, plant step, sensor reading, orchestrator tick, context delta, event dispatch, and telemetry output without wall-clock dependence.",
+      "verification": "Cargo test harness_e2e in hydragrow-simulator"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Full closed-loop dosing cycle integration test verifies phase transitions across Monitoring -> MimoDosing -> Cooldown -> Monitoring driven by virtual plant dynamics.",
+      "verification": "Cargo test e2e_closed_loop_dosing_cycle in hydragrow-simulator"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "CLI subcommands (run, step, scenario-list) execute simulation scenarios, step REPL, and dynamic scenario directory listing.",
+      "verification": "Cargo test main in hydragrow-simulator"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "All workspace simulator tests, clippy, and cargo fmt checks pass with zero warnings.",
+      "verification": "Cargo test, clippy, fmt checks in hydragrow-simulator"
+    }
+  ]
+}

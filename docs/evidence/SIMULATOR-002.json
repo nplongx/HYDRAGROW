@@ -1,0 +1,37 @@
+{
+  "requirement_id": "SIMULATOR-002",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "Harness advances SimClock deterministically and executes fault activation, plant step, sensor reading, orchestrator tick, context delta, event dispatch, and telemetry output",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml --test harness_e2e harness_runs_controller_against_virtual_plant",
+      "environment": "sandbox",
+      "verified_at": "2026-03-31T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "Full closed-loop dosing cycle integration test verifies phase transitions across Monitoring -> MimoDosing -> Cooldown -> Monitoring driven by virtual plant dynamics",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml --test harness_e2e e2e_closed_loop_dosing_cycle",
+      "environment": "sandbox",
+      "verified_at": "2026-03-31T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "CLI subcommands (run, step, scenario-list) execute simulation scenarios, step REPL, and dynamic scenario directory listing",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml --bin hydragrow-simulator tests::parses_run_options",
+      "environment": "sandbox",
+      "verified_at": "2026-03-31T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": "All workspace simulator unit/integration tests, clippy, and cargo fmt checks pass with zero warnings",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml && cargo clippy --manifest-path hydragrow-simulator/Cargo.toml --all-targets -- -D warnings && cargo fmt --manifest-path hydragrow-simulator/Cargo.toml -- --check",
+      "environment": "sandbox",
+      "verified_at": "2026-03-31T00:00:00Z"
+    }
+  ]
+}

@@ -41,7 +41,7 @@ Hệ thống điều khiển và giám sát thủy canh thông minh.
 | Shared types | Rust crate | `hydragrow-shared/` | [README](hydragrow-shared/README.md) |
 | Controller firmware | Rust / esp-rs | `ESP32-C3-CONTROLLER-NODE/` | [README](ESP32-C3-CONTROLLER-NODE/README.md) |
 | Sensor firmware | C++ / PlatformIO | `ESP32-C3-SENSOR-NODE/` | [README](ESP32-C3-SENSOR-NODE/README.md) |
-| Simulator | Rust | `hydragrow-simulator/` | N/A |
+| Simulator | Rust | `hydragrow-simulator/` | [README](hydragrow-simulator/README.md) |
 
 ## MQTT Topics chính
 

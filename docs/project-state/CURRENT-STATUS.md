@@ -21,7 +21,7 @@ Last updated: 2026-09-02
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | DASHBOARD-HEADER-REFINEMENT-001 SensorBentoCard theme 'sky' rename and AlertBell header component verified with Vitest tests, Playwright screenshot, and evidence contract. |
 | Controller / firmware | IMPLEMENTING | Use staging or hardware evidence where behavior depends on real devices. |
-| Simulator | IMPLEMENTING | Keep scenario coverage aligned with production contracts. |
+| Simulator | VERIFIED | SIMULATOR-TELEMETRY-001 safe CSV Recorder and MqttBridge structured telemetry sinks verified with unit & integration tests and evidence contract. |
 | CI / automation | VERIFIED | Delivery governance workflow is present and PR contract validation is enabled. |
 
 ## Active blockers

@@ -21,8 +21,14 @@ const firebaseConfig = {
 const firebaseVapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 export const app = initializeApp(firebaseConfig);
 
-// Khởi tạo Messaging instance
-export const messaging = getMessaging(app);
+// Khởi tạo Messaging instance (tránh crash trong môi trường test/jsdom thiếu WindowMessaging)
+export const messaging = (() => {
+  try {
+    return getMessaging(app);
+  } catch {
+    return null as unknown as ReturnType<typeof getMessaging>;
+  }
+})();
 
 export const requestForWebToken = async () => {
   try {

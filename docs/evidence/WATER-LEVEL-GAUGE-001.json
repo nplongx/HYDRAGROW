@@ -1,0 +1,26 @@
+{
+  "requirement_id": "WATER-LEVEL-GAUGE-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest test suite hydragrow-frontend/src/components/ui/WaterLevelGauge.test.tsx",
+      "verified_at": "2026-09-02T14:50:00Z",
+      "notes": "Verified Min/Target/Max rendering, fill percentage calculation, target clamping to 100%, and min === max handling"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest test suite hydragrow-frontend/src/pages/settings/ThresholdsSection.test.tsx",
+      "verified_at": "2026-09-02T14:50:00Z",
+      "notes": "Verified ThresholdsSection renders WaterLevelGauge with values passed via config prop"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Frontend test, lint, tsc typecheck, and production build execution outputs",
+      "verified_at": "2026-09-02T14:50:00Z",
+      "notes": "Passed all frontend vitest tests, ESLint with 0 warnings, tsc typecheck, and Vite production build"
+    }
+  ]
+}

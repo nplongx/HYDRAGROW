@@ -1,0 +1,30 @@
+{
+  "requirement_id": "PLANT-FEEDBACK-001",
+  "objective": "Close the plant -> sensor feedback loop in hydragrow-simulator with linear configuration-driven tank dynamics (volume, water level, dosing gain) and deterministic seeded noise model for sensors.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Nutrient A flow calculates EC change using config ec_gain_per_ml, capacity, and pump PWM.",
+      "verification": "Unit test nutrient_a_flow_uses_config_gain_and_pwm in hydragrow-simulator/tests/plant_feedback.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Refill and drain move volume and level consistently and clamp at physical bounds.",
+      "verification": "Unit test refill_and_drain_change_volume_and_level in hydragrow-simulator/tests/plant_feedback.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Sensor noise is deterministic and reproducible for a seeded NoiseConfig.",
+      "verification": "Unit test sensor_noise_is_deterministic_for_a_seeded_config in hydragrow-simulator/tests/plant_feedback.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Simulator crate passes fmt, clippy -D warnings, and test suites with zero errors.",
+      "verification": "cargo test, cargo clippy --all-targets -- -D warnings, cargo fmt --check",
+      "evidence_required": true
+    }
+  ]
+}

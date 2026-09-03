@@ -106,11 +106,39 @@ impl SafetyGuard {
         self.last_ec_before_dose = None;
         self.last_ph_before_dose = None;
     }
+
+    /// Returns true if a force-on override is currently active at `now_ms`.
+    /// This is the read-site that was previously missing — the field was
+    /// written by command_handler.rs but never consulted anywhere.
+    pub fn is_override_active(&self, now_ms: u64) -> bool {
+        now_ms < self.safety_override_until
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn override_active_before_expiry() {
+        let mut guard = SafetyGuard::new();
+        guard.safety_override_until = 5000;
+        assert!(guard.is_override_active(4999));
+    }
+
+    #[test]
+    fn override_inactive_after_expiry() {
+        let mut guard = SafetyGuard::new();
+        guard.safety_override_until = 5000;
+        assert!(!guard.is_override_active(5000));
+        assert!(!guard.is_override_active(5001));
+    }
+
+    #[test]
+    fn override_inactive_by_default() {
+        let guard = SafetyGuard::new();
+        assert!(!guard.is_override_active(0));
+    }
 
     #[test]
     fn budget_not_consumed_when_second_pump_fails() {

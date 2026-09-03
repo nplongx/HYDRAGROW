@@ -1,10 +1,14 @@
 // src/hw/pcf857x.rs
+#![allow(dead_code)]
 
 use esp_idf_hal::i2c::I2cDriver;
 use pcf857x::{Error, Pcf8574, PinFlag, SlaveAddr};
 use serde::{Deserialize, Serialize};
 
+// ---------------------------------------------------------------------------
 // Tank alert state
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct TankAlert {
     pub tank_a_low: bool,
@@ -19,11 +23,14 @@ impl TankAlert {
     }
 }
 
+// ---------------------------------------------------------------------------
 // PCF8574 pins
+//
 // P0..P3 = INPUT from TTP223 touch sensors
 // P4..P5 = OUTPUT for valves
 // P6    = OUTPUT for water pump IN
 // P7    = OUTPUT for water pump OUT
+// ---------------------------------------------------------------------------
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,17 +87,23 @@ impl ExpanderPin {
     }
 }
 
+// ---------------------------------------------------------------------------
 // Masks
-// P0..P3 là INPUT.
-// Với PCF8574, muốn dùng pin làm input thì phải ghi HIGH vào latch.
-// HIGH ở đây có nghĩa là "release" chân, không phải ép tín hiệu HIGH.
+// ---------------------------------------------------------------------------
+
+/// P0..P3 là INPUT.
+///
+/// Với PCF8574, muốn dùng pin làm input thì phải ghi HIGH vào latch.
+/// HIGH ở đây có nghĩa là "release" chân, không phải ép tín hiệu HIGH.
 const INPUT_MASK: u8 = 0b0000_1111;
 
 // P4..P7 là OUTPUT.
 #[allow(dead_code)]
 const OUTPUT_MASK: u8 = 0b1111_0000;
 
+// ---------------------------------------------------------------------------
 // I2C Expander
+// ---------------------------------------------------------------------------
 
 pub struct I2cExpander<'d> {
     pcf: Pcf8574<I2cDriver<'d>>,

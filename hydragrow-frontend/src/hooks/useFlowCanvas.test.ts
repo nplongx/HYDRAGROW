@@ -56,4 +56,22 @@ describe('useFlowCanvas', () => {
     expect(result.current.isDrawerOpen).toBe(false);
     expect(result.current.selectedScript).toBeNull();
   });
+
+  it('tạo 1 edge cho mỗi cặp (script, next_flow_id) hợp lệ', () => {
+    const scripts = [
+      makeScript({ id: 'a', ir_json: { kind: 'alert', trigger: { type: 'sensor' }, conditions: [], actions: [], nodes: [], edges: [], next_flow_ids: ['b'] } }),
+      makeScript({ id: 'b', ir_json: { kind: 'action_command', trigger: { type: 'sensor' }, conditions: [], actions: [], nodes: [], edges: [], next_flow_ids: [] } }),
+    ];
+    const { result } = renderHook(() => useFlowCanvas(scripts));
+    expect(result.current.edges).toHaveLength(1);
+    expect(result.current.edges[0]).toMatchObject({ source: 'a', target: 'b', animated: true });
+  });
+
+  it('bỏ qua next_flow_id trỏ tới script không tồn tại (đã xoá) thay vì crash', () => {
+    const scripts = [
+      makeScript({ id: 'a', ir_json: { kind: 'alert', trigger: { type: 'sensor' }, conditions: [], actions: [], nodes: [], edges: [], next_flow_ids: ['ghost'] } }),
+    ];
+    const { result } = renderHook(() => useFlowCanvas(scripts));
+    expect(result.current.edges).toHaveLength(0);
+  });
 });

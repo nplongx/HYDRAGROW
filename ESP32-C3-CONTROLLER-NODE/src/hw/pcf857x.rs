@@ -1,4 +1,5 @@
 // src/hw/pcf857x.rs
+#![allow(dead_code)]
 
 use esp_idf_hal::i2c::I2cDriver;
 use pcf857x::{Error, Pcf8574, PinFlag, SlaveAddr};
@@ -55,6 +56,7 @@ impl ExpanderPin {
         1u8 << (self as u8)
     }
 
+    #[allow(dead_code)]
     pub fn flag(self) -> PinFlag {
         match self {
             Self::TankA => PinFlag::P0,
@@ -69,6 +71,7 @@ impl ExpanderPin {
     }
 
     /// True nếu pin này là input từ TTP223.
+    #[allow(dead_code)]
     pub fn is_input(self) -> bool {
         matches!(
             self,
@@ -185,6 +188,7 @@ impl<'d> I2cExpander<'d> {
     }
 
     /// Bật/tắt output theo bool.
+    #[allow(dead_code)]
     pub fn set_output(
         &mut self,
         pin: ExpanderPin,
@@ -223,6 +227,7 @@ impl<'d> I2cExpander<'d> {
     /// Đọc một input cụ thể.
     ///
     /// Chỉ cho phép TankA/TankB/TankPHDown/TankPHUp.
+    #[allow(dead_code)]
     pub fn read_input(
         &mut self,
         pin: ExpanderPin,
@@ -267,6 +272,7 @@ impl<'d> I2cExpander<'d> {
     // -----------------------------------------------------------------------
 
     /// Trả về shadow state hiện tại của PCF8574.
+    #[allow(dead_code)]
     pub fn state(&self) -> u8 {
         self.state
     }

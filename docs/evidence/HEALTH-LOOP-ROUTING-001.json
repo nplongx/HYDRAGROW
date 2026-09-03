@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "requirement_id": "HEALTH-LOOP-ROUTING-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml publish_routing::",
+      "environment": "local-sandbox",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "All 3 unit tests in publish_routing.rs passed successfully: resolves_override_target_with_payload, resolves_override_target_falls_back_to_whole_value, and returns_none_when_no_override_present."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "ESP32-C3-CONTROLLER-NODE/src/runtime/health.rs",
+      "environment": "local-sandbox",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "Removed continue statements from fsm_rx and dosing_report_rx handlers, using resolve_override_publish_target so that sensor commands and 10s health status publish blocks run in the same tick."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo fmt --check && cargo clippy --manifest-path hydragrow-controller-core/Cargo.toml --all-targets -- -D warnings",
+      "environment": "local-sandbox",
+      "verified_at": "2026-03-31T00:00:00Z",
+      "notes": "Formatting check and clippy warnings-as-errors passed without errors."
+    }
+  ]
+}

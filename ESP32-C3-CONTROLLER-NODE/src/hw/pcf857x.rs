@@ -1,4 +1,5 @@
 // src/hw/pcf857x.rs
+#![allow(dead_code)]
 
 use esp_idf_hal::i2c::I2cDriver;
 use pcf857x::{Error, Pcf8574, PinFlag, SlaveAddr};

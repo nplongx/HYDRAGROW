@@ -6,7 +6,7 @@ interface SensorBentoCardProps {
   value: number | string | null;
   unit?: string;
   icon: LucideIcon | React.ElementType;
-  theme: 'blue' | 'fuchsia' | 'orange' | 'cyan' | 'rose' | 'emerald';
+  theme: 'sky' | 'fuchsia' | 'orange' | 'cyan' | 'rose' | 'emerald';
   statusLabel?: string;
   statusTone?: 'good' | 'warn' | 'danger' | 'info';
   rangeLabel?: string;
@@ -15,7 +15,7 @@ interface SensorBentoCardProps {
 }
 
 const themeClasses: Record<string, string> = {
-  blue: 'text-sky-700 bg-sky-50 border-sky-100',
+  sky: 'text-sky-700 bg-sky-50 border-sky-100',
   fuchsia: 'text-fuchsia-700 bg-fuchsia-50 border-fuchsia-100',
   orange: 'text-orange-700 bg-orange-50 border-orange-100',
   cyan: 'text-cyan-700 bg-cyan-50 border-cyan-100',

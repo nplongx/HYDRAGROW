@@ -11,9 +11,11 @@ import { useNavigate } from 'react-router-dom';
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { QuickActionBar } from '../components/ui/QuickActionBar';
 import { DosingSummaryCard } from '../components/ui/DosingSummaryCard';
+import { AlertBell } from '../components/ui/AlertBell';
 import { LoadingState } from '../components/ui/LoadingState';
 import { useFCM } from '../hooks/useFCM';
 import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
+import type { SystemEvent } from '../types/models';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${color}`}>
@@ -73,6 +75,19 @@ const Dashboard = () => {
   const { permission, enableNotifications } = useFCM();
   const { data: healthSummary } = useSystemHealthSummary(deviceId ?? '');
   const dosingTotalCount = (healthSummary?.ec_dosing_count ?? 0) + (healthSummary?.ph_dosing_count ?? 0);
+
+  const systemEvents = useDeviceStore((s) => s.systemEvents);
+  const unreadAlertCount = useMemo(() => {
+    if (!systemEvents || !Array.isArray(systemEvents)) return 0;
+    return systemEvents.filter((ev: SystemEvent) => {
+      const rawTs = ev?.timestamp_ms ?? (ev as any)?.timestamp ?? 0;
+      const ts = typeof rawTs === 'number' ? (rawTs > 1e12 ? rawTs : rawTs * 1000) : new Date(rawTs).getTime();
+      if (!ts || Number.isNaN(ts)) return false;
+      const within24h = Date.now() - ts <= 24 * 60 * 60 * 1000;
+      const level = String(ev?.level || '').toLowerCase();
+      return within24h && (level === 'warning' || level === 'critical' || level === 'error');
+    }).length;
+  }, [systemEvents]);
 
   const friendlyState = useMemo(() => {
     const res = friendly_state(fsmState || 'Monitoring', isOnline);
@@ -138,18 +153,21 @@ const Dashboard = () => {
       <div className="ui-card relative overflow-hidden p-6 md:p-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-4 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`farm-status-pill ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                <Wifi size={13} />
-                {isOnline ? 'Trạm Online' : 'Trạm Offline'}
-              </span>
-              <span className="farm-status-pill bg-sky-50 text-sky-700 border-sky-200">
-                <Cpu size={13} />
-                {modeLabel}
-              </span>
-              <span className="farm-status-pill bg-white text-emerald-800 border-emerald-200">
-                ID: {deviceId}
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`farm-status-pill ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                  <Wifi size={13} />
+                  {isOnline ? 'Trạm Online' : 'Trạm Offline'}
+                </span>
+                <span className="farm-status-pill bg-sky-50 text-sky-700 border-sky-200">
+                  <Cpu size={13} />
+                  {modeLabel}
+                </span>
+                <span className="farm-status-pill bg-white text-emerald-800 border-emerald-200">
+                  ID: {deviceId}
+                </span>
+              </div>
+              <AlertBell unreadCount={unreadAlertCount} onClick={() => navigate('/journal')} />
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-emerald-950">
@@ -232,7 +250,7 @@ const Dashboard = () => {
             value={sensorData?.err_ec === true ? "Bảo trì" : formatNumber(sensorData?.ec, 2)}
             unit={sensorData?.err_ec === true ? "" : "ppm"}
             icon={Activity}
-            theme={sensorData?.err_ec === true ? "rose" : "blue"}
+            theme={sensorData?.err_ec === true ? "rose" : "sky"}
             statusLabel={ecStatus.label}
             statusTone={ecStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber(getTdsSetting(settings, 'ec_target', 'ec_target'), 2)} ± ${formatNumber(getTdsSetting(settings, 'ec_tolerance', 'ec_tolerance'), 2)}`}

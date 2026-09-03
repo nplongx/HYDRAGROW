@@ -1,4 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
+
+vi.mock('../lib/firebase', () => ({
+  app: { name: '[DEFAULT]', options: { apiKey: 'dummy', projectId: 'dummy' } },
+  messaging: {},
+  requestForWebToken: vi.fn(),
+  subscribeWebMessages: vi.fn(),
+}));
+
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn().mockReturnValue({}),
+  onAuthStateChanged: vi.fn().mockReturnValue(() => {}),
+  signInWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
+}));
+
 import { SETTINGS_TABS } from './Settings';
 import { build_full_unified_payload_json } from '../../gleam_core/build/dev/javascript/gleam_core/settings/payload.mjs';
 

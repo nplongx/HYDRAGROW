@@ -1,0 +1,29 @@
+{
+  "requirement_id": "DASHBOARD-HEADER-REFINEMENT-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "hydragrow-frontend/src/components/ui/SensorBentoCard.tsx",
+      "notes": "theme prop type updated to sky | fuchsia | orange | cyan | rose | emerald"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "hydragrow-frontend/src/components/ui/AlertBell.test.tsx",
+      "notes": "Unit tests for AlertBell component passing"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "hydragrow-frontend/src/pages/Dashboard.tsx",
+      "notes": "AlertBell rendered in Dashboard header with 24h unread count from systemEvents"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "hydragrow-frontend",
+      "notes": "Frontend passes tsc, eslint, vitest, and production vite build"
+    }
+  ]
+}

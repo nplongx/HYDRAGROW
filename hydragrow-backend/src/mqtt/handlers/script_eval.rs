@@ -21,6 +21,48 @@ pub struct ChainNode {
     pub kind: ScriptKind,
     pub next_flow_ids: Vec<String>,
     pub ast: rhai::AST,
+    pub ir_json: Option<serde_json::Value>,
+}
+
+/// Key duy nhất cho 1 lần gọi fetch_range_stat: (sensor, mode, window_sec).
+pub type RangeStatKey = (String, String, i64);
+
+/// Quét đệ quy conditions[] trong ir_json (`ConditionOrGroup[]`) tìm mọi leaf
+/// có mode != "instant", trả về danh sách key duy nhất cần prefetch.
+/// KHÔNG gọi network — hàm thuần, test bằng JSON tĩnh.
+pub fn collect_range_stat_keys(ir_json: &serde_json::Value) -> Vec<RangeStatKey> {
+    fn walk(node: &serde_json::Value, out: &mut Vec<RangeStatKey>) {
+        if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+            for child in children {
+                walk(child, out);
+            }
+            return;
+        }
+        let mode = node
+            .get("mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("instant");
+        if mode == "instant" {
+            return;
+        }
+        let (Some(sensor), Some(window_sec)) = (
+            node.get("sensor").and_then(|v| v.as_str()),
+            node.get("windowSec").and_then(|v| v.as_i64()),
+        ) else {
+            return;
+        };
+        out.push((sensor.to_string(), mode.to_string(), window_sec));
+    }
+
+    let mut out = Vec::new();
+    if let Some(conditions) = ir_json.get("conditions").and_then(|c| c.as_array()) {
+        for c in conditions {
+            walk(c, &mut out);
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// Kết quả eval 1 node trong chain, đủ đa hình để caller (sensors.rs) biết làm gì tiếp:
@@ -34,14 +76,19 @@ pub enum ChainFireResult {
     RecipeOverride(RecipeOverrideOutput),
 }
 
-/// Eval mọi root node của đồ thị Flow chain (toàn bộ script enabled thuộc device).
-/// Khi một node fire, tiếp tục eval các script trong `next_flow_ids` của nó (kể cả cross-kind).
-/// Dedupe theo script id: một script chỉ góp mặt tối đa 1 lần trong kết quả.
-pub fn eval_flow_chain(
+/// Biến thể sync, nhận sẵn 1 fetcher tra bảng (không I/O) — dùng để unit-test
+/// không cần Influx thật, và để `eval_flow_chain` (async) gọi sau khi prefetch xong.
+pub fn eval_flow_chain_with_fetcher<F>(
     engine: &Arc<ScriptEngine>,
     all_scripts: &[ChainNode],
     snapshot: &SensorSnapshot,
-) -> Vec<(Uuid, ChainFireResult)> {
+    device_id: &str,
+    fetcher: F,
+) -> Vec<(Uuid, ChainFireResult)>
+where
+    F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
+{
+    let fetcher_arc = Arc::new(fetcher);
     let mut fired: Vec<(Uuid, ChainFireResult)> = Vec::new();
     let mut seen: Vec<Uuid> = Vec::new();
 
@@ -67,6 +114,8 @@ pub fn eval_flow_chain(
             all_scripts,
             engine,
             snapshot,
+            device_id,
+            &fetcher_arc,
             0,
             &mut seen,
             &mut fired,
@@ -76,15 +125,78 @@ pub fn eval_flow_chain(
     fired
 }
 
-fn eval_flow_chain_from(
+/// Entry point thật — prefetch mọi (sensor, mode, window_sec) cần dùng trong TOÀN
+/// BỘ chain (không chỉ root) trước khi eval, rồi cấp cho Rhai 1 closure tra bảng.
+pub async fn eval_flow_chain(
+    engine: &Arc<ScriptEngine>,
+    all_scripts: &[ChainNode],
+    snapshot: &SensorSnapshot,
+    device_id: &str,
+    influx_client: &influxdb2::Client,
+    influx_bucket: &str,
+) -> Vec<(Uuid, ChainFireResult)> {
+    use std::collections::HashMap;
+
+    let mut keys: Vec<RangeStatKey> = all_scripts
+        .iter()
+        .filter_map(|s| s.ir_json.as_ref())
+        .flat_map(collect_range_stat_keys)
+        .collect();
+    keys.sort();
+    keys.dedup();
+
+    let mut cache: HashMap<RangeStatKey, f64> = HashMap::new();
+    if !keys.is_empty() {
+        let fetches = keys.iter().map(|(sensor, mode, window_sec)| {
+            crate::db::influx::query_range_stat(
+                influx_client,
+                influx_bucket,
+                device_id,
+                sensor,
+                mode,
+                *window_sec,
+            )
+        });
+        let results = futures_util::future::join_all(fetches).await;
+        for (key, result) in keys.iter().zip(results) {
+            match result {
+                Ok(value) => {
+                    cache.insert(key.clone(), value);
+                }
+                Err(e) => {
+                    warn!(
+                        device_id,
+                        sensor = %key.0,
+                        mode = %key.1,
+                        window_sec = key.2,
+                        error = %e,
+                        "fetch_range_stat prefetch failed — condition sẽ dùng 0.0, có thể không fire đúng"
+                    );
+                }
+            }
+        }
+    }
+
+    let fetcher =
+        move |_dev_id: &str, key: &RangeStatKey| -> f64 { cache.get(key).copied().unwrap_or(0.0) };
+
+    eval_flow_chain_with_fetcher(engine, all_scripts, snapshot, device_id, fetcher)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn eval_flow_chain_from<F>(
     node: &ChainNode,
     all_scripts: &[ChainNode],
     engine: &Arc<ScriptEngine>,
     snapshot: &SensorSnapshot,
+    device_id: &str,
+    fetcher: &Arc<F>,
     depth: usize,
     seen: &mut Vec<Uuid>,
     fired: &mut Vec<(Uuid, ChainFireResult)>,
-) {
+) where
+    F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
+{
     if depth >= MAX_CHAIN_DEPTH || seen.contains(&node.id) {
         if depth >= MAX_CHAIN_DEPTH {
             warn!(script_id = %node.id, depth, "Flow chain depth limit reached — skipping");
@@ -122,7 +234,15 @@ fn eval_flow_chain_from(
                 device_id: snapshot.device_id.clone(),
                 timestamp_ms: snapshot.timestamp_ms,
             };
-            match engine.eval_action_command(&node.ast, &input) {
+            let range_stat_fetcher = {
+                let device_id = device_id.to_string();
+                let fetcher_clone = fetcher.clone();
+                move |sensor: String, mode: String, window_sec: i64| -> f64 {
+                    fetcher_clone(&device_id, &(sensor, mode, window_sec))
+                }
+            };
+            match engine.eval_action_command_with_range_stat(&node.ast, &input, range_stat_fetcher)
+            {
                 Ok(Some(cmd)) => Some(ChainFireResult::ActionCommand(cmd)),
                 Ok(None) => None,
                 Err(e) => {
@@ -154,6 +274,8 @@ fn eval_flow_chain_from(
                 all_scripts,
                 engine,
                 snapshot,
+                device_id,
+                fetcher,
                 depth + 1,
                 seen,
                 fired,
@@ -179,6 +301,7 @@ pub fn eval_alert_scripts_chained(
             },
             next_flow_ids: s.next_flow_ids.clone(),
             ast: s.ast.clone(),
+            ir_json: s.ir_json.clone(),
         })
         .collect();
 
@@ -192,7 +315,9 @@ pub fn eval_alert_scripts_chained(
         timestamp_ms: input.timestamp_ms,
     };
 
-    let results = eval_flow_chain(engine, &chain_nodes, &snapshot);
+    let fetcher = |_dev_id: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+    let results =
+        eval_flow_chain_with_fetcher(engine, &chain_nodes, &snapshot, &input.device_id, fetcher);
 
     results
         .into_iter()
@@ -239,6 +364,7 @@ mod tests {
                 .compile(source)
                 .expect("Failed to compile test Rhai alert script source"),
             next_flow_ids,
+            ir_json: None,
         }
     }
 
@@ -277,6 +403,7 @@ fn main(input) {
             ast: engine
                 .compile(source)
                 .expect("Failed to compile test Rhai action command script source"),
+            ir_json: None,
         }
     }
 
@@ -359,6 +486,7 @@ fn main(input) {
                 .compile(FIRING_SCRIPT)
                 .expect("test script A compiles"),
             next_flow_ids: vec![b_id.to_string()],
+            ir_json: None,
         };
         let b = CachedScript {
             id: b_id,
@@ -368,6 +496,7 @@ fn main(input) {
                 .compile(FIRING_SCRIPT)
                 .expect("test script B compiles"),
             next_flow_ids: vec![a_id.to_string()],
+            ir_json: None,
         };
         let alerts = eval_alert_scripts_chained(&engine, &[a, b], &make_input());
         assert_eq!(alerts.len(), 2);
@@ -391,6 +520,7 @@ fn main(input) {
                     .get(i + 1)
                     .map(|next| vec![next.to_string()])
                     .unwrap_or_default(),
+                ir_json: None,
             })
             .collect();
         let alerts = eval_alert_scripts_chained(&engine, &scripts, &make_input());
@@ -412,12 +542,16 @@ fn main(input) {
             kind: ScriptKind::Alert,
             next_flow_ids: vec![action_child.id.to_string()],
             ast: alert_root_ast,
+            ir_json: None,
         };
 
-        let results = eval_flow_chain(
+        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+        let results = eval_flow_chain_with_fetcher(
             &engine,
             &[alert_root.clone(), action_child.clone()],
             &make_snapshot(),
+            "d1",
+            dummy_fetcher,
         );
 
         assert_eq!(results.len(), 2);
@@ -439,9 +573,17 @@ fn main(input) {
             kind: ScriptKind::Alert,
             next_flow_ids: vec![action_child.id.to_string()],
             ast: alert_root_ast,
+            ir_json: None,
         };
 
-        let results = eval_flow_chain(&engine, &[alert_root, action_child], &make_snapshot());
+        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+        let results = eval_flow_chain_with_fetcher(
+            &engine,
+            &[alert_root, action_child],
+            &make_snapshot(),
+            "d1",
+            dummy_fetcher,
+        );
 
         assert!(results.is_empty());
     }
@@ -457,15 +599,93 @@ fn main(input) {
             kind: ScriptKind::Alert,
             next_flow_ids: vec![b_id.to_string()],
             ast: engine.compile(FIRING_SCRIPT).expect("compiles"),
+            ir_json: None,
         };
         let b = ChainNode {
             id: b_id,
             kind: ScriptKind::ActionCommand,
             next_flow_ids: vec![a_id.to_string()],
             ast: engine.compile(DOSE_SCRIPT).expect("compiles"),
+            ir_json: None,
         };
 
-        let results = eval_flow_chain(&engine, &[a, b], &make_snapshot());
+        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+        let results =
+            eval_flow_chain_with_fetcher(&engine, &[a, b], &make_snapshot(), "d1", dummy_fetcher);
         assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn returns_empty_for_all_instant_conditions() {
+        let ir = serde_json::json!({ "conditions": [{ "sensor": "ph", "operator": ">", "value": 7.5, "mode": "instant" }] });
+        assert!(collect_range_stat_keys(&ir).is_empty());
+    }
+
+    #[test]
+    fn collects_flat_time_window_condition() {
+        let ir = serde_json::json!({ "conditions": [{ "sensor": "ph", "operator": ">", "value": 6.5, "mode": "mean", "windowSec": 900 }] });
+        assert_eq!(
+            collect_range_stat_keys(&ir),
+            vec![("ph".to_string(), "mean".to_string(), 900)]
+        );
+    }
+
+    #[test]
+    fn collects_nested_inside_condition_group() {
+        let ir = serde_json::json!({
+            "conditions": [{
+                "op": "and",
+                "children": [
+                    { "sensor": "ph", "operator": ">", "value": 6.5, "mode": "mean", "windowSec": 900 },
+                    { "sensor": "ec", "operator": "<", "value": 1.0, "mode": "instant" }
+                ]
+            }]
+        });
+        assert_eq!(
+            collect_range_stat_keys(&ir),
+            vec![("ph".to_string(), "mean".to_string(), 900)]
+        );
+    }
+
+    #[test]
+    fn dedupes_identical_keys_across_multiple_scripts_worth_of_conditions() {
+        let ir = serde_json::json!({
+            "conditions": [
+                { "sensor": "ph", "operator": ">", "value": 6.5, "mode": "mean", "windowSec": 900 },
+                { "sensor": "ph", "operator": "<", "value": 8.0, "mode": "mean", "windowSec": 900 }
+            ]
+        });
+        assert_eq!(collect_range_stat_keys(&ir).len(), 1);
+    }
+
+    #[test]
+    fn eval_flow_chain_uses_real_range_stat_fetcher_not_zero_stub() {
+        let engine = Arc::new(ScriptEngine::new());
+        let source = r#"
+fn main(input) {
+    if fetch_range_stat("ph", "mean", 900) > 6.5 {
+        return #{ "action": "dose", "pump": "PH_DOWN", "dose_ml": 5, "pwm": 100 };
+    }
+    ()
+}
+"#;
+        let ir_json = serde_json::json!({
+            "conditions": [{ "sensor": "ph", "operator": ">", "value": 6.5, "mode": "mean", "windowSec": 900 }]
+        });
+        let node = ChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::ActionCommand,
+            next_flow_ids: vec![],
+            ast: engine.compile(source).expect("compiles"),
+            ir_json: Some(ir_json),
+        };
+        let fetcher = |_device_id: &str, _key: &RangeStatKey| -> f64 { 7.0 };
+        let result =
+            eval_flow_chain_with_fetcher(&engine, &[node], &make_snapshot(), "device-1", fetcher);
+        assert_eq!(
+            result.len(),
+            1,
+            "phải fire vì 7.0 > 6.5, không phải 0.0 > 6.5 (stub cũ luôn fail)"
+        );
     }
 }

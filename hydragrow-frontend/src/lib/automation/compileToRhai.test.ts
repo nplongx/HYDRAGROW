@@ -2,6 +2,34 @@ import { describe, expect, it } from "vitest";
 import { compileToRhai } from "./compileToRhai";
 import type { AutomationIr } from "./ir";
 
+describe("compileToRhai range mode condition", () => {
+  it('condition instant sinh input.<sensor> như cũ', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7.5, mode: 'instant' }],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    };
+    expect(compileToRhai(ir)).toContain('input.ph > 7.5');
+  });
+
+  it('condition mean sinh fetch_range_stat với field/mode/window đúng thứ tự', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 6.5, mode: 'mean', windowSec: 900 }],
+      actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    };
+    expect(compileToRhai(ir)).toContain('fetch_range_stat("ph", "mean", 900) > 6.5');
+  });
+});
+
 describe("compileToRhai", () => {
   it('produces the exact same guard string as before groups existed (regression)', () => {
     const ir: AutomationIr = {

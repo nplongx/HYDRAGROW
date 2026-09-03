@@ -55,6 +55,34 @@ describe('ConditionGroupEditor', () => {
     });
   });
 
+  it('chọn mode "mean" hiện thêm ô nhập window (phút) và gọi onChange với windowSec tính ra giây', () => {
+    const group: ConditionGroup = {
+      op: 'and',
+      children: [{ sensor: 'ph', operator: '>', value: 6.5, mode: 'instant' }],
+    };
+    const onChange = vi.fn();
+    render(<ConditionGroupEditor group={group} fields={FIELDS} onChange={onChange} isRoot />);
+    fireEvent.change(screen.getByLabelText('Chế độ đọc'), { target: { value: 'mean' } });
+    expect(onChange).toHaveBeenCalledWith({
+      op: 'and',
+      children: [{ sensor: 'ph', operator: '>', value: 6.5, mode: 'mean', windowSec: 900 }],
+    });
+  });
+
+  it('đổi ô phút cập nhật windowSec = phút * 60', () => {
+    const group: ConditionGroup = {
+      op: 'and',
+      children: [{ sensor: 'ph', operator: '>', value: 6.5, mode: 'mean', windowSec: 900 }],
+    };
+    const onChange = vi.fn();
+    render(<ConditionGroupEditor group={group} fields={FIELDS} onChange={onChange} isRoot />);
+    fireEvent.change(screen.getByLabelText('Cửa sổ (phút)'), { target: { value: '5' } });
+    expect(onChange).toHaveBeenCalledWith({
+      op: 'and',
+      children: [{ sensor: 'ph', operator: '>', value: 6.5, mode: 'mean', windowSec: 300 }],
+    });
+  });
+
   it('removing a child calls onChange without that child', () => {
     const group: ConditionGroup = {
       op: 'and',

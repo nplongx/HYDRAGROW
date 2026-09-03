@@ -1,0 +1,42 @@
+{
+  "requirement_id": "AUTOMATION-004",
+  "objective": "Support time-window conditions (mean/min/max) across IR, Rhai compiler, UI editor, and backend script execution chain with InfluxDB range pre-fetching.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "query_range_stat receives range_sec: i64 and queries InfluxDB with range(start: -{}s) using supported stat functions.",
+      "verification": "Cargo test stat_to_flux_fn validates stat translation and range_sec signature in hydragrow-backend/src/db/influx.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "ConditionSchema supports range mode (instant, mean, min, max) and enforces windowSec requirement for non-instant modes.",
+      "verification": "Vitest test validates ConditionSchema parsing for instant and time-window conditions in hydragrow-frontend/src/lib/automation/ir.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "compileToRhai produces fetch_range_stat(sensor, mode, windowSec) calls for non-instant conditions.",
+      "verification": "Vitest test validates Rhai code generation for mean/min/max conditions in hydragrow-frontend/src/lib/automation/compileToRhai.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "collect_range_stat_keys recursively extracts deduplicated non-instant (sensor, mode, windowSec) keys from IR JSON trees.",
+      "verification": "Cargo test range_stat_prefetch_tests validates key collection across nested conditions in hydragrow-backend/src/mqtt/handlers/script_eval.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "eval_flow_chain pre-fetches required range stat keys before Rhai evaluation and routes values into fetch_range_stat execution.",
+      "verification": "Cargo test eval_flow_chain_uses_real_range_stat_fetcher validates non-zero fetcher wiring in hydragrow-backend/src/mqtt/handlers/script_eval.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "ConditionGroupEditor LeafEditor UI allows picking range mode and editing window minutes, propagating windowSec in seconds.",
+      "verification": "Vitest test validates LeafEditor mode selector and windowSec conversion in hydragrow-frontend/src/components/automation/reactflow/ConditionGroupEditor.test.tsx",
+      "evidence_required": true
+    }
+  ]
+}

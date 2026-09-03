@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, LucideIcon } from 'lucide-react';
 
 interface AccordionSectionProps {
@@ -25,22 +25,17 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   badge,
   hidden = false,
 }) => {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const isControlled = controlledIsOpen !== undefined;
-  const [internalOpen, setInternalOpen] = useState(defaultOpen || controlledIsOpen === true);
-
-  // In Settings, controlledIsOpen represents active tab, not accordion state.
-  // Sync when tab changes, then let each accordion open/close locally.
-  useEffect(() => {
-    if (isControlled) setInternalOpen(controlledIsOpen);
-  }, [controlledIsOpen, isControlled]);
-
-  const open = internalOpen;
+  const open = isControlled ? controlledIsOpen : internalOpen;
 
   const handleToggle = () => {
-    setInternalOpen((current) => !current);
-    // Keep legacy uncontrolled callback behavior. Controlled Settings accordions
-    // must not mutate the active tab when a child accordion is clicked.
-    if (!isControlled) onToggle?.();
+    if (onToggle) {
+      onToggle();
+    }
+    if (!isControlled) {
+      setInternalOpen(!internalOpen);
+    }
   };
 
   return (

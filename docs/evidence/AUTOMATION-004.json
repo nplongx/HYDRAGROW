@@ -1,0 +1,53 @@
+{
+  "requirement_id": "AUTOMATION-004",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test stat_to_flux_fn --bin hydragrow-backend",
+      "environment": "Linux x86_64 sandbox",
+      "verified_at": "2026-05-28T00:00:00Z",
+      "notes": "stat_to_flux_fn and range_sec parameter signature verified in hydragrow-backend/src/db/influx.rs"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "npx vitest run src/lib/automation/ir.test.ts",
+      "environment": "Linux x86_64 sandbox",
+      "verified_at": "2026-05-28T00:00:00Z",
+      "notes": "ConditionSchema verified for instant and time-window conditions in hydragrow-frontend"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npx vitest run src/lib/automation/compileToRhai.test.ts",
+      "environment": "Linux x86_64 sandbox",
+      "verified_at": "2026-05-28T00:00:00Z",
+      "notes": "compileToRhai verified generating fetch_range_stat calls"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test range_stat_prefetch_tests --bin hydragrow-backend",
+      "environment": "Linux x86_64 sandbox",
+      "verified_at": "2026-05-28T00:00:00Z",
+      "notes": "collect_range_stat_keys verified across flat and nested condition trees"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test eval_flow_chain_uses_real_range_stat_fetcher --bin hydragrow-backend",
+      "environment": "Linux x86_64 sandbox",
+      "verified_at": "2026-05-28T00:00:00Z",
+      "notes": "eval_flow_chain prefetch fetcher wiring verified"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/reactflow/ConditionGroupEditor.test.tsx",
+      "environment": "Linux x86_64 sandbox",
+      "verified_at": "2026-05-28T00:00:00Z",
+      "notes": "LeafEditor mode dropdown and windowSec minutes conversion verified"
+    }
+  ]
+}

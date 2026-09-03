@@ -6,6 +6,9 @@ function rhaiString(s: string): string {
 }
 
 function conditionToRhai(c: Condition): string {
+  if (c.mode && c.mode !== 'instant') {
+    return `fetch_range_stat("${c.sensor}", "${c.mode}", ${c.windowSec}) ${c.operator} ${c.value}`;
+  }
   return `input.${c.sensor} ${c.operator} ${c.value}`;
 }
 

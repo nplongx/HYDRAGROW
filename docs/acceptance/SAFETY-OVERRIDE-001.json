@@ -1,0 +1,26 @@
+{
+  "requirement_id": "SAFETY-OVERRIDE-001",
+  "objective": "Wire up safety_override_until as an active read-site in hydragrow-controller-core to allow force-on safety override during manual actions.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "SafetyGuard::is_override_active returns true when now_ms < safety_override_until and false when now_ms >= safety_override_until or default.",
+      "verification": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml safety_guard::tests::override"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "MonitoringPhase safety guard check sites for nutrient dose budget, pH dose budget, refill limits, and drain limits consult is_override_active to bypass non-emergency safety blocks when active.",
+      "verification": "hydragrow-controller-core/src/core/fsm/phases/monitoring.rs code inspection and cargo test"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "SystemContext apply_delta integration test verifies ContextDelta { safety_override_until: Some(t), .. } properly updates safety_override_until and reflects in is_override_active.",
+      "verification": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml context::tests::apply_delta_safety_override"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Controller-core verification suite passes including cargo fmt --check, cargo check, cargo clippy -- -D warnings, and cargo test.",
+      "verification": "cargo fmt --manifest-path hydragrow-controller-core/Cargo.toml -- --check && cargo check --manifest-path hydragrow-controller-core/Cargo.toml && cargo clippy --manifest-path hydragrow-controller-core/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path hydragrow-controller-core/Cargo.toml"
+    }
+  ]
+}

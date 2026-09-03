@@ -187,3 +187,24 @@ mod tests {
         assert_eq!(deserialized_recipe, ScriptKind::RecipeOverride);
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConditionTraceEntry {
+    pub description: String,
+    pub passed: bool,
+    pub actual_value: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TestScriptRequest {
+    pub ir_json: serde_json::Value,
+    pub sample: std::collections::HashMap<String, f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[derive(Deserialize)]
+pub struct TestScriptResponse {
+    pub will_fire: bool,
+    pub trace: Vec<ConditionTraceEntry>,
+    pub actions_preview: Vec<serde_json::Value>,
+}

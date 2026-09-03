@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
-use crate::models::script::{ScriptValidateResponse, UpsertScriptRequest, UserScript};
+use crate::models::script::{ScriptValidateResponse, UpsertScriptRequest, UserScript, ConditionTraceEntry, TestScriptRequest, TestScriptResponse};
 
 // ─── Validation helpers ───────────────────────────────────────────────────────
 
@@ -355,12 +355,226 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("", web::get().to(list_scripts))
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
+        .route("/test", web::post().to(test_script))
         .route("/{script_id}", web::put().to(update_script))
         .route("/{script_id}", web::delete().to(delete_script));
 }
 
+
+pub fn eval_condition_tree(node: &serde_json::Value, sample: &std::collections::HashMap<String, f64>, trace: &mut Vec<ConditionTraceEntry>) -> bool {
+    if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+        let op = node.get("op").and_then(|v| v.as_str()).unwrap_or("and");
+        // We use map and collect into a Vec instead of early-return to ensure all branches are traced
+        let results: Vec<bool> = children.iter().map(|c| eval_condition_tree(c, sample, trace)).collect();
+        let passed = if op == "or" { results.iter().any(|&r| r) } else { results.iter().all(|&r| r) };
+        return passed;
+    }
+
+    let sensor = node.get("sensor").and_then(|v| v.as_str()).unwrap_or("");
+    let operator = node.get("operator").and_then(|v| v.as_str()).unwrap_or(">");
+    let value = node.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+    let actual = sample.get(sensor).copied();
+
+    let passed = match (actual, operator) {
+        (Some(a), ">") => a > value,
+        (Some(a), "<") => a < value,
+        (Some(a), ">=") => a >= value,
+        (Some(a), "<=") => a <= value,
+        (Some(a), "==") => (a - value).abs() < f64::EPSILON,
+        (Some(a), "!=") => (a - value).abs() >= f64::EPSILON,
+        (None, _) => false,
+        _ => false,
+    };
+
+    trace.push(ConditionTraceEntry {
+        description: format!("{} {} {}", sensor, operator, value),
+        passed,
+        actual_value: actual,
+    });
+
+    passed
+}
+
+pub async fn test_script(body: web::Json<TestScriptRequest>) -> impl Responder {
+    let conditions = body.ir_json.get("conditions").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+    let mut trace = Vec::new();
+    let will_fire = conditions.iter().all(|c| eval_condition_tree(c, &body.sample, &mut trace));
+    let actions_preview = body.ir_json.get("actions").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+
+    HttpResponse::Ok().json(TestScriptResponse {
+        will_fire,
+        trace,
+        actions_preview: if will_fire { actions_preview } else { vec![] },
+    })
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[actix_web::test]
+    async fn test_endpoint_returns_will_fire_true_and_trace_when_condition_met() {
+        use crate::api::script::init_routes;
+        use actix_web::{test, web, App};
+        use serde_json::json;
+
+        let app = test::init_service(
+            App::new().service(web::scope("/api/scripts").configure(init_routes)),
+        )
+        .await;
+
+        let req_body = json!({
+            "ir_json": {
+                "conditions": [
+                    {
+                        "sensor": "ph",
+                        "operator": ">",
+                        "value": 7.5
+                    }
+                ],
+                "actions": [
+                    {
+                        "action": "dose",
+                        "pump": "ph_down",
+                        "dose_ml": 5
+                    }
+                ]
+            },
+            "sample": {
+                "ph": 7.8
+            }
+        });
+
+        let req = test::TestRequest::post()
+            .uri("/api/scripts/test")
+            .set_json(&req_body)
+            .to_request();
+        let resp: crate::models::script::TestScriptResponse = test::call_and_read_body_json(&app, req).await;
+
+        assert!(resp.will_fire);
+        assert_eq!(resp.trace.len(), 1);
+        assert_eq!(resp.trace[0].description, "ph > 7.5");
+        assert!(resp.trace[0].passed);
+        assert_eq!(resp.trace[0].actual_value, Some(7.8));
+        assert_eq!(resp.actions_preview.len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn test_endpoint_returns_will_fire_false_with_failing_leaf_marked() {
+        use crate::api::script::init_routes;
+        use actix_web::{test, web, App};
+        use serde_json::json;
+
+        let app = test::init_service(
+            App::new().service(web::scope("/api/scripts").configure(init_routes)),
+        )
+        .await;
+
+        let req_body = json!({
+            "ir_json": {
+                "conditions": [
+                    {
+                        "children": [
+                            {
+                                "sensor": "ph",
+                                "operator": ">",
+                                "value": 7.5
+                            },
+                            {
+                                "sensor": "ec",
+                                "operator": ">",
+                                "value": 3.0
+                            }
+                        ],
+                        "op": "and"
+                    }
+                ]
+            },
+            "sample": {
+                "ph": 7.8,
+                "ec": 2.1
+            }
+        });
+
+        let req = test::TestRequest::post()
+            .uri("/api/scripts/test")
+            .set_json(&req_body)
+            .to_request();
+        let resp: crate::models::script::TestScriptResponse = test::call_and_read_body_json(&app, req).await;
+
+        assert!(!resp.will_fire);
+        assert_eq!(resp.trace.len(), 2);
+
+        let ec_trace = resp.trace.iter().find(|t| t.description.contains("ec")).unwrap();
+        assert!(!ec_trace.passed);
+        assert_eq!(ec_trace.actual_value, Some(2.1));
+
+        let ph_trace = resp.trace.iter().find(|t| t.description.contains("ph")).unwrap();
+        assert!(ph_trace.passed);
+        assert_eq!(ph_trace.actual_value, Some(7.8));
+    }
+
+    #[test]
+    fn eval_condition_tree_agrees_with_compiled_rhai_on_random_cases() {
+        use crate::api::script::eval_condition_tree;
+
+        use serde_json::json;
+        use std::collections::HashMap;
+
+        // Condition 1: ph > 7.5 AND ec < 2.0
+        let cond1 = json!({
+            "children": [
+                { "sensor": "ph", "operator": ">", "value": 7.5 },
+                { "sensor": "ec", "operator": "<", "value": 2.0 }
+            ],
+            "op": "and"
+        });
+
+        let rhai_guard1 = "input.ph > 7.5 && input.ec < 2.0";
+
+        // Condition 2: water_level < 50.0 OR temp >= 30.0
+        let cond2 = json!({
+            "children": [
+                { "sensor": "water_level", "operator": "<", "value": 50.0 },
+                { "sensor": "temp", "operator": ">=", "value": 30.0 }
+            ],
+            "op": "or"
+        });
+
+        let rhai_guard2 = "input.water_level < 50.0 || input.temp >= 30.0";
+
+        let cases = vec![
+            (&cond1, rhai_guard1, vec![("ph", 7.8), ("ec", 1.5)], true),
+            (&cond1, rhai_guard1, vec![("ph", 7.8), ("ec", 2.5)], false),
+            (&cond2, rhai_guard2, vec![("water_level", 40.0), ("temp", 25.0)], true),
+            (&cond2, rhai_guard2, vec![("water_level", 60.0), ("temp", 35.0)], true),
+            (&cond2, rhai_guard2, vec![("water_level", 60.0), ("temp", 25.0)], false),
+        ];
+
+        let engine = rhai::Engine::new();
+
+        for (cond, rhai_guard, sample_data, expected) in cases {
+            let mut sample = HashMap::new();
+            let mut rhai_map = rhai::Map::new();
+
+            for (k, v) in sample_data {
+                sample.insert(k.to_string(), v);
+                rhai_map.insert(k.into(), rhai::Dynamic::from_float(v as rhai::FLOAT));
+            }
+
+            let mut trace = Vec::new();
+            let rust_result = eval_condition_tree(cond, &sample, &mut trace);
+
+            let mut scope = rhai::Scope::new();
+            scope.push("input", rhai_map);
+            let rhai_result: bool = engine.eval_with_scope(&mut scope, rhai_guard).unwrap();
+
+            assert_eq!(rust_result, expected);
+            assert_eq!(rhai_result, expected);
+            assert_eq!(rust_result, rhai_result);
+        }
+    }
+
     use super::*;
 
     #[test]

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
-import type { UpsertScriptRequest, UserScript } from '../types/automation';
+import type { UpsertScriptRequest, UserScript, TestScriptRequest, TestScriptResponse } from '../types/automation';
 
 export function useAutomationScripts(deviceId: string, options?: { enabled?: boolean }) {
   return useQuery({
@@ -44,5 +44,12 @@ export function useValidateAutomationScript(deviceId: string) {
   return useMutation({
     mutationFn: (body: UpsertScriptRequest) =>
       apiPost<{ valid: boolean; error?: string }, UpsertScriptRequest>(`/devices/${deviceId}/scripts/validate`, body),
+  });
+}
+
+export function useTestAutomationScript(deviceId: string) {
+  return useMutation({
+    mutationFn: (body: TestScriptRequest) =>
+      apiPost<TestScriptResponse, TestScriptRequest>(`/devices/${deviceId}/scripts/test`, body),
   });
 }

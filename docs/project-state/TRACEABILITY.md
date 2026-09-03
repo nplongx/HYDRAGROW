@@ -42,3 +42,4 @@ This register connects product/system requirements to implementation, verificati
 4. `ACCEPTED` requires deployment/outcome evidence plus synchronized documentation.
 5. Unknown or missing evidence must remain `NOT_STARTED`, `IMPLEMENTING`, or `BLOCKED`; never promote it based on assumption.
 6. Governance/tooling-only changes are traceable here when they change the delivery control plane; they are not treated as product subsystem changes by the material-product-change detector.
+| AUTOMATION-007 | Test Panel: dry run with sample values | `hydragrow-backend/src/api/script.rs`, `TestPanel.tsx` | Unit tests | VERIFIED |

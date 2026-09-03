@@ -17,6 +17,7 @@ Last updated: 2026-03-31
 
 | Area | Status | Evidence / next action |
 |---|---|---|
+| Automation | VERIFIED | AUTOMATION-007 Test Panel dry run implemented and tested |
 | Backend | VERIFIED | AUTOMATION-006 Webhook trigger binding into flow and eval_webhook_chain verified with tests and evidence contract. |
 | Shared contracts | IMPLEMENTING | Keep MQTT/schema changes traceable and synchronized. |
 | Frontend | VERIFIED | AUTOMATION-006 WebhookFieldMappingEditor UI and WebhookTriggerConfigSchema verified with Vitest tests and evidence contract. |

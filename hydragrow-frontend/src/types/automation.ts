@@ -21,3 +21,20 @@ export interface UpsertScriptRequest {
   ir_json?: AutomationIr;
   next_flow_ids?: string[];
 }
+
+export interface ConditionTraceEntry {
+  description: string;
+  passed: boolean;
+  actual_value: number | null;
+}
+
+export interface TestScriptRequest {
+  ir_json: AutomationIr;
+  sample: Record<string, number>;
+}
+
+export interface TestScriptResponse {
+  will_fire: boolean;
+  trace: ConditionTraceEntry[];
+  actions_preview: Record<string, unknown>[];
+}

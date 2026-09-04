@@ -147,3 +147,60 @@ fn emit_stage_event(
             payload_json: payload.to_string(),
         });
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ControllerRuntimeState {
+    pub base_config: ControllerConfig,
+    pub effective_config: ControllerConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_recipe: Option<CropStage>,
+}
+
+impl ControllerRuntimeState {
+    pub fn new(base_config: ControllerConfig) -> Self {
+        let mut state = Self {
+            base_config: base_config.clone(),
+            effective_config: base_config,
+            active_recipe: None,
+        };
+        state.recompute_effective_config();
+        state
+    }
+
+    pub fn set_base_config(&mut self, base_config: ControllerConfig) {
+        self.base_config = base_config;
+        self.recompute_effective_config();
+    }
+
+    pub fn set_active_recipe(&mut self, active_recipe: Option<CropStage>) {
+        self.active_recipe = active_recipe;
+        self.recompute_effective_config();
+    }
+
+    pub fn recompute_effective_config(&mut self) {
+        self.effective_config = self.base_config.clone();
+        if let Some(stage) = &self.active_recipe {
+            apply_stage_override(&mut self.effective_config, stage);
+        }
+    }
+
+    pub fn apply_recipe_tick_result(&mut self, result: &TickResult) {
+        if let Some(Some(stage_idx)) = result.delta.current_stage_index {
+            if let Some(recipe) = &self.base_config.active_recipe {
+                self.active_recipe = recipe.stages.get(stage_idx).cloned();
+            } else if let Some(recipe) = &self.effective_config.active_recipe {
+                self.active_recipe = recipe.stages.get(stage_idx).cloned();
+            }
+            self.recompute_effective_config();
+        } else if let Some(true) = result.delta.recipe_completed {
+            self.active_recipe = None;
+            self.recompute_effective_config();
+        }
+    }
+}
+
+impl Default for ControllerRuntimeState {
+    fn default() -> Self {
+        Self::new(ControllerConfig::default())
+    }
+}

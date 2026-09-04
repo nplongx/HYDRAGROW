@@ -7,7 +7,7 @@ use esp_idf_hal::peripherals::Peripherals;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::log::EspLogger;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
-use hydragrow_controller_core::utils::get_current_time_sec;
+use hydragrow_controller_core::utils::{get_current_time_sec, write_or_recover};
 use log::{info, warn};
 use std::sync::{mpsc, Arc};
 
@@ -62,12 +62,18 @@ fn main() -> anyhow::Result<()> {
     let (mqtt_user, mqtt_password) =
         nvs_store.load_or_init_mqtt_credentials(default_mqtt_user, default_mqtt_pass);
 
-    if let Ok(mut config) = shared_config.write() {
-        config.base_config.device_id = device_id.clone();
+    {
+        let mut state = write_or_recover(&shared_config);
+        state.base_config.device_id = device_id.clone();
     }
 
     match nvs_store.load_active_recipe() {
-        Ok(Some(_recipe)) => info!("Đã khôi phục active recipe từ NVS"),
+        Ok(Some(recipe)) => {
+            info!("Đã khôi phục active recipe từ NVS: {}", recipe.recipe_id);
+            let mut state = write_or_recover(&shared_config);
+            state.base_config.active_recipe = Some(recipe);
+            state.recompute_effective_config();
+        }
         Ok(None) => info!("Không có active recipe trong NVS"),
         Err(error) => warn!(
             "recipe_rejected: không thể đọc active recipe từ NVS khi boot: {:?}",

@@ -189,17 +189,8 @@ pub fn start_fsm_control_loop(
                     current_wall_time_ms / 1000,
                 );
 
-            // [VÁ BUG 4b]: Cập nhật `active_recipe` vào Runtime State.
-            // Điều này cực kỳ quan trọng để nếu có lệnh cập nhật cấu hình từ MQTT,
-            // hàm `state.recompute_effective_config()` (trong config.rs)
-            // sẽ tự biết để áp dụng đè lại stage này lên base config mới.
-            if let Some(Some(stage_idx)) = recipe_result.delta.current_stage_index {
-                if let Some(recipe) = &state.effective_config.active_recipe {
-                    state.active_recipe = recipe.stages.get(stage_idx).cloned();
-                }
-            } else if let Some(true) = recipe_result.delta.recipe_completed {
-                state.active_recipe = None;
-            }
+            // Cập nhật stage override hoặc khôi phục base config khi hoàn thành recipe
+            state.apply_recipe_tick_result(&recipe_result);
 
             // Lấy ra bản clone MỚI NHẤT (đã được override) để truyền xuống Orchestrator
             updated_config = state.effective_config.clone();

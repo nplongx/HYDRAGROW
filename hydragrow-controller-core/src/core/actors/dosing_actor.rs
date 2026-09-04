@@ -247,7 +247,7 @@ impl DosingActor {
                 pwm_percent: 0,
             });
 
-            if job.delivered_ml >= job.target_ml {
+            if job.delivered_ml + 1e-3 >= job.target_ml {
                 let PumpTarget::NutrientA { dose_b_ml } = job.pump else {
                     return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events);
                 };
@@ -359,7 +359,7 @@ impl DosingActor {
 
             job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
 
-            if job.delivered_ml >= job.target_ml {
+            if job.delivered_ml + 1e-3 >= job.target_ml {
                 let delivered_b = job.delivered_ml;
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     ctx.dose_b_delivered_ml = delivered_b;
@@ -429,7 +429,7 @@ impl DosingActor {
                 pwm_percent: 0,
             });
 
-            if job.delivered_ml >= job.target_ml {
+            if job.delivered_ml + 1e-3 >= job.target_ml {
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     if matches!(job.pump, PumpTarget::PhUp) {
                         ctx.ph_up_delivered_ml = job.delivered_ml;
@@ -546,7 +546,7 @@ pub fn pulse_params(
     let pulse_on_ms = if is_pulse_mode {
         config.dosing_pulse_on_ms.max(1) as u64
     } else {
-        ((dose_ml / capacity_ml_per_sec) * 1000.0).max(1.0) as u64
+        ((dose_ml / capacity_ml_per_sec) * 1000.0).round().max(1.0) as u64
     };
     let pulse_off_ms = if is_pulse_mode {
         config.dosing_pulse_off_ms as u64

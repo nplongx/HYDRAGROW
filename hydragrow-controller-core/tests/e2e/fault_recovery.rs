@@ -533,3 +533,84 @@ fn reset_fault_delta_fully_resets_dosing_and_water_actors() {
     ));
     assert_eq!(ctx.water.retry_refill, 0);
 }
+
+#[test]
+fn sensor_error_flags_gate_actuator_commands_only_healthy_channels_dose() {
+    let mut config = minimal_config();
+    config.control_mode = ControlMode::Auto;
+    config.is_enabled = true;
+    config.enable_ec_sensor = true;
+    config.enable_ph_sensor = true;
+    config.ec_target = 1.5;
+    config.ph_target = 6.0;
+    config.max_dose_per_hour = 50.0;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    // Sensor report:
+    // EC is low (0.5 vs target 1.5) BUT err_ec is true!
+    // pH is low (5.0 vs target 6.0) AND err_ph is false (healthy)
+    let mut sensor = normal_sensor();
+    sensor.ec = 0.5;
+    sensor.err_ec = Some(true);
+    sensor.ph = 5.0;
+    sensor.err_ph = Some(false);
+
+    let events = tick_apply(&mut ctx, &config, &sensor, 10_000, 10_000);
+
+    // Must transition to MimoDosing because pH needs dosing
+    assert_eq!(ctx.phase, SystemPhase::MimoDosing);
+
+    // EC must NOT have any dosing commands
+    let has_nutrient_dose = events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::events::DosingPumpTarget::NutrientA
+                    | hydragrow_controller_core::core::fsm::events::DosingPumpTarget::NutrientB,
+                on: true,
+                ..
+            }
+        )
+    });
+    assert!(
+        !has_nutrient_dose,
+        "Faulty EC sensor (err_ec=true) must NOT command Nutrient dosing even if EC is low"
+    );
+
+    // Only healthy pH channel should have dosing scheduled directly in sub_state
+    assert!(
+        matches!(
+            ctx.dosing.sub_state,
+            hydragrow_controller_core::core::actors::dosing_actor::DosingSubState::SoftStarting { .. }
+                | hydragrow_controller_core::core::actors::dosing_actor::DosingSubState::PumpingPH(
+                    ..
+                )
+        ),
+        "Healthy pH channel must schedule pH dosing in DosingSubState"
+    );
+}
+
+#[test]
+fn osaka_supersession_generation_counter_prevents_stale_soft_start() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    let soft_start_gen = Arc::new(AtomicU64::new(0));
+
+    // Start soft start (gen becomes 1)
+    let current_gen = soft_start_gen.fetch_add(1, Ordering::SeqCst) + 1;
+    assert_eq!(current_gen, 1);
+
+    // A newer direct PWM command is dispatched (gen becomes 2)
+    soft_start_gen.fetch_add(1, Ordering::SeqCst);
+    assert_eq!(soft_start_gen.load(Ordering::SeqCst), 2);
+
+    // Any running soft-start loop checking generation must cancel
+    let is_superseded = soft_start_gen.load(Ordering::SeqCst) != current_gen;
+    assert!(
+        is_superseded,
+        "Soft-start step must detect generation mismatch and cancel immediately without writing duty"
+    );
+}

@@ -233,3 +233,79 @@ fn calculated_stage_wins_over_stale_persisted_stage_index() {
     let tick = tick_recipe_engine(&mut config, &ctx, 1_700_000_000 + 4000);
     assert_eq!(tick.delta.current_stage_index, Some(Some(1)));
 }
+
+#[test]
+fn recipe_boot_activates_correct_stage_on_startup() {
+    let recipe = test_recipe();
+    // Device reboots at start_time + 4000s (during Stage 2, which starts at +3600s)
+    let base = ControllerConfig {
+        ec_target: 1.0,
+        ph_target: 6.5,
+        active_recipe: Some(recipe.clone()),
+        ..ControllerConfig::default()
+    };
+
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+    assert_eq!(ctx.current_stage_index, None);
+
+    // Initial tick on boot
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000 + 4000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+
+    assert_eq!(ctx.current_stage_index, Some(1));
+    let stage1 = &recipe.stages[1];
+    assert_eq!(state.active_recipe.as_ref().unwrap().name, stage1.name);
+    assert_eq!(state.effective_config.ec_target, stage1.ec_target);
+    assert_eq!(state.effective_config.ph_target, stage1.ph_target);
+    assert_eq!(
+        state.effective_config.water_level_target,
+        stage1.water_level_target
+    );
+}
+
+#[test]
+fn factory_reset_simulation_restores_default_context_and_clears_recipe() {
+    let recipe = test_recipe();
+    let base = ControllerConfig {
+        active_recipe: Some(recipe),
+        ..ControllerConfig::default()
+    };
+
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    // Activate stage 0
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+    assert_eq!(ctx.current_stage_index, Some(0));
+
+    // Simulate factory reset:
+    // 1. Clear active_recipe from base and runtime
+    let mut reset_base = state.base_config.clone();
+    reset_base.active_recipe = None;
+    state.set_base_config(reset_base);
+    state.set_active_recipe(None);
+
+    // 2. Clear context stage and reset safety/actor state
+    let mut reset_delta = hydragrow_controller_core::core::fsm::ContextDelta {
+        phase: Some(hydragrow_shared::fsm::SystemPhase::Fault(
+            hydragrow_shared::fsm::FaultCode::EmergencyStop,
+        )),
+        current_stage_index: Some(None),
+        reset_safety_budget: true,
+        ..Default::default()
+    };
+    ctx.apply_delta(&mut reset_delta);
+
+    // Verify all recipe state and overrides are wiped clean
+    assert!(state.active_recipe.is_none());
+    assert_eq!(ctx.current_stage_index, None);
+    assert_eq!(
+        ctx.phase,
+        hydragrow_shared::fsm::SystemPhase::Fault(hydragrow_shared::fsm::FaultCode::EmergencyStop)
+    );
+    assert_eq!(state.effective_config, state.base_config);
+}

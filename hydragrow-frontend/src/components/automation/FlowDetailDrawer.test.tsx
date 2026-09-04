@@ -51,6 +51,15 @@ describe('FlowDetailDrawer', () => {
     expect(screen.getByText('Flow mới')).toBeInTheDocument();
   });
 
+  it('drawer container has overflow-y-auto for vertical scrolling', () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FlowDetailDrawer deviceId="123" script="new" onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(screen.getByTestId('flow-detail-drawer')).toHaveClass('overflow-y-auto');
+  });
+
   it('shows all flow kinds for next flow selection including cross-kind flows', () => {
     vi.mocked(useAutomationScriptsModule.useAutomationScripts).mockReturnValue({
       data: [

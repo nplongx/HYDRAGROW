@@ -90,12 +90,19 @@ export function Automation() {
 
         {/* Desktop Drawer */}
         {isDesktop && canvas.selectedScript && (
-          <div className="absolute right-0 top-0 h-full w-2/3 border-l bg-white shadow-2xl z-10">
-            <FlowDetailDrawer
-              deviceId={deviceId}
-              script={canvas.selectedScript}
-              onClose={canvas.closeEditor}
+          <div className="fixed inset-0 z-40 flex justify-end">
+            <div
+              data-testid="drawer-backdrop"
+              onClick={canvas.closeEditor}
+              className="fixed inset-0 bg-black/20 transition-opacity"
             />
+            <div className="relative z-50 h-full w-full max-w-xl border-l bg-white shadow-2xl">
+              <FlowDetailDrawer
+                deviceId={deviceId}
+                script={canvas.selectedScript}
+                onClose={canvas.closeEditor}
+              />
+            </div>
           </div>
         )}
       </div>

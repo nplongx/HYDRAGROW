@@ -125,7 +125,7 @@ export function FlowDetailDrawer({
   };
 
   return (
-    <div className="flex h-full flex-col gap-2 p-4">
+    <div data-testid="flow-detail-drawer" className="flex h-full flex-col gap-2 p-4 overflow-y-auto">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-emerald-950">
           {isNew ? "Flow mới" : `Sửa: ${script.name}`}

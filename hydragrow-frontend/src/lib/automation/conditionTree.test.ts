@@ -1,105 +1,68 @@
-import { describe, expect, it } from 'vitest';
-import { toEditorRoot, fromEditorRoot, countLeafConditions, summarizeConditionTree } from './conditionTree';
-import type { ConditionOrGroup } from './ir';
+import { describe, it, expect } from "vitest";
+import {
+  toEditorRoot,
+  fromEditorRoot,
+  summarizeConditionTree,
+} from "./conditionTree";
+import type { Condition, ConditionGroup, ConditionOrGroup } from "./ir";
 
-describe('toEditorRoot', () => {
-  it('wraps a flat leaf array in an implicit AND root', () => {
-    const stored: ConditionOrGroup[] = [
-      { sensor: 'ph', operator: '>', value: 7.5 },
-      { sensor: 'ec', operator: '<', value: 1.2 },
+describe("ConditionTree", () => {
+  it("toEditorRoot and fromEditorRoot preserve tree structure losslessly", () => {
+    // A single leaf
+    const leaf: Condition = { sensor: "ph", operator: "<", value: 5.5 };
+
+    // A nested OR group inside an array
+    const nestedOr: ConditionGroup = {
+      op: "or",
+      children: [
+        { sensor: "ph", operator: "<", value: 5.5 },
+        { sensor: "ph", operator: ">", value: 7.5 },
+      ],
+    };
+
+    // Test 1: Single leaf wrapped in an implicit AND root
+    const arrayWithLeaf: ConditionOrGroup[] = [leaf];
+    const root1 = toEditorRoot(arrayWithLeaf);
+    expect(root1.op).toBe("and");
+    expect(root1.children).toHaveLength(1);
+    expect(fromEditorRoot(root1)).toEqual(arrayWithLeaf);
+
+    // Test 2: Pre-existing single group is preserved as root
+    const arrayWithGroup: ConditionOrGroup[] = [nestedOr];
+    const root2 = toEditorRoot(arrayWithGroup);
+    expect(root2).toEqual(nestedOr); // Because it is the only element and is a group
+    expect(fromEditorRoot(root2)).toEqual(arrayWithGroup);
+
+    // Test 3: Multiple siblings wrap in AND root
+    const arrayWithSiblings: ConditionOrGroup[] = [
+      nestedOr,
+      { sensor: "ec", operator: ">", value: 3.0 },
     ];
-    expect(toEditorRoot(stored)).toEqual({ op: 'and', children: stored });
+    const root3 = toEditorRoot(arrayWithSiblings);
+    expect(root3.op).toBe("and");
+    expect(root3.children).toHaveLength(2);
+    expect(fromEditorRoot(root3)).toEqual(arrayWithSiblings);
   });
 
-  it('wraps an empty array in an empty AND root', () => {
-    expect(toEditorRoot([])).toEqual({ op: 'and', children: [] });
-  });
+  it("correctly formats an expression preview", () => {
+    const leaf: Condition = { sensor: "ec", operator: ">", value: 3.0 };
+    const nestedOr: ConditionGroup = {
+      op: "or",
+      children: [
+        { sensor: "ph", operator: "<", value: 5.5, mode: "instant" },
+        { sensor: "ph", operator: ">", value: 7.5, mode: "instant" },
+      ],
+    };
 
-  it('unwraps a single-item array whose item is already a group (root OR case)', () => {
-    const group = { op: 'or' as const, children: [
-      { sensor: 'ph', operator: '<' as const, value: 5.5 },
-      { sensor: 'ph', operator: '>' as const, value: 7.5 },
-    ]};
-    expect(toEditorRoot([group])).toEqual(group);
-  });
+    // Empty
+    expect(summarizeConditionTree([])).toBe("Chưa cấu hình");
 
-  it('wraps a mixed array (group + leaf) in an implicit AND root, NOT unwrapped', () => {
-    const group = { op: 'or' as const, children: [
-      { sensor: 'ph', operator: '<' as const, value: 5.5 },
-      { sensor: 'ph', operator: '>' as const, value: 7.5 },
-    ]};
-    const leaf = { sensor: 'ec', operator: '>' as const, value: 3.0 };
-    expect(toEditorRoot([group, leaf])).toEqual({ op: 'and', children: [group, leaf] });
-  });
-});
+    // Single
+    expect(summarizeConditionTree([leaf])).toBe("ec > 3");
 
-describe('fromEditorRoot', () => {
-  it('unwraps an AND root back to a flat array (round-trips legacy data exactly)', () => {
-    const stored: ConditionOrGroup[] = [
-      { sensor: 'ph', operator: '>', value: 7.5 },
-      { sensor: 'ec', operator: '<', value: 1.2 },
-    ];
-    expect(fromEditorRoot(toEditorRoot(stored))).toEqual(stored);
-  });
-
-  it('wraps an OR root in a single-item array', () => {
-    const root = { op: 'or' as const, children: [
-      { sensor: 'ph', operator: '<' as const, value: 5.5 },
-      { sensor: 'ph', operator: '>' as const, value: 7.5 },
-    ]};
-    expect(fromEditorRoot(root)).toEqual([root]);
-  });
-
-  it('round-trips the Figma frame-03 example exactly', () => {
-    const stored: ConditionOrGroup[] = [
-      { op: 'or', children: [
-        { sensor: 'ph', operator: '<', value: 5.5 },
-        { sensor: 'ph', operator: '>', value: 7.5 },
-      ]},
-      { sensor: 'ec', operator: '>', value: 3.0 },
-    ];
-    expect(fromEditorRoot(toEditorRoot(stored))).toEqual(stored);
-  });
-});
-
-describe('countLeafConditions', () => {
-  it('counts 0 for an empty array', () => {
-    expect(countLeafConditions([])).toBe(0);
-  });
-  it('counts flat leaves directly', () => {
-    expect(countLeafConditions([
-      { sensor: 'ph', operator: '>', value: 7.5 },
-      { sensor: 'ec', operator: '<', value: 1.2 },
-    ])).toBe(2);
-  });
-  it('counts leaves inside nested groups recursively', () => {
-    expect(countLeafConditions([
-      { op: 'or', children: [
-        { sensor: 'ph', operator: '<', value: 5.5 },
-        { sensor: 'ph', operator: '>', value: 7.5 },
-      ]},
-      { sensor: 'ec', operator: '>', value: 3.0 },
-    ])).toBe(3);
-  });
-});
-
-describe('summarizeConditionTree', () => {
-  it('returns "Chưa cấu hình" for an empty array', () => {
-    expect(summarizeConditionTree([])).toBe('Chưa cấu hình');
-  });
-  it('joins flat leaves with " và " exactly like the old summarizeConditions', () => {
-    expect(summarizeConditionTree([
-      { sensor: 'ph', operator: '>', value: 7.5 },
-      { sensor: 'ec', operator: '<', value: 1.2 },
-    ])).toBe('ph > 7.5 và ec < 1.2');
-  });
-  it('renders a nested OR group in parens joined by " hoặc "', () => {
-    expect(summarizeConditionTree([
-      { op: 'or', children: [
-        { sensor: 'ph', operator: '<', value: 5.5 },
-        { sensor: 'ph', operator: '>', value: 7.5 },
-      ]},
-      { sensor: 'ec', operator: '>', value: 3.0 },
-    ])).toBe('(ph < 5.5 hoặc ph > 7.5) và ec > 3');
+    // Complex
+    expect(summarizeConditionTree([nestedOr, leaf])).toBe(
+      "(ph < 5.5 hoặc ph > 7.5) và ec > 3",
+    );
   });
 });

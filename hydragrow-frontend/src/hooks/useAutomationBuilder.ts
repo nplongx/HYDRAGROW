@@ -1,48 +1,69 @@
-import { useCallback, useMemo, useState } from 'react';
-import type { Edge, Node } from '@xyflow/react';
-import { addEdge, useEdgesState, useNodesState, type Connection } from '@xyflow/react';
-import { FSM_FIELDS, SENSOR_FIELDS, type Action, type AutomationIr, type ConditionOrGroup } from '../lib/automation/ir';
-import { summarizeConditionTree } from '../lib/automation/conditionTree';
+import { useCallback, useMemo, useState } from "react";
+import type { Edge, Node } from "@xyflow/react";
+import {
+  addEdge,
+  useEdgesState,
+  useNodesState,
+  type Connection,
+} from "@xyflow/react";
+import {
+  FSM_FIELDS,
+  SENSOR_FIELDS,
+  type Action,
+  type AutomationIr,
+  type ConditionOrGroup,
+} from "../lib/automation/ir";
+import { summarizeConditionTree } from "../lib/automation/conditionTree";
 
 function seedNodes(): Node[] {
   return [
-    { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
-    { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions: [], summary: 'Chưa cấu hình' } },
-    { id: '3', type: 'action', position: { x: 250, y: 240 }, data: { actions: [], summary: 'Chưa cấu hình' } },
+    { id: "trigger", type: "trigger", position: { x: 250, y: 0 }, data: {} },
+    {
+      id: "2",
+      type: "condition",
+      position: { x: 250, y: 120 },
+      data: { conditions: [], summary: "Chưa cấu hình" },
+    },
+    {
+      id: "3",
+      type: "action",
+      position: { x: 250, y: 240 },
+      data: { actions: [], summary: "Chưa cấu hình" },
+    },
   ];
 }
 const SEED_EDGES: Edge[] = [
-  { id: 'etrigger-2', source: 'trigger', target: '2' },
-  { id: 'e2-3', source: '2', target: '3' },
+  { id: "etrigger-2", source: "trigger", target: "2" },
+  { id: "e2-3", source: "2", target: "3" },
 ];
 
 /** Mirrors NodeEditorPanel's summarizeActions — kept in sync manually since
  * duplicating a switch over `Action['type']` here is simpler than exporting
  * a UI-layer helper into a hook module. */
 function summarizeActions(actions: Action[]): string {
-  if (actions.length === 0) return 'Chưa cấu hình';
+  if (actions.length === 0) return "Chưa cấu hình";
   return actions
     .map((a) => {
       switch (a.type) {
-        case 'alert':
+        case "alert":
           return `alert (${a.level}): ${a.message}`;
-        case 'advance_stage':
-          return `advance_stage ${a.targetStageOffset >= 0 ? '+' : ''}${a.targetStageOffset}: ${a.reason}`;
-        case 'end_season':
+        case "advance_stage":
+          return `advance_stage ${a.targetStageOffset >= 0 ? "+" : ""}${a.targetStageOffset}: ${a.reason}`;
+        case "end_season":
           return `end_season: ${a.reason}`;
-        case 'dose':
+        case "dose":
           return `dose ${a.doseMl}ml (${a.pump})`;
-        case 'water_on':
+        case "water_on":
           return `water_on ${a.durationSec}s (${a.pump})`;
-        case 'water_off':
+        case "water_off":
           return `water_off (${a.pump})`;
-        case 'emergency_stop':
-          return 'emergency_stop';
+        case "emergency_stop":
+          return "emergency_stop";
         default:
-          return 'unknown_action';
+          return "unknown_action";
       }
     })
-    .join(', ');
+    .join(", ");
 }
 
 /** Rebuild the seed graph but with a single condition-node and single
@@ -51,25 +72,38 @@ function summarizeActions(actions: Action[]): string {
  * actions collapse into one action-node's `actions` array — this matches
  * `buildIrFromGraph`'s own flattening (it concatenates every action-node's
  * `actions` array), so re-saving without any edits round-trips exactly. */
-function synthesizeGraphFromFlatIr(conditions: ConditionOrGroup[], actions: Action[]): { nodes: Node[]; edges: Edge[] } {
+function synthesizeGraphFromFlatIr(
+  conditions: ConditionOrGroup[],
+  actions: Action[],
+): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
-    { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
-    { id: '2', type: 'condition', position: { x: 250, y: 120 }, data: { conditions, summary: summarizeConditionTree(conditions) } },
-    { id: '3', type: 'action', position: { x: 250, y: 240 }, data: { actions, summary: summarizeActions(actions) } },
+    { id: "trigger", type: "trigger", position: { x: 250, y: 0 }, data: {} },
+    {
+      id: "2",
+      type: "condition",
+      position: { x: 250, y: 120 },
+      data: { conditions, summary: summarizeConditionTree(conditions) },
+    },
+    {
+      id: "3",
+      type: "action",
+      position: { x: 250, y: 240 },
+      data: { actions, summary: summarizeActions(actions) },
+    },
   ];
   return { nodes, edges: SEED_EDGES };
 }
 
 /** Sensor field list valid for the given automation kind (mirrors backend
  * ScriptSensorInput / ScriptFsmInput). */
-export function fieldsForKind(kind: AutomationIr['kind']): readonly string[] {
-  return kind === 'alert' ? SENSOR_FIELDS : FSM_FIELDS;
+export function fieldsForKind(kind: AutomationIr["kind"]): readonly string[] {
+  return kind === "alert" ? SENSOR_FIELDS : FSM_FIELDS;
 }
 
 let nextNodeId = 100;
 
 export function useAutomationBuilder() {
-  const [kind, setKindState] = useState<AutomationIr['kind']>('alert');
+  const [kind, setKindState] = useState<AutomationIr["kind"]>("alert");
   const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(SEED_EDGES);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -80,7 +114,7 @@ export function useAutomationBuilder() {
   );
 
   const setKind = useCallback(
-    (next: AutomationIr['kind']) => {
+    (next: AutomationIr["kind"]) => {
       setKindState(next);
       setNodes(seedNodes());
       setEdges(SEED_EDGES);
@@ -91,22 +125,37 @@ export function useAutomationBuilder() {
 
   const updateNodeData = useCallback(
     (nodeId: string, data: Record<string, unknown>) => {
-      setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n)));
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n,
+        ),
+      );
     },
     [setNodes],
   );
 
   const addNode = useCallback(
-    (type: 'condition' | 'condition_group' | 'action') => {
+    (type: "condition" | "condition_group" | "action") => {
       const id = String(nextNodeId++);
       const data =
-        type === 'action'
-          ? { actions: [], summary: 'Chưa cấu hình' }
-          : type === 'condition_group'
-          ? { conditions: [{ op: 'and', children: [] }], summary: 'Chưa cấu hình' }
-          : { conditions: [], summary: 'Chưa cấu hình' };
-      const nodeType = type === 'condition_group' ? 'condition' : type;
-      setNodes((nds) => [...nds, { id, type: nodeType, position: { x: 250 + nds.length * 40, y: 360 }, data }]);
+        type === "action"
+          ? { actions: [], summary: "Chưa cấu hình" }
+          : type === "condition_group"
+            ? {
+                conditions: [{ op: "and", children: [] }],
+                summary: "Chưa cấu hình",
+              }
+            : { conditions: [], summary: "Chưa cấu hình" };
+      const nodeType = type === "condition_group" ? "condition" : type;
+      setNodes((nds) => [
+        ...nds,
+        {
+          id,
+          type: nodeType,
+          position: { x: 250 + nds.length * 40, y: 360 },
+          data,
+        },
+      ]);
     },
     [setNodes],
   );
@@ -118,16 +167,24 @@ export function useAutomationBuilder() {
       setSelectedNodeId(null);
       if (ir.nodes.length > 0) {
         let loadedNodes = ir.nodes as Node[];
-        if (!loadedNodes.some((n) => n.id === 'trigger' || n.type === 'trigger')) {
+        if (
+          !loadedNodes.some((n) => n.id === "trigger" || n.type === "trigger")
+        ) {
           loadedNodes = [
-            { id: 'trigger', type: 'trigger', position: { x: 250, y: 0 }, data: {} },
+            {
+              id: "trigger",
+              type: "trigger",
+              position: { x: 250, y: 0 },
+              data: {},
+            },
             ...loadedNodes,
           ];
         }
         setNodes(loadedNodes);
         setEdges(ir.edges);
       } else {
-        const { nodes: synthesized, edges: synthesizedEdges } = synthesizeGraphFromFlatIr(ir.conditions, ir.actions);
+        const { nodes: synthesized, edges: synthesizedEdges } =
+          synthesizeGraphFromFlatIr(ir.conditions, ir.actions);
         setNodes(synthesized);
         setEdges(synthesizedEdges);
       }
@@ -135,7 +192,10 @@ export function useAutomationBuilder() {
     [setNodes, setEdges],
   );
 
-  const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
+  const selectedNode = useMemo(
+    () => nodes.find((n) => n.id === selectedNodeId) ?? null,
+    [nodes, selectedNodeId],
+  );
 
   return {
     kind,

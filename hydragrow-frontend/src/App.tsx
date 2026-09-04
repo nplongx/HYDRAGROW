@@ -22,7 +22,7 @@ const queryClient = new QueryClient({
 });
 
 import Dashboard from './pages/Dashboard';
-import Operations from './pages/Operations';
+import { Operations } from './pages/Operations';
 import Cultivation from './pages/Cultivation';
 import Journal from './pages/Journal';
 const Settings = React.lazy(() => import('./pages/Settings'));

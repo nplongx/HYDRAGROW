@@ -1,37 +1,42 @@
-import { Play } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
-import { ReactFlow, Background, Controls } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-import { AUTOMATION_NODE_TYPES } from './reactflow/nodeTypes';
-import { NodePalette } from './reactflow/NodePalette';
-import { NodeEditorPanel } from './reactflow/NodeEditorPanel';
-import { buildIrFromGraph } from './reactflow/buildIr';
-import { TestPanel } from './reactflow/TestPanel';
-import { fieldsForKind } from '../../hooks/useAutomationBuilder';
-import { useAutomationBuilder } from '../../hooks/useAutomationBuilder';
-import { AutomationIrSchema, type AutomationIr } from '../../lib/automation/ir';
-import { compileToRhai } from '../../lib/automation/compileToRhai';
-import type { UserScript } from '../../types/automation';
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { ReactFlow, Background, Controls } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { AUTOMATION_NODE_TYPES } from "./reactflow/nodeTypes";
+import { NodePalette } from "./reactflow/NodePalette";
+import { NodeEditorPanel } from "./reactflow/NodeEditorPanel";
+import { buildIrFromGraph } from "./reactflow/buildIr";
+import { TestPanel } from "./reactflow/TestPanel";
+import { fieldsForKind } from "../../hooks/useAutomationBuilder";
+import { FlowEditorHeader } from "./FlowEditorHeader";
+import { FlowEditorFooter } from "./FlowEditorFooter";
+import { NextFlowSelector } from "./NextFlowSelector";
+import { useAutomationBuilder } from "../../hooks/useAutomationBuilder";
+import { AutomationIrSchema, type AutomationIr } from "../../lib/automation/ir";
+import { compileToRhai } from "../../lib/automation/compileToRhai";
+import type { UserScript } from "../../types/automation";
 import {
   useAutomationScripts,
   useCreateAutomationScript,
   useDeleteAutomationScript,
   useUpdateAutomationScript,
   useValidateAutomationScript,
-} from '../../hooks/useAutomationScripts';
-import { wouldCreateCycle } from '../../lib/automation/flowCycle';
+} from "../../hooks/useAutomationScripts";
 
 export interface FlowDetailDrawerProps {
   deviceId: string;
   /** 'new' khi tạo Flow mới; một `UserScript` khi mở chi tiết Flow đã lưu. */
-  script: UserScript | 'new';
+  script: UserScript | "new";
   onClose: () => void;
 }
 
-export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawerProps) {
-  const isNew = script === 'new';
-  const [name, setName] = useState(isNew ? 'Flow mới' : script.name);
+export function FlowDetailDrawer({
+  deviceId,
+  script,
+  onClose,
+}: FlowDetailDrawerProps) {
+  const isNew = script === "new";
+  const [name, setName] = useState(isNew ? "Flow mới" : script.name);
   const [enabled, setEnabled] = useState(isNew ? true : script.enabled);
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [nextFlowIds, setNextFlowIds] = useState<string[]>(
@@ -44,14 +49,16 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   );
 
   const toggleNextFlow = (id: string) => {
-    setNextFlowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setNextFlowIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   };
 
   useEffect(() => {
     if (!isNew && script.ir_json) {
       builder.loadFromIr(script.ir_json);
     } else {
-      builder.setKind('alert');
+      builder.setKind("alert");
     }
     // Seed once per Flow opened — not on every builder state change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,7 +66,10 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
 
   const validateScript = useValidateAutomationScript(deviceId);
   const createScript = useCreateAutomationScript(deviceId);
-  const updateScript = useUpdateAutomationScript(deviceId, isNew ? '' : script.id);
+  const updateScript = useUpdateAutomationScript(
+    deviceId,
+    isNew ? "" : script.id,
+  );
   const deleteScript = useDeleteAutomationScript(deviceId);
 
   const handleSave = async () => {
@@ -88,11 +98,23 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
       return;
     }
     if (isNew) {
-      await createScript.mutateAsync({ kind: parsed.data.kind, name, source, enabled, ir_json: parsed.data });
+      await createScript.mutateAsync({
+        kind: parsed.data.kind,
+        name,
+        source,
+        enabled,
+        ir_json: parsed.data,
+      });
     } else {
-      await updateScript.mutateAsync({ kind: parsed.data.kind, name, source, enabled, ir_json: parsed.data });
+      await updateScript.mutateAsync({
+        kind: parsed.data.kind,
+        name,
+        source,
+        enabled,
+        ir_json: parsed.data,
+      });
     }
-    toast.success('Đã lưu Flow');
+    toast.success("Đã lưu Flow");
     onClose();
   };
 
@@ -105,25 +127,26 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
   return (
     <div className="flex h-full flex-col gap-2 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-emerald-950">{isNew ? 'Flow mới' : `Sửa: ${script.name}`}</h2>
+        <h2 className="text-lg font-semibold text-emerald-950">
+          {isNew ? "Flow mới" : `Sửa: ${script.name}`}
+        </h2>
         <button className="text-sm text-emerald-700/70" onClick={onClose}>
           Đóng
         </button>
       </div>
-      <div className="flex items-center gap-2">
-        <input className="ui-input flex-1" value={name} onChange={(e) => setName(e.target.value)} />
-        <select className="ui-input w-auto" value={builder.kind} onChange={(e) => builder.setKind(e.target.value as AutomationIr['kind'])}>
-          <option value="alert">Alert</option>
-          <option value="recipe_override">Recipe Override</option>
-          <option value="action_command">Action Command</option>
-        </select>
-        <label className="flex items-center gap-1 text-xs text-emerald-800/75">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          Bật
-        </label>
-      </div>
 
-      <NodePalette onAddNode={builder.addNode} />
+      <FlowEditorHeader
+        name={name}
+        kind={builder.kind}
+        enabled={enabled}
+        onChange={(updates) => {
+          if (updates.name !== undefined) setName(updates.name);
+          if (updates.kind !== undefined) builder.setKind(updates.kind);
+          if (updates.enabled !== undefined) setEnabled(updates.enabled);
+        }}
+      />
+
+      <NodePalette onAddNode={builder.addNode} onUpdateTrigger={(builder as any).updateTrigger} />
 
       <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-100 lg:flex-row">
         <div className="min-h-[16rem] flex-1">
@@ -146,12 +169,16 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
             <div className="absolute right-0 top-0 h-full w-96 shadow-xl z-20 flex flex-col border-l">
               <TestPanel
                 deviceId={deviceId}
-                ir={buildIrFromGraph({ kind: builder.kind, nodes: builder.nodes, edges: builder.edges, nextFlowIds })}
+                ir={buildIrFromGraph({
+                  kind: builder.kind,
+                  nodes: builder.nodes,
+                  edges: builder.edges,
+                  nextFlowIds,
+                })}
                 fields={fieldsForKind(builder.kind)}
               />
             </div>
           )}
-
         </div>
         {builder.selectedNode && (
           <NodeEditorPanel
@@ -164,54 +191,22 @@ export function FlowDetailDrawer({ deviceId, script, onClose }: FlowDetailDrawer
       </div>
 
       {otherScripts.length > 0 && (
-        <div className="rounded-lg border border-emerald-100 p-2">
-          <p className="mb-1 text-xs font-semibold text-emerald-950">Flow kế tiếp sau khi chạy xong</p>
-          {otherScripts.map((s) => {
-            const isChecked = nextFlowIds.includes(s.id);
-            const currentScriptId = isNew ? '__new__' : script.id;
-            const isCycle = !isChecked && wouldCreateCycle(currentScriptId, nextFlowIds, s.id, allScripts ?? []);
-
-            return (
-              <label key={s.id} className="flex items-center gap-1 text-xs text-emerald-800/75">
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  disabled={isCycle}
-                  onChange={() => toggleNextFlow(s.id)}
-                />
-                <span>{s.name}</span>
-                {isCycle && (
-                  <span className="ml-1 text-[11px] font-medium text-amber-600">
-                    không cho phép — sẽ tạo vòng lặp
-                  </span>
-                )}
-              </label>
-            );
-          })}
-        </div>
+        <NextFlowSelector
+          scripts={otherScripts}
+          selectedIds={nextFlowIds}
+          currentScriptId={isNew ? null : script.id}
+          onToggle={(id) => toggleNextFlow(id)}
+          allScripts={allScripts ?? []}
+        />
       )}
 
-      <div className="flex justify-between">
-        {!isNew ? (
-          <button className="rounded-lg bg-red-50 border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700" onClick={handleDelete}>
-            Xóa Flow
-          </button>
-        ) : (
-          <span />
-        )}
-
-        <button
-          className={`ui-btn-md flex items-center gap-2 ${showTestPanel ? 'bg-emerald-100 text-emerald-800' : 'bg-white border text-slate-700'}`}
-          onClick={() => setShowTestPanel(!showTestPanel)}
-        >
-          <Play className="h-4 w-4" />
-          Chạy thử
-        </button>
-
-        <button className="ui-btn-primary" disabled={createScript.isPending || updateScript.isPending} onClick={handleSave}>
-          Lưu Flow
-        </button>
-      </div>
+      <FlowEditorFooter
+        isNew={isNew}
+        pending={createScript.isPending || updateScript.isPending}
+        onDelete={handleDelete}
+        onTest={() => setShowTestPanel(!showTestPanel)}
+        onSave={handleSave}
+      />
     </div>
   );
 }

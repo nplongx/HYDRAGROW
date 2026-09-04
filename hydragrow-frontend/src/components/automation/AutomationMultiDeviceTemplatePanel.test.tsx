@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AutomationMultiDeviceTemplatePanel } from "./AutomationMultiDeviceTemplatePanel";
 
 // Mock dependencies
@@ -13,28 +14,50 @@ vi.mock("../../hooks/useOwnedDevices", () => ({
   }),
 }));
 
-describe("AutomationMultiDeviceTemplatePanel", () => {
-  it("renders multi-device template application UI properly", () => {
-    // We expect blocked apply behavior because we don't have a real Flow bulk API
-    render(
-      <AutomationMultiDeviceTemplatePanel
-        currentScript={{ id: "script1", name: "Test Script" } as any}
-      />,
-    );
+const mutateMock = vi.fn();
+vi.mock("../../hooks/useAutomationScripts", () => ({
+  useApplyTemplate: () => ({
+    mutate: mutateMock,
+    isPending: false,
+    isSuccess: false,
+    isError: false,
+  }),
+}));
 
-    // selected device count is reflected in the CTA
-    // a device with local override renders override;
-    // a device inheriting template renders giống gốc;
-    // the current Flow threshold summary is visible;
-    // the sync helper text states that local overrides are preserved;
-    // Apply is disabled with an explanatory state when no supported Automation bulk API exists.
+const queryClient = new QueryClient();
+
+describe("AutomationMultiDeviceTemplatePanel", () => {
+  it("renders multi-device template application UI and allows applying to selected devices", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AutomationMultiDeviceTemplatePanel
+          currentScript={{ id: "script1", device_id: "dev-root", name: "Test Script" } as any}
+        />
+      </QueryClientProvider>,
+    );
 
     expect(
       screen.getByText("Áp Flow template cho nhiều thiết bị"),
     ).toBeInTheDocument();
 
-    // We expect some UI indicating it's unsupported/blocked for now
-    expect(screen.getByText(/Tính năng đang phát triển/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Áp dụng/i })).toBeDisabled();
+    expect(screen.getByText("Device 1")).toBeInTheDocument();
+    expect(screen.getByText("Device 2 (Local Override)")).toBeInTheDocument();
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(2);
+
+    // Initial state: 0 selected, button disabled
+    const applyButton = screen.getByRole("button", { name: /Áp dụng cho 0 thiết bị đã chọn/i });
+    expect(applyButton).toBeDisabled();
+
+    // Check first device
+    fireEvent.click(checkboxes[0]);
+    expect(screen.getByRole("button", { name: /Áp dụng cho 1 thiết bị đã chọn/i })).not.toBeDisabled();
+
+    // Click apply
+    fireEvent.click(screen.getByRole("button", { name: /Áp dụng cho 1 thiết bị đã chọn/i }));
+    expect(mutateMock).toHaveBeenCalledWith([
+      { device_id: "dev1", overrides: {} },
+    ]);
   });
 });

@@ -54,6 +54,9 @@ pub struct UserScript {
     #[sqlx(json)]
     pub next_flow_ids: Vec<String>,
     pub cron_next_run_at: Option<DateTime<Utc>>,
+    pub template_source_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub template_overrides: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

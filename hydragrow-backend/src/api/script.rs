@@ -351,11 +351,32 @@ pub async fn validate_script(
     })
 }
 
+pub async fn apply_template(
+    path: web::Path<(String, uuid::Uuid)>,
+    body: web::Json<Vec<crate::services::multi_device_template::TemplateTarget>>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let (device_id, script_id) = path.into_inner();
+    let source: Option<UserScript> = sqlx::query_as("SELECT * FROM user_scripts WHERE id = $1 AND device_id = $2")
+        .bind(script_id).bind(&device_id)
+        .fetch_optional(&app_state.pg_pool).await.unwrap_or(None);
+
+    let Some(source) = source else {
+        return HttpResponse::NotFound().json(serde_json::json!({"error": "Flow gốc không tồn tại"}));
+    };
+
+    match crate::services::multi_device_template::apply_template(&app_state.pg_pool, &source, body.into_inner()).await {
+        Ok(ids) => HttpResponse::Ok().json(serde_json::json!({"status": "success", "applied_script_ids": ids})),
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()})),
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("", web::get().to(list_scripts))
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
         .route("/test", web::post().to(test_script))
+        .route("/{script_id}/apply-template", web::post().to(apply_template))
         .route("/{script_id}", web::put().to(update_script))
         .route("/{script_id}", web::delete().to(delete_script));
 }

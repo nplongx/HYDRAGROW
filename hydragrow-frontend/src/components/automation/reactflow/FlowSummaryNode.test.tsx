@@ -1,112 +1,62 @@
-import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ReactFlowProvider } from '@xyflow/react';
+import { describe, it, expect } from 'vitest';
 import { FlowSummaryNode } from './FlowSummaryNode';
+import { ReactFlowProvider } from '@xyflow/react';
 import type { UserScript } from '../../../types/automation';
 
-function nodeProps(script: UserScript) {
-  return { id: script.id, data: { script } } as unknown as Parameters<typeof FlowSummaryNode>[0];
-}
-
 describe('FlowSummaryNode', () => {
-  it('counts leaf conditions recursively across nested condition groups', () => {
+  it('shows name, kind badge, and trigger info', () => {
     const script: UserScript = {
-      id: 's3',
-      device_id: 'd1',
-      kind: 'alert',
-      name: 'Nested Flow',
-      source: '',
-      enabled: true,
-      ir_json: {
-        kind: 'alert',
-        trigger: { type: 'sensor' },
-        conditions: [
-          {
-            op: 'or',
-            children: [
-              { sensor: 'ph', operator: '<', value: 5.5 },
-              { sensor: 'ph', operator: '>', value: 7.5 },
-            ],
-          },
-          { sensor: 'ec', operator: '>', value: 3.0 },
-        ],
-        actions: [{ type: 'alert', level: 'warning', message: 'x' }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-      },
-      created_at: '',
-      updated_at: '',
-    };
-    render(
-      <ReactFlowProvider>
-        <FlowSummaryNode {...nodeProps(script)} />
-      </ReactFlowProvider>,
-    );
-    expect(screen.getByText('3 điều kiện → 1 hành động')).toBeInTheDocument();
-  });
-
-  it('shows name, kind badge, and condition/action counts for a Blockly-authored flow', () => {
-    const script: UserScript = {
-      id: 's1',
-      device_id: 'd1',
-      kind: 'alert',
+      id: '1',
       name: 'pH cao',
+      kind: 'alert',
       source: '',
+      device_id: 'dev1',
       enabled: true,
       ir_json: {
         kind: 'alert',
-        trigger: { type: 'sensor' },
-        conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
-        actions: [{ type: 'alert', level: 'warning', message: 'pH cao' }],
-        nodes: [],
+        nodes: [{ id: 'trigger', type: 'trigger', data: { kind: 'sensor' } }],
         edges: [],
         next_flow_ids: [],
-      },
-      created_at: '',
-      updated_at: '',
-    };
+      } as any,
+    } as any;
+
     render(
       <ReactFlowProvider>
-        <FlowSummaryNode {...nodeProps(script)} />
-      </ReactFlowProvider>,
+        <FlowSummaryNode data={{ script }} />
+      </ReactFlowProvider>
     );
     expect(screen.getByText('pH cao')).toBeInTheDocument();
-    expect(screen.getByText('Alert')).toBeInTheDocument();
-    expect(screen.getByText('1 điều kiện → 1 hành động')).toBeInTheDocument();
+    expect(screen.getByText('Cảnh báo')).toBeInTheDocument();
+    expect(screen.getByText('SENSOR')).toBeInTheDocument();
+    expect(screen.getByText('1 nodes')).toBeInTheDocument();
   });
 
-  it('shows "Script viết tay (Rhai)" for scripts without ir_json', () => {
+  it('shows name, kind badge, and trigger info for webhook', () => {
     const script: UserScript = {
-      id: 's2',
-      device_id: 'd1',
-      kind: 'recipe_override',
-      name: 'Manual script',
+      id: '1',
+      name: 'Webhook flow',
+      kind: 'action_command',
       source: '',
+      device_id: 'dev1',
       enabled: false,
-      ir_json: null,
-      created_at: '',
-      updated_at: '',
-    };
+      ir_json: {
+        kind: 'action_command',
+        nodes: [{ id: 'trigger', type: 'trigger', data: { kind: 'webhook' } }, { id: '2', type: 'action', data: {} }],
+        edges: [],
+        next_flow_ids: [],
+      } as any,
+    } as any;
+
     render(
       <ReactFlowProvider>
-        <FlowSummaryNode {...nodeProps(script)} />
-      </ReactFlowProvider>,
+        <FlowSummaryNode data={{ script }} />
+      </ReactFlowProvider>
     );
-    expect(screen.getByText('Script viết tay (Rhai)')).toBeInTheDocument();
-  });
-});
-
-const KIND_COLORS: Record<string, string> = {
-  alert: 'bg-red-100 text-red-700',
-  recipe_override: 'bg-sky-100 text-sky-700',
-  action_command: 'bg-amber-100 text-amber-700',
-};
-
-describe('FlowSummaryNode badge color mapping', () => {
-  it('badge color mapping covers all kinds', () => {
-    expect(KIND_COLORS['alert']).toBeTruthy();
-    expect(KIND_COLORS['recipe_override']).toBeTruthy();
-    expect(KIND_COLORS['action_command']).toBeTruthy();
+    expect(screen.getByText('Webhook flow')).toBeInTheDocument();
+    expect(screen.getByText('Hành động')).toBeInTheDocument();
+    expect(screen.getByText('WEBHOOK')).toBeInTheDocument();
+    expect(screen.getByText('2 nodes')).toBeInTheDocument();
+    expect(screen.getByText('Đã tắt')).toBeInTheDocument();
   });
 });

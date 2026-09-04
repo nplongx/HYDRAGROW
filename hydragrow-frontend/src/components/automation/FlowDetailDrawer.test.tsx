@@ -76,7 +76,7 @@ describe('FlowDetailDrawer', () => {
 
     // Assert NodePalette is present
     expect(screen.getByText('+ Condition')).toBeInTheDocument();
-    expect(screen.getByText('+ Action')).toBeInTheDocument();
+    expect(screen.getByText('+ Alert')).toBeInTheDocument();
 
     // In React Flow mode, BlockLogicEditor is gone, so trying to find any specific text from it would fail,
     // but we can assert we don't have the legacy hasLegacyGraph message anymore.

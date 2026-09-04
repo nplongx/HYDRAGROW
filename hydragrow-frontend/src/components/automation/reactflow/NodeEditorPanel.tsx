@@ -25,8 +25,7 @@ export function NodeEditorPanel({
 
   if (node.type === "trigger" || node.id === "trigger") {
     const currentKind = (node.data.kind as "sensor" | "fsm" | "cron" | "webhook") || triggerTab;
-    const cronExp = (node.data.expression as string) || "0 7 * * *";
-    const isCronValid = /^(\*|\d+|\*\/\d+|\d+-\d+|\d+(,\d+)*)(\s+(\*|\d+|\*\/\d+|\d+-\d+|\d+(,\d+)*)){4}$/.test(cronExp) && cronExp !== 'invalid cron';
+    const cronExp = (node.data.expression as string) || "0 0 7 * * *";
 
     return (
       <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">

@@ -1,4 +1,3 @@
-import { useParams } from "react-router-dom";
 import { useAutomationScripts } from "../hooks/useAutomationScripts";
 import { FlowDetailDrawer } from "../components/automation/FlowDetailDrawer";
 import { AutomationPageHeader } from "../components/automation/AutomationPageHeader";
@@ -15,16 +14,27 @@ import { useFlowCanvas } from "../hooks/useFlowCanvas";
 import { FlowSummaryNode } from "../components/automation/reactflow/FlowSummaryNode";
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { AutomationMultiDeviceTemplatePanel } from '../components/automation/AutomationMultiDeviceTemplatePanel';
+import { useDeviceStore } from "../store/useDeviceStore";
 
 const nodeTypes = {
   flowSummary: FlowSummaryNode,
 };
 
 export function Automation() {
-  const { deviceId = "demo-device" } = useParams();
-  const { data: scripts, isLoading, isError } = useAutomationScripts(deviceId);
+  const deviceId = useDeviceStore((s) => s.deviceId) ?? "";
+  const { data: scripts, isLoading, isError } = useAutomationScripts(deviceId, {
+    enabled: !!deviceId,
+  });
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const canvas = useFlowCanvas(scripts ?? []);
+
+  if (!deviceId) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+        Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động.
+      </div>
+    );
+  }
 
   if (isLoading) return <LoadingState />;
   if (isError)

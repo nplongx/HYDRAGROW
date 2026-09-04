@@ -219,12 +219,14 @@ async fn receive_webhook_flow_event(
             .and_then(|m| m.as_array())
         {
             for m in mappings {
-                let body_path = m.get("bodyPath").and_then(|p| p.as_str());
-                let target_field = m.get("targetField").and_then(|f| f.as_str());
-                if let (Some(path), Some(target)) = (body_path, target_field)
-                    && let Some(v) = body.get(path)
-                {
-                    mapped.insert(target.to_string(), v.clone());
+                let body_path = m.get("bodyPath").and_then(|p| p.as_str()).unwrap_or("");
+                let target_field = m.get("targetField").and_then(|f| f.as_str()).unwrap_or("");
+                if !body_path.is_empty() && !target_field.is_empty() {
+                    let pointer_path = format!("/{}", body_path.replace('.', "/"));
+                    let val = payload.pointer(&pointer_path).or_else(|| body.get(body_path));
+                    if let Some(v) = val {
+                        mapped.insert(target_field.to_string(), v.clone());
+                    }
                 }
             }
         } else {

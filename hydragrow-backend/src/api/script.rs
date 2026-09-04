@@ -351,30 +351,54 @@ pub async fn validate_script(
     })
 }
 
+pub async fn apply_template(
+    path: web::Path<(String, uuid::Uuid)>,
+    body: web::Json<Vec<crate::services::multi_device_template::TemplateTarget>>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let (device_id, script_id) = path.into_inner();
+    let source: Option<UserScript> = sqlx::query_as("SELECT * FROM user_scripts WHERE id = $1 AND device_id = $2")
+        .bind(script_id).bind(&device_id)
+        .fetch_optional(&app_state.pg_pool).await.unwrap_or(None);
+
+    let Some(source) = source else {
+        return HttpResponse::NotFound().json(serde_json::json!({"error": "Flow gốc không tồn tại"}));
+    };
+
+    match crate::services::multi_device_template::apply_template(&app_state.pg_pool, &source, body.into_inner()).await {
+        Ok(ids) => HttpResponse::Ok().json(serde_json::json!({"status": "success", "applied_script_ids": ids})),
+        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()})),
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("", web::get().to(list_scripts))
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
         .route("/test", web::post().to(test_script))
+        .route("/{script_id}/apply-template", web::post().to(apply_template))
         .route("/{script_id}", web::put().to(update_script))
         .route("/{script_id}", web::delete().to(delete_script));
 }
 
 
-pub fn eval_condition_tree(node: &serde_json::Value, sample: &std::collections::HashMap<String, f64>, trace: &mut Vec<ConditionTraceEntry>) -> bool {
+pub fn eval_condition_tree(
+    node: &serde_json::Value,
+    sample: &std::collections::HashMap<String, crate::models::script::SampleValue>,
+    trace: &mut Vec<ConditionTraceEntry>,
+) -> bool {
     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
         let op = node.get("op").and_then(|v| v.as_str()).unwrap_or("and");
-        // We use map and collect into a Vec instead of early-return to ensure all branches are traced
         let results: Vec<bool> = children.iter().map(|c| eval_condition_tree(c, sample, trace)).collect();
-        let passed = if op == "or" { results.iter().any(|&r| r) } else { results.iter().all(|&r| r) };
-        return passed;
+        return if op == "or" { results.iter().any(|&r| r) } else { results.iter().all(|&r| r) };
     }
 
     let sensor = node.get("sensor").and_then(|v| v.as_str()).unwrap_or("");
     let operator = node.get("operator").and_then(|v| v.as_str()).unwrap_or(">");
     let value = node.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let mode = node.get("mode").and_then(|v| v.as_str()).unwrap_or("instant");
 
-    let actual = sample.get(sensor).copied();
+    let actual = sample.get(sensor).map(|sv| sv.resolve(mode));
 
     let passed = match (actual, operator) {
         (Some(a), ">") => a > value,
@@ -383,7 +407,6 @@ pub fn eval_condition_tree(node: &serde_json::Value, sample: &std::collections::
         (Some(a), "<=") => a <= value,
         (Some(a), "==") => (a - value).abs() < f64::EPSILON,
         (Some(a), "!=") => (a - value).abs() >= f64::EPSILON,
-        (None, _) => false,
         _ => false,
     };
 
@@ -558,7 +581,7 @@ mod tests {
             let mut rhai_map = rhai::Map::new();
 
             for (k, v) in sample_data {
-                sample.insert(k.to_string(), v);
+                sample.insert(k.to_string(), crate::models::script::SampleValue::Value(v));
                 rhai_map.insert(k.into(), rhai::Dynamic::from_float(v as rhai::FLOAT));
             }
 
@@ -651,5 +674,35 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.expect_err("expected cycle error");
         assert!(err_msg.contains("chu trình") || err_msg.contains("vòng lặp"));
+    }
+
+    #[test]
+    fn eval_condition_tree_respects_mean_mode_over_series() {
+        use std::collections::HashMap;
+        use crate::models::script::SampleValue;
+        let mut sample = HashMap::new();
+        sample.insert(
+            "ph".to_string(),
+            SampleValue::Series(vec![7.0, 7.5, 8.5]), // mean = 7.666..
+        );
+        let node = serde_json::json!({
+            "sensor": "ph", "operator": ">", "value": 7.5,
+            "mode": "mean", "windowSec": 900
+        });
+        let mut trace = Vec::new();
+        let passed = eval_condition_tree(&node, &sample, &mut trace);
+        assert!(passed); // mean 7.67 > 7.5
+        assert_eq!(trace[0].actual_value, Some(7.666666666666667));
+    }
+
+    #[test]
+    fn eval_condition_tree_defaults_to_instant_value_when_series_absent() {
+        use std::collections::HashMap;
+        use crate::models::script::SampleValue;
+        let mut sample = HashMap::new();
+        sample.insert("ec".to_string(), SampleValue::Value(2.1));
+        let node = serde_json::json!({"sensor": "ec", "operator": "<", "value": 3.0});
+        let mut trace = Vec::new();
+        assert!(eval_condition_tree(&node, &sample, &mut trace));
     }
 }

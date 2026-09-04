@@ -53,3 +53,15 @@ export function useTestAutomationScript(deviceId: string) {
       apiPost<TestScriptResponse, TestScriptRequest>(`/devices/${deviceId}/scripts/test`, body),
   });
 }
+
+export function useApplyTemplate(deviceId: string, scriptId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (targets: { device_id: string; overrides: Record<string, unknown> }[]) =>
+      apiPost<{ status: string; applied_script_ids: string[] }, typeof targets>(
+        `/devices/${deviceId}/scripts/${scriptId}/apply-template`,
+        targets,
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-scripts'] }),
+  });
+}

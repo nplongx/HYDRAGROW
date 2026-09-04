@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Automation } from "./Automation";
+import { useDeviceStore } from "../store/useDeviceStore";
 
 // Mock dependencies to focus just on layout
 vi.mock("../hooks/useAutomationScripts", () => ({
@@ -68,6 +69,10 @@ vi.mock("../hooks/useFlowCanvas", () => ({
 }));
 
 describe("Automation Page", () => {
+  beforeEach(() => {
+    useDeviceStore.setState({ deviceId: "dev1" });
+  });
+
   it("renders saved flows", () => {
     // we mocked useMediaQuery in setupTests to return false, so we are in mobile view
     // showing flow cards instead of canvas
@@ -84,5 +89,13 @@ describe("Automation Page", () => {
     // trigger badge prefers CRON or WEBHOOK when configured
     expect(screen.getByText("CRON")).toBeInTheDocument();
     expect(screen.getByText("WEBHOOK")).toBeInTheDocument();
+  });
+
+  it("shows prompt when no deviceId is selected in useDeviceStore", () => {
+    useDeviceStore.setState({ deviceId: null });
+    render(<Automation />);
+    expect(
+      screen.getByText(/Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động/i)
+    ).toBeInTheDocument();
   });
 });

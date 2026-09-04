@@ -70,6 +70,8 @@ serde_urlencoded = "0.7.1"
 
 prometheus = { version = "0.13", features = ["process"] }
 actix-cors = "0.7.1"
+cron = "0.12"
+chrono-tz = "0.9"
 
 [dev-dependencies]
 serial_test = "4.0.1"

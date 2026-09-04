@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Automation } from './Automation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
+import { useDeviceStore } from '../store/useDeviceStore';
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ vi.mock('../hooks/useAutomationScripts', () => ({
   useDeleteAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useValidateAutomationScript: () => ({ mutateAsync: vi.fn().mockResolvedValue({ valid: true }), isPending: false }),
   useTestAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false, data: null }),
+  useApplyTemplate: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false }),
 }));
 
 class ResizeObserverMock {
@@ -32,6 +34,7 @@ global.ResizeObserver = ResizeObserverMock as any;
 
 describe('Automation Integration', () => {
   it('covers the complete navigation path', async () => {
+    useDeviceStore.setState({ deviceId: 'dev1' });
     // We mock media query to ensure desktop view
     Object.defineProperty(window, 'matchMedia', {
       writable: true,

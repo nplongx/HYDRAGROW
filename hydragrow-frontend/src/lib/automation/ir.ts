@@ -122,9 +122,17 @@ export const WebhookTriggerConfigSchema = z.object({
 });
 export type WebhookTriggerConfig = z.infer<typeof WebhookTriggerConfigSchema>;
 
+export const CronTriggerConfigSchema = z.object({
+  type: z.literal('cron'),
+  cronExpression: z.string().min(1), // "0 0 7 * * *" — 6 field, giây ở đầu, khớp crate `cron` backend
+  timezone: z.string().default('Asia/Ho_Chi_Minh'),
+});
+export type CronTriggerConfig = z.infer<typeof CronTriggerConfigSchema>;
+
 export const TriggerSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['sensor', 'fsm']) }),
   WebhookTriggerConfigSchema,
+  CronTriggerConfigSchema,
 ]);
 
 // React Flow canvas state — opaque to the compiler, used only to restore the UI.

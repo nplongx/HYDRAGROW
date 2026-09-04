@@ -30,7 +30,7 @@ export interface ConditionTraceEntry {
 
 export interface TestScriptRequest {
   ir_json: AutomationIr;
-  sample: Record<string, number>;
+  sample: Record<string, number | number[]>;
 }
 
 export interface TestScriptResponse {

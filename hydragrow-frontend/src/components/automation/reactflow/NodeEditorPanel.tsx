@@ -25,8 +25,7 @@ export function NodeEditorPanel({
 
   if (node.type === "trigger" || node.id === "trigger") {
     const currentKind = (node.data.kind as "sensor" | "fsm" | "cron" | "webhook") || triggerTab;
-    const cronExp = (node.data.expression as string) || "0 7 * * *";
-    const isCronValid = /^(\*|\d+|\*\/\d+|\d+-\d+|\d+(,\d+)*)(\s+(\*|\d+|\*\/\d+|\d+-\d+|\d+(,\d+)*)){4}$/.test(cronExp) && cronExp !== 'invalid cron';
+    const cronExp = (node.data.expression as string) || "0 0 7 * * *";
 
     return (
       <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
@@ -55,22 +54,63 @@ export function NodeEditorPanel({
           <p className="text-xs text-emerald-800/80">Kích hoạt khi chuyển đổi trạng thái FSM (chuyển phase).</p>
         )}
         {currentKind === "cron" && (
-          <div className="flex flex-col gap-2">
-            <h4 className="font-medium text-sm">Cấu hình Lịch (Cron)</h4>
+          <div className="flex flex-col gap-3">
+            <h4 className="font-medium text-sm text-emerald-950">Cấu hình Lịch (Cron)</h4>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-emerald-950">Lịch dựng sẵn</label>
+              <select
+                className="ui-input w-full text-xs"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "daily_7am") {
+                    onChange(node.id, {
+                      kind: "cron",
+                      expression: "0 0 7 * * *",
+                      trigger: { type: "cron", cronExpression: "0 0 7 * * *", timezone: "Asia/Ho_Chi_Minh" },
+                    });
+                  } else if (val === "hourly") {
+                    onChange(node.id, {
+                      kind: "cron",
+                      expression: "0 0 * * * *",
+                      trigger: { type: "cron", cronExpression: "0 0 * * * *", timezone: "Asia/Ho_Chi_Minh" },
+                    });
+                  } else if (val === "weekly_mon") {
+                    onChange(node.id, {
+                      kind: "cron",
+                      expression: "0 0 7 * * 1",
+                      trigger: { type: "cron", cronExpression: "0 0 7 * * 1", timezone: "Asia/Ho_Chi_Minh" },
+                    });
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>-- Chọn lịch mẫu --</option>
+                <option value="daily_7am">Mỗi ngày lúc 07:00</option>
+                <option value="hourly">Mỗi giờ (phút thứ 0)</option>
+                <option value="weekly_mon">Mỗi thứ Hai lúc 07:00</option>
+              </select>
+            </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-emerald-800/75">Biểu thức Cron</label>
+              <label className="text-xs text-emerald-800/75 font-medium">Biểu thức Cron (6 fields: s m h dom mon dow)</label>
               <input
                 type="text"
-                value={cronExp}
-                onChange={(e) => onChange(node.id, { kind: "cron", expression: e.target.value })}
-                className={`ui-input ${!isCronValid && cronExp !== '' ? 'border-red-300 bg-red-50' : ''}`}
-                placeholder="0 7 * * *"
+                value={(node.data.trigger as any)?.cronExpression || cronExp}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChange(node.id, {
+                    kind: "cron",
+                    expression: val,
+                    trigger: { type: "cron", cronExpression: val, timezone: "Asia/Ho_Chi_Minh" },
+                  });
+                }}
+                className="ui-input text-xs font-mono"
+                placeholder="0 0 7 * * *"
               />
-              {!isCronValid && cronExp !== '' && (
-                <span className="text-xs text-red-500">Cron không hợp lệ</span>
-              )}
             </div>
-            <p className="text-xs text-emerald-800/80">Kích hoạt dựa trên lịch đặt trước (ví dụ: 0 7 * * * chạy lúc 7h sáng mỗi ngày).</p>
+            <div className="rounded bg-emerald-50/70 p-2 text-xs text-emerald-850">
+              <span className="font-semibold text-emerald-950">Múi giờ:</span> Asia/Ho_Chi_Minh (GMT+7)
+            </div>
+            <p className="text-xs text-emerald-800/80 leading-relaxed">Kích hoạt định kỳ chính xác theo lịch biểu hệ thống.</p>
           </div>
         )}
         {currentKind === "webhook" && (

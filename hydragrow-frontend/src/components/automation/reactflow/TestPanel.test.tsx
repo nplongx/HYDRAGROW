@@ -34,4 +34,30 @@ describe("TestPanel", () => {
     const runBtn = screen.getByRole("button", { name: "Chạy thử" });
     expect(runBtn).toBeInTheDocument();
   });
+
+  it("renders series input and note for field with mode=mean", () => {
+    const irWithMean = {
+      kind: "alert",
+      conditions: [
+        { sensor: "ph", operator: ">", value: 7.5, mode: "mean", windowSec: 900 },
+      ],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    } as any;
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TestPanel
+          deviceId="dev1"
+          ir={irWithMean}
+          fields={["ph", "ec"]}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("(mean)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("vd: 7.0, 7.5, 8.5")).toBeInTheDocument();
+    expect(screen.getByText(/Nhập nhiều điểm, cách nhau bởi dấu phẩy/i)).toBeInTheDocument();
+  });
 });

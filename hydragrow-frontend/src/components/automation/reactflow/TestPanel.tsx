@@ -10,25 +10,62 @@ interface TestPanelProps {
   fields: readonly string[];
 }
 
+function findFieldMode(ir: AutomationIr, field: string): string {
+  const check = (item: any): string | null => {
+    if (!item) return null;
+    if (item.sensor === field && item.mode && item.mode !== 'instant') {
+      return item.mode;
+    }
+    if (item.children && Array.isArray(item.children)) {
+      for (const child of item.children) {
+        const res = check(child);
+        if (res) return res;
+      }
+    }
+    return null;
+  };
+  if (ir.conditions && Array.isArray(ir.conditions)) {
+    for (const cond of ir.conditions) {
+      const res = check(cond);
+      if (res) return res;
+    }
+  }
+  return 'instant';
+}
+
 export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
-  const [sample, setSample] = useState<Record<string, number>>({});
+  const [sampleRaw, setSampleRaw] = useState<Record<string, string>>({});
   const testMutation = useTestAutomationScript(deviceId);
 
   const handleRun = () => {
-    testMutation.mutate({ ir_json: ir, sample });
+    const samplePayload: Record<string, number | number[]> = {};
+    for (const field of fields) {
+      const raw = sampleRaw[field];
+      if (!raw || raw.trim() === '') continue;
+      const mode = findFieldMode(ir, field);
+      if (mode !== 'instant') {
+        const parts = raw
+          .split(',')
+          .map((s) => parseFloat(s.trim()))
+          .filter((n) => !isNaN(n));
+        if (parts.length > 0) {
+          samplePayload[field] = parts;
+        }
+      } else {
+        const num = parseFloat(raw.trim());
+        if (!isNaN(num)) {
+          samplePayload[field] = num;
+        }
+      }
+    }
+    testMutation.mutate({ ir_json: ir, sample: samplePayload });
   };
 
   const handleFieldChange = (field: string, value: string) => {
-    const num = parseFloat(value);
-    setSample((prev) => {
-      const next = { ...prev };
-      if (isNaN(num)) {
-        delete next[field];
-      } else {
-        next[field] = num;
-      }
-      return next;
-    });
+    setSampleRaw((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   return (
@@ -45,27 +82,37 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
             Giá trị mẫu (Input)
           </h3>
           <div className="space-y-3">
-            {fields.map((field) => (
-              <div key={field} className="flex items-center justify-between">
-                <label className="text-sm font-medium text-slate-600">
-                  {field}
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="ui-input w-24 text-right"
-                  value={sample[field] ?? ""}
-                  onChange={(e) => handleFieldChange(field, e.target.value)}
-                  placeholder="0.0"
-                />
-              </div>
-            ))}
+            {fields.map((field) => {
+              const mode = findFieldMode(ir, field);
+              const isWindow = mode !== 'instant';
+              return (
+                <div key={field} className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-slate-600">
+                      {field} {isWindow && <span className="text-xs text-emerald-600 font-normal">({mode})</span>}
+                    </label>
+                    <input
+                      type={isWindow ? "text" : "number"}
+                      step={isWindow ? undefined : "0.01"}
+                      className={`ui-input ${isWindow ? "w-44 text-left" : "w-24 text-right"}`}
+                      value={sampleRaw[field] ?? ""}
+                      onChange={(e) => handleFieldChange(field, e.target.value)}
+                      placeholder={isWindow ? "vd: 7.0, 7.5, 8.5" : "0.0"}
+                    />
+                  </div>
+                  {isWindow && (
+                    <span className="text-[11px] text-slate-400 text-right">
+                      Nhập nhiều điểm, cách nhau bởi dấu phẩy
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="rounded border border-sky-100 bg-sky-50 p-3 mt-4 mb-4 text-xs text-sky-800">
             <strong>Lưu ý: Đối với điều kiện time-window</strong>
             <br />
-            Các điều kiện lấy mẫu theo thời gian (mean/min/max) sẽ được giả lập
-            với giá trị mẫu này làm giá trị duy nhất trong cửa sổ.
+            Các điều kiện lấy mẫu theo thời gian (mean/min/max) nhận chuỗi số cách nhau bởi dấu phẩy để tính toán cửa sổ giả lập.
           </div>
           <button
             type="button"

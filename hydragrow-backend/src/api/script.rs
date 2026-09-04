@@ -361,20 +361,23 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 }
 
 
-pub fn eval_condition_tree(node: &serde_json::Value, sample: &std::collections::HashMap<String, f64>, trace: &mut Vec<ConditionTraceEntry>) -> bool {
+pub fn eval_condition_tree(
+    node: &serde_json::Value,
+    sample: &std::collections::HashMap<String, crate::models::script::SampleValue>,
+    trace: &mut Vec<ConditionTraceEntry>,
+) -> bool {
     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
         let op = node.get("op").and_then(|v| v.as_str()).unwrap_or("and");
-        // We use map and collect into a Vec instead of early-return to ensure all branches are traced
         let results: Vec<bool> = children.iter().map(|c| eval_condition_tree(c, sample, trace)).collect();
-        let passed = if op == "or" { results.iter().any(|&r| r) } else { results.iter().all(|&r| r) };
-        return passed;
+        return if op == "or" { results.iter().any(|&r| r) } else { results.iter().all(|&r| r) };
     }
 
     let sensor = node.get("sensor").and_then(|v| v.as_str()).unwrap_or("");
     let operator = node.get("operator").and_then(|v| v.as_str()).unwrap_or(">");
     let value = node.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let mode = node.get("mode").and_then(|v| v.as_str()).unwrap_or("instant");
 
-    let actual = sample.get(sensor).copied();
+    let actual = sample.get(sensor).map(|sv| sv.resolve(mode));
 
     let passed = match (actual, operator) {
         (Some(a), ">") => a > value,
@@ -383,7 +386,6 @@ pub fn eval_condition_tree(node: &serde_json::Value, sample: &std::collections::
         (Some(a), "<=") => a <= value,
         (Some(a), "==") => (a - value).abs() < f64::EPSILON,
         (Some(a), "!=") => (a - value).abs() >= f64::EPSILON,
-        (None, _) => false,
         _ => false,
     };
 
@@ -558,7 +560,7 @@ mod tests {
             let mut rhai_map = rhai::Map::new();
 
             for (k, v) in sample_data {
-                sample.insert(k.to_string(), v);
+                sample.insert(k.to_string(), crate::models::script::SampleValue::Value(v));
                 rhai_map.insert(k.into(), rhai::Dynamic::from_float(v as rhai::FLOAT));
             }
 
@@ -651,5 +653,35 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.expect_err("expected cycle error");
         assert!(err_msg.contains("chu trình") || err_msg.contains("vòng lặp"));
+    }
+
+    #[test]
+    fn eval_condition_tree_respects_mean_mode_over_series() {
+        use std::collections::HashMap;
+        use crate::models::script::SampleValue;
+        let mut sample = HashMap::new();
+        sample.insert(
+            "ph".to_string(),
+            SampleValue::Series(vec![7.0, 7.5, 8.5]), // mean = 7.666..
+        );
+        let node = serde_json::json!({
+            "sensor": "ph", "operator": ">", "value": 7.5,
+            "mode": "mean", "windowSec": 900
+        });
+        let mut trace = Vec::new();
+        let passed = eval_condition_tree(&node, &sample, &mut trace);
+        assert!(passed); // mean 7.67 > 7.5
+        assert_eq!(trace[0].actual_value, Some(7.666666666666667));
+    }
+
+    #[test]
+    fn eval_condition_tree_defaults_to_instant_value_when_series_absent() {
+        use std::collections::HashMap;
+        use crate::models::script::SampleValue;
+        let mut sample = HashMap::new();
+        sample.insert("ec".to_string(), SampleValue::Value(2.1));
+        let node = serde_json::json!({"sensor": "ec", "operator": "<", "value": 3.0});
+        let mut trace = Vec::new();
+        assert!(eval_condition_tree(&node, &sample, &mut trace));
     }
 }

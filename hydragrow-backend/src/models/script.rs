@@ -195,10 +195,32 @@ pub struct ConditionTraceEntry {
     pub actual_value: Option<f64>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum SampleValue {
+    Series(Vec<f64>),
+    Value(f64),
+}
+
+impl SampleValue {
+    pub fn resolve(&self, mode: &str) -> f64 {
+        match self {
+            SampleValue::Value(v) => *v,
+            SampleValue::Series(s) if s.is_empty() => 0.0,
+            SampleValue::Series(s) => match mode {
+                "mean" => s.iter().sum::<f64>() / s.len() as f64,
+                "min" => s.iter().cloned().fold(f64::INFINITY, f64::min),
+                "max" => s.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                _ => *s.last().unwrap(), // instant = giá trị mới nhất trong chuỗi
+            },
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct TestScriptRequest {
     pub ir_json: serde_json::Value,
-    pub sample: std::collections::HashMap<String, f64>,
+    pub sample: std::collections::HashMap<String, SampleValue>,
 }
 
 #[derive(Debug, Serialize)]

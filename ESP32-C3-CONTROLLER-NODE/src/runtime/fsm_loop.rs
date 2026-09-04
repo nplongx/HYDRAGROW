@@ -126,7 +126,8 @@ pub fn start_fsm_control_loop(
                 config: &config,
                 observers: &mut observer_set,
             };
-            EventDispatcher::dispatch(cmd_events, &mut dc);
+            let fault = EventDispatcher::dispatch(cmd_events, &mut dc);
+            apply_dispatch_fault(fault, &mut ctx);
 
             let _ = fsm_mqtt_tx.send(build_status_msg(
                 &ctx,
@@ -170,7 +171,8 @@ pub fn start_fsm_control_loop(
                     config: &config,
                     observers: &mut observer_set,
                 };
-                EventDispatcher::dispatch(stop_events, &mut dc);
+                let fault = EventDispatcher::dispatch(stop_events, &mut dc);
+                apply_dispatch_fault(fault, &mut ctx);
 
                 // Đồng bộ ngay lập tức trạng thái Tắt lên MQTT để UI Web/App cập nhật tức thì
                 let _ = fsm_mqtt_tx.send(build_status_msg(
@@ -217,7 +219,8 @@ pub fn start_fsm_control_loop(
                 config: &updated_config,              // Sử dụng updated_config
                 observers: &mut observer_set,
             };
-            EventDispatcher::dispatch(recipe_result.events, &mut dc);
+            let fault = EventDispatcher::dispatch(recipe_result.events, &mut dc);
+            apply_dispatch_fault(fault, &mut ctx);
         }
 
         // 3. Chạy FSM Tick Decision Engine
@@ -245,7 +248,8 @@ pub fn start_fsm_control_loop(
                 config: &updated_config,
                 observers: &mut observer_set,
             };
-            EventDispatcher::dispatch(tick_result.events, &mut dc);
+            let fault = EventDispatcher::dispatch(tick_result.events, &mut dc);
+            apply_dispatch_fault(fault, &mut ctx);
         }
 
         // 5. Báo trạng thái chuyển Phase
@@ -261,5 +265,20 @@ pub fn start_fsm_control_loop(
         }
 
         std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn apply_dispatch_fault(
+    fault: Option<hydragrow_shared::fsm::FaultCode>,
+    ctx: &mut SystemContext,
+) {
+    if let Some(f) = fault {
+        tracing::error!(
+            "🚨 [DISPATCHER] Physical actuator failure: {:?}. Forcing Fault phase!",
+            f
+        );
+        let mut delta = hydragrow_controller_core::core::fsm::ContextDelta::default();
+        delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(f));
+        ctx.apply_delta(&mut delta);
     }
 }

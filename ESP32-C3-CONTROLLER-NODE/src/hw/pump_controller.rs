@@ -6,7 +6,7 @@ use esp_idf_hal::ledc::LedcDriver;
 pub use hydragrow_controller_core::{PumpType, WaterDirection};
 
 use log::{info, warn};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -25,7 +25,8 @@ pub struct PumpController<'d> {
     osaka_en: esp_idf_hal::gpio::PinDriver<'static, esp_idf_hal::gpio::Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
 
-    cancel_soft_start: Arc<AtomicBool>,
+    soft_start_gen: Arc<AtomicU64>,
+    current_water_direction: WaterDirection,
 }
 
 impl<'d> PumpController<'d> {
@@ -87,7 +88,8 @@ impl<'d> PumpController<'d> {
             valve,
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
-            cancel_soft_start: Arc::new(AtomicBool::new(false)),
+            soft_start_gen: Arc::new(AtomicU64::new(0)),
+            current_water_direction: WaterDirection::Stop,
         })
     }
 
@@ -137,29 +139,35 @@ impl<'d> PumpController<'d> {
     /// Khi đảo chiều, luôn tắt bơm đang chạy trước, chờ relay nhả 100ms,
     /// rồi mới bật bơm còn lại.
     pub fn set_water_pump(&mut self, direction: WaterDirection) -> anyhow::Result<()> {
+        if direction == self.current_water_direction {
+            return Ok(());
+        }
+
         match direction {
             WaterDirection::In => {
-                self.valve
-                    .set_low(ExpanderPin::WaterPumpOut)
-                    .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e))?;
-
-                thread::sleep(Duration::from_millis(100));
-
+                if self.current_water_direction == WaterDirection::Out {
+                    self.valve
+                        .set_low(ExpanderPin::WaterPumpOut)
+                        .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e))?;
+                    thread::sleep(Duration::from_millis(100));
+                }
                 self.valve
                     .set_high(ExpanderPin::WaterPumpIn)
                     .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpIn ON failed: {:?}", e))?;
+                self.current_water_direction = WaterDirection::In;
             }
 
             WaterDirection::Out => {
-                self.valve
-                    .set_low(ExpanderPin::WaterPumpIn)
-                    .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpIn OFF failed: {:?}", e))?;
-
-                thread::sleep(Duration::from_millis(100));
-
+                if self.current_water_direction == WaterDirection::In {
+                    self.valve
+                        .set_low(ExpanderPin::WaterPumpIn)
+                        .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpIn OFF failed: {:?}", e))?;
+                    thread::sleep(Duration::from_millis(100));
+                }
                 self.valve
                     .set_high(ExpanderPin::WaterPumpOut)
                     .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut ON failed: {:?}", e))?;
+                self.current_water_direction = WaterDirection::Out;
             }
 
             WaterDirection::Stop => {
@@ -169,6 +177,7 @@ impl<'d> PumpController<'d> {
                 self.valve
                     .set_low(ExpanderPin::WaterPumpOut)
                     .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e))?;
+                self.current_water_direction = WaterDirection::Stop;
             }
         }
 
@@ -214,17 +223,17 @@ impl<'d> PumpController<'d> {
     // =========================================================================
 
     pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
+        let safe_percent = target_pwm_percent.clamp(0, 100);
         info!(
             "🌀 Điều khiển khởi động mềm Osaka lên {}%...",
-            target_pwm_percent
+            safe_percent
         );
 
+        let current_gen = self.soft_start_gen.fetch_add(1, Ordering::SeqCst) + 1;
         self.osaka_en.set_high()?;
-        self.cancel_soft_start.store(false, Ordering::SeqCst);
 
         let rpwm_clone = Arc::clone(&self.osaka_rpwm);
-        let cancel_flag = Arc::clone(&self.cancel_soft_start);
-        let safe_percent = target_pwm_percent.clamp(0, 100);
+        let gen_clone = Arc::clone(&self.soft_start_gen);
 
         thread::spawn(move || {
             let max_duty = {
@@ -243,16 +252,17 @@ impl<'d> PumpController<'d> {
             let step_delay = Duration::from_millis(100);
 
             for i in 1..=steps {
-                if cancel_flag.load(Ordering::SeqCst) {
-                    warn!("⚠️ Hủy tiến trình khởi động mềm Osaka!");
-                    if let Ok(mut pump) = rpwm_clone.lock() {
-                        let _ = pump.set_duty(0);
-                    }
+                if gen_clone.load(Ordering::SeqCst) != current_gen {
+                    warn!("⚠️ Hủy tiến trình khởi động mềm Osaka (superseded by gen {} != {})!", gen_clone.load(Ordering::SeqCst), current_gen);
                     return;
                 }
 
                 let current_duty = target_duty * i / steps;
                 if let Ok(mut pump) = rpwm_clone.lock() {
+                    if gen_clone.load(Ordering::SeqCst) != current_gen {
+                        warn!("⚠️ Hủy tiến trình khởi động mềm Osaka trước khi ghi PWM!");
+                        return;
+                    }
                     let _ = pump.set_duty(current_duty);
                 } else {
                     warn!("⚠️ Không thể lock Osaka RPWM!");
@@ -262,15 +272,17 @@ impl<'d> PumpController<'d> {
                 thread::sleep(step_delay);
             }
 
-            info!("✅ Bơm Osaka đạt {}%!", safe_percent);
+            info!("✅ Bơm Osaka đạt {}% (gen {})!", safe_percent, current_gen);
         });
 
         Ok(())
     }
 
     pub fn set_osaka_pump_pwm(&mut self, duty_percent: u32) -> anyhow::Result<()> {
+        // Hủy mọi tiến trình soft-start đang chạy dở bằng cách tăng generation
+        self.soft_start_gen.fetch_add(1, Ordering::SeqCst);
+
         if duty_percent == 0 {
-            self.cancel_soft_start.store(true, Ordering::SeqCst);
             self.osaka_en.set_low()?;
 
             let mut pump = self
@@ -302,5 +314,28 @@ impl<'d> PumpController<'d> {
         self.valve
             .parse_tank_alert()
             .map_err(|e| anyhow::anyhow!("Lỗi đọc I2C TankAlert: {:?}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn osaka_generation_counter_invalidates_stale_threads() {
+        let gen = Arc::new(AtomicU64::new(0));
+
+        // Start thread 1 with gen 1
+        let gen_t1 = gen.fetch_add(1, Ordering::SeqCst) + 1;
+        assert_eq!(gen_t1, 1);
+        assert_eq!(gen.load(Ordering::SeqCst), 1);
+
+        // Newer command arrives (direct PWM or second soft start)
+        let gen_t2 = gen.fetch_add(1, Ordering::SeqCst) + 1;
+        assert_eq!(gen_t2, 2);
+
+        // Older thread 1 must detect that its generation is no longer current
+        assert_ne!(gen.load(Ordering::SeqCst), gen_t1);
+        assert_eq!(gen.load(Ordering::SeqCst), gen_t2);
     }
 }

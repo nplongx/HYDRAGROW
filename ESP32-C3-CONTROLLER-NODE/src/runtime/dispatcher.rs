@@ -2,7 +2,9 @@
 //! EventDispatcher — Thực thi toàn bộ side-effects (Hardware, Flash, MQTT).
 
 use esp_idf_svc::nvs::EspDefaultNvs;
+use hydragrow_controller_core::WaterDirection;
 use hydragrow_shared::ControllerConfig;
+use hydragrow_shared::fsm::FaultCode;
 use std::sync::mpsc::Sender;
 use tracing::warn;
 
@@ -27,9 +29,17 @@ pub struct DispatchContext<'a, 'd> {
 pub struct EventDispatcher;
 
 impl EventDispatcher {
-    pub fn dispatch(events: Vec<OrchestratorEvent>, dc: &mut DispatchContext<'_, '_>) {
+    pub fn dispatch(
+        events: Vec<OrchestratorEvent>,
+        dc: &mut DispatchContext<'_, '_>,
+    ) -> Option<FaultCode> {
+        let mut first_fault = None;
         for event in events {
-            Self::handle_event(event.clone(), dc);
+            if let Some(fault) = Self::handle_event(event.clone(), dc) {
+                if first_fault.is_none() {
+                    first_fault = Some(fault);
+                }
+            }
 
             let oc = ObserverContext {
                 ctx: dc.ctx,
@@ -40,9 +50,13 @@ impl EventDispatcher {
             };
             dc.observers.notify_all(&event, &oc);
         }
+        first_fault
     }
 
-    fn handle_event(event: OrchestratorEvent, dc: &mut DispatchContext<'_, '_>) {
+    fn handle_event(
+        event: OrchestratorEvent,
+        dc: &mut DispatchContext<'_, '_>,
+    ) -> Option<FaultCode> {
         match event {
             OrchestratorEvent::SetDosingPump {
                 pump,
@@ -57,31 +71,46 @@ impl EventDispatcher {
                 };
                 if let Err(e) = res {
                     warn!("⚠️ [DISPATCHER] SetDosingPump error: {:?}", e);
+                    let fault = match pump_type {
+                        PumpType::NutrientA | PumpType::NutrientB => FaultCode::EcDosingFailed,
+                        PumpType::PhUp | PumpType::PhDown => FaultCode::PhDosingFailed,
+                    };
+                    return Some(fault);
                 }
             }
             OrchestratorEvent::SetWaterPump { direction } => {
                 if let Err(e) = dc.pumps.set_water_pump(direction) {
                     warn!("⚠️ [DISPATCHER] SetWaterPump error: {:?}", e);
+                    let fault = match direction {
+                        WaterDirection::In => FaultCode::WaterRefillFailed,
+                        WaterDirection::Out => FaultCode::WaterDrainFailed,
+                        WaterDirection::Stop => FaultCode::EmergencyStop,
+                    };
+                    return Some(fault);
                 }
             }
             OrchestratorEvent::SetMistValve { on } => {
                 if let Err(e) = dc.pumps.set_mist_valve(on) {
                     warn!("⚠️ [DISPATCHER] SetMistValve error: {:?}", e);
+                    return Some(FaultCode::EmergencyStop);
                 }
             }
             OrchestratorEvent::SetMixValve { on } => {
                 if let Err(e) = dc.pumps.set_mix_valve(on) {
                     warn!("⚠️ [DISPATCHER] SetMixValve error: {:?}", e);
+                    return Some(FaultCode::EmergencyStop);
                 }
             }
             OrchestratorEvent::SetOsakaPump { pwm_percent } => {
                 if let Err(e) = dc.pumps.set_osaka_pump_pwm(pwm_percent) {
                     warn!("⚠️ [DISPATCHER] SetOsakaPump error: {:?}", e);
+                    return Some(FaultCode::EmergencyStop);
                 }
             }
             OrchestratorEvent::StartOsakaSoft { target_pwm_percent } => {
                 if let Err(e) = dc.pumps.start_osaka_pump_soft(target_pwm_percent) {
                     warn!("⚠️ [DISPATCHER] StartOsakaSoft error: {:?}", e);
+                    return Some(FaultCode::EmergencyStop);
                 }
             }
             OrchestratorEvent::SaveNvsSnapshot => {
@@ -223,5 +252,6 @@ impl EventDispatcher {
             }
             _ => {}
         }
+        None
     }
 }

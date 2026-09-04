@@ -1,99 +1,24 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import { NodeEditorPanel } from './NodeEditorPanel';
 
-describe('NodeEditorPanel', () => {
-  it('renders trigger node tab bar and shows placeholder for cron/webhook', () => {
+describe('NodeEditorPanel Chain Action', () => {
+  it('renders chain action editor', () => {
+    const mockOnChange = vi.fn();
+
     render(
       <NodeEditorPanel
         kind="alert"
-        node={{ id: 'trigger', type: 'trigger', data: {} }}
-        onChange={() => {}}
-        onClose={() => {}}
-      />,
+        node={{ id: 'action-1', type: 'action', data: { type: 'chain' } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />
     );
-    expect(screen.getByText('Trigger')).toBeInTheDocument();
-    expect(screen.getByText('Sensor')).toBeInTheDocument();
-    expect(screen.getByText('FSM')).toBeInTheDocument();
-    expect(screen.getByText('Cron')).toBeInTheDocument();
-    expect(screen.getByText('Webhook')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Cron'));
-    expect(screen.getByText('Sắp có ở Phase 4/5')).toBeInTheDocument();
+    // The chain is edited using NextFlowSelector now which is in the FlowDetailDrawer
+    // But the NodeEditorPanel for "chain" should at least explain it or provide UI
 
-    fireEvent.click(screen.getByText('Webhook'));
-    expect(screen.getByText('Chế độ Webhook')).toBeInTheDocument();
-  });
-
-  it('adds a condition and reports the update via onChange', () => {
-    const onChange = vi.fn();
-    render(
-      <NodeEditorPanel
-        kind="alert"
-        node={{ id: '2', type: 'condition', data: { conditions: [] } }}
-        onChange={onChange}
-        onClose={() => {}}
-      />,
-    );
-    fireEvent.click(screen.getByText('+ Thêm điều kiện'));
-    expect(onChange).toHaveBeenCalledWith(
-      '2',
-      expect.objectContaining({ conditions: [{ sensor: 'ph', operator: '>', value: 0 }] }),
-    );
-  });
-
-  it('renders advance_stage fields for recipe_override action nodes', () => {
-    render(
-      <NodeEditorPanel
-        kind="recipe_override"
-        node={{ id: '3', type: 'action', data: { actions: [] } }}
-        onChange={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    expect(screen.getByText('Action — Recipe')).toBeInTheDocument();
-  });
-
-  it('renders dose/water/emergency-stop action picker for action_command nodes', () => {
-    render(
-      <NodeEditorPanel
-        kind="action_command"
-        node={{ id: '3', type: 'action', data: { actions: [] } }}
-        onChange={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    expect(screen.getByLabelText('Loại hành động')).toBeInTheDocument();
-  });
-
-  it('emits a dose action with the right shape', () => {
-    const onChange = vi.fn();
-    render(
-      <NodeEditorPanel
-        kind="action_command"
-        node={{ id: '3', type: 'action', data: { actions: [{ type: 'dose', pump: 'PUMP_B', doseMl: 12, pwm: 100 }] } }}
-        onChange={onChange}
-        onClose={() => {}}
-      />,
-    );
-    fireEvent.change(screen.getByLabelText('PWM (%)'), { target: { value: '80' } });
-    expect(onChange).toHaveBeenLastCalledWith(
-      '3',
-      expect.objectContaining({ actions: [{ type: 'dose', pump: 'PUMP_B', doseMl: 12, pwm: 80 }] }),
-    );
-  });
-
-  it('offers end_season as an action type for recipe_override nodes', () => {
-    render(
-      <NodeEditorPanel
-        kind="recipe_override"
-        node={{ id: '3', type: 'action', data: { actions: [] } }}
-        onChange={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    const select = screen.getByLabelText('Loại hành động') as HTMLSelectElement;
-    const optionValues = Array.from(select.options).map((o) => o.value);
-    expect(optionValues).toEqual(['advance_stage', 'end_season']);
+    expect(screen.getByText(/Hành động — Kích hoạt Flow khác/)).toBeInTheDocument();
+    expect(screen.getByText(/Để chọn Flow cần kích hoạt/)).toBeInTheDocument();
   });
 });

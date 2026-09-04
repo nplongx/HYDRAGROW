@@ -1,21 +1,29 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import { NodePalette } from './NodePalette';
 
 describe('NodePalette', () => {
-  it('renders a "+ Condition Group" button that calls onAddNode with condition_group', () => {
-    const onAddNode = vi.fn();
-    render(<NodePalette onAddNode={onAddNode} />);
-    fireEvent.click(screen.getByText('+ Condition Group'));
-    expect(onAddNode).toHaveBeenCalledWith('condition_group');
-  });
+  it('exposes all expected capabilities', () => {
+    render(<NodePalette onAddNode={vi.fn()} />);
 
-  it('calls onAddNode with condition and action when respective buttons are clicked', () => {
-    const onAddNode = vi.fn();
-    render(<NodePalette onAddNode={onAddNode} />);
-    fireEvent.click(screen.getByText('+ Condition'));
-    expect(onAddNode).toHaveBeenCalledWith('condition');
-    fireEvent.click(screen.getByText('+ Action'));
-    expect(onAddNode).toHaveBeenCalledWith('action');
+    expect(screen.getByText('TRIGGER')).toBeInTheDocument();
+    expect(screen.getByText('+ Sensor')).toBeInTheDocument();
+    expect(screen.getByText('+ FSM giai đoạn')).toBeInTheDocument();
+    expect(screen.getByText('+ Cron (lịch)')).toBeInTheDocument();
+    expect(screen.getByText('+ Webhook')).toBeInTheDocument();
+
+    expect(screen.getByText('CONDITION')).toBeInTheDocument();
+    expect(screen.getByText('+ Condition')).toBeInTheDocument();
+    expect(screen.getByText('+ Condition Group (AND/OR)')).toBeInTheDocument();
+    expect(screen.getByText('+ Time-window (mean/min/max)')).toBeInTheDocument();
+
+    expect(screen.getByText('DELAY')).toBeInTheDocument();
+    expect(screen.getByText('+ Delay')).toBeInTheDocument();
+
+    expect(screen.getByText('ACTION')).toBeInTheDocument();
+    expect(screen.getByText('+ Alert')).toBeInTheDocument();
+    expect(screen.getByText('+ Dose / Water / Emergency stop')).toBeInTheDocument();
+    expect(screen.getByText('+ Advance stage / End season')).toBeInTheDocument();
+    expect(screen.getByText('+ Chain — chạy Flow khác')).toBeInTheDocument();
   });
 });

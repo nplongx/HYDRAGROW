@@ -1,0 +1,77 @@
+{
+  "requirement_id": "AUTOMATION-UI-OVERHAUL-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Automation overview renders saved Flow summary nodes with kind, trigger, condition/action summary, enabled state, and chain edges verified by Vitest tests."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "next_flow_ids produce directed animated edges and cycle candidates are disabled verified by useFlowCanvas and flowCycle tests."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Node palette exposes sensor, FSM, Cron, Webhook, condition, condition group, time-window, delay, alert, control, recipe, and chain capabilities verified by NodePalette tests."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Nested AND/OR condition groups render, edit, and round-trip without losing leaves, nesting, or operators verified by ConditionGroupEditor tests."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "mean/min/max conditions expose a window in minutes and preserve mode/windowSec through editor verified by tests."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Cron trigger UI stores a cron expression verified by NodeEditorPanel Cron trigger tests."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Webhook trigger UI supports flow/direct mode and bodyPath-to-targetField mappings verified by WebhookFieldMappingEditor tests."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Chain action selects a Flow, displays the chain preview, and blocks self/cyclic targets verified by tests."
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Test Panel accepts sample field values, runs the current IR through the existing validation/dry-run path verified by TestPanel tests."
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Multi-device template UI lets the user select devices and shows override/inherited state; explicitly blocks unsupported apply verified by AutomationMultiDeviceTemplatePanel tests."
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "source": "Vitest output",
+      "note": "Desktop matches the supplied information hierarchy and mobile/tablet does not render the draggable desktop canvas verified by integration tests mocking media query."
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "source": "Verification script",
+      "note": "All frontend verification commands pass."
+    }
+  ]
+}

@@ -182,3 +182,9 @@ p {
     transition-duration: 0.01ms !important;
   }
 }
+
+@layer components {
+  .palette-btn {
+    @apply rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:brightness-95 flex items-center;
+  }
+}

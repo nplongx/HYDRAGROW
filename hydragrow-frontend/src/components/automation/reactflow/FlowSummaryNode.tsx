@@ -1,49 +1,108 @@
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import type { FlowNodeData } from '../../../hooks/useFlowCanvas';
-import { countLeafConditions } from '../../../lib/automation/conditionTree';
+import { Handle, Position } from "@xyflow/react";
+import type { UserScript } from "../../../types/automation";
+import { Activity, Zap, Calendar, Webhook } from "lucide-react";
 
-const KIND_LABEL: Record<string, string> = {
-  alert: 'Alert',
-  recipe_override: 'Recipe',
-  action_command: 'Action',
-};
+export interface FlowSummaryNodeProps {
+  data: {
+    script: UserScript;
+    onClick?: () => void;
+  };
+}
 
-const KIND_COLOR: Record<string, string> = {
-  alert: 'bg-red-100 text-red-700',
-  recipe_override: 'bg-sky-100 text-sky-700',
-  action_command: 'bg-amber-100 text-amber-700',
-};
+export function FlowSummaryNode({
+  data: { script, onClick },
+}: FlowSummaryNodeProps) {
+  const { name, kind, enabled, ir_json } = script;
 
-/** Thẻ hiển thị 1 Flow trên canvas tổng quan. `onNodeClick` (React Flow) do
- * component cha xử lý — component này chỉ render nội dung thẻ. */
-export function FlowSummaryNode({ data }: NodeProps<Node<FlowNodeData>>) {
-  const { script } = data;
-  const conditionCount = script.ir_json ? countLeafConditions(script.ir_json.conditions) : 0;
-  const actionCount = script.ir_json?.actions.length ?? 0;
-  const badgeColor = KIND_COLOR[script.kind] ?? 'bg-emerald-50 text-emerald-800/70';
+  // Derive summary
+  const getTriggerSummary = () => {
+    if (!ir_json || !ir_json.nodes)
+      return {
+        label: "No trigger",
+        Icon: Activity,
+        badge: "bg-gray-100 text-gray-700",
+      };
+    const trigger = ir_json.nodes.find((n) => n.id === "trigger");
+    if (!trigger)
+      return {
+        label: "No trigger",
+        Icon: Activity,
+        badge: "bg-gray-100 text-gray-700",
+      };
+
+    if (trigger.data.kind === "cron")
+      return {
+        label: "CRON",
+        Icon: Calendar,
+        badge: "bg-purple-100 text-purple-700",
+      };
+    if (trigger.data.kind === "webhook")
+      return {
+        label: "WEBHOOK",
+        Icon: Webhook,
+        badge: "bg-indigo-100 text-indigo-700",
+      };
+    if (trigger.data.kind === "sensor")
+      return {
+        label: "SENSOR",
+        Icon: Activity,
+        badge: "bg-blue-100 text-blue-700",
+      };
+    if (trigger.data.kind === "fsm")
+      return {
+        label: "FSM",
+        Icon: Zap,
+        badge: "bg-orange-100 text-orange-700",
+      };
+    return {
+      label: "TRIGGER",
+      Icon: Activity,
+      badge: "bg-gray-100 text-gray-700",
+    };
+  };
+
+  const triggerInfo = getTriggerSummary();
+  const kindBadge = kind === "alert" ? "Cảnh báo" : "Hành động";
+  const kindColors =
+    kind === "alert"
+      ? "bg-amber-100 text-amber-800"
+      : "bg-emerald-100 text-emerald-800";
 
   return (
     <div
-      className={`w-52 cursor-pointer rounded-lg border-2 bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
-        script.enabled ? 'border-emerald-500' : 'border-gray-200 opacity-60'
-      }`}
+      className={`ui-card p-3 w-64 ${!enabled ? "opacity-50 grayscale" : "hover:shadow-md cursor-pointer transition-shadow"} border-2 ${enabled ? "border-emerald-200" : "border-gray-200"}`}
+      onClick={onClick}
     >
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <div className="flex items-start justify-between gap-1">
-        <span className="truncate text-sm font-semibold leading-tight">{script.name}</span>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${badgeColor}`}>
-          {KIND_LABEL[script.kind] ?? script.kind}
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="font-semibold text-sm truncate max-w-[150px]">{name}</h3>
+        <span
+          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${kindColors}`}
+        >
+          {kindBadge}
         </span>
       </div>
-      <div className="mt-1.5 text-xs text-gray-400">
-        {script.ir_json
-          ? `${conditionCount} điều kiện → ${actionCount} hành động`
-          : 'Script viết tay (Rhai)'}
+
+      <div className="flex gap-2 items-center mb-1">
+        <div
+          className={`flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${triggerInfo.badge}`}
+        >
+          <triggerInfo.Icon className="w-3 h-3" /> {triggerInfo.label}
+        </div>
       </div>
-      {!script.enabled && (
-        <div className="mt-1 text-[10px] text-gray-400 italic">Đã tắt</div>
+
+      <div className="text-xs text-gray-500 truncate">
+        {ir_json?.nodes?.length ? `${ir_json.nodes.length} nodes` : "No nodes"}
+      </div>
+
+      {!enabled && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded font-bold uppercase tracking-wider opacity-90">
+          Đã tắt
+        </div>
       )}
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </div>
   );
 }

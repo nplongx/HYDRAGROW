@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { NodeEditorPanel } from './NodeEditorPanel';
 
@@ -35,7 +35,6 @@ describe('NodeEditorPanel Chain Action', () => {
     );
 
     const select = screen.getByRole('combobox');
-    const { fireEvent } = require('@testing-library/react');
     fireEvent.change(select, { target: { value: 'daily_7am' } });
 
     expect(mockOnChange).toHaveBeenCalledWith('trigger', {

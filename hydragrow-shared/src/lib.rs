@@ -587,6 +587,86 @@ pub struct ControllerHealthPayload {
 impl ControllerConfig {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
+
+        let float_fields: &[(&str, f32)] = &[
+            ("ec_target", self.ec_target),
+            ("ec_tolerance", self.ec_tolerance),
+            ("ph_target", self.ph_target),
+            ("ph_tolerance", self.ph_tolerance),
+            ("nutrient_a_ratio", self.nutrient_a_ratio),
+            ("nutrient_b_ratio", self.nutrient_b_ratio),
+            ("water_level_min", self.water_level_min),
+            ("water_level_target", self.water_level_target),
+            ("water_level_max", self.water_level_max),
+            ("water_level_tolerance", self.water_level_tolerance),
+            ("dilute_drain_amount_cm", self.dilute_drain_amount_cm),
+            ("scheduled_drain_amount_cm", self.scheduled_drain_amount_cm),
+            ("max_ec_limit", self.max_ec_limit),
+            ("min_ec_limit", self.min_ec_limit),
+            ("min_ph_limit", self.min_ph_limit),
+            ("max_ph_limit", self.max_ph_limit),
+            ("max_ec_delta", self.max_ec_delta),
+            ("max_ph_delta", self.max_ph_delta),
+            ("max_dose_per_cycle", self.max_dose_per_cycle),
+            ("min_temp_limit", self.min_temp_limit),
+            ("max_temp_limit", self.max_temp_limit),
+            ("max_dose_per_hour", self.max_dose_per_hour),
+            ("water_level_critical_min", self.water_level_critical_min),
+            ("ec_ack_threshold", self.ec_ack_threshold),
+            ("ph_ack_threshold", self.ph_ack_threshold),
+            ("water_ack_threshold", self.water_ack_threshold),
+            ("ec_gain_per_ml", self.ec_gain_per_ml),
+            ("ph_shift_up_per_ml", self.ph_shift_up_per_ml),
+            ("ph_shift_down_per_ml", self.ph_shift_down_per_ml),
+            ("ec_step_ratio", self.ec_step_ratio),
+            ("ph_step_ratio", self.ph_step_ratio),
+            ("best_ec_ratio", self.best_ec_ratio),
+            ("best_ph_ratio", self.best_ph_ratio),
+            ("effective_ec_tolerance", self.effective_ec_tolerance),
+            ("effective_ph_tolerance", self.effective_ph_tolerance),
+            (
+                "pump_a_capacity_ml_per_sec",
+                self.pump_a_capacity_ml_per_sec,
+            ),
+            (
+                "pump_b_capacity_ml_per_sec",
+                self.pump_b_capacity_ml_per_sec,
+            ),
+            (
+                "pump_ph_up_capacity_ml_per_sec",
+                self.pump_ph_up_capacity_ml_per_sec,
+            ),
+            (
+                "pump_ph_down_capacity_ml_per_sec",
+                self.pump_ph_down_capacity_ml_per_sec,
+            ),
+            ("dosing_min_dose_ml", self.dosing_min_dose_ml),
+            ("misting_temp_threshold", self.misting_temp_threshold),
+        ];
+
+        for &(name, val) in float_fields {
+            if !val.is_finite() {
+                errors.push(format!("{name} phải là số hữu hạn"));
+            }
+        }
+
+        if let Some(matrix) = &self.interaction_matrix {
+            for val in matrix {
+                if !val.is_finite() {
+                    errors.push("interaction_matrix chứa phần tử không hữu hạn".into());
+                    break;
+                }
+            }
+        }
+        if let Some(conf) = &self.kalman_confidence {
+            for val in conf {
+                if !val.is_finite() {
+                    errors.push("kalman_confidence chứa phần tử không hữu hạn".into());
+                    break;
+                }
+            }
+        }
+
         if self.ec_target <= 0.0 || self.ec_target > 10.0 {
             errors.push("ec_target phải trong khoảng (0, 10]".into());
         }
@@ -596,15 +676,118 @@ impl ControllerConfig {
         if self.ph_target < 0.0 || self.ph_target > 14.0 {
             errors.push("ph_target phải trong khoảng [0, 14]".into());
         }
+
+        if self.nutrient_a_ratio < 0.0 {
+            errors.push("nutrient_a_ratio phải >= 0".into());
+        }
+        if self.nutrient_b_ratio < 0.0 {
+            errors.push("nutrient_b_ratio phải >= 0".into());
+        }
+        if self.nutrient_a_ratio <= 0.0 && self.nutrient_b_ratio <= 0.0 {
+            errors.push("nutrient_a_ratio và nutrient_b_ratio không được đồng thời bằng 0".into());
+        }
+
+        if self.pump_a_capacity_ml_per_sec <= 0.0 {
+            errors.push("pump_a_capacity_ml_per_sec phải > 0".into());
+        }
+        if self.pump_b_capacity_ml_per_sec <= 0.0 {
+            errors.push("pump_b_capacity_ml_per_sec phải > 0".into());
+        }
+        if self.pump_ph_up_capacity_ml_per_sec <= 0.0 {
+            errors.push("pump_ph_up_capacity_ml_per_sec phải > 0".into());
+        }
+        if self.pump_ph_down_capacity_ml_per_sec <= 0.0 {
+            errors.push("pump_ph_down_capacity_ml_per_sec phải > 0".into());
+        }
+
+        if self.soft_start_duration < 0 {
+            errors.push("soft_start_duration phải >= 0".into());
+        }
+        if self.delay_between_a_and_b_sec < 0 {
+            errors.push("delay_between_a_and_b_sec phải >= 0".into());
+        }
+        if self.dosing_pulse_on_ms < 0 {
+            errors.push("dosing_pulse_on_ms phải >= 0".into());
+        }
+        if self.dosing_pulse_off_ms < 0 {
+            errors.push("dosing_pulse_off_ms phải >= 0".into());
+        }
+        if self.max_refill_duration_sec < 0 {
+            errors.push("max_refill_duration_sec phải >= 0".into());
+        }
+        if self.max_drain_duration_sec < 0 {
+            errors.push("max_drain_duration_sec phải >= 0".into());
+        }
+        if self.misting_on_duration_ms < 0 {
+            errors.push("misting_on_duration_ms phải >= 0".into());
+        }
+        if self.misting_off_duration_ms < 0 {
+            errors.push("misting_off_duration_ms phải >= 0".into());
+        }
+        if self.cooldown_sec < 0 {
+            errors.push("cooldown_sec phải >= 0".into());
+        }
+        if self.active_mixing_sec < 0 {
+            errors.push("active_mixing_sec phải >= 0".into());
+        }
+        if self.sensor_stabilize_sec < 0 {
+            errors.push("sensor_stabilize_sec phải >= 0".into());
+        }
+        if self.scheduled_mixing_interval_sec < 0 {
+            errors.push("scheduled_mixing_interval_sec phải >= 0".into());
+        }
+        if self.scheduled_mixing_duration_sec < 0 {
+            errors.push("scheduled_mixing_duration_sec phải >= 0".into());
+        }
+
+        if self.dosing_max_pulse_count_per_cycle <= 0 {
+            errors.push("dosing_max_pulse_count_per_cycle phải > 0".into());
+        }
+
         if self.dosing_pwm_percent < 1 || self.dosing_pwm_percent > 100 {
             errors.push("dosing_pwm_percent phải trong [1, 100]".into());
+        }
+        if self.dosing_min_pwm_percent < 1 || self.dosing_min_pwm_percent > 100 {
+            errors.push("dosing_min_pwm_percent phải trong [1, 100]".into());
         }
         if self.dosing_min_pwm_percent > self.dosing_pwm_percent {
             errors.push("dosing_min_pwm_percent không được vượt dosing_pwm_percent".into());
         }
-        if self.pump_a_capacity_ml_per_sec <= 0.0 {
-            errors.push("pump_a_capacity_ml_per_sec phải > 0".into());
+
+        if let Some(pwm) = self.pump_a_min_pwm_percent {
+            if !(1..=100).contains(&pwm) {
+                errors.push("pump_a_min_pwm_percent phải trong [1, 100]".into());
+            }
+            if pwm > self.dosing_pwm_percent {
+                errors.push("pump_a_min_pwm_percent không được vượt dosing_pwm_percent".into());
+            }
         }
+        if let Some(pwm) = self.pump_b_min_pwm_percent {
+            if !(1..=100).contains(&pwm) {
+                errors.push("pump_b_min_pwm_percent phải trong [1, 100]".into());
+            }
+            if pwm > self.dosing_pwm_percent {
+                errors.push("pump_b_min_pwm_percent không được vượt dosing_pwm_percent".into());
+            }
+        }
+        if let Some(pwm) = self.pump_ph_up_min_pwm_percent {
+            if !(1..=100).contains(&pwm) {
+                errors.push("pump_ph_up_min_pwm_percent phải trong [1, 100]".into());
+            }
+            if pwm > self.dosing_pwm_percent {
+                errors.push("pump_ph_up_min_pwm_percent không được vượt dosing_pwm_percent".into());
+            }
+        }
+        if let Some(pwm) = self.pump_ph_down_min_pwm_percent {
+            if !(1..=100).contains(&pwm) {
+                errors.push("pump_ph_down_min_pwm_percent phải trong [1, 100]".into());
+            }
+            if pwm > self.dosing_pwm_percent {
+                errors
+                    .push("pump_ph_down_min_pwm_percent không được vượt dosing_pwm_percent".into());
+            }
+        }
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -623,5 +806,270 @@ impl DosingReportPayload {
             );
         }
         v
+    }
+}
+
+#[cfg(test)]
+mod config_validation_tests {
+    use super::*;
+
+    #[test]
+    fn default_config_is_valid() {
+        let config = ControllerConfig::default();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_negative_durations() {
+        let c = ControllerConfig {
+            soft_start_duration: -1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("soft_start_duration")));
+
+        let c = ControllerConfig {
+            delay_between_a_and_b_sec: -1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("delay_between_a_and_b_sec")));
+
+        let c = ControllerConfig {
+            dosing_pulse_on_ms: -1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("dosing_pulse_on_ms")));
+
+        let c = ControllerConfig {
+            dosing_pulse_off_ms: -1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("dosing_pulse_off_ms")));
+
+        let c = ControllerConfig {
+            max_refill_duration_sec: -1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("max_refill_duration_sec")));
+
+        let c = ControllerConfig {
+            max_drain_duration_sec: -1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("max_drain_duration_sec")));
+    }
+
+    #[test]
+    fn rejects_invalid_dosing_pulse_count() {
+        let c = ControllerConfig {
+            dosing_max_pulse_count_per_cycle: 0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("dosing_max_pulse_count_per_cycle"))
+        );
+
+        let c = ControllerConfig {
+            dosing_max_pulse_count_per_cycle: -5,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("dosing_max_pulse_count_per_cycle"))
+        );
+    }
+
+    #[test]
+    fn rejects_non_positive_pump_capacities() {
+        let c = ControllerConfig {
+            pump_b_capacity_ml_per_sec: 0.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_b_capacity_ml_per_sec")));
+
+        let c = ControllerConfig {
+            pump_b_capacity_ml_per_sec: -1.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_b_capacity_ml_per_sec")));
+
+        let c = ControllerConfig {
+            pump_ph_up_capacity_ml_per_sec: 0.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("pump_ph_up_capacity_ml_per_sec"))
+        );
+
+        let c = ControllerConfig {
+            pump_ph_up_capacity_ml_per_sec: -0.5,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("pump_ph_up_capacity_ml_per_sec"))
+        );
+
+        let c = ControllerConfig {
+            pump_ph_down_capacity_ml_per_sec: 0.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("pump_ph_down_capacity_ml_per_sec"))
+        );
+
+        let c = ControllerConfig {
+            pump_ph_down_capacity_ml_per_sec: -2.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("pump_ph_down_capacity_ml_per_sec"))
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_nutrient_ratios() {
+        let c = ControllerConfig {
+            nutrient_a_ratio: -0.1,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("nutrient_a_ratio")));
+
+        let c = ControllerConfig {
+            nutrient_b_ratio: -0.5,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("nutrient_b_ratio")));
+
+        let c = ControllerConfig {
+            nutrient_a_ratio: 0.0,
+            nutrient_b_ratio: 0.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("nutrient_a_ratio")
+            || e.contains("nutrient_b_ratio")
+            || e.contains("ratio")));
+    }
+
+    #[test]
+    fn rejects_nan_and_infinity_in_control_fields() {
+        let c = ControllerConfig {
+            ec_target: f32::NAN,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+
+        let c = ControllerConfig {
+            ec_target: f32::INFINITY,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+
+        let c = ControllerConfig {
+            ph_target: f32::NAN,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+
+        let c = ControllerConfig {
+            pump_a_capacity_ml_per_sec: f32::NAN,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+
+        let c = ControllerConfig {
+            pump_b_capacity_ml_per_sec: f32::INFINITY,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+
+        let c = ControllerConfig {
+            max_ec_limit: f32::NAN,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+
+        let c = ControllerConfig {
+            max_dose_per_cycle: f32::INFINITY,
+            ..Default::default()
+        };
+        assert!(c.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_per_pump_min_pwm() {
+        let c = ControllerConfig {
+            pump_a_min_pwm_percent: Some(0),
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_a_min_pwm_percent")));
+
+        let c = ControllerConfig {
+            pump_a_min_pwm_percent: Some(101),
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_a_min_pwm_percent")));
+
+        let c = ControllerConfig {
+            dosing_pwm_percent: 50,
+            pump_a_min_pwm_percent: Some(60),
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_a_min_pwm_percent")));
+
+        let c = ControllerConfig {
+            pump_b_min_pwm_percent: Some(0),
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_b_min_pwm_percent")));
+
+        let c = ControllerConfig {
+            dosing_pwm_percent: 50,
+            pump_ph_up_min_pwm_percent: Some(99),
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("pump_ph_up_min_pwm_percent")));
+
+        let c = ControllerConfig {
+            pump_ph_down_min_pwm_percent: Some(-1),
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(
+            err.iter()
+                .any(|e| e.contains("pump_ph_down_min_pwm_percent"))
+        );
+
+        let c = ControllerConfig {
+            dosing_min_pwm_percent: 0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("dosing_min_pwm_percent")));
     }
 }

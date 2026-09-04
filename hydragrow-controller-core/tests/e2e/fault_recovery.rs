@@ -271,3 +271,130 @@ fn e2e_too_many_drains_triggers_fault() {
     );
     eprintln!("✅ TooManyDrains fault correctly triggered");
 }
+
+fn assert_all_outputs_stopped(events: &[OrchestratorEvent]) {
+    use hydragrow_controller_core::core::fsm::events::DosingPumpTarget;
+
+    let assert_stop_event_for = |target: DosingPumpTarget| {
+        events.iter().any(|e| {
+            matches!(
+                e,
+                OrchestratorEvent::SetDosingPump {
+                    pump,
+                    on: false,
+                    ..
+                } if *pump == target
+            )
+        })
+    };
+    assert!(
+        assert_stop_event_for(DosingPumpTarget::NutrientA),
+        "Missing stop event for NutrientA"
+    );
+    assert!(
+        assert_stop_event_for(DosingPumpTarget::NutrientB),
+        "Missing stop event for NutrientB"
+    );
+    assert!(
+        assert_stop_event_for(DosingPumpTarget::PhUp),
+        "Missing stop event for PhUp"
+    );
+    assert!(
+        assert_stop_event_for(DosingPumpTarget::PhDown),
+        "Missing stop event for PhDown"
+    );
+
+    let assert_water_stop = events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop
+            }
+        )
+    });
+    assert!(assert_water_stop, "Missing stop event for WaterPump");
+
+    let assert_mist_off = events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetMistValve { on: false }));
+    assert!(assert_mist_off, "Missing stop event for MistValve");
+
+    let assert_mix_off = events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetMixValve { on: false }));
+    assert!(assert_mix_off, "Missing stop event for MixValve");
+
+    let assert_osaka_zero = events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 }));
+    assert!(assert_osaka_zero, "Missing stop event for OsakaPump");
+}
+
+#[test]
+fn fault_invariant_sensor_timeout_stops_all_actuators() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    let sensor = normal_sensor();
+    // 100s since last sensor update
+    let events = tick_apply(&mut ctx, &config, &sensor, 100_000, 0);
+
+    assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::SensorTimeout));
+    assert_all_outputs_stopped(&events);
+}
+
+#[test]
+fn fault_invariant_osaka_running_without_valve_stops_all_actuators() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    ctx.peripherals.pump_status.osaka_pump = true;
+    ctx.peripherals.pump_status.mist_valve = false;
+    ctx.peripherals.pump_status.mix_valve = false;
+
+    let sensor = normal_sensor();
+    let events = tick_apply(&mut ctx, &config, &sensor, 10_000, 10_000);
+
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Fault(FaultCode::OsakaRunningWithoutValve)
+    );
+    assert_all_outputs_stopped(&events);
+}
+
+#[test]
+fn fault_invariant_hourly_ec_limit_stops_all_actuators() {
+    let mut config = minimal_config();
+    config.max_dose_per_hour = 1.0;
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    // Exhaust hourly dose budget for EC
+    ctx.safety.commit_hourly_dose("NutrientA", 10, 2.0);
+
+    let mut low_ec = normal_sensor();
+    low_ec.ec = 0.5; // low EC triggers dosing
+    let events = tick_apply(&mut ctx, &config, &low_ec, 10_000, 10_000);
+
+    assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
+    assert_all_outputs_stopped(&events);
+}
+
+#[test]
+fn fault_invariant_hourly_ph_limit_stops_all_actuators() {
+    let mut config = minimal_config();
+    config.max_dose_per_hour = 1.0;
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    // Exhaust hourly dose budget for PhUp
+    ctx.safety.commit_hourly_dose("PhUp", 10, 2.0);
+
+    let mut low_ph = normal_sensor();
+    low_ph.ph = 5.0; // low pH triggers pH Up dosing
+    let events = tick_apply(&mut ctx, &config, &low_ph, 10_000, 10_000);
+
+    assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
+    assert_all_outputs_stopped(&events);
+}

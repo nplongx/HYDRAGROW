@@ -8,7 +8,7 @@ use tracing::error;
 use crate::WaterDirection;
 use crate::core::fsm::ContextDelta;
 use crate::core::fsm::context::SystemContext;
-use crate::core::fsm::events::OrchestratorEvent;
+use crate::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
 use crate::core::fsm::peripheral::PeripheralController;
 use crate::core::fsm::phase_tick::PhaseTick;
 use crate::core::fsm::phases::{
@@ -16,6 +16,74 @@ use crate::core::fsm::phases::{
     WaterDrainingPhase, WaterRefillingPhase,
 };
 use crate::core::fsm::tick_result::{PeripheralDelta, TickResult};
+
+pub fn fault_all_outputs_off(result: &mut TickResult) {
+    // 1. Remove any actuator ON events that were queued prior to the fault
+    result.events.retain(|e| match e {
+        OrchestratorEvent::SetDosingPump { on: true, .. } => false,
+        OrchestratorEvent::SetWaterPump {
+            direction: WaterDirection::In | WaterDirection::Out,
+        } => false,
+        OrchestratorEvent::SetMistValve { on: true } => false,
+        OrchestratorEvent::SetMixValve { on: true } => false,
+        OrchestratorEvent::SetOsakaPump { pwm_percent } if *pwm_percent > 0 => false,
+        OrchestratorEvent::StartOsakaSoft { .. } => false,
+        _ => true,
+    });
+
+    // 2. Emit physical stop events for all actuator groups
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::NutrientA,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::NutrientB,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::PhUp,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::PhDown,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetWaterPump {
+        direction: WaterDirection::Stop,
+    });
+    result
+        .events
+        .push(OrchestratorEvent::SetMistValve { on: false });
+    result
+        .events
+        .push(OrchestratorEvent::SetMixValve { on: false });
+    result
+        .events
+        .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+
+    // 3. Logical peripheral state updates
+    let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
+    peri_delta.pump_a = Some(false);
+    peri_delta.pump_b = Some(false);
+    peri_delta.ph_up = Some(false);
+    peri_delta.ph_down = Some(false);
+    peri_delta.water_pump_in = Some(false);
+    peri_delta.water_pump_out = Some(false);
+    peri_delta.mist_valve = Some(false);
+    peri_delta.mix_valve = Some(false);
+    peri_delta.osaka_pump = Some(false);
+    peri_delta.osaka_pwm = Some(0);
+    peri_delta.is_misting_active = Some(false);
+    peri_delta.is_scheduled_mixing_active = Some(false);
+    peri_delta.misting_started_by_dosing = Some(false);
+    peri_delta.mix_valve_started_by_dosing = Some(false);
+    peri_delta.water_pump_started_uptime_ms = Some(None);
+    result.delta.peripherals = Some(peri_delta);
+}
 
 pub fn tick(
     now_ms: u64,
@@ -35,40 +103,18 @@ pub fn tick(
     let mist_valve_open = ctx.peripherals.pump_status.mist_valve;
     let mix_valve_open = ctx.peripherals.pump_status.mix_valve;
     if osaka_running && !mist_valve_open && !mix_valve_open {
-        result
-            .events
-            .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
-        let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
-        peri_delta.osaka_pump = Some(false);
-        peri_delta.osaka_pwm = Some(0);
-        result.delta.peripherals = Some(peri_delta);
-
         result.delta.phase = Some(SystemPhase::Fault(FaultCode::OsakaRunningWithoutValve));
+        fault_all_outputs_off(&mut result);
         return result;
     }
 
     // 1. Kiểm tra Sensor Timeout
     // SỬA: Dùng uptime_ms để kiểm tra timeout, an toàn tuyệt đối trước Time Jump
     if uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000 {
-        if !matches!(ctx.phase, SystemPhase::Fault(_)) {
+        if !ctx.phase.is_fault() {
             error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
             result.delta.phase = Some(SystemPhase::Fault(FaultCode::SensorTimeout));
-            result.events.push(OrchestratorEvent::SetWaterPump {
-                direction: WaterDirection::Stop,
-            });
-            result
-                .events
-                .push(OrchestratorEvent::SetMistValve { on: false });
-            result
-                .events
-                .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
-
-            let mut peri_delta = PeripheralDelta::default();
-            peri_delta.osaka_pump = Some(false);
-            peri_delta.osaka_pwm = Some(0);
-            peri_delta.is_misting_active = Some(false);
-            peri_delta.is_scheduled_mixing_active = Some(false);
-            result.delta.peripherals = Some(peri_delta);
+            fault_all_outputs_off(&mut result);
         }
         return result;
     } else if matches!(ctx.phase, SystemPhase::Fault(FaultCode::SensorTimeout)) {
@@ -138,6 +184,14 @@ pub fn tick(
         );
     } else {
         result = merge_tick_results(result, phase_result);
+    }
+
+    // Centralized Fault & EmergencyStop invariant: enforce all outputs OFF
+    if let Some(ref new_phase) = result.delta.phase
+        && new_phase.is_fault()
+        && (!ctx.phase.is_fault() || ctx.phase != *new_phase)
+    {
+        fault_all_outputs_off(&mut result);
     }
 
     result

@@ -189,26 +189,34 @@ fn apply_decision(
             if control.ph_up_ml > 0.0 {
                 if ctx.safety.is_override_active(now_ms) {
                     // Force-on override active — bypass this safety check.
+                } else if !ctx.safety.peek_hourly_dose(
+                    "PhUp",
+                    uptime_sec,
+                    control.ph_up_ml,
+                    config.max_dose_per_hour / 4.0,
+                ) {
+                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
+                    return result;
                 } else {
-                    let _ = ctx.safety.check_hourly_dose(
-                        "PhUp",
-                        uptime_sec,
-                        control.ph_up_ml,
-                        config.max_dose_per_hour / 4.0,
-                    );
+                    ctx.safety
+                        .commit_hourly_dose("PhUp", uptime_sec, control.ph_up_ml);
                 }
                 peri_delta.ph_up = Some(true);
             }
             if control.ph_down_ml > 0.0 {
                 if ctx.safety.is_override_active(now_ms) {
                     // Force-on override active — bypass this safety check.
+                } else if !ctx.safety.peek_hourly_dose(
+                    "PhDown",
+                    uptime_sec,
+                    control.ph_down_ml,
+                    config.max_dose_per_hour / 4.0,
+                ) {
+                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
+                    return result;
                 } else {
-                    let _ = ctx.safety.check_hourly_dose(
-                        "PhDown",
-                        uptime_sec,
-                        control.ph_down_ml,
-                        config.max_dose_per_hour / 4.0,
-                    );
+                    ctx.safety
+                        .commit_hourly_dose("PhDown", uptime_sec, control.ph_down_ml);
                 }
                 peri_delta.ph_down = Some(true);
             }

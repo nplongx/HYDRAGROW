@@ -20,7 +20,7 @@ function ScriptRow({ deviceId, script, onLoad }: { deviceId: string; script: Use
   return (
     <li className="flex items-center justify-between gap-2 text-sm">
       <span>
-        {script.name} <span className="text-xs text-gray-400">({script.kind})</span>
+        {script.name} <span className="text-xs text-emerald-700/60">({script.kind})</span>
       </span>
       <div className="flex gap-2">
         <button
@@ -64,7 +64,7 @@ export function ScriptListPanel({ deviceId, onLoad }: ScriptListPanelProps) {
   const { data: scripts } = useAutomationScripts(deviceId);
 
   if (!scripts || scripts.length === 0) {
-    return <div className="border-t p-2 text-sm text-gray-500">Chưa có automation nào.</div>;
+    return <div className="border-t p-2 text-sm text-emerald-800/70">Chưa có automation nào.</div>;
   }
 
   return (

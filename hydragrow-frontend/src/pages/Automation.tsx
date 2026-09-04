@@ -30,7 +30,7 @@ export function Automation() {
 
   if (!deviceId) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+      <div className="absolute inset-0 flex items-center justify-center text-emerald-800/70">
         Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động.
       </div>
     );
@@ -48,7 +48,7 @@ export function Automation() {
 
       <div className="ui-card flex-1 flex overflow-hidden relative">
         {isEmpty ? (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+          <div className="absolute inset-0 flex items-center justify-center text-emerald-800/70">
             Chưa có Flow nào
           </div>
         ) : isDesktop ? (
@@ -72,7 +72,7 @@ export function Automation() {
             </ReactFlowProvider>
           </div>
         ) : (
-          <div className="w-full h-full overflow-y-auto p-4 flex flex-col gap-4 bg-gray-50">
+          <div className="w-full h-full overflow-y-auto p-4 flex flex-col gap-4 bg-emerald-50/30">
             <ReactFlowProvider>
               {scripts.map((script) => (
                 <div key={script.id} className="relative">

@@ -52,8 +52,8 @@ export function useFlowCanvas(scripts: UserScript[]) {
     if (!script.ir_json || !script.ir_json.nodes)
       return {
         icon: Activity,
-        color: "text-gray-500",
-        bg: "bg-gray-100",
+        color: "text-emerald-800/70",
+        bg: "bg-emerald-100/60",
         label: "Không có trigger",
       };
 
@@ -61,8 +61,8 @@ export function useFlowCanvas(scripts: UserScript[]) {
     if (!triggerNode)
       return {
         icon: Activity,
-        color: "text-gray-500",
-        bg: "bg-gray-100",
+        color: "text-emerald-800/70",
+        bg: "bg-emerald-100/60",
         label: "Không có trigger",
       };
 
@@ -77,8 +77,8 @@ export function useFlowCanvas(scripts: UserScript[]) {
 
     return {
       icon: Zap,
-      color: "text-blue-500",
-      bg: "bg-blue-100",
+      color: "text-sky-600",
+      bg: "bg-sky-100",
       label: "Hành động",
     };
   };

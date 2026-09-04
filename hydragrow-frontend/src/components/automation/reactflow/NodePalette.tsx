@@ -10,19 +10,19 @@ export function NodePalette({ onAddNode, onUpdateTrigger }: Props) {
   return (
     <div className="flex flex-col gap-3 p-3 border-b border-emerald-100 bg-white">
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-bold text-gray-500 flex items-center gap-1">
+        <h3 className="text-xs font-bold text-emerald-800/70 flex items-center gap-1">
           TRIGGER
         </h3>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => onUpdateTrigger?.("sensor")}
-            className="palette-btn bg-blue-50 text-blue-700 border-blue-200"
+            className="palette-btn bg-sky-50 text-sky-700 border-sky-200"
           >
             + Sensor
           </button>
           <button
             onClick={() => onUpdateTrigger?.("fsm")}
-            className="palette-btn bg-blue-50 text-blue-700 border-blue-200"
+            className="palette-btn bg-sky-50 text-sky-700 border-sky-200"
           >
             + FSM giai đoạn
           </button>
@@ -48,7 +48,7 @@ export function NodePalette({ onAddNode, onUpdateTrigger }: Props) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-bold text-gray-500 flex items-center gap-1">
+        <h3 className="text-xs font-bold text-emerald-800/70 flex items-center gap-1">
           CONDITION
         </h3>
         <div className="flex flex-wrap gap-2">
@@ -74,13 +74,13 @@ export function NodePalette({ onAddNode, onUpdateTrigger }: Props) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-bold text-gray-500 flex items-center gap-1">
+        <h3 className="text-xs font-bold text-emerald-800/70 flex items-center gap-1">
           DELAY
         </h3>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => onAddNode("action", "delay")}
-            className="palette-btn bg-slate-50 text-slate-700 border-slate-200"
+            className="palette-btn bg-emerald-50/50 text-emerald-800 border-emerald-200"
           >
             + Delay
           </button>
@@ -88,7 +88,7 @@ export function NodePalette({ onAddNode, onUpdateTrigger }: Props) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-bold text-gray-500 flex items-center gap-1">
+        <h3 className="text-xs font-bold text-emerald-800/70 flex items-center gap-1">
           ACTION
         </h3>
         <div className="flex flex-wrap gap-2">

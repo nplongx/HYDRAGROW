@@ -166,7 +166,7 @@ export function NodeEditorPanel({
     const storedActions = Array.isArray(node.data?.actions)
       ? (node.data.actions as Action[])
       : [];
-    const current = storedActions[0] ?? (node.data as any);
+    const firstAction = storedActions[0];
     const setAction = (updates: Action) =>
       onChange(node.id, {
         ...node.data,
@@ -174,7 +174,7 @@ export function NodeEditorPanel({
         summary: summarizeActions([updates]),
       });
 
-    if (current?.type === "chain" || node.data?.type === "chain") {
+    if ((node.data as any)?.type === "chain" || (firstAction as any)?.type === "chain") {
       return (
         <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -188,6 +188,11 @@ export function NodeEditorPanel({
     }
 
     if (kind === "alert") {
+      const alertAct = firstAction?.type === "alert" ? firstAction : undefined;
+      const level = alertAct?.level ?? "info";
+      const title = alertAct?.title ?? "";
+      const message = alertAct?.message ?? "";
+
       return (
         <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -198,13 +203,13 @@ export function NodeEditorPanel({
             Level
             <select
               className="ui-input mt-1"
-              value={current?.level ?? "info"}
+              value={level}
               onChange={(e) =>
                 setAction({
                   type: "alert",
                   level: e.target.value as "info" | "warning" | "error",
-                  title: current?.title ?? "",
-                  message: current?.message ?? "",
+                  title,
+                  message,
                 })
               }
             >
@@ -217,13 +222,13 @@ export function NodeEditorPanel({
             Title (optional)
             <input
               className="ui-input mt-1"
-              value={current?.title ?? ""}
+              value={title}
               onChange={(e) =>
                 setAction({
                   type: "alert",
-                  level: current?.level ?? "info",
+                  level,
                   title: e.target.value,
-                  message: current?.message ?? "",
+                  message,
                 })
               }
             />
@@ -232,12 +237,12 @@ export function NodeEditorPanel({
             Message
             <input
               className="ui-input mt-1"
-              value={current?.message ?? ""}
+              value={message}
               onChange={(e) =>
                 setAction({
                   type: "alert",
-                  level: current?.level ?? "info",
-                  title: current?.title ?? "",
+                  level,
+                  title,
                   message: e.target.value,
                 })
               }
@@ -248,7 +253,14 @@ export function NodeEditorPanel({
     }
 
     if (kind === "recipe_override") {
-      const isEndSeason = current?.type === "end_season";
+      const isEndSeason = firstAction?.type === "end_season";
+      const reason =
+        firstAction?.type === "end_season" || firstAction?.type === "advance_stage"
+          ? firstAction.reason
+          : "";
+      const targetStageOffset =
+        firstAction?.type === "advance_stage" ? firstAction.targetStageOffset : 1;
+
       return (
         <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -263,12 +275,8 @@ export function NodeEditorPanel({
               onChange={(e) =>
                 setAction(
                   e.target.value === "end_season"
-                    ? { type: "end_season", reason: current?.reason ?? "" }
-                    : {
-                        type: "advance_stage",
-                        targetStageOffset: 1,
-                        reason: current?.reason ?? "",
-                      }
+                    ? { type: "end_season", reason }
+                    : { type: "advance_stage", targetStageOffset: 1, reason }
                 )
               }
             >
@@ -283,12 +291,12 @@ export function NodeEditorPanel({
                 <input
                   type="number"
                   className="ui-input mt-1"
-                  value={current?.targetStageOffset ?? 1}
+                  value={targetStageOffset}
                   onChange={(e) =>
                     setAction({
                       type: "advance_stage",
                       targetStageOffset: Number(e.target.value),
-                      reason: current?.reason ?? "",
+                      reason,
                     })
                   }
                 />
@@ -297,11 +305,11 @@ export function NodeEditorPanel({
                 Reason
                 <input
                   className="ui-input mt-1"
-                  value={current?.reason ?? ""}
+                  value={reason}
                   onChange={(e) =>
                     setAction({
                       type: "advance_stage",
-                      targetStageOffset: current?.targetStageOffset ?? 1,
+                      targetStageOffset,
                       reason: e.target.value,
                     })
                   }
@@ -313,7 +321,7 @@ export function NodeEditorPanel({
               Reason
               <input
                 className="ui-input mt-1"
-                value={current?.reason ?? ""}
+                value={reason}
                 onChange={(e) =>
                   setAction({
                     type: "end_season",
@@ -329,13 +337,24 @@ export function NodeEditorPanel({
 
     // action_command
     const isWater =
-      current?.type === "water_on" || current?.type === "water_off";
-    const isDose = current?.type === "dose";
+      firstAction?.type === "water_on" || firstAction?.type === "water_off";
+    const isDose = firstAction?.type === "dose";
     const actionVal = isDose
       ? "dose"
       : isWater
-        ? current.type
+        ? firstAction.type
         : "emergency_stop";
+
+    const dosePump = firstAction?.type === "dose" ? firstAction.pump : "PUMP_A";
+    const doseMl = firstAction?.type === "dose" ? firstAction.doseMl : 1;
+    const dosePwm = firstAction?.type === "dose" ? firstAction.pwm : 100;
+
+    const waterPump =
+      firstAction?.type === "water_on" || firstAction?.type === "water_off"
+        ? firstAction.pump
+        : "WATER_PUMP_IN";
+    const waterDuration =
+      firstAction?.type === "water_on" ? firstAction.durationSec : 10;
 
     return (
       <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
@@ -384,13 +403,13 @@ export function NodeEditorPanel({
               Bơm
               <select
                 className="ui-input mt-1"
-                value={current.pump ?? "PUMP_A"}
+                value={dosePump}
                 onChange={(e) =>
                   setAction({
                     type: "dose",
-                    pump: e.target.value as any,
-                    doseMl: current.doseMl ?? 1,
-                    pwm: current.pwm ?? 100,
+                    pump: e.target.value as "PUMP_A" | "PUMP_B" | "PH_UP" | "PH_DOWN",
+                    doseMl,
+                    pwm: dosePwm,
                   })
                 }
               >
@@ -405,13 +424,13 @@ export function NodeEditorPanel({
               <input
                 type="number"
                 className="ui-input mt-1"
-                value={current.doseMl ?? 1}
+                value={doseMl}
                 onChange={(e) =>
                   setAction({
                     type: "dose",
-                    pump: current.pump ?? "PUMP_A",
+                    pump: dosePump,
                     doseMl: Number(e.target.value),
-                    pwm: current.pwm ?? 100,
+                    pwm: dosePwm,
                   })
                 }
               />
@@ -421,12 +440,12 @@ export function NodeEditorPanel({
               <input
                 type="number"
                 className="ui-input mt-1"
-                value={current.pwm ?? 100}
+                value={dosePwm}
                 onChange={(e) =>
                   setAction({
                     type: "dose",
-                    pump: current.pump ?? "PUMP_A",
-                    doseMl: current.doseMl ?? 1,
+                    pump: dosePump,
+                    doseMl,
                     pwm: Number(e.target.value),
                   })
                 }
@@ -441,21 +460,22 @@ export function NodeEditorPanel({
               Bơm/van
               <select
                 className="ui-input mt-1"
-                value={current.pump ?? "WATER_PUMP_IN"}
-                onChange={(e) =>
+                value={waterPump}
+                onChange={(e) => {
+                  const pump = e.target.value as "WATER_PUMP_IN" | "WATER_PUMP_OUT" | "MIST_VALVE" | "OSAKA_PUMP";
                   setAction(
                     actionVal === "water_on"
                       ? {
                           type: "water_on",
-                          pump: e.target.value as any,
-                          durationSec: current.durationSec ?? 10,
+                          pump,
+                          durationSec: waterDuration,
                         }
                       : {
                           type: "water_off",
-                          pump: e.target.value as any,
+                          pump,
                         }
-                  )
-                }
+                  );
+                }}
               >
                 <option value="WATER_PUMP_IN">WATER_PUMP_IN</option>
                 <option value="WATER_PUMP_OUT">WATER_PUMP_OUT</option>
@@ -469,11 +489,11 @@ export function NodeEditorPanel({
                 <input
                   type="number"
                   className="ui-input mt-1"
-                  value={current.durationSec ?? 10}
+                  value={waterDuration}
                   onChange={(e) =>
                     setAction({
                       type: "water_on",
-                      pump: current.pump ?? "WATER_PUMP_IN",
+                      pump: waterPump,
                       durationSec: Number(e.target.value),
                     })
                   }

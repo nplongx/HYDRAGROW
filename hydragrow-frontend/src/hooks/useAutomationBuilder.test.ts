@@ -41,7 +41,7 @@ describe('useAutomationBuilder', () => {
   it('summarizeActions summarizes different action types properly', () => {
     expect(summarizeActions([])).toBe('Chưa cấu hình');
     expect(summarizeActions([{ type: 'alert', level: 'warning', message: 'test alert' }])).toBe('alert (warning): test alert');
-    expect(summarizeActions([{ type: 'dose', pump: 'PUMP_A', doseMl: 10 }])).toBe('dose 10ml (PUMP_A)');
+    expect(summarizeActions([{ type: 'dose', pump: 'PUMP_A', doseMl: 10, pwm: 100 }])).toBe('dose 10ml (PUMP_A)');
     expect(summarizeActions([{ type: 'water_on', pump: 'WATER_PUMP_IN', durationSec: 30 }])).toBe('water_on 30s (WATER_PUMP_IN)');
     expect(summarizeActions([{ type: 'water_off', pump: 'WATER_PUMP_IN' }])).toBe('water_off (WATER_PUMP_IN)');
     expect(summarizeActions([{ type: 'emergency_stop' }])).toBe('emergency_stop');

@@ -19,7 +19,7 @@ interface NodeProps {
 export function TriggerNode({ data, selected }: NodeProps) {
   let Icon = Activity;
   let label = "Trigger (sensor)";
-  let color = "text-blue-600 bg-blue-50 border-blue-200";
+  let color = "text-sky-700 bg-sky-50 border-sky-200";
 
   if (data.kind === "fsm") {
     Icon = Zap;
@@ -37,7 +37,7 @@ export function TriggerNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`rounded-xl border-2 px-4 py-3 shadow-sm ${color} ${selected ? "ring-2 ring-blue-500 ring-offset-2" : ""}`}
+      className={`rounded-xl border-2 px-4 py-3 shadow-sm ${color} ${selected ? "ring-2 ring-emerald-500 ring-offset-2" : ""}`}
     >
       <Handle type="target" position={Position.Top} className="opacity-0" />
       <div className="flex items-center gap-2">
@@ -86,7 +86,7 @@ export function ActionNode({ data, selected }: NodeProps) {
   } else if (data.type === "delay") {
     Icon = Clock;
     label = `Chờ: ${data.duration ? data.duration + "s" : "..."}`;
-    color = "text-slate-600 bg-slate-50 border-slate-200";
+    color = "text-amber-800 bg-amber-50 border-amber-200";
   } else if (data.type === "fsm") {
     Icon = Zap;
     label = `Chuyển giai đoạn`;

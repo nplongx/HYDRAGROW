@@ -78,7 +78,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div>
-          <h3 className="text-sm font-medium text-slate-700 mb-3">
+          <h3 className="text-sm font-medium text-emerald-950 mb-3">
             Giá trị mẫu (Input)
           </h3>
           <div className="space-y-3">
@@ -88,7 +88,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
               return (
                 <div key={field} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-slate-600">
+                    <label className="text-sm font-medium text-emerald-900">
                       {field} {isWindow && <span className="text-xs text-emerald-600 font-normal">({mode})</span>}
                     </label>
                     <input
@@ -101,7 +101,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                     />
                   </div>
                   {isWindow && (
-                    <span className="text-[11px] text-slate-400 text-right">
+                    <span className="text-[11px] text-emerald-800/60 text-right">
                       Nhập nhiều điểm, cách nhau bởi dấu phẩy
                     </span>
                   )}
@@ -127,7 +127,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
 
         {testMutation.data && (
           <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-slate-700 mb-3">
+            <h3 className="text-sm font-medium text-emerald-950 mb-3">
               Kết quả (Output)
             </h3>
 
@@ -152,7 +152,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
             </div>
 
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">
                 Trace Điều Kiện
               </h4>
               {testMutation.data.trace.map(
@@ -164,10 +164,10 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                       <X className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
                     )}
                     <div className="flex-1">
-                      <div className="font-mono text-xs text-slate-700">
+                      <div className="font-mono text-xs text-emerald-900">
                         {entry.description}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-emerald-800/70">
                         Actual:{" "}
                         {entry.actual_value !== null
                           ? entry.actual_value
@@ -178,28 +178,28 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                 ),
               )}
               {testMutation.data.trace.length === 0 && (
-                <div className="text-sm text-slate-500 italic">
+                <div className="text-sm text-emerald-800/70 italic">
                   Không có điều kiện.
                 </div>
               )}
             </div>
 
             <div className="space-y-2 mt-4">
-              <h4 className="text-xs font-semibold text-slate-500 uppercase">
+              <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">
                 Actions Preview
               </h4>
               {testMutation.data.actions_preview.map(
                 (action: Record<string, unknown>, idx: number) => (
                   <pre
                     key={idx}
-                    className="text-xs font-mono bg-slate-50 p-2 rounded border border-slate-100 overflow-x-auto text-slate-700"
+                    className="text-xs font-mono bg-emerald-50/50 p-2 rounded border border-emerald-100 overflow-x-auto text-emerald-900"
                   >
                     {JSON.stringify(action, null, 2)}
                   </pre>
                 ),
               )}
               {testMutation.data.actions_preview.length === 0 && (
-                <div className="text-sm text-slate-500 italic">
+                <div className="text-sm text-emerald-800/70 italic">
                   Không có hành động (hoặc điều kiện không thỏa).
                 </div>
               )}

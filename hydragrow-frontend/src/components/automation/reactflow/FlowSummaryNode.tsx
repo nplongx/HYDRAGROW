@@ -20,14 +20,14 @@ export function FlowSummaryNode({
       return {
         label: "No trigger",
         Icon: Activity,
-        badge: "bg-gray-100 text-gray-700",
+        badge: "bg-emerald-100/60 text-emerald-800/70",
       };
     const trigger = ir_json.nodes.find((n) => n.id === "trigger");
     if (!trigger)
       return {
         label: "No trigger",
         Icon: Activity,
-        badge: "bg-gray-100 text-gray-700",
+        badge: "bg-emerald-100/60 text-emerald-800/70",
       };
 
     if (trigger.data.kind === "cron")
@@ -46,7 +46,7 @@ export function FlowSummaryNode({
       return {
         label: "SENSOR",
         Icon: Activity,
-        badge: "bg-blue-100 text-blue-700",
+        badge: "bg-sky-100 text-sky-800",
       };
     if (trigger.data.kind === "fsm")
       return {
@@ -57,7 +57,7 @@ export function FlowSummaryNode({
     return {
       label: "TRIGGER",
       Icon: Activity,
-      badge: "bg-gray-100 text-gray-700",
+      badge: "bg-emerald-100/60 text-emerald-800/70",
     };
   };
 
@@ -70,7 +70,7 @@ export function FlowSummaryNode({
 
   return (
     <div
-      className={`ui-card p-3 w-64 ${!enabled ? "opacity-50 grayscale" : "hover:shadow-md cursor-pointer transition-shadow"} border-2 ${enabled ? "border-emerald-200" : "border-gray-200"}`}
+      className={`ui-card p-3 w-64 ${!enabled ? "opacity-50 grayscale" : "hover:shadow-md cursor-pointer transition-shadow"} border-2 ${enabled ? "border-emerald-200" : "border-emerald-200/50"}`}
       onClick={onClick}
     >
       <Handle type="target" position={Position.Top} className="opacity-0" />
@@ -92,13 +92,15 @@ export function FlowSummaryNode({
         </div>
       </div>
 
-      <div className="text-xs text-gray-500 truncate">
+      <div className="text-xs text-emerald-800/70 truncate">
         {ir_json?.nodes?.length ? `${ir_json.nodes.length} nodes` : "No nodes"}
       </div>
 
       {!enabled && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded font-bold uppercase tracking-wider opacity-90">
-          Đã tắt
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-emerald-950 text-white text-xs px-2 py-1 rounded font-bold uppercase tracking-wider opacity-90">
+            Đã tắt
+          </div>
         </div>
       )}
 

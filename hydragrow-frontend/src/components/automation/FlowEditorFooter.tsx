@@ -32,7 +32,7 @@ export function FlowEditorFooter({
         <button
           onClick={onTest}
           disabled={pending}
-          className="ui-btn-md flex items-center gap-2 bg-white border text-slate-700"
+          className="ui-btn-md flex items-center gap-2 bg-white border border-emerald-200 text-emerald-900"
         >
           <Play className="h-4 w-4" /> Chạy thử
         </button>

@@ -52,7 +52,7 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Automation
         {devices?.map((device: any) => (
           <label
             key={device.id}
-            className="flex items-center gap-3 p-2 border rounded hover:bg-gray-50 cursor-pointer"
+            className="flex items-center gap-3 p-2 border rounded hover:bg-emerald-50/50 cursor-pointer"
           >
             <input
               type="checkbox"
@@ -66,7 +66,7 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Automation
                 override
               </span>
             ) : (
-              <span className="farm-status-pill bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded">
+              <span className="farm-status-pill bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded">
                 giống gốc
               </span>
             )}

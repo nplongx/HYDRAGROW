@@ -136,11 +136,13 @@ impl WaterActor {
                 vec![],
             ),
             WaterSubState::Filling { job } => {
-                let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
+                let elapsed_ms = now_ms.saturating_sub(job.start_ms);
+                let timeout_ms = (config.max_refill_duration_sec as u64).saturating_mul(1000);
                 let reached = sensors.water_level >= job.target_level;
-                let timeout = elapsed > config.max_refill_duration_sec as u64;
+                let timeout = elapsed_ms >= timeout_ms;
 
                 if reached || timeout {
+                    let elapsed = elapsed_ms / 1000;
                     let level_after = sensors.water_level;
                     let event = SystemLogEvent::WaterEvent(WaterMetadata {
                         source: "water_pump".into(),
@@ -196,11 +198,13 @@ impl WaterActor {
                 )
             }
             WaterSubState::Draining { job } => {
-                let elapsed = now_ms.saturating_sub(job.start_ms) / 1000;
+                let elapsed_ms = now_ms.saturating_sub(job.start_ms);
+                let timeout_ms = (config.max_drain_duration_sec as u64).saturating_mul(1000);
                 let reached = sensors.water_level <= job.target_level;
-                let timeout = elapsed > config.max_drain_duration_sec as u64;
+                let timeout = elapsed_ms >= timeout_ms;
 
                 if reached || timeout {
+                    let elapsed = elapsed_ms / 1000;
                     let level_after = sensors.water_level;
                     let event = SystemLogEvent::WaterEvent(WaterMetadata {
                         source: "water_pump".into(),
@@ -262,6 +266,60 @@ impl WaterActor {
                 }],
                 vec![],
             ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_sensors(level: f32) -> SensorData {
+        SensorData {
+            device_id: "test_device".to_string(),
+            ec: 1.5,
+            ph: 6.0,
+            temp: 25.0,
+            water_level: level,
+            pump_status: Default::default(),
+            time: "2026-09-04T00:00:00Z".to_string(),
+            controller_received_ms: Some(1_000_000),
+            rssi: Some(-60),
+            free_heap: Some(100_000),
+            uptime: Some(1000),
+            err_water: None,
+            err_temp: None,
+            err_ec: None,
+            err_ph: None,
+            is_continuous: None,
+            ph_voltage_mv: None,
+        }
+    }
+
+    #[test]
+    fn water_actor_timeout_at_exact_boundary() {
+        let mut actor = WaterActor::new("test_actor");
+        let sensors = dummy_sensors(10.0);
+        let mut config = ControllerConfig::default();
+        config.max_refill_duration_sec = 2; // 2000ms
+
+        actor.start_fill(1_000, 50.0, &sensors, "test");
+
+        // At 2999ms (elapsed 1999ms) -> not timed out
+        let (event_2999, _, _) = actor.tick(2_999, &sensors, &config);
+        assert!(matches!(event_2999, WaterEvent::Pending));
+
+        // At 3000ms (elapsed 2000ms >= timeout 2000ms) -> timed out!
+        let (event_3000, _, _) = actor.tick(3_000, &sensors, &config);
+        match event_3000 {
+            WaterEvent::Done {
+                success,
+                duration_sec,
+            } => {
+                assert!(!success, "Should fail on timeout");
+                assert_eq!(duration_sec, 2);
+            }
+            _ => panic!("Expected WaterEvent::Done on exact timeout boundary"),
         }
     }
 }

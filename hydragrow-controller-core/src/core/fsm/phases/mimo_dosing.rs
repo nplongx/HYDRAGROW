@@ -28,8 +28,8 @@ impl PhaseTick for MimoDosingPhase {
         // SỬA: Dùng `uptime` để tính thời gian trôi qua, chống lỗi nhảy cóc thời gian
         let elapsed_ms = uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
 
-        // 1. Kiểm tra Safety Timeout của bơm nước (elapsed_ms giờ đã an toàn tuyệt đối)
-        self.check_water_pump_timeouts(elapsed_ms, config, ctx, &mut result, &mut peri_delta);
+        // 1. Kiểm tra Safety Timeout của bơm nước dựa trên water_pump_started_uptime_ms
+        self.check_water_pump_timeouts(uptime, config, ctx, &mut result, &mut peri_delta);
 
         // 2. Hard Timeout toàn Phase -> Chuyển Cooldown
         // SỬA: Dùng `uptime` để so sánh và thiết lập mốc thời gian tương lai
@@ -174,27 +174,34 @@ impl MimoDosingPhase {
     /// Kiểm tra và ngắt bơm nước nếu chạy quá thời gian cấu hình tối đa
     fn check_water_pump_timeouts(
         &self,
-        elapsed_ms: u64,
+        uptime: u64,
         config: &ControllerConfig,
         ctx: &SystemContext,
         result: &mut TickResult,
         peri_delta: &mut PeripheralDelta,
     ) {
+        let pump_elapsed_ms = uptime.saturating_sub(
+            ctx.peripherals
+                .water_pump_started_uptime_ms
+                .unwrap_or(uptime),
+        );
         if ctx.peripherals.pump_status.water_pump_in
-            && elapsed_ms >= (config.max_refill_duration_sec as u64 * 1000)
+            && pump_elapsed_ms >= (config.max_refill_duration_sec as u64 * 1000)
         {
             result.events.push(OrchestratorEvent::SetWaterPump {
                 direction: WaterDirection::Stop,
             });
             peri_delta.water_pump_in = Some(false);
+            peri_delta.water_pump_started_uptime_ms = Some(None);
         }
         if ctx.peripherals.pump_status.water_pump_out
-            && elapsed_ms >= (config.max_drain_duration_sec as u64 * 1000)
+            && pump_elapsed_ms >= (config.max_drain_duration_sec as u64 * 1000)
         {
             result.events.push(OrchestratorEvent::SetWaterPump {
                 direction: WaterDirection::Stop,
             });
             peri_delta.water_pump_out = Some(false);
+            peri_delta.water_pump_started_uptime_ms = Some(None);
         }
     }
 }

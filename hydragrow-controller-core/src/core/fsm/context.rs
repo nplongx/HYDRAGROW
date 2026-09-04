@@ -201,6 +201,19 @@ mod tests {
         assert!(ctx.safety.is_override_active(4999));
         assert!(!ctx.safety.is_override_active(5000));
     }
+
+    #[test]
+    fn apply_delta_safety_override_monotonic_uptime() {
+        let mut ctx = SystemContext::default();
+        let mut delta = ContextDelta {
+            safety_override_until: Some(20_000),
+            ..Default::default()
+        };
+        ctx.apply_delta(&mut delta);
+        assert!(ctx.safety.is_override_active(19_999));
+        assert!(!ctx.safety.is_override_active(20_000));
+        assert!(!ctx.safety.is_override_active(1_700_000_000_000));
+    }
 }
 
 impl SensorStabilizerTracker {

@@ -107,11 +107,11 @@ impl SafetyGuard {
         self.last_ph_before_dose = None;
     }
 
-    /// Returns true if a force-on override is currently active at `now_ms`.
+    /// Returns true if a force-on override is currently active at `now_uptime_ms`.
     /// This is the read-site that was previously missing — the field was
     /// written by command_handler.rs but never consulted anywhere.
-    pub fn is_override_active(&self, now_ms: u64) -> bool {
-        now_ms < self.safety_override_until
+    pub fn is_override_active(&self, now_uptime_ms: u64) -> bool {
+        now_uptime_ms < self.safety_override_until
     }
 }
 

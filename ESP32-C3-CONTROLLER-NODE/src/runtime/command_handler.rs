@@ -15,7 +15,8 @@ pub fn process_mqtt_commands(
     cmd_rx: &Receiver<MqttCommandIn>,
     config: &ControllerConfig,
     ctx: &SystemContext,
-    current_time_ms: u64,
+    now_uptime_ms: u64,
+    now_wall_time_ms: u64,
     _fsm_mqtt_tx: &Sender<String>,
 ) -> (ContextDelta, Vec<OrchestratorEvent>) {
     let mut delta = ContextDelta::default();
@@ -33,7 +34,7 @@ pub fn process_mqtt_commands(
             info!("🛠️ Bắt đầu chu kỳ hiệu chuẩn cảm biến!");
             stop_all_hardware(&mut all_events);
             delta.phase = Some(SystemPhase::SensorCalibration);
-            delta.phase_finish_ms = Some(Some(current_time_ms + 3_600_000));
+            delta.phase_finish_ms = Some(Some(now_uptime_ms + 3_600_000));
 
             let mut peri_delta = delta.peripherals.take().unwrap_or_default();
             peri_delta.osaka_pump = Some(false);
@@ -193,7 +194,7 @@ pub fn process_mqtt_commands(
 
         if is_force_on {
             let duration = duration_sec.unwrap_or(120);
-            delta.safety_override_until = Some(current_time_ms + (duration * 1000));
+            delta.safety_override_until = Some(now_uptime_ms + (duration * 1000));
             let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,
                 LogLevel::Warning,
@@ -202,7 +203,7 @@ pub fn process_mqtt_commands(
                 format!("Kích hoạt FORCE ON {} trong {}s.", pump_name, duration),
                 None,
                 "fsm_command",
-                current_time_ms,
+                now_wall_time_ms,
             );
             all_events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
@@ -213,7 +214,7 @@ pub fn process_mqtt_commands(
             if let Some(duration) = duration_sec {
                 if duration > 0 {
                     delta.manual_pump_timeout =
-                        Some((pump_name.clone(), current_time_ms + (duration * 1000)));
+                        Some((pump_name.clone(), now_uptime_ms + (duration * 1000)));
                 }
             }
         } else {

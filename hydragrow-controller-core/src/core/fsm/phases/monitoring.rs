@@ -153,7 +153,7 @@ fn apply_decision(
             // =========================================================================
             // KIỂM TRA LƯỚI AN TOÀN (SAFETY BUDGETS) DỰA TRÊN UPTIME_SEC
             // =========================================================================
-            let nutrient_a_ok = ctx.safety.is_override_active(now_ms)
+            let nutrient_a_ok = ctx.safety.is_override_active(uptime_ms)
                 || control.nutrient_a_ml <= 0.0
                 || ctx.safety.peek_hourly_dose(
                     "NutrientA",
@@ -161,7 +161,7 @@ fn apply_decision(
                     control.nutrient_a_ml,
                     config.max_dose_per_hour / 2.0,
                 );
-            let nutrient_b_ok = ctx.safety.is_override_active(now_ms)
+            let nutrient_b_ok = ctx.safety.is_override_active(uptime_ms)
                 || control.nutrient_b_ml <= 0.0
                 || ctx.safety.peek_hourly_dose(
                     "NutrientB",
@@ -187,7 +187,7 @@ fn apply_decision(
                     .commit_hourly_dose("NutrientB", uptime_sec, control.nutrient_b_ml);
             }
             if control.ph_up_ml > 0.0 {
-                if ctx.safety.is_override_active(now_ms) {
+                if ctx.safety.is_override_active(uptime_ms) {
                     // Force-on override active — bypass this safety check.
                 } else if !ctx.safety.peek_hourly_dose(
                     "PhUp",
@@ -204,7 +204,7 @@ fn apply_decision(
                 peri_delta.ph_up = Some(true);
             }
             if control.ph_down_ml > 0.0 {
-                if ctx.safety.is_override_active(now_ms) {
+                if ctx.safety.is_override_active(uptime_ms) {
                     // Force-on override active — bypass this safety check.
                 } else if !ctx.safety.peek_hourly_dose(
                     "PhDown",
@@ -221,7 +221,7 @@ fn apply_decision(
                 peri_delta.ph_down = Some(true);
             }
             if control.water_in_sec > 0.0
-                && !ctx.safety.is_override_active(now_ms)
+                && !ctx.safety.is_override_active(uptime_ms)
                 && !ctx
                     .safety
                     .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32)
@@ -231,7 +231,7 @@ fn apply_decision(
                 return result;
             }
             if control.water_out_sec > 0.0
-                && !ctx.safety.is_override_active(now_ms)
+                && !ctx.safety.is_override_active(uptime_ms)
                 && !ctx
                     .safety
                     .record_drain(uptime_sec, config.max_drain_cycles_per_hour as u32)
@@ -249,14 +249,18 @@ fn apply_decision(
                     direction: WaterDirection::In,
                 });
                 peri_delta.water_pump_in = Some(true);
-                peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
+                if !ctx.peripherals.pump_status.water_pump_in {
+                    peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
+                }
             }
             if control.water_out_sec > 0.0 {
                 result.events.push(OrchestratorEvent::SetWaterPump {
                     direction: WaterDirection::Out,
                 });
                 peri_delta.water_pump_out = Some(true);
-                peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
+                if !ctx.peripherals.pump_status.water_pump_out {
+                    peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
+                }
             }
             if control.misting_sec > 0.0 {
                 result

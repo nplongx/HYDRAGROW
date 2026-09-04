@@ -104,8 +104,14 @@ pub fn start_fsm_control_loop(
         }
 
         // 1. Parse lệnh MQTT
-        let (mut cmd_delta, cmd_events) =
-            process_mqtt_commands(&cmd_rx, &config, &ctx, current_uptime_ms, &fsm_mqtt_tx);
+        let (mut cmd_delta, cmd_events) = process_mqtt_commands(
+            &cmd_rx,
+            &config,
+            &ctx,
+            current_uptime_ms,
+            current_wall_time_ms,
+            &fsm_mqtt_tx,
+        );
         ctx.apply_delta(&mut cmd_delta);
         if !cmd_events.is_empty() {
             let mut dc = DispatchContext {

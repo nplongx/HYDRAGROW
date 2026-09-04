@@ -194,3 +194,106 @@ fn disabled_controller_stops_automation() {
         "is_enabled = false phải dừng automation"
     );
 }
+
+// Test 7: FORCE ON override remains active with divergent clocks (uptime vs Unix wall-clock)
+#[test]
+fn force_on_override_stays_active_with_divergent_clocks() {
+    let config = auto_config();
+    let mut sensors = balanced_sensors();
+    sensors.ec = 0.5; // low EC triggers dosing
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    // Exhaust hourly budget so without override it would fault with MaxHourlyDoseEc
+    ctx.safety
+        .commit_hourly_dose("NutrientA", 0, config.max_dose_per_hour * 2.0);
+
+    // Override active for 10s at uptime 10_000ms -> expires at uptime 20_000ms
+    ctx.safety.safety_override_until = 20_000;
+
+    // Tick at uptime 19_999ms, but wall-clock time is Unix timestamp
+    let result = orchestrator::tick(
+        1_700_000_000_000,
+        19_999,
+        &config,
+        &sensors,
+        19_999,
+        &mut ctx,
+    );
+
+    assert_ne!(
+        result.delta.phase,
+        Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc)),
+        "Override must be active based on uptime_ms, bypassing budget even when Unix wall-clock is much larger"
+    );
+}
+
+// Test 8: Water pump timeout is based on water_pump_started_uptime_ms, not phase_start_ms
+#[test]
+fn water_timeout_uses_pump_started_uptime_not_phase_start() {
+    use hydragrow_controller_core::core::actors::dosing_actor::DosingSubState;
+    use hydragrow_controller_core::core::fsm::phase_tick::PhaseTick;
+    use hydragrow_controller_core::core::fsm::phases::mimo_dosing::MimoDosingPhase;
+
+    let mut config = auto_config();
+    config.max_refill_duration_sec = 5; // 5s timeout
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::MimoDosing;
+    ctx.phase_start_ms = Some(1_000);
+    ctx.phase_finish_ms = Some(30_000); // not timed out
+    ctx.dosing.sub_state = DosingSubState::SoftStarting {
+        finish_ms: 30_000,
+        next_state: Box::new(DosingSubState::Idle),
+    };
+    ctx.peripherals.pump_status.water_pump_in = true;
+    ctx.peripherals.water_pump_started_uptime_ms = Some(10_000);
+
+    let sensors = balanced_sensors();
+    let phase = MimoDosingPhase;
+
+    // Tick at uptime 10_500ms (elapsed for pump is 500ms, but phase elapsed is 9_500ms)
+    let result = phase.tick(1_700_000_000_000, 10_500, &config, &sensors, &mut ctx);
+
+    // Should NOT stop water pump after only 500ms
+    let has_water_stop = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump { direction }
+                if *direction == WaterDirection::Stop
+        )
+    });
+    assert!(
+        !has_water_stop,
+        "Water pump should not time out after only 500ms of pump running"
+    );
+
+    // Tick at uptime 15_000ms (elapsed for pump is 5000ms >= max_refill_duration_sec)
+    let result_timeout = phase.tick(1_700_000_000_000, 15_000, &config, &sensors, &mut ctx);
+    let has_water_stop_timeout = result_timeout.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump { direction }
+                if *direction == WaterDirection::Stop
+        )
+    });
+    assert!(
+        has_water_stop_timeout,
+        "Water pump must time out when pump running duration reaches max_refill_duration_sec"
+    );
+    assert_eq!(
+        result_timeout
+            .delta
+            .peripherals
+            .as_ref()
+            .and_then(|p| p.water_pump_in),
+        Some(false)
+    );
+    assert_eq!(
+        result_timeout
+            .delta
+            .peripherals
+            .as_ref()
+            .and_then(|p| p.water_pump_started_uptime_ms),
+        Some(None)
+    );
+}

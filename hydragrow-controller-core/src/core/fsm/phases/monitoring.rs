@@ -154,31 +154,56 @@ fn apply_decision(
             // =========================================================================
             // KIỂM TRA LƯỚI AN TOÀN (SAFETY BUDGETS) DỰA TRÊN UPTIME_SEC
             // =========================================================================
-            let nutrient_a_ok = ctx.safety.is_override_active(uptime_ms)
-                || control.nutrient_a_ml <= 0.0
-                || ctx.safety.peek_hourly_dose(
-                    "NutrientA",
-                    uptime_sec,
-                    control.nutrient_a_ml,
-                    config.max_dose_per_hour / 2.0,
-                );
-            let nutrient_b_ok = ctx.safety.is_override_active(uptime_ms)
-                || control.nutrient_b_ml <= 0.0
-                || ctx.safety.peek_hourly_dose(
-                    "NutrientB",
-                    uptime_sec,
-                    control.nutrient_b_ml,
-                    config.max_dose_per_hour / 2.0,
-                );
+            let override_active = ctx.safety.is_override_active(uptime_ms);
 
-            if !nutrient_a_ok || !nutrient_b_ok {
-                peri_delta.pump_a = Some(control.nutrient_a_ml > 0.0);
-                peri_delta.pump_b = Some(control.nutrient_b_ml > 0.0);
-                result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
-                result.delta.peripherals = Some(peri_delta);
-                return result;
+            if !override_active {
+                let requested_ec_ml = control.nutrient_a_ml + control.nutrient_b_ml;
+                let requested_ph_ml = control.ph_up_ml + control.ph_down_ml;
+
+                if requested_ec_ml > 0.0
+                    && !ctx.safety.peek_total_hourly_dose(
+                        uptime_sec,
+                        requested_ec_ml,
+                        config.max_dose_per_hour,
+                    )
+                {
+                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
+                    return result;
+                }
+
+                if requested_ph_ml > 0.0
+                    && !ctx.safety.peek_total_hourly_dose(
+                        uptime_sec,
+                        requested_ec_ml + requested_ph_ml,
+                        config.max_dose_per_hour,
+                    )
+                {
+                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
+                    return result;
+                }
+
+                if control.water_in_sec > 0.0
+                    && !ctx
+                        .safety
+                        .peek_refill(uptime_sec, config.max_refill_cycles_per_hour as u32)
+                {
+                    warn!("  [SAFETY] Vượt quá giới hạn chu kỳ cấp nước / giờ.");
+                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyRefills));
+                    return result;
+                }
+
+                if control.water_out_sec > 0.0
+                    && !ctx
+                        .safety
+                        .peek_drain(uptime_sec, config.max_drain_cycles_per_hour as u32)
+                {
+                    warn!("  [SAFETY] Vượt quá giới hạn chu kỳ xả nước / giờ.");
+                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyDrains));
+                    return result;
+                }
             }
 
+            // Ghi nhận (commit) transactional khi tất cả các kiểm tra an toàn đều đã đạt
             if control.nutrient_a_ml > 0.0 {
                 ctx.safety
                     .commit_hourly_dose("NutrientA", uptime_sec, control.nutrient_a_ml);
@@ -188,58 +213,22 @@ fn apply_decision(
                     .commit_hourly_dose("NutrientB", uptime_sec, control.nutrient_b_ml);
             }
             if control.ph_up_ml > 0.0 {
-                if ctx.safety.is_override_active(uptime_ms) {
-                    // Force-on override active — bypass this safety check.
-                } else if !ctx.safety.peek_hourly_dose(
-                    "PhUp",
-                    uptime_sec,
-                    control.ph_up_ml,
-                    config.max_dose_per_hour / 4.0,
-                ) {
-                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
-                    return result;
-                } else {
-                    ctx.safety
-                        .commit_hourly_dose("PhUp", uptime_sec, control.ph_up_ml);
-                }
+                ctx.safety
+                    .commit_hourly_dose("PhUp", uptime_sec, control.ph_up_ml);
                 peri_delta.ph_up = Some(true);
             }
             if control.ph_down_ml > 0.0 {
-                if ctx.safety.is_override_active(uptime_ms) {
-                    // Force-on override active — bypass this safety check.
-                } else if !ctx.safety.peek_hourly_dose(
-                    "PhDown",
-                    uptime_sec,
-                    control.ph_down_ml,
-                    config.max_dose_per_hour / 4.0,
-                ) {
-                    result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
-                    return result;
-                } else {
-                    ctx.safety
-                        .commit_hourly_dose("PhDown", uptime_sec, control.ph_down_ml);
-                }
+                ctx.safety
+                    .commit_hourly_dose("PhDown", uptime_sec, control.ph_down_ml);
                 peri_delta.ph_down = Some(true);
             }
-            if control.water_in_sec > 0.0
-                && !ctx.safety.is_override_active(uptime_ms)
-                && !ctx
-                    .safety
-                    .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32)
-            {
-                warn!("  [SAFETY] Vượt quá giới hạn chu kỳ cấp nước / giờ.");
-                result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyRefills));
-                return result;
+            if control.water_in_sec > 0.0 {
+                ctx.safety
+                    .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32);
             }
-            if control.water_out_sec > 0.0
-                && !ctx.safety.is_override_active(uptime_ms)
-                && !ctx
-                    .safety
-                    .record_drain(uptime_sec, config.max_drain_cycles_per_hour as u32)
-            {
-                warn!("  [SAFETY] Vượt quá giới hạn chu kỳ xả nước / giờ.");
-                result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyDrains));
-                return result;
+            if control.water_out_sec > 0.0 {
+                ctx.safety
+                    .record_drain(uptime_sec, config.max_drain_cycles_per_hour as u32);
             }
 
             // =========================================================================

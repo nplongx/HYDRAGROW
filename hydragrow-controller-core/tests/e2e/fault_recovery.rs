@@ -398,3 +398,49 @@ fn fault_invariant_hourly_ph_limit_stops_all_actuators() {
     assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
     assert_all_outputs_stopped(&events);
 }
+
+#[test]
+fn fault_invariant_hourly_ph_down_limit_stops_all_actuators() {
+    let mut config = minimal_config();
+    config.max_dose_per_hour = 1.0;
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    // Exhaust hourly dose budget for PhDown
+    ctx.safety.commit_hourly_dose("PhDown", 10, 2.0);
+
+    let mut high_ph = normal_sensor();
+    high_ph.ph = 8.0; // high pH triggers pH Down dosing
+    let events = tick_apply(&mut ctx, &config, &high_ph, 10_000, 10_000);
+
+    assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
+    assert_all_outputs_stopped(&events);
+}
+
+#[test]
+fn hourly_dose_safety_check_is_transactional_and_does_not_commit_on_ph_failure() {
+    let mut config = minimal_config();
+    config.max_dose_per_hour = 100.0;
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    // Leave enough budget for EC (~2ml) but exhaust total budget so pH (~15ml) fails
+    ctx.safety.commit_hourly_dose("PhUp", 10, 95.0);
+
+    // Both low EC and low pH -> will request EC dosing and pH Up dosing
+    let mut low_both = normal_sensor();
+    low_both.ec = 0.5;
+    low_both.ph = 5.0;
+
+    let events = tick_apply(&mut ctx, &config, &low_both, 10_000, 10_000);
+
+    assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
+    assert_all_outputs_stopped(&events);
+
+    // NutrientA and NutrientB must NOT have been committed
+    assert!(
+        !ctx.safety.hourly_doses().contains_key("NutrientA")
+            || ctx.safety.hourly_doses()["NutrientA"].is_empty(),
+        "NutrientA must not be committed when pH check fails in the same tick"
+    );
+}

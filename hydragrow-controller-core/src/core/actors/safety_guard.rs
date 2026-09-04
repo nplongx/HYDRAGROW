@@ -67,6 +67,39 @@ impl SafetyGuard {
         history.push((now_sec, dose_ml));
     }
 
+    /// Tổng lượng hóa chất đã châm trong 1 giờ qua trên tất cả các bơm.
+    pub fn total_hourly_dose(&self, now_sec: u64) -> f32 {
+        self.hourly_doses
+            .values()
+            .flat_map(|h| h.iter())
+            .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+            .map(|(_, ml)| *ml)
+            .sum()
+    }
+
+    /// Kiểm tra tổng hóa chất toàn hệ thống có vượt max_ml không, KHÔNG commit.
+    pub fn peek_total_hourly_dose(&self, now_sec: u64, dose_ml: f32, max_ml: f32) -> bool {
+        self.total_hourly_dose(now_sec) + dose_ml <= max_ml
+    }
+
+    pub fn peek_refill(&self, now_sec: u64, max: u32) -> bool {
+        let count = self
+            .refill_history
+            .iter()
+            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+            .count() as u32;
+        count < max
+    }
+
+    pub fn peek_drain(&self, now_sec: u64, max: u32) -> bool {
+        let count = self
+            .drain_history
+            .iter()
+            .filter(|ts| now_sec.saturating_sub(**ts) <= 3600)
+            .count() as u32;
+        count < max
+    }
+
     pub fn record_drain(&mut self, now_sec: u64, max: u32) -> bool {
         self.drain_history
             .retain(|ts| now_sec.saturating_sub(*ts) <= 3600);
@@ -264,5 +297,34 @@ mod tests {
             guard.peek_hourly_dose("NutrientA", now_sec, 10.0, 10.0),
             "Peek không consume budget"
         );
+    }
+
+    #[test]
+    fn total_hourly_dose_aggregates_across_all_pumps() {
+        let mut guard = SafetyGuard::new();
+        let now_sec = 1000u64;
+        let max_ml = 20.0f32;
+
+        guard.commit_hourly_dose("NutrientA", now_sec, 6.0);
+        guard.commit_hourly_dose("NutrientB", now_sec, 6.0);
+        guard.commit_hourly_dose("PhUp", now_sec, 3.0);
+
+        assert_eq!(guard.total_hourly_dose(now_sec), 15.0);
+        assert!(guard.peek_total_hourly_dose(now_sec, 5.0, max_ml));
+        assert!(!guard.peek_total_hourly_dose(now_sec, 5.1, max_ml));
+    }
+
+    #[test]
+    fn peek_refill_and_drain_do_not_commit() {
+        let guard = SafetyGuard::new();
+        let now_sec = 1000u64;
+
+        for _ in 0..5 {
+            assert!(guard.peek_refill(now_sec, 2));
+            assert!(guard.peek_drain(now_sec, 2));
+        }
+
+        assert!(guard.refill_history().is_empty());
+        assert!(guard.drain_history().is_empty());
     }
 }

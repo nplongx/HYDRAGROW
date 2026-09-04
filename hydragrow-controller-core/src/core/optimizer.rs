@@ -153,9 +153,9 @@ pub fn apply_safety_guardrails(
     // =========================================================================
     // LƯỚI 5: RÀNG BUỘC CÔNG SUẤT VẬT LÝ VÀ THỜI GIAN CHẠY TỐI ĐA
     // =========================================================================
-    let max_ab = control.nutrient_a_ml.max(control.nutrient_b_ml);
-    if max_ab > config.max_dose_per_cycle {
-        let scale = config.max_dose_per_cycle / max_ab;
+    let total_ab = control.nutrient_a_ml + control.nutrient_b_ml;
+    if total_ab > config.max_dose_per_cycle && total_ab > 0.0 {
+        let scale = config.max_dose_per_cycle / total_ab;
         control.nutrient_a_ml *= scale;
         control.nutrient_b_ml *= scale;
     }
@@ -175,4 +175,82 @@ pub fn apply_safety_guardrails(
         .clamp(0.0, config.max_drain_duration_sec as f32);
     control.mixing_sec = control.mixing_sec.clamp(0.0, 3600.0);
     control.misting_sec = control.misting_sec.clamp(0.0, 300.0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn total_nutrient_dose_per_cycle_limit_preserves_ratio() {
+        let mut config = ControllerConfig::default();
+        config.max_dose_per_cycle = 10.0;
+        config.max_ec_delta = 5.0; // High enough not to trigger delta guardrail
+        config.max_ec_limit = 5.0;
+        config.water_level_critical_min = 5.0;
+        config.water_level_max = 30.0;
+
+        let mut control = ControlVector {
+            nutrient_a_ml: 6.0,
+            nutrient_b_ml: 6.0,
+            ..Default::default()
+        };
+
+        apply_safety_guardrails(
+            &mut control,
+            1.0,  // current_ec
+            6.0,  // current_ph
+            20.0, // current_water_level
+            &config,
+            0.01, // ec_a_gain_per_ml
+            0.01, // ec_b_gain_per_ml
+        );
+
+        let total_ab = control.nutrient_a_ml + control.nutrient_b_ml;
+        assert!(
+            total_ab <= 10.0 + 1e-4,
+            "Total A+B must be <= max_dose_per_cycle (10.0), got {total_ab}"
+        );
+        assert!(
+            (control.nutrient_a_ml - 5.0).abs() < 1e-4,
+            "Nutrient A should be scaled to 5.0, got {}",
+            control.nutrient_a_ml
+        );
+        assert!(
+            (control.nutrient_b_ml - 5.0).abs() < 1e-4,
+            "Nutrient B should be scaled to 5.0, got {}",
+            control.nutrient_b_ml
+        );
+    }
+
+    #[test]
+    fn total_nutrient_dose_per_cycle_limit_asymmetric_ratio() {
+        let mut config = ControllerConfig::default();
+        config.max_dose_per_cycle = 9.0;
+        config.max_ec_delta = 5.0;
+        config.max_ec_limit = 5.0;
+        config.water_level_critical_min = 5.0;
+        config.water_level_max = 30.0;
+
+        let mut control = ControlVector {
+            nutrient_a_ml: 12.0,
+            nutrient_b_ml: 6.0,
+            ..Default::default()
+        };
+
+        apply_safety_guardrails(&mut control, 1.0, 6.0, 20.0, &config, 0.01, 0.01);
+
+        let total_ab = control.nutrient_a_ml + control.nutrient_b_ml;
+        assert!(
+            total_ab <= 9.0 + 1e-4,
+            "Total A+B must be <= 9.0, got {total_ab}"
+        );
+        let ratio = control.nutrient_a_ml / control.nutrient_b_ml;
+        assert!(
+            (ratio - 2.0).abs() < 1e-4,
+            "Ratio A:B must remain 2.0, got {ratio}"
+        );
+        assert!((control.nutrient_a_ml - 6.0).abs() < 1e-4);
+        assert!((control.nutrient_b_ml - 3.0).abs() < 1e-4);
+    }
 }

@@ -214,6 +214,38 @@ mod tests {
         assert!(!ctx.safety.is_override_active(20_000));
         assert!(!ctx.safety.is_override_active(1_700_000_000_000));
     }
+
+    #[test]
+    fn snapshot_hourly_dose_filtering_clock_separation() {
+        let mut ctx = SystemContext::default();
+        // Dose committed at Unix timestamp 1_756_000_000 sec
+        ctx.safety
+            .commit_hourly_dose("NutrientA", 1_756_000_000, 10.0);
+        ctx.safety.commit_hourly_dose("PhUp", 1_756_000_000, 5.0);
+
+        // Snapshot built with current Unix time = 1_756_000_100 sec (100s later, within 3600s window)
+        let snap_valid = NvsSnapshot::from_context(&ctx, 1_756_000_100);
+        assert_eq!(
+            snap_valid.hourly_dose_ec_ml, 10.0,
+            "Dose at 1_756_000_000 must be included when now_unix_sec = 1_756_000_100"
+        );
+        assert_eq!(
+            snap_valid.hourly_dose_ph_ml, 5.0,
+            "Dose at 1_756_000_000 must be included when now_unix_sec = 1_756_000_100"
+        );
+
+        // Snapshot built with uptime = 100 sec (mismatching clock domain!)
+        // Old code: 100.saturating_sub(1_756_000_000) = 0 <= 3600, so it erroneously included the dose!
+        let snap_uptime = NvsSnapshot::from_context(&ctx, 100);
+        assert_eq!(
+            snap_uptime.hourly_dose_ec_ml, 0.0,
+            "Dose at 1_756_000_000 must NOT be treated as current when now_sec = 100"
+        );
+        assert_eq!(
+            snap_uptime.hourly_dose_ph_ml, 0.0,
+            "Dose at 1_756_000_000 must NOT be treated as current when now_sec = 100"
+        );
+    }
 }
 
 impl SensorStabilizerTracker {
@@ -604,7 +636,11 @@ pub struct NvsSnapshot {
 }
 
 impl NvsSnapshot {
-    pub fn from_context(ctx: &SystemContext, now_sec: u64) -> Self {
+    /// Builds an NVS snapshot from the system context.
+    ///
+    /// NOTE: `now_unix_sec` MUST be wall-clock Unix seconds (not monotonic uptime seconds).
+    /// All persisted dose timestamps in `SafetyGuard` are recorded in Unix wall-clock seconds.
+    pub fn from_context(ctx: &SystemContext, now_unix_sec: u64) -> Self {
         let hourly_dose_ec_ml = ctx
             .safety
             .hourly_doses()
@@ -612,7 +648,7 @@ impl NvsSnapshot {
             .filter(|(p, _)| p.as_str() == "NutrientA" || p.as_str() == "NutrientB")
             .map(|(_, h)| {
                 h.iter()
-                    .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                    .filter(|(ts, _)| *ts <= now_unix_sec && now_unix_sec - *ts <= 3600)
                     .map(|(_, ml)| ml)
                     .sum::<f32>()
             })
@@ -625,7 +661,7 @@ impl NvsSnapshot {
             .filter(|(p, _)| p.as_str() == "PhUp" || p.as_str() == "PhDown")
             .map(|(_, h)| {
                 h.iter()
-                    .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                    .filter(|(ts, _)| *ts <= now_unix_sec && now_unix_sec - *ts <= 3600)
                     .map(|(_, ml)| ml)
                     .sum::<f32>()
             })
@@ -650,7 +686,7 @@ impl NvsSnapshot {
             last_water_change_sec: ctx.last_water_change_sec,
             hourly_dose_ec_ml,
             hourly_dose_ph_ml,
-            hourly_window_start_sec: now_sec.saturating_sub(3600),
+            hourly_window_start_sec: now_unix_sec.saturating_sub(3600),
             retry_ec: ctx.dosing.retry_ec,
             retry_ph: ctx.dosing.retry_ph,
             dosing_cycle_count: ctx.dosing_cycle_count,

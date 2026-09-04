@@ -124,8 +124,8 @@ impl PhaseTick for StabilizingPhase {
             );
         }
 
-        // 3. Lưu NVS Snapshot xuống Flash
-        let snapshot = NvsSnapshot::from_context(ctx, uptime_ms / 1000); // SỬA: Khớp với logic budget trong monitoring
+        // 3. Lưu NVS Snapshot xuống Flash (dùng Unix seconds từ now_ms)
+        let snapshot = NvsSnapshot::from_context(ctx, now_ms / 1000);
         if serde_json::to_string(&snapshot).is_ok() {
             result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }

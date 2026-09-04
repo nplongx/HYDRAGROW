@@ -20,21 +20,6 @@ impl NvsStore {
         Self { nvs }
     }
 
-    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
-    #[allow(dead_code)]
-    pub fn save_active_recipe(&mut self, recipe: &CropRecipe) -> Result<()> {
-        // recipe.validate()?;
-        let serialized = serde_json::to_string(recipe)?;
-        serde_json::from_str::<CropRecipe>(&serialized)?;
-
-        let nvs = self
-            .nvs
-            .as_mut()
-            .ok_or_else(|| anyhow!("NVS namespace 'agitech' is not available"))?;
-        nvs.set_str(ACTIVE_RECIPE_KEY, &serialized)?;
-        Ok(())
-    }
-
     pub fn load_active_recipe(&mut self) -> Result<Option<CropRecipe>> {
         let Some(nvs) = self.nvs.as_mut() else {
             return Ok(None);
@@ -190,24 +175,14 @@ impl NvsStore {
         }
     }
 
-    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
-    #[allow(dead_code)]
-    pub fn save_snapshot(&mut self, ctx: &SystemContext, now_sec: u64) {
+    pub fn factory_reset(&mut self) -> Result<()> {
         if let Some(nvs) = self.nvs.as_mut() {
-            let snapshot = NvsSnapshot::from_context(ctx, now_sec);
-            if let Ok(serialized) = serde_json::to_string(&snapshot) {
-                if let Err(e) = nvs.set_str("runtime_snap", &serialized) {
-                    warn!("Lỗi khi lưu NvsSnapshot: {:?}", e);
-                }
-            }
+            let _ = nvs.remove(ACTIVE_RECIPE_KEY);
+            let _ = nvs.remove("runtime_snap");
+            let _ = nvs.remove("current_stage");
+            let _ = nvs.remove("last_w_change");
+            let _ = nvs.remove("safety_budget");
         }
-    }
-
-    // TODO(follow-up): wire into the periodic snapshot / recipe-persistence path, or remove.
-    #[allow(dead_code)]
-    pub fn save_last_water_change(&mut self, timestamp_sec: u64) {
-        if let Some(nvs) = self.nvs.as_mut() {
-            let _ = nvs.set_u64("last_w_change", timestamp_sec);
-        }
+        Ok(())
     }
 }

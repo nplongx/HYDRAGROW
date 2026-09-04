@@ -238,11 +238,14 @@ impl EventDispatcher {
                 }
             }
             OrchestratorEvent::FactoryReset => {
-                log::warn!("⚠️ [DISPATCHER] Factory Reset: xoá NVS và reboot...");
+                log::warn!("⚠️ [DISPATCHER] Factory Reset: xoá toàn bộ runtime NVS keys và reboot...");
                 if let Some(nvs) = dc.nvs.as_mut() {
                     let empty = hydragrow_shared::WifiCredentialList::default();
                     let _ = crate::hw::save_wifi_list(nvs, &empty);
                     let _ = nvs.remove("active_recipe");
+                    let _ = nvs.remove("runtime_snap");
+                    let _ = nvs.remove("current_stage");
+                    let _ = nvs.remove("last_w_change");
                     let _ = nvs.remove("safety_budget");
                 }
                 std::thread::sleep(std::time::Duration::from_millis(200));

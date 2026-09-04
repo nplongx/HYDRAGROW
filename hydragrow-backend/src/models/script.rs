@@ -53,6 +53,7 @@ pub struct UserScript {
     /// Vắng / `[]` = Flow độc lập (hành vi cũ).
     #[sqlx(json)]
     pub next_flow_ids: Vec<String>,
+    pub cron_next_run_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

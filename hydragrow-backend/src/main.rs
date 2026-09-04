@@ -331,6 +331,11 @@ async fn main() -> anyhow::Result<()> {
         app_state_for_bridge.into_inner(),
     ));
 
+    let app_state_for_cron = app_state.clone();
+    tokio::spawn(crate::services::cron_scheduler::run_cron_loop(
+        app_state_for_cron.into_inner(),
+    ));
+
     let app_state_for_mqtt = app_state.clone();
     tokio::spawn(async move {
         info!("Bắt đầu vòng lặp sự kiện MQTT dưới nền...");

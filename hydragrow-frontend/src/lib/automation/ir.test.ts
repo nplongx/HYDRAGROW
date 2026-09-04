@@ -243,3 +243,34 @@ it('AutomationIrSchema: next_flow_ids defaults to [] when absent', () => {
   expect(result.success).toBe(true);
   expect(result.data?.next_flow_ids).toEqual([]);
 });
+
+it('AutomationIrSchema: accepts valid cron trigger', () => {
+  const ir = {
+    kind: 'alert',
+    trigger: { type: 'cron', cronExpression: '0 0 7 * * *' },
+    conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+    actions: [{ type: 'alert', level: 'info', message: 'test' }],
+    nodes: [],
+    edges: [],
+  };
+  const result = AutomationIrSchema.safeParse(ir);
+  expect(result.success).toBe(true);
+  expect(result.data?.trigger).toEqual({
+    type: 'cron',
+    cronExpression: '0 0 7 * * *',
+    timezone: 'Asia/Ho_Chi_Minh',
+  });
+});
+
+it('AutomationIrSchema: rejects cron trigger with empty expression', () => {
+  const ir = {
+    kind: 'alert',
+    trigger: { type: 'cron', cronExpression: '' },
+    conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+    actions: [{ type: 'alert', level: 'info', message: 'test' }],
+    nodes: [],
+    edges: [],
+  };
+  const result = AutomationIrSchema.safeParse(ir);
+  expect(result.success).toBe(false);
+});

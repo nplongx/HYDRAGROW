@@ -79,4 +79,38 @@ describe('buildIrFromGraph', () => {
     const ir = buildIrFromGraph({ kind: 'alert', nodes: [], edges: [] });
     expect(ir.next_flow_ids).toEqual([]);
   });
+
+  it('correctly builds IR from edited condition and action nodes', () => {
+    const nodes: Node[] = [
+      { id: 'trigger', type: 'trigger', position: { x: 0, y: 0 }, data: { kind: 'sensor' } },
+      {
+        id: '2',
+        type: 'condition',
+        position: { x: 0, y: 100 },
+        data: {
+          conditions: [
+            { sensor: 'temperature', operator: '>=', value: 30 },
+            { sensor: 'humidity', operator: '<=', value: 50 },
+          ],
+          summary: 'temperature >= 30 và humidity <= 50',
+        },
+      },
+      {
+        id: '3',
+        type: 'action',
+        position: { x: 0, y: 200 },
+        data: {
+          actions: [{ type: 'dose', pump: 'PUMP_A', doseMl: 10, pwm: 100 }],
+          summary: 'dose 10ml (PUMP_A)',
+        },
+      },
+    ];
+
+    const ir = buildIrFromGraph({ kind: 'action_command', nodes, edges: [] });
+    expect(ir.conditions).toEqual([
+      { sensor: 'temperature', operator: '>=', value: 30 },
+      { sensor: 'humidity', operator: '<=', value: 50 },
+    ]);
+    expect(ir.actions).toEqual([{ type: 'dose', pump: 'PUMP_A', doseMl: 10, pwm: 100 }]);
+  });
 });

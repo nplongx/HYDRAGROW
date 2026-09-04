@@ -1,9 +1,19 @@
 import { useState } from "react";
 import type {
+  Action,
   AutomationIr,
+  ConditionOrGroup,
   WebhookTriggerConfig,
 } from "../../../lib/automation/ir";
-import { fieldsForKind } from "../../../hooks/useAutomationBuilder";
+import {
+  fieldsForKind,
+  summarizeActions,
+} from "../../../hooks/useAutomationBuilder";
+import {
+  toEditorRoot,
+  fromEditorRoot,
+  summarizeConditionTree,
+} from "../../../lib/automation/conditionTree";
 import { ConditionGroupEditor } from "./ConditionGroupEditor";
 import { WebhookFieldMappingEditor } from "./WebhookFieldMappingEditor";
 
@@ -124,6 +134,11 @@ export function NodeEditorPanel({
   }
 
   if (node.type === "condition" || node.type === "condition_group") {
+    const rawConditions = Array.isArray(node.data?.conditions)
+      ? (node.data.conditions as ConditionOrGroup[])
+      : [];
+    const rootGroup = toEditorRoot(rawConditions);
+
     return (
       <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
         <div className="mb-2 flex items-center justify-between">
@@ -131,13 +146,16 @@ export function NodeEditorPanel({
           <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
         </div>
         <ConditionGroupEditor
-          group={
-            node.type === "condition_group"
-              ? (node.data as any)
-              : { op: "and", children: [node.data as any] }
-          }
+          group={rootGroup}
           fields={fields}
-          onChange={(g) => onChange(node.id, g as any)}
+          onChange={(g) => {
+            const conditions = fromEditorRoot(g);
+            onChange(node.id, {
+              ...node.data,
+              conditions,
+              summary: summarizeConditionTree(conditions),
+            });
+          }}
           isRoot={true}
         />
       </div>
@@ -145,10 +163,18 @@ export function NodeEditorPanel({
   }
 
   if (node.type === "action") {
-    const current = node.data as any;
-    const setAction = (updates: any) => onChange(node.id, updates);
+    const storedActions = Array.isArray(node.data?.actions)
+      ? (node.data.actions as Action[])
+      : [];
+    const current = storedActions[0] ?? (node.data as any);
+    const setAction = (updates: Action) =>
+      onChange(node.id, {
+        ...node.data,
+        actions: [updates],
+        summary: summarizeActions([updates]),
+      });
 
-    if (current?.type === "chain") {
+    if (current?.type === "chain" || node.data?.type === "chain") {
       return (
         <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -156,7 +182,7 @@ export function NodeEditorPanel({
             <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
           </div>
           <p className="text-xs text-emerald-800/80 mb-2">Để chọn Flow cần kích hoạt tiếp theo, vui lòng sử dụng phần "Flow kế tiếp" bên dưới biểu đồ.</p>
-          <div className="rounded border border-blue-100 bg-blue-50 p-2 text-center text-xs text-blue-800">Node này chỉ có tính chất minh họa trực quan trên sơ đồ Flow.</div>
+          <div className="rounded border border-sky-100 bg-sky-50 p-2 text-center text-xs text-sky-800">Node này chỉ có tính chất minh họa trực quan trên sơ đồ Flow.</div>
         </div>
       );
     }
@@ -173,7 +199,14 @@ export function NodeEditorPanel({
             <select
               className="ui-input mt-1"
               value={current?.level ?? "info"}
-              onChange={(e) => setAction({ ...node.data, level: e.target.value })}
+              onChange={(e) =>
+                setAction({
+                  type: "alert",
+                  level: e.target.value as "info" | "warning" | "error",
+                  title: current?.title ?? "",
+                  message: current?.message ?? "",
+                })
+              }
             >
               <option value="info">info</option>
               <option value="warning">warning</option>
@@ -182,11 +215,33 @@ export function NodeEditorPanel({
           </label>
           <label className="mb-2 block text-xs text-emerald-800/75">
             Title (optional)
-            <input className="ui-input mt-1" value={current?.title ?? ""} onChange={(e) => setAction({ ...node.data, title: e.target.value })} />
+            <input
+              className="ui-input mt-1"
+              value={current?.title ?? ""}
+              onChange={(e) =>
+                setAction({
+                  type: "alert",
+                  level: current?.level ?? "info",
+                  title: e.target.value,
+                  message: current?.message ?? "",
+                })
+              }
+            />
           </label>
           <label className="block text-xs text-emerald-800/75">
             Message
-            <input className="ui-input mt-1" value={current?.message ?? ""} onChange={(e) => setAction({ ...node.data, message: e.target.value })} />
+            <input
+              className="ui-input mt-1"
+              value={current?.message ?? ""}
+              onChange={(e) =>
+                setAction({
+                  type: "alert",
+                  level: current?.level ?? "info",
+                  title: current?.title ?? "",
+                  message: e.target.value,
+                })
+              }
+            />
           </label>
         </div>
       );
@@ -205,7 +260,17 @@ export function NodeEditorPanel({
             <select
               className="ui-input mt-1"
               value={isEndSeason ? "end_season" : "advance_stage"}
-              onChange={(e) => setAction(e.target.value === "end_season" ? { type: "end_season", reason: current?.reason ?? "" } : { type: "advance_stage", targetStageOffset: 1, reason: "" })}
+              onChange={(e) =>
+                setAction(
+                  e.target.value === "end_season"
+                    ? { type: "end_season", reason: current?.reason ?? "" }
+                    : {
+                        type: "advance_stage",
+                        targetStageOffset: 1,
+                        reason: current?.reason ?? "",
+                      }
+                )
+              }
             >
               <option value="advance_stage">advance_stage</option>
               <option value="end_season">end_season</option>
@@ -215,17 +280,47 @@ export function NodeEditorPanel({
             <>
               <label className="mb-2 block text-xs text-emerald-800/75">
                 Target stage offset
-                <input type="number" className="ui-input mt-1" value={current?.targetStageOffset ?? 1} onChange={(e) => setAction({ ...current, targetStageOffset: Number(e.target.value) })} />
+                <input
+                  type="number"
+                  className="ui-input mt-1"
+                  value={current?.targetStageOffset ?? 1}
+                  onChange={(e) =>
+                    setAction({
+                      type: "advance_stage",
+                      targetStageOffset: Number(e.target.value),
+                      reason: current?.reason ?? "",
+                    })
+                  }
+                />
               </label>
               <label className="block text-xs text-emerald-800/75">
                 Reason
-                <input className="ui-input mt-1" value={current?.reason ?? ""} onChange={(e) => setAction({ ...current, reason: e.target.value })} />
+                <input
+                  className="ui-input mt-1"
+                  value={current?.reason ?? ""}
+                  onChange={(e) =>
+                    setAction({
+                      type: "advance_stage",
+                      targetStageOffset: current?.targetStageOffset ?? 1,
+                      reason: e.target.value,
+                    })
+                  }
+                />
               </label>
             </>
           ) : (
             <label className="block text-xs text-emerald-800/75">
               Reason
-              <input className="ui-input mt-1" value={current?.reason ?? ""} onChange={(e) => setAction({ ...current, reason: e.target.value })} />
+              <input
+                className="ui-input mt-1"
+                value={current?.reason ?? ""}
+                onChange={(e) =>
+                  setAction({
+                    type: "end_season",
+                    reason: e.target.value,
+                  })
+                }
+              />
             </label>
           )}
         </div>
@@ -233,9 +328,14 @@ export function NodeEditorPanel({
     }
 
     // action_command
-    const isWater = current?.type === "water_on" || current?.type === "water_off";
+    const isWater =
+      current?.type === "water_on" || current?.type === "water_off";
     const isDose = current?.type === "dose";
-    const actionVal = isDose ? "dose" : isWater ? current.type : "emergency_stop";
+    const actionVal = isDose
+      ? "dose"
+      : isWater
+        ? current.type
+        : "emergency_stop";
 
     return (
       <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
@@ -250,9 +350,24 @@ export function NodeEditorPanel({
             value={actionVal}
             onChange={(e) => {
               const next = e.target.value;
-              if (next === "dose") setAction({ type: "dose", pump: "PUMP_A", doseMl: 1, pwm: 100 });
-              else if (next === "water_on") setAction({ type: "water_on", pump: "WATER_PUMP_IN", durationSec: 10 });
-              else if (next === "water_off") setAction({ type: "water_off", pump: "WATER_PUMP_IN" });
+              if (next === "dose")
+                setAction({
+                  type: "dose",
+                  pump: "PUMP_A",
+                  doseMl: 1,
+                  pwm: 100,
+                });
+              else if (next === "water_on")
+                setAction({
+                  type: "water_on",
+                  pump: "WATER_PUMP_IN",
+                  durationSec: 10,
+                });
+              else if (next === "water_off")
+                setAction({
+                  type: "water_off",
+                  pump: "WATER_PUMP_IN",
+                });
               else setAction({ type: "emergency_stop" });
             }}
           >
@@ -267,15 +382,56 @@ export function NodeEditorPanel({
           <>
             <label className="mb-2 block text-xs text-emerald-800/75">
               Bơm
-              <select className="ui-input mt-1" value={current.pump ?? "PUMP_A"} onChange={(e) => setAction({ ...current, pump: e.target.value })}>
+              <select
+                className="ui-input mt-1"
+                value={current.pump ?? "PUMP_A"}
+                onChange={(e) =>
+                  setAction({
+                    type: "dose",
+                    pump: e.target.value as any,
+                    doseMl: current.doseMl ?? 1,
+                    pwm: current.pwm ?? 100,
+                  })
+                }
+              >
                 <option value="PUMP_A">PUMP_A</option>
                 <option value="PUMP_B">PUMP_B</option>
                 <option value="PH_UP">PH_UP</option>
                 <option value="PH_DOWN">PH_DOWN</option>
               </select>
             </label>
-            <label className="mb-2 block text-xs text-emerald-800/75">Liều (ml) <input type="number" className="ui-input mt-1" value={current.doseMl ?? 1} onChange={(e) => setAction({ ...current, doseMl: Number(e.target.value) })} /></label>
-            <label className="block text-xs text-emerald-800/75">PWM (%) <input type="number" className="ui-input mt-1" value={current.pwm ?? 100} onChange={(e) => setAction({ ...current, pwm: Number(e.target.value) })} /></label>
+            <label className="mb-2 block text-xs text-emerald-800/75">
+              Liều (ml){" "}
+              <input
+                type="number"
+                className="ui-input mt-1"
+                value={current.doseMl ?? 1}
+                onChange={(e) =>
+                  setAction({
+                    type: "dose",
+                    pump: current.pump ?? "PUMP_A",
+                    doseMl: Number(e.target.value),
+                    pwm: current.pwm ?? 100,
+                  })
+                }
+              />
+            </label>
+            <label className="block text-xs text-emerald-800/75">
+              PWM (%){" "}
+              <input
+                type="number"
+                className="ui-input mt-1"
+                value={current.pwm ?? 100}
+                onChange={(e) =>
+                  setAction({
+                    type: "dose",
+                    pump: current.pump ?? "PUMP_A",
+                    doseMl: current.doseMl ?? 1,
+                    pwm: Number(e.target.value),
+                  })
+                }
+              />
+            </label>
           </>
         )}
 
@@ -283,7 +439,24 @@ export function NodeEditorPanel({
           <>
             <label className="mb-2 block text-xs text-emerald-800/75">
               Bơm/van
-              <select className="ui-input mt-1" value={current.pump ?? "WATER_PUMP_IN"} onChange={(e) => setAction({ ...current, pump: e.target.value })}>
+              <select
+                className="ui-input mt-1"
+                value={current.pump ?? "WATER_PUMP_IN"}
+                onChange={(e) =>
+                  setAction(
+                    actionVal === "water_on"
+                      ? {
+                          type: "water_on",
+                          pump: e.target.value as any,
+                          durationSec: current.durationSec ?? 10,
+                        }
+                      : {
+                          type: "water_off",
+                          pump: e.target.value as any,
+                        }
+                  )
+                }
+              >
                 <option value="WATER_PUMP_IN">WATER_PUMP_IN</option>
                 <option value="WATER_PUMP_OUT">WATER_PUMP_OUT</option>
                 <option value="MIST_VALVE">MIST_VALVE</option>
@@ -291,7 +464,21 @@ export function NodeEditorPanel({
               </select>
             </label>
             {actionVal === "water_on" && (
-              <label className="block text-xs text-emerald-800/75">Thời gian (giây) <input type="number" className="ui-input mt-1" value={current.durationSec ?? 10} onChange={(e) => setAction({ ...current, durationSec: Number(e.target.value) })} /></label>
+              <label className="block text-xs text-emerald-800/75">
+                Thời gian (giây){" "}
+                <input
+                  type="number"
+                  className="ui-input mt-1"
+                  value={current.durationSec ?? 10}
+                  onChange={(e) =>
+                    setAction({
+                      type: "water_on",
+                      pump: current.pump ?? "WATER_PUMP_IN",
+                      durationSec: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
             )}
           </>
         )}

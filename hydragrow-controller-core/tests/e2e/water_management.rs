@@ -330,3 +330,186 @@ fn e2e_water_only_cycle_honors_duration() {
     });
     assert!(has_stop_done, "Must stop water pump when target is reached");
 }
+
+#[test]
+fn stage_water_change_interval_triggers_when_due_without_cron() {
+    use hydragrow_shared::recipe::{CropRecipe, CropStage};
+
+    let mut config = water_config();
+    config.scheduled_water_change_enabled = true;
+    config.water_change_cron = String::new(); // No cron!
+    config.scheduled_drain_amount_cm = 5.0;
+
+    let recipe = CropRecipe {
+        schema_version: 1,
+        recipe_id: "water_recipe".to_string(),
+        season_id: "season_1".to_string(),
+        device_id: "e2e_water_test".to_string(),
+        revision: 1,
+        start_time_sec: 1_700_000_000,
+        current_stage_index: 0,
+        stages: vec![CropStage {
+            name: "Vegetative".to_string(),
+            duration_sec: 14 * 86400,
+            ec_target: 1.5,
+            ec_tolerance: 0.05,
+            ph_target: 6.0,
+            ph_tolerance: 0.1,
+            nutrient_a_ratio: 1.0,
+            nutrient_b_ratio: 1.0,
+            water_level_target: 20.0,
+            water_change_interval_days: Some(7),
+            water_change_drain_cm: Some(5.0),
+            auto_dilute_ec_trigger: None,
+            max_dose_per_cycle_ml: Some(10.0),
+            misting_on_duration_ms: 5000,
+            misting_off_duration_ms: 60000,
+        }],
+    };
+    config.active_recipe = Some(recipe);
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    ctx.current_stage_index = Some(0);
+
+    let normal = make_sensor(20.0);
+
+    // Before due (day 6 = 6 * 86400s = 518_400s)
+    let day6_ms = (1_700_000_000u64 + 6 * 86400) * 1000;
+    let events_day6 = orchestrator::tick(
+        day6_ms,
+        518_400_000,
+        &config,
+        &normal,
+        518_400_000,
+        &mut ctx,
+    );
+    assert!(
+        !events_day6
+            .events
+            .iter()
+            .any(|e| matches!(e, OrchestratorEvent::SaveLastWaterChange { .. })),
+        "Should not trigger water change on day 6"
+    );
+
+    // At due (day 7 = 7 * 86400s = 604_800s)
+    let day7_ms = (1_700_000_000u64 + 7 * 86400) * 1000;
+    let mut events_day7 = orchestrator::tick(
+        day7_ms,
+        604_800_000,
+        &config,
+        &normal,
+        604_800_000,
+        &mut ctx,
+    );
+    ctx.apply_delta(&mut events_day7.delta);
+
+    let has_water_change = events_day7
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SaveLastWaterChange { .. }));
+    assert!(
+        has_water_change,
+        "Stage interval must trigger scheduled water change when due at day 7"
+    );
+    assert_eq!(ctx.last_water_change_sec, 1_700_000_000 + 7 * 86400);
+}
+
+#[test]
+fn scheduler_precedence_stage_interval_overrides_static_and_cron() {
+    use hydragrow_shared::recipe::{CropRecipe, CropStage};
+
+    let mut config = water_config();
+    config.scheduled_water_change_enabled = true;
+    config.water_change_interval_days = Some(14); // Static interval: 14 days
+    config.water_change_cron = "0 0 0 * * SUN".to_string(); // Cron
+
+    let recipe = CropRecipe {
+        schema_version: 1,
+        recipe_id: "water_recipe".to_string(),
+        season_id: "season_1".to_string(),
+        device_id: "e2e_water_test".to_string(),
+        revision: 1,
+        start_time_sec: 1_700_000_000,
+        current_stage_index: 0,
+        stages: vec![CropStage {
+            name: "Vegetative".to_string(),
+            duration_sec: 14 * 86400,
+            ec_target: 1.5,
+            ec_tolerance: 0.05,
+            ph_target: 6.0,
+            ph_tolerance: 0.1,
+            nutrient_a_ratio: 1.0,
+            nutrient_b_ratio: 1.0,
+            water_level_target: 20.0,
+            water_change_interval_days: Some(3), // Stage interval: 3 days (highest precedence)
+            water_change_drain_cm: Some(5.0),
+            auto_dilute_ec_trigger: None,
+            max_dose_per_cycle_ml: Some(10.0),
+            misting_on_duration_ms: 5000,
+            misting_off_duration_ms: 60000,
+        }],
+    };
+    config.active_recipe = Some(recipe);
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    ctx.current_stage_index = Some(0);
+
+    let normal = make_sensor(20.0);
+
+    // Day 3: Stage interval (3 days) is due and must fire
+    let day3_ms = (1_700_000_000u64 + 3 * 86400) * 1000;
+    let events_day3 = orchestrator::tick(
+        day3_ms,
+        3 * 86400 * 1000,
+        &config,
+        &normal,
+        3 * 86400 * 1000,
+        &mut ctx,
+    );
+
+    let has_water_change = events_day3
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SaveLastWaterChange { .. }));
+    assert!(
+        has_water_change,
+        "Precedence rule: stage interval (3 days) must fire over static interval (14 days) and cron"
+    );
+}
+
+#[test]
+fn scheduler_precedence_static_interval_overrides_cron() {
+    let mut config = water_config();
+    config.scheduled_water_change_enabled = true;
+    config.water_change_interval_days = Some(5); // Static interval: 5 days
+    config.water_change_cron = "0 0 0 * * SUN".to_string(); // Cron
+    config.active_recipe = None; // No active recipe
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    ctx.last_water_change_sec = 1_700_000_000;
+
+    let normal = make_sensor(20.0);
+
+    // Day 5 after last change
+    let day5_ms = (1_700_000_000u64 + 5 * 86400) * 1000;
+    let events_day5 = orchestrator::tick(
+        day5_ms,
+        5 * 86400 * 1000,
+        &config,
+        &normal,
+        5 * 86400 * 1000,
+        &mut ctx,
+    );
+
+    let has_water_change = events_day5
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SaveLastWaterChange { .. }));
+    assert!(
+        has_water_change,
+        "Precedence rule: static interval (5 days) must fire over cron"
+    );
+}

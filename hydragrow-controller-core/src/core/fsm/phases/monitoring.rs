@@ -1,6 +1,5 @@
 // src/core/fsm/phases/monitoring.rs
 
-use chrono::Local;
 use cron::Schedule;
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
@@ -62,44 +61,95 @@ impl PhaseTick for MonitoringPhase {
 }
 
 // Hàm kiểm tra lịch trình xả nước định kỳ (chạy theo Wall Time `now_sec`)
+// Thứ tự ưu tiên (Precedence): stage interval > static interval > cron
 fn check_scheduled_water_change(
     ctx: &SystemContext,
     config: &ControllerConfig,
     now_sec: u64,
     delta: &mut ContextDelta,
 ) -> Option<SolveResult> {
-    if !(config.enable_water_level_sensor
-        && config.scheduled_water_change_enabled
-        && !config.water_change_cron.is_empty())
-    {
+    if !config.enable_water_level_sensor || !config.scheduled_water_change_enabled {
         return None;
     }
 
-    let mut current_next_trigger = ctx.next_water_change_trigger_sec;
-    if ctx.water_change_cron != config.water_change_cron {
-        delta.water_change_cron = Some(config.water_change_cron.clone());
-        if let Ok(schedule) = Schedule::from_str(&config.water_change_cron)
-            && let Some(next) = schedule.upcoming(Local).next()
-        {
-            let ts = next.timestamp() as u64;
-            delta.next_water_change_trigger_sec = Some(Some(ts));
-            current_next_trigger = Some(ts);
-        }
-    }
+    // 1. Stage interval: Ưu tiên cao nhất nếu có active recipe và stage cấu hình interval
+    let stage_interval = config
+        .active_recipe
+        .as_ref()
+        .and_then(|r| ctx.current_stage_index.and_then(|idx| r.stages.get(idx)))
+        .and_then(|s| s.water_change_interval_days);
 
-    let next_trigger = current_next_trigger?;
-    if now_sec < next_trigger {
+    let (effective_days, is_interval) = if let Some(days) = stage_interval {
+        (Some(days), true)
+    } else if let Some(days) = config.water_change_interval_days {
+        // 2. Static interval: Ưu tiên nhì nếu config có cấu hình ngày
+        (Some(days), true)
+    } else {
+        // 3. Cron: Ưu tiên ba
+        (None, false)
+    };
+
+    if is_interval {
+        let days = effective_days.unwrap_or(0);
+        if days == 0 {
+            return None;
+        }
+
+        let interval_sec = (days as u64) * 86400;
+        let base_sec = if ctx.last_water_change_sec != 0 {
+            ctx.last_water_change_sec
+        } else if let Some(recipe) = &config.active_recipe {
+            recipe.start_time_sec
+        } else {
+            now_sec
+        };
+
+        let next_due = base_sec.saturating_add(interval_sec);
+        if ctx.next_water_change_trigger_sec != Some(next_due) {
+            delta.next_water_change_trigger_sec = Some(Some(next_due));
+        }
+
+        if now_sec < next_due {
+            return None;
+        }
+
+        delta.last_water_change_sec = Some(now_sec);
+        delta.next_water_change_trigger_sec = Some(Some(now_sec.saturating_add(interval_sec)));
+    } else if !config.water_change_cron.trim().is_empty() {
+        let schedule = match Schedule::from_str(&config.water_change_cron) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("  [WATER_CHANGE] Parse cron biểu thức thất bại: {:?}", e);
+                return None;
+            }
+        };
+
+        let now_utc = chrono::DateTime::from_timestamp(now_sec as i64, 0).unwrap_or_default();
+        let mut current_next_trigger = ctx.next_water_change_trigger_sec;
+
+        if ctx.water_change_cron != config.water_change_cron || current_next_trigger.is_none() {
+            delta.water_change_cron = Some(config.water_change_cron.clone());
+            if let Some(next_dt) = schedule.after(&now_utc).next() {
+                let ts = next_dt.timestamp() as u64;
+                delta.next_water_change_trigger_sec = Some(Some(ts));
+                current_next_trigger = Some(ts);
+            }
+        }
+
+        let next_trigger = current_next_trigger?;
+        if now_sec < next_trigger {
+            return None;
+        }
+
+        let future_utc = now_utc + chrono::Duration::seconds(1);
+        if let Some(next_dt) = schedule.after(&future_utc).next() {
+            delta.next_water_change_trigger_sec = Some(Some(next_dt.timestamp() as u64));
+        }
+        delta.last_water_change_sec = Some(now_sec);
+    } else {
         return None;
     }
 
-    if let Ok(schedule) = Schedule::from_str(&config.water_change_cron) {
-        let future = Local::now() + chrono::Duration::seconds(1);
-        if let Some(next) = schedule.after(&future).next() {
-            delta.next_water_change_trigger_sec = Some(Some(next.timestamp() as u64));
-        }
-    }
-
-    delta.last_water_change_sec = Some(now_sec);
     let mut peri_delta = delta.peripherals.take().unwrap_or_default();
     peri_delta.last_mixing_start_sec = Some(now_sec);
     peri_delta.is_scheduled_mixing_active = Some(false);

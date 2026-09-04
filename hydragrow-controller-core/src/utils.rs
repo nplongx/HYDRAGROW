@@ -212,6 +212,40 @@ mod recipe_validation_tests {
         let err = validate_recipe(&recipe, &config, "dev_01", None).unwrap_err();
         assert!(err.to_string().contains("invalid_nutrient_ratios"));
     }
+
+    #[test]
+    fn validator_rejects_unsupported_auto_dilute_ec_trigger() {
+        let config = ControllerConfig::default();
+        let recipe = SharedCropRecipe {
+            schema_version: 1,
+            recipe_id: "rec_01".to_string(),
+            season_id: "season_01".to_string(),
+            device_id: "dev_01".to_string(),
+            revision: 10u64,
+            start_time_sec: 1_700_000_000,
+            current_stage_index: 0,
+            stages: vec![SharedCropStage {
+                name: "Stage1".to_string(),
+                duration_sec: 3600,
+                ec_target: 1.5,
+                ec_tolerance: 0.1,
+                ph_target: 6.0,
+                ph_tolerance: 0.2,
+                nutrient_a_ratio: 1.0,
+                nutrient_b_ratio: 1.0,
+                water_level_target: 20.0,
+                water_change_interval_days: None,
+                water_change_drain_cm: None,
+                auto_dilute_ec_trigger: Some(2.5),
+                misting_on_duration_ms: 5000,
+                misting_off_duration_ms: 180000,
+                max_dose_per_cycle_ml: None,
+            }],
+        };
+
+        let err = validate_recipe(&recipe, &config, "dev_01", None).unwrap_err();
+        assert!(err.to_string().contains("auto_dilute_ec_trigger"));
+    }
 }
 
 pub use hydragrow_shared::recipe::{CropRecipe, CropStage};
@@ -367,11 +401,9 @@ pub fn validate_recipe(
             );
         }
 
-        if let Some(trigger) = stage.auto_dilute_ec_trigger
-            && (!trigger.is_finite() || trigger < config.min_ec_limit)
-        {
+        if let Some(trigger) = stage.auto_dilute_ec_trigger {
             anyhow::bail!(
-                "auto_dilute_ec_trigger_out_of_range: stage={}, trigger={}",
+                "auto_dilute_ec_trigger is unsupported: stage={}, trigger={}",
                 idx,
                 trigger
             );

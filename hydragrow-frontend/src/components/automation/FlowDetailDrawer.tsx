@@ -146,7 +146,7 @@ export function FlowDetailDrawer({
         }}
       />
 
-      <NodePalette onAddNode={builder.addNode} onUpdateTrigger={(builder as any).updateTrigger} />
+      <NodePalette onAddNode={builder.addNode} onUpdateTrigger={builder.updateTrigger} />
 
       <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-100 lg:flex-row">
         <div className="min-h-[16rem] flex-1">

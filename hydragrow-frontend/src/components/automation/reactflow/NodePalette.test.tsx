@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { NodePalette } from './NodePalette';
 
@@ -25,5 +25,36 @@ describe('NodePalette', () => {
     expect(screen.getByText('+ Dose / Water / Emergency stop')).toBeInTheDocument();
     expect(screen.getByText('+ Advance stage / End season')).toBeInTheDocument();
     expect(screen.getByText('+ Chain — chạy Flow khác')).toBeInTheDocument();
+  });
+
+  it('calls onUpdateTrigger when trigger buttons are clicked', () => {
+    const onUpdateTrigger = vi.fn();
+    render(<NodePalette onAddNode={vi.fn()} onUpdateTrigger={onUpdateTrigger} />);
+
+    fireEvent.click(screen.getByText('+ Sensor'));
+    expect(onUpdateTrigger).toHaveBeenCalledWith('sensor');
+
+    fireEvent.click(screen.getByText('+ FSM giai đoạn'));
+    expect(onUpdateTrigger).toHaveBeenCalledWith('fsm');
+
+    fireEvent.click(screen.getByText(/\+ Cron \(lịch\)/));
+    expect(onUpdateTrigger).toHaveBeenCalledWith('cron');
+
+    fireEvent.click(screen.getByText(/\+ Webhook/));
+    expect(onUpdateTrigger).toHaveBeenCalledWith('webhook');
+  });
+
+  it('calls onAddNode with proper type and variant', () => {
+    const onAddNode = vi.fn();
+    render(<NodePalette onAddNode={onAddNode} />);
+
+    fireEvent.click(screen.getByText('+ Chain — chạy Flow khác'));
+    expect(onAddNode).toHaveBeenCalledWith('action', 'chain');
+
+    fireEvent.click(screen.getByText('+ Delay'));
+    expect(onAddNode).toHaveBeenCalledWith('action', 'delay');
+
+    fireEvent.click(screen.getByText('+ Time-window (mean/min/max)'));
+    expect(onAddNode).toHaveBeenCalledWith('condition', 'time-window');
   });
 });

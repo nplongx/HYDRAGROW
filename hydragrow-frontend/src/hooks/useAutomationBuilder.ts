@@ -132,18 +132,43 @@ export function useAutomationBuilder() {
     [setNodes],
   );
 
+  const updateTrigger = useCallback(
+    (type: "sensor" | "fsm" | "cron" | "webhook") => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === "trigger" || n.type === "trigger"
+            ? { ...n, data: { ...n.data, kind: type } }
+            : n,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
   const addNode = useCallback(
-    (type: "condition" | "condition_group" | "action") => {
+    (
+      type: "condition" | "condition_group" | "action",
+      variant?: string,
+    ) => {
       const id = String(nextNodeId++);
       const data =
         type === "action"
-          ? { actions: [], summary: "Chưa cấu hình" }
+          ? {
+              ...(variant ? { type: variant } : {}),
+              actions: [],
+              summary:
+                variant === "chain" ? "Kích hoạt Flow khác" : "Chưa cấu hình",
+            }
           : type === "condition_group"
             ? {
                 conditions: [{ op: "and", children: [] }],
                 summary: "Chưa cấu hình",
               }
-            : { conditions: [], summary: "Chưa cấu hình" };
+            : {
+                ...(variant ? { type: variant } : {}),
+                conditions: [],
+                summary: "Chưa cấu hình",
+              };
       const nodeType = type === "condition_group" ? "condition" : type;
       setNodes((nds) => [
         ...nds,
@@ -208,6 +233,7 @@ export function useAutomationBuilder() {
     selectedNode,
     updateNodeData,
     addNode,
+    updateTrigger,
     loadFromIr,
   };
 }

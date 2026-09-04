@@ -237,7 +237,7 @@ impl DosingActor {
                 pwm_percent: 0,
             });
 
-            if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
+            if job.delivered_ml >= job.target_ml {
                 let PumpTarget::NutrientA { dose_b_ml } = job.pump else {
                     return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events);
                 };
@@ -275,6 +275,9 @@ impl DosingActor {
                     b_job,
                 };
                 (DosingEvent::PhaseTransition, hw_events)
+            } else if job.pulse_count >= job.max_pulses {
+                self.sub_state = DosingSubState::Idle;
+                (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events)
             } else {
                 job.pulse_on = false;
                 job.next_toggle_ms = now_ms + job.off_ms;
@@ -346,7 +349,7 @@ impl DosingActor {
 
             job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
 
-            if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
+            if job.delivered_ml >= job.target_ml {
                 let delivered_b = job.delivered_ml;
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     ctx.dose_b_delivered_ml = delivered_b;
@@ -361,6 +364,9 @@ impl DosingActor {
                     self.transition_to_ph_or_idle(delivered_a, delivered_b, now_ms);
                 hw_events.append(&mut follow_events);
                 (ev, hw_events)
+            } else if job.pulse_count >= job.max_pulses {
+                self.sub_state = DosingSubState::Idle;
+                (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events)
             } else {
                 job.pulse_on = false;
                 job.next_toggle_ms = now_ms + job.off_ms;
@@ -413,7 +419,7 @@ impl DosingActor {
                 pwm_percent: 0,
             });
 
-            if job.delivered_ml >= job.target_ml || job.pulse_count >= job.max_pulses {
+            if job.delivered_ml >= job.target_ml {
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     if matches!(job.pump, PumpTarget::PhUp) {
                         ctx.ph_up_delivered_ml = job.delivered_ml;
@@ -453,6 +459,9 @@ impl DosingActor {
                     },
                     hw_events,
                 )
+            } else if job.pulse_count >= job.max_pulses {
+                self.sub_state = DosingSubState::Idle;
+                (DosingEvent::Failed(FaultCode::PhDosingFailed), hw_events)
             } else {
                 job.pulse_on = false;
                 job.next_toggle_ms = now_ms + job.off_ms;
@@ -518,7 +527,7 @@ impl DosingActor {
     }
 }
 
-fn pulse_params(
+pub fn pulse_params(
     dose_ml: f32,
     capacity_ml_per_sec: f32,
     config: &ControllerConfig,
@@ -540,6 +549,32 @@ fn pulse_params(
         1
     };
     (pulse_on_ms, pulse_off_ms, max_pulse_count)
+}
+
+pub fn calculate_channel_dosing_duration_ms(
+    dose_ml: f32,
+    capacity_ml_per_sec: f32,
+    config: &ControllerConfig,
+) -> u64 {
+    if dose_ml <= 1e-3 || capacity_ml_per_sec <= 1e-4 {
+        return 0;
+    }
+    let (on_ms, off_ms, max_pulse_count) = pulse_params(dose_ml, capacity_ml_per_sec, config);
+    if dose_ml < config.dosing_min_dose_ml {
+        let ml_per_pulse = capacity_ml_per_sec * (on_ms as f32 / 1000.0);
+        if ml_per_pulse <= 1e-6 {
+            return 0;
+        }
+        let pulses_needed = (dose_ml / ml_per_pulse).ceil() as u64;
+        let actual_pulses = pulses_needed.min(max_pulse_count as u64);
+        if actual_pulses == 0 {
+            0
+        } else {
+            actual_pulses * on_ms + actual_pulses.saturating_sub(1) * off_ms
+        }
+    } else {
+        on_ms
+    }
 }
 
 #[cfg(test)]

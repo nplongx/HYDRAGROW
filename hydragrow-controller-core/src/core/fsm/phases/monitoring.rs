@@ -9,6 +9,7 @@ use log::warn;
 use std::str::FromStr;
 
 use crate::WaterDirection;
+use crate::core::actors::dosing_actor::calculate_channel_dosing_duration_ms;
 use crate::core::adaptive::matrix::ControlVector;
 use crate::core::adaptive::solver::{SolveResult, select_solver};
 use crate::core::fsm::context::SystemContext;
@@ -252,6 +253,8 @@ fn apply_decision(
                 if !ctx.peripherals.pump_status.water_pump_in {
                     peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
                 }
+                ctx.water
+                    .start_fill(uptime_ms, config.water_level_target, sensors, "mimo_dosing");
             }
             if control.water_out_sec > 0.0 {
                 result.events.push(OrchestratorEvent::SetWaterPump {
@@ -261,6 +264,8 @@ fn apply_decision(
                 if !ctx.peripherals.pump_status.water_pump_out {
                     peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
                 }
+                ctx.water
+                    .start_drain(uptime_ms, config.water_level_target, sensors, "mimo_dosing");
             }
             if control.misting_sec > 0.0 {
                 result
@@ -276,41 +281,43 @@ fn apply_decision(
             // [VÁ BUG]: TÍNH TOÁN CHÍNH XÁC THỜI GIAN CẦN THIẾT CHO DOSING ACTOR
             // =================================================================
             let safe_pwm = pwm.clamp(1, 100);
-            let mut dosing_time_sec = (config.soft_start_duration as f32) / 1000.0;
+            let mut dosing_time_ms = config.soft_start_duration as u64;
 
             if control.nutrient_a_ml > 0.0 {
                 let flow_a =
                     effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config).unwrap_or(1.0);
-                dosing_time_sec += control.nutrient_a_ml / flow_a;
+                dosing_time_ms +=
+                    calculate_channel_dosing_duration_ms(control.nutrient_a_ml, flow_a, config);
 
                 // Trạm FSM bơm theo tuần tự: Bơm A xong sẽ trễ (delay) rồi mới bơm B
                 if control.nutrient_b_ml > 0.0 {
-                    dosing_time_sec += config.delay_between_a_and_b_sec as f32;
+                    dosing_time_ms += (config.delay_between_a_and_b_sec as u64) * 1000;
                 }
             }
             if control.nutrient_b_ml > 0.0 {
                 let flow_b =
                     effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config).unwrap_or(1.0);
-                dosing_time_sec += control.nutrient_b_ml / flow_b;
+                dosing_time_ms +=
+                    calculate_channel_dosing_duration_ms(control.nutrient_b_ml, flow_b, config);
             }
             if control.ph_up_ml > 0.0 {
                 let flow_up =
                     effective_flow_ml_per_sec(DosePumpKind::PhUp, safe_pwm, config).unwrap_or(1.0);
-                dosing_time_sec += control.ph_up_ml / flow_up;
+                dosing_time_ms +=
+                    calculate_channel_dosing_duration_ms(control.ph_up_ml, flow_up, config);
             }
             if control.ph_down_ml > 0.0 {
                 let flow_down = effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config)
                     .unwrap_or(1.0);
-                dosing_time_sec += control.ph_down_ml / flow_down;
+                dosing_time_ms +=
+                    calculate_channel_dosing_duration_ms(control.ph_down_ml, flow_down, config);
             }
 
+            let water_time_ms = (control.water_in_sec.max(control.water_out_sec) * 1000.0) as u64;
+            let misting_time_ms = (control.misting_sec * 1000.0) as u64;
+
             // Chọn ra khoảng thời gian lớn nhất giữa tất cả các phần cứng đang chạy
-            let hardware_run_ms = (control
-                .water_in_sec
-                .max(control.water_out_sec)
-                .max(control.misting_sec)
-                .max(dosing_time_sec)
-                * 1000.0) as u64;
+            let hardware_run_ms = water_time_ms.max(misting_time_ms).max(dosing_time_ms);
 
             // Truyền uptime_ms vào DosingActor để bơm xung PWM chính xác trên Monotonic Time
             ctx.dosing.start_matrix_cycle(

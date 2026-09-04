@@ -244,3 +244,89 @@ fn e2e_normal_water_no_action() {
     );
     eprintln!("✅ Normal water level stays in Monitoring");
 }
+
+/// E2E Water Test 5: Chu kỳ chỉ bơm nước (water-only) phải duy trì bơm nước theo đúng thời gian yêu cầu
+#[test]
+fn e2e_water_only_cycle_honors_duration() {
+    let mut config = water_config();
+    config.max_refill_duration_sec = 30;
+    config.water_level_target = 20.0;
+    config.water_level_tolerance = 0.5;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    let sensor = make_sensor(17.0);
+
+    // Tick 1: At uptime 10_000ms, Monitoring triggers MimoDosing with Water Pump In
+    let events = tick_apply(&mut ctx, &config, &sensor, 10_000);
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::MimoDosing,
+        "Must transition to MimoDosing"
+    );
+    assert!(
+        ctx.peripherals.pump_status.water_pump_in,
+        "Water pump In must be running"
+    );
+    let has_water_in = events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::In
+            }
+        )
+    });
+    assert!(has_water_in, "Must emit SetWaterPump In");
+
+    // Tick 2: At uptime 10_600ms (600ms elapsed), old code had `elapsed_ms >= 500 && is_idle()` and wrongly stopped water!
+    let events_600 = tick_apply(&mut ctx, &config, &sensor, 10_600);
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::MimoDosing,
+        "Must remain in MimoDosing after 600ms"
+    );
+    assert!(
+        ctx.peripherals.pump_status.water_pump_in,
+        "Water pump In must remain running"
+    );
+    let has_stop = events_600.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop
+            }
+        )
+    });
+    assert!(!has_stop, "Must NOT stop water after only 600ms");
+
+    // Tick 3: At uptime 25_000ms (15s elapsed), water still filling because level is still 17.0 < 20.0
+    let _events_15s = tick_apply(&mut ctx, &config, &sensor, 25_000);
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::MimoDosing,
+        "Must remain in MimoDosing at 15s"
+    );
+    assert!(
+        ctx.peripherals.pump_status.water_pump_in,
+        "Water pump In must remain running at 15s"
+    );
+
+    // Tick 4: Water level reaches target 20.0 at uptime 30_000ms
+    let full_sensor = make_sensor(20.0);
+    let events_done = tick_apply(&mut ctx, &config, &full_sensor, 30_000);
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::ActiveMixing,
+        "Must transition to ActiveMixing when water target is reached"
+    );
+    let has_stop_done = events_done.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop
+            }
+        )
+    });
+    assert!(has_stop_done, "Must stop water pump when target is reached");
+}

@@ -5,6 +5,7 @@ use log::warn;
 
 use crate::WaterDirection;
 use crate::core::actors::dosing_actor::{DosingEvent, PumpTarget};
+use crate::core::actors::water_actor::{WaterEvent, WaterSubState};
 use crate::core::fsm::tick_result::CalibrationDelta;
 use crate::core::fsm::types::PendingCalibrationSample;
 use crate::core::fsm::{
@@ -66,43 +67,74 @@ impl PhaseTick for MimoDosingPhase {
         let (dosing_event, hardware_events) = ctx.dosing.tick(uptime, config);
         result.events.extend(hardware_events);
 
+        let is_water_active = matches!(
+            ctx.water.sub_state,
+            WaterSubState::Filling { .. } | WaterSubState::Draining { .. }
+        );
+
+        let water_event = if is_water_active {
+            let (event, hw_events, sys_log) = ctx.water.tick(uptime, sensors, config);
+            result.events.extend(hw_events);
+            result
+                .events
+                .extend(sys_log.into_iter().filter_map(|mut log| {
+                    log.timestamp_ms = now_ms;
+                    serde_json::to_string(&log)
+                        .ok()
+                        .map(|payload_json| OrchestratorEvent::PublishSystemLog { payload_json })
+                }));
+            Some(event)
+        } else {
+            None
+        };
+
         match dosing_event {
             DosingEvent::Pending => {
-                if ctx.dosing.is_idle() && elapsed_ms >= 500 {
-                    // Chu kỳ chỉ bơm nước hoàn tất
-                    let water_pump_elapsed_ms = uptime.saturating_sub(
-                        ctx.peripherals
-                            .water_pump_started_uptime_ms
-                            .unwrap_or(uptime),
-                    );
-                    let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
-                        water_pump_elapsed_ms.min(config.max_refill_duration_sec as u64 * 1000)
-                            as f32
-                            / 1000.0
-                    } else {
-                        0.0
-                    };
-                    let water_out_spent = if ctx.peripherals.pump_status.water_pump_out {
-                        water_pump_elapsed_ms.min(config.max_drain_duration_sec as u64 * 1000)
-                            as f32
-                            / 1000.0
-                    } else {
-                        0.0
-                    };
+                if ctx.dosing.is_idle() {
+                    if let Some(w_event) = water_event {
+                        match w_event {
+                            WaterEvent::Done { duration_sec, .. } => {
+                                let (water_in_spent, water_out_spent) =
+                                    if ctx.peripherals.pump_status.water_pump_in {
+                                        (duration_sec as f32, 0.0)
+                                    } else {
+                                        (0.0, duration_sec as f32)
+                                    };
 
-                    stop_water_and_misting(ctx, &mut result, &mut peri_delta);
+                                stop_water_and_misting(ctx, &mut result, &mut peri_delta);
 
-                    let sample = build_calibration_sample(
-                        format!("water-{now_ms}"), // GIỮ NGUYÊN: Dùng now_ms để tạo ID dễ đọc cho người dùng
-                        "water_only_cycle".to_string(),
-                        (0.0, 0.0, 0.0, 0.0),
-                        (water_in_spent, water_out_spent),
-                        uptime, // SỬA: Dùng uptime cho logic tracking bên trong
-                        sensors,
-                        config,
-                        ctx,
-                    );
-                    transition_to_active_mixing(uptime, sample, ctx, &mut result);
+                                let sample = build_calibration_sample(
+                                    format!("water-{now_ms}"), // GIỮ NGUYÊN: Dùng now_ms để tạo ID dễ đọc cho người dùng
+                                    "water_only_cycle".to_string(),
+                                    (0.0, 0.0, 0.0, 0.0),
+                                    (water_in_spent, water_out_spent),
+                                    uptime, // SỬA: Dùng uptime cho logic tracking bên trong
+                                    sensors,
+                                    config,
+                                    ctx,
+                                );
+                                transition_to_active_mixing(uptime, sample, ctx, &mut result);
+                            }
+                            WaterEvent::Pending => {
+                                // Chu kỳ bơm nước đang chạy — tiếp tục ở MimoDosing
+                            }
+                        }
+                    } else if elapsed_ms >= 500 {
+                        // Không có nước chạy và dosing đã hoàn tất
+                        stop_water_and_misting(ctx, &mut result, &mut peri_delta);
+
+                        let sample = build_calibration_sample(
+                            format!("idle-{now_ms}"),
+                            "idle_cycle".to_string(),
+                            (0.0, 0.0, 0.0, 0.0),
+                            (0.0, 0.0),
+                            uptime,
+                            sensors,
+                            config,
+                            ctx,
+                        );
+                        transition_to_active_mixing(uptime, sample, ctx, &mut result);
+                    }
                 }
             }
             DosingEvent::SoftStartDone | DosingEvent::PhaseTransition => {}
@@ -214,9 +246,18 @@ fn stop_water_and_misting(
     result: &mut TickResult,
     peri_delta: &mut PeripheralDelta,
 ) {
-    result.events.push(OrchestratorEvent::SetWaterPump {
-        direction: WaterDirection::Stop,
-    });
+    if !result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop
+            }
+        )
+    }) {
+        result.events.push(OrchestratorEvent::SetWaterPump {
+            direction: WaterDirection::Stop,
+        });
+    }
     if ctx.peripherals.misting_started_by_dosing {
         result
             .events

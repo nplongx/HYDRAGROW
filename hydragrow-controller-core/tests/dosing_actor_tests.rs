@@ -137,3 +137,59 @@ fn tick_when_idle_returns_pending_safely() {
         "Tick khi idle không emit hardware events"
     );
 }
+
+// Test 6: Khi hết số xung (max_pulses) mà chưa đạt target_ml -> phải trả về Fault, tắt bơm, không coi là hoàn thành
+#[test]
+fn pulse_exhaustion_below_target_emits_pump_off_and_fails() {
+    use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
+    use hydragrow_shared::fsm::FaultCode;
+
+    let mut actor = DosingActor::new();
+    let mut config = auto_config();
+    config.soft_start_duration = 0;
+    config.dosing_min_dose_ml = 5.0; // ép vào pulse mode nếu dose < 5.0
+    config.dosing_pulse_on_ms = 100;
+    config.dosing_pulse_off_ms = 100;
+    config.pump_a_capacity_ml_per_sec = 1.0; // mỗi xung 100ms = 0.1ml
+    config.dosing_max_pulse_count_per_cycle = 2; // tối đa 2 xung = 0.2ml
+
+    let sensors = make_sensors();
+    let mut control = ControlVector::default();
+    control.nutrient_a_ml = 1.0; // Cần 1.0ml, nhưng max 2 xung chỉ đạt 0.2ml!
+
+    actor.start_matrix_cycle(0, &control, 1.5, 6.0, 80, &config, &sensors);
+
+    let mut failed = false;
+    let mut pump_turned_off = false;
+    let mut current_ms = 0u64;
+
+    for _ in 0..50 {
+        current_ms += 100;
+        let (event, hw_events) = actor.tick(current_ms, &config);
+        for hw in &hw_events {
+            if matches!(
+                hw,
+                OrchestratorEvent::SetDosingPump {
+                    pump: DosingPumpTarget::NutrientA,
+                    on: false,
+                    ..
+                }
+            ) {
+                pump_turned_off = true;
+            }
+        }
+        if matches!(event, DosingEvent::Failed(FaultCode::EcDosingFailed)) {
+            failed = true;
+            break;
+        }
+    }
+
+    assert!(
+        pump_turned_off,
+        "Khi pulse count đạt max_pulses phải tắt bơm"
+    );
+    assert!(
+        failed,
+        "Khi pulse count đạt max_pulses mà chưa đạt target phải trả về Failed(EcDosingFailed)"
+    );
+}

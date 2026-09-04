@@ -37,10 +37,10 @@ const SEED_EDGES: Edge[] = [
   { id: "e2-3", source: "2", target: "3" },
 ];
 
-/** Mirrors NodeEditorPanel's summarizeActions — kept in sync manually since
- * duplicating a switch over `Action['type']` here is simpler than exporting
- * a UI-layer helper into a hook module. */
-function summarizeActions(actions: Action[]): string {
+/** Single source of truth for rendering an action list as one summary line.
+ * Imported by NodeEditorPanel so the node-canvas label and the
+ * synthesized-from-flat-IR label can never drift apart. */
+export function summarizeActions(actions: Action[]): string {
   if (actions.length === 0) return "Chưa cấu hình";
   return actions
     .map((a) => {

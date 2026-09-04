@@ -8,6 +8,8 @@ Rebuild the Automation page UI around one coherent responsive React Flow experie
 ## Acceptance Contract
 - Acceptance contract: `docs/acceptance/AUTOMATION-UI-OVERHAUL-001.json`
 - Evidence contract: `docs/evidence/AUTOMATION-UI-OVERHAUL-001.json`
+- For C1-C7 changes, commit both contracts in the same PR.
+- Schemas: `docs/schemas/acceptance-contract.schema.json`, `docs/schemas/evidence-contract.schema.json`
 
 ## Acceptance Criteria
 

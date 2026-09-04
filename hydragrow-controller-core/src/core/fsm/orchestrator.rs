@@ -15,7 +15,7 @@ use crate::core::fsm::phases::{
     ActiveMixingPhase, CooldownPhase, MimoDosingPhase, MonitoringPhase, StabilizingPhase,
     WaterDrainingPhase, WaterRefillingPhase,
 };
-use crate::core::fsm::tick_result::{PeripheralDelta, TickResult};
+use crate::core::fsm::tick_result::{CalibrationDelta, PeripheralDelta, TickResult};
 
 pub fn fault_all_outputs_off(result: &mut TickResult) {
     // 1. Remove any actuator ON events that were queued prior to the fault
@@ -477,6 +477,10 @@ fn check_sensor_noise(
             is_noisy = true;
         }
         peri_delta.previous_ph = Some(Some(sensors.ph));
+    }
+
+    if is_noisy && ctx.calibration.pending_sample.is_some() {
+        delta.calibration = Some(CalibrationDelta::Invalidate);
     }
 
     delta.peripherals = Some(peri_delta);

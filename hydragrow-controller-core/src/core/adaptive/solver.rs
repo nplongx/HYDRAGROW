@@ -45,27 +45,30 @@ impl SafeStateDeltas {
         let ec_tolerance = effective_ec_tolerance(config, ctx);
         let ph_tolerance = effective_ph_tolerance(config, ctx);
 
-        let ec = if config.enable_ec_sensor && ec_delta.abs() > ec_tolerance {
+        let ec_valid = config.enable_ec_sensor && !sensors.err_ec.unwrap_or(false);
+        let ph_valid = config.enable_ph_sensor && !sensors.err_ph.unwrap_or(false);
+        let water_valid = config.enable_water_level_sensor && !sensors.err_water.unwrap_or(false);
+        let temp_valid = config.enable_temp_sensor && !sensors.err_temp.unwrap_or(false);
+
+        let ec = if ec_valid && ec_delta.abs() > ec_tolerance {
             ec_delta
         } else {
             0.0
         };
 
-        let ph = if config.enable_ph_sensor && ph_delta.abs() > ph_tolerance {
+        let ph = if ph_valid && ph_delta.abs() > ph_tolerance {
             ph_delta
         } else {
             0.0
         };
 
-        let water = if config.enable_water_level_sensor
-            && water_delta.abs() > config.water_level_tolerance
-        {
+        let water = if water_valid && water_delta.abs() > config.water_level_tolerance {
             water_delta
         } else {
             0.0
         };
 
-        let temp = if config.enable_temp_sensor && temp_delta < 0.0 {
+        let temp = if temp_valid && temp_delta < 0.0 {
             temp_delta
         } else {
             0.0
@@ -371,4 +374,163 @@ fn effective_ec_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32
 
 fn effective_ph_tolerance(config: &ControllerConfig, ctx: &SystemContext) -> f32 {
     ctx.tuner.effective_ph_tolerance(config.ph_tolerance)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_config() -> ControllerConfig {
+        ControllerConfig {
+            is_enabled: true,
+            control_mode: hydragrow_shared::ControlMode::Auto,
+            ec_target: 1.5,
+            ec_tolerance: 0.1,
+            ph_target: 6.0,
+            ph_tolerance: 0.2,
+            water_level_target: 20.0,
+            water_level_tolerance: 1.0,
+            misting_temp_threshold: 30.0,
+            enable_ec_sensor: true,
+            enable_ph_sensor: true,
+            enable_water_level_sensor: true,
+            enable_temp_sensor: true,
+            nutrient_a_ratio: 1.0,
+            nutrient_b_ratio: 1.0,
+            ec_gain_per_ml: 0.1,
+            ph_shift_up_per_ml: 0.1,
+            ph_shift_down_per_ml: 0.1,
+            dosing_pwm_percent: 80,
+            ..Default::default()
+        }
+    }
+
+    fn test_sensors() -> SensorData {
+        SensorData {
+            device_id: "test".to_string(),
+            ec: 1.5,
+            ph: 6.0,
+            temp: 25.0,
+            water_level: 20.0,
+            pump_status: Default::default(),
+            time: "2026-09-04T00:00:00Z".to_string(),
+            controller_received_ms: Some(1000),
+            rssi: Some(-60),
+            free_heap: Some(100_000),
+            uptime: Some(1000),
+            err_water: None,
+            err_temp: None,
+            err_ec: None,
+            err_ph: None,
+            is_continuous: None,
+            ph_voltage_mv: None,
+        }
+    }
+
+    #[test]
+    fn solver_gates_on_sensor_validity_err_ec() {
+        let config = test_config();
+        let ctx = SystemContext::default();
+        let solver = ColdPathSolver;
+
+        let mut sensors = test_sensors();
+        sensors.ec = 1.0;
+        sensors.err_ec = Some(true);
+        sensors.ph = 5.0;
+
+        let result = solver.solve(&sensors, &config, &ctx);
+        match result {
+            SolveResult::Execute { control, .. } => {
+                assert_eq!(
+                    control.nutrient_a_ml, 0.0,
+                    "Nutrient A must be 0 when err_ec is true"
+                );
+                assert_eq!(
+                    control.nutrient_b_ml, 0.0,
+                    "Nutrient B must be 0 when err_ec is true"
+                );
+                assert!(
+                    control.ph_up_ml > 0.0,
+                    "Healthy pH sensor should still be controlled"
+                );
+            }
+            SolveResult::Idle => panic!("Expected SolveResult::Execute for healthy pH channel"),
+        }
+    }
+
+    #[test]
+    fn solver_gates_on_sensor_validity_err_ph() {
+        let config = test_config();
+        let ctx = SystemContext::default();
+        let solver = ColdPathSolver;
+
+        let mut sensors = test_sensors();
+        sensors.ph = 5.0;
+        sensors.err_ph = Some(true);
+        sensors.ec = 1.0;
+
+        let result = solver.solve(&sensors, &config, &ctx);
+        match result {
+            SolveResult::Execute { control, .. } => {
+                assert_eq!(control.ph_up_ml, 0.0, "pH Up must be 0 when err_ph is true");
+                assert_eq!(
+                    control.ph_down_ml, 0.0,
+                    "pH Down must be 0 when err_ph is true"
+                );
+                assert!(
+                    control.nutrient_a_ml > 0.0,
+                    "Healthy EC sensor should still be controlled"
+                );
+            }
+            SolveResult::Idle => panic!("Expected SolveResult::Execute for healthy EC channel"),
+        }
+    }
+
+    #[test]
+    fn solver_gates_on_sensor_validity_err_water() {
+        let config = test_config();
+        let ctx = SystemContext::default();
+        let solver = ColdPathSolver;
+
+        let mut sensors = test_sensors();
+        sensors.water_level = 10.0;
+        sensors.err_water = Some(true);
+        sensors.ec = 1.0;
+
+        let result = solver.solve(&sensors, &config, &ctx);
+        match result {
+            SolveResult::Execute { control, .. } => {
+                assert_eq!(
+                    control.water_in_sec, 0.0,
+                    "Water In must be 0 when err_water is true"
+                );
+                assert_eq!(
+                    control.water_out_sec, 0.0,
+                    "Water Out must be 0 when err_water is true"
+                );
+                assert!(
+                    control.nutrient_a_ml > 0.0,
+                    "Healthy EC sensor should still be controlled"
+                );
+            }
+            SolveResult::Idle => panic!("Expected SolveResult::Execute for healthy EC channel"),
+        }
+    }
+
+    #[test]
+    fn solver_gates_on_sensor_validity_err_temp() {
+        let config = test_config();
+        let ctx = SystemContext::default();
+
+        let mut sensors = test_sensors();
+        sensors.temp = 35.0;
+        sensors.err_temp = Some(true);
+        sensors.ec = 1.0;
+
+        let deltas = SafeStateDeltas::compute(&sensors, &config, &ctx);
+        assert_eq!(
+            deltas.temp, 0.0,
+            "deltas.temp must be 0 when err_temp is true"
+        );
+    }
 }

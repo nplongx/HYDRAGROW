@@ -297,3 +297,85 @@ fn water_timeout_uses_pump_started_uptime_not_phase_start() {
         Some(None)
     );
 }
+
+// Test 9: Noise detection invalidates pending calibration sample and AutoTuner refuses to learn
+#[test]
+fn noise_invalidates_pending_calibration_sample_and_tuner_refuses_learning() {
+    use hydragrow_controller_core::core::fsm::tick_result::CalibrationDelta;
+    use hydragrow_controller_core::core::fsm::types::PendingCalibrationSample;
+
+    let mut config = auto_config();
+    config.enable_ec_sensor = true;
+    config.max_ec_delta = 0.3;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    ctx.peripherals.previous_ec = Some(1.5);
+
+    let sample = PendingCalibrationSample {
+        cycle_id: "test-cycle".to_string(),
+        trigger: "mimo_test".to_string(),
+        start_ec: 1.5,
+        start_ph: 6.0,
+        start_water_level: 20.0,
+        start_temp: 25.0,
+        target_ec: 2.0,
+        target_ph: 6.0,
+        dose_a_ml: 5.0,
+        dose_b_ml: 5.0,
+        dose_ph_up_ml: 0.0,
+        dose_ph_down_ml: 0.0,
+        water_in_sec: 0.0,
+        water_out_sec: 0.0,
+        post_mixing_ec: 0.0,
+        post_mixing_ph: 0.0,
+        start_ms: 1000,
+        active_mixing_finish_ms: 0,
+        stabilizing_start_ms: None,
+        stabilizing_finish_ms: None,
+        invalid_by_noise: false,
+        invalid_by_water_change: false,
+    };
+    ctx.apply_delta(&mut hydragrow_controller_core::core::fsm::ContextDelta {
+        calibration: Some(CalibrationDelta::Start(sample)),
+        ..Default::default()
+    });
+
+    assert!(ctx.calibration.pending_sample.is_some());
+    assert!(
+        !ctx.calibration
+            .pending_sample
+            .as_ref()
+            .unwrap()
+            .invalid_by_noise
+    );
+
+    // EC spike: 1.5 -> 2.5 (> max_ec_delta 0.3)
+    let noisy = noisy_ec_sensors(1.5);
+    let mut result =
+        orchestrator::tick(1_700_000_000_000, 10_000, &config, &noisy, 10_000, &mut ctx);
+
+    // ContextDelta must contain CalibrationDelta::Invalidate
+    assert_eq!(
+        result.delta.calibration,
+        Some(CalibrationDelta::Invalidate),
+        "Orchestrator must emit CalibrationDelta::Invalidate when sensor noise is detected"
+    );
+
+    // Apply delta to context
+    ctx.apply_delta(&mut result.delta);
+    let pending = ctx.calibration.pending_sample.as_ref().unwrap();
+    assert!(
+        pending.invalid_by_noise,
+        "Pending sample must be marked invalid_by_noise"
+    );
+
+    // AutoTuner refuses to learn
+    let learned = ctx
+        .tuner
+        .learn_from_cycle(pending, 2.0, 6.0, 20.0, 25.0, &config, 10);
+    assert!(
+        !learned,
+        "AutoTuner must refuse to learn from sample marked invalid_by_noise"
+    );
+}

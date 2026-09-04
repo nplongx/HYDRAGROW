@@ -7,7 +7,7 @@ pub type SharedSensorData = Arc<RwLock<SensorData>>;
 // ---------------------------------------------------------------------------
 // PendingCalibrationSample – dữ liệu chờ cập nhật EMA sau mỗi chu kỳ bơm
 // ---------------------------------------------------------------------------
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PendingCalibrationSample {
     pub cycle_id: String,
     pub trigger: String,

@@ -95,7 +95,7 @@ pub struct PeripheralDelta {
     pub water_pump_started_uptime_ms: Option<Option<u64>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CalibrationDelta {
     /// Bắt đầu thu thập sample mới
     Start(PendingCalibrationSample),

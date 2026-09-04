@@ -159,3 +159,32 @@ pub fn noisy_ec_sensors(prev_ec: f32) -> SensorData {
         ..balanced_sensors()
     }
 }
+
+pub fn sample_recipe() -> hydragrow_shared::recipe::CropRecipe {
+    hydragrow_shared::recipe::CropRecipe {
+        schema_version: 1,
+        recipe_id: "recipe_lettuce_01".to_string(),
+        season_id: "season_2026_01".to_string(),
+        device_id: "test_device".to_string(),
+        revision: 42,
+        start_time_sec: 1_700_000_000,
+        current_stage_index: 0,
+        stages: vec![hydragrow_shared::recipe::CropStage {
+            name: "Seedling".to_string(),
+            duration_sec: 7 * 86400,
+            ec_target: 1.2,
+            ec_tolerance: 0.05,
+            ph_target: 6.0,
+            ph_tolerance: 0.1,
+            nutrient_a_ratio: 1.0,
+            nutrient_b_ratio: 1.0,
+            water_level_target: 20.0,
+            water_change_interval_days: Some(7),
+            water_change_drain_cm: Some(5.0),
+            auto_dilute_ec_trigger: None,
+            misting_on_duration_ms: 5000,
+            misting_off_duration_ms: 30000,
+            max_dose_per_cycle_ml: Some(10.0),
+        }],
+    }
+}

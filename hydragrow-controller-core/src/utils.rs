@@ -60,40 +60,168 @@ mod recover_tests {
     }
 }
 
+#[cfg(test)]
+mod recipe_validation_tests {
+    use super::*;
+    use hydragrow_shared::recipe::{CropRecipe as SharedCropRecipe, CropStage as SharedCropStage};
+
+    #[test]
+    fn validator_accepts_shared_canonical_recipe_with_u64_revision() {
+        let config = ControllerConfig::default();
+        let recipe = SharedCropRecipe {
+            schema_version: 1,
+            recipe_id: "rec_01".to_string(),
+            season_id: "season_01".to_string(),
+            device_id: "dev_01".to_string(),
+            revision: 42u64,
+            start_time_sec: 1_700_000_000,
+            current_stage_index: 0,
+            stages: vec![SharedCropStage {
+                name: "Stage1".to_string(),
+                duration_sec: 3600,
+                ec_target: 1.5,
+                ec_tolerance: 0.1,
+                ph_target: 6.0,
+                ph_tolerance: 0.2,
+                nutrient_a_ratio: 1.0,
+                nutrient_b_ratio: 1.0,
+                water_level_target: 20.0,
+                water_change_interval_days: Some(7),
+                water_change_drain_cm: Some(5.0),
+                auto_dilute_ec_trigger: None,
+                misting_on_duration_ms: 5000,
+                misting_off_duration_ms: 180000,
+                max_dose_per_cycle_ml: Some(10.0),
+            }],
+        };
+
+        let res = validate_recipe(&recipe, &config, "dev_01", Some(10u64));
+        assert!(res.is_ok(), "validation failed: {:?}", res.err());
+    }
+
+    #[test]
+    fn validator_rejects_stale_revision() {
+        let config = ControllerConfig::default();
+        let mut recipe = SharedCropRecipe {
+            schema_version: 1,
+            recipe_id: "rec_01".to_string(),
+            season_id: "season_01".to_string(),
+            device_id: "dev_01".to_string(),
+            revision: 5u64,
+            start_time_sec: 1_700_000_000,
+            current_stage_index: 0,
+            stages: vec![SharedCropStage {
+                name: "Stage1".to_string(),
+                duration_sec: 3600,
+                ec_target: 1.5,
+                ec_tolerance: 0.1,
+                ph_target: 6.0,
+                ph_tolerance: 0.2,
+                nutrient_a_ratio: 1.0,
+                nutrient_b_ratio: 1.0,
+                water_level_target: 20.0,
+                water_change_interval_days: None,
+                water_change_drain_cm: None,
+                auto_dilute_ec_trigger: None,
+                misting_on_duration_ms: 5000,
+                misting_off_duration_ms: 180000,
+                max_dose_per_cycle_ml: None,
+            }],
+        };
+
+        let err = validate_recipe(&recipe, &config, "dev_01", Some(10u64)).unwrap_err();
+        assert!(
+            err.to_string().contains("stale_revision"),
+            "expected stale_revision error, got: {}",
+            err
+        );
+
+        recipe.revision = 10u64;
+        assert!(validate_recipe(&recipe, &config, "dev_01", Some(10u64)).is_ok());
+    }
+
+    #[test]
+    fn validator_rejects_nan_and_infinite_targets() {
+        let config = ControllerConfig::default();
+        let mut recipe = SharedCropRecipe {
+            schema_version: 1,
+            recipe_id: "rec_01".to_string(),
+            season_id: "season_01".to_string(),
+            device_id: "dev_01".to_string(),
+            revision: 10u64,
+            start_time_sec: 1_700_000_000,
+            current_stage_index: 0,
+            stages: vec![SharedCropStage {
+                name: "Stage1".to_string(),
+                duration_sec: 3600,
+                ec_target: f32::NAN,
+                ec_tolerance: 0.1,
+                ph_target: 6.0,
+                ph_tolerance: 0.2,
+                nutrient_a_ratio: 1.0,
+                nutrient_b_ratio: 1.0,
+                water_level_target: 20.0,
+                water_change_interval_days: None,
+                water_change_drain_cm: None,
+                auto_dilute_ec_trigger: None,
+                misting_on_duration_ms: 5000,
+                misting_off_duration_ms: 30000,
+                max_dose_per_cycle_ml: None,
+            }],
+        };
+
+        let err = validate_recipe(&recipe, &config, "dev_01", None).unwrap_err();
+        assert!(err.to_string().contains("non_finite_stage_target"));
+
+        recipe.stages[0].ec_target = 1.5;
+        recipe.stages[0].ph_target = f32::INFINITY;
+        let err2 = validate_recipe(&recipe, &config, "dev_01", None).unwrap_err();
+        assert!(err2.to_string().contains("non_finite_stage_target"));
+    }
+
+    #[test]
+    fn validator_rejects_both_nutrient_ratios_zero() {
+        let config = ControllerConfig::default();
+        let recipe = SharedCropRecipe {
+            schema_version: 1,
+            recipe_id: "rec_01".to_string(),
+            season_id: "season_01".to_string(),
+            device_id: "dev_01".to_string(),
+            revision: 10u64,
+            start_time_sec: 1_700_000_000,
+            current_stage_index: 0,
+            stages: vec![SharedCropStage {
+                name: "Stage1".to_string(),
+                duration_sec: 3600,
+                ec_target: 1.5,
+                ec_tolerance: 0.1,
+                ph_target: 6.0,
+                ph_tolerance: 0.2,
+                nutrient_a_ratio: 0.0,
+                nutrient_b_ratio: 0.0,
+                water_level_target: 20.0,
+                water_change_interval_days: None,
+                water_change_drain_cm: None,
+                auto_dilute_ec_trigger: None,
+                misting_on_duration_ms: 5000,
+                misting_off_duration_ms: 30000,
+                max_dose_per_cycle_ml: None,
+            }],
+        };
+
+        let err = validate_recipe(&recipe, &config, "dev_01", None).unwrap_err();
+        assert!(err.to_string().contains("invalid_nutrient_ratios"));
+    }
+}
+
+pub use hydragrow_shared::recipe::{CropRecipe, CropStage};
+
 #[derive(Debug, Clone, Copy)]
 pub enum DosePumpKind {
     PumpA,
     PumpB,
     PhUp,
     PhDown,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct CropRecipe {
-    #[serde(default)]
-    pub device_id: String,
-    #[serde(default)]
-    pub schema_version: u16,
-    #[serde(default)]
-    pub revision: u32,
-    #[serde(default)]
-    pub stages: Vec<CropRecipeStage>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct CropRecipeStage {
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub duration_sec: u32,
-    #[serde(default)]
-    pub ec_target: f32,
-    #[serde(default)]
-    pub ph_target: f32,
-    #[serde(default)]
-    pub misting_on_duration_ms: i32,
-    #[serde(default)]
-    pub misting_off_duration_ms: i32,
 }
 
 pub const CURRENT_RECIPE_SCHEMA_VERSION: u16 = 1;
@@ -104,7 +232,7 @@ pub fn validate_recipe(
     recipe: &CropRecipe,
     config: &ControllerConfig,
     device_id: &str,
-    current_revision: Option<u32>,
+    current_revision: Option<u64>,
 ) -> anyhow::Result<()> {
     if recipe.device_id != device_id {
         anyhow::bail!(
@@ -133,9 +261,7 @@ pub fn validate_recipe(
     let total_duration_sec = recipe
         .stages
         .iter()
-        .try_fold(0_u64, |total, stage| {
-            total.checked_add(stage.duration_sec as u64)
-        })
+        .try_fold(0_u64, |total, stage| total.checked_add(stage.duration_sec))
         .ok_or_else(|| anyhow::anyhow!("total_duration_overflow"))?;
     if total_duration_sec == 0 || total_duration_sec > MAX_RECIPE_TOTAL_DURATION_SEC {
         anyhow::bail!(
@@ -149,6 +275,19 @@ pub fn validate_recipe(
         if stage.duration_sec == 0 {
             anyhow::bail!("invalid_stage_duration: stage={}, duration_sec=0", idx);
         }
+
+        // Validate all floating point values are finite
+        if !stage.ec_target.is_finite()
+            || !stage.ec_tolerance.is_finite()
+            || !stage.ph_target.is_finite()
+            || !stage.ph_tolerance.is_finite()
+            || !stage.nutrient_a_ratio.is_finite()
+            || !stage.nutrient_b_ratio.is_finite()
+            || !stage.water_level_target.is_finite()
+        {
+            anyhow::bail!("non_finite_stage_target: stage={}", idx);
+        }
+
         if stage.ec_target < config.min_ec_limit || stage.ec_target > config.max_ec_limit {
             anyhow::bail!(
                 "ec_out_of_range: stage={}, ec_target={}, allowed={}..={}",
@@ -158,6 +297,13 @@ pub fn validate_recipe(
                 config.max_ec_limit
             );
         }
+        if stage.ec_tolerance < 0.0 || stage.ec_tolerance > stage.ec_target {
+            anyhow::bail!(
+                "ec_tolerance_out_of_range: stage={}, ec_tolerance={}",
+                idx,
+                stage.ec_tolerance
+            );
+        }
         if stage.ph_target < config.min_ph_limit || stage.ph_target > config.max_ph_limit {
             anyhow::bail!(
                 "ph_out_of_range: stage={}, ph_target={}, allowed={}..={}",
@@ -165,6 +311,35 @@ pub fn validate_recipe(
                 stage.ph_target,
                 config.min_ph_limit,
                 config.max_ph_limit
+            );
+        }
+        if stage.ph_tolerance < 0.0 {
+            anyhow::bail!(
+                "ph_tolerance_out_of_range: stage={}, ph_tolerance={}",
+                idx,
+                stage.ph_tolerance
+            );
+        }
+        if stage.nutrient_a_ratio < 0.0
+            || stage.nutrient_b_ratio < 0.0
+            || (stage.nutrient_a_ratio == 0.0 && stage.nutrient_b_ratio == 0.0)
+        {
+            anyhow::bail!(
+                "invalid_nutrient_ratios: stage={}, a={}, b={}",
+                idx,
+                stage.nutrient_a_ratio,
+                stage.nutrient_b_ratio
+            );
+        }
+        if stage.water_level_target < config.water_level_min
+            || stage.water_level_target > config.water_level_max
+        {
+            anyhow::bail!(
+                "water_level_out_of_range: stage={}, target={}, allowed={}..={}",
+                idx,
+                stage.water_level_target,
+                config.water_level_min,
+                config.water_level_max
             );
         }
         if stage.misting_on_duration_ms < 0
@@ -179,6 +354,36 @@ pub fn validate_recipe(
                 stage.misting_off_duration_ms,
                 config.high_temp_misting_on_duration_ms,
                 config.misting_off_duration_ms
+            );
+        }
+
+        if let Some(drain_cm) = stage.water_change_drain_cm
+            && (!drain_cm.is_finite() || drain_cm < 0.0 || drain_cm > config.tank_height as f32)
+        {
+            anyhow::bail!(
+                "water_change_drain_cm_out_of_range: stage={}, drain_cm={}",
+                idx,
+                drain_cm
+            );
+        }
+
+        if let Some(trigger) = stage.auto_dilute_ec_trigger
+            && (!trigger.is_finite() || trigger < config.min_ec_limit)
+        {
+            anyhow::bail!(
+                "auto_dilute_ec_trigger_out_of_range: stage={}, trigger={}",
+                idx,
+                trigger
+            );
+        }
+
+        if let Some(max_dose) = stage.max_dose_per_cycle_ml
+            && (!max_dose.is_finite() || max_dose <= 0.0 || max_dose > config.max_dose_per_hour)
+        {
+            anyhow::bail!(
+                "max_dose_out_of_range: stage={}, max_dose_ml={}",
+                idx,
+                max_dose
             );
         }
     }
@@ -199,7 +404,7 @@ pub fn validate_recipe(
 pub fn build_recipe_event(
     device_id: &str,
     status: &str,
-    revision: u32,
+    revision: u64,
     reason: Option<&str>,
 ) -> String {
     serde_json::json!({

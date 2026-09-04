@@ -19,7 +19,8 @@ use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use crate::config::SharedConfig;
-use hydragrow_controller_core::utils::{build_recipe_event, validate_recipe, CropRecipe};
+use hydragrow_controller_core::utils::{build_recipe_event, validate_recipe};
+use hydragrow_shared::recipe::CropRecipe;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {
@@ -194,7 +195,7 @@ pub fn init_mqtt_client(
                             let mut nvs = EspNvs::new(nvs_partition.clone(), "agitech", true).ok();
                             let current_revision = nvs
                                 .as_mut()
-                                .and_then(|nvs| nvs.get_u32("recipe_rev").ok().flatten());
+                                .and_then(|nvs| nvs.get_u64("recipe_rev").ok().flatten());
 
                             match validate_recipe(
                                 &recipe,
@@ -206,7 +207,7 @@ pub fn init_mqtt_client(
                                     if let Some(nvs) = nvs.as_mut() {
                                         if let Ok(serialized) = serde_json::to_string(&recipe) {
                                             let _ = nvs.set_str("crop_recipe", &serialized);
-                                            let _ = nvs.set_u32("recipe_rev", recipe.revision);
+                                            let _ = nvs.set_u64("recipe_rev", recipe.revision);
                                         }
                                     }
                                     let event = serde_json::json!({
@@ -231,7 +232,7 @@ pub fn init_mqtt_client(
                             error!("❌ Recipe JSON parse error: {}", reason);
                             let event = serde_json::json!({
                                 "_mqtt_topic_override": recipe_event_topic.clone(),
-                                "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "rejected", 0, Some(&reason))).unwrap_or_default()
+                                "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "rejected", 0u64, Some(&reason))).unwrap_or_default()
                             });
                             let _ = recipe_event_tx.send(event.to_string());
                         }

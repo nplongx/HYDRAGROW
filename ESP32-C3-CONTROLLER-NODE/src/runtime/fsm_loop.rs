@@ -268,10 +268,7 @@ pub fn start_fsm_control_loop(
     }
 }
 
-fn apply_dispatch_fault(
-    fault: Option<hydragrow_shared::fsm::FaultCode>,
-    ctx: &mut SystemContext,
-) {
+fn apply_dispatch_fault(fault: Option<hydragrow_shared::fsm::FaultCode>, ctx: &mut SystemContext) {
     if let Some(f) = fault {
         tracing::error!(
             "🚨 [DISPATCHER] Physical actuator failure: {:?}. Forcing Fault phase!",

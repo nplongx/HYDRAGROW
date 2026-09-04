@@ -42,6 +42,12 @@ impl WaterActor {
         }
     }
 
+    /// Reset hoàn toàn trạng thái WaterActor về Idle và xoá số lần retry.
+    pub fn reset(&mut self) {
+        self.sub_state = WaterSubState::Idle;
+        self.retry_refill = 0;
+    }
+
     /// Bắt đầu cấp nước, trả về log Info (nếu muốn gửi ngay).
     pub fn start_fill(
         &mut self,

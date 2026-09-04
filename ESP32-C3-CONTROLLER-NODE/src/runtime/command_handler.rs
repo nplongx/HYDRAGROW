@@ -257,6 +257,10 @@ pub fn process_mqtt_commands(
             step_delta.reset_safety_budget = true;
 
             let mut peri_delta = PeripheralDelta::default();
+            peri_delta.pump_a = Some(false);
+            peri_delta.pump_b = Some(false);
+            peri_delta.ph_up = Some(false);
+            peri_delta.ph_down = Some(false);
             peri_delta.osaka_pump = Some(false);
             peri_delta.osaka_pwm = Some(0);
             peri_delta.is_misting_active = Some(false);

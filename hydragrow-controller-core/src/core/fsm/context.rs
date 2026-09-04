@@ -451,6 +451,8 @@ impl SystemContext {
         if delta.reset_safety_budget {
             self.safety.flush_for_reset();
             self.tuner.on_manual_reset();
+            self.dosing.reset();
+            self.water.reset();
         }
 
         if let Some(until) = delta.safety_override_until {

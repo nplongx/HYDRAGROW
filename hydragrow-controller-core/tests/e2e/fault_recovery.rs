@@ -444,3 +444,92 @@ fn hourly_dose_safety_check_is_transactional_and_does_not_commit_on_ph_failure()
         "NutrientA must not be committed when pH check fails in the same tick"
     );
 }
+
+#[test]
+fn reset_fault_delta_fully_resets_dosing_and_water_actors() {
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Fault(FaultCode::EmergencyStop);
+
+    // Corrupt / dirty dosing actor state
+    ctx.dosing.retry_ec = 3;
+    ctx.dosing.retry_ph = 2;
+    ctx.dosing.sub_state =
+        hydragrow_controller_core::core::actors::dosing_actor::DosingSubState::PumpingA(
+            hydragrow_controller_core::core::actors::dosing_actor::PulseJob {
+                pump:
+                    hydragrow_controller_core::core::actors::dosing_actor::PumpTarget::NutrientA {
+                        dose_b_ml: 5.0,
+                    },
+                target_ml: 5.0,
+                delivered_ml: 2.0,
+                pulse_on: true,
+                pulse_count: 4,
+                max_pulses: 10,
+                on_ms: 100,
+                off_ms: 100,
+                pwm: 80,
+                ml_per_sec: 1.0,
+                next_toggle_ms: 5000,
+            },
+        );
+    ctx.dosing.cycle_ctx = Some(
+        hydragrow_controller_core::core::actors::dosing_actor::DosingCycleCtx {
+            dose_a_delivered_ml: 2.0,
+            dose_b_delivered_ml: 0.0,
+            ph_up_delivered_ml: 0.0,
+            ph_down_delivered_ml: 0.0,
+        },
+    );
+    ctx.dosing.pending_ph_job = Some(
+        hydragrow_controller_core::core::actors::dosing_actor::PulseJob {
+            pump: hydragrow_controller_core::core::actors::dosing_actor::PumpTarget::PhUp,
+            target_ml: 1.0,
+            delivered_ml: 0.0,
+            pulse_on: false,
+            pulse_count: 0,
+            max_pulses: 5,
+            on_ms: 100,
+            off_ms: 100,
+            pwm: 80,
+            ml_per_sec: 0.5,
+            next_toggle_ms: 6000,
+        },
+    );
+
+    // Corrupt / dirty water actor state
+    ctx.water.retry_refill = 2;
+    ctx.water.sub_state =
+        hydragrow_controller_core::core::actors::water_actor::WaterSubState::Filling {
+            job: hydragrow_controller_core::core::actors::water_actor::WaterJob {
+                trigger: "schedule".to_string(),
+                target_level: 25.0,
+                start_level: 10.0,
+                start_ms: 1000,
+            },
+        };
+
+    // Apply delta simulating reset_fault (reset_safety_budget = true, phase = Monitoring)
+    let mut reset_delta = hydragrow_controller_core::core::fsm::ContextDelta {
+        phase: Some(SystemPhase::Monitoring),
+        reset_safety_budget: true,
+        ..Default::default()
+    };
+    ctx.apply_delta(&mut reset_delta);
+
+    // Assert DosingActor is completely idle and clean
+    assert_eq!(
+        ctx.dosing.sub_state,
+        hydragrow_controller_core::core::actors::dosing_actor::DosingSubState::Idle
+    );
+    assert_eq!(ctx.dosing.retry_ec, 0);
+    assert_eq!(ctx.dosing.retry_ph, 0);
+    assert!(ctx.dosing.cycle_ctx.is_none());
+    assert!(ctx.dosing.pending_ph_job.is_none());
+
+    // Assert WaterActor is completely idle and clean
+    assert!(matches!(
+        ctx.water.sub_state,
+        hydragrow_controller_core::core::actors::water_actor::WaterSubState::Idle
+    ));
+    assert_eq!(ctx.water.retry_refill, 0);
+}

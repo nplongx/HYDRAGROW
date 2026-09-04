@@ -104,6 +104,16 @@ impl DosingActor {
         matches!(self.sub_state, DosingSubState::Idle)
     }
 
+    /// Reset hoàn toàn trạng thái DosingActor về Idle, xoá toàn bộ job đang chờ,
+    /// bộ đếm thử lại và tiến độ phân phối.
+    pub fn reset(&mut self) {
+        self.sub_state = DosingSubState::Idle;
+        self.cycle_ctx = None;
+        self.retry_ec = 0;
+        self.retry_ph = 0;
+        self.pending_ph_job = None;
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn start_matrix_cycle(
         &mut self,

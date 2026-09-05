@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
+use sqlx::PgPool;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::models::config::DeviceConfig;
 
@@ -95,9 +97,141 @@ pub fn write_field(
     Ok(())
 }
 
+/// 1 chỉ thị Config·Overwrite đã được phân giải từ `ir_json.configOverwrite`
+/// (xem services/config_context.rs::parse_config_overwrite).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfigOverwriteDirective {
+    pub config_key: String,
+    pub value: String,
+    pub read_original_before_write: bool,
+}
+
+/// Áp dụng hoặc khôi phục Config·Overwrite dựa trên chuyển trạng thái điều kiện
+/// giữa 2 lần eval liên tiếp (`previous_state` -> `condition_state`):
+/// - None/false -> true: áp dụng (backup giá trị gốc nếu `read_original_before_write`).
+/// - true -> true: no-op — đã áp dụng, không backup thêm lần 2.
+/// - true -> false: khôi phục giá trị gốc từ backup gần nhất chưa restore.
+/// - false/None -> false: no-op.
+pub async fn apply_config_overwrite_transition(
+    pool: &PgPool,
+    script_id: Uuid,
+    device_id: &str,
+    directive: &ConfigOverwriteDirective,
+    context: &HashMap<String, f64>,
+    previous_state: Option<bool>,
+    condition_state: bool,
+) -> Result<()> {
+    match (previous_state, condition_state) {
+        (Some(true), true) | (Some(false), false) | (None, false) => Ok(()),
+        (Some(true), false) => restore_override(pool, script_id, device_id, directive).await,
+        (_, true) => apply_override(pool, script_id, device_id, directive, context).await,
+    }
+}
+
+async fn apply_override(
+    pool: &PgPool,
+    script_id: Uuid,
+    device_id: &str,
+    directive: &ConfigOverwriteDirective,
+    context: &HashMap<String, f64>,
+) -> Result<()> {
+    let mut config = crate::db::postgres::get_device_config(pool, device_id).await?;
+    if directive.read_original_before_write {
+        let original = read_field_as_string(&config, &directive.config_key)
+            .context("cannot back up an unknown config key")?;
+        sqlx::query(
+            "INSERT INTO flow_config_overrides (script_id, device_id, config_key, original_value) \
+            VALUES ($1, $2, $3, $4)",
+        )
+        .bind(script_id)
+        .bind(device_id)
+        .bind(&directive.config_key)
+        .bind(&original)
+        .execute(pool)
+        .await
+        .context("failed to persist config override backup")?;
+    }
+    write_field(&mut config, &directive.config_key, &directive.value, context)?;
+    crate::db::postgres::upsert_device_config(pool, &config).await
+}
+
+async fn restore_override(
+    pool: &PgPool,
+    script_id: Uuid,
+    device_id: &str,
+    directive: &ConfigOverwriteDirective,
+) -> Result<()> {
+    let row: Option<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, original_value FROM flow_config_overrides \
+        WHERE script_id = $1 AND device_id = $2 AND config_key = $3 AND restored_at IS NULL \
+        ORDER BY applied_at DESC LIMIT 1",
+    )
+    .bind(script_id)
+    .bind(device_id)
+    .bind(&directive.config_key)
+    .fetch_optional(pool)
+    .await
+    .context("failed to look up config override backup")?;
+
+    let Some((backup_id, original_value)) = row else {
+        return Ok(()); // Không có gì để khôi phục — vd. read_original_before_write=false.
+    };
+
+    let mut config = crate::db::postgres::get_device_config(pool, device_id).await?;
+    write_field(&mut config, &directive.config_key, &original_value, &HashMap::new())?;
+    crate::db::postgres::upsert_device_config(pool, &config).await?;
+
+    sqlx::query("UPDATE flow_config_overrides SET restored_at = NOW() WHERE id = $1")
+        .bind(backup_id)
+        .execute(pool)
+        .await
+        .context("failed to mark config override backup restored")?;
+    Ok(())
+}
+
+/// Quét mọi override chưa được khôi phục (flow dừng đột ngột — mất điện/crash
+/// trước khi condition chuyển về false) và khôi phục giá trị gốc. Gọi 1 lần
+/// khi khởi động server — xem main.rs.
+pub async fn recover_orphan_overrides(pool: &PgPool) -> Result<usize> {
+    let rows: Vec<(Uuid, String, String, String)> = sqlx::query_as(
+        "SELECT id, device_id, config_key, original_value FROM flow_config_overrides \
+        WHERE restored_at IS NULL",
+    )
+    .fetch_all(pool)
+    .await
+    .context("failed to list orphan config overrides")?;
+
+    let mut recovered = 0;
+    for (backup_id, device_id, config_key, original_value) in rows {
+        let mut config = match crate::db::postgres::get_device_config(pool, &device_id).await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(device_id, error = %e, "orphan override recovery: device_config missing, skipping");
+                continue;
+            }
+        };
+        if let Err(e) = write_field(&mut config, &config_key, &original_value, &HashMap::new()) {
+            tracing::warn!(device_id, config_key, error = %e, "orphan override recovery: failed to parse original value, skipping");
+            continue;
+        }
+        if let Err(e) = crate::db::postgres::upsert_device_config(pool, &config).await {
+            tracing::warn!(device_id, config_key, error = %e, "orphan override recovery: failed to write restored config");
+            continue;
+        }
+        let _ = sqlx::query("UPDATE flow_config_overrides SET restored_at = NOW() WHERE id = $1")
+            .bind(backup_id)
+            .execute(pool)
+            .await;
+        tracing::warn!(device_id, config_key, "orphan override recovery: restored un-restored config override from a previous run");
+        recovered += 1;
+    }
+    Ok(recovered)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::postgres::{get_device_config, upsert_device_config};
     use crate::models::config::DeviceConfig;
     use std::collections::HashMap;
 
@@ -166,5 +300,168 @@ mod tests {
     fn write_field_errors_when_literal_is_neither_a_number_nor_a_known_variable() {
         let mut cfg = sample_config();
         assert!(write_field(&mut cfg, "ec_target", "not_a_number", &HashMap::new()).is_err());
+    }
+
+    async fn seed_device(pool: &sqlx::PgPool, device_id: &str) {
+        upsert_device_config(
+            pool,
+            &DeviceConfig {
+                device_id: device_id.to_string(),
+                ec_target: 1.8,
+                ec_tolerance: 0.2,
+                ph_target: 6.0,
+                ph_tolerance: 0.3,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 5,
+                last_updated: chrono::Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    fn directive() -> ConfigOverwriteDirective {
+        ConfigOverwriteDirective {
+            config_key: "ec_target".to_string(),
+            value: "2.4".to_string(),
+            read_original_before_write: true,
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn transition_to_true_applies_override_and_backs_up_original(pool: sqlx::PgPool) {
+        seed_device(&pool, "dev-a").await;
+        let script_id = uuid::Uuid::new_v4();
+        apply_config_overwrite_transition(
+            &pool,
+            script_id,
+            "dev-a",
+            &directive(),
+            &HashMap::new(),
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+        let cfg = get_device_config(&pool, "dev-a").await.unwrap();
+        assert!((cfg.ec_target - 2.4).abs() < 0.001);
+
+        let backup_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM flow_config_overrides WHERE script_id = $1 AND restored_at IS NULL",
+        )
+        .bind(script_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(backup_count, 1);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn transition_from_true_to_false_restores_original_value(pool: sqlx::PgPool) {
+        seed_device(&pool, "dev-b").await;
+        let script_id = uuid::Uuid::new_v4();
+        apply_config_overwrite_transition(
+            &pool,
+            script_id,
+            "dev-b",
+            &directive(),
+            &HashMap::new(),
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+        apply_config_overwrite_transition(
+            &pool,
+            script_id,
+            "dev-b",
+            &directive(),
+            &HashMap::new(),
+            Some(true),
+            false,
+        )
+        .await
+        .unwrap();
+
+        let cfg = get_device_config(&pool, "dev-b").await.unwrap();
+        assert!(
+            (cfg.ec_target - 1.8).abs() < 0.001,
+            "expected restore to original 1.8, got {}",
+            cfg.ec_target
+        );
+        let unrestored: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM flow_config_overrides WHERE script_id = $1 AND restored_at IS NULL",
+        )
+        .bind(script_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(unrestored, 0);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn staying_true_does_not_create_a_second_backup(pool: sqlx::PgPool) {
+        seed_device(&pool, "dev-c").await;
+        let script_id = uuid::Uuid::new_v4();
+        apply_config_overwrite_transition(
+            &pool,
+            script_id,
+            "dev-c",
+            &directive(),
+            &HashMap::new(),
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+        apply_config_overwrite_transition(
+            &pool,
+            script_id,
+            "dev-c",
+            &directive(),
+            &HashMap::new(),
+            Some(true),
+            true,
+        )
+        .await
+        .unwrap();
+        let backup_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM flow_config_overrides WHERE script_id = $1",
+        )
+        .bind(script_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(backup_count, 1);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn recover_orphan_overrides_restores_un_restored_rows_and_marks_them_restored(
+        pool: sqlx::PgPool,
+    ) {
+        seed_device(&pool, "dev-d").await;
+        let script_id = uuid::Uuid::new_v4();
+        apply_config_overwrite_transition(
+            &pool,
+            script_id,
+            "dev-d",
+            &directive(),
+            &HashMap::new(),
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+        // Không gọi transition sang false — mô phỏng flow dừng đột ngột (crash/mất điện).
+        let recovered = recover_orphan_overrides(&pool).await.unwrap();
+        assert_eq!(recovered, 1);
+        let cfg = get_device_config(&pool, "dev-d").await.unwrap();
+        assert!((cfg.ec_target - 1.8).abs() < 0.001);
+        let recovered_again = recover_orphan_overrides(&pool).await.unwrap();
+        assert_eq!(
+            recovered_again, 0,
+            "already-recovered rows must not be recovered twice"
+        );
     }
 }

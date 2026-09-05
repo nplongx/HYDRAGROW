@@ -10,8 +10,11 @@ pub mod hestia;
 pub mod log;
 pub mod recipe;
 pub mod safety;
+pub mod sensors;
 pub mod telemetry;
 pub mod topics;
+
+pub use sensors::IncomingSensorPayload;
 
 /// A WiFi network credential tried by a controller in ascending priority order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

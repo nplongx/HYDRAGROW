@@ -13,7 +13,9 @@ use hydragrow_shared::topics::{
     topic_controller_command, topic_controller_config, topic_controller_recipe,
     topic_recipe_events, topic_recipe_set, topic_sensors, topic_status,
 };
-use hydragrow_shared::{ControllerConfig, MqttCommandIn, PumpStatus, RecipeSetCommand, SensorData};
+use hydragrow_shared::{
+    ControllerConfig, IncomingSensorPayload, MqttCommandIn, PumpStatus, RecipeSetCommand, SensorData,
+};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, RwLock};
@@ -28,26 +30,6 @@ pub enum ConnectionState {
     WifiDisconnected,
     MqttConnected,
     MqttDisconnected,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct IncomingSensorPayload {
-    pub temp: Option<f32>,
-    #[serde(alias = "tds")]
-    pub ec: Option<f32>,
-    pub ph: Option<f32>,
-    pub water_level: Option<f32>,
-    pub ph_voltage_mv: Option<f32>,
-    pub time: Option<String>,
-    pub rssi: Option<i32>,
-    pub free_heap: Option<u32>,
-    pub uptime: Option<u32>,
-    pub is_continuous: Option<bool>,
-    pub err_water: Option<bool>,
-    pub err_temp: Option<bool>,
-    pub err_ph: Option<bool>,
-    #[serde(alias = "err_tds")]
-    pub err_ec: Option<bool>,
 }
 
 pub type SharedSensorData = Arc<RwLock<SensorData>>;
@@ -254,34 +236,9 @@ pub fn init_mqtt_client(
                 else if topic_str == topic_sensors_cb {
                     if let Ok(payload) = serde_json::from_slice::<IncomingSensorPayload>(data) {
                         if let Ok(mut sensors) = shared_sensor_data.write() {
-                            sensors.controller_received_ms = Some(get_uptime_ms());
-                            if let Some(t) = payload.temp {
-                                sensors.temp = t;
-                            }
-                            if let Some(e) = payload.ec {
-                                sensors.ec = e;
-                            }
-                            if let Some(p) = payload.ph {
-                                sensors.ph = p;
-                            }
-                            if let Some(w) = payload.water_level {
-                                sensors.water_level = w;
-                            }
-                            if let Some(mv) = payload.ph_voltage_mv {
-                                sensors.ph_voltage_mv = Some(mv as f64);
-                            }
-                            if let Some(cont) = payload.is_continuous {
-                                sensors.is_continuous = Some(cont);
-                            }
-                            sensors.err_water = payload.err_water;
-                            sensors.err_temp = payload.err_temp;
-                            sensors.err_ec = payload.err_ec;
-                            sensors.err_ph = payload.err_ph;
-                            sensors.rssi = payload.rssi;
-                            sensors.free_heap = payload.free_heap;
-                            sensors.uptime = payload.uptime;
-                            if let Some(time) = payload.time {
-                                sensors.time = time;
+                            let uptime_ms = get_uptime_ms();
+                            if !sensors.merge_incoming_payload(&payload, uptime_ms) {
+                                warn!("⚠️ [SENSORS] Bỏ qua gói tin cảm biến rỗng hoặc không hợp lệ");
                             }
                         }
                     }

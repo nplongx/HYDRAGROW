@@ -24,7 +24,6 @@ import {
   Badge,
   ConfigCard,
   FieldGroup,
-  Chip,
   ChipsRow,
   Segmented,
   ToggleRow,

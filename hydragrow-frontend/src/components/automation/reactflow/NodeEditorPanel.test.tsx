@@ -154,6 +154,18 @@ describe('NodeEditorPanel', () => {
       summary: 'dose 15ml (PUMP_A)',
     });
   });
+
+  it('shows an ACTION badge on the alert action panel', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'a1', type: 'action', data: { actions: [] } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('ACTION · ALERT')).toBeInTheDocument();
+  });
 });
 
 describe('NodeEditorPanel — Config nodes', () => {

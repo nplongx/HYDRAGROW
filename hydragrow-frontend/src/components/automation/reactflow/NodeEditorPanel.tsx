@@ -221,13 +221,16 @@ export function NodeEditorPanel({
 
     if ((node.data as any)?.type === "chain" || (firstAction as any)?.type === "chain") {
       return (
-        <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+        <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-emerald-950">Hành động — Kích hoạt Flow khác</h3>
             <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
           </div>
-          <p className="text-xs text-emerald-800/80 mb-2">Để chọn Flow cần kích hoạt tiếp theo, vui lòng sử dụng phần "Flow kế tiếp" bên dưới biểu đồ.</p>
-          <div className="rounded border border-sky-100 bg-sky-50 p-2 text-center text-xs text-sky-800">Node này chỉ có tính chất minh họa trực quan trên sơ đồ Flow.</div>
+          <ConfigCard tone="emerald">
+            <Badge tone="emerald">ACTION · CHAIN (SƠ ĐỒ)</Badge>
+            <p className="text-xs text-emerald-800/80 mb-2">Để chọn Flow cần kích hoạt tiếp theo, vui lòng sử dụng phần "Flow kế tiếp" bên dưới biểu đồ.</p>
+            <div className="rounded border border-sky-100 bg-sky-50 p-2 text-center text-xs text-sky-800">Node này chỉ có tính chất minh họa trực quan trên sơ đồ Flow.</div>
+          </ConfigCard>
         </div>
       );
     }
@@ -239,102 +242,102 @@ export function NodeEditorPanel({
       const message = alertAct?.message ?? "";
 
       return (
-        <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+        <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-emerald-950">Action — Alert</h3>
             <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
           </div>
-          <label className="mb-2 block text-xs text-emerald-800/75">
-            Level
-            <select
-              className="ui-input mt-1"
-              value={level}
-              onChange={(e) =>
-                setAction({
-                  type: "alert",
-                  level: e.target.value as "info" | "warning" | "error",
-                  title,
-                  message,
-                })
-              }
-            >
-              <option value="info">info</option>
-              <option value="warning">warning</option>
-              <option value="error">error</option>
-            </select>
-          </label>
-          <label className="mb-2 block text-xs text-emerald-800/75">
-            Title (optional)
-            <input
-              className="ui-input mt-1"
-              value={title}
-              onChange={(e) =>
-                setAction({
-                  type: "alert",
-                  level,
-                  title: e.target.value,
-                  message,
-                })
-              }
-            />
-          </label>
-          <label className="mb-1 block text-xs text-emerald-800/75">
-            Message
-            <textarea
-              aria-label="Message"
-              className="ui-input mt-1 w-full"
-              rows={3}
-              value={message}
-              onChange={(e) =>
-                setAction({
-                  type: "alert",
-                  level,
-                  title,
-                  message: e.target.value,
-                })
-              }
-            />
-          </label>
-          {availableVariables.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1">
-              {availableVariables.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  aria-label={v}
-                  className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100"
-                  onClick={() =>
-                    setAction({
-                      type: "alert",
-                      level,
-                      title,
-                      message: `${message}{{${v}}}`,
-                    })
-                  }
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          )}
-          {(() => {
-            const tokens = extractTemplateTokens(message);
-            const knownTokens = new Set([...availableVariables, ...BUILTIN_TEMPLATE_TOKENS]);
-            const unknownTokens = tokens.filter((t) => !knownTokens.has(t));
-            const sample: Record<string, string> = {};
-            for (const v of availableVariables) sample[v] = `⟨${v}⟩`;
-            for (const t of BUILTIN_TEMPLATE_TOKENS) sample[t] = `⟨${t}⟩`;
-            return (
-              <div className="rounded bg-emerald-50/70 p-2 text-[11px] text-emerald-900">
-                <span className="font-semibold">Xem trước:</span> {renderTemplatePreview(message, sample)}
-                {unknownTokens.length > 0 && (
-                  <p className="mt-1 text-amber-700">
-                    Biến chưa xác định: {unknownTokens.join(", ")}
-                  </p>
-                )}
-              </div>
-            );
-          })()}
+          <ConfigCard tone="emerald">
+            <Badge tone="emerald">ACTION · ALERT</Badge>
+            <FieldGroup label="Mức độ">
+              <Segmented
+                options={[
+                  { value: "info", label: "Info" },
+                  { value: "warning", label: "Warning" },
+                  { value: "error", label: "Critical" },
+                ]}
+                value={level}
+                onChange={(v) =>
+                  setAction({
+                    type: "alert",
+                    level: v as "info" | "warning" | "error",
+                    title,
+                    message,
+                  })
+                }
+              />
+            </FieldGroup>
+            <FieldGroup label="Title (optional)">
+              <input
+                className="ui-input mt-1"
+                value={title}
+                onChange={(e) =>
+                  setAction({
+                    type: "alert",
+                    level,
+                    title: e.target.value,
+                    message,
+                  })
+                }
+              />
+            </FieldGroup>
+            <FieldGroup label="Message">
+              <textarea
+                aria-label="Message"
+                className="ui-input mt-1 w-full"
+                rows={3}
+                value={message}
+                onChange={(e) =>
+                  setAction({
+                    type: "alert",
+                    level,
+                    title,
+                    message: e.target.value,
+                  })
+                }
+              />
+            </FieldGroup>
+            {availableVariables.length > 0 && (
+              <ChipsRow>
+                {availableVariables.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-label={v}
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100"
+                    onClick={() =>
+                      setAction({
+                        type: "alert",
+                        level,
+                        title,
+                        message: `${message}{{${v}}}`,
+                      })
+                    }
+                  >
+                    {v}
+                  </button>
+                ))}
+              </ChipsRow>
+            )}
+            {(() => {
+              const tokens = extractTemplateTokens(message);
+              const knownTokens = new Set([...availableVariables, ...BUILTIN_TEMPLATE_TOKENS]);
+              const unknownTokens = tokens.filter((t) => !knownTokens.has(t));
+              const sample: Record<string, string> = {};
+              for (const v of availableVariables) sample[v] = `⟨${v}⟩`;
+              for (const t of BUILTIN_TEMPLATE_TOKENS) sample[t] = `⟨${t}⟩`;
+              return (
+                <div className="rounded bg-emerald-50/70 p-2 text-[11px] text-emerald-900">
+                  <span className="font-semibold">Xem trước:</span> {renderTemplatePreview(message, sample)}
+                  {unknownTokens.length > 0 && (
+                    <p className="mt-1 text-amber-700">
+                      Biến chưa xác định: {unknownTokens.join(", ")}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+          </ConfigCard>
         </div>
       );
     }
@@ -349,75 +352,74 @@ export function NodeEditorPanel({
         firstAction?.type === "advance_stage" ? firstAction.targetStageOffset : 1;
 
       return (
-        <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+        <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-emerald-950">Action — Recipe</h3>
             <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
           </div>
-          <label className="mb-2 block text-xs text-emerald-800/75">
-            Loại hành động
-            <select
-              className="ui-input mt-1"
-              value={isEndSeason ? "end_season" : "advance_stage"}
-              onChange={(e) =>
-                setAction(
-                  e.target.value === "end_season"
-                    ? { type: "end_season", reason }
-                    : { type: "advance_stage", targetStageOffset: 1, reason }
-                )
-              }
-            >
-              <option value="advance_stage">advance_stage</option>
-              <option value="end_season">end_season</option>
-            </select>
-          </label>
-          {!isEndSeason ? (
-            <>
-              <label className="mb-2 block text-xs text-emerald-800/75">
-                Target stage offset
-                <input
-                  type="number"
-                  className="ui-input mt-1"
-                  value={targetStageOffset}
-                  onChange={(e) =>
-                    setAction({
-                      type: "advance_stage",
-                      targetStageOffset: Number(e.target.value),
-                      reason,
-                    })
-                  }
-                />
-              </label>
-              <label className="block text-xs text-emerald-800/75">
-                Reason
+          <ConfigCard tone="emerald">
+            <Badge tone="emerald">ACTION · RECIPE</Badge>
+            <FieldGroup label="Loại hành động">
+              <select
+                className="ui-input mt-1"
+                value={isEndSeason ? "end_season" : "advance_stage"}
+                onChange={(e) =>
+                  setAction(
+                    e.target.value === "end_season"
+                      ? { type: "end_season", reason }
+                      : { type: "advance_stage", targetStageOffset: 1, reason }
+                  )
+                }
+              >
+                <option value="advance_stage">advance_stage</option>
+                <option value="end_season">end_season</option>
+              </select>
+            </FieldGroup>
+            {!isEndSeason ? (
+              <>
+                <FieldGroup label="Target stage offset">
+                  <input
+                    type="number"
+                    className="ui-input mt-1"
+                    value={targetStageOffset}
+                    onChange={(e) =>
+                      setAction({
+                        type: "advance_stage",
+                        targetStageOffset: Number(e.target.value),
+                        reason,
+                      })
+                    }
+                  />
+                </FieldGroup>
+                <FieldGroup label="Reason">
+                  <input
+                    className="ui-input mt-1"
+                    value={reason}
+                    onChange={(e) =>
+                      setAction({
+                        type: "advance_stage",
+                        targetStageOffset,
+                        reason: e.target.value,
+                      })
+                    }
+                  />
+                </FieldGroup>
+              </>
+            ) : (
+              <FieldGroup label="Reason">
                 <input
                   className="ui-input mt-1"
                   value={reason}
                   onChange={(e) =>
                     setAction({
-                      type: "advance_stage",
-                      targetStageOffset,
+                      type: "end_season",
                       reason: e.target.value,
                     })
                   }
                 />
-              </label>
-            </>
-          ) : (
-            <label className="block text-xs text-emerald-800/75">
-              Reason
-              <input
-                className="ui-input mt-1"
-                value={reason}
-                onChange={(e) =>
-                  setAction({
-                    type: "end_season",
-                    reason: e.target.value,
-                  })
-                }
-              />
-            </label>
-          )}
+              </FieldGroup>
+            )}
+          </ConfigCard>
         </div>
       );
     }
@@ -444,151 +446,148 @@ export function NodeEditorPanel({
       firstAction?.type === "water_on" ? firstAction.durationSec : 10;
 
     return (
-      <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+      <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-emerald-950">Action — Điều khiển</h3>
           <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
         </div>
-        <label className="mb-2 block text-xs text-emerald-800/75">
-          Loại hành động
-          <select
-            className="ui-input mt-1"
-            value={actionVal}
-            onChange={(e) => {
-              const next = e.target.value;
-              if (next === "dose")
-                setAction({
-                  type: "dose",
-                  pump: "PUMP_A",
-                  doseMl: 1,
-                  pwm: 100,
-                });
-              else if (next === "water_on")
-                setAction({
-                  type: "water_on",
-                  pump: "WATER_PUMP_IN",
-                  durationSec: 10,
-                });
-              else if (next === "water_off")
-                setAction({
-                  type: "water_off",
-                  pump: "WATER_PUMP_IN",
-                });
-              else setAction({ type: "emergency_stop" });
-            }}
-          >
-            <option value="dose">dose</option>
-            <option value="water_on">water_on</option>
-            <option value="water_off">water_off</option>
-            <option value="emergency_stop">emergency_stop</option>
-          </select>
-        </label>
+        <ConfigCard tone="emerald">
+          <Badge tone="emerald">ACTION · {actionVal.toUpperCase()}</Badge>
+          <FieldGroup label="Loại hành động">
+            <select
+              className="ui-input mt-1"
+              value={actionVal}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "dose")
+                  setAction({
+                    type: "dose",
+                    pump: "PUMP_A",
+                    doseMl: 1,
+                    pwm: 100,
+                  });
+                else if (next === "water_on")
+                  setAction({
+                    type: "water_on",
+                    pump: "WATER_PUMP_IN",
+                    durationSec: 10,
+                  });
+                else if (next === "water_off")
+                  setAction({
+                    type: "water_off",
+                    pump: "WATER_PUMP_IN",
+                  });
+                else setAction({ type: "emergency_stop" });
+              }}
+            >
+              <option value="dose">dose</option>
+              <option value="water_on">water_on</option>
+              <option value="water_off">water_off</option>
+              <option value="emergency_stop">emergency_stop</option>
+            </select>
+          </FieldGroup>
 
-        {isDose && (
-          <>
-            <label className="mb-2 block text-xs text-emerald-800/75">
-              Bơm
-              <select
-                className="ui-input mt-1"
-                value={dosePump}
-                onChange={(e) =>
-                  setAction({
-                    type: "dose",
-                    pump: e.target.value as "PUMP_A" | "PUMP_B" | "PH_UP" | "PH_DOWN",
-                    doseMl,
-                    pwm: dosePwm,
-                  })
-                }
-              >
-                <option value="PUMP_A">PUMP_A</option>
-                <option value="PUMP_B">PUMP_B</option>
-                <option value="PH_UP">PH_UP</option>
-                <option value="PH_DOWN">PH_DOWN</option>
-              </select>
-            </label>
-            <label className="mb-2 block text-xs text-emerald-800/75">
-              Liều (ml){" "}
-              <input
-                type="number"
-                className="ui-input mt-1"
-                value={doseMl}
-                onChange={(e) =>
-                  setAction({
-                    type: "dose",
-                    pump: dosePump,
-                    doseMl: Number(e.target.value),
-                    pwm: dosePwm,
-                  })
-                }
-              />
-            </label>
-            <label className="block text-xs text-emerald-800/75">
-              PWM (%){" "}
-              <input
-                type="number"
-                className="ui-input mt-1"
-                value={dosePwm}
-                onChange={(e) =>
-                  setAction({
-                    type: "dose",
-                    pump: dosePump,
-                    doseMl,
-                    pwm: Number(e.target.value),
-                  })
-                }
-              />
-            </label>
-          </>
-        )}
-
-        {isWater && (
-          <>
-            <label className="mb-2 block text-xs text-emerald-800/75">
-              Bơm/van
-              <select
-                className="ui-input mt-1"
-                value={waterPump}
-                onChange={(e) => {
-                  const pump = e.target.value as "WATER_PUMP_IN" | "WATER_PUMP_OUT" | "MIST_VALVE" | "OSAKA_PUMP";
-                  setAction(
-                    actionVal === "water_on"
-                      ? {
-                          type: "water_on",
-                          pump,
-                          durationSec: waterDuration,
-                        }
-                      : {
-                          type: "water_off",
-                          pump,
-                        }
-                  );
-                }}
-              >
-                <option value="WATER_PUMP_IN">WATER_PUMP_IN</option>
-                <option value="WATER_PUMP_OUT">WATER_PUMP_OUT</option>
-                <option value="MIST_VALVE">MIST_VALVE</option>
-                <option value="OSAKA_PUMP">OSAKA_PUMP</option>
-              </select>
-            </label>
-            {actionVal === "water_on" && (
-              <label className="block text-xs text-emerald-800/75">
-                Thời gian (giây){" "}
+          {isDose && (
+            <>
+              <FieldGroup label="Bơm">
+                <select
+                  className="ui-input mt-1"
+                  value={dosePump}
+                  onChange={(e) =>
+                    setAction({
+                      type: "dose",
+                      pump: e.target.value as "PUMP_A" | "PUMP_B" | "PH_UP" | "PH_DOWN",
+                      doseMl,
+                      pwm: dosePwm,
+                    })
+                  }
+                >
+                  <option value="PUMP_A">PUMP_A</option>
+                  <option value="PUMP_B">PUMP_B</option>
+                  <option value="PH_UP">PH_UP</option>
+                  <option value="PH_DOWN">PH_DOWN</option>
+                </select>
+              </FieldGroup>
+              <FieldGroup label="Liều (ml)">
                 <input
                   type="number"
                   className="ui-input mt-1"
-                  value={waterDuration}
+                  value={doseMl}
                   onChange={(e) =>
                     setAction({
-                      type: "water_on",
-                      pump: waterPump,
-                      durationSec: Number(e.target.value),
+                      type: "dose",
+                      pump: dosePump,
+                      doseMl: Number(e.target.value),
+                      pwm: dosePwm,
                     })
                   }
                 />
-              </label>
-            )}
-          </>
-        )}
+              </FieldGroup>
+              <FieldGroup label="PWM (%)">
+                <input
+                  type="number"
+                  className="ui-input mt-1"
+                  value={dosePwm}
+                  onChange={(e) =>
+                    setAction({
+                      type: "dose",
+                      pump: dosePump,
+                      doseMl,
+                      pwm: Number(e.target.value),
+                    })
+                  }
+                />
+              </FieldGroup>
+            </>
+          )}
+
+          {isWater && (
+            <>
+              <FieldGroup label="Bơm/van">
+                <select
+                  className="ui-input mt-1"
+                  value={waterPump}
+                  onChange={(e) => {
+                    const pump = e.target.value as "WATER_PUMP_IN" | "WATER_PUMP_OUT" | "MIST_VALVE" | "OSAKA_PUMP";
+                    setAction(
+                      actionVal === "water_on"
+                        ? {
+                            type: "water_on",
+                            pump,
+                            durationSec: waterDuration,
+                          }
+                        : {
+                            type: "water_off",
+                            pump,
+                          }
+                    );
+                  }}
+                >
+                  <option value="WATER_PUMP_IN">WATER_PUMP_IN</option>
+                  <option value="WATER_PUMP_OUT">WATER_PUMP_OUT</option>
+                  <option value="MIST_VALVE">MIST_VALVE</option>
+                  <option value="OSAKA_PUMP">OSAKA_PUMP</option>
+                </select>
+              </FieldGroup>
+              {actionVal === "water_on" && (
+                <FieldGroup label="Thời gian (giây)">
+                  <input
+                    type="number"
+                    className="ui-input mt-1"
+                    value={waterDuration}
+                    onChange={(e) =>
+                      setAction({
+                        type: "water_on",
+                        pump: waterPump,
+                        durationSec: Number(e.target.value),
+                      })
+                    }
+                  />
+                </FieldGroup>
+              )}
+            </>
+          )}
+        </ConfigCard>
       </div>
     );
   }

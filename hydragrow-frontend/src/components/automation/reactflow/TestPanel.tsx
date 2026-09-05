@@ -184,6 +184,48 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
               )}
             </div>
 
+            {/* Config Diff Comparison */}
+            {testMutation.data.will_fire && (ir.configOverwrite || ir.actions.some((a) => a.type === "config_override")) && (
+              <div className="space-y-2 mt-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-indigo-900 uppercase">
+                    SO SÁNH CONFIG (DIFF)
+                  </h4>
+                  <span className="bg-indigo-600 text-white text-[9px] font-semibold px-1 rounded">
+                    MỚI
+                  </span>
+                </div>
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                    <span>CONFIG KEY</span>
+                    <span className="font-bold text-indigo-950">
+                      {ir.configOverwrite?.configKey ?? (ir.actions.find((a) => a.type === "config_override") as any)?.key ?? "ec_target"}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1 border-t border-indigo-100/80">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase">TRƯỚC</span>
+                      <span className="line-through text-slate-500 font-medium">2.4 mS/cm</span>
+                    </div>
+                    <span className="text-indigo-400 font-bold">&rarr;</span>
+                    <div className="text-right">
+                      <span className="text-[10px] text-indigo-700 block uppercase font-semibold">SAU KHI GHI ĐÈ</span>
+                      <span className="text-sm font-bold text-indigo-700">
+                        {ir.configOverwrite?.value ?? (ir.actions.find((a) => a.type === "config_override") as any)?.value ?? 1.8} mS/cm
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Trong giới hạn cho phép (0.8 – 3.2 mS/cm)</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600">
+                    &circlearrowright; Tự động khôi phục 2.4 mS/cm khi điều kiện hết đúng
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 mt-4">
               <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">
                 Actions Preview

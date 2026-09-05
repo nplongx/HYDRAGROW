@@ -104,6 +104,14 @@ export const EmergencyStopActionSchema = z.object({
   type: z.literal('emergency_stop'),
 });
 
+export const ConfigOverrideActionSchema = z.object({
+  type: z.literal('config_override'),
+  key: z.string().min(1),
+  value: z.number(),
+  restoreOnExit: z.boolean().default(true),
+  priority: z.number().int().default(0),
+});
+
 export const ActionSchema = z.discriminatedUnion('type', [
   AlertActionSchema,
   StageOverrideActionSchema,
@@ -112,6 +120,7 @@ export const ActionSchema = z.discriminatedUnion('type', [
   WaterOnActionSchema,
   WaterOffActionSchema,
   EmergencyStopActionSchema,
+  ConfigOverrideActionSchema,
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 
@@ -154,7 +163,7 @@ export const AutomationEdgeSchema = z.object({
   target: z.string(),
 });
 
-export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command']);
+export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command', 'config_override']);
 
 export const ContextReadSchema = z.object({
   configKey: z.string().min(1),
@@ -206,9 +215,40 @@ export const AutomationIrSchema = z
       if (ir.kind === 'recipe_override') {
         return ir.actions.every((a) => a.type === 'advance_stage' || a.type === 'end_season');
       }
+      if (ir.kind === 'config_override') {
+        return ir.actions.every((a) => a.type === 'config_override');
+      }
       return ir.actions.every((a) => ['dose', 'water_on', 'water_off', 'emergency_stop'].includes(a.type));
     },
     { message: 'actions must match kind' },
   );
 
 export type AutomationIr = z.infer<typeof AutomationIrSchema>;
+
+export interface DeviceConfigBound {
+  min: number;
+  max: number;
+  unit: string;
+  step: number;
+  label: string;
+  sourceGroup: string;
+  defaultVal: number;
+}
+
+export const DEVICE_CONFIG_BOUNDS: Record<string, DeviceConfigBound> = {
+  ec_target: { min: 0.8, max: 3.2, unit: 'mS/cm', step: 0.1, label: 'ec_target', sourceGroup: 'Recipe hiện tại (Stage 3 - Tăng trưởng)', defaultVal: 2.4 },
+  ec_tolerance: { min: 0.05, max: 0.5, unit: 'mS/cm', step: 0.01, label: 'ec_tolerance', sourceGroup: 'Cấu hình thiết bị', defaultVal: 0.2 },
+  ph_target: { min: 4.5, max: 8.5, unit: '', step: 0.1, label: 'ph_target', sourceGroup: 'Recipe hiện tại (Stage 3 - Tăng trưởng)', defaultVal: 6.2 },
+  ph_tolerance: { min: 0.1, max: 1.0, unit: '', step: 0.05, label: 'ph_tolerance', sourceGroup: 'Cấu hình thiết bị', defaultVal: 0.2 },
+  dose_max_ml: { min: 1, max: 50, unit: 'ml', step: 1, label: 'dose_max_ml', sourceGroup: 'An toàn thiết bị', defaultVal: 15 },
+  water_cycle_sec: { min: 60, max: 7200, unit: 's', step: 60, label: 'water_cycle_sec', sourceGroup: 'Lịch tưới', defaultVal: 1800 },
+};
+
+export function clampConfigValue(key: string, val: number): { value: number; clamped: boolean; bound?: DeviceConfigBound } {
+  const bound = DEVICE_CONFIG_BOUNDS[key];
+  if (!bound) return { value: val, clamped: false };
+  if (val < bound.min) return { value: bound.min, clamped: true, bound };
+  if (val > bound.max) return { value: bound.max, clamped: true, bound };
+  return { value: val, clamped: false, bound };
+}
+

@@ -14,9 +14,9 @@ use crate::models::script::{
 
 pub fn validate_kind(kind: &str) -> Result<(), String> {
     match kind {
-        "alert" | "recipe_override" | "action_command" => Ok(()),
+        "alert" | "recipe_override" | "action_command" | "config_override" => Ok(()),
         other => Err(format!(
-            "kind phải là 'alert', 'recipe_override' hoặc 'action_command', nhận: '{}'",
+            "kind phải là 'alert', 'recipe_override', 'action_command' hoặc 'config_override', nhận: '{}'",
             other
         )),
     }

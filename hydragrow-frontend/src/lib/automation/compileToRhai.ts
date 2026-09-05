@@ -98,6 +98,17 @@ function actionToRhaiMap(action: Action): string {
       ].join("\n ");
     case "emergency_stop":
       return '#{ "action": "emergency_stop" }';
+    case "config_override": {
+      return [
+        "#{",
+        ` "action": "config_override",`,
+        ` "key": "${rhaiString(action.key)}",`,
+        ` "value": ${action.value},`,
+        ` "restore_on_exit": ${action.restoreOnExit ? "true" : "false"},`,
+        ` "priority": ${action.priority ?? 0}`,
+        "}",
+      ].join("\n ");
+    }
   }
 }
 

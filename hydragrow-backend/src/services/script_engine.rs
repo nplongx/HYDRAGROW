@@ -338,6 +338,7 @@ impl ScriptEngine {
                 ))
             }
             crate::models::script::ScriptKind::RecipeOverride => None,
+            crate::models::script::ScriptKind::ConfigOverride => None,
         })
     }
 }

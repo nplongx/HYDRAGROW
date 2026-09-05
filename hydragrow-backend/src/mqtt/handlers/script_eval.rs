@@ -509,6 +509,13 @@ fn eval_flow_chain_from<F>(
             );
             None
         }
+        ScriptKind::ConfigOverride => {
+            warn!(
+                script_id = %node.id,
+                "ConfigOverride script in sensor flow chain — handled via config service"
+            );
+            None
+        }
     };
 
     if let Some(res) = fired_result {

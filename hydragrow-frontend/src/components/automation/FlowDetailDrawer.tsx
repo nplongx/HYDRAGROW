@@ -8,7 +8,7 @@ import { NodeEditorPanel } from "./reactflow/NodeEditorPanel";
 import { buildIrFromGraph } from "./reactflow/buildIr";
 import { TestPanel } from "./reactflow/TestPanel";
 import { fieldsForKind } from "../../hooks/useAutomationBuilder";
-import { FlowEditorHeader } from "./FlowEditorHeader";
+import { ConfigNodeInspector } from "./reactflow/ConfigNodeInspector";
 import { FlowEditorFooter } from "./FlowEditorFooter";
 import { NextFlowSelector } from "./NextFlowSelector";
 import { useAutomationBuilder } from "../../hooks/useAutomationBuilder";
@@ -132,32 +132,52 @@ export function FlowDetailDrawer({
     deleteScript.mutate(script.id, { onSuccess: onClose });
   };
 
-  return (
-    <div data-testid="flow-detail-drawer" className="flex h-full flex-col gap-2 p-4 overflow-y-auto">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-emerald-950">
-          {isNew ? "Flow mới" : `Sửa: ${script.name}`}
-        </h2>
-        <button className="text-sm text-emerald-700/70" onClick={onClose}>
-          Đóng
-        </button>
-      </div>
+  const isConfigNode = builder.selectedNode?.type === "config";
 
-      <FlowEditorHeader
-        name={name}
-        kind={builder.kind}
-        enabled={enabled}
-        onChange={(updates) => {
-          if (updates.name !== undefined) setName(updates.name);
-          if (updates.kind !== undefined) builder.setKind(updates.kind);
-          if (updates.enabled !== undefined) setEnabled(updates.enabled);
-        }}
-      />
+  return (
+    <div data-testid="flow-detail-drawer" className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40">
+      {/* Top Header matching Reference 02 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-2 border-b border-emerald-100 bg-white p-3 rounded-2xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-emerald-950">
+            {isNew ? "Flow mới" : `Sửa: ${script.name}`}
+          </h2>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="ui-input font-bold text-base text-emerald-950 px-2.5 py-1 w-52"
+            placeholder="Tên Flow..."
+          />
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200">
+            {builder.kind.toUpperCase()}
+          </span>
+          <label className="flex items-center gap-1.5 text-xs text-emerald-900 cursor-pointer ml-2">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="rounded text-emerald-600 focus:ring-emerald-500"
+            />
+            <span>Đang bật</span>
+          </label>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+          >
+            Đóng ✕
+          </button>
+        </div>
+      </div>
 
       <NodePalette onAddNode={builder.addNode} onUpdateTrigger={builder.updateTrigger} />
 
-      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-100 lg:flex-row">
-        <div className="min-h-[16rem] flex-1">
+      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-100 bg-white relative my-2 min-h-[360px]">
+        <div className="h-full w-full flex-1">
           <ReactFlow
             nodes={builder.nodes}
             edges={builder.edges}
@@ -174,7 +194,17 @@ export function FlowDetailDrawer({
           </ReactFlow>
 
           {showTestPanel && (
-            <div className="absolute right-0 top-0 h-full w-96 shadow-xl z-20 flex flex-col border-l">
+            <div className="absolute right-0 top-0 h-full w-96 shadow-2xl z-30 flex flex-col border-l border-emerald-100 bg-white">
+              <div className="flex items-center justify-between p-2 border-b">
+                <span className="text-xs font-bold text-slate-500 uppercase px-2">Dry Run Simulator</span>
+                <button
+                  type="button"
+                  onClick={() => setShowTestPanel(false)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
               <TestPanel
                 deviceId={deviceId}
                 ir={buildIrFromGraph({
@@ -189,13 +219,34 @@ export function FlowDetailDrawer({
             </div>
           )}
         </div>
-        {builder.selectedNode && (
+
+        {/* Normal Node Editor Drawer */}
+        {builder.selectedNode && !isConfigNode && (
           <NodeEditorPanel
             kind={builder.kind}
             node={builder.selectedNode}
             nodes={builder.nodes}
             edges={builder.edges}
             onChange={builder.updateNodeData}
+            onClose={() => builder.setSelectedNodeId(null)}
+          />
+        )}
+
+        {/* Specialized Config Node Inspector */}
+        {builder.selectedNode && isConfigNode && (
+          <ConfigNodeInspector
+            initialKey={(builder.selectedNode.data?.configKey as string) ?? "ec_target"}
+            initialValue={Number(builder.selectedNode.data?.overrideValue ?? 1.8)}
+            onSave={(updated: { configKey: string; overrideValue: number; applyMode: string; autoRestore: boolean }) => {
+              builder.updateNodeData(builder.selectedNode!.id, {
+                ...builder.selectedNode!.data,
+                configKey: updated.configKey,
+                overrideValue: updated.overrideValue,
+                applyMode: updated.applyMode,
+                autoRestore: updated.autoRestore,
+                summary: `Ghi đè ${updated.configKey} -> ${updated.overrideValue}`,
+              });
+            }}
             onClose={() => builder.setSelectedNodeId(null)}
           />
         )}

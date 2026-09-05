@@ -24,6 +24,11 @@ pub enum ScriptKind {
     /// trước khi publish MQTT — xem Task 6. Script KHÔNG thể bỏ qua bước này.
     #[serde(rename = "action_command")]
     ActionCommand,
+    /// fn main(input: Map) -> Map?
+    /// input fields: ph, ec, temp, water_level, device_id, timestamp_ms
+    /// return Map { action: "config_override", key, value, restore_on_exit, priority }
+    #[serde(rename = "config_override")]
+    ConfigOverride,
 }
 
 impl std::fmt::Display for ScriptKind {
@@ -32,6 +37,7 @@ impl std::fmt::Display for ScriptKind {
             ScriptKind::Alert => write!(f, "alert"),
             ScriptKind::RecipeOverride => write!(f, "recipe_override"),
             ScriptKind::ActionCommand => write!(f, "action_command"),
+            ScriptKind::ConfigOverride => write!(f, "config_override"),
         }
     }
 }

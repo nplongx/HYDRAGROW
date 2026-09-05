@@ -57,6 +57,8 @@ export function summarizeActions(actions: Action[]): string {
           return `water_off (${a.pump})`;
         case "emergency_stop":
           return "emergency_stop";
+        case "config_override":
+          return `ghi đè ${a.key} -> ${a.value}`;
         default:
           return "unknown_action";
       }
@@ -95,7 +97,7 @@ function synthesizeGraphFromFlatIr(
 /** Sensor field list valid for the given automation kind (mirrors backend
  * ScriptSensorInput / ScriptFsmInput). */
 export function fieldsForKind(kind: AutomationIr["kind"]): readonly string[] {
-  return kind === "alert" ? SENSOR_FIELDS : FSM_FIELDS;
+  return kind === "recipe_override" ? FSM_FIELDS : SENSOR_FIELDS;
 }
 
 let nextNodeId = 100;

@@ -157,6 +157,20 @@ describe('NodeEditorPanel', () => {
 });
 
 describe('NodeEditorPanel — Config nodes', () => {
+  it('shows a safe-read note on the config read panel', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cfg1', type: 'config', data: { variant: 'read' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('Chỉ đọc — không thay đổi trạng thái thiết bị'),
+    ).toBeInTheDocument();
+  });
+
   it('renders the Config·Read editor and updates configKey/saveToVariable', () => {
     const mockOnChange = vi.fn();
 

@@ -597,18 +597,50 @@ export function NodeEditorPanel({
     const variant = (node.data?.variant as string) === "overwrite" ? "overwrite" : "read";
     if (variant === "read") {
       return (
-        <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+        <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-emerald-950">Config — Đọc</h3>
             <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
           </div>
-          <p className="text-xs text-emerald-800/80 mb-3">
-            Đọc giá trị từ cấu hình thiết bị và lưu vào biến cục bộ của Flow.
-          </p>
-          <label className="mb-2 block text-xs text-emerald-800/75">
-            Config key
+          <ConfigCard tone="indigo">
+            <Badge tone="indigo">CONFIG · ĐỌC (MỚI)</Badge>
+            <FieldGroup label="Config key">
+              <select
+                className="ui-input"
+                value={(node.data?.configKey as string) ?? ""}
+                onChange={(e) => onChange(node.id, { ...node.data, configKey: e.target.value })}
+              >
+                <option value="">-- Chọn key --</option>
+                {DEVICE_CONFIG_KEYS.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
+            </FieldGroup>
+            <FieldGroup label="Lưu vào biến">
+              <input
+                type="text"
+                className="ui-input"
+                placeholder="vd: ph_target_now"
+                value={(node.data?.saveToVariable as string) ?? ""}
+                onChange={(e) => onChange(node.id, { ...node.data, saveToVariable: e.target.value })}
+              />
+            </FieldGroup>
+            <SafeNote>Chỉ đọc — không thay đổi trạng thái thiết bị</SafeNote>
+          </ConfigCard>
+        </div>
+      );
+    }
+    return (
+      <div className="w-80 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-emerald-950">Config — Ghi đè</h3>
+          <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
+        </div>
+        <ConfigCard tone="indigo" emphasized>
+          <Badge tone="indigo">CONFIG · GHI ĐÈ (MỚI)</Badge>
+          <FieldGroup label="Config key">
             <select
-              className="ui-input mt-1"
+              className="ui-input"
               value={(node.data?.configKey as string) ?? ""}
               onChange={(e) => onChange(node.id, { ...node.data, configKey: e.target.value })}
             >
@@ -617,85 +649,44 @@ export function NodeEditorPanel({
                 <option key={k} value={k}>{k}</option>
               ))}
             </select>
-          </label>
-          <label className="mb-2 block text-xs text-emerald-800/75">
-            Lưu vào biến
-            <input
-              type="text"
-              className="ui-input mt-1"
-              placeholder="vd: ph_target_now"
-              value={(node.data?.saveToVariable as string) ?? ""}
-              onChange={(e) => onChange(node.id, { ...node.data, saveToVariable: e.target.value })}
+          </FieldGroup>
+          <FieldGroup label="Giá trị ghi đè">
+            <VariableCombobox
+              id={`cfg-${node.id}-override`}
+              ariaLabel="Giá trị ghi đè"
+              value={String(node.data?.overrideValue ?? "")}
+              onChange={(val) => onChange(node.id, { ...node.data, overrideValue: val })}
+              availableVariables={availableVariables}
+              placeholder="vd: 1.8 hoặc chọn biến..."
             />
-          </label>
-        </div>
-      );
-    }
-    return (
-      <div className="w-80 shrink-0 border-l border-emerald-100 bg-white p-3 overflow-y-auto">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-emerald-950">Config — Ghi đè</h3>
-          <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
-        </div>
-        <p className="text-xs text-emerald-800/80 mb-3">
-          Ghi đè giá trị cấu hình thiết bị với tuỳ chọn khôi phục (safe rollback).
-        </p>
-        <label className="mb-2 block text-xs text-emerald-800/75">
-          Config key
-          <select
-            className="ui-input mt-1"
-            value={(node.data?.configKey as string) ?? ""}
-            onChange={(e) => onChange(node.id, { ...node.data, configKey: e.target.value })}
-          >
-            <option value="">-- Chọn key --</option>
-            {DEVICE_CONFIG_KEYS.map((k) => (
-              <option key={k} value={k}>{k}</option>
-            ))}
-          </select>
-        </label>
-        <label className="mb-2 block text-xs text-emerald-800/75">
-          Giá trị ghi đè
-          <VariableCombobox
-            id={`cfg-${node.id}-override`}
-            ariaLabel="Giá trị ghi đè"
-            value={String(node.data?.overrideValue ?? "")}
-            onChange={(val) => onChange(node.id, { ...node.data, overrideValue: val })}
-            availableVariables={availableVariables}
-            placeholder="vd: 1.8 hoặc chọn biến..."
-            className="mt-1"
-          />
-        </label>
-        <label className="mb-2 block text-xs text-emerald-800/75">
-          Thời điểm áp dụng
-          <select
-            className="ui-input mt-1"
-            value={(node.data?.applyWhen as string) ?? "previous_condition_true"}
-            onChange={(e) => onChange(node.id, { ...node.data, applyWhen: e.target.value })}
-          >
-            <option value="previous_condition_true">Khi điều kiện trước đúng</option>
-            <option value="always">Luôn áp dụng</option>
-          </select>
-        </label>
-        <label className="mb-2 flex items-center gap-2 text-xs text-emerald-800/75">
-          <input
-            type="checkbox"
+          </FieldGroup>
+          <FieldGroup label="Thời điểm áp dụng">
+            <select
+              className="ui-input"
+              value={(node.data?.applyWhen as string) ?? "previous_condition_true"}
+              onChange={(e) => onChange(node.id, { ...node.data, applyWhen: e.target.value })}
+            >
+              <option value="previous_condition_true">Khi điều kiện trước đúng</option>
+              <option value="always">Luôn áp dụng</option>
+            </select>
+          </FieldGroup>
+          <ToggleRow
+            label="Đọc giá trị gốc trước khi ghi (rollback an toàn)"
             checked={Boolean(node.data?.readOriginalBeforeWrite ?? true)}
-            onChange={(e) => onChange(node.id, { ...node.data, readOriginalBeforeWrite: e.target.checked })}
+            onChange={(v) => onChange(node.id, { ...node.data, readOriginalBeforeWrite: v })}
           />
-          Đọc giá trị gốc trước khi ghi (rollback an toàn)
-        </label>
-        <label className="mb-2 block text-xs text-emerald-800/75">
-          Chế độ khôi phục
-          <select
-            className="ui-input mt-1"
-            value={(node.data?.restoreMode as string) ?? "on_flow_exit"}
-            onChange={(e) => onChange(node.id, { ...node.data, restoreMode: e.target.value })}
-          >
-            <option value="manual">Thủ công (không tự khôi phục)</option>
-            <option value="on_flow_exit">Khi Flow kết thúc</option>
-            <option value="on_condition_false">Khi điều kiện không còn đúng</option>
-          </select>
-        </label>
+          <FieldGroup label="Chế độ khôi phục">
+            <select
+              className="ui-input"
+              value={(node.data?.restoreMode as string) ?? "on_flow_exit"}
+              onChange={(e) => onChange(node.id, { ...node.data, restoreMode: e.target.value })}
+            >
+              <option value="manual">Thủ công (không tự khôi phục)</option>
+              <option value="on_flow_exit">Khi Flow kết thúc</option>
+              <option value="on_condition_false">Khi điều kiện không còn đúng</option>
+            </select>
+          </FieldGroup>
+        </ConfigCard>
       </div>
     );
   }

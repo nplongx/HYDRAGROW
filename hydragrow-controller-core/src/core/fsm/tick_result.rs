@@ -104,6 +104,8 @@ pub enum CalibrationDelta {
     Start(PendingCalibrationSample),
     /// Xóa sample hiện tại (invalid)
     Invalidate,
+    /// Xóa toàn bộ pending sample
+    Clear,
     /// Cập nhật post-mixing EC/pH khi chuyển từ ActiveMixing → Stabilizing
     UpdatePostMixing { ec: f32, ph: f32, finish_ms: u64 },
 }

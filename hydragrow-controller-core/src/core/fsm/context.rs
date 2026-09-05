@@ -392,6 +392,7 @@ impl SystemContext {
     pub fn reset_active_actors_and_ownership(&mut self) {
         self.dosing.reset();
         self.water.reset();
+        self.calibration.pending_sample = None;
         self.peripherals.misting_started_by_dosing = false;
         self.peripherals.mix_valve_started_by_dosing = false;
         self.peripherals.is_misting_active = false;
@@ -563,6 +564,9 @@ impl SystemContext {
                     if let Some(s) = self.calibration.pending_sample.as_mut() {
                         s.invalid_by_noise = true;
                     }
+                }
+                CalibrationDelta::Clear => {
+                    self.calibration.pending_sample = None;
                 }
                 CalibrationDelta::UpdatePostMixing { ec, ph, finish_ms } => {
                     if let Some(s) = self.calibration.pending_sample.as_mut() {

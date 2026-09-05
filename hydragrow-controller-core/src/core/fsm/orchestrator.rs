@@ -176,13 +176,31 @@ pub fn tick(
         SystemPhase::WaterDraining => {
             WaterDrainingPhase.tick(now_ms, uptime_ms, config, sensors, ctx)
         }
+        SystemPhase::SensorCalibration => {
+            let mut res = TickResult::default();
+            let is_timed_out = if let Some(finish_ms) = ctx.phase_finish_ms {
+                uptime_ms >= finish_ms || now_ms >= finish_ms
+            } else {
+                false
+            };
+            if is_timed_out {
+                tracing::info!("⏱️ [CALIBRATION] SensorCalibration timeout reached, returning to Monitoring");
+                res.delta.phase = Some(SystemPhase::Monitoring);
+                res.delta.phase_finish_ms = Some(None);
+                res.delta.phase_start_ms = Some(None);
+                res.delta.reset_active_actors = true;
+                res.delta.reset_stabilizer = true;
+                res.delta.calibration = Some(crate::core::fsm::tick_result::CalibrationDelta::Clear);
+            }
+            res
+        }
         _ => TickResult::default(),
     };
 
     // 5. Tick Peripheral Controllers
     if !matches!(
         ctx.phase,
-        SystemPhase::Fault(_) | SystemPhase::EmergencyStop(_)
+        SystemPhase::Fault(_) | SystemPhase::EmergencyStop(_) | SystemPhase::SensorCalibration
     ) {
         let is_dosing_active = matches!(
             ctx.phase,

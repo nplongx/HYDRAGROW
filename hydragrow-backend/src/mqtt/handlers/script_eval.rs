@@ -247,6 +247,7 @@ where
 
 /// Entry point thật — prefetch mọi (sensor, mode, window_sec) cần dùng trong TOÀN
 /// BỘ chain (không chỉ root) trước khi eval, rồi cấp cho Rhai 1 closure tra bảng.
+#[allow(clippy::too_many_arguments)]
 pub async fn eval_flow_chain(
     engine: &Arc<ScriptEngine>,
     all_scripts: &[ChainNode],
@@ -1055,7 +1056,7 @@ fn main(input) {
         let engine = Arc::new(ScriptEngine::new());
         let ast = engine
             .compile(r#"fn main(input) { if input.ph > input.ph_target_now { return #{ "level": "warning", "title": "t", "message": "m" }; } () }"#)
-            .unwrap();
+            .expect("compiles");
         let node = ChainNode {
             id: Uuid::new_v4(),
             kind: ScriptKind::Alert,
@@ -1095,7 +1096,7 @@ fn main(input) {
         let engine = Arc::new(ScriptEngine::new());
         let ast = engine
             .compile(r#"fn main(input) { #{ "level": "info", "title": "t", "message": "m" } }"#)
-            .unwrap();
+            .expect("compiles");
         // 3 script nối tiếp a -> b -> c, nhưng chainConfig.iterationLimit của a = 1
         // nên chỉ a được eval (b, c bị cắt).
         let c_id = Uuid::new_v4();
@@ -1147,7 +1148,7 @@ fn main(input) {
         let engine = Arc::new(ScriptEngine::new());
         let ast = engine
             .compile(r#"fn main(input) { #{ "level": "info", "title": "t", "message": "m" } }"#)
-            .unwrap();
+            .expect("compiles");
         let node = ChainNode {
             id: Uuid::new_v4(),
             kind: ScriptKind::Alert,

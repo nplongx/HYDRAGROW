@@ -238,21 +238,30 @@ pub fn merge_tick_results(base: &mut TickResult, addition: TickResult) {
     base.delta.merge_from(addition.delta);
 }
 
-fn tick_peripheral_systems(
+pub fn tick_peripheral_systems(
     mut result: TickResult,
     ctx: &SystemContext,
     sensors: &SensorData,
     _now_ms: u64,
     uptime_ms: u64, // SỬA: Nhận uptime_ms
     config: &ControllerConfig,
-    _is_dosing_active: bool,
+    is_dosing_active: bool,
 ) -> TickResult {
     // 1. Rút cái `peripherals` delta hiện tại ra (nếu các pha trước đã có thay đổi thì giữ lại, không thì tạo mới)
     let mut current_peri_delta = result.delta.peripherals.take().unwrap_or_default();
 
+    // Determine ownership considering same-tick phase delta overrides
+    let mist_owned_by_dosing = current_peri_delta
+        .misting_started_by_dosing
+        .unwrap_or(ctx.peripherals.misting_started_by_dosing);
+    let mix_owned_by_dosing = current_peri_delta
+        .mix_valve_started_by_dosing
+        .unwrap_or(ctx.peripherals.mix_valve_started_by_dosing)
+        || is_dosing_active;
+
     // 2. Tính toán Van Phun Sương (Mist)
     let mut mist_delta = PeripheralDelta::default();
-    if !ctx.peripherals.misting_started_by_dosing {
+    if !mist_owned_by_dosing {
         let (delta, mist_events) =
             PeripheralController::tick_misting(&ctx.peripherals, sensors, uptime_ms, config);
         mist_delta = delta;
@@ -261,7 +270,7 @@ fn tick_peripheral_systems(
 
     // 3. Tính toán Van Trộn (Mix)
     let mut mix_delta = PeripheralDelta::default();
-    if !ctx.peripherals.mix_valve_started_by_dosing {
+    if !mix_owned_by_dosing {
         let (delta, mix_events) =
             PeripheralController::tick_scheduled_mixing(&ctx.peripherals, uptime_ms / 1000, config);
         mix_delta = delta;
@@ -284,17 +293,65 @@ fn tick_peripheral_systems(
         None
     };
 
+    let effective_misting_active = current_peri_delta
+        .is_misting_active
+        .unwrap_or(ctx.peripherals.is_misting_active);
+
     // 4. Tính toán Bơm Osaka (Thực thi SAU CÙNG như đã bàn)
     let (osaka_delta, osaka_events) = PeripheralController::tick_osaka(
         &ctx.peripherals,
         &mist_valve_is_open,
         &mix_valve_is_open,
+        effective_misting_active,
         config,
-    ); // dù đã đặt tick_osaka
+    );
     result.events.extend(osaka_events);
 
     // ---> Gộp nốt state của Osaka vào current_peri_delta
     current_peri_delta = merge_peripheral_deltas(current_peri_delta, osaka_delta);
+
+    // Deduplicate valve events so only the final resolved intent per valve is emitted
+    if let Some(final_mix) = current_peri_delta.mix_valve {
+        let mut found = false;
+        result.events.retain(|e| {
+            if matches!(e, OrchestratorEvent::SetMixValve { .. }) {
+                if !found {
+                    found = true;
+                    true
+                } else {
+                    false
+                }
+            } else {
+                true
+            }
+        });
+        for e in result.events.iter_mut() {
+            if let OrchestratorEvent::SetMixValve { on } = e {
+                *on = final_mix;
+            }
+        }
+    }
+
+    if let Some(final_mist) = current_peri_delta.mist_valve {
+        let mut found = false;
+        result.events.retain(|e| {
+            if matches!(e, OrchestratorEvent::SetMistValve { .. }) {
+                if !found {
+                    found = true;
+                    true
+                } else {
+                    false
+                }
+            } else {
+                true
+            }
+        });
+        for e in result.events.iter_mut() {
+            if let OrchestratorEvent::SetMistValve { on } = e {
+                *on = final_mist;
+            }
+        }
+    }
 
     // 5. Đóng gói lại và trả về
     result.delta.peripherals = Some(current_peri_delta);

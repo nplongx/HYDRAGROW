@@ -1,0 +1,46 @@
+{
+  "requirement_id": "AUTOMATION-CONTEXT-001",
+  "objective": "Execute automation execution context end-to-end: Condition.valueVariable resolution, Config·Read/Overwrite runtime evaluation with rollback tracking and orphan recovery, chain context copying, and alert template rendering.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Rhai codegen and eval_condition_tree resolve Condition.valueVariable from execution context sample.",
+      "verification": "Vitest compileToRhai tests and Cargo test eval_condition_tree_uses_value_variable_when_present"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Frontend IR emits flat contextReads and configOverwrite directives from canvas nodes, plus chainConfig.iterationLimit.",
+      "verification": "Vitest configDirectives, ir, and buildIr tests"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "flow_config_overrides migration tracks original config values for rollback with unrestored index.",
+      "verification": "Cargo sqlx test applies migration and verifies table/index existence"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "config_override helpers read/write numeric, text, bool, and integer DeviceConfig fields with variable lookup.",
+      "verification": "Cargo test services::config_override"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Config·Overwrite applies on condition true, restores on condition false, prevents duplicate backups, and recovers orphans on startup.",
+      "verification": "Cargo test services::config_override transition and orphan recovery tests"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "services/config_context parses contextReads/configOverwrite from ir_json and resolves numeric fields against DeviceConfig.",
+      "verification": "Cargo test services::config_context"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Flow chain evaluation injects resolved context into alert and action command scripts, respects configured iteration limits, and copies context across chain when enabled.",
+      "verification": "Cargo test mqtt::handlers::script_eval and services::script_engine"
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Action·Alert template rendering replaces {{var}} and {{time}} tokens while leaving unresolved variables intact.",
+      "verification": "Cargo test services::template"
+    }
+  ]
+}

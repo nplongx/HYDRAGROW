@@ -2,6 +2,7 @@
 //! Không blocking: eval là CPU-bound nhưng nhẹ (< 1ms per script với giới hạn 50k ops).
 //! Fire-and-forget: lỗi trong script được log nhưng không làm drop sensor message.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
@@ -157,12 +158,41 @@ pub enum ChainFireResult {
 
 /// Biến thể sync, nhận sẵn 1 fetcher tra bảng (không I/O) — dùng để unit-test
 /// không cần Influx thật, và để `eval_flow_chain` (async) gọi sau khi prefetch xong.
+/// Biến thể sync, nhận sẵn 1 fetcher tra bảng (không I/O) — dùng để unit-test
+/// không cần Influx thật, và để `eval_flow_chain` (async) gọi sau khi prefetch xong.
 pub fn eval_flow_chain_with_fetcher<F>(
     engine: &Arc<ScriptEngine>,
     all_scripts: &[ChainNode],
     snapshot: &SensorSnapshot,
     device_id: &str,
     fetcher: F,
+) -> Vec<(Uuid, ChainFireResult)>
+where
+    F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
+{
+    eval_flow_chain_with_fetcher_and_context(
+        engine,
+        all_scripts,
+        snapshot,
+        device_id,
+        fetcher,
+        &HashMap::new(),
+    )
+}
+
+/// Như `eval_flow_chain_with_fetcher`, cộng thêm `resolved_context_by_node`
+/// (context Config·Read đã phân giải sẵn cho từng node — xem
+/// `eval_flow_chain` trong Task 8) và cho phép mỗi flow cấu hình
+/// `chainConfig.iterationLimit`/`passContextVariables` riêng qua `ir_json`.
+/// Node không có `ir_json` hoặc không set các field này giữ nguyên hành vi cũ
+/// (MAX_CHAIN_DEPTH, context rỗng).
+pub fn eval_flow_chain_with_fetcher_and_context<F>(
+    engine: &Arc<ScriptEngine>,
+    all_scripts: &[ChainNode],
+    snapshot: &SensorSnapshot,
+    device_id: &str,
+    fetcher: F,
+    resolved_context_by_node: &HashMap<Uuid, HashMap<String, f64>>,
 ) -> Vec<(Uuid, ChainFireResult)>
 where
     F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
@@ -188,6 +218,14 @@ where
     };
 
     for script in start_scripts {
+        let max_depth = script
+            .ir_json
+            .as_ref()
+            .and_then(|j| j.get("chainConfig"))
+            .and_then(|c| c.get("iterationLimit"))
+            .and_then(|v| v.as_u64())
+            .map(|n| (n as usize).min(MAX_CHAIN_DEPTH))
+            .unwrap_or(MAX_CHAIN_DEPTH);
         eval_flow_chain_from(
             script,
             all_scripts,
@@ -196,6 +234,9 @@ where
             device_id,
             &fetcher_arc,
             0,
+            max_depth,
+            HashMap::new(),
+            resolved_context_by_node,
             &mut seen,
             &mut fired,
         );
@@ -213,9 +254,9 @@ pub async fn eval_flow_chain(
     device_id: &str,
     influx_client: &influxdb2::Client,
     influx_bucket: &str,
+    pool: &sqlx::PgPool,
+    condition_state_cache: &Arc<tokio::sync::RwLock<HashMap<Uuid, bool>>>,
 ) -> Vec<(Uuid, ChainFireResult)> {
-    use std::collections::HashMap;
-
     let mut keys: Vec<RangeStatKey> = all_scripts
         .iter()
         .filter_map(|s| s.ir_json.as_ref())
@@ -259,7 +300,102 @@ pub async fn eval_flow_chain(
     let fetcher =
         move |_dev_id: &str, key: &RangeStatKey| -> f64 { cache.get(key).copied().unwrap_or(0.0) };
 
-    eval_flow_chain_with_fetcher(engine, all_scripts, snapshot, device_id, fetcher)
+    // Nạp context Config·Read cho toàn bộ chain trên CÙNG 1 thiết bị — chỉ 1
+    // lượt query DeviceConfig, không phải 1 lượt/node.
+    let mut resolved_context_by_node: HashMap<Uuid, HashMap<String, f64>> = HashMap::new();
+    if let Ok(config) = crate::db::postgres::get_device_config(pool, device_id).await {
+        for s in all_scripts {
+            let Some(ir_json) = &s.ir_json else { continue };
+            let reads = crate::services::config_context::parse_context_reads(ir_json);
+            if reads.is_empty() {
+                continue;
+            }
+            let ctx =
+                crate::services::config_context::resolve_context_reads_from_config(&config, &reads);
+            if !ctx.is_empty() {
+                resolved_context_by_node.insert(s.id, ctx);
+            }
+        }
+    }
+
+    let fired = eval_flow_chain_with_fetcher_and_context(
+        engine,
+        all_scripts,
+        snapshot,
+        device_id,
+        fetcher,
+        &resolved_context_by_node,
+    );
+
+    // Config·Overwrite apply/restore — độc lập với việc action chính có fire
+    // hay không (đây là 1 loại "action" khác, xem
+    // hydragrow-backend/src/services/config_override.rs).
+    for s in all_scripts {
+        let Some(ir_json) = &s.ir_json else { continue };
+        let Some(directive) =
+            crate::services::config_context::parse_config_overwrite(ir_json)
+        else {
+            continue;
+        };
+        let empty = HashMap::new();
+        let ctx = resolved_context_by_node.get(&s.id).unwrap_or(&empty);
+        let mut sample: HashMap<String, crate::models::script::SampleValue> = [
+            (
+                "ph".to_string(),
+                crate::models::script::SampleValue::Value(snapshot.ph as f64),
+            ),
+            (
+                "ec".to_string(),
+                crate::models::script::SampleValue::Value(snapshot.ec as f64),
+            ),
+            (
+                "temp".to_string(),
+                crate::models::script::SampleValue::Value(snapshot.temp as f64),
+            ),
+            (
+                "water_level".to_string(),
+                crate::models::script::SampleValue::Value(snapshot.water_level as f64),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        for (k, v) in ctx {
+            sample.insert(k.clone(), crate::models::script::SampleValue::Value(*v));
+        }
+        let conditions = ir_json
+            .get("conditions")
+            .and_then(|c| c.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let mut trace = Vec::new();
+        let condition_state = conditions
+            .iter()
+            .all(|c| crate::api::script::eval_condition_tree(c, &sample, &mut trace));
+
+        let previous_state = { condition_state_cache.read().await.get(&s.id).copied() };
+        if let Err(e) =
+            crate::services::config_override::apply_config_overwrite_transition(
+                pool,
+                s.id,
+                device_id,
+                &directive,
+                ctx,
+                previous_state,
+                condition_state,
+            )
+            .await
+        {
+            warn!(
+                script_id = %s.id,
+                device_id,
+                error = %e,
+                "config overwrite apply/restore failed"
+            );
+        }
+        condition_state_cache.write().await.insert(s.id, condition_state);
+    }
+
+    fired
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -271,18 +407,31 @@ fn eval_flow_chain_from<F>(
     device_id: &str,
     fetcher: &Arc<F>,
     depth: usize,
+    max_depth: usize,
+    parent_context: HashMap<String, f64>,
+    resolved_context_by_node: &HashMap<Uuid, HashMap<String, f64>>,
     seen: &mut Vec<Uuid>,
     fired: &mut Vec<(Uuid, ChainFireResult)>,
 ) where
     F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
 {
-    if depth >= MAX_CHAIN_DEPTH || seen.contains(&node.id) {
-        if depth >= MAX_CHAIN_DEPTH {
-            warn!(script_id = %node.id, depth, "Flow chain depth limit reached — skipping");
+    if depth >= max_depth || seen.contains(&node.id) {
+        if depth >= max_depth {
+            warn!(
+                script_id = %node.id,
+                depth,
+                max_depth,
+                "Flow chain iteration limit reached — skipping"
+            );
         }
         return;
     }
     seen.push(node.id);
+
+    let mut effective_context = parent_context.clone();
+    if let Some(own) = resolved_context_by_node.get(&node.id) {
+        effective_context.extend(own.iter().map(|(k, v)| (k.clone(), *v)));
+    }
 
     let fired_result = match node.kind {
         ScriptKind::Alert => {
@@ -294,11 +443,23 @@ fn eval_flow_chain_from<F>(
                 device_id: snapshot.device_id.clone(),
                 timestamp_ms: snapshot.timestamp_ms,
             };
-            match engine.eval_alert(&node.ast, &input) {
-                Ok(Some(alert)) => Some(ChainFireResult::Alert(alert)),
+            match engine.eval_alert_with_context(&node.ast, &input, &effective_context) {
+                Ok(Some(mut alert)) => {
+                    let vars = template_vars(&effective_context, snapshot);
+                    alert.message =
+                        crate::services::template::render_alert_template(&alert.message, &vars);
+                    alert.title =
+                        crate::services::template::render_alert_template(&alert.title, &vars);
+                    Some(ChainFireResult::Alert(alert))
+                }
                 Ok(None) => None,
                 Err(e) => {
-                    warn!(script_id = %node.id, device_id = %snapshot.device_id, error = %e, "Alert script runtime error — skipping");
+                    warn!(
+                        script_id = %node.id,
+                        device_id = %snapshot.device_id,
+                        error = %e,
+                        "Alert script runtime error — skipping"
+                    );
                     None
                 }
             }
@@ -320,24 +481,49 @@ fn eval_flow_chain_from<F>(
                     fetcher_clone(&device_id, &(sensor, mode, window_sec))
                 }
             };
-            match engine.eval_action_command_with_range_stat(&node.ast, &input, range_stat_fetcher)
-            {
+            match engine.eval_action_command_with_context(
+                &node.ast,
+                &input,
+                range_stat_fetcher,
+                &effective_context,
+            ) {
                 Ok(Some(cmd)) => Some(ChainFireResult::ActionCommand(cmd)),
                 Ok(None) => None,
                 Err(e) => {
-                    warn!(script_id = %node.id, device_id = %snapshot.device_id, error = %e, "ActionCommand script runtime error — skipping");
+                    warn!(
+                        script_id = %node.id,
+                        device_id = %snapshot.device_id,
+                        error = %e,
+                        "ActionCommand script runtime error — skipping"
+                    );
                     None
                 }
             }
         }
         ScriptKind::RecipeOverride => {
-            warn!(script_id = %node.id, "RecipeOverride script in sensor flow chain — skipping");
+            warn!(
+                script_id = %node.id,
+                "RecipeOverride script in sensor flow chain — skipping"
+            );
             None
         }
     };
 
     if let Some(res) = fired_result {
         fired.push((node.id, res));
+        let pass_context = node
+            .ir_json
+            .as_ref()
+            .and_then(|j| j.get("chainConfig"))
+            .and_then(|c| c.get("passContextVariables"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let next_parent_context = if pass_context {
+            effective_context.clone()
+        } else {
+            HashMap::new()
+        };
+
         for next_id in &node.next_flow_ids {
             let Some(next_script) = all_scripts.iter().find(|s| s.id.to_string() == *next_id)
             else {
@@ -356,11 +542,38 @@ fn eval_flow_chain_from<F>(
                 device_id,
                 fetcher,
                 depth + 1,
+                max_depth,
+                next_parent_context.clone(),
+                resolved_context_by_node,
                 seen,
                 fired,
             );
         }
     }
+}
+
+/// Xây map biến -> chuỗi hiển thị cho `{{var}}` trong Action·Alert — cộng gộp
+/// context đã phân giải (Config·Read/Chain) với snapshot cảm biến + "time".
+fn template_vars(
+    context: &HashMap<String, f64>,
+    snapshot: &SensorSnapshot,
+) -> HashMap<String, String> {
+    use chrono::TimeZone;
+    let mut vars: HashMap<String, String> = context
+        .iter()
+        .map(|(k, v)| (k.clone(), format!("{v}")))
+        .collect();
+    vars.insert("ec".to_string(), format!("{:.2}", snapshot.ec));
+    vars.insert("ph".to_string(), format!("{:.2}", snapshot.ph));
+    vars.insert("temp".to_string(), format!("{:.1}", snapshot.temp));
+    vars.insert("water_level".to_string(), format!("{:.1}", snapshot.water_level));
+    let time = chrono::Utc
+        .timestamp_millis_opt(snapshot.timestamp_ms)
+        .single()
+        .map(|dt| dt.format("%H:%M:%S UTC").to_string())
+        .unwrap_or_default();
+    vars.insert("time".to_string(), time);
+    vars
 }
 
 /// Backward-compatible wrapper cho eval_alert_scripts_chained
@@ -831,5 +1044,58 @@ fn main(input) {
             1,
             "phải fire vì 7.0 > 6.5, không phải 0.0 > 6.5 (stub cũ luôn fail)"
         );
+    }
+
+    #[test]
+    fn eval_flow_chain_with_fetcher_and_context_injects_resolved_context_into_the_guard() {
+        let engine = Arc::new(ScriptEngine::new());
+        let ast = engine
+            .compile(r#"fn main(input) { if input.ph > input.ph_target_now { return #{ "level": "warning", "title": "t", "message": "m" }; } () }"#)
+            .unwrap();
+        let node = ChainNode { id: Uuid::new_v4(), kind: ScriptKind::Alert, next_flow_ids: vec![], ast, ir_json: None };
+        let snapshot = SensorSnapshot { ph: 7.4, ec: 1.0, temp: 24.0, water_level: 80.0, phase: "Monitoring".into(), device_id: "d".into(), timestamp_ms: 0 };
+
+        let mut ctx_by_node = std::collections::HashMap::new();
+        ctx_by_node.insert(node.id, [("ph_target_now".to_string(), 7.2)].into_iter().collect());
+
+        let fired = eval_flow_chain_with_fetcher_and_context(
+            &engine, &[node], &snapshot, "d", |_, _| 0.0, &ctx_by_node,
+        );
+        assert_eq!(fired.len(), 1);
+    }
+
+    #[test]
+    fn eval_flow_chain_with_fetcher_respects_a_lower_configured_iteration_limit() {
+        let engine = Arc::new(ScriptEngine::new());
+        let ast = engine
+            .compile(r#"fn main(input) { #{ "level": "info", "title": "t", "message": "m" } }"#)
+            .unwrap();
+        // 3 script nối tiếp a -> b -> c, nhưng chainConfig.iterationLimit của a = 1
+        // nên chỉ a được eval (b, c bị cắt).
+        let c_id = Uuid::new_v4();
+        let b_id = Uuid::new_v4();
+        let a_id = Uuid::new_v4();
+        let c = ChainNode { id: c_id, kind: ScriptKind::Alert, next_flow_ids: vec![], ast: ast.clone(), ir_json: None };
+        let b = ChainNode { id: b_id, kind: ScriptKind::Alert, next_flow_ids: vec![c_id.to_string()], ast: ast.clone(), ir_json: None };
+        let a = ChainNode {
+            id: a_id, kind: ScriptKind::Alert, next_flow_ids: vec![b_id.to_string()], ast,
+            ir_json: Some(serde_json::json!({ "chainConfig": { "iterationLimit": 1 } })),
+        };
+        let snapshot = SensorSnapshot { ph: 7.0, ec: 1.0, temp: 24.0, water_level: 80.0, phase: "Monitoring".into(), device_id: "d".into(), timestamp_ms: 0 };
+
+        let fired = eval_flow_chain_with_fetcher(&engine, &[a, b, c], &snapshot, "d", |_, _| 0.0);
+        assert_eq!(fired.len(), 1, "expected only the root to fire before the iteration limit stops the chain");
+    }
+
+    #[test]
+    fn eval_flow_chain_with_fetcher_default_behavior_is_unchanged_without_ir_json() {
+        // Guards against regressions: existing ChainNodes with ir_json: None must
+        // keep using MAX_CHAIN_DEPTH and an empty context exactly as before.
+        let engine = Arc::new(ScriptEngine::new());
+        let ast = engine.compile(r#"fn main(input) { #{ "level": "info", "title": "t", "message": "m" } }"#).unwrap();
+        let node = ChainNode { id: Uuid::new_v4(), kind: ScriptKind::Alert, next_flow_ids: vec![], ast, ir_json: None };
+        let snapshot = SensorSnapshot { ph: 7.0, ec: 1.0, temp: 24.0, water_level: 80.0, phase: "Monitoring".into(), device_id: "d".into(), timestamp_ms: 0 };
+        let fired = eval_flow_chain_with_fetcher(&engine, &[node], &snapshot, "d", |_, _| 0.0);
+        assert_eq!(fired.len(), 1);
     }
 }

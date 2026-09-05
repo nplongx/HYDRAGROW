@@ -396,6 +396,8 @@ impl DosingActor {
                 pwm_percent: 0,
             });
 
+            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
+
             if job.delivered_ml + 1e-3 >= job.target_ml {
                 let PumpTarget::NutrientA { dose_b_ml } = job.pump else {
                     return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events);
@@ -458,7 +460,6 @@ impl DosingActor {
 
             job.pulse_on = true;
             job.pulse_count += 1;
-            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
             job.next_toggle_ms = now_ms + job.on_ms;
             self.sub_state = DosingSubState::PumpingA(job.clone());
             (
@@ -578,6 +579,8 @@ impl DosingActor {
                 pwm_percent: 0,
             });
 
+            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
+
             if job.delivered_ml + 1e-3 >= job.target_ml {
                 if let Some(ctx) = self.cycle_ctx.as_mut() {
                     if matches!(job.pump, PumpTarget::PhUp) {
@@ -642,7 +645,6 @@ impl DosingActor {
 
             job.pulse_on = true;
             job.pulse_count += 1;
-            job.delivered_ml += job.ml_per_sec * (job.on_ms as f32 / 1000.0);
             job.next_toggle_ms = now_ms + job.on_ms;
             self.sub_state = DosingSubState::PumpingPH(job.clone());
             (

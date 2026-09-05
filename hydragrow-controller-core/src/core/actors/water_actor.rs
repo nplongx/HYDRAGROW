@@ -5,7 +5,7 @@ use hydragrow_shared::{
 
 use crate::{WaterDirection, core::fsm::OrchestratorEvent};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WaterSubState {
     Idle,
     Starting,
@@ -13,7 +13,7 @@ pub enum WaterSubState {
     Draining { job: WaterJob },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WaterJob {
     pub trigger: String,
     pub target_level: f32,

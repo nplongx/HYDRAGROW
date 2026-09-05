@@ -51,6 +51,9 @@ pub struct ContextDelta {
     /// Xóa các budget/history an toàn khi reset lỗi thủ công
     pub reset_safety_budget: bool,
 
+    /// Reset sub-actors (dosing, water) và xoá ownership/chiếm dụng ngoại vi
+    pub reset_active_actors: bool,
+
     /// Cập nhật safety override timeout
     pub safety_override_until: Option<u64>,
 
@@ -151,6 +154,9 @@ impl ContextDelta {
         }
         if addition.reset_safety_budget {
             self.reset_safety_budget = true;
+        }
+        if addition.reset_active_actors {
+            self.reset_active_actors = true;
         }
         if addition.safety_override_until.is_some() {
             self.safety_override_until = addition.safety_override_until;

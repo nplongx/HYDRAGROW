@@ -83,6 +83,7 @@ pub fn fault_all_outputs_off(result: &mut TickResult) {
     peri_delta.mix_valve_started_by_dosing = Some(false);
     peri_delta.water_pump_started_uptime_ms = Some(None);
     result.delta.peripherals = Some(peri_delta);
+    result.delta.reset_active_actors = true;
 }
 
 pub fn tick(
@@ -351,6 +352,7 @@ fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> Tic
         peri_delta.ph_up = Some(false);
         peri_delta.ph_down = Some(false);
         result.delta.peripherals = Some(peri_delta);
+        result.delta.reset_active_actors = true;
     }
 
     result.delta.phase = Some(SystemPhase::ManualMode);

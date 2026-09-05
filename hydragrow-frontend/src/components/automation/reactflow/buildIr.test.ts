@@ -113,4 +113,40 @@ describe('buildIrFromGraph', () => {
     ]);
     expect(ir.actions).toEqual([{ type: 'dose', pump: 'PUMP_A', doseMl: 10, pwm: 100 }]);
   });
+
+  it('includes config nodes verbatim in ir.nodes (opaque to the compiler)', () => {
+    const nodes: Node[] = [
+      {
+        id: 'cfg-1',
+        type: 'config',
+        position: { x: 0, y: 0 },
+        data: { variant: 'read', configKey: 'ph_target', saveToVariable: 'ph_target_now' },
+      },
+    ];
+    const ir = buildIrFromGraph({ kind: 'alert', nodes, edges: [] });
+    expect(ir.nodes).toEqual([
+      {
+        id: 'cfg-1',
+        type: 'config',
+        position: { x: 0, y: 0 },
+        data: { variant: 'read', configKey: 'ph_target', saveToVariable: 'ph_target_now' },
+      },
+    ]);
+  });
+
+  it('defaults chainConfig.passContextVariables to false when omitted', () => {
+    const ir = buildIrFromGraph({ kind: 'alert', nodes: [], edges: [] });
+    expect(ir.chainConfig).toEqual({ passContextVariables: false });
+  });
+
+  it('passes an explicit chainConfig through', () => {
+    const ir = buildIrFromGraph({
+      kind: 'alert',
+      nodes: [],
+      edges: [],
+      chainConfig: { passContextVariables: true },
+    });
+    expect(ir.chainConfig).toEqual({ passContextVariables: true });
+  });
 });
+

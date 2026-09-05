@@ -1,12 +1,13 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { Action, AutomationIr, ChainConfig, Condition } from '../../../lib/automation/ir';
+import { collectConfigDirectives } from '../../../lib/automation/configDirectives';
 
 export function buildIrFromGraph(params: {
   kind: AutomationIr['kind'];
   nodes: Node[];
   edges: Edge[];
   nextFlowIds?: string[];
-  chainConfig?: ChainConfig;
+  chainConfig?: Partial<ChainConfig>;
 }): AutomationIr {
   const { kind, nodes, edges, nextFlowIds, chainConfig } = params;
 
@@ -17,6 +18,10 @@ export function buildIrFromGraph(params: {
   const actions: Action[] = nodes
     .filter((n) => n.type === 'action')
     .flatMap((n) => (n.data as { actions?: Action[] }).actions ?? []);
+
+  const { contextReads, configOverwrite } = collectConfigDirectives(
+    nodes.map((n) => ({ id: n.id, type: n.type, data: n.data as Record<string, unknown> })),
+  );
 
   return {
     kind,
@@ -34,6 +39,11 @@ export function buildIrFromGraph(params: {
     })),
     edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
     next_flow_ids: nextFlowIds ?? [],
-    chainConfig: chainConfig ?? { passContextVariables: false },
+    chainConfig: {
+      passContextVariables: chainConfig?.passContextVariables ?? false,
+      iterationLimit: chainConfig?.iterationLimit ?? 5,
+    },
+    contextReads,
+    configOverwrite,
   };
 }

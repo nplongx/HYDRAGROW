@@ -17,17 +17,17 @@ import { summarizeConditionTree } from "../lib/automation/conditionTree";
 
 function seedNodes(): Node[] {
   return [
-    { id: "trigger", type: "trigger", position: { x: 250, y: 0 }, data: {} },
+    { id: "trigger", type: "trigger", position: { x: 80, y: 150 }, data: {} },
     {
       id: "2",
       type: "condition",
-      position: { x: 250, y: 120 },
+      position: { x: 330, y: 150 },
       data: { conditions: [], summary: "Chưa cấu hình" },
     },
     {
       id: "3",
       type: "action",
-      position: { x: 250, y: 240 },
+      position: { x: 580, y: 150 },
       data: { actions: [], summary: "Chưa cấu hình" },
     },
   ];
@@ -77,17 +77,17 @@ function synthesizeGraphFromFlatIr(
   actions: Action[],
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [
-    { id: "trigger", type: "trigger", position: { x: 250, y: 0 }, data: {} },
+    { id: "trigger", type: "trigger", position: { x: 80, y: 150 }, data: {} },
     {
       id: "2",
       type: "condition",
-      position: { x: 250, y: 120 },
+      position: { x: 330, y: 150 },
       data: { conditions, summary: summarizeConditionTree(conditions) },
     },
     {
       id: "3",
       type: "action",
-      position: { x: 250, y: 240 },
+      position: { x: 580, y: 150 },
       data: { actions, summary: summarizeActions(actions) },
     },
   ];
@@ -194,7 +194,7 @@ export function useAutomationBuilder() {
         {
           id,
           type: nodeType,
-          position: { x: 250 + nds.length * 40, y: 360 },
+          position: { x: 80 + nds.length * 240, y: 150 },
           data,
         },
       ]);

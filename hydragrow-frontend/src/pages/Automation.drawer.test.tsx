@@ -58,7 +58,7 @@ describe("Automation Page Desktop Drawer", () => {
     useDeviceStore.setState({ deviceId: "dev1" });
   });
 
-  it("renders backdrop and max-w-xl container when a script is selected in desktop mode", () => {
+  it("renders backdrop and max-w-7xl centered container when a script is selected in desktop mode", () => {
     mockSelectedScript = "new";
     render(
       <QueryClientProvider client={queryClient}>
@@ -70,7 +70,7 @@ describe("Automation Page Desktop Drawer", () => {
     expect(backdrop).toBeInTheDocument();
 
     const drawerContainer = backdrop.nextElementSibling;
-    expect(drawerContainer).toHaveClass("max-w-xl");
+    expect(drawerContainer).toHaveClass("max-w-7xl");
 
     fireEvent.click(backdrop);
     expect(mockCloseEditor).toHaveBeenCalledTimes(1);

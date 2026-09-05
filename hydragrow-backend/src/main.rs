@@ -309,7 +309,10 @@ async fn main() -> anyhow::Result<()> {
     // Khôi phục mọi Config·Overwrite chưa được restore từ lần chạy trước
     // (server crash/mất điện trước khi condition chuyển về false).
     match crate::services::config_override::recover_orphan_overrides(&app_state.pg_pool).await {
-        Ok(n) if n > 0 => info!(count = n, "Đã khôi phục config override mồ côi khi khởi động"),
+        Ok(n) if n > 0 => info!(
+            count = n,
+            "Đã khôi phục config override mồ côi khi khởi động"
+        ),
         Ok(_) => {}
         Err(e) => error!(error = %e, "Lỗi khôi phục config override mồ côi khi khởi động"),
     }

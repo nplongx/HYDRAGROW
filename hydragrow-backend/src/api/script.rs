@@ -5,7 +5,10 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
-use crate::models::script::{ScriptValidateResponse, UpsertScriptRequest, UserScript, ConditionTraceEntry, TestScriptRequest, TestScriptResponse};
+use crate::models::script::{
+    ConditionTraceEntry, ScriptValidateResponse, TestScriptRequest, TestScriptResponse,
+    UpsertScriptRequest, UserScript,
+};
 
 // ─── Validation helpers ───────────────────────────────────────────────────────
 
@@ -357,17 +360,31 @@ pub async fn apply_template(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let (device_id, script_id) = path.into_inner();
-    let source: Option<UserScript> = sqlx::query_as("SELECT * FROM user_scripts WHERE id = $1 AND device_id = $2")
-        .bind(script_id).bind(&device_id)
-        .fetch_optional(&app_state.pg_pool).await.unwrap_or(None);
+    let source: Option<UserScript> =
+        sqlx::query_as("SELECT * FROM user_scripts WHERE id = $1 AND device_id = $2")
+            .bind(script_id)
+            .bind(&device_id)
+            .fetch_optional(&app_state.pg_pool)
+            .await
+            .unwrap_or(None);
 
     let Some(source) = source else {
-        return HttpResponse::NotFound().json(serde_json::json!({"error": "Flow gốc không tồn tại"}));
+        return HttpResponse::NotFound()
+            .json(serde_json::json!({"error": "Flow gốc không tồn tại"}));
     };
 
-    match crate::services::multi_device_template::apply_template(&app_state.pg_pool, &source, body.into_inner()).await {
-        Ok(ids) => HttpResponse::Ok().json(serde_json::json!({"status": "success", "applied_script_ids": ids})),
-        Err(e) => HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()})),
+    match crate::services::multi_device_template::apply_template(
+        &app_state.pg_pool,
+        &source,
+        body.into_inner(),
+    )
+    .await
+    {
+        Ok(ids) => HttpResponse::Ok()
+            .json(serde_json::json!({"status": "success", "applied_script_ids": ids})),
+        Err(e) => {
+            HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()}))
+        }
     }
 }
 
@@ -376,11 +393,13 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
         .route("/test", web::post().to(test_script))
-        .route("/{script_id}/apply-template", web::post().to(apply_template))
+        .route(
+            "/{script_id}/apply-template",
+            web::post().to(apply_template),
+        )
         .route("/{script_id}", web::put().to(update_script))
         .route("/{script_id}", web::delete().to(delete_script));
 }
-
 
 pub fn eval_condition_tree(
     node: &serde_json::Value,
@@ -389,13 +408,23 @@ pub fn eval_condition_tree(
 ) -> bool {
     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
         let op = node.get("op").and_then(|v| v.as_str()).unwrap_or("and");
-        let results: Vec<bool> = children.iter().map(|c| eval_condition_tree(c, sample, trace)).collect();
-        return if op == "or" { results.iter().any(|&r| r) } else { results.iter().all(|&r| r) };
+        let results: Vec<bool> = children
+            .iter()
+            .map(|c| eval_condition_tree(c, sample, trace))
+            .collect();
+        return if op == "or" {
+            results.iter().any(|&r| r)
+        } else {
+            results.iter().all(|&r| r)
+        };
     }
 
     let sensor = node.get("sensor").and_then(|v| v.as_str()).unwrap_or("");
     let operator = node.get("operator").and_then(|v| v.as_str()).unwrap_or(">");
-    let mode = node.get("mode").and_then(|v| v.as_str()).unwrap_or("instant");
+    let mode = node
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("instant");
 
     // Khi valueVariable có mặt, tra nó trong `sample` (được backend nạp từ
     // Config·Read/Chain context — xem services/config_context.rs) thay vì
@@ -430,10 +459,22 @@ pub fn eval_condition_tree(
 }
 
 pub async fn test_script(body: web::Json<TestScriptRequest>) -> impl Responder {
-    let conditions = body.ir_json.get("conditions").and_then(|c| c.as_array()).cloned().unwrap_or_default();
+    let conditions = body
+        .ir_json
+        .get("conditions")
+        .and_then(|c| c.as_array())
+        .cloned()
+        .unwrap_or_default();
     let mut trace = Vec::new();
-    let will_fire = conditions.iter().all(|c| eval_condition_tree(c, &body.sample, &mut trace));
-    let actions_preview = body.ir_json.get("actions").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+    let will_fire = conditions
+        .iter()
+        .all(|c| eval_condition_tree(c, &body.sample, &mut trace));
+    let actions_preview = body
+        .ir_json
+        .get("actions")
+        .and_then(|a| a.as_array())
+        .cloned()
+        .unwrap_or_default();
 
     HttpResponse::Ok().json(TestScriptResponse {
         will_fire,
@@ -448,7 +489,7 @@ mod tests {
     #[actix_web::test]
     async fn test_endpoint_returns_will_fire_true_and_trace_when_condition_met() {
         use crate::api::script::init_routes;
-        use actix_web::{test, web, App};
+        use actix_web::{App, test, web};
         use serde_json::json;
 
         let app = test::init_service(
@@ -482,7 +523,8 @@ mod tests {
             .uri("/api/scripts/test")
             .set_json(&req_body)
             .to_request();
-        let resp: crate::models::script::TestScriptResponse = test::call_and_read_body_json(&app, req).await;
+        let resp: crate::models::script::TestScriptResponse =
+            test::call_and_read_body_json(&app, req).await;
 
         assert!(resp.will_fire);
         assert_eq!(resp.trace.len(), 1);
@@ -495,7 +537,7 @@ mod tests {
     #[actix_web::test]
     async fn test_endpoint_returns_will_fire_false_with_failing_leaf_marked() {
         use crate::api::script::init_routes;
-        use actix_web::{test, web, App};
+        use actix_web::{App, test, web};
         use serde_json::json;
 
         let app = test::init_service(
@@ -533,16 +575,25 @@ mod tests {
             .uri("/api/scripts/test")
             .set_json(&req_body)
             .to_request();
-        let resp: crate::models::script::TestScriptResponse = test::call_and_read_body_json(&app, req).await;
+        let resp: crate::models::script::TestScriptResponse =
+            test::call_and_read_body_json(&app, req).await;
 
         assert!(!resp.will_fire);
         assert_eq!(resp.trace.len(), 2);
 
-        let ec_trace = resp.trace.iter().find(|t| t.description.contains("ec")).expect("Value should exist in test");
+        let ec_trace = resp
+            .trace
+            .iter()
+            .find(|t| t.description.contains("ec"))
+            .expect("Value should exist in test");
         assert!(!ec_trace.passed);
         assert_eq!(ec_trace.actual_value, Some(2.1));
 
-        let ph_trace = resp.trace.iter().find(|t| t.description.contains("ph")).expect("Value should exist in test");
+        let ph_trace = resp
+            .trace
+            .iter()
+            .find(|t| t.description.contains("ph"))
+            .expect("Value should exist in test");
         assert!(ph_trace.passed);
         assert_eq!(ph_trace.actual_value, Some(7.8));
     }
@@ -579,9 +630,24 @@ mod tests {
         let cases = vec![
             (&cond1, rhai_guard1, vec![("ph", 7.8), ("ec", 1.5)], true),
             (&cond1, rhai_guard1, vec![("ph", 7.8), ("ec", 2.5)], false),
-            (&cond2, rhai_guard2, vec![("water_level", 40.0), ("temp", 25.0)], true),
-            (&cond2, rhai_guard2, vec![("water_level", 60.0), ("temp", 35.0)], true),
-            (&cond2, rhai_guard2, vec![("water_level", 60.0), ("temp", 25.0)], false),
+            (
+                &cond2,
+                rhai_guard2,
+                vec![("water_level", 40.0), ("temp", 25.0)],
+                true,
+            ),
+            (
+                &cond2,
+                rhai_guard2,
+                vec![("water_level", 60.0), ("temp", 35.0)],
+                true,
+            ),
+            (
+                &cond2,
+                rhai_guard2,
+                vec![("water_level", 60.0), ("temp", 25.0)],
+                false,
+            ),
         ];
 
         let engine = rhai::Engine::new();
@@ -600,7 +666,9 @@ mod tests {
 
             let mut scope = rhai::Scope::new();
             scope.push("input", rhai_map);
-            let rhai_result: bool = engine.eval_with_scope(&mut scope, rhai_guard).expect("Value should exist in test");
+            let rhai_result: bool = engine
+                .eval_with_scope(&mut scope, rhai_guard)
+                .expect("Value should exist in test");
 
             assert_eq!(rust_result, expected);
             assert_eq!(rhai_result, expected);
@@ -688,8 +756,8 @@ mod tests {
 
     #[test]
     fn eval_condition_tree_respects_mean_mode_over_series() {
-        use std::collections::HashMap;
         use crate::models::script::SampleValue;
+        use std::collections::HashMap;
         let mut sample = HashMap::new();
         sample.insert(
             "ph".to_string(),
@@ -707,8 +775,8 @@ mod tests {
 
     #[test]
     fn eval_condition_tree_defaults_to_instant_value_when_series_absent() {
-        use std::collections::HashMap;
         use crate::models::script::SampleValue;
+        use std::collections::HashMap;
         let mut sample = HashMap::new();
         sample.insert("ec".to_string(), SampleValue::Value(2.1));
         let node = serde_json::json!({"sensor": "ec", "operator": "<", "value": 3.0});
@@ -743,8 +811,9 @@ mod tests {
         let node = serde_json::json!({
             "sensor": "ph", "operator": ">", "value": 0, "valueVariable": "ph_target_now"
         });
-        let sample: HashMap<String, SampleValue> =
-            [("ph".to_string(), SampleValue::Value(7.4))].into_iter().collect();
+        let sample: HashMap<String, SampleValue> = [("ph".to_string(), SampleValue::Value(7.4))]
+            .into_iter()
+            .collect();
         let mut trace = Vec::new();
         // ph_target_now chưa được nạp (vd. Config·Read lỗi) -> threshold mặc định 0.0,
         // giữ hành vi cũ khi thiếu dữ liệu thay vì panic.
@@ -758,8 +827,9 @@ mod tests {
         use std::collections::HashMap;
 
         let node = serde_json::json!({ "sensor": "ec", "operator": "<", "value": 1.5 });
-        let sample: HashMap<String, SampleValue> =
-            [("ec".to_string(), SampleValue::Value(1.2))].into_iter().collect();
+        let sample: HashMap<String, SampleValue> = [("ec".to_string(), SampleValue::Value(1.2))]
+            .into_iter()
+            .collect();
         let mut trace = Vec::new();
         assert!(eval_condition_tree(&node, &sample, &mut trace));
     }

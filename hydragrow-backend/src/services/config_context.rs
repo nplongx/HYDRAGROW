@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::models::config::DeviceConfig;
-use crate::services::config_override::{read_numeric_field, ConfigOverwriteDirective};
+use crate::services::config_override::{ConfigOverwriteDirective, read_numeric_field};
 
 /// Đọc `ir_json.contextReads` (mảng {configKey, saveToVariable} do frontend
 /// tính sẵn từ canvas Config·Read nodes — xem
@@ -93,7 +93,10 @@ mod tests {
     #[test]
     fn parse_context_reads_returns_empty_when_field_absent() {
         let ir_json = serde_json::json!({ "conditions": [] });
-        assert_eq!(parse_context_reads(&ir_json), Vec::<(String, String)>::new());
+        assert_eq!(
+            parse_context_reads(&ir_json),
+            Vec::<(String, String)>::new()
+        );
     }
 
     #[test]

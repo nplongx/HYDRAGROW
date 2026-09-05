@@ -814,7 +814,9 @@ fn main(input) {
         let context: std::collections::HashMap<String, f64> =
             [("ph_target_now".to_string(), 7.2)].into_iter().collect();
 
-        let result = engine.eval_alert_with_context(&ast, &input, &context).unwrap();
+        let result = engine
+            .eval_alert_with_context(&ast, &input, &context)
+            .unwrap();
         assert!(result.is_some());
     }
 

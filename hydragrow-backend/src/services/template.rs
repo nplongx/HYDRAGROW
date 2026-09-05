@@ -61,8 +61,9 @@ mod tests {
 
     #[test]
     fn tolerates_whitespace_inside_braces() {
-        let vars: HashMap<String, String> =
-            [("ph_target_now".to_string(), "6.4".to_string())].into_iter().collect();
+        let vars: HashMap<String, String> = [("ph_target_now".to_string(), "6.4".to_string())]
+            .into_iter()
+            .collect();
         assert_eq!(
             render_alert_template("giá trị {{ ph_target_now }}", &vars),
             "giá trị 6.4"

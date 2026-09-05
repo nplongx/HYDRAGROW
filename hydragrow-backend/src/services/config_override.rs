@@ -17,7 +17,9 @@ enum ConfigFieldKind {
 
 fn config_field_kind(key: &str) -> Option<ConfigFieldKind> {
     match key {
-        "ec_target" | "ec_tolerance" | "ph_target" | "ph_tolerance" => Some(ConfigFieldKind::Numeric),
+        "ec_target" | "ec_tolerance" | "ph_target" | "ph_tolerance" => {
+            Some(ConfigFieldKind::Numeric)
+        }
         "delay_between_a_and_b_sec" => Some(ConfigFieldKind::Integer),
         "control_mode" => Some(ConfigFieldKind::Text),
         "is_enabled" => Some(ConfigFieldKind::Bool),
@@ -68,8 +70,9 @@ pub fn write_field(
         if let Some(v) = context.get(raw) {
             return Ok(*v);
         }
-        raw.parse::<f64>()
-            .context(format!("'{raw}' is neither a known context variable nor a number"))
+        raw.parse::<f64>().context(format!(
+            "'{raw}' is neither a known context variable nor a number"
+        ))
     };
     match kind {
         ConfigFieldKind::Numeric => {
@@ -151,7 +154,12 @@ async fn apply_override(
         .await
         .context("failed to persist config override backup")?;
     }
-    write_field(&mut config, &directive.config_key, &directive.value, context)?;
+    write_field(
+        &mut config,
+        &directive.config_key,
+        &directive.value,
+        context,
+    )?;
     crate::db::postgres::upsert_device_config(pool, &config).await
 }
 
@@ -178,7 +186,12 @@ async fn restore_override(
     };
 
     let mut config = crate::db::postgres::get_device_config(pool, device_id).await?;
-    write_field(&mut config, &directive.config_key, &original_value, &HashMap::new())?;
+    write_field(
+        &mut config,
+        &directive.config_key,
+        &original_value,
+        &HashMap::new(),
+    )?;
     crate::db::postgres::upsert_device_config(pool, &config).await?;
 
     sqlx::query("UPDATE flow_config_overrides SET restored_at = NOW() WHERE id = $1")
@@ -222,7 +235,11 @@ pub async fn recover_orphan_overrides(pool: &PgPool) -> Result<usize> {
             .bind(backup_id)
             .execute(pool)
             .await;
-        tracing::warn!(device_id, config_key, "orphan override recovery: restored un-restored config override from a previous run");
+        tracing::warn!(
+            device_id,
+            config_key,
+            "orphan override recovery: restored un-restored config override from a previous run"
+        );
         recovered += 1;
     }
     Ok(recovered)
@@ -260,9 +277,18 @@ mod tests {
     #[test]
     fn read_field_as_string_covers_every_writable_key() {
         let cfg = sample_config();
-        assert_eq!(read_field_as_string(&cfg, "control_mode"), Some("auto".to_string()));
-        assert_eq!(read_field_as_string(&cfg, "is_enabled"), Some("true".to_string()));
-        assert_eq!(read_field_as_string(&cfg, "delay_between_a_and_b_sec"), Some("5".to_string()));
+        assert_eq!(
+            read_field_as_string(&cfg, "control_mode"),
+            Some("auto".to_string())
+        );
+        assert_eq!(
+            read_field_as_string(&cfg, "is_enabled"),
+            Some("true".to_string())
+        );
+        assert_eq!(
+            read_field_as_string(&cfg, "delay_between_a_and_b_sec"),
+            Some("5".to_string())
+        );
         assert_eq!(read_field_as_string(&cfg, "unknown_key"), None);
     }
 
@@ -426,13 +452,12 @@ mod tests {
         )
         .await
         .unwrap();
-        let backup_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM flow_config_overrides WHERE script_id = $1",
-        )
-        .bind(script_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let backup_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM flow_config_overrides WHERE script_id = $1")
+                .bind(script_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(backup_count, 1);
     }
 

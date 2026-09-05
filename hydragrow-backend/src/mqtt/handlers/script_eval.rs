@@ -332,8 +332,7 @@ pub async fn eval_flow_chain(
     // hydragrow-backend/src/services/config_override.rs).
     for s in all_scripts {
         let Some(ir_json) = &s.ir_json else { continue };
-        let Some(directive) =
-            crate::services::config_context::parse_config_overwrite(ir_json)
+        let Some(directive) = crate::services::config_context::parse_config_overwrite(ir_json)
         else {
             continue;
         };
@@ -373,17 +372,16 @@ pub async fn eval_flow_chain(
             .all(|c| crate::api::script::eval_condition_tree(c, &sample, &mut trace));
 
         let previous_state = { condition_state_cache.read().await.get(&s.id).copied() };
-        if let Err(e) =
-            crate::services::config_override::apply_config_overwrite_transition(
-                pool,
-                s.id,
-                device_id,
-                &directive,
-                ctx,
-                previous_state,
-                condition_state,
-            )
-            .await
+        if let Err(e) = crate::services::config_override::apply_config_overwrite_transition(
+            pool,
+            s.id,
+            device_id,
+            &directive,
+            ctx,
+            previous_state,
+            condition_state,
+        )
+        .await
         {
             warn!(
                 script_id = %s.id,
@@ -392,7 +390,10 @@ pub async fn eval_flow_chain(
                 "config overwrite apply/restore failed"
             );
         }
-        condition_state_cache.write().await.insert(s.id, condition_state);
+        condition_state_cache
+            .write()
+            .await
+            .insert(s.id, condition_state);
     }
 
     fired
@@ -566,7 +567,10 @@ fn template_vars(
     vars.insert("ec".to_string(), format!("{:.2}", snapshot.ec));
     vars.insert("ph".to_string(), format!("{:.2}", snapshot.ph));
     vars.insert("temp".to_string(), format!("{:.1}", snapshot.temp));
-    vars.insert("water_level".to_string(), format!("{:.1}", snapshot.water_level));
+    vars.insert(
+        "water_level".to_string(),
+        format!("{:.1}", snapshot.water_level),
+    );
     let time = chrono::Utc
         .timestamp_millis_opt(snapshot.timestamp_ms)
         .single()
@@ -1052,14 +1056,36 @@ fn main(input) {
         let ast = engine
             .compile(r#"fn main(input) { if input.ph > input.ph_target_now { return #{ "level": "warning", "title": "t", "message": "m" }; } () }"#)
             .unwrap();
-        let node = ChainNode { id: Uuid::new_v4(), kind: ScriptKind::Alert, next_flow_ids: vec![], ast, ir_json: None };
-        let snapshot = SensorSnapshot { ph: 7.4, ec: 1.0, temp: 24.0, water_level: 80.0, phase: "Monitoring".into(), device_id: "d".into(), timestamp_ms: 0 };
+        let node = ChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast,
+            ir_json: None,
+        };
+        let snapshot = SensorSnapshot {
+            ph: 7.4,
+            ec: 1.0,
+            temp: 24.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
 
         let mut ctx_by_node = std::collections::HashMap::new();
-        ctx_by_node.insert(node.id, [("ph_target_now".to_string(), 7.2)].into_iter().collect());
+        ctx_by_node.insert(
+            node.id,
+            [("ph_target_now".to_string(), 7.2)].into_iter().collect(),
+        );
 
         let fired = eval_flow_chain_with_fetcher_and_context(
-            &engine, &[node], &snapshot, "d", |_, _| 0.0, &ctx_by_node,
+            &engine,
+            &[node],
+            &snapshot,
+            "d",
+            |_, _| 0.0,
+            &ctx_by_node,
         );
         assert_eq!(fired.len(), 1);
     }
@@ -1075,16 +1101,43 @@ fn main(input) {
         let c_id = Uuid::new_v4();
         let b_id = Uuid::new_v4();
         let a_id = Uuid::new_v4();
-        let c = ChainNode { id: c_id, kind: ScriptKind::Alert, next_flow_ids: vec![], ast: ast.clone(), ir_json: None };
-        let b = ChainNode { id: b_id, kind: ScriptKind::Alert, next_flow_ids: vec![c_id.to_string()], ast: ast.clone(), ir_json: None };
+        let c = ChainNode {
+            id: c_id,
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast: ast.clone(),
+            ir_json: None,
+        };
+        let b = ChainNode {
+            id: b_id,
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![c_id.to_string()],
+            ast: ast.clone(),
+            ir_json: None,
+        };
         let a = ChainNode {
-            id: a_id, kind: ScriptKind::Alert, next_flow_ids: vec![b_id.to_string()], ast,
+            id: a_id,
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![b_id.to_string()],
+            ast,
             ir_json: Some(serde_json::json!({ "chainConfig": { "iterationLimit": 1 } })),
         };
-        let snapshot = SensorSnapshot { ph: 7.0, ec: 1.0, temp: 24.0, water_level: 80.0, phase: "Monitoring".into(), device_id: "d".into(), timestamp_ms: 0 };
+        let snapshot = SensorSnapshot {
+            ph: 7.0,
+            ec: 1.0,
+            temp: 24.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
 
         let fired = eval_flow_chain_with_fetcher(&engine, &[a, b, c], &snapshot, "d", |_, _| 0.0);
-        assert_eq!(fired.len(), 1, "expected only the root to fire before the iteration limit stops the chain");
+        assert_eq!(
+            fired.len(),
+            1,
+            "expected only the root to fire before the iteration limit stops the chain"
+        );
     }
 
     #[test]
@@ -1092,9 +1145,25 @@ fn main(input) {
         // Guards against regressions: existing ChainNodes with ir_json: None must
         // keep using MAX_CHAIN_DEPTH and an empty context exactly as before.
         let engine = Arc::new(ScriptEngine::new());
-        let ast = engine.compile(r#"fn main(input) { #{ "level": "info", "title": "t", "message": "m" } }"#).unwrap();
-        let node = ChainNode { id: Uuid::new_v4(), kind: ScriptKind::Alert, next_flow_ids: vec![], ast, ir_json: None };
-        let snapshot = SensorSnapshot { ph: 7.0, ec: 1.0, temp: 24.0, water_level: 80.0, phase: "Monitoring".into(), device_id: "d".into(), timestamp_ms: 0 };
+        let ast = engine
+            .compile(r#"fn main(input) { #{ "level": "info", "title": "t", "message": "m" } }"#)
+            .unwrap();
+        let node = ChainNode {
+            id: Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast,
+            ir_json: None,
+        };
+        let snapshot = SensorSnapshot {
+            ph: 7.0,
+            ec: 1.0,
+            temp: 24.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
         let fired = eval_flow_chain_with_fetcher(&engine, &[node], &snapshot, "d", |_, _| 0.0);
         assert_eq!(fired.len(), 1);
     }

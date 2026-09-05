@@ -324,7 +324,7 @@ describe('config node type + Condition.valueVariable + chainConfig', () => {
     };
     const result = AutomationIrSchema.safeParse(ir);
     expect(result.success).toBe(true);
-    expect(result.data?.chainConfig).toEqual({ passContextVariables: false });
+    expect(result.data?.chainConfig).toEqual({ passContextVariables: false, iterationLimit: 5 });
   });
 
   it('AutomationIrSchema accepts an explicit chainConfig.passContextVariables', () => {
@@ -339,6 +339,59 @@ describe('config node type + Condition.valueVariable + chainConfig', () => {
     };
     const result = AutomationIrSchema.safeParse(ir);
     expect(result.success).toBe(true);
-    expect(result.data?.chainConfig).toEqual({ passContextVariables: true });
+    expect(result.data?.chainConfig).toEqual({ passContextVariables: true, iterationLimit: 5 });
+  });
+});
+
+describe('contextReads + configOverwrite + chainConfig.iterationLimit', () => {
+  it('AutomationIrSchema defaults contextReads to [] and configOverwrite to undefined', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+      actions: [{ type: 'alert', level: 'info', message: 'test' }],
+      nodes: [],
+      edges: [],
+    };
+    const result = AutomationIrSchema.safeParse(ir);
+    expect(result.success).toBe(true);
+    expect(result.data?.contextReads).toEqual([]);
+    expect(result.data?.configOverwrite).toBeUndefined();
+    expect(result.data?.chainConfig).toEqual({ passContextVariables: false, iterationLimit: 5 });
+  });
+
+  it('accepts explicit contextReads and configOverwrite', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+      actions: [{ type: 'alert', level: 'info', message: 'test' }],
+      nodes: [],
+      edges: [],
+      contextReads: [{ configKey: 'ph_target', saveToVariable: 'ph_target_now' }],
+      configOverwrite: {
+        configKey: 'ec_target',
+        value: '1.8',
+        readOriginalBeforeWrite: true,
+        restoreMode: 'on_condition_false',
+      },
+    };
+    const result = AutomationIrSchema.safeParse(ir);
+    expect(result.success).toBe(true);
+    expect(result.data?.contextReads).toEqual([{ configKey: 'ph_target', saveToVariable: 'ph_target_now' }]);
+    expect(result.data?.configOverwrite?.configKey).toBe('ec_target');
+  });
+
+  it('rejects a contextRead with an empty saveToVariable', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+      actions: [{ type: 'alert', level: 'info', message: 'test' }],
+      nodes: [],
+      edges: [],
+      contextReads: [{ configKey: 'ph_target', saveToVariable: '' }],
+    };
+    expect(AutomationIrSchema.safeParse(ir).success).toBe(false);
   });
 });

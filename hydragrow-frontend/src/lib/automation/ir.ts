@@ -156,6 +156,22 @@ export const AutomationEdgeSchema = z.object({
 
 export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command']);
 
+export const ContextReadSchema = z.object({
+  configKey: z.string().min(1),
+  saveToVariable: z.string().min(1),
+});
+export type ContextRead = z.infer<typeof ContextReadSchema>;
+
+export const ConfigOverwriteSchema = z.object({
+  configKey: z.string().min(1),
+  /** Literal ("1.8", "true") hoặc tên 1 context variable — phân giải ở
+   * backend, xem hydragrow-backend/src/services/config_override.rs::write_field. */
+  value: z.string().min(1),
+  readOriginalBeforeWrite: z.boolean().default(false),
+  restoreMode: z.literal('on_condition_false').default('on_condition_false'),
+});
+export type ConfigOverwrite = z.infer<typeof ConfigOverwriteSchema>;
+
 /** Cấu hình cho toàn bộ Flow chain (next_flow_ids) của IR này — không phải
  * per-link, xem "Known scope boundary" trong plan triển khai frontend. */
 export const ChainConfigSchema = z.object({
@@ -163,6 +179,9 @@ export const ChainConfigSchema = z.object({
    * — thực thi copy-on-call nằm ở backend (subsystem "Chain context-copy +
    * per-node iteration limit"), field này chỉ lưu ý định người dùng chọn trên UI. */
   passContextVariables: z.boolean().default(false),
+  /** Số hop tối đa Chain được phép đi qua trước khi engine dừng — giới hạn cứng
+   * MAX_CHAIN_DEPTH ở backend luôn áp dụng thêm, giá trị này không thể vượt qua nó. */
+  iterationLimit: z.number().int().positive().default(5),
 });
 export type ChainConfig = z.infer<typeof ChainConfigSchema>;
 
@@ -177,7 +196,9 @@ export const AutomationIrSchema = z
     /** IDs của các Flow sẽ được kích hoạt kế tiếp sau khi Flow này thực thi thành công.
      * Vắng hoặc `[]` = Flow độc lập (hành vi cũ, backward-compat). */
     next_flow_ids: z.array(z.string()).default([]),
-    chainConfig: ChainConfigSchema.default({ passContextVariables: false }),
+    chainConfig: ChainConfigSchema.default({ passContextVariables: false, iterationLimit: 5 }),
+    contextReads: z.array(ContextReadSchema).default([]),
+    configOverwrite: ConfigOverwriteSchema.optional(),
   })
   .refine(
     (ir) => {

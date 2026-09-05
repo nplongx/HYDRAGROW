@@ -62,6 +62,7 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
             );
 
             for (_id, res) in results {
+                #[allow(clippy::collapsible_if)]
                 if let crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) = res {
                     if let Ok(cfg) = crate::db::postgres::get_safety_config(&app_state.pg_pool, &script.device_id).await {
                         let limits = hydragrow_shared::safety::DoseSafetyLimits {

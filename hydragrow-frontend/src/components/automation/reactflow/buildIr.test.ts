@@ -136,7 +136,7 @@ describe('buildIrFromGraph', () => {
 
   it('defaults chainConfig.passContextVariables to false when omitted', () => {
     const ir = buildIrFromGraph({ kind: 'alert', nodes: [], edges: [] });
-    expect(ir.chainConfig).toEqual({ passContextVariables: false });
+    expect(ir.chainConfig).toEqual({ passContextVariables: false, iterationLimit: 5 });
   });
 
   it('passes an explicit chainConfig through', () => {
@@ -146,7 +146,38 @@ describe('buildIrFromGraph', () => {
       edges: [],
       chainConfig: { passContextVariables: true },
     });
-    expect(ir.chainConfig).toEqual({ passContextVariables: true });
+    expect(ir.chainConfig).toEqual({ passContextVariables: true, iterationLimit: 5 });
+  });
+
+  it('derives contextReads and configOverwrite from config canvas nodes', () => {
+    const nodes: Node[] = [
+      {
+        id: 'cfg-read',
+        type: 'config',
+        position: { x: 0, y: 0 },
+        data: { variant: 'read', configKey: 'ph_target', saveToVariable: 'ph_target_now' },
+      },
+      {
+        id: 'cfg-write',
+        type: 'config',
+        position: { x: 0, y: 0 },
+        data: { variant: 'overwrite', configKey: 'ec_target', overrideValue: '1.8', readOriginalBeforeWrite: true },
+      },
+    ];
+    const ir = buildIrFromGraph({ kind: 'alert', nodes, edges: [] });
+    expect(ir.contextReads).toEqual([{ configKey: 'ph_target', saveToVariable: 'ph_target_now' }]);
+    expect(ir.configOverwrite).toEqual({
+      configKey: 'ec_target',
+      value: '1.8',
+      readOriginalBeforeWrite: true,
+      restoreMode: 'on_condition_false',
+    });
+  });
+
+  it('defaults contextReads to [] and configOverwrite to undefined with no config nodes', () => {
+    const ir = buildIrFromGraph({ kind: 'alert', nodes: [], edges: [] });
+    expect(ir.contextReads).toEqual([]);
+    expect(ir.configOverwrite).toBeUndefined();
   });
 });
 

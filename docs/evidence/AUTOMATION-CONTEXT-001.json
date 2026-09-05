@@ -1,0 +1,53 @@
+{
+  "requirement_id": "AUTOMATION-CONTEXT-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest & Cargo test",
+      "note": "compileToRhai.test.ts verifies input.<var> Rhai codegen. eval_condition_tree_uses_value_variable_when_present verified via cargo test."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest",
+      "note": "configDirectives.test.ts, ir.test.ts, and buildIr.test.ts verify flat IR fields emission with default iterationLimit: 5."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Cargo test",
+      "note": "Migration 20260905090000_add_flow_config_overrides.sql verified clean via sqlx::test."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Cargo test",
+      "note": "services::config_override unit tests verify reading and writing typed DeviceConfig fields."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "Cargo test",
+      "note": "transition_to_true, transition_from_true_to_false, staying_true, and recover_orphan_overrides tests all pass."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "Cargo test",
+      "note": "services::config_context 6 unit tests pass parsing and resolving context reads."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "Cargo test",
+      "note": "eval_flow_chain_with_fetcher_and_context and iteration limit tests pass (22 tests in script_eval, 17 tests in script_engine)."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "Cargo test",
+      "note": "services::template 4 unit tests pass validating {{var}} token substitution."
+    }
+  ]
+}

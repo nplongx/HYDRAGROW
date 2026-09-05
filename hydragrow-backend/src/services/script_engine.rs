@@ -41,6 +41,19 @@ impl ScriptEngine {
     /// Eval một alert script với sensor input.
     /// Script phải define `fn main(input)` và return Map hoặc () (unit = no alert).
     pub fn eval_alert(&self, ast: &AST, input: &ScriptSensorInput) -> Result<Option<AlertOutput>> {
+        self.eval_alert_with_context(ast, input, &HashMap::new())
+    }
+
+    /// Như `eval_alert`, nhưng nạp thêm mỗi cặp (tên, giá trị) trong `context`
+    /// vào Map `input` trước khi gọi Rhai — dùng để cấp các biến execution
+    /// context (Config·Read, hoặc context được Chain truyền từ flow cha) cho
+    /// `Condition.valueVariable` trong guard đã compile.
+    pub fn eval_alert_with_context(
+        &self,
+        ast: &AST,
+        input: &ScriptSensorInput,
+        context: &HashMap<String, f64>,
+    ) -> Result<Option<AlertOutput>> {
         let mut map = Map::new();
         map.insert("ph".into(), Dynamic::from_float(input.ph));
         map.insert("ec".into(), Dynamic::from_float(input.ec));
@@ -48,6 +61,9 @@ impl ScriptEngine {
         map.insert("water_level".into(), Dynamic::from_float(input.water_level));
         map.insert("device_id".into(), Dynamic::from(input.device_id.clone()));
         map.insert("timestamp_ms".into(), Dynamic::from_int(input.timestamp_ms));
+        for (k, v) in context {
+            map.insert(k.as_str().into(), Dynamic::from_float(*v as rhai::FLOAT));
+        }
 
         let result: Dynamic = self
             .engine
@@ -147,6 +163,18 @@ impl ScriptEngine {
         input: &ScriptActionInput,
         range_stat_fetcher: impl Fn(String, String, i64) -> f64 + Send + Sync + 'static,
     ) -> Result<Option<ActionCommandOutput>> {
+        self.eval_action_command_with_context(ast, input, range_stat_fetcher, &HashMap::new())
+    }
+
+    /// Như `eval_action_command_with_range_stat`, cộng thêm các biến trong
+    /// `context` vào Map `input` — cùng vai trò với `eval_alert_with_context`.
+    pub fn eval_action_command_with_context(
+        &self,
+        ast: &AST,
+        input: &ScriptActionInput,
+        range_stat_fetcher: impl Fn(String, String, i64) -> f64 + Send + Sync + 'static,
+        context: &HashMap<String, f64>,
+    ) -> Result<Option<ActionCommandOutput>> {
         // We must preserve configuration limits while mutating it to register the function.
         let mut engine = Engine::new();
         engine.set_max_operations(50_000);
@@ -170,6 +198,9 @@ impl ScriptEngine {
         map.insert("phase".into(), Dynamic::from(input.phase.clone()));
         map.insert("device_id".into(), Dynamic::from(input.device_id.clone()));
         map.insert("timestamp_ms".into(), Dynamic::from_int(input.timestamp_ms));
+        for (k, v) in context {
+            map.insert(k.as_str().into(), Dynamic::from_float(*v as rhai::FLOAT));
+        }
 
         let result: Dynamic = engine
             .call_fn(&mut Scope::new(), ast, "main", (Dynamic::from_map(map),))
@@ -762,5 +793,49 @@ fn main(input) {
 
         let scripts_other = cache.get_alert_scripts("device_999").await;
         assert_eq!(scripts_other.len(), 0);
+    }
+
+    #[test]
+    fn eval_alert_with_context_merges_extra_variables_into_the_rhai_input_map() {
+        let engine = ScriptEngine::new();
+        let ast = engine
+            .compile(
+                r#"fn main(input) { if input.ph > input.ph_target_now { return #{ "level": "warning", "title": "high ph", "message": "x" }; } () }"#,
+            )
+            .unwrap();
+        let input = ScriptSensorInput {
+            ph: 7.4,
+            ec: 1.0,
+            temp: 24.0,
+            water_level: 80.0,
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
+        let context: std::collections::HashMap<String, f64> =
+            [("ph_target_now".to_string(), 7.2)].into_iter().collect();
+
+        let result = engine
+            .eval_alert_with_context(&ast, &input, &context)
+            .unwrap();
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn eval_alert_without_context_behaves_exactly_as_before() {
+        let engine = ScriptEngine::new();
+        let ast = engine
+            .compile(
+                r#"fn main(input) { if input.ph > 7.0 { return #{ "level": "info", "title": "t", "message": "m" }; } () }"#,
+            )
+            .unwrap();
+        let input = ScriptSensorInput {
+            ph: 7.4,
+            ec: 1.0,
+            temp: 24.0,
+            water_level: 80.0,
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
+        assert!(engine.eval_alert(&ast, &input).unwrap().is_some());
     }
 }

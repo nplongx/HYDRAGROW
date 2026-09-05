@@ -1,6 +1,8 @@
 pub mod action_dispatch;
 pub mod analytics;
 pub mod command;
+pub mod config_context;
+pub mod config_override;
 pub mod cron_scheduler;
 pub mod fcm;
 pub mod firebase_auth;
@@ -10,3 +12,4 @@ pub mod ph_calibration;
 pub mod retention;
 pub mod script_engine;
 pub mod solana;
+pub mod template;

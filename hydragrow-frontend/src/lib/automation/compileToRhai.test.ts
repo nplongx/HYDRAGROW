@@ -12,7 +12,8 @@ describe("compileToRhai range mode condition", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     expect(compileToRhai(ir)).toContain('input.ph > 7.5');
   });
@@ -26,7 +27,8 @@ describe("compileToRhai range mode condition", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     expect(compileToRhai(ir)).toContain('fetch_range_stat("ph", "mean", 900) > 6.5');
   });
@@ -45,7 +47,8 @@ describe("compileToRhai", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain('if !(input.ph > 7.5 && input.ec < 1.2) { return (); }');
@@ -69,7 +72,8 @@ describe("compileToRhai", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain(
@@ -102,7 +106,8 @@ describe("compileToRhai", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain(
@@ -128,7 +133,8 @@ describe("compileToRhai", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain("fn main(input)");
@@ -149,7 +155,8 @@ describe("compileToRhai", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain("input.elapsed_sec >= 86400");
@@ -167,7 +174,8 @@ describe("compileToRhai", () => {
         nodes: [],
         edges: [],
         next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
       });
       expect(source).toContain('"action": "end_season"');
       expect(source).toContain('"reason": "Hoàn thành mùa vụ"');
@@ -182,7 +190,8 @@ describe("compileToRhai", () => {
         nodes: [],
         edges: [],
         next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
       });
       expect(source).toContain('"action": "advance_stage"');
       expect(source).toContain('"target_stage_index"');
@@ -198,7 +207,8 @@ describe("compileToRhai", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     };
     const rhai = compileToRhai(ir);
     expect(rhai).toContain('pH is \\"high\\"');
@@ -215,7 +225,8 @@ describe("action_command compilation", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     });
     expect(source).toContain('"action": "dose"');
     expect(source).toContain('"pump": "PH_DOWN"');
@@ -232,7 +243,8 @@ describe("action_command compilation", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     });
     expect(source).toContain('"action": "water_off"');
     expect(source).not.toContain("duration_sec");
@@ -247,8 +259,26 @@ describe("action_command compilation", () => {
       nodes: [],
       edges: [],
       next_flow_ids: [],
-      chainConfig: { passContextVariables: false },
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
     });
     expect(source).toContain('"action": "emergency_stop"');
+  });
+
+  it('compiles a condition with valueVariable to an input.<var> comparison instead of the literal value', () => {
+    const ir = {
+      kind: 'alert' as const,
+      trigger: { type: 'sensor' as const },
+      conditions: [{ sensor: 'ph', operator: '>' as const, value: 0, valueVariable: 'ph_target_now' }],
+      actions: [{ type: 'alert' as const, level: 'warning' as const, message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
+    };
+    const source = compileToRhai(ir as any);
+    expect(source).toContain('input.ph > input.ph_target_now');
+    expect(source).not.toContain('input.ph > 0');
   });
 });

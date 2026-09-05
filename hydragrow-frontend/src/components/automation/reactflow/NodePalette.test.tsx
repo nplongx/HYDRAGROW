@@ -57,4 +57,22 @@ describe('NodePalette', () => {
     fireEvent.click(screen.getByText('+ Time-window (mean/min/max)'));
     expect(onAddNode).toHaveBeenCalledWith('condition', 'time-window');
   });
+
+  it('exposes the CONFIG section', () => {
+    render(<NodePalette onAddNode={vi.fn()} />);
+    expect(screen.getByText('CONFIG')).toBeInTheDocument();
+    expect(screen.getByText('+ Đọc cấu hình')).toBeInTheDocument();
+    expect(screen.getByText('+ Ghi đè cấu hình')).toBeInTheDocument();
+  });
+
+  it('calls onAddNode with config type and read/overwrite variant', () => {
+    const onAddNode = vi.fn();
+    render(<NodePalette onAddNode={onAddNode} />);
+
+    fireEvent.click(screen.getByText('+ Đọc cấu hình'));
+    expect(onAddNode).toHaveBeenCalledWith('config', 'read');
+
+    fireEvent.click(screen.getByText('+ Ghi đè cấu hình'));
+    expect(onAddNode).toHaveBeenCalledWith('config', 'overwrite');
+  });
 });

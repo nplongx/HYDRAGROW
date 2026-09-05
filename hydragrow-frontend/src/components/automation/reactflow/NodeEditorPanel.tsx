@@ -49,6 +49,7 @@ export interface NodeEditorPanelProps {
   edges?: Array<{ id: string; source: string; target: string }>;
   onChange: (nodeId: string, data: Record<string, unknown>) => void;
   onClose: () => void;
+  onOpenAuditModal?: () => void;
 }
 
 export function NodeEditorPanel({
@@ -58,6 +59,7 @@ export function NodeEditorPanel({
   edges,
   onChange,
   onClose,
+  onOpenAuditModal,
 }: NodeEditorPanelProps) {
   const fields = fieldsForKind(kind);
   const [triggerTab, setTriggerTab] = useState<"sensor" | "fsm" | "cron" | "webhook">("sensor");
@@ -684,6 +686,15 @@ export function NodeEditorPanel({
               <option value="on_condition_false">Khi điều kiện không còn đúng</option>
             </select>
           </FieldGroup>
+          {onOpenAuditModal && (
+            <button
+              type="button"
+              onClick={onOpenAuditModal}
+              className="w-full mt-3 py-1.5 px-3 rounded-xl border border-indigo-200 bg-indigo-50/80 text-indigo-900 text-xs font-semibold hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              Mở chi tiết an toàn & Audit Log →
+            </button>
+          )}
         </ConfigCard>
       </div>
     );

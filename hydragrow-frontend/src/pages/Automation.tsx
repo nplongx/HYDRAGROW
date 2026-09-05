@@ -281,15 +281,15 @@ export function Automation() {
       </div>
 
 
-      {/* Flow Editor Drawer */}
+      {/* Flow Editor Centered Modal */}
       {canvas.selectedScript && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 lg:p-8">
           <div
             data-testid="drawer-backdrop"
             onClick={canvas.closeEditor}
-            className="fixed inset-0 bg-black/30 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity"
           />
-          <div className="relative z-50 h-full w-full max-w-xl border-l bg-white shadow-2xl overflow-hidden flex flex-col">
+          <div className="relative z-50 h-[92vh] max-h-[960px] w-full max-w-7xl rounded-3xl bg-white shadow-2xl border border-emerald-100/80 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <FlowDetailDrawer
               deviceId={deviceId}
               script={canvas.selectedScript}

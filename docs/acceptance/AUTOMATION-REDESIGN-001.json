@@ -41,6 +41,26 @@
       "id": "AC-8",
       "criterion": "Full test suites pass and frontend compiles cleanly.",
       "verification": "Vitest 59 test suites passed, 0 lint errors, build exit code 0"
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Centered modal container max-w-7xl with backdrop blur replaces right-hand drawer for Flow Editor.",
+      "verification": "Vitest Automation.drawer.test.tsx"
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Dedicated Config Read inspector rendered for variant read and Config Overwrite inspector rendered for variant overwrite.",
+      "verification": "Vitest NodeEditorPanel.test.tsx and FlowDetailDrawer.test.tsx"
+    },
+    {
+      "id": "AC-11",
+      "criterion": "ReactFlow nodes styled horizontally with left-to-right handles, category badges, and summary formatting.",
+      "verification": "Vitest nodeTypes.test.tsx"
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Horizontal NodePalette bar and top action buttons wired matching Figma design.",
+      "verification": "Vitest NodePalette.test.tsx and FlowDetailDrawer.test.tsx"
     }
   ]
 }

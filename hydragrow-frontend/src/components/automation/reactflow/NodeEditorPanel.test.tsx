@@ -243,3 +243,58 @@ describe('NodeEditorPanel — Config nodes', () => {
   });
 });
 
+describe('NodeEditorPanel — Alert template preview', () => {
+  it('renders a preview substituting {{time}} and any in-scope variable, leaving unknown tokens visible', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'action-1',
+          type: 'action',
+          data: {
+            actions: [
+              { type: 'alert', level: 'warning', title: '', message: 'EC: {{ec}} lúc {{time}}, x={{unknown_var}}' },
+            ],
+            summary: 'alert (warning): ...',
+          },
+        }}
+        nodes={[{ id: 'trigger', type: 'trigger', data: { kind: 'sensor' } }]}
+        edges={[]}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/EC: ⟨ec⟩ lúc ⟨time⟩, x=\{\{unknown_var\}\}/)).toBeInTheDocument();
+    expect(screen.getByText(/Biến chưa xác định.*unknown_var/)).toBeInTheDocument();
+  });
+
+  it('clicking a variable chip appends {{name}} to the message', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'action-1',
+          type: 'action',
+          data: {
+            actions: [{ type: 'alert', level: 'info', title: '', message: 'Giá trị: ' }],
+            summary: '...',
+          },
+        }}
+        nodes={[{ id: 'trigger', type: 'trigger', data: { kind: 'sensor' } }]}
+        edges={[]}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'ec' }));
+    expect(mockOnChange).toHaveBeenCalledWith('action-1', {
+      actions: [{ type: 'alert', level: 'info', title: '', message: 'Giá trị: {{ec}}' }],
+      summary: 'alert (info): Giá trị: {{ec}}',
+    });
+  });
+});
+
+

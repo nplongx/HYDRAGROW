@@ -50,7 +50,9 @@ export function getAvailableContextVariables(
 
   const variables = new Set<string>();
 
-  const trigger = ancestors.find((n) => n.id === 'trigger' || n.type === 'trigger');
+  const trigger =
+    ancestors.find((n) => n.id === 'trigger' || n.type === 'trigger') ??
+    nodes.find((n) => n.id === 'trigger' || n.type === 'trigger');
   if (trigger) {
     const kind = trigger.data.kind as 'sensor' | 'fsm' | 'cron' | 'webhook' | undefined;
     if (kind === 'webhook') {

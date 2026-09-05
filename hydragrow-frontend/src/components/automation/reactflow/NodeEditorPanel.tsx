@@ -18,7 +18,10 @@ import { ConditionGroupEditor } from "./ConditionGroupEditor";
 import { WebhookFieldMappingEditor } from "./WebhookFieldMappingEditor";
 
 import { getAvailableContextVariables } from "../../../lib/automation/contextVariables";
+import { extractTemplateTokens, renderTemplatePreview } from "../../../lib/automation/templateVars";
 import { VariableCombobox } from "./VariableCombobox";
+
+const BUILTIN_TEMPLATE_TOKENS = ["time"] as const;
 
 export const DEVICE_CONFIG_KEYS = [
   "ec_target",
@@ -256,10 +259,12 @@ export function NodeEditorPanel({
               }
             />
           </label>
-          <label className="block text-xs text-emerald-800/75">
+          <label className="mb-1 block text-xs text-emerald-800/75">
             Message
-            <input
-              className="ui-input mt-1"
+            <textarea
+              aria-label="Message"
+              className="ui-input mt-1 w-full"
+              rows={3}
               value={message}
               onChange={(e) =>
                 setAction({
@@ -271,6 +276,46 @@ export function NodeEditorPanel({
               }
             />
           </label>
+          {availableVariables.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {availableVariables.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-label={v}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100"
+                  onClick={() =>
+                    setAction({
+                      type: "alert",
+                      level,
+                      title,
+                      message: `${message}{{${v}}}`,
+                    })
+                  }
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const tokens = extractTemplateTokens(message);
+            const knownTokens = new Set([...availableVariables, ...BUILTIN_TEMPLATE_TOKENS]);
+            const unknownTokens = tokens.filter((t) => !knownTokens.has(t));
+            const sample: Record<string, string> = {};
+            for (const v of availableVariables) sample[v] = `⟨${v}⟩`;
+            for (const t of BUILTIN_TEMPLATE_TOKENS) sample[t] = `⟨${t}⟩`;
+            return (
+              <div className="rounded bg-emerald-50/70 p-2 text-[11px] text-emerald-900">
+                <span className="font-semibold">Xem trước:</span> {renderTemplatePreview(message, sample)}
+                {unknownTokens.length > 0 && (
+                  <p className="mt-1 text-amber-700">
+                    Biến chưa xác định: {unknownTokens.join(", ")}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
       );
     }

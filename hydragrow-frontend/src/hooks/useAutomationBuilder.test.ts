@@ -48,4 +48,42 @@ describe('useAutomationBuilder', () => {
     expect(summarizeActions([{ type: 'advance_stage', targetStageOffset: 1, reason: 'next' }])).toBe('advance_stage +1: next');
     expect(summarizeActions([{ type: 'end_season', reason: 'done' }])).toBe('end_season: done');
   });
+
+  it('adds a config_read node with the expected default data shape', () => {
+    const { result } = renderHook(() => useAutomationBuilder());
+
+    act(() => {
+      result.current.addNode('config', 'read');
+    });
+
+    const configNode = result.current.nodes.find((n) => n.type === 'config');
+    expect(configNode).toBeDefined();
+    expect(configNode?.data).toMatchObject({
+      variant: 'read',
+      configKey: '',
+      saveToVariable: '',
+      summary: 'Chưa cấu hình',
+    });
+  });
+
+  it('adds a config_overwrite node with the expected default data shape', () => {
+    const { result } = renderHook(() => useAutomationBuilder());
+
+    act(() => {
+      result.current.addNode('config', 'overwrite');
+    });
+
+    const configNode = result.current.nodes.find((n) => n.type === 'config');
+    expect(configNode).toBeDefined();
+    expect(configNode?.data).toMatchObject({
+      variant: 'overwrite',
+      configKey: '',
+      overrideValue: '',
+      applyWhen: 'previous_condition_true',
+      readOriginalBeforeWrite: false,
+      restoreMode: 'on_condition_false',
+      summary: 'Chưa cấu hình',
+    });
+  });
 });
+

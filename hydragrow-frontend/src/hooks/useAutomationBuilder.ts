@@ -147,7 +147,7 @@ export function useAutomationBuilder() {
 
   const addNode = useCallback(
     (
-      type: "condition" | "condition_group" | "action",
+      type: "condition" | "condition_group" | "action" | "config",
       variant?: string,
     ) => {
       const id = String(nextNodeId++);
@@ -164,11 +164,28 @@ export function useAutomationBuilder() {
                 conditions: [{ op: "and", children: [] }],
                 summary: "Chưa cấu hình",
               }
-            : {
-                ...(variant ? { type: variant } : {}),
-                conditions: [],
-                summary: "Chưa cấu hình",
-              };
+            : type === "config"
+              ? variant === "overwrite"
+                ? {
+                    variant: "overwrite",
+                    configKey: "",
+                    overrideValue: "",
+                    applyWhen: "previous_condition_true",
+                    readOriginalBeforeWrite: false,
+                    restoreMode: "on_condition_false",
+                    summary: "Chưa cấu hình",
+                  }
+                : {
+                    variant: "read",
+                    configKey: "",
+                    saveToVariable: "",
+                    summary: "Chưa cấu hình",
+                  }
+              : {
+                  ...(variant ? { type: variant } : {}),
+                  conditions: [],
+                  summary: "Chưa cấu hình",
+                };
       const nodeType = type === "condition_group" ? "condition" : type;
       setNodes((nds) => [
         ...nds,

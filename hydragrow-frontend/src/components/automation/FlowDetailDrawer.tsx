@@ -42,6 +42,9 @@ export function FlowDetailDrawer({
   const [nextFlowIds, setNextFlowIds] = useState<string[]>(
     isNew ? [] : (script.ir_json?.next_flow_ids ?? []),
   );
+  const [passContextVariables, setPassContextVariables] = useState<boolean>(
+    isNew ? false : (script.ir_json?.chainConfig?.passContextVariables ?? false),
+  );
   const builder = useAutomationBuilder();
   const { data: allScripts } = useAutomationScripts(deviceId);
   const otherScripts = (allScripts ?? []).filter(
@@ -57,8 +60,12 @@ export function FlowDetailDrawer({
   useEffect(() => {
     if (!isNew && script.ir_json) {
       builder.loadFromIr(script.ir_json);
+      setNextFlowIds(script.ir_json.next_flow_ids ?? []);
+      setPassContextVariables(script.ir_json.chainConfig?.passContextVariables ?? false);
     } else {
       builder.setKind("alert");
+      setNextFlowIds([]);
+      setPassContextVariables(false);
     }
     // Seed once per Flow opened — not on every builder state change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,6 +85,7 @@ export function FlowDetailDrawer({
       nodes: builder.nodes,
       edges: builder.edges,
       nextFlowIds,
+      chainConfig: { passContextVariables },
     });
     const parsed = AutomationIrSchema.safeParse(ir);
     if (!parsed.success) {
@@ -174,6 +182,7 @@ export function FlowDetailDrawer({
                   nodes: builder.nodes,
                   edges: builder.edges,
                   nextFlowIds,
+                  chainConfig: { passContextVariables },
                 })}
                 fields={fieldsForKind(builder.kind)}
               />
@@ -184,6 +193,8 @@ export function FlowDetailDrawer({
           <NodeEditorPanel
             kind={builder.kind}
             node={builder.selectedNode}
+            nodes={builder.nodes}
+            edges={builder.edges}
             onChange={builder.updateNodeData}
             onClose={() => builder.setSelectedNodeId(null)}
           />
@@ -197,6 +208,8 @@ export function FlowDetailDrawer({
           currentScriptId={isNew ? null : script.id}
           onToggle={(id) => toggleNextFlow(id)}
           allScripts={allScripts ?? []}
+          passContextVariables={passContextVariables}
+          onTogglePassContext={setPassContextVariables}
         />
       )}
 

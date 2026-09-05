@@ -149,4 +149,104 @@ mod tests {
         );
         assert_eq!(hw.osaka_pwm_percent, 90);
     }
+
+    #[test]
+    fn dispatcher_stops_after_first_fault() {
+        let mut hw = VirtualHardwareState::default();
+        let events = vec![
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: true,
+                pwm_percent: 50,
+            },
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientB,
+                on: true,
+                pwm_percent: 50,
+            },
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::In,
+            },
+        ];
+
+        let result = dispatch_events_transactional(
+            &mut hw,
+            &events,
+            Some(DosingPumpTarget::NutrientA),
+        );
+        assert!(result.is_err(), "Dispatcher must report hardware failure");
+        assert!(!hw.pump_a.on);
+        assert!(!hw.pump_b.on, "Pump B must not be attempted after Pump A fault");
+        assert!(!hw.water_pump_in.on, "Water pump must not be attempted after Pump A fault");
+    }
+
+    #[test]
+    fn off_command_fails_during_all_off_latches_primary_and_reports_secondary() {
+        let mut hw = VirtualHardwareState::default();
+        hw.pump_b.on = true;
+
+        let primary_fault = "PumpA hardware fault".to_string();
+        let all_off_events = vec![
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: false,
+                pwm_percent: 0,
+            },
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientB,
+                on: false,
+                pwm_percent: 0,
+            },
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop,
+            },
+        ];
+
+        let secondary = dispatch_best_effort_all_off(
+            &mut hw,
+            &all_off_events,
+            Some(DosingPumpTarget::NutrientB),
+        );
+
+        assert_eq!(primary_fault, "PumpA hardware fault", "Primary fault must remain latched");
+        assert!(secondary.is_some(), "Secondary failure must be observable");
+        assert_eq!(secondary.unwrap(), "Failed to turn off pump NutrientB");
+        assert!(!hw.pump_a.on, "Pump A OFF must still have been attempted");
+    }
+}
+
+pub fn dispatch_events_transactional(
+    hw: &mut VirtualHardwareState,
+    events: &[OrchestratorEvent],
+    failing_pump: Option<DosingPumpTarget>,
+) -> Result<(), String> {
+    for event in events {
+        if let OrchestratorEvent::SetDosingPump { pump, on: true, .. } = event {
+            if Some(*pump) == failing_pump {
+                return Err(format!("Hardware fault on pump {:?}", pump));
+            }
+        }
+        apply_event(hw, event);
+    }
+    Ok(())
+}
+
+pub fn dispatch_best_effort_all_off(
+    hw: &mut VirtualHardwareState,
+    events: &[OrchestratorEvent],
+    failing_off_pump: Option<DosingPumpTarget>,
+) -> Option<String> {
+    let mut secondary_fault = None;
+    for event in events {
+        if let OrchestratorEvent::SetDosingPump { pump, on: false, .. } = event {
+            if Some(*pump) == failing_off_pump {
+                if secondary_fault.is_none() {
+                    secondary_fault = Some(format!("Failed to turn off pump {:?}", pump));
+                }
+                continue;
+            }
+        }
+        apply_event(hw, event);
+    }
+    secondary_fault
 }

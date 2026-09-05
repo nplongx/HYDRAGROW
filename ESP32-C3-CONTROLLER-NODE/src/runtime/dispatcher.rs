@@ -33,11 +33,40 @@ impl EventDispatcher {
         events: Vec<OrchestratorEvent>,
         dc: &mut DispatchContext<'_, '_>,
     ) -> Option<FaultCode> {
-        let mut first_fault = None;
         for event in events {
             if let Some(fault) = Self::handle_event(event.clone(), dc) {
-                if first_fault.is_none() {
-                    first_fault = Some(fault);
+                warn!(
+                    "🚨 [DISPATCHER] Actuator command failed with fault {:?}, aborting remaining events",
+                    fault
+                );
+                return Some(fault);
+            }
+
+            let oc = ObserverContext {
+                ctx: dc.ctx,
+                config: dc.config,
+                now_ms: dc.now_sec * 1000,
+                mqtt_tx: dc.mqtt_tx,
+                dosing_report_tx: dc.dosing_report_tx,
+            };
+            dc.observers.notify_all(&event, &oc);
+        }
+        None
+    }
+
+    pub fn dispatch_best_effort_all_off(
+        events: Vec<OrchestratorEvent>,
+        dc: &mut DispatchContext<'_, '_>,
+    ) -> Option<FaultCode> {
+        let mut shutdown_fault = None;
+        for event in events {
+            if let Some(fault) = Self::handle_event(event.clone(), dc) {
+                warn!(
+                    "🚨 [DISPATCHER] Secondary actuator fault during emergency ALL-OFF: {:?}",
+                    fault
+                );
+                if shutdown_fault.is_none() {
+                    shutdown_fault = Some(fault);
                 }
             }
 
@@ -50,7 +79,7 @@ impl EventDispatcher {
             };
             dc.observers.notify_all(&event, &oc);
         }
-        first_fault
+        shutdown_fault
     }
 
     fn handle_event(

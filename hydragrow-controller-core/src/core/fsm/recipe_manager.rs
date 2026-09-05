@@ -167,8 +167,17 @@ impl ControllerRuntimeState {
         state
     }
 
-    pub fn set_base_config(&mut self, base_config: ControllerConfig) {
+    pub fn set_base_config(&mut self, mut base_config: ControllerConfig) {
+        if base_config.active_recipe.is_none() && self.base_config.active_recipe.is_some() {
+            base_config.active_recipe = self.base_config.active_recipe.clone();
+        }
         self.base_config = base_config;
+        self.recompute_effective_config();
+    }
+
+    pub fn clear_recipe(&mut self) {
+        self.base_config.active_recipe = None;
+        self.active_recipe = None;
         self.recompute_effective_config();
     }
 

@@ -187,7 +187,7 @@ pub fn tick(
             ctx.phase,
             SystemPhase::MimoDosing | SystemPhase::ActiveMixing | SystemPhase::Stabilizing
         );
-        result = merge_tick_results(result, phase_result);
+        merge_tick_results(&mut result, phase_result);
 
         // SỬA: Truyền thêm uptime_ms vào
         result = tick_peripheral_systems(
@@ -200,7 +200,7 @@ pub fn tick(
             is_dosing_active,
         );
     } else {
-        result = merge_tick_results(result, phase_result);
+        merge_tick_results(&mut result, phase_result);
     }
 
     // Centralized Fault & EmergencyStop invariant: enforce all outputs OFF
@@ -214,62 +214,9 @@ pub fn tick(
     result
 }
 
-fn merge_tick_results(mut base: TickResult, addition: TickResult) -> TickResult {
+pub fn merge_tick_results(base: &mut TickResult, addition: TickResult) {
     base.events.extend(addition.events);
-
-    if addition.delta.phase.is_some() {
-        base.delta.phase = addition.delta.phase;
-    }
-    if addition.delta.phase_start_ms.is_some() {
-        base.delta.phase_start_ms = addition.delta.phase_start_ms;
-    }
-    if addition.delta.phase_finish_ms.is_some() {
-        base.delta.phase_finish_ms = addition.delta.phase_finish_ms;
-    }
-    if addition.delta.peripherals.is_some() {
-        base.delta.peripherals = addition.delta.peripherals;
-    }
-    if addition.delta.calibration.is_some() {
-        base.delta.calibration = addition.delta.calibration;
-    }
-    if addition.delta.dosing_cycle_count_increment {
-        base.delta.dosing_cycle_count_increment = true;
-    }
-    if addition.delta.reset_stabilizer {
-        base.delta.reset_stabilizer = true;
-    }
-    if addition.delta.last_water_change_sec.is_some() {
-        base.delta.last_water_change_sec = addition.delta.last_water_change_sec;
-    }
-    if addition.delta.next_water_change_trigger_sec.is_some() {
-        base.delta.next_water_change_trigger_sec = addition.delta.next_water_change_trigger_sec;
-    }
-    if addition.delta.water_change_cron.is_some() {
-        base.delta.water_change_cron = addition.delta.water_change_cron;
-    }
-    if addition.delta.current_stage_index.is_some() {
-        base.delta.current_stage_index = addition.delta.current_stage_index;
-    }
-    if addition.delta.recipe_completed.is_some() {
-        base.delta.recipe_completed = addition.delta.recipe_completed;
-    }
-    if addition.delta.last_recipe_check_sec.is_some() {
-        base.delta.last_recipe_check_sec = addition.delta.last_recipe_check_sec;
-    }
-    if addition.delta.reset_safety_budget {
-        base.delta.reset_safety_budget = true;
-    }
-    if addition.delta.safety_override_until.is_some() {
-        base.delta.safety_override_until = addition.delta.safety_override_until;
-    }
-    if addition.delta.manual_pump_timeout.is_some() {
-        base.delta.manual_pump_timeout = addition.delta.manual_pump_timeout;
-    }
-    if addition.delta.manual_pump_timeout_clear.is_some() {
-        base.delta.manual_pump_timeout_clear = addition.delta.manual_pump_timeout_clear;
-    }
-
-    base
+    base.delta.merge_from(addition.delta);
 }
 
 fn tick_peripheral_systems(
@@ -412,61 +359,11 @@ fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> Tic
     result
 }
 
-fn merge_peripheral_deltas(
+pub fn merge_peripheral_deltas(
     mut base: PeripheralDelta,
     addition: PeripheralDelta,
 ) -> PeripheralDelta {
-    if addition.osaka_pump.is_some() {
-        base.osaka_pump = addition.osaka_pump;
-    }
-    if addition.osaka_pwm.is_some() {
-        base.osaka_pwm = addition.osaka_pwm;
-    }
-    if addition.is_misting_active.is_some() {
-        base.is_misting_active = addition.is_misting_active;
-    }
-    if addition.last_mist_toggle_time.is_some() {
-        base.last_mist_toggle_time = addition.last_mist_toggle_time;
-    }
-    if addition.mist_valve.is_some() {
-        base.mist_valve = addition.mist_valve;
-    }
-    if addition.is_scheduled_mixing_active.is_some() {
-        base.is_scheduled_mixing_active = addition.is_scheduled_mixing_active;
-    }
-    if addition.last_mixing_start_sec.is_some() {
-        base.last_mixing_start_sec = addition.last_mixing_start_sec;
-    }
-    if addition.water_pump_in.is_some() {
-        base.water_pump_in = addition.water_pump_in;
-    }
-    if addition.water_pump_out.is_some() {
-        base.water_pump_out = addition.water_pump_out;
-    }
-    if addition.pump_a.is_some() {
-        base.pump_a = addition.pump_a;
-    }
-    if addition.pump_b.is_some() {
-        base.pump_b = addition.pump_b;
-    }
-    if addition.ph_up.is_some() {
-        base.ph_up = addition.ph_up;
-    }
-    if addition.ph_down.is_some() {
-        base.ph_down = addition.ph_down;
-    }
-    if addition.last_ec_before_dose.is_some() {
-        base.last_ec_before_dose = addition.last_ec_before_dose;
-    }
-    if addition.last_ph_before_dose.is_some() {
-        base.last_ph_before_dose = addition.last_ph_before_dose;
-    }
-    if addition.misting_started_by_dosing.is_some() {
-        base.misting_started_by_dosing = addition.misting_started_by_dosing;
-    }
-    if addition.mix_valve_started_by_dosing.is_some() {
-        base.mix_valve_started_by_dosing = addition.mix_valve_started_by_dosing;
-    }
+    base.merge_from(addition);
     base
 }
 

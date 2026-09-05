@@ -395,23 +395,33 @@ pub fn eval_condition_tree(
 
     let sensor = node.get("sensor").and_then(|v| v.as_str()).unwrap_or("");
     let operator = node.get("operator").and_then(|v| v.as_str()).unwrap_or(">");
-    let value = node.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let mode = node.get("mode").and_then(|v| v.as_str()).unwrap_or("instant");
+
+    // Khi valueVariable có mặt, tra nó trong `sample` (được backend nạp từ
+    // Config·Read/Chain context — xem services/config_context.rs) thay vì
+    // dùng literal `value`. Biến thiếu khỏi sample -> mặc định 0.0, giữ hành
+    // vi "fail theo cách cũ" thay vì panic hay coi là false cứng.
+    let value_variable = node.get("valueVariable").and_then(|v| v.as_str());
+    let threshold = match value_variable {
+        Some(var_name) => sample.get(var_name).map(|sv| sv.resolve("instant")),
+        None => node.get("value").and_then(|v| v.as_f64()),
+    }
+    .unwrap_or(0.0);
 
     let actual = sample.get(sensor).map(|sv| sv.resolve(mode));
 
     let passed = match (actual, operator) {
-        (Some(a), ">") => a > value,
-        (Some(a), "<") => a < value,
-        (Some(a), ">=") => a >= value,
-        (Some(a), "<=") => a <= value,
-        (Some(a), "==") => (a - value).abs() < f64::EPSILON,
-        (Some(a), "!=") => (a - value).abs() >= f64::EPSILON,
+        (Some(a), ">") => a > threshold,
+        (Some(a), "<") => a < threshold,
+        (Some(a), ">=") => a >= threshold,
+        (Some(a), "<=") => a <= threshold,
+        (Some(a), "==") => (a - threshold).abs() < f64::EPSILON,
+        (Some(a), "!=") => (a - threshold).abs() >= f64::EPSILON,
         _ => false,
     };
 
     trace.push(ConditionTraceEntry {
-        description: format!("{} {} {}", sensor, operator, value),
+        description: format!("{} {} {}", sensor, operator, threshold),
         passed,
         actual_value: actual,
     });
@@ -702,6 +712,54 @@ mod tests {
         let mut sample = HashMap::new();
         sample.insert("ec".to_string(), SampleValue::Value(2.1));
         let node = serde_json::json!({"sensor": "ec", "operator": "<", "value": 3.0});
+        let mut trace = Vec::new();
+        assert!(eval_condition_tree(&node, &sample, &mut trace));
+    }
+
+    #[test]
+    fn eval_condition_tree_uses_value_variable_when_present() {
+        use crate::models::script::SampleValue;
+        use std::collections::HashMap;
+
+        let node = serde_json::json!({
+            "sensor": "ph", "operator": ">", "value": 0, "valueVariable": "ph_target_now"
+        });
+        let sample: HashMap<String, SampleValue> = [
+            ("ph".to_string(), SampleValue::Value(7.4)),
+            ("ph_target_now".to_string(), SampleValue::Value(7.2)),
+        ]
+        .into_iter()
+        .collect();
+        let mut trace = Vec::new();
+        assert!(eval_condition_tree(&node, &sample, &mut trace));
+        assert_eq!(trace[0].description, "ph > 7.2");
+    }
+
+    #[test]
+    fn eval_condition_tree_fails_closed_when_value_variable_missing_from_sample() {
+        use crate::models::script::SampleValue;
+        use std::collections::HashMap;
+
+        let node = serde_json::json!({
+            "sensor": "ph", "operator": ">", "value": 0, "valueVariable": "ph_target_now"
+        });
+        let sample: HashMap<String, SampleValue> =
+            [("ph".to_string(), SampleValue::Value(7.4))].into_iter().collect();
+        let mut trace = Vec::new();
+        // ph_target_now chưa được nạp (vd. Config·Read lỗi) -> threshold mặc định 0.0,
+        // giữ hành vi cũ khi thiếu dữ liệu thay vì panic.
+        assert!(eval_condition_tree(&node, &sample, &mut trace));
+        assert_eq!(trace[0].description, "ph > 0");
+    }
+
+    #[test]
+    fn eval_condition_tree_without_value_variable_is_unchanged() {
+        use crate::models::script::SampleValue;
+        use std::collections::HashMap;
+
+        let node = serde_json::json!({ "sensor": "ec", "operator": "<", "value": 1.5 });
+        let sample: HashMap<String, SampleValue> =
+            [("ec".to_string(), SampleValue::Value(1.2))].into_iter().collect();
         let mut trace = Vec::new();
         assert!(eval_condition_tree(&node, &sample, &mut trace));
     }

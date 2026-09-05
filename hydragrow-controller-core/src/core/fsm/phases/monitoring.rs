@@ -306,8 +306,13 @@ fn apply_decision(
                 } else {
                     "mimo_dosing"
                 };
-                ctx.water
-                    .start_fill(uptime_ms, config.water_level_target, sensors, trigger);
+                ctx.water.start_fill_with_duration(
+                    uptime_ms,
+                    config.water_level_target,
+                    sensors,
+                    trigger,
+                    Some(config.max_refill_duration_sec as u64),
+                );
             }
             if control.water_out_sec > 0.0 {
                 result.events.push(OrchestratorEvent::SetWaterPump {
@@ -336,8 +341,13 @@ fn apply_decision(
                     (config.water_level_target, "mimo_dosing")
                 };
 
-                ctx.water
-                    .start_drain(uptime_ms, target_level, sensors, trigger);
+                ctx.water.start_drain_with_duration(
+                    uptime_ms,
+                    target_level,
+                    sensors,
+                    trigger,
+                    Some(config.max_drain_duration_sec as u64),
+                );
             }
             if control.misting_sec > 0.0 {
                 result

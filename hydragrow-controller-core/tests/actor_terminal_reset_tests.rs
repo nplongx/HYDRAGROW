@@ -36,6 +36,7 @@ fn dummy_water_job() -> WaterJob {
         target_level: 20.0,
         start_level: 15.0,
         start_ms: 1000,
+        max_duration_sec: None,
     }
 }
 

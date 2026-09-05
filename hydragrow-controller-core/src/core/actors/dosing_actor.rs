@@ -74,6 +74,8 @@ pub struct DosingCycleCtx {
     pub dose_b_delivered_ml: f32,
     pub ph_up_delivered_ml: f32,
     pub ph_down_delivered_ml: f32,
+    pub b_job: Option<PulseJob>,
+    pub delay_a_to_b_ms: u64,
 }
 
 #[must_use]
@@ -252,11 +254,35 @@ impl DosingActor {
             });
         }
 
+        let b_job_snapshot = if a_active && b_active {
+            let f = flow_b.unwrap();
+            let (on_ms, off_ms, max_pulses) = pulse_params(control.nutrient_b_ml, f, config);
+            Some(PulseJob {
+                pump: PumpTarget::NutrientB,
+                target_ml: control.nutrient_b_ml,
+                delivered_ml: 0.0,
+                pulse_on: false,
+                pulse_count: 0,
+                max_pulses,
+                on_ms,
+                off_ms,
+                pwm: safe_pwm,
+                ml_per_sec: f,
+                next_toggle_ms: now_ms,
+            })
+        } else {
+            None
+        };
+
+        let delay_a_to_b_ms = (config.delay_between_a_and_b_sec as u64) * 1000;
+
         self.cycle_ctx = Some(DosingCycleCtx {
             dose_a_delivered_ml: 0.0,
             dose_b_delivered_ml: 0.0,
             ph_up_delivered_ml: 0.0,
             ph_down_delivered_ml: 0.0,
+            b_job: b_job_snapshot,
+            delay_a_to_b_ms,
         });
 
         self.pending_ph_job = None;
@@ -402,36 +428,48 @@ impl DosingActor {
                     ctx.dose_a_delivered_ml = job.delivered_ml;
                 }
 
-                // Chi cham A
-                if dose_b_ml <= 1e-3 {
-                    return self.transition_to_ph_or_idle(job.delivered_ml, 0.0, now_ms);
-                }
-
-                let safe_pwm = job.pwm.clamp(1, 100);
-                let ml_per_sec =
-                    match effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config) {
-                        Some(v) => v,
-                        None => return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events),
+                if let Some(b_job) = self.cycle_ctx.as_mut().and_then(|c| c.b_job.take()) {
+                    let delay_ms = self
+                        .cycle_ctx
+                        .as_ref()
+                        .map(|c| c.delay_a_to_b_ms)
+                        .unwrap_or(0);
+                    self.sub_state = DosingSubState::WaitingAtoB {
+                        finish_ms: now_ms + delay_ms,
+                        b_job,
                     };
-                let (on_ms, off_ms, max_pulses) = pulse_params(dose_b_ml, ml_per_sec, config);
-                let b_job = PulseJob {
-                    pump: PumpTarget::NutrientB,
-                    target_ml: dose_b_ml,
-                    delivered_ml: 0.0,
-                    pulse_on: false,
-                    pulse_count: 0,
-                    max_pulses,
-                    on_ms,
-                    off_ms,
-                    pwm: safe_pwm,
-                    ml_per_sec,
-                    next_toggle_ms: now_ms,
-                };
-                self.sub_state = DosingSubState::WaitingAtoB {
-                    finish_ms: now_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
-                    b_job,
-                };
-                (DosingEvent::PhaseTransition, hw_events)
+                    (DosingEvent::PhaseTransition, hw_events)
+                } else if dose_b_ml > 1e-3 {
+                    let safe_pwm = job.pwm.clamp(1, 100);
+                    let ml_per_sec =
+                        match effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config) {
+                            Some(v) => v,
+                            None => {
+                                return (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events);
+                            }
+                        };
+                    let (on_ms, off_ms, max_pulses) = pulse_params(dose_b_ml, ml_per_sec, config);
+                    let b_job = PulseJob {
+                        pump: PumpTarget::NutrientB,
+                        target_ml: dose_b_ml,
+                        delivered_ml: 0.0,
+                        pulse_on: false,
+                        pulse_count: 0,
+                        max_pulses,
+                        on_ms,
+                        off_ms,
+                        pwm: safe_pwm,
+                        ml_per_sec,
+                        next_toggle_ms: now_ms,
+                    };
+                    self.sub_state = DosingSubState::WaitingAtoB {
+                        finish_ms: now_ms + (config.delay_between_a_and_b_sec as u64 * 1000),
+                        b_job,
+                    };
+                    (DosingEvent::PhaseTransition, hw_events)
+                } else {
+                    self.transition_to_ph_or_idle(job.delivered_ml, 0.0, now_ms)
+                }
             } else if job.pulse_count >= job.max_pulses {
                 self.sub_state = DosingSubState::Idle;
                 (DosingEvent::Failed(FaultCode::EcDosingFailed), hw_events)
@@ -759,6 +797,8 @@ mod tests {
             dose_b_delivered_ml: 0.0,
             ph_up_delivered_ml: 0.0,
             ph_down_delivered_ml: 0.0,
+            b_job: None,
+            delay_a_to_b_ms: 0,
         });
         let (_event, _hw) = actor.begin_pump_b(b_job, 1000);
         assert!(matches!(actor.sub_state, DosingSubState::PumpingB(_)));

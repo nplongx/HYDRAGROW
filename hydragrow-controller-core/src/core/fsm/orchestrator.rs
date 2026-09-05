@@ -99,6 +99,16 @@ pub fn tick(
     // Điều này đảm bảo rằng mỗi khi user lưu cấu hình mới, AI sẽ phản hồi ngay lập tức
     ctx.tuner.sync_with_config(config);
 
+    // Safety check: Emergency shutdown
+    if config.emergency_shutdown {
+        if !matches!(ctx.phase, SystemPhase::Fault(FaultCode::EmergencyStop)) {
+            error!("🚨 [EMERGENCY SHUTDOWN] Config emergency_shutdown is active!");
+            result.delta.phase = Some(SystemPhase::Fault(FaultCode::EmergencyStop));
+            fault_all_outputs_off(&mut result);
+        }
+        return result;
+    }
+
     // [NPL-9] Safety watchdog — chạy bất kể mode (Auto/Manual/Fault)
     let osaka_running = ctx.peripherals.pump_status.osaka_pump;
     let mist_valve_open = ctx.peripherals.pump_status.mist_valve;

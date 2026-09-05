@@ -97,6 +97,7 @@ fn sensor_calibration_cleanup_clears_peripherals_actors_and_ownership() {
             target_level: 20.0,
             start_level: 15.0,
             start_ms: 1000,
+            max_duration_sec: None,
         },
     };
     ctx.peripherals.osaka_pwm = 80;

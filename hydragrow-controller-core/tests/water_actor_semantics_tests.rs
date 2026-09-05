@@ -30,6 +30,7 @@ fn water_failure_in_mimo_does_not_advance_to_active_mixing() {
             target_level: 20.0,
             start_level: 15.0,
             start_ms: 1000,
+            max_duration_sec: None,
         },
     };
 
@@ -69,6 +70,7 @@ fn water_actual_duration_is_propagated_to_calibration_sample() {
             target_level: 20.0,
             start_level: 15.0,
             start_ms: 10_000,
+            max_duration_sec: None,
         },
     };
 

@@ -8,7 +8,10 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useAutomationScripts } from "../hooks/useAutomationScripts";
+import { useAutomationScripts, useConfigOverrides, useRevertConfigOverride } from "../hooks/useAutomationScripts";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiPut } from "../lib/apiClient";
+import toast from "react-hot-toast";
 import { FlowDetailDrawer } from "../components/automation/FlowDetailDrawer";
 import { AutomationPageHeader } from "../components/automation/AutomationPageHeader";
 import { AutomationMetricsBanner } from "../components/automation/AutomationMetricsBanner";
@@ -33,6 +36,11 @@ export function Automation() {
   const { data: scripts, isLoading, isError } = useAutomationScripts(deviceId, {
     enabled: !!deviceId,
   });
+  const { data: configOverridesData } = useConfigOverrides(deviceId, {
+    enabled: !!deviceId,
+  });
+  const revertMutation = useRevertConfigOverride(deviceId);
+  const queryClient = useQueryClient();
 
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const canvas = useFlowCanvas(scripts ?? []);
@@ -42,159 +50,33 @@ export function Automation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterKind, setFilterKind] = useState<"all" | "alert" | "recipe" | "action" | "config">("all");
 
-  const sampleFallbackScripts: UserScript[] = useMemo(() => [
-    {
-      id: "s-1",
-      device_id: deviceId || "dev-01",
-      kind: "alert",
-      name: "Cảnh báo pH vượt ngưỡng",
-      source: "",
-      enabled: true,
-      ir_json: {
-        kind: "alert",
-        trigger: { type: "sensor" },
-        conditions: [{ sensor: "ph", operator: ">", value: 7.5 }],
-        actions: [{ type: "alert", level: "warning", message: "pH > 7.5 trong 10 phút" }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-        chainConfig: { passContextVariables: false, iterationLimit: 5 },
-        contextReads: [],
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "s-2",
-      device_id: deviceId || "dev-01",
-      kind: "recipe_override",
-      name: "Chuyển giai đoạn sinh trưởng",
-      source: "",
-      enabled: true,
-      ir_json: {
-        kind: "recipe_override",
-        trigger: { type: "fsm" },
-        conditions: [{ sensor: "elapsed_sec", operator: ">", value: 604800 }],
-        actions: [{ type: "advance_stage", targetStageOffset: 1, reason: "Giai đoạn sinh trưởng" }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-        chainConfig: { passContextVariables: false, iterationLimit: 5 },
-        contextReads: [],
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "s-3",
-      device_id: deviceId || "dev-01",
-      kind: "config_override",
-      name: "Hạ ngưỡng EC ban đêm",
-      source: "",
-      enabled: true,
-      ir_json: {
-        kind: "config_override",
-        trigger: { type: "sensor" },
-        conditions: [{ sensor: "ec", operator: ">", value: 1.8 }],
-        actions: [{ type: "config_override", key: "ec_target", value: 1.8, restoreOnExit: true, priority: 1 }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-        chainConfig: { passContextVariables: false, iterationLimit: 5 },
-        contextReads: [],
-        configOverwrite: {
-          configKey: "ec_target",
-          value: "1.8",
-          readOriginalBeforeWrite: true,
-          restoreMode: "on_condition_false",
-        },
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "s-4",
-      device_id: deviceId || "dev-01",
-      kind: "action_command",
-      name: "Tưới định kỳ buổi sáng",
-      source: "",
-      enabled: true,
-      ir_json: {
-        kind: "action_command",
-        trigger: { type: "cron", cronExpression: "0 0 6 * * *", timezone: "Asia/Ho_Chi_Minh" },
-        conditions: [{ sensor: "water_level", operator: ">", value: 20 }],
-        actions: [{ type: "water_on", pump: "WATER_PUMP_IN", durationSec: 30 }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-        chainConfig: { passContextVariables: false, iterationLimit: 5 },
-        contextReads: [],
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "s-5",
-      device_id: deviceId || "dev-01",
-      kind: "config_override",
-      name: "Giới hạn dosing khi cảm biến lỗi",
-      source: "",
-      enabled: false,
-      ir_json: {
-        kind: "config_override",
-        trigger: { type: "sensor" },
-        conditions: [{ sensor: "ec", operator: "<", value: 0.5 }],
-        actions: [{ type: "config_override", key: "dose_max_ml", value: 5, restoreOnExit: true, priority: 0 }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-        chainConfig: { passContextVariables: false, iterationLimit: 5 },
-        contextReads: [],
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "s-6",
-      device_id: deviceId || "dev-01",
-      kind: "alert",
-      name: "Cảnh báo mực nước thấp",
-      source: "",
-      enabled: true,
-      ir_json: {
-        kind: "alert",
-        trigger: { type: "sensor" },
-        conditions: [{ sensor: "water_level", operator: "<", value: 20 }],
-        actions: [{ type: "alert", level: "warning", message: "Mực nước bồn dưới 20%" }],
-        nodes: [],
-        edges: [],
-        next_flow_ids: [],
-        chainConfig: { passContextVariables: false, iterationLimit: 5 },
-        contextReads: [],
-      },
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ], [deviceId]);
+  const activeScripts = scripts ?? [];
 
-  const activeScripts = (scripts && scripts.length > 0) ? scripts : sampleFallbackScripts;
+  const toggleScriptEnabled = async (script: UserScript, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await apiPut(`/devices/${deviceId}/scripts/${script.id}`, {
+        name: script.name,
+        kind: script.kind,
+        source: script.source,
+        enabled: !script.enabled,
+        ir_json: script.ir_json,
+      });
+      queryClient.invalidateQueries({ queryKey: ["automation-scripts", deviceId] });
+      toast.success(script.enabled ? "Đã tắt Flow" : "Đã bật Flow");
+    } catch {
+      toast.error("Không thể thay đổi trạng thái Flow");
+    }
+  };
 
   const counts = useMemo(() => {
-    let alert = 0;
-    let recipe = 0;
-    let action = 0;
-    let config = 0;
+    let alert = 0, recipe = 0, action = 0, config = 0;
     activeScripts.forEach((s) => {
       const isCfg = s.kind === "config_override" || s.ir_json?.kind === "config_override" || s.name.toLowerCase().includes("config") || s.name.toLowerCase().includes("ngưỡng ec");
-      if (isCfg) {
-        config++;
-      } else if (s.kind === "alert") {
-        alert++;
-      } else if (s.kind === "recipe_override") {
-        recipe++;
-      } else if (s.kind === "action_command") {
-        action++;
-      }
+      if (isCfg) config++;
+      else if (s.kind === "alert") alert++;
+      else if (s.kind === "recipe_override") recipe++;
+      else if (s.kind === "action_command") action++;
     });
     return { all: activeScripts.length, alert, recipe, action, config };
   }, [activeScripts]);
@@ -231,7 +113,12 @@ export function Automation() {
   if (currentView === "config_explorer") {
     return (
       <div className="app-page min-h-screen p-4 sm:p-6 lg:p-8">
-        <ConfigExplorerView onBack={() => setCurrentView("overview")} />
+        <ConfigExplorerView
+          onBack={() => setCurrentView("overview")}
+          activeOverrides={configOverridesData?.active ?? []}
+          auditLogs={configOverridesData?.history ?? []}
+          onRevert={(id) => revertMutation.mutate(id)}
+        />
       </div>
     );
   }
@@ -247,10 +134,10 @@ export function Automation() {
       {/* 4 KPI Cards */}
       <AutomationMetricsBanner
         metrics={{
-          activeFlows: counts.all,
-          alerts24h: 3,
-          configOverridesToday: 5,
-          successRatePercent: 99.2,
+          activeFlows: activeScripts.filter((s) => s.enabled).length,
+          alerts24h: activeScripts.filter((s) => s.kind === "alert" && s.enabled).length,
+          configOverridesToday: (configOverridesData?.active?.length ?? 0) + activeScripts.filter((s) => s.kind === "config_override" && s.enabled).length,
+          successRatePercent: 100,
         }}
       />
 
@@ -323,13 +210,31 @@ export function Automation() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Side: Flows Display */}
         <div className="lg:col-span-8 space-y-6">
-          {viewMode === "grid" ? (
+          {activeScripts.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-emerald-100 p-8 sm:p-12 text-center shadow-sm space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                <Network className="w-8 h-8" />
+              </div>
+              <div className="max-w-md mx-auto">
+                <h3 className="text-lg font-bold text-emerald-950">Chưa có Flow tự động hóa nào</h3>
+                <p className="text-xs text-emerald-800/70 mt-1">Chưa có kịch bản nào được kích hoạt trên thiết bị này. Hãy tạo Flow đầu tiên.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => canvas.openEditor("new")}
+                className="ui-btn-primary px-6 py-2.5 text-xs font-semibold inline-flex items-center gap-2 cursor-pointer shadow-md"
+              >
+                <span>+ Tạo Flow tự động hóa đầu tiên</span>
+              </button>
+            </div>
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {filteredScripts.map((script) => (
                 <FlowOverviewCard
                   key={script.id}
                   script={script}
                   onClick={() => canvas.openEditor(script)}
+                  onToggleEnabled={(e) => toggleScriptEnabled(script, e)}
                 />
               ))}
               {filteredScripts.length === 0 && (
@@ -369,10 +274,12 @@ export function Automation() {
         {/* Right Side: Config Explorer Widget */}
         <div className="lg:col-span-4 sticky top-6">
           <ConfigExplorerWidget
+            items={configOverridesData?.active ?? []}
             onOpenFullView={() => setCurrentView("config_explorer")}
           />
         </div>
       </div>
+
 
       {/* Flow Editor Drawer */}
       {canvas.selectedScript && (

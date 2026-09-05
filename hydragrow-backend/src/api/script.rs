@@ -388,11 +388,193 @@ pub async fn apply_template(
     }
 }
 
+pub fn get_config_unit(key: &str) -> &'static str {
+    match key {
+        "ec_target" | "ec_tolerance" => "mS/cm",
+        "delay_between_a_and_b_sec" => "s",
+        "water_cycle_sec" => "s",
+        "dose_max_ml" => "ml",
+        _ => "",
+    }
+}
+
+#[rustfmt::skip]
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct ConfigOverrideRow {
+    pub id: Uuid, pub script_id: Uuid, pub device_id: String, pub config_key: String,
+    pub original_value: String, pub applied_at: chrono::DateTime<chrono::Utc>,
+    pub restored_at: Option<chrono::DateTime<chrono::Utc>>, pub flow_name: Option<String>,
+}
+
+#[rustfmt::skip]
+#[derive(Debug, serde::Serialize)]
+pub struct ConfigOverrideActiveItemDto {
+    pub id: Uuid, pub config_key: String, pub device_id: String, pub device_name: Option<String>,
+    pub original_value: String, pub current_value: String, pub unit: String,
+    pub flow_name: String, pub flow_id: Uuid, pub status: String,
+}
+
+#[rustfmt::skip]
+#[derive(Debug, serde::Serialize)]
+pub struct ConfigAuditLogEntryDto {
+    pub id: Uuid, pub timestamp: String, pub device_id: String, pub device_name: Option<String>,
+    pub config_key: String, pub original_value: String, pub override_value: String,
+    pub unit: String, pub reason: String, pub status: String,
+}
+
+/// GET /api/devices/{device_id}/scripts/config-overrides
+pub async fn list_config_overrides(
+    path: web::Path<String>,
+    http_req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("script:read") {
+        return HttpResponse::Forbidden().json(json!({"error": "Missing scope script:read"}));
+    }
+
+    let current_config = crate::db::postgres::get_device_config(&app_state.pg_pool, &device_id)
+        .await
+        .ok();
+
+    let active_rows = sqlx::query_as::<_, ConfigOverrideRow>(
+        "SELECT fco.id, fco.script_id, fco.device_id, fco.config_key, fco.original_value, fco.applied_at, fco.restored_at, s.name as flow_name FROM flow_config_overrides fco LEFT JOIN user_scripts s ON s.id = fco.script_id WHERE fco.device_id = $1 AND fco.restored_at IS NULL ORDER BY fco.applied_at DESC",
+    )
+    .bind(&device_id).fetch_all(&app_state.pg_pool).await.unwrap_or_default();
+
+    let active: Vec<ConfigOverrideActiveItemDto> = active_rows
+        .into_iter()
+        .map(|row| {
+            let unit = get_config_unit(&row.config_key).to_string();
+            let current_val = current_config
+                .as_ref()
+                .and_then(|cfg| {
+                    crate::services::config_override::read_field_as_string(cfg, &row.config_key)
+                })
+                .unwrap_or_else(|| row.original_value.clone());
+            ConfigOverrideActiveItemDto {
+                id: row.id,
+                config_key: row.config_key,
+                device_id: row.device_id,
+                device_name: None,
+                original_value: row.original_value,
+                current_value: current_val,
+                unit,
+                flow_name: row
+                    .flow_name
+                    .unwrap_or_else(|| "Flow không xác định".to_string()),
+                flow_id: row.script_id,
+                status: "active".to_string(),
+            }
+        })
+        .collect();
+
+    let history_rows = sqlx::query_as::<_, ConfigOverrideRow>(
+        "SELECT fco.id, fco.script_id, fco.device_id, fco.config_key, fco.original_value, fco.applied_at, fco.restored_at, s.name as flow_name FROM flow_config_overrides fco LEFT JOIN user_scripts s ON s.id = fco.script_id WHERE fco.device_id = $1 ORDER BY fco.applied_at DESC LIMIT 50",
+    )
+    .bind(&device_id).fetch_all(&app_state.pg_pool).await.unwrap_or_default();
+
+    let history: Vec<ConfigAuditLogEntryDto> = history_rows
+        .into_iter()
+        .map(|row| {
+            let unit = get_config_unit(&row.config_key).to_string();
+            let (status, reason) = if row.restored_at.is_some() {
+                (
+                    "restored".to_string(),
+                    "Điều kiện sai -> khôi phục gốc".to_string(),
+                )
+            } else {
+                (
+                    "applied".to_string(),
+                    "Điều kiện thỏa mãn -> ghi đè".to_string(),
+                )
+            };
+            ConfigAuditLogEntryDto {
+                id: row.id,
+                timestamp: row.applied_at.format("%d/%m %H:%M").to_string(),
+                device_id: row.device_id,
+                device_name: None,
+                config_key: row.config_key,
+                original_value: row.original_value.clone(),
+                override_value: row.original_value,
+                unit,
+                reason,
+                status,
+            }
+        })
+        .collect();
+
+    HttpResponse::Ok()
+        .json(json!({ "status": "success", "data": { "active": active, "history": history } }))
+}
+
+/// POST /api/devices/{device_id}/scripts/config-overrides/{override_id}/revert
+pub async fn revert_config_override(
+    path: web::Path<(String, Uuid)>,
+    http_req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let (device_id, override_id) = path.into_inner();
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("script:write") {
+        return HttpResponse::Forbidden().json(json!({"error": "Missing scope script:write"}));
+    }
+
+    let record: Option<(String, String)> = sqlx::query_as(
+        "SELECT config_key, original_value FROM flow_config_overrides WHERE id = $1 AND device_id = $2 AND restored_at IS NULL",
+    )
+    .bind(override_id).bind(&device_id)
+    .fetch_optional(&app_state.pg_pool).await.unwrap_or(None);
+
+    let Some((config_key, original_value)) = record else {
+        return HttpResponse::NotFound()
+            .json(json!({"error": "Không tìm thấy bản ghi đè đang hoạt động"}));
+    };
+
+    if let Ok(mut config) =
+        crate::db::postgres::get_device_config(&app_state.pg_pool, &device_id).await
+    {
+        let empty_params = std::collections::HashMap::new();
+        if crate::services::config_override::write_field(
+            &mut config,
+            &config_key,
+            &original_value,
+            &empty_params,
+        )
+        .is_ok()
+        {
+            let _ = crate::db::postgres::upsert_device_config(&app_state.pg_pool, &config).await;
+        }
+    }
+
+    let _ = sqlx::query("UPDATE flow_config_overrides SET restored_at = NOW() WHERE id = $1")
+        .bind(override_id)
+        .execute(&app_state.pg_pool)
+        .await;
+
+    HttpResponse::Ok()
+        .json(json!({"status": "success", "message": "Đã khôi phục cấu hình về giá trị gốc"}))
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("", web::get().to(list_scripts))
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
         .route("/test", web::post().to(test_script))
+        .route("/config-overrides", web::get().to(list_config_overrides))
+        .route(
+            "/config-overrides/{override_id}/revert",
+            web::post().to(revert_config_override),
+        )
         .route(
             "/{script_id}/apply-template",
             web::post().to(apply_template),

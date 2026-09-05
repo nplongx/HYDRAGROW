@@ -1,131 +1,25 @@
 import { useState, useMemo } from "react";
-import { Search, ArrowLeft, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Search, ArrowLeft, ShieldCheck, AlertTriangle, RotateCcw } from "lucide-react";
 import type { ConfigOverrideActiveItem, ConfigAuditLogEntry } from "../../types/automation";
 
 interface Props {
   onBack: () => void;
+  activeOverrides?: ConfigOverrideActiveItem[];
+  auditLogs?: ConfigAuditLogEntry[];
+  onRevert?: (id: string) => void;
 }
 
-const SAMPLE_OVERRIDES: ConfigOverrideActiveItem[] = [
-  {
-    configKey: "ec_target",
-    deviceId: "dev-a1",
-    deviceName: "Nhà kính A · Kệ 1",
-    originalValue: "2.4",
-    currentValue: "1.8",
-    unit: "mS/cm",
-    flowName: "Hạ ngưỡng EC ban đêm",
-    status: "active",
-  },
-  {
-    configKey: "ec_target",
-    deviceId: "dev-a2",
-    deviceName: "Nhà kính A · Kệ 2",
-    originalValue: "2.4",
-    currentValue: "1.8",
-    unit: "mS/cm",
-    flowName: "Hạ ngưỡng EC ban đêm",
-    status: "active",
-  },
-  {
-    configKey: "ph_target",
-    deviceId: "dev-b1",
-    deviceName: "Nhà kính B · Kệ 1",
-    originalValue: "6.2",
-    currentValue: "5.8",
-    unit: "",
-    flowName: "Bù pH giai đoạn ra hoa",
-    status: "active",
-  },
-  {
-    configKey: "dose_max_ml",
-    deviceId: "dev-b2",
-    deviceName: "Nhà kính B · Kệ 2",
-    originalValue: "15",
-    currentValue: "15",
-    unit: "ml",
-    flowName: "Giới hạn dosing khi cảm biến lỗi",
-    status: "restored",
-  },
-  {
-    configKey: "water_cycle_sec",
-    deviceId: "dev-c1",
-    deviceName: "Nhà kính C · Kệ 1",
-    originalValue: "1800",
-    currentValue: "2400",
-    unit: "s",
-    flowName: "Tưới thừa mùa mưa",
-    status: "active",
-  },
-  {
-    configKey: "ph_target",
-    deviceId: "dev-c2",
-    deviceName: "Nhà kính C · Kệ 2",
-    originalValue: "6.2",
-    currentValue: "6.2",
-    unit: "",
-    flowName: "Bù pH giai đoạn ra hoa",
-    status: "restored",
-  },
-];
-
-const SAMPLE_AUDIT_LOGS: ConfigAuditLogEntry[] = [
-  {
-    id: "log-1",
-    timestamp: "05/09 22:00",
-    deviceId: "dev-a1",
-    deviceName: "Nhà kính A · Kệ 1",
-    configKey: "ec_target",
-    originalValue: "2.4",
-    overrideValue: "1.8",
-    unit: "mS/cm",
-    reason: 'Điều kiện "Khung giờ ban đêm" chuyển sang đúng',
-    status: "applied",
-  },
-  {
-    id: "log-2",
-    timestamp: "05/09 05:00",
-    deviceId: "dev-a1",
-    deviceName: "Nhà kính A · Kệ 1",
-    configKey: "ec_target",
-    originalValue: "1.8",
-    overrideValue: "2.4",
-    unit: "mS/cm",
-    reason: "Điều kiện sai -> tự khôi phục giá trị gốc",
-    status: "restored",
-  },
-  {
-    id: "log-3",
-    timestamp: "05/09 21:58",
-    deviceId: "dev-b1",
-    deviceName: "Nhà kính B · Kệ 1",
-    configKey: "ph_target",
-    originalValue: "6.2",
-    overrideValue: "5.8",
-    unit: "",
-    reason: "Webhook ngoài: cảm biến hoa báo cần hạ pH",
-    status: "applied",
-  },
-  {
-    id: "log-4",
-    timestamp: "04/09 22:00",
-    deviceId: "dev-c1",
-    deviceName: "Nhà kính C · Kệ 1",
-    configKey: "water_cycle_sec",
-    originalValue: "1800",
-    overrideValue: "2400",
-    unit: "s",
-    reason: "Đề xuất vượt Max cho phép -> đã kẹp về 2400s",
-    status: "clamped_warning",
-  },
-];
-
-export function ConfigExplorerView({ onBack }: Props) {
-  const [searchTerm, setSearchTerm] = useState("");
+export function ConfigExplorerView({ onBack, activeOverrides = [], auditLogs = [], onRevert }: Props) {
   const [selectedKey, setSelectedKey] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+
+  const distinctKeys = useMemo(() => {
+    const keys = new Set(activeOverrides.map((i) => i.configKey));
+    return Array.from(keys);
+  }, [activeOverrides]);
 
   const filteredOverrides = useMemo(() => {
-    return SAMPLE_OVERRIDES.filter((item) => {
+    return activeOverrides.filter((item) => {
       const matchKey = selectedKey === "all" || item.configKey === selectedKey;
       const matchSearch =
         searchTerm === "" ||
@@ -134,7 +28,11 @@ export function ConfigExplorerView({ onBack }: Props) {
         item.flowName.toLowerCase().includes(searchTerm.toLowerCase());
       return matchKey && matchSearch;
     });
-  }, [selectedKey, searchTerm]);
+  }, [activeOverrides, selectedKey, searchTerm]);
+
+  const overriddenKeyCount = new Set(activeOverrides.filter((i) => i.status === "active").map((i) => i.configKey)).size;
+  const uniqueDeviceCount = new Set(activeOverrides.map((i) => i.deviceId)).size;
+  const restoredCount = auditLogs.filter((l) => l.status === "restored").length;
 
   return (
     <div className="space-y-6">
@@ -167,19 +65,21 @@ export function ConfigExplorerView({ onBack }: Props) {
       {/* KPI Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl border border-indigo-100 p-4 shadow-sm">
-          <div className="text-3xl font-bold text-indigo-700">9</div>
+          <div className="text-3xl font-bold text-indigo-700">{overriddenKeyCount}</div>
           <div className="text-xs text-indigo-900/70 font-medium mt-1">Config key đang bị ghi đè</div>
         </div>
         <div className="bg-white rounded-2xl border border-emerald-100 p-4 shadow-sm">
-          <div className="text-3xl font-bold text-emerald-800">6</div>
+          <div className="text-3xl font-bold text-emerald-800">{uniqueDeviceCount}</div>
           <div className="text-xs text-emerald-900/70 font-medium mt-1">Thiết bị có override cục bộ</div>
         </div>
         <div className="bg-white rounded-2xl border border-amber-100 p-4 shadow-sm">
-          <div className="text-3xl font-bold text-amber-700">14</div>
+          <div className="text-3xl font-bold text-amber-700">{auditLogs.length}</div>
           <div className="text-xs text-amber-900/70 font-medium mt-1">Lượt ghi đè trong 24h</div>
         </div>
         <div className="bg-white rounded-2xl border border-teal-100 p-4 shadow-sm">
-          <div className="text-3xl font-bold text-teal-700">96%</div>
+          <div className="text-3xl font-bold text-teal-700">
+            {auditLogs.length > 0 ? `${Math.round((restoredCount / auditLogs.length) * 100)}%` : "100%"}
+          </div>
           <div className="text-xs text-teal-900/70 font-medium mt-1">Tự khôi phục đúng điều kiện</div>
         </div>
       </div>
@@ -198,24 +98,25 @@ export function ConfigExplorerView({ onBack }: Props) {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-          {[
-            { id: "all", label: "Tất cả 9" },
-            { id: "ec_target", label: "ec_target 3" },
-            { id: "ph_target", label: "ph_target 2" },
-            { id: "dose_max_ml", label: "dose_max_ml 2" },
-            { id: "water_cycle_sec", label: "water_cycle_sec 2" },
-          ].map((pill) => (
+          <button
+            type="button"
+            onClick={() => setSelectedKey("all")}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              selectedKey === "all" ? "bg-emerald-700 text-white shadow-sm" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+            }`}
+          >
+            Tất cả ({activeOverrides.length})
+          </button>
+          {distinctKeys.map((key) => (
             <button
-              key={pill.id}
+              key={key}
               type="button"
-              onClick={() => setSelectedKey(pill.id)}
+              onClick={() => setSelectedKey(key)}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                selectedKey === pill.id
-                  ? "bg-emerald-700 text-white shadow-sm"
-                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                selectedKey === key ? "bg-emerald-700 text-white shadow-sm" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
               }`}
             >
-              {pill.label}
+              {key} ({activeOverrides.filter((o) => o.configKey === key).length})
             </button>
           ))}
         </div>
@@ -241,10 +142,17 @@ export function ConfigExplorerView({ onBack }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-50">
+              {filteredOverrides.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-slate-500">
+                    Chưa có bản ghi đè config nào thỏa mãn bộ lọc.
+                  </td>
+                </tr>
+              )}
               {filteredOverrides.map((row, idx) => (
                 <tr key={`${row.deviceId}-${row.configKey}-${idx}`} className="hover:bg-emerald-50/30">
                   <td className="py-3 px-4 font-mono font-bold text-emerald-950">{row.configKey}</td>
-                  <td className="py-3 px-4 text-slate-700">{row.deviceName}</td>
+                  <td className="py-3 px-4 text-slate-700">{row.deviceName ?? row.deviceId}</td>
                   <td className="py-3 px-4 text-slate-500">{row.originalValue} {row.unit}</td>
                   <td className="py-3 px-4 font-bold text-indigo-700">
                     {row.currentValue} {row.unit}
@@ -255,15 +163,20 @@ export function ConfigExplorerView({ onBack }: Props) {
                       {row.flowName}
                     </span>
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-3 px-4 flex items-center justify-between">
                     {row.status === "active" ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                        Đang override
-                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">Đang override</span>
                     ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        Đã khôi phục
-                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">Đã khôi phục</span>
+                    )}
+                    {onRevert && row.id && row.status === "active" && (
+                      <button
+                        type="button"
+                        onClick={() => onRevert(row.id!)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" /> Hoàn tác
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -296,10 +209,17 @@ export function ConfigExplorerView({ onBack }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-50">
-              {SAMPLE_AUDIT_LOGS.map((log) => (
+              {auditLogs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-6 text-center text-slate-500">
+                    Chưa có nhật ký ghi đè nào được ghi nhận trong hệ thống.
+                  </td>
+                </tr>
+              )}
+              {auditLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-emerald-50/30">
                   <td className="py-3 px-4 font-mono text-slate-500">{log.timestamp}</td>
-                  <td className="py-3 px-4 font-medium text-slate-800">{log.deviceName}</td>
+                  <td className="py-3 px-4 font-medium text-slate-800">{log.deviceName ?? log.deviceId}</td>
                   <td className="py-3 px-4 font-mono font-bold text-indigo-900">{log.configKey}</td>
                   <td className="py-3 px-4 font-medium text-slate-700">
                     {log.originalValue} &rarr; <span className="font-bold text-indigo-700">{log.overrideValue}</span> {log.unit}

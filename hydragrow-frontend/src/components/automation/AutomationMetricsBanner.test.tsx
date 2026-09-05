@@ -6,16 +6,10 @@ describe("AutomationMetricsBanner", () => {
   it("renders default KPI metric values and labels", () => {
     render(<AutomationMetricsBanner />);
 
-    expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getByText("Flow đang hoạt động")).toBeInTheDocument();
-
-    expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("Cảnh báo trong 24h")).toBeInTheDocument();
-
-    expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("Ghi đè Config hôm nay")).toBeInTheDocument();
-
-    expect(screen.getByText("99.2%")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("Tỉ lệ thực thi thành công")).toBeInTheDocument();
   });
 

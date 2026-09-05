@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Play, Check, X } from "lucide-react";
 import { useTestAutomationScript } from "../../../hooks/useAutomationScripts";
-import type { AutomationIr } from "../../../lib/automation/ir";
+import { DEVICE_CONFIG_BOUNDS, type AutomationIr } from "../../../lib/automation/ir";
+import { useDeviceStore } from "../../../store/useDeviceStore";
 import type { ConditionTraceEntry } from "../../../types/automation";
+
 
 interface TestPanelProps {
   deviceId: string;
@@ -36,6 +38,14 @@ function findFieldMode(ir: AutomationIr, field: string): string {
 export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
   const [sampleRaw, setSampleRaw] = useState<Record<string, string>>({});
   const testMutation = useTestAutomationScript(deviceId);
+  const settings = useDeviceStore((s) => s.settings);
+
+  const targetKey = (ir.configOverwrite?.configKey ?? (ir.actions?.find((a) => a.type === "config_override") as any)?.key ?? "ec_target") as string;
+  const bound = DEVICE_CONFIG_BOUNDS[targetKey] ?? { min: 0.8, max: 3.2, unit: "mS/cm", defaultVal: 2.4 };
+  const actualBeforeVal = (settings && typeof (settings as any)[targetKey] === "number")
+    ? (settings as any)[targetKey]
+    : bound.defaultVal;
+  const overrideVal = ir.configOverwrite?.value ?? (ir.actions?.find((a) => a.type === "config_override") as any)?.value ?? 1.8;
 
   const handleRun = () => {
     const samplePayload: Record<string, number | number[]> = {};
@@ -199,32 +209,33 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
                     <span>CONFIG KEY</span>
                     <span className="font-bold text-indigo-950">
-                      {ir.configOverwrite?.configKey ?? (ir.actions.find((a) => a.type === "config_override") as any)?.key ?? "ec_target"}
+                      {targetKey}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between pt-1 border-t border-indigo-100/80">
                     <div>
                       <span className="text-[10px] text-slate-400 block uppercase">TRƯỚC</span>
-                      <span className="line-through text-slate-500 font-medium">2.4 mS/cm</span>
+                      <span className="line-through text-slate-500 font-medium">{actualBeforeVal} {bound.unit}</span>
                     </div>
                     <span className="text-indigo-400 font-bold">&rarr;</span>
                     <div className="text-right">
                       <span className="text-[10px] text-indigo-700 block uppercase font-semibold">SAU KHI GHI ĐÈ</span>
                       <span className="text-sm font-bold text-indigo-700">
-                        {ir.configOverwrite?.value ?? (ir.actions.find((a) => a.type === "config_override") as any)?.value ?? 1.8} mS/cm
+                        {overrideVal} {bound.unit}
                       </span>
                     </div>
                   </div>
                   <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
                     <Check className="w-3.5 h-3.5" />
-                    <span>Trong giới hạn cho phép (0.8 – 3.2 mS/cm)</span>
+                    <span>Trong giới hạn cho phép ({bound.min} – {bound.max} {bound.unit})</span>
                   </div>
                   <div className="text-[11px] text-slate-600">
-                    &circlearrowright; Tự động khôi phục 2.4 mS/cm khi điều kiện hết đúng
+                    &circlearrowright; Tự động khôi phục {actualBeforeVal} {bound.unit} khi điều kiện hết đúng
                   </div>
                 </div>
               </div>
             )}
+
 
             <div className="space-y-2 mt-4">
               <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">

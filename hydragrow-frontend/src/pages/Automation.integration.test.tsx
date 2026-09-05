@@ -22,6 +22,8 @@ vi.mock('../hooks/useAutomationScripts', () => ({
   useValidateAutomationScript: () => ({ mutateAsync: vi.fn().mockResolvedValue({ valid: true }), isPending: false }),
   useTestAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false, data: null }),
   useApplyTemplate: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false }),
+  useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
+  useRevertConfigOverride: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 class ResizeObserverMock {

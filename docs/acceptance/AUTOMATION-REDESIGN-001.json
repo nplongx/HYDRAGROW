@@ -1,0 +1,46 @@
+{
+  "requirement_id": "AUTOMATION-REDESIGN-001",
+  "objective": "Replace placeholders with live PostgreSQL endpoints, device store binding, dynamic KPI metrics, and robust empty states.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Backend exposes GET /api/devices/{device_id}/scripts/config-overrides returning active and history overrides.",
+      "verification": "cargo check and cargo test api::script"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Backend exposes POST /api/devices/{device_id}/scripts/config-overrides/{override_id}/revert restoring device config.",
+      "verification": "cargo check and cargo clippy"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "All dummy fallback scripts, mock overrides, and hardcoded devices are eliminated from frontend.",
+      "verification": "Vitest automation overview tests"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Dynamic KPI metrics banner computes live values with clean defaults.",
+      "verification": "Vitest AutomationMetricsBanner tests"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "ConfigExplorerView and ConfigExplorerWidget render live database overrides and empty states.",
+      "verification": "Vitest ConfigExplorerView tests"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "AutomationMultiDeviceTemplatePanel maps real owned devices with clean empty states.",
+      "verification": "Vitest AutomationMultiDeviceTemplatePanel tests"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "WebhookAndChainPanel uses dynamic webhook URL and candidate flows from real scripts.",
+      "verification": "Vitest WebhookAndChainPanel tests"
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Full test suites pass and frontend compiles cleanly.",
+      "verification": "Vitest 59 test suites passed, 0 lint errors, build exit code 0"
+    }
+  ]
+}

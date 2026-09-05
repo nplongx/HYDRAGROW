@@ -2,6 +2,9 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Automation } from "./Automation";
 import { useDeviceStore } from "../store/useDeviceStore";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
 
 // Mock dependencies to focus just on layout
 vi.mock("../hooks/useAutomationScripts", () => ({
@@ -53,6 +56,8 @@ vi.mock("../hooks/useAutomationScripts", () => ({
     isLoading: false,
     isError: false,
   }),
+  useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
+  useRevertConfigOverride: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("../hooks/useFlowCanvas", () => ({
@@ -76,7 +81,11 @@ describe("Automation Page", () => {
   it("renders saved flows", () => {
     // we mocked useMediaQuery in setupTests to return false, so we are in mobile view
     // showing flow cards instead of canvas
-    render(<Automation />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Automation />
+      </QueryClientProvider>
+    );
 
     // a saved alert node shows its kind badge
     expect(screen.queryByText("Cửa sổ (mean)")).not.toBeInTheDocument(); // Make sure nothing weird renders
@@ -93,7 +102,11 @@ describe("Automation Page", () => {
 
   it("shows prompt when no deviceId is selected in useDeviceStore", () => {
     useDeviceStore.setState({ deviceId: null });
-    render(<Automation />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Automation />
+      </QueryClientProvider>
+    );
     expect(
       screen.getByText(/Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động/i)
     ).toBeInTheDocument();

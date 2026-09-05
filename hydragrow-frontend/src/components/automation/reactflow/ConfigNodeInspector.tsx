@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { AlertTriangle, ShieldCheck, X, RefreshCw } from "lucide-react";
 import { DEVICE_CONFIG_BOUNDS, clampConfigValue } from "../../../lib/automation/ir";
+import { useDeviceStore } from "../../../store/useDeviceStore";
+import type { ConfigAuditLogEntry } from "../../../types/automation";
 
 interface Props {
   initialKey?: string;
   initialValue?: number;
+  auditLogs?: ConfigAuditLogEntry[];
   onSave?: (data: { configKey: string; overrideValue: number; applyMode: string; autoRestore: boolean }) => void;
   onClose: () => void;
 }
@@ -12,6 +15,7 @@ interface Props {
 export function ConfigNodeInspector({
   initialKey = "ec_target",
   initialValue = 1.8,
+  auditLogs = [],
   onSave,
   onClose,
 }: Props) {
@@ -19,6 +23,8 @@ export function ConfigNodeInspector({
   const [overrideValue, setOverrideValue] = useState<number>(initialValue);
   const [applyMode, setApplyMode] = useState<string>("during_true");
   const [autoRestore, setAutoRestore] = useState(true);
+
+  const settings = useDeviceStore((s) => s.settings);
 
   const bound = DEVICE_CONFIG_BOUNDS[configKey] ?? {
     min: 0.8,
@@ -28,6 +34,11 @@ export function ConfigNodeInspector({
     sourceGroup: "Recipe hiện tại",
     defaultVal: 2.4,
   };
+
+  const currentOriginalVal = (settings && typeof (settings as any)[configKey] === "number")
+    ? (settings as any)[configKey]
+    : bound.defaultVal;
+
 
   const handleValueChange = (valStr: string) => {
     const n = parseFloat(valStr);
@@ -114,12 +125,12 @@ export function ConfigNodeInspector({
                   <div className="text-[10px] font-semibold text-emerald-800/60 uppercase">
                     GIÁ TRỊ HIỆN TẠI (LIVE)
                   </div>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-xl font-bold text-emerald-950">
-                      {bound.defaultVal} {bound.unit}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-emerald-950">
+                      {currentOriginalVal} {bound.unit}
                     </span>
                     <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                      nguồn: Recipe
+                      nguồn: {settings ? "Cấu hình thiết bị" : "Mặc định"}
                     </span>
                   </div>
                 </div>
@@ -316,51 +327,43 @@ export function ConfigNodeInspector({
                 </tr>
               </thead>
               <tbody className="divide-y divide-emerald-50 text-[11px]">
-                <tr className="hover:bg-emerald-50/20">
-                  <td className="py-2 px-3 font-mono text-slate-500">05/09/2026 22:00:03</td>
-                  <td className="py-2 px-3 text-slate-600">2.4 mS/cm</td>
-                  <td className="py-2 px-3 font-bold text-indigo-700">1.8 mS/cm</td>
-                  <td className="py-2 px-3 text-slate-700">Điều kiện "Khung giờ ban đêm" chuyển sang đúng</td>
-                  <td className="py-2 px-3">
-                    <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Đã áp dụng
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-emerald-50/20">
-                  <td className="py-2 px-3 font-mono text-slate-500">05/09/2026 05:00:01</td>
-                  <td className="py-2 px-3 text-slate-600">1.8 mS/cm</td>
-                  <td className="py-2 px-3 font-bold text-indigo-700">2.4 mS/cm</td>
-                  <td className="py-2 px-3 text-slate-700">Điều kiện sai &rarr; tự khôi phục giá trị gốc</td>
-                  <td className="py-2 px-3">
-                    <span className="text-sky-700 font-semibold inline-flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3" /> Đã khôi phục
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-emerald-50/20">
-                  <td className="py-2 px-3 font-mono text-slate-500">04/09/2026 22:00:04</td>
-                  <td className="py-2 px-3 text-slate-600">2.4 mS/cm</td>
-                  <td className="py-2 px-3 font-bold text-indigo-700">1.8 mS/cm</td>
-                  <td className="py-2 px-3 text-slate-700">Điều kiện "Khung giờ ban đêm" chuyển sang đúng</td>
-                  <td className="py-2 px-3">
-                    <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Đã áp dụng
-                    </span>
-                  </td>
-                </tr>
-                <tr className="hover:bg-emerald-50/20">
-                  <td className="py-2 px-3 font-mono text-slate-500">03/09/2026 22:00:02</td>
-                  <td className="py-2 px-3 text-slate-600">2.4 mS/cm</td>
-                  <td className="py-2 px-3 font-bold text-amber-700">2.0 mS/cm</td>
-                  <td className="py-2 px-3 text-amber-800">Giá trị đề xuất &gt; Max cho phép &rarr; đã kẹp về 2.0</td>
-                  <td className="py-2 px-3">
-                    <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> Cảnh báo - Đã kẹp
-                    </span>
-                  </td>
-                </tr>
+                {((auditLogs ?? []).filter((l) => l.configKey === configKey)).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-slate-500">
+                      Chưa có nhật ký ghi đè nào cho tham số này. Nhật ký sẽ được ghi nhận khi Flow kích hoạt.
+                    </td>
+                  </tr>
+                ) : (
+                  (auditLogs ?? [])
+                    .filter((l) => l.configKey === configKey)
+                    .map((log) => (
+                      <tr key={log.id} className="hover:bg-emerald-50/20">
+                        <td className="py-2 px-3 font-mono text-slate-500">{log.timestamp}</td>
+                        <td className="py-2 px-3 text-slate-600">{log.originalValue} {bound.unit}</td>
+                        <td className="py-2 px-3 font-bold text-indigo-700">{log.overrideValue} {bound.unit}</td>
+                        <td className="py-2 px-3 text-slate-700">{log.reason}</td>
+                        <td className="py-2 px-3">
+                          {log.status === "applied" && (
+                            <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5" /> Đã áp dụng
+                            </span>
+                          )}
+                          {log.status === "restored" && (
+                            <span className="text-sky-700 font-semibold inline-flex items-center gap-1">
+                              <RefreshCw className="w-3 h-3" /> Đã khôi phục
+                            </span>
+                          )}
+                          {log.status === "clamped_warning" && (
+                            <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" /> Cảnh báo - Đã kẹp
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                )}
               </tbody>
+
             </table>
           </div>
         </div>

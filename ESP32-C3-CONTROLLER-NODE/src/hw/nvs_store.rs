@@ -43,6 +43,16 @@ impl NvsStore {
         }
     }
 
+    pub fn save_active_recipe(&mut self, recipe: &CropRecipe) -> Result<()> {
+        let nvs = self
+            .nvs
+            .as_mut()
+            .ok_or_else(|| anyhow!("NVS namespace 'agitech' is not available"))?;
+        let serialized = serde_json::to_string(recipe)?;
+        nvs.set_str(ACTIVE_RECIPE_KEY, &serialized)?;
+        Ok(())
+    }
+
     pub fn clear_active_recipe(&mut self) -> Result<()> {
         let nvs = self
             .nvs

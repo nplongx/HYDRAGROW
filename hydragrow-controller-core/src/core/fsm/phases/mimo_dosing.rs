@@ -93,7 +93,10 @@ impl PhaseTick for MimoDosingPhase {
                 if ctx.dosing.is_idle() {
                     if let Some(w_event) = water_event {
                         match w_event {
-                            WaterEvent::Done { duration_sec, .. } => {
+                            WaterEvent::Done {
+                                success: true,
+                                duration_sec,
+                            } => {
                                 let (water_in_spent, water_out_spent) =
                                     if ctx.peripherals.pump_status.water_pump_in {
                                         (duration_sec as f32, 0.0)
@@ -114,6 +117,22 @@ impl PhaseTick for MimoDosingPhase {
                                     ctx,
                                 );
                                 transition_to_active_mixing(uptime, sample, ctx, &mut result);
+                            }
+                            WaterEvent::Done {
+                                success: false,
+                                duration_sec,
+                            } => {
+                                warn!(
+                                    "🚨 [MIMO] Water operation failed/timed out after {}s. Aborting cycle to Cooldown!",
+                                    duration_sec
+                                );
+                                stop_water_and_misting(ctx, &mut result, &mut peri_delta);
+                                result.delta.reset_active_actors = true;
+                                result.delta.phase = Some(SystemPhase::Cooldown);
+                                result.delta.phase_finish_ms =
+                                    Some(Some(uptime + config.cooldown_sec.max(30) as u64 * 1000));
+                                result.delta.peripherals = Some(peri_delta);
+                                return result;
                             }
                             WaterEvent::Pending => {
                                 // Chu kỳ bơm nước đang chạy — tiếp tục ở MimoDosing
@@ -161,13 +180,18 @@ impl PhaseTick for MimoDosingPhase {
                 ph_up_ml,
                 ph_down_ml,
             } => {
+                let actual_water_sec = ctx
+                    .peripherals
+                    .water_pump_started_uptime_ms
+                    .map(|start| uptime.saturating_sub(start) as f32 / 1000.0)
+                    .unwrap_or(0.0);
                 let water_in_spent = if ctx.peripherals.pump_status.water_pump_in {
-                    config.max_refill_duration_sec as f32
+                    actual_water_sec
                 } else {
                     0.0
                 };
                 let water_out_spent = if ctx.peripherals.pump_status.water_pump_out {
-                    config.max_drain_duration_sec as f32
+                    actual_water_sec
                 } else {
                     0.0
                 };

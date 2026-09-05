@@ -45,10 +45,16 @@ impl SafeStateDeltas {
         let ec_tolerance = effective_ec_tolerance(config, ctx);
         let ph_tolerance = effective_ph_tolerance(config, ctx);
 
-        let ec_valid = config.enable_ec_sensor && !sensors.err_ec.unwrap_or(false);
-        let ph_valid = config.enable_ph_sensor && !sensors.err_ph.unwrap_or(false);
-        let water_valid = config.enable_water_level_sensor && !sensors.err_water.unwrap_or(false);
-        let temp_valid = config.enable_temp_sensor && !sensors.err_temp.unwrap_or(false);
+        let ec_valid =
+            config.enable_ec_sensor && !sensors.err_ec.unwrap_or(false) && sensors.ec.is_finite();
+        let ph_valid =
+            config.enable_ph_sensor && !sensors.err_ph.unwrap_or(false) && sensors.ph.is_finite();
+        let water_valid = config.enable_water_level_sensor
+            && !sensors.err_water.unwrap_or(false)
+            && sensors.water_level.is_finite();
+        let temp_valid = config.enable_temp_sensor
+            && !sensors.err_temp.unwrap_or(false)
+            && sensors.temp.is_finite();
 
         let ec = if ec_valid && ec_delta.abs() > ec_tolerance {
             ec_delta
@@ -532,5 +538,35 @@ mod tests {
             deltas.temp, 0.0,
             "deltas.temp must be 0 when err_temp is true"
         );
+    }
+
+    #[test]
+    fn solver_gates_on_sensor_validity_nan_ec() {
+        let config = test_config();
+        let ctx = SystemContext::default();
+        let solver = ColdPathSolver;
+
+        let mut sensors = test_sensors();
+        sensors.ec = f32::NAN;
+        sensors.ph = 5.0;
+
+        let result = solver.solve(&sensors, &config, &ctx);
+        match result {
+            SolveResult::Execute { control, .. } => {
+                assert_eq!(
+                    control.nutrient_a_ml, 0.0,
+                    "Nutrient A must be 0 when EC is NaN"
+                );
+                assert_eq!(
+                    control.nutrient_b_ml, 0.0,
+                    "Nutrient B must be 0 when EC is NaN"
+                );
+                assert!(
+                    control.ph_up_ml > 0.0,
+                    "Healthy pH channel should still dose when EC is NaN"
+                );
+            }
+            SolveResult::Idle => panic!("Expected SolveResult::Execute for healthy pH channel"),
+        }
     }
 }

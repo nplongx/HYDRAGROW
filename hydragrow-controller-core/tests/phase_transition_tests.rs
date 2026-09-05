@@ -173,3 +173,177 @@ fn automation_stop_emits_hardware_off_events() {
     );
     assert_eq!(result.delta.phase, Some(SystemPhase::ManualMode));
 }
+
+#[test]
+fn manual_mode_returns_to_monitoring_when_auto_reenabled() {
+    let config = auto_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::ManualMode;
+
+    let result = one_tick(&mut ctx, &config, &balanced_sensors(), 10_000);
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Monitoring),
+        "Khi control_mode là Auto và is_enabled là true, ManualMode phải chuyển về Monitoring"
+    );
+    assert_eq!(result.delta.phase_start_ms, Some(None));
+    assert_eq!(result.delta.phase_finish_ms, Some(None));
+    assert!(result.delta.reset_stabilizer);
+}
+
+#[test]
+fn manual_mode_actuator_stop_is_complete() {
+    let mut config = auto_config();
+    config.control_mode = hydragrow_shared::ControlMode::Manual;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::WaterRefilling;
+    ctx.peripherals.pump_status.water_pump_in = true;
+    ctx.peripherals.pump_status.osaka_pump = true;
+    ctx.peripherals.pump_status.mist_valve = true;
+    ctx.peripherals.pump_status.mix_valve = true;
+
+    let result = one_tick(&mut ctx, &config, &balanced_sensors(), 10_000);
+
+    assert_eq!(result.delta.phase, Some(SystemPhase::ManualMode));
+
+    // Verify all actuator groups are commanded OFF in events
+    let has_water_stop = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump { direction } if *direction == WaterDirection::Stop
+        )
+    });
+    let has_mist_off = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetMistValve { on: false }));
+    let has_mix_off = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetMixValve { on: false }));
+    let has_osaka_off = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 }));
+    let has_pump_a_off = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::events::DosingPumpTarget::NutrientA,
+                on: false,
+                ..
+            }
+        )
+    });
+    let has_ph_up_off = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::events::DosingPumpTarget::PhUp,
+                on: false,
+                ..
+            }
+        )
+    });
+
+    assert!(has_water_stop, "Must emit SetWaterPump Stop");
+    assert!(has_mist_off, "Must emit SetMistValve false");
+    assert!(has_mix_off, "Must emit SetMixValve false");
+    assert!(has_osaka_off, "Must emit SetOsakaPump 0");
+    assert!(has_pump_a_off, "Must emit SetDosingPump A false");
+    assert!(has_ph_up_off, "Must emit SetDosingPump PhUp false");
+
+    // Logical peripherals must also be set to false
+    let peri = result
+        .delta
+        .peripherals
+        .expect("Must have peripheral delta");
+    assert_eq!(peri.water_pump_in, Some(false));
+    assert_eq!(peri.mist_valve, Some(false));
+    assert_eq!(peri.mix_valve, Some(false));
+    assert_eq!(peri.osaka_pump, Some(false));
+    assert_eq!(peri.osaka_pwm, Some(0));
+    assert_eq!(peri.pump_a, Some(false));
+    assert_eq!(peri.ph_up, Some(false));
+}
+
+#[test]
+fn merge_tick_results_preserves_independent_peripheral_fields() {
+    use hydragrow_controller_core::core::fsm::orchestrator::merge_tick_results;
+    use hydragrow_controller_core::core::fsm::tick_result::{PeripheralDelta, TickResult};
+
+    let mut base = TickResult::default();
+    base.delta.peripherals = Some(PeripheralDelta {
+        water_pump_in: Some(true),
+        ..Default::default()
+    });
+    let mut addition = TickResult::default();
+    addition.delta.peripherals = Some(PeripheralDelta {
+        mist_valve: Some(true),
+        ..Default::default()
+    });
+    merge_tick_results(&mut base, addition);
+    let pd = base.delta.peripherals.expect("merged peripheral delta");
+    assert_eq!(pd.water_pump_in, Some(true));
+    assert_eq!(pd.mist_valve, Some(true));
+}
+
+#[test]
+fn merge_peripheral_deltas_resolves_valve_conflict_by_dosing_ownership() {
+    use hydragrow_controller_core::core::fsm::tick_result::PeripheralDelta;
+
+    // Case 1: Dosing addition takes ownership and sets mist_valve = true over scheduled false
+    let mut scheduled_base = PeripheralDelta {
+        mist_valve: Some(false),
+        misting_started_by_dosing: Some(false),
+        ..Default::default()
+    };
+    let dosing_addition = PeripheralDelta {
+        mist_valve: Some(true),
+        misting_started_by_dosing: Some(true),
+        ..Default::default()
+    };
+    scheduled_base.merge_from(dosing_addition);
+    assert_eq!(scheduled_base.mist_valve, Some(true));
+    assert_eq!(scheduled_base.misting_started_by_dosing, Some(true));
+
+    // Case 2: Scheduled addition (non-dosing) cannot override existing dosing-owned mist_valve = true
+    let mut dosing_base = PeripheralDelta {
+        mist_valve: Some(true),
+        misting_started_by_dosing: Some(true),
+        ..Default::default()
+    };
+    let scheduled_addition = PeripheralDelta {
+        mist_valve: Some(false),
+        misting_started_by_dosing: Some(false),
+        ..Default::default()
+    };
+    dosing_base.merge_from(scheduled_addition);
+    assert_eq!(
+        dosing_base.mist_valve,
+        Some(true),
+        "Scheduled cannot override dosing ownership"
+    );
+    assert_eq!(dosing_base.misting_started_by_dosing, Some(true));
+
+    // Case 3: Same for mix valve
+    let mut mix_base = PeripheralDelta {
+        mix_valve: Some(true),
+        mix_valve_started_by_dosing: Some(true),
+        ..Default::default()
+    };
+    let scheduled_mix = PeripheralDelta {
+        mix_valve: Some(false),
+        mix_valve_started_by_dosing: Some(false),
+        ..Default::default()
+    };
+    mix_base.merge_from(scheduled_mix);
+    assert_eq!(
+        mix_base.mix_valve,
+        Some(true),
+        "Scheduled cannot override dosing mix ownership"
+    );
+    assert_eq!(mix_base.mix_valve_started_by_dosing, Some(true));
+}

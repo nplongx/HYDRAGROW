@@ -26,7 +26,7 @@ pub struct PumpController<'d> {
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
 
     soft_start_gen: Arc<AtomicU64>,
-    current_water_direction: WaterDirection,
+    current_water_direction: Option<WaterDirection>,
 }
 
 impl<'d> PumpController<'d> {
@@ -89,8 +89,13 @@ impl<'d> PumpController<'d> {
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
             soft_start_gen: Arc::new(AtomicU64::new(0)),
-            current_water_direction: WaterDirection::Stop,
+            current_water_direction: Some(WaterDirection::Stop),
         })
+    }
+
+    /// Xóa cache chiều bơm nước để buộc lệnh kế tiếp phát sinh ghi phần cứng thực sự
+    pub fn invalidate_water_direction_cache(&mut self) {
+        self.current_water_direction = None;
     }
 
     // =========================================================================
@@ -139,45 +144,66 @@ impl<'d> PumpController<'d> {
     /// Khi đảo chiều, luôn tắt bơm đang chạy trước, chờ relay nhả 100ms,
     /// rồi mới bật bơm còn lại.
     pub fn set_water_pump(&mut self, direction: WaterDirection) -> anyhow::Result<()> {
-        if direction == self.current_water_direction {
+        if self.current_water_direction == Some(direction) {
             return Ok(());
         }
 
         match direction {
             WaterDirection::In => {
-                if self.current_water_direction == WaterDirection::Out {
-                    self.valve
-                        .set_low(ExpanderPin::WaterPumpOut)
-                        .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e))?;
+                if self.current_water_direction == Some(WaterDirection::Out) {
+                    if let Err(e) = self.valve.set_low(ExpanderPin::WaterPumpOut) {
+                        self.current_water_direction = None;
+                        return Err(anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e));
+                    }
                     thread::sleep(Duration::from_millis(100));
                 }
-                self.valve
-                    .set_high(ExpanderPin::WaterPumpIn)
-                    .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpIn ON failed: {:?}", e))?;
-                self.current_water_direction = WaterDirection::In;
+                if let Err(e) = self.valve.set_high(ExpanderPin::WaterPumpIn) {
+                    self.current_water_direction = None;
+                    return Err(anyhow::anyhow!("PCF8574 WaterPumpIn ON failed: {:?}", e));
+                }
+                self.current_water_direction = Some(WaterDirection::In);
             }
 
             WaterDirection::Out => {
-                if self.current_water_direction == WaterDirection::In {
-                    self.valve
-                        .set_low(ExpanderPin::WaterPumpIn)
-                        .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpIn OFF failed: {:?}", e))?;
+                if self.current_water_direction == Some(WaterDirection::In) {
+                    if let Err(e) = self.valve.set_low(ExpanderPin::WaterPumpIn) {
+                        self.current_water_direction = None;
+                        return Err(anyhow::anyhow!("PCF8574 WaterPumpIn OFF failed: {:?}", e));
+                    }
                     thread::sleep(Duration::from_millis(100));
                 }
-                self.valve
-                    .set_high(ExpanderPin::WaterPumpOut)
-                    .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut ON failed: {:?}", e))?;
-                self.current_water_direction = WaterDirection::Out;
+                if let Err(e) = self.valve.set_high(ExpanderPin::WaterPumpOut) {
+                    self.current_water_direction = None;
+                    return Err(anyhow::anyhow!("PCF8574 WaterPumpOut ON failed: {:?}", e));
+                }
+                self.current_water_direction = Some(WaterDirection::Out);
             }
 
             WaterDirection::Stop => {
-                self.valve
-                    .set_low(ExpanderPin::WaterPumpIn)
-                    .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpIn OFF failed: {:?}", e))?;
-                self.valve
-                    .set_low(ExpanderPin::WaterPumpOut)
-                    .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e))?;
-                self.current_water_direction = WaterDirection::Stop;
+                let res_in = self.valve.set_low(ExpanderPin::WaterPumpIn);
+                let res_out = self.valve.set_low(ExpanderPin::WaterPumpOut);
+
+                match (res_in, res_out) {
+                    (Ok(()), Ok(())) => {
+                        self.current_water_direction = Some(WaterDirection::Stop);
+                    }
+                    (Err(e_in), Ok(())) => {
+                        self.current_water_direction = None;
+                        anyhow::bail!("PCF8574 WaterPumpIn OFF failed: {:?}", e_in);
+                    }
+                    (Ok(()), Err(e_out)) => {
+                        self.current_water_direction = None;
+                        anyhow::bail!("PCF8574 WaterPumpOut OFF failed: {:?}", e_out);
+                    }
+                    (Err(e_in), Err(e_out)) => {
+                        self.current_water_direction = None;
+                        anyhow::bail!(
+                            "PCF8574 WaterPumpIn AND WaterPumpOut OFF failed: in={:?}, out={:?}",
+                            e_in,
+                            e_out
+                        );
+                    }
+                }
             }
         }
 

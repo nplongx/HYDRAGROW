@@ -195,6 +195,34 @@ fn disabled_controller_stops_automation() {
     );
 }
 
+#[test]
+fn controller_reenabled_recovers_from_manual_mode() {
+    let mut config = auto_config();
+    config.control_mode = hydragrow_shared::ControlMode::Auto;
+    config.is_enabled = true;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::ManualMode;
+
+    let result = orchestrator::tick(
+        1_700_000_000_000,
+        10_000,
+        &config,
+        &balanced_sensors(),
+        10_000,
+        &mut ctx,
+    );
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Monitoring),
+        "Khi controller được re-enable và mode là Auto, ManualMode phải phục hồi về Monitoring"
+    );
+    assert_eq!(result.delta.phase_start_ms, Some(None));
+    assert_eq!(result.delta.phase_finish_ms, Some(None));
+    assert!(result.delta.reset_stabilizer);
+}
+
 // Test 7: FORCE ON override remains active with divergent clocks (uptime vs Unix wall-clock)
 #[test]
 fn force_on_override_stays_active_with_divergent_clocks() {

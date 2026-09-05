@@ -2,6 +2,7 @@
 use hydragrow_shared::ControllerConfig;
 use log::warn;
 
+use crate::WaterDirection;
 use crate::core::adaptive::matrix::ControlVector;
 
 /// Hàm này nhận đầu vào là ControlVector do Ma trận tính toán ra, duyệt qua các ranh giới
@@ -175,6 +176,113 @@ pub fn apply_safety_guardrails(
         .clamp(0.0, config.max_drain_duration_sec as f32);
     control.mixing_sec = control.mixing_sec.clamp(0.0, 3600.0);
     control.misting_sec = control.misting_sec.clamp(0.0, 300.0);
+}
+
+pub const DEFAULT_WATER_RATE_CM_PER_SEC: f32 = 0.1;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WaterPlan {
+    pub direction: WaterDirection,
+    pub target_level: f32,
+    pub duration_sec: f32,
+    pub amount_cm: f32,
+}
+
+/// Chuyển đổi hướng + lượng nước + tốc độ/hiệu chuẩn + thời gian tối đa thành một kế hoạch khả thi đã qua kiểm tra an toàn.
+pub fn plan_water_operation(
+    direction: WaterDirection,
+    amount_cm: f32,
+    current_water_level: f32,
+    flow_cm_per_sec: Option<f32>,
+    config: &ControllerConfig,
+) -> Option<WaterPlan> {
+    let flow_rate = flow_cm_per_sec
+        .unwrap_or(DEFAULT_WATER_RATE_CM_PER_SEC)
+        .max(0.001);
+
+    match direction {
+        WaterDirection::Out => {
+            if current_water_level <= config.water_level_critical_min {
+                warn!(
+                    "🚨 [WATER_PLAN] Không thể xả nước: mực nước ({:.1}cm) <= ngưỡng nguy hiểm ({:.1}cm)",
+                    current_water_level, config.water_level_critical_min
+                );
+                return None;
+            }
+
+            let max_safe_drain = (current_water_level - config.water_level_critical_min).max(0.0);
+            if max_safe_drain <= 0.0 {
+                return None;
+            }
+
+            let effective_amount = if amount_cm > 0.0 {
+                amount_cm.min(max_safe_drain)
+            } else {
+                max_safe_drain
+            };
+
+            let target_level =
+                (current_water_level - effective_amount).max(config.water_level_critical_min);
+            let calculated_duration = if amount_cm > 0.0 {
+                effective_amount / flow_rate
+            } else {
+                config.max_drain_duration_sec as f32
+            };
+            let duration_sec = calculated_duration.clamp(0.0, config.max_drain_duration_sec as f32);
+
+            if duration_sec <= 0.0 {
+                return None;
+            }
+
+            Some(WaterPlan {
+                direction: WaterDirection::Out,
+                target_level,
+                duration_sec,
+                amount_cm: effective_amount,
+            })
+        }
+        WaterDirection::In => {
+            if current_water_level >= config.water_level_max {
+                warn!(
+                    "⚠️ [WATER_PLAN] Không thể cấp nước: mực nước ({:.1}cm) >= trần bồn ({:.1}cm)",
+                    current_water_level, config.water_level_max
+                );
+                return None;
+            }
+
+            let max_safe_refill = (config.water_level_max - current_water_level).max(0.0);
+            if max_safe_refill <= 0.0 {
+                return None;
+            }
+
+            let effective_amount = if amount_cm > 0.0 {
+                amount_cm.min(max_safe_refill)
+            } else {
+                max_safe_refill
+            };
+
+            let target_level = (current_water_level + effective_amount).min(config.water_level_max);
+            let calculated_duration = if amount_cm > 0.0 {
+                effective_amount / flow_rate
+            } else {
+                config.max_refill_duration_sec as f32
+            };
+            let duration_sec =
+                calculated_duration.clamp(0.0, config.max_refill_duration_sec as f32);
+
+            if duration_sec <= 0.0 {
+                return None;
+            }
+
+            Some(WaterPlan {
+                direction: WaterDirection::In,
+                target_level,
+                duration_sec,
+                amount_cm: effective_amount,
+            })
+        }
+        WaterDirection::Stop => None,
+    }
 }
 
 #[cfg(test)]

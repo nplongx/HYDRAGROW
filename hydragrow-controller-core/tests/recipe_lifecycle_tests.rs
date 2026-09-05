@@ -284,10 +284,7 @@ fn factory_reset_simulation_restores_default_context_and_clears_recipe() {
 
     // Simulate factory reset:
     // 1. Clear active_recipe from base and runtime
-    let mut reset_base = state.base_config.clone();
-    reset_base.active_recipe = None;
-    state.set_base_config(reset_base);
-    state.set_active_recipe(None);
+    state.clear_recipe();
 
     // 2. Clear context stage and reset safety/actor state
     let mut reset_delta = hydragrow_controller_core::core::fsm::ContextDelta {
@@ -308,4 +305,172 @@ fn factory_reset_simulation_restores_default_context_and_clears_recipe() {
         hydragrow_shared::fsm::SystemPhase::Fault(hydragrow_shared::fsm::FaultCode::EmergencyStop)
     );
     assert_eq!(state.effective_config, state.base_config);
+}
+
+#[test]
+fn config_update_without_recipe_preserves_existing_recipe() {
+    let recipe = test_recipe();
+    let base = ControllerConfig {
+        active_recipe: Some(recipe),
+        cooldown_sec: 100,
+        ..ControllerConfig::default()
+    };
+
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    // Activate stage 0
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+    assert_eq!(ctx.current_stage_index, Some(0));
+
+    // Simulate backend sending config update with active_recipe: None
+    let new_backend_config = ControllerConfig {
+        cooldown_sec: 500,
+        active_recipe: None,
+        ..ControllerConfig::default()
+    };
+    state.set_base_config(new_backend_config);
+
+    // Active recipe must NOT be wiped
+    assert!(state.base_config.active_recipe.is_some());
+    assert!(state.effective_config.active_recipe.is_some());
+    assert_eq!(state.effective_config.cooldown_sec, 500);
+    // Stage 0 overrides must remain intact
+    let stage0 = &test_recipe().stages[0];
+    assert_eq!(state.effective_config.ec_target, stage0.ec_target);
+    assert_eq!(state.effective_config.ph_target, stage0.ph_target);
+
+    // Next tick should still see the recipe and work normally
+    let tick2 = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000 + 3600);
+    state.apply_recipe_tick_result(&tick2);
+    ctx.apply_delta(&mut { tick2.delta });
+    assert_eq!(ctx.current_stage_index, Some(1));
+    let stage1 = &test_recipe().stages[1];
+    assert_eq!(state.effective_config.ec_target, stage1.ec_target);
+}
+
+#[test]
+fn config_update_with_new_recipe_replaces_old_recipe() {
+    let recipe1 = test_recipe();
+    let mut recipe2 = test_recipe();
+    recipe2.recipe_id = "recipe_v2".to_string();
+    recipe2.stages[0].ec_target = 3.5;
+
+    let base = ControllerConfig {
+        active_recipe: Some(recipe1),
+        ..ControllerConfig::default()
+    };
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    // Activate stage 0 of recipe 1
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+    assert_eq!(state.effective_config.ec_target, 2.2);
+
+    // Update base config with recipe 2
+    let new_base = ControllerConfig {
+        active_recipe: Some(recipe2),
+        ..ControllerConfig::default()
+    };
+    state.set_base_config(new_base);
+
+    // New recipe must be active in base_config
+    assert_eq!(
+        state.base_config.active_recipe.as_ref().unwrap().recipe_id,
+        "recipe_v2"
+    );
+
+    // Trigger stage tick for new recipe
+    let tick2 = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick2);
+    ctx.apply_delta(&mut { tick2.delta });
+
+    // Effective config must now reflect new recipe's stage targets
+    assert_eq!(state.effective_config.ec_target, 3.5);
+}
+
+#[test]
+fn activate_recipe_resets_completion_and_stage_cursor_on_new_revision() {
+    let mut recipe1 = test_recipe();
+    recipe1.revision = 1;
+    let base = ControllerConfig {
+        active_recipe: Some(recipe1.clone()),
+        ..ControllerConfig::default()
+    };
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    // Run to completion
+    let tick_comp = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000 + 7201);
+    assert_eq!(tick_comp.delta.recipe_completed, Some(true));
+    state.apply_recipe_tick_result(&tick_comp);
+    ctx.apply_delta(&mut { tick_comp.delta });
+    assert!(ctx.recipe_completed);
+    assert_eq!(ctx.current_stage_index, None);
+
+    // Backend activates revision 2 of the same recipe, with a new start time
+    let mut recipe2 = test_recipe();
+    recipe2.revision = 2;
+    recipe2.start_time_sec = 1_700_010_000;
+    recipe2.stages[0].ec_target = 2.9;
+
+    state.activate_recipe(recipe2);
+
+    // Active recipe must be updated in base_config
+    assert_eq!(
+        state.base_config.active_recipe.as_ref().unwrap().revision,
+        2
+    );
+
+    // Ticking the engine with revision 2 at its start time MUST reset recipe_completed and activate stage 0
+    let tick_rev2 = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_010_000);
+    assert_eq!(tick_rev2.delta.recipe_completed, Some(false));
+    assert_eq!(tick_rev2.delta.current_stage_index, Some(Some(0)));
+    state.apply_recipe_tick_result(&tick_rev2);
+    ctx.apply_delta(&mut { tick_rev2.delta });
+
+    assert!(!ctx.recipe_completed);
+    assert_eq!(ctx.current_stage_index, Some(0));
+    assert_eq!(state.effective_config.ec_target, 2.9);
+}
+
+#[test]
+fn clear_recipe_resets_all_overrides_and_clears_active_stage() {
+    let recipe = test_recipe();
+    let base = ControllerConfig {
+        ec_target: 1.0,
+        ph_target: 6.5,
+        ..ControllerConfig::default()
+    };
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    state.activate_recipe(recipe);
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+
+    assert_eq!(state.effective_config.ec_target, 2.2);
+    assert!(state.active_recipe.is_some());
+    assert_eq!(ctx.current_stage_index, Some(0));
+
+    // Clear recipe
+    state.clear_recipe();
+    let mut clear_delta = hydragrow_controller_core::core::fsm::ContextDelta {
+        current_stage_index: Some(None),
+        recipe_completed: Some(false),
+        ..Default::default()
+    };
+    ctx.apply_delta(&mut clear_delta);
+
+    assert!(state.base_config.active_recipe.is_none());
+    assert!(state.effective_config.active_recipe.is_none());
+    assert!(state.active_recipe.is_none());
+    assert_eq!(state.effective_config.ec_target, 1.0);
+    assert_eq!(state.effective_config.ph_target, 6.5);
+    assert_eq!(ctx.current_stage_index, None);
 }

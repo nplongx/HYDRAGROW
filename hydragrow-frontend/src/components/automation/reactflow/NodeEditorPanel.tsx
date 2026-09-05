@@ -186,20 +186,23 @@ export function NodeEditorPanel({
           <h3 className="text-sm font-semibold text-emerald-950">Điều kiện</h3>
           <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
         </div>
-        <ConditionGroupEditor
-          group={rootGroup}
-          fields={fields}
-          availableVariables={availableVariables}
-          onChange={(g) => {
-            const conditions = fromEditorRoot(g);
-            onChange(node.id, {
-              ...node.data,
-              conditions,
-              summary: summarizeConditionTree(conditions),
-            });
-          }}
-          isRoot={true}
-        />
+        <ConfigCard tone="amber">
+          <Badge tone="amber">CONDITION</Badge>
+          <ConditionGroupEditor
+            group={rootGroup}
+            fields={fields}
+            availableVariables={availableVariables}
+            onChange={(g) => {
+              const conditions = fromEditorRoot(g);
+              onChange(node.id, {
+                ...node.data,
+                conditions,
+                summary: summarizeConditionTree(conditions),
+              });
+            }}
+            isRoot={true}
+          />
+        </ConfigCard>
       </div>
     );
   }

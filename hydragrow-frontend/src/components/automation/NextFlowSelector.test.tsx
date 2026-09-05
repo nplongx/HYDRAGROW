@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { NextFlowSelector } from "./NextFlowSelector";
 import * as flowCycle from "../../lib/automation/flowCycle";
@@ -42,5 +42,31 @@ describe("NextFlowSelector", () => {
     expect(
       screen.getByText("không cho phép — sẽ tạo vòng lặp"),
     ).toBeInTheDocument();
+  });
+
+  it('renders the pass-context-variables toggle and reports changes', () => {
+    const onTogglePassContext = vi.fn();
+    render(
+      <NextFlowSelector
+        scripts={[]}
+        selectedIds={[]}
+        currentScriptId="3"
+        onToggle={() => {}}
+        passContextVariables={false}
+        onTogglePassContext={onTogglePassContext}
+      />,
+    );
+
+    const checkbox = screen.getByLabelText('Truyền biến ngữ cảnh sang flow tiếp theo');
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(onTogglePassContext).toHaveBeenCalledWith(true);
+  });
+
+  it('defaults passContextVariables to false when not provided', () => {
+    render(
+      <NextFlowSelector scripts={[]} selectedIds={[]} currentScriptId="3" onToggle={() => {}} />,
+    );
+    expect(screen.getByLabelText('Truyền biến ngữ cảnh sang flow tiếp theo')).not.toBeChecked();
   });
 });

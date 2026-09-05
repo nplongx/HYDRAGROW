@@ -17,9 +17,27 @@ import {
 import { ConditionGroupEditor } from "./ConditionGroupEditor";
 import { WebhookFieldMappingEditor } from "./WebhookFieldMappingEditor";
 
+import { getAvailableContextVariables } from "../../../lib/automation/contextVariables";
+import { extractTemplateTokens, renderTemplatePreview } from "../../../lib/automation/templateVars";
+import { VariableCombobox } from "./VariableCombobox";
+
+const BUILTIN_TEMPLATE_TOKENS = ["time"] as const;
+
+export const DEVICE_CONFIG_KEYS = [
+  "ec_target",
+  "ec_tolerance",
+  "ph_target",
+  "ph_tolerance",
+  "control_mode",
+  "is_enabled",
+  "delay_between_a_and_b_sec",
+];
+
 export interface NodeEditorPanelProps {
   kind: AutomationIr["kind"];
   node: { id: string; type?: string; data: Record<string, unknown> };
+  nodes?: Array<{ id: string; type?: string; data: Record<string, unknown> }>;
+  edges?: Array<{ id: string; source: string; target: string }>;
   onChange: (nodeId: string, data: Record<string, unknown>) => void;
   onClose: () => void;
 }
@@ -27,11 +45,18 @@ export interface NodeEditorPanelProps {
 export function NodeEditorPanel({
   kind,
   node,
+  nodes,
+  edges,
   onChange,
   onClose,
 }: NodeEditorPanelProps) {
   const fields = fieldsForKind(kind);
   const [triggerTab, setTriggerTab] = useState<"sensor" | "fsm" | "cron" | "webhook">("sensor");
+  const availableVariables = getAvailableContextVariables(
+    nodes ?? [],
+    edges ?? [],
+    node.id,
+  );
 
   if (node.type === "trigger" || node.id === "trigger") {
     const currentKind = (node.data.kind as "sensor" | "fsm" | "cron" | "webhook") || triggerTab;
@@ -148,6 +173,7 @@ export function NodeEditorPanel({
         <ConditionGroupEditor
           group={rootGroup}
           fields={fields}
+          availableVariables={availableVariables}
           onChange={(g) => {
             const conditions = fromEditorRoot(g);
             onChange(node.id, {
@@ -233,10 +259,12 @@ export function NodeEditorPanel({
               }
             />
           </label>
-          <label className="block text-xs text-emerald-800/75">
+          <label className="mb-1 block text-xs text-emerald-800/75">
             Message
-            <input
-              className="ui-input mt-1"
+            <textarea
+              aria-label="Message"
+              className="ui-input mt-1 w-full"
+              rows={3}
               value={message}
               onChange={(e) =>
                 setAction({
@@ -248,6 +276,46 @@ export function NodeEditorPanel({
               }
             />
           </label>
+          {availableVariables.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {availableVariables.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-label={v}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100"
+                  onClick={() =>
+                    setAction({
+                      type: "alert",
+                      level,
+                      title,
+                      message: `${message}{{${v}}}`,
+                    })
+                  }
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const tokens = extractTemplateTokens(message);
+            const knownTokens = new Set([...availableVariables, ...BUILTIN_TEMPLATE_TOKENS]);
+            const unknownTokens = tokens.filter((t) => !knownTokens.has(t));
+            const sample: Record<string, string> = {};
+            for (const v of availableVariables) sample[v] = `⟨${v}⟩`;
+            for (const t of BUILTIN_TEMPLATE_TOKENS) sample[t] = `⟨${t}⟩`;
+            return (
+              <div className="rounded bg-emerald-50/70 p-2 text-[11px] text-emerald-900">
+                <span className="font-semibold">Xem trước:</span> {renderTemplatePreview(message, sample)}
+                {unknownTokens.length > 0 && (
+                  <p className="mt-1 text-amber-700">
+                    Biến chưa xác định: {unknownTokens.join(", ")}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
       );
     }
@@ -502,6 +570,113 @@ export function NodeEditorPanel({
             )}
           </>
         )}
+      </div>
+    );
+  }
+
+  if (node.type === "config") {
+    const variant = (node.data?.variant as string) === "overwrite" ? "overwrite" : "read";
+    if (variant === "read") {
+      return (
+        <div className="w-72 shrink-0 border-l border-emerald-100 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-emerald-950">Config — Đọc</h3>
+            <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
+          </div>
+          <p className="text-xs text-emerald-800/80 mb-3">
+            Đọc giá trị từ cấu hình thiết bị và lưu vào biến cục bộ của Flow.
+          </p>
+          <label className="mb-2 block text-xs text-emerald-800/75">
+            Config key
+            <select
+              className="ui-input mt-1"
+              value={(node.data?.configKey as string) ?? ""}
+              onChange={(e) => onChange(node.id, { ...node.data, configKey: e.target.value })}
+            >
+              <option value="">-- Chọn key --</option>
+              {DEVICE_CONFIG_KEYS.map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </label>
+          <label className="mb-2 block text-xs text-emerald-800/75">
+            Lưu vào biến
+            <input
+              type="text"
+              className="ui-input mt-1"
+              placeholder="vd: ph_target_now"
+              value={(node.data?.saveToVariable as string) ?? ""}
+              onChange={(e) => onChange(node.id, { ...node.data, saveToVariable: e.target.value })}
+            />
+          </label>
+        </div>
+      );
+    }
+    return (
+      <div className="w-80 shrink-0 border-l border-emerald-100 bg-white p-3 overflow-y-auto">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-emerald-950">Config — Ghi đè</h3>
+          <button className="text-xs text-emerald-700/70" onClick={onClose}>Đóng</button>
+        </div>
+        <p className="text-xs text-emerald-800/80 mb-3">
+          Ghi đè giá trị cấu hình thiết bị với tuỳ chọn khôi phục (safe rollback).
+        </p>
+        <label className="mb-2 block text-xs text-emerald-800/75">
+          Config key
+          <select
+            className="ui-input mt-1"
+            value={(node.data?.configKey as string) ?? ""}
+            onChange={(e) => onChange(node.id, { ...node.data, configKey: e.target.value })}
+          >
+            <option value="">-- Chọn key --</option>
+            {DEVICE_CONFIG_KEYS.map((k) => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+        </label>
+        <label className="mb-2 block text-xs text-emerald-800/75">
+          Giá trị ghi đè
+          <VariableCombobox
+            id={`cfg-${node.id}-override`}
+            ariaLabel="Giá trị ghi đè"
+            value={String(node.data?.overrideValue ?? "")}
+            onChange={(val) => onChange(node.id, { ...node.data, overrideValue: val })}
+            availableVariables={availableVariables}
+            placeholder="vd: 1.8 hoặc chọn biến..."
+            className="mt-1"
+          />
+        </label>
+        <label className="mb-2 block text-xs text-emerald-800/75">
+          Thời điểm áp dụng
+          <select
+            className="ui-input mt-1"
+            value={(node.data?.applyWhen as string) ?? "previous_condition_true"}
+            onChange={(e) => onChange(node.id, { ...node.data, applyWhen: e.target.value })}
+          >
+            <option value="previous_condition_true">Khi điều kiện trước đúng</option>
+            <option value="always">Luôn áp dụng</option>
+          </select>
+        </label>
+        <label className="mb-2 flex items-center gap-2 text-xs text-emerald-800/75">
+          <input
+            type="checkbox"
+            checked={Boolean(node.data?.readOriginalBeforeWrite ?? true)}
+            onChange={(e) => onChange(node.id, { ...node.data, readOriginalBeforeWrite: e.target.checked })}
+          />
+          Đọc giá trị gốc trước khi ghi (rollback an toàn)
+        </label>
+        <label className="mb-2 block text-xs text-emerald-800/75">
+          Chế độ khôi phục
+          <select
+            className="ui-input mt-1"
+            value={(node.data?.restoreMode as string) ?? "on_flow_exit"}
+            onChange={(e) => onChange(node.id, { ...node.data, restoreMode: e.target.value })}
+          >
+            <option value="manual">Thủ công (không tự khôi phục)</option>
+            <option value="on_flow_exit">Khi Flow kết thúc</option>
+            <option value="on_condition_false">Khi điều kiện không còn đúng</option>
+          </select>
+        </label>
       </div>
     );
   }

@@ -9,6 +9,7 @@ import {
   Filter,
   Calendar,
   Webhook,
+  Database,
 } from "lucide-react";
 
 interface NodeProps {
@@ -109,8 +110,45 @@ export function ActionNode({ data, selected }: NodeProps) {
   );
 }
 
+export function ConfigNode({ data, selected }: NodeProps) {
+  const isOverwrite = data.variant === "overwrite";
+  const configKey = typeof data.configKey === "string" ? data.configKey : "";
+  const saveToVariable = typeof data.saveToVariable === "string" ? data.saveToVariable : "";
+  const overrideValue = data.overrideValue !== undefined ? String(data.overrideValue) : "";
+
+  const label = isOverwrite ? "CONFIG · GHI ĐÈ" : "CONFIG · ĐỌC";
+  const summary = isOverwrite
+    ? configKey && overrideValue
+      ? `${configKey} → ${overrideValue}`
+      : "Chưa cấu hình"
+    : configKey && saveToVariable
+      ? `${configKey} → ${saveToVariable}`
+      : "Chưa cấu hình";
+
+  const color = isOverwrite
+    ? "text-indigo-700 bg-indigo-50 border-indigo-400 border-2"
+    : "text-indigo-600 bg-indigo-50 border-indigo-200";
+
+  return (
+    <div
+      className={`rounded-xl border px-4 py-3 shadow-sm ${color} ${selected ? "ring-2 ring-emerald-500 ring-offset-2" : ""}`}
+    >
+      <Handle type="target" position={Position.Top} />
+      <div className="flex items-center gap-2">
+        <Database className="h-4 w-4" />
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold uppercase tracking-wide">{label}</span>
+          <span className="text-sm font-semibold">{summary}</span>
+        </div>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
+    </div>
+  );
+}
+
 export const AUTOMATION_NODE_TYPES = {
   trigger: TriggerNode,
   condition: ConditionNode,
   action: ActionNode,
+  config: ConfigNode,
 };

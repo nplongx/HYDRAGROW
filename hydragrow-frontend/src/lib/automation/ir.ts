@@ -21,6 +21,11 @@ export const ConditionSchema = z
     mode: RangeModeSchema.default('instant'),
     /** Bắt buộc khi mode != 'instant'. Đơn vị giây. */
     windowSec: z.number().int().positive().optional(),
+    /** Khi có mặt, trình biên dịch (subsystem "compiler + runtime context")
+     * so sánh với giá trị của biến ngữ cảnh này thay vì literal `value`.
+     * `value` vẫn bắt buộc để giữ tương thích ngược — UI có thể để nguyên 0
+     * khi dùng valueVariable, xem VariableCombobox. */
+    valueVariable: z.string().min(1).optional(),
   })
   .refine((c) => c.mode === 'instant' || c.windowSec !== undefined, {
     message: 'windowSec bắt buộc khi mode là mean/min/max',
@@ -33,6 +38,7 @@ export interface Condition {
   value: number;
   mode?: RangeMode;
   windowSec?: number;
+  valueVariable?: string;
 }
 
 export interface ConditionGroup {
@@ -138,7 +144,7 @@ export const TriggerSchema = z.discriminatedUnion('type', [
 // React Flow canvas state — opaque to the compiler, used only to restore the UI.
 export const AutomationNodeSchema = z.object({
   id: z.string(),
-  type: z.enum(['trigger', 'sensor', 'condition', 'delay', 'action']),
+  type: z.enum(['trigger', 'sensor', 'condition', 'delay', 'action', 'config']),
   position: z.object({ x: z.number(), y: z.number() }),
   data: z.record(z.string(), z.unknown()),
 });
@@ -149,6 +155,16 @@ export const AutomationEdgeSchema = z.object({
 });
 
 export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command']);
+
+/** Cấu hình cho toàn bộ Flow chain (next_flow_ids) của IR này — không phải
+ * per-link, xem "Known scope boundary" trong plan triển khai frontend. */
+export const ChainConfigSchema = z.object({
+  /** Khi true, flow con nhận BẢN SAO context hiện tại (không phải reference)
+   * — thực thi copy-on-call nằm ở backend (subsystem "Chain context-copy +
+   * per-node iteration limit"), field này chỉ lưu ý định người dùng chọn trên UI. */
+  passContextVariables: z.boolean().default(false),
+});
+export type ChainConfig = z.infer<typeof ChainConfigSchema>;
 
 export const AutomationIrSchema = z
   .object({
@@ -161,6 +177,7 @@ export const AutomationIrSchema = z
     /** IDs của các Flow sẽ được kích hoạt kế tiếp sau khi Flow này thực thi thành công.
      * Vắng hoặc `[]` = Flow độc lập (hành vi cũ, backward-compat). */
     next_flow_ids: z.array(z.string()).default([]),
+    chainConfig: ChainConfigSchema.default({ passContextVariables: false }),
   })
   .refine(
     (ir) => {

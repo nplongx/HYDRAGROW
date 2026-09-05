@@ -1,6 +1,6 @@
 interface Props {
   onAddNode: (
-    type: "condition" | "condition_group" | "action",
+    type: "condition" | "condition_group" | "action" | "config",
     variant?: string,
   ) => void;
   onUpdateTrigger?: (type: "sensor" | "fsm" | "cron" | "webhook") => void;
@@ -83,6 +83,26 @@ export function NodePalette({ onAddNode, onUpdateTrigger }: Props) {
             className="palette-btn bg-emerald-50/50 text-emerald-800 border-emerald-200"
           >
             + Delay
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-xs font-bold text-emerald-800/70 flex items-center gap-1">
+          CONFIG
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => onAddNode("config", "read")}
+            className="palette-btn bg-indigo-50 text-indigo-700 border-indigo-200"
+          >
+            + Đọc cấu hình
+          </button>
+          <button
+            onClick={() => onAddNode("config", "overwrite")}
+            className="palette-btn bg-indigo-50 text-indigo-700 border-indigo-200"
+          >
+            + Ghi đè cấu hình
           </button>
         </div>
       </div>

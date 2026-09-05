@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { Condition, ConditionGroup, ConditionOrGroup, ComparisonOperator } from '../../../lib/automation/ir';
+import { VariableCombobox } from './VariableCombobox';
 
 const OPERATORS: ComparisonOperator[] = ['>', '<', '>=', '<=', '==', '!='];
 
@@ -17,30 +19,35 @@ const DEFAULT_WINDOW_SEC = 900; // 15 phút — khớp mock Figma frame 04
 function LeafEditor({
   condition,
   fields,
+  availableVariables,
   onChange,
   onRemove,
 }: {
   condition: Condition;
   fields: readonly string[];
+  availableVariables: readonly string[];
   onChange: (c: Condition) => void;
   onRemove: () => void;
 }) {
   const mode = condition.mode ?? 'instant';
+  const [localVariableMode, setLocalVariableMode] = useState<boolean | null>(null);
+  const usesVariable = localVariableMode ?? (condition.valueVariable !== undefined);
+  // The sensor combobox suggests the fixed fields for this automation kind
+  // first, then any context variables discovered upstream on the canvas
+  // (e.g. a Config·Read node's "Lưu vào biến"), de-duplicated.
+  const sensorSuggestions = Array.from(new Set([...fields, ...availableVariables]));
+
   return (
     <div className="mb-2 flex flex-col gap-1 rounded border border-emerald-100 p-1.5">
       <div className="flex items-center gap-1">
-        <select
-          aria-label="Cảm biến"
-          className="ui-input px-1 py-1 text-xs"
+        <VariableCombobox
+          id={`sensor-${condition.sensor || 'new'}-${Math.random().toString(36).slice(2, 8)}`}
+          ariaLabel="Cảm biến"
           value={condition.sensor}
-          onChange={(e) => onChange({ ...condition, sensor: e.target.value })}
-        >
-          {fields.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
+          availableVariables={sensorSuggestions}
+          onChange={(raw) => onChange({ ...condition, sensor: raw })}
+          className="ui-input px-1 py-1 text-xs"
+        />
         <select
           aria-label="Toán tử"
           className="ui-input px-1 py-1 text-xs"
@@ -53,13 +60,38 @@ function LeafEditor({
             </option>
           ))}
         </select>
-        <input
-          aria-label="Giá trị"
-          type="number"
-          className="ui-input w-20 px-1 py-1 text-xs"
-          value={condition.value}
-          onChange={(e) => onChange({ ...condition, value: Number(e.target.value) })}
-        />
+        {usesVariable ? (
+          <VariableCombobox
+            id={`value-var-${condition.sensor || 'new'}`}
+            ariaLabel="Biến giá trị"
+            value={condition.valueVariable ?? ''}
+            availableVariables={availableVariables}
+            onChange={(raw) => onChange({ ...condition, valueVariable: raw })}
+            className="ui-input w-28 px-1 py-1 text-xs"
+          />
+        ) : (
+          <input
+            aria-label="Giá trị"
+            type="number"
+            className="ui-input w-20 px-1 py-1 text-xs"
+            value={condition.value}
+            onChange={(e) => onChange({ ...condition, value: Number(e.target.value) })}
+          />
+        )}
+        <button
+          type="button"
+          className="p-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-900"
+          onClick={() => {
+            const nextUsesVariable = !usesVariable;
+            setLocalVariableMode(nextUsesVariable);
+            onChange({
+              ...condition,
+              valueVariable: nextUsesVariable ? (condition.valueVariable ?? availableVariables[0] ?? '') : undefined,
+            });
+          }}
+        >
+          {usesVariable ? 'Dùng số' : 'Dùng biến'}
+        </button>
         <button
           type="button"
           className="p-1 text-xs font-bold text-red-600 hover:text-red-800"
@@ -111,11 +143,21 @@ function LeafEditor({
 export interface ConditionGroupEditorProps {
   group: ConditionGroup;
   fields: readonly string[];
+  /** Variable names in scope at this node (trigger fields + upstream
+   * Config·Read saveToVariable names). Defaults to `[]` so existing callers
+   * that don't yet compute this (e.g. older tests) keep working unchanged. */
+  availableVariables?: readonly string[];
   onChange: (next: ConditionGroup) => void;
   isRoot?: boolean;
 }
 
-export function ConditionGroupEditor({ group, fields, onChange, isRoot }: ConditionGroupEditorProps) {
+export function ConditionGroupEditor({
+  group,
+  fields,
+  availableVariables = [],
+  onChange,
+  isRoot,
+}: ConditionGroupEditorProps) {
   const setChild = (index: number, next: ConditionOrGroup) => {
     onChange({ ...group, children: group.children.map((c, i) => (i === index ? next : c)) });
   };
@@ -162,6 +204,7 @@ export function ConditionGroupEditor({ group, fields, onChange, isRoot }: Condit
             key={i}
             group={child}
             fields={fields}
+            availableVariables={availableVariables}
             onChange={(next) => setChild(i, next)}
           />
         ) : (
@@ -169,6 +212,7 @@ export function ConditionGroupEditor({ group, fields, onChange, isRoot }: Condit
             key={i}
             condition={child}
             fields={fields}
+            availableVariables={availableVariables}
             onChange={(next) => setChild(i, next)}
             onRemove={() => removeChild(i)}
           />

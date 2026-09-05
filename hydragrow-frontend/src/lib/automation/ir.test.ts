@@ -274,3 +274,71 @@ it('AutomationIrSchema: rejects cron trigger with empty expression', () => {
   const result = AutomationIrSchema.safeParse(ir);
   expect(result.success).toBe(false);
 });
+
+describe('config node type + Condition.valueVariable + chainConfig', () => {
+  it('AutomationNodeSchema accepts type "config"', () => {
+    const node = {
+      id: 'cfg-1',
+      type: 'config',
+      position: { x: 0, y: 0 },
+      data: { variant: 'read', configKey: 'ph_target', saveToVariable: 'ph_target_now' },
+    };
+    expect(AutomationNodeSchema.safeParse(node).success).toBe(true);
+  });
+
+  it('ConditionSchema accepts an optional valueVariable alongside the numeric value', () => {
+    const result = ConditionSchema.safeParse({
+      sensor: 'ph',
+      operator: '>',
+      value: 0,
+      valueVariable: 'ph_target_now',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.valueVariable).toBe('ph_target_now');
+  });
+
+  it('ConditionSchema omits valueVariable when not provided (back-compat)', () => {
+    const result = ConditionSchema.safeParse({ sensor: 'ph', operator: '>', value: 7.2 });
+    expect(result.success).toBe(true);
+    expect(result.data?.valueVariable).toBeUndefined();
+  });
+
+  it('rejects an empty-string valueVariable', () => {
+    const result = ConditionSchema.safeParse({
+      sensor: 'ph',
+      operator: '>',
+      value: 0,
+      valueVariable: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('AutomationIrSchema defaults chainConfig.passContextVariables to false when absent', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+      actions: [{ type: 'alert', level: 'info', message: 'test' }],
+      nodes: [],
+      edges: [],
+    };
+    const result = AutomationIrSchema.safeParse(ir);
+    expect(result.success).toBe(true);
+    expect(result.data?.chainConfig).toEqual({ passContextVariables: false });
+  });
+
+  it('AutomationIrSchema accepts an explicit chainConfig.passContextVariables', () => {
+    const ir = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+      actions: [{ type: 'alert', level: 'info', message: 'test' }],
+      nodes: [],
+      edges: [],
+      chainConfig: { passContextVariables: true },
+    };
+    const result = AutomationIrSchema.safeParse(ir);
+    expect(result.success).toBe(true);
+    expect(result.data?.chainConfig).toEqual({ passContextVariables: true });
+  });
+});

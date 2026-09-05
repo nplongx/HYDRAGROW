@@ -8,6 +8,12 @@ interface NextFlowSelectorProps {
   onToggle: (id: string, selected: boolean) => void;
   // Make check optional, falling back to false if not provided, allowing parent to handle it if needed
   allScripts?: UserScript[];
+  /** Whether child flows receive a COPY of this flow's execution context.
+   * Stored in `AutomationIr.chainConfig.passContextVariables` — see
+   * "Known scope boundary" in the frontend IR/UI implementation plan for
+   * what this does and does not enforce yet. */
+  passContextVariables?: boolean;
+  onTogglePassContext?: (next: boolean) => void;
 }
 
 export function NextFlowSelector({
@@ -16,6 +22,8 @@ export function NextFlowSelector({
   currentScriptId,
   onToggle,
   allScripts = scripts,
+  passContextVariables = false,
+  onTogglePassContext,
 }: NextFlowSelectorProps) {
   return (
     <div className="rounded-lg border border-emerald-100 p-2 mt-4">
@@ -54,6 +62,15 @@ export function NextFlowSelector({
           </label>
         );
       })}
+      <label className="mt-2 flex items-center gap-2 border-t border-emerald-100 pt-2 text-xs text-emerald-800/75 cursor-pointer">
+        <input
+          type="checkbox"
+          aria-label="Truyền biến ngữ cảnh sang flow tiếp theo"
+          checked={passContextVariables}
+          onChange={(e) => onTogglePassContext?.(e.target.checked)}
+        />
+        Truyền biến ngữ cảnh sang flow tiếp theo
+      </label>
     </div>
   );
 }

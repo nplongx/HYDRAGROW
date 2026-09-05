@@ -77,4 +77,38 @@ describe('FlowDetailDrawer', () => {
     expect(screen.getByText('Alert B')).toBeInTheDocument();
     expect(screen.getByText('Action C')).toBeInTheDocument();
   });
+
+  it('threads chainConfig.passContextVariables through save and reloads it when editing an existing Flow', async () => {
+    vi.mocked(useAutomationScriptsModule.useAutomationScripts).mockReturnValue({
+      data: [
+        { id: 'script-2', name: 'Flow tiếp theo', kind: 'alert', enabled: true } as any,
+      ],
+    } as any);
+
+    const existingScript = {
+      id: 'script-1',
+      name: 'Flow hiện có',
+      kind: 'alert',
+      enabled: true,
+      ir_json: {
+        kind: 'alert',
+        trigger: { type: 'sensor' },
+        conditions: [{ sensor: 'ph', operator: '>', value: 7 }],
+        actions: [{ type: 'alert', level: 'warning', message: 'x' }],
+        nodes: [],
+        edges: [],
+        next_flow_ids: [],
+        chainConfig: { passContextVariables: true },
+      },
+    };
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FlowDetailDrawer deviceId="device-1" script={existingScript as any} onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+
+    const checkbox = await screen.findByLabelText('Truyền biến ngữ cảnh sang flow tiếp theo');
+    expect(checkbox).toBeChecked();
+  });
 });

@@ -143,3 +143,158 @@ describe('NodeEditorPanel', () => {
     });
   });
 });
+
+describe('NodeEditorPanel — Config nodes', () => {
+  it('renders the Config·Read editor and updates configKey/saveToVariable', () => {
+    const mockOnChange = vi.fn();
+
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'cfg-1',
+          type: 'config',
+          data: { variant: 'read', configKey: '', saveToVariable: '' },
+        }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Config — Đọc')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Config key'), { target: { value: 'ph_target' } });
+    expect(mockOnChange).toHaveBeenCalledWith('cfg-1', {
+      variant: 'read',
+      configKey: 'ph_target',
+      saveToVariable: '',
+    });
+
+    fireEvent.change(screen.getByLabelText('Lưu vào biến'), { target: { value: 'ph_target_now' } });
+    expect(mockOnChange).toHaveBeenCalledWith('cfg-1', {
+      variant: 'read',
+      configKey: '',
+      saveToVariable: 'ph_target_now',
+    });
+  });
+
+  it('renders the Config·Overwrite editor with rollback toggle and restore mode', () => {
+    const mockOnChange = vi.fn();
+
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'cfg-2',
+          type: 'config',
+          data: {
+            variant: 'overwrite',
+            configKey: 'ec_target',
+            overrideValue: '1.8',
+            applyWhen: 'previous_condition_true',
+            readOriginalBeforeWrite: false,
+            restoreMode: 'on_condition_false',
+          },
+        }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Config — Ghi đè')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Đọc giá trị gốc trước khi ghi (rollback an toàn)'));
+    expect(mockOnChange).toHaveBeenCalledWith('cfg-2', {
+      variant: 'overwrite',
+      configKey: 'ec_target',
+      overrideValue: '1.8',
+      applyWhen: 'previous_condition_true',
+      readOriginalBeforeWrite: true,
+      restoreMode: 'on_condition_false',
+    });
+  });
+
+  it('lets the overwrite value reference a context variable via the combobox', () => {
+    const mockOnChange = vi.fn();
+
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'cfg-3',
+          type: 'config',
+          data: { variant: 'overwrite', configKey: 'ec_target', overrideValue: '' },
+        }}
+        nodes={[
+          { id: 'trigger', type: 'trigger', data: { kind: 'sensor' } },
+          { id: 'cfg-3', type: 'config', data: { variant: 'overwrite' } },
+        ]}
+        edges={[{ id: 'e1', source: 'trigger', target: 'cfg-3' }]}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const overrideInput = screen.getByLabelText('Giá trị ghi đè') as HTMLInputElement;
+    const options = Array.from(
+      document.querySelectorAll(`#${overrideInput.getAttribute('list')} option`),
+    ).map((o) => o.getAttribute('value'));
+    expect(options).toEqual(['ec', 'ph', 'temp', 'water_level']);
+  });
+});
+
+describe('NodeEditorPanel — Alert template preview', () => {
+  it('renders a preview substituting {{time}} and any in-scope variable, leaving unknown tokens visible', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'action-1',
+          type: 'action',
+          data: {
+            actions: [
+              { type: 'alert', level: 'warning', title: '', message: 'EC: {{ec}} lúc {{time}}, x={{unknown_var}}' },
+            ],
+            summary: 'alert (warning): ...',
+          },
+        }}
+        nodes={[{ id: 'trigger', type: 'trigger', data: { kind: 'sensor' } }]}
+        edges={[]}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/EC: ⟨ec⟩ lúc ⟨time⟩, x=\{\{unknown_var\}\}/)).toBeInTheDocument();
+    expect(screen.getByText(/Biến chưa xác định.*unknown_var/)).toBeInTheDocument();
+  });
+
+  it('clicking a variable chip appends {{name}} to the message', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'action-1',
+          type: 'action',
+          data: {
+            actions: [{ type: 'alert', level: 'info', title: '', message: 'Giá trị: ' }],
+            summary: '...',
+          },
+        }}
+        nodes={[{ id: 'trigger', type: 'trigger', data: { kind: 'sensor' } }]}
+        edges={[]}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'ec' }));
+    expect(mockOnChange).toHaveBeenCalledWith('action-1', {
+      actions: [{ type: 'alert', level: 'info', title: '', message: 'Giá trị: {{ec}}' }],
+      summary: 'alert (info): Giá trị: {{ec}}',
+    });
+  });
+});
+
+

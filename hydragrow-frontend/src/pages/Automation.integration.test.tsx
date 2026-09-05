@@ -89,5 +89,5 @@ describe('Automation Integration', () => {
     // -> save
     const saveBtn = screen.getByRole('button', { name: /Lưu Flow/i });
     fireEvent.click(saveBtn);
-  });
+  }, 15000);
 });

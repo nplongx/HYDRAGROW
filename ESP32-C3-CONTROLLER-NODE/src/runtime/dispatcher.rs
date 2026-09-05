@@ -58,6 +58,7 @@ impl EventDispatcher {
         events: Vec<OrchestratorEvent>,
         dc: &mut DispatchContext<'_, '_>,
     ) -> Option<FaultCode> {
+        dc.pumps.invalidate_water_direction_cache();
         let mut shutdown_fault = None;
         for event in events {
             if let Some(fault) = Self::handle_event(event.clone(), dc) {
@@ -110,6 +111,7 @@ impl EventDispatcher {
             OrchestratorEvent::SetWaterPump { direction } => {
                 if let Err(e) = dc.pumps.set_water_pump(direction) {
                     warn!("⚠️ [DISPATCHER] SetWaterPump error: {:?}", e);
+                    dc.pumps.invalidate_water_direction_cache();
                     let fault = match direction {
                         WaterDirection::In => FaultCode::WaterRefillFailed,
                         WaterDirection::Out => FaultCode::WaterDrainFailed,

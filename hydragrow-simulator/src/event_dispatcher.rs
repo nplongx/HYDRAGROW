@@ -213,6 +213,115 @@ mod tests {
         assert_eq!(secondary.unwrap(), "Failed to turn off pump NutrientB");
         assert!(!hw.pump_a.on, "Pump A OFF must still have been attempted");
     }
+
+    #[test]
+    fn emergency_stop_water_in_off_fails_still_attempts_water_out_off() {
+        let mut hw = VirtualHardwareState::default();
+        hw.water_pump_in.on = true;
+        hw.water_pump_out.on = true;
+
+        let mut driver = VirtualWaterPumpDriver::new();
+        driver.cached_direction = Some(WaterDirection::In);
+
+        let result = driver.set_water_pump(WaterDirection::Stop, &mut hw, true);
+
+        assert!(result.is_err(), "Must report failure of Water IN OFF");
+        assert!(hw.water_pump_in.on, "Water IN remains on due to simulated write failure");
+        assert!(!hw.water_pump_out.on, "Water OUT OFF must still be attempted and shut off!");
+        assert_eq!(driver.cached_direction, None, "Direction cache must be invalidated on error");
+    }
+
+    #[test]
+    fn cached_direction_recovery_reasserts_hardware_write() {
+        let mut hw = VirtualHardwareState::default();
+        let mut driver = VirtualWaterPumpDriver::new();
+
+        let res1 = driver.set_water_pump(WaterDirection::In, &mut hw, false);
+        assert!(res1.is_ok());
+        assert_eq!(driver.physical_writes, 1);
+        assert!(hw.water_pump_in.on);
+
+        // Simulate external shutdown / reset
+        hw.water_pump_in.on = false;
+
+        // Invalidate cache on fault/recovery
+        driver.invalidate_cache();
+        assert_eq!(driver.cached_direction, None);
+
+        // Next IN request must reassert real write
+        let res2 = driver.set_water_pump(WaterDirection::In, &mut hw, false);
+        assert!(res2.is_ok());
+        assert_eq!(driver.physical_writes, 2, "Must issue real physical write after cache invalidation");
+        assert!(hw.water_pump_in.on, "Hardware must be reasserted to ON");
+        assert_eq!(driver.cached_direction, Some(WaterDirection::In));
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct VirtualWaterPumpDriver {
+    pub cached_direction: Option<WaterDirection>,
+    pub physical_writes: usize,
+}
+
+impl VirtualWaterPumpDriver {
+    pub fn new() -> Self {
+        Self {
+            cached_direction: Some(WaterDirection::Stop),
+            physical_writes: 0,
+        }
+    }
+
+    pub fn set_water_pump(
+        &mut self,
+        direction: WaterDirection,
+        hw: &mut VirtualHardwareState,
+        fail_in_off: bool,
+    ) -> Result<(), String> {
+        if self.cached_direction == Some(direction) {
+            return Ok(());
+        }
+
+        match direction {
+            WaterDirection::In => {
+                self.physical_writes += 1;
+                hw.water_pump_in.on = true;
+                hw.water_pump_out.on = false;
+                self.cached_direction = Some(WaterDirection::In);
+                Ok(())
+            }
+            WaterDirection::Out => {
+                self.physical_writes += 1;
+                hw.water_pump_in.on = false;
+                hw.water_pump_out.on = true;
+                self.cached_direction = Some(WaterDirection::Out);
+                Ok(())
+            }
+            WaterDirection::Stop => {
+                self.physical_writes += 1;
+                let mut err_in = None;
+                if fail_in_off {
+                    err_in = Some("PCF8574 WaterPumpIn OFF failed");
+                } else {
+                    hw.water_pump_in.on = false;
+                }
+
+                // Water OUT OFF MUST still be attempted even if IN OFF failed!
+                hw.water_pump_out.on = false;
+
+                if let Some(e) = err_in {
+                    self.cached_direction = None; // Invalidate cache on error
+                    Err(e.to_string())
+                } else {
+                    self.cached_direction = Some(WaterDirection::Stop);
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    pub fn invalidate_cache(&mut self) {
+        self.cached_direction = None;
+    }
 }
 
 pub fn dispatch_events_transactional(

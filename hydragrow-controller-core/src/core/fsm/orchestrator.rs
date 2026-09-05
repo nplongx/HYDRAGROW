@@ -136,6 +136,14 @@ pub fn tick(
         return stop_automation_if_needed(result, ctx);
     }
 
+    if ctx.phase == SystemPhase::ManualMode {
+        result.delta.phase = Some(SystemPhase::Monitoring);
+        result.delta.phase_start_ms = Some(None);
+        result.delta.phase_finish_ms = Some(None);
+        result.delta.reset_stabilizer = true;
+        return result;
+    }
+
     if matches!(
         ctx.phase,
         SystemPhase::ActiveMixing | SystemPhase::Stabilizing

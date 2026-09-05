@@ -173,3 +173,21 @@ fn automation_stop_emits_hardware_off_events() {
     );
     assert_eq!(result.delta.phase, Some(SystemPhase::ManualMode));
 }
+
+#[test]
+fn manual_mode_returns_to_monitoring_when_auto_reenabled() {
+    let config = auto_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::ManualMode;
+
+    let result = one_tick(&mut ctx, &config, &balanced_sensors(), 10_000);
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Monitoring),
+        "Khi control_mode là Auto và is_enabled là true, ManualMode phải chuyển về Monitoring"
+    );
+    assert_eq!(result.delta.phase_start_ms, Some(None));
+    assert_eq!(result.delta.phase_finish_ms, Some(None));
+    assert!(result.delta.reset_stabilizer);
+}

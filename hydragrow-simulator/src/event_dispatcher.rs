@@ -169,15 +169,18 @@ mod tests {
             },
         ];
 
-        let result = dispatch_events_transactional(
-            &mut hw,
-            &events,
-            Some(DosingPumpTarget::NutrientA),
-        );
+        let result =
+            dispatch_events_transactional(&mut hw, &events, Some(DosingPumpTarget::NutrientA));
         assert!(result.is_err(), "Dispatcher must report hardware failure");
         assert!(!hw.pump_a.on);
-        assert!(!hw.pump_b.on, "Pump B must not be attempted after Pump A fault");
-        assert!(!hw.water_pump_in.on, "Water pump must not be attempted after Pump A fault");
+        assert!(
+            !hw.pump_b.on,
+            "Pump B must not be attempted after Pump A fault"
+        );
+        assert!(
+            !hw.water_pump_in.on,
+            "Water pump must not be attempted after Pump A fault"
+        );
     }
 
     #[test]
@@ -208,7 +211,10 @@ mod tests {
             Some(DosingPumpTarget::NutrientB),
         );
 
-        assert_eq!(primary_fault, "PumpA hardware fault", "Primary fault must remain latched");
+        assert_eq!(
+            primary_fault, "PumpA hardware fault",
+            "Primary fault must remain latched"
+        );
         assert!(secondary.is_some(), "Secondary failure must be observable");
         assert_eq!(secondary.unwrap(), "Failed to turn off pump NutrientB");
         assert!(!hw.pump_a.on, "Pump A OFF must still have been attempted");
@@ -226,9 +232,18 @@ mod tests {
         let result = driver.set_water_pump(WaterDirection::Stop, &mut hw, true);
 
         assert!(result.is_err(), "Must report failure of Water IN OFF");
-        assert!(hw.water_pump_in.on, "Water IN remains on due to simulated write failure");
-        assert!(!hw.water_pump_out.on, "Water OUT OFF must still be attempted and shut off!");
-        assert_eq!(driver.cached_direction, None, "Direction cache must be invalidated on error");
+        assert!(
+            hw.water_pump_in.on,
+            "Water IN remains on due to simulated write failure"
+        );
+        assert!(
+            !hw.water_pump_out.on,
+            "Water OUT OFF must still be attempted and shut off!"
+        );
+        assert_eq!(
+            driver.cached_direction, None,
+            "Direction cache must be invalidated on error"
+        );
     }
 
     #[test]
@@ -251,7 +266,10 @@ mod tests {
         // Next IN request must reassert real write
         let res2 = driver.set_water_pump(WaterDirection::In, &mut hw, false);
         assert!(res2.is_ok());
-        assert_eq!(driver.physical_writes, 2, "Must issue real physical write after cache invalidation");
+        assert_eq!(
+            driver.physical_writes, 2,
+            "Must issue real physical write after cache invalidation"
+        );
         assert!(hw.water_pump_in.on, "Hardware must be reasserted to ON");
         assert_eq!(driver.cached_direction, Some(WaterDirection::In));
     }
@@ -330,10 +348,10 @@ pub fn dispatch_events_transactional(
     failing_pump: Option<DosingPumpTarget>,
 ) -> Result<(), String> {
     for event in events {
-        if let OrchestratorEvent::SetDosingPump { pump, on: true, .. } = event {
-            if Some(*pump) == failing_pump {
-                return Err(format!("Hardware fault on pump {:?}", pump));
-            }
+        if let OrchestratorEvent::SetDosingPump { pump, on: true, .. } = event
+            && Some(*pump) == failing_pump
+        {
+            return Err(format!("Hardware fault on pump {:?}", pump));
         }
         apply_event(hw, event);
     }
@@ -347,13 +365,15 @@ pub fn dispatch_best_effort_all_off(
 ) -> Option<String> {
     let mut secondary_fault = None;
     for event in events {
-        if let OrchestratorEvent::SetDosingPump { pump, on: false, .. } = event {
-            if Some(*pump) == failing_off_pump {
-                if secondary_fault.is_none() {
-                    secondary_fault = Some(format!("Failed to turn off pump {:?}", pump));
-                }
-                continue;
+        if let OrchestratorEvent::SetDosingPump {
+            pump, on: false, ..
+        } = event
+            && Some(*pump) == failing_off_pump
+        {
+            if secondary_fault.is_none() {
+                secondary_fault = Some(format!("Failed to turn off pump {:?}", pump));
             }
+            continue;
         }
         apply_event(hw, event);
     }

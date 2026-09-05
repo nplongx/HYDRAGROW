@@ -251,4 +251,20 @@ describe("action_command compilation", () => {
     });
     expect(source).toContain('"action": "emergency_stop"');
   });
+
+  it('compiles a condition with valueVariable to an input.<var> comparison instead of the literal value', () => {
+    const ir = {
+      kind: 'alert' as const,
+      trigger: { type: 'sensor' as const },
+      conditions: [{ sensor: 'ph', operator: '>' as const, value: 0, valueVariable: 'ph_target_now' }],
+      actions: [{ type: 'alert' as const, level: 'warning' as const, message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+      chainConfig: { passContextVariables: false },
+    };
+    const source = compileToRhai(ir as any);
+    expect(source).toContain('input.ph > input.ph_target_now');
+    expect(source).not.toContain('input.ph > 0');
+  });
 });

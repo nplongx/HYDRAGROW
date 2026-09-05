@@ -9,7 +9,11 @@ function conditionToRhai(c: Condition): string {
   if (c.mode && c.mode !== 'instant') {
     return `fetch_range_stat("${c.sensor}", "${c.mode}", ${c.windowSec}) ${c.operator} ${c.value}`;
   }
-  return `input.${c.sensor} ${c.operator} ${c.value}`;
+  // Khi có valueVariable, so sánh với 1 biến trong execution context (được backend
+  // nạp vào `input` từ Config·Read hoặc từ context được Chain truyền tới) thay vì
+  // literal `value` — xem hydragrow-backend/src/services/config_context.rs.
+  const rhs = c.valueVariable ? `input.${c.valueVariable}` : `${c.value}`;
+  return `input.${c.sensor} ${c.operator} ${rhs}`;
 }
 
 function isGroup(c: ConditionOrGroup): c is import("./ir").ConditionGroup {

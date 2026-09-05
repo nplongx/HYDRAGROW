@@ -1,0 +1,53 @@
+{
+  "requirement_id": "AUTOMATION-REDESIGN-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::script",
+      "verified_at": "2026-09-05T21:52:11Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings",
+      "verified_at": "2026-09-05T21:53:21Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Automation.test.tsx",
+      "verified_at": "2026-09-05T21:57:53Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/AutomationMetricsBanner.test.tsx",
+      "verified_at": "2026-09-05T21:57:53Z"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/ConfigExplorerView.test.tsx",
+      "verified_at": "2026-09-05T21:57:53Z"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/AutomationMultiDeviceTemplatePanel.test.tsx",
+      "verified_at": "2026-09-05T21:57:53Z"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/WebhookAndChainPanel.test.tsx",
+      "verified_at": "2026-09-05T21:57:53Z"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "npx vitest run && npm run build && npx eslint . && npx tsc --noEmit",
+      "verified_at": "2026-09-05T22:00:22Z"
+    }
+  ]
+}

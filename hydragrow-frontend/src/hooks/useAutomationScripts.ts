@@ -65,3 +65,27 @@ export function useApplyTemplate(deviceId: string, scriptId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-scripts'] }),
   });
 }
+
+export function useConfigOverrides(deviceId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['config-overrides', deviceId],
+    queryFn: () =>
+      apiGet<{ status: string; data: import('../types/automation').ConfigOverridesResponse }>(
+        `/devices/${deviceId}/scripts/config-overrides`,
+      ).then((r) => r.data),
+    enabled: options?.enabled !== undefined ? options.enabled && !!deviceId : !!deviceId,
+  });
+}
+
+export function useRevertConfigOverride(deviceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (overrideId: string) =>
+      apiPost<{ status: string; message: string }>(`/devices/${deviceId}/scripts/config-overrides/${overrideId}/revert`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config-overrides', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['automation-scripts', deviceId] });
+    },
+  });
+}
+

@@ -40,6 +40,7 @@ export interface TestScriptResponse {
 }
 
 export interface ConfigOverrideActiveItem {
+  id?: string;
   configKey: string;
   deviceId: string;
   deviceName?: string;
@@ -63,4 +64,10 @@ export interface ConfigAuditLogEntry {
   reason: string;
   status: 'applied' | 'restored' | 'clamped_warning';
 }
+
+export interface ConfigOverridesResponse {
+  active: ConfigOverrideActiveItem[];
+  history: ConfigAuditLogEntry[];
+}
+
 

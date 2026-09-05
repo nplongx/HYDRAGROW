@@ -11,10 +11,10 @@ interface Props {
 
 export function AutomationMetricsBanner({ metrics }: Props) {
   const data: AutomationMetrics = {
-    activeFlows: metrics?.activeFlows ?? 12,
-    alerts24h: metrics?.alerts24h ?? 3,
-    configOverridesToday: metrics?.configOverridesToday ?? 5,
-    successRatePercent: metrics?.successRatePercent ?? 99.2,
+    activeFlows: metrics?.activeFlows ?? 0,
+    alerts24h: metrics?.alerts24h ?? 0,
+    configOverridesToday: metrics?.configOverridesToday ?? 0,
+    successRatePercent: metrics?.successRatePercent ?? 100,
   };
 
   return (

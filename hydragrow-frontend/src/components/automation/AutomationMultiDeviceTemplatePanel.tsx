@@ -16,28 +16,22 @@ interface TargetDeviceMeta {
   currentOverrideVal?: string;
 }
 
-const DEFAULT_DEVICES: TargetDeviceMeta[] = [
-  { id: "dev-a1", name: "Nhà kính A · Kệ 1", group: "Rau ăn lá", hasLocalOverride: false },
-  { id: "dev-a2", name: "Nhà kính A · Kệ 2", group: "Rau ăn lá", hasLocalOverride: false },
-  { id: "dev-b1", name: "Nhà kính B · Kệ 1", group: "Dâu tây", hasLocalOverride: true, currentOverrideVal: "2.1" },
-  { id: "dev-b2", name: "Nhà kính B · Kệ 2", group: "Dâu tây", hasLocalOverride: false },
-  { id: "dev-c1", name: "Nhà kính C · Kệ 1", group: "Cà chua bi", hasLocalOverride: true, currentOverrideVal: "2.6" },
-];
-
 export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
-  const { data: realDevices } = useOwnedDevices() as any;
+  const ownedRes = useOwnedDevices() as any;
+  const rawDevices = ownedRes?.devices ?? ownedRes?.data ?? [];
   const applyMutation = useApplyTemplate(currentScript.device_id, currentScript.id);
 
-  // Map real devices if available, otherwise fallback to sample structure
-  const devices: TargetDeviceMeta[] = (realDevices && realDevices.length > 0)
-    ? realDevices.map((d: any) => ({
-        id: d.id,
-        name: d.name || `Thiết bị ${d.id}`,
-        group: d.group || "Mặc định",
-        hasLocalOverride: d.id === "dev2" || (typeof d.name === "string" && d.name.includes("Override")),
-        currentOverrideVal: d.id === "dev2" ? "2.1" : undefined,
+  // Map real devices
+  const devices: TargetDeviceMeta[] = (rawDevices && rawDevices.length > 0)
+    ? rawDevices.map((d: any) => ({
+        id: d.device_id || d.id,
+        name: d.label || d.name || `Thiết bị ${d.device_id || d.id}`,
+        group: d.group || "Khu vực sản xuất",
+        hasLocalOverride: Boolean(d.hasLocalOverride || (d.name && String(d.name).toLowerCase().includes("override")) || (d.label && String(d.label).toLowerCase().includes("override"))),
+        currentOverrideVal: d.currentOverrideVal,
       }))
-    : DEFAULT_DEVICES;
+    : [];
+
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
@@ -112,6 +106,11 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
           </div>
 
           <div className="space-y-2.5">
+            {devices.length === 0 && (
+              <div className="py-6 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-4">
+                Không tìm thấy thiết bị nào trong tài khoản để triển khai mẫu.
+              </div>
+            )}
             {devices.map((d) => {
               const isChecked = !!selectedIds[d.id];
               return (

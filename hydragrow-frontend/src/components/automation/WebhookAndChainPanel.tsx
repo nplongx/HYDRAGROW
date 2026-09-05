@@ -29,7 +29,7 @@ export function WebhookAndChainPanel({
   scripts,
   selectedNextFlowIds,
   onToggleNextFlow,
-  webhookUrl = "https://api.hydragrow.app/webhook/wh_8f3a2c91",
+  webhookUrl,
 }: Props) {
   const [mode, setMode] = useState<"flow" | "direct">("flow");
   const [mappings, setMappings] = useState<FieldMapping[]>(DEFAULT_MAPPINGS);
@@ -38,8 +38,13 @@ export function WebhookAndChainPanel({
   const [isNewConfig, setIsNewConfig] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const fallbackWebhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/webhook/devices/${scripts[0]?.device_id || "device"}/flow-event`
+    : "https://api.hydragrow.app/api/webhook/devices/device/flow-event";
+  const effectiveWebhookUrl = webhookUrl ?? fallbackWebhookUrl;
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(webhookUrl);
+    navigator.clipboard.writeText(effectiveWebhookUrl);
     setCopied(true);
     toast.success("Đã sao chép Webhook URL!");
     setTimeout(() => setCopied(false), 2000);
@@ -56,41 +61,8 @@ export function WebhookAndChainPanel({
     setIsNewConfig(false);
   };
 
-  const candidateFlows = scripts.length > 0 ? scripts : [
-    {
-      id: "flow-1",
-      device_id: "dev-01",
-      name: "Auto dose PH_DOWN",
-      kind: "action_command" as const,
-      enabled: true,
-      source: "",
-      ir_json: null,
-      created_at: "",
-      updated_at: "",
-    },
-    {
-      id: "flow-2",
-      device_id: "dev-01",
-      name: "Hạ ngưỡng EC ban đêm",
-      kind: "config_override" as const,
-      enabled: true,
-      source: "",
-      ir_json: null,
-      created_at: "",
-      updated_at: "",
-    },
-    {
-      id: "flow-3",
-      device_id: "dev-01",
-      name: "Kết thúc mùa vụ",
-      kind: "recipe_override" as const,
-      enabled: true,
-      source: "",
-      ir_json: null,
-      created_at: "",
-      updated_at: "",
-    },
-  ];
+  const candidateFlows = scripts;
+
 
   return (
     <div className="bg-white rounded-3xl border border-emerald-100 p-6 shadow-sm space-y-6">
@@ -282,23 +254,29 @@ export function WebhookAndChainPanel({
             </div>
 
             {/* Candidate flows */}
-            {candidateFlows.map((cf) => {
-              const isSelected = selectedNextFlowIds.includes(cf.id);
-              const isSelf = cf.id === currentScriptId;
-              return (
-                <div
-                  key={cf.id}
-                  onClick={() => {
-                    if (!isSelf) onToggleNextFlow(cf.id);
-                  }}
-                  className={`p-3 rounded-2xl border text-xs flex items-center justify-between transition-all ${
-                    isSelf
-                      ? "border-red-200 bg-red-50/40 opacity-70 cursor-not-allowed"
-                      : isSelected
-                      ? "border-indigo-300 bg-indigo-50/50 cursor-pointer"
-                      : "border-slate-200 bg-white hover:border-slate-300 cursor-pointer"
-                  }`}
-                >
+            {candidateFlows.length === 0 ? (
+              <div className="py-4 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                Chưa có Flow nào khác trong hệ thống để xâu chuỗi.
+              </div>
+            ) : (
+              candidateFlows.map((cf) => {
+                const isSelected = selectedNextFlowIds.includes(cf.id);
+                const isSelf = cf.id === currentScriptId;
+                return (
+                  <div
+                    key={cf.id}
+                    onClick={() => {
+                      if (!isSelf) onToggleNextFlow(cf.id);
+                    }}
+                    className={`p-3 rounded-2xl border text-xs flex items-center justify-between transition-all ${
+                      isSelf
+                        ? "border-red-200 bg-red-50/40 opacity-70 cursor-not-allowed"
+                        : isSelected
+                        ? "border-indigo-300 bg-indigo-50/50 cursor-pointer"
+                        : "border-slate-200 bg-white hover:border-slate-300 cursor-pointer"
+                    }`}
+                  >
+
                   <div className="flex items-center gap-2.5">
                     <input
                       type="checkbox"
@@ -321,7 +299,8 @@ export function WebhookAndChainPanel({
                   )}
                 </div>
               );
-            })}
+            })
+          )}
           </div>
 
           {/* Execution Chain Preview */}

@@ -2,6 +2,9 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Automation } from "./Automation";
 import { useDeviceStore } from "../store/useDeviceStore";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
 
 class ResizeObserverMock {
   observe() {}
@@ -21,6 +24,8 @@ vi.mock("../hooks/useAutomationScripts", () => ({
     isError: false,
   }),
   useApplyTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
+  useRevertConfigOverride: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("../hooks/useMediaQuery", () => ({
@@ -55,7 +60,11 @@ describe("Automation Page Desktop Drawer", () => {
 
   it("renders backdrop and max-w-xl container when a script is selected in desktop mode", () => {
     mockSelectedScript = "new";
-    render(<Automation />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Automation />
+      </QueryClientProvider>
+    );
 
     const backdrop = screen.getByTestId("drawer-backdrop");
     expect(backdrop).toBeInTheDocument();
@@ -69,7 +78,11 @@ describe("Automation Page Desktop Drawer", () => {
 
   it("does not render drawer or backdrop when no script is selected", () => {
     mockSelectedScript = null;
-    render(<Automation />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Automation />
+      </QueryClientProvider>
+    );
 
     expect(screen.queryByTestId("drawer-backdrop")).not.toBeInTheDocument();
     expect(screen.queryByTestId("flow-detail-drawer-stub")).not.toBeInTheDocument();

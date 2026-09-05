@@ -6,46 +6,7 @@ interface Props {
   onOpenFullView: () => void;
 }
 
-const DEFAULT_CONFIGS: ConfigOverrideActiveItem[] = [
-  {
-    configKey: "ec_target",
-    deviceId: "dev-01",
-    originalValue: "2.4",
-    currentValue: "1.8",
-    unit: "mS/cm",
-    flowName: "Hạ ngưỡng EC ban đêm",
-    status: "active",
-  },
-  {
-    configKey: "ph_target",
-    deviceId: "dev-01",
-    originalValue: "6.2",
-    currentValue: "6.2",
-    unit: "",
-    flowName: "Giá trị gốc từ Recipe",
-    status: "restored",
-  },
-  {
-    configKey: "dose_max_ml",
-    deviceId: "dev-01",
-    originalValue: "15",
-    currentValue: "15",
-    unit: "ml",
-    flowName: "Giá trị gốc từ Recipe",
-    status: "restored",
-  },
-  {
-    configKey: "water_cycle_sec",
-    deviceId: "dev-01",
-    originalValue: "1800",
-    currentValue: "1800",
-    unit: "s",
-    flowName: "Giới hạn dosing (đã tắt)",
-    status: "restored",
-  },
-];
-
-export function ConfigExplorerWidget({ items = DEFAULT_CONFIGS, onOpenFullView }: Props) {
+export function ConfigExplorerWidget({ items = [], onOpenFullView }: Props) {
   return (
     <div className="bg-white rounded-2xl border border-indigo-100 p-5 shadow-sm flex flex-col justify-between h-full">
       <div>
@@ -61,11 +22,18 @@ export function ConfigExplorerWidget({ items = DEFAULT_CONFIGS, onOpenFullView }
           Xem trực tiếp giá trị config đang chạy trên thiết bị và Flow nào đang ghi đè nó.
         </p>
 
+        {items.length === 0 && (
+          <div className="py-6 text-center text-xs text-indigo-950/60 bg-indigo-50/30 rounded-xl border border-dashed border-indigo-100 p-4 mb-2">
+            <span className="block font-medium text-indigo-900 mb-1">Giá trị gốc ổn định</span>
+            Tất cả thông số đang hoạt động theo công thức mặc định. Chưa có Flow nào ghi đè cấu hình.
+          </div>
+        )}
+
         <div className="divide-y divide-indigo-50/80">
           {items.map((item) => {
             const isOverridden = item.status === "active";
             return (
-              <div key={item.configKey} className="py-3 flex items-center justify-between">
+              <div key={`${item.configKey}-${item.deviceId}`} className="py-3 flex items-center justify-between">
                 <div>
                   <span className="font-mono text-xs font-semibold text-indigo-950 block">
                     {item.configKey}
@@ -89,6 +57,7 @@ export function ConfigExplorerWidget({ items = DEFAULT_CONFIGS, onOpenFullView }
           })}
         </div>
       </div>
+
 
       <button
         type="button"

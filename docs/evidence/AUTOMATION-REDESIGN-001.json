@@ -48,6 +48,30 @@
       "status": "PASS",
       "source": "npx vitest run && npm run build && npx eslint . && npx tsc --noEmit",
       "verified_at": "2026-09-05T22:00:22Z"
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Automation.drawer.test.tsx",
+      "verified_at": "2026-09-05T22:37:31Z"
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/reactflow/NodeEditorPanel.test.tsx src/components/automation/FlowDetailDrawer.test.tsx",
+      "verified_at": "2026-09-05T22:37:31Z"
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/reactflow/nodeTypes.test.tsx",
+      "verified_at": "2026-09-05T22:37:31Z"
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/reactflow/NodePalette.test.tsx",
+      "verified_at": "2026-09-05T22:37:31Z"
     }
   ]
 }

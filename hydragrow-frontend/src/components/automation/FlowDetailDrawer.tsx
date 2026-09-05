@@ -9,7 +9,6 @@ import { buildIrFromGraph } from "./reactflow/buildIr";
 import { TestPanel } from "./reactflow/TestPanel";
 import { fieldsForKind } from "../../hooks/useAutomationBuilder";
 import { ConfigNodeInspector } from "./reactflow/ConfigNodeInspector";
-import { FlowEditorFooter } from "./FlowEditorFooter";
 import { NextFlowSelector } from "./NextFlowSelector";
 import { useAutomationBuilder } from "../../hooks/useAutomationBuilder";
 import { AutomationIrSchema, type AutomationIr } from "../../lib/automation/ir";
@@ -132,7 +131,9 @@ export function FlowDetailDrawer({
     deleteScript.mutate(script.id, { onSuccess: onClose });
   };
 
+  const [showAuditModal, setShowAuditModal] = useState(false);
   const isConfigNode = builder.selectedNode?.type === "config";
+  const isConfigOverwrite = isConfigNode && builder.selectedNode?.data?.variant === "overwrite";
 
   return (
     <div data-testid="flow-detail-drawer" className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40">
@@ -164,6 +165,30 @@ export function FlowDetailDrawer({
         </div>
 
         <div className="flex items-center gap-2">
+          {!isNew && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer"
+            >
+              Xóa Flow
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowTestPanel(!showTestPanel)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            Chạy thử
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={createScript.isPending || updateScript.isPending}
+            className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer"
+          >
+            Lưu Flow
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -176,8 +201,8 @@ export function FlowDetailDrawer({
 
       <NodePalette onAddNode={builder.addNode} onUpdateTrigger={builder.updateTrigger} />
 
-      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-emerald-100 bg-white relative my-2 min-h-[360px]">
-        <div className="h-full w-full flex-1">
+      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden rounded-2xl border border-emerald-100 bg-white relative my-2 min-h-[420px]">
+        <div className="h-full w-full flex-1 relative">
           <ReactFlow
             nodes={builder.nodes}
             edges={builder.edges}
@@ -220,8 +245,8 @@ export function FlowDetailDrawer({
           )}
         </div>
 
-        {/* Normal Node Editor Drawer */}
-        {builder.selectedNode && !isConfigNode && (
+        {/* Node Editor Panel (handles Trigger, Condition, Config Read, Config Overwrite, Action) */}
+        {builder.selectedNode && (
           <NodeEditorPanel
             kind={builder.kind}
             node={builder.selectedNode}
@@ -229,11 +254,12 @@ export function FlowDetailDrawer({
             edges={builder.edges}
             onChange={builder.updateNodeData}
             onClose={() => builder.setSelectedNodeId(null)}
+            onOpenAuditModal={() => setShowAuditModal(true)}
           />
         )}
 
-        {/* Specialized Config Node Inspector */}
-        {builder.selectedNode && isConfigNode && (
+        {/* Specialized Config Node Inspector Modal (Opened on demand for audit & safety visualization) */}
+        {showAuditModal && isConfigOverwrite && builder.selectedNode && (
           <ConfigNodeInspector
             initialKey={(builder.selectedNode.data?.configKey as string) ?? "ec_target"}
             initialValue={Number(builder.selectedNode.data?.overrideValue ?? 1.8)}
@@ -246,8 +272,9 @@ export function FlowDetailDrawer({
                 autoRestore: updated.autoRestore,
                 summary: `Ghi đè ${updated.configKey} -> ${updated.overrideValue}`,
               });
+              setShowAuditModal(false);
             }}
-            onClose={() => builder.setSelectedNodeId(null)}
+            onClose={() => setShowAuditModal(false)}
           />
         )}
       </div>
@@ -263,14 +290,6 @@ export function FlowDetailDrawer({
           onTogglePassContext={setPassContextVariables}
         />
       )}
-
-      <FlowEditorFooter
-        isNew={isNew}
-        pending={createScript.isPending || updateScript.isPending}
-        onDelete={handleDelete}
-        onTest={() => setShowTestPanel(!showTestPanel)}
-        onSave={handleSave}
-      />
     </div>
   );
 }

@@ -45,6 +45,18 @@ describe('NodeEditorPanel', () => {
     });
   });
 
+  it('shows a sky TRIGGER badge for the selected trigger tab', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'trigger', type: 'trigger', data: { kind: 'cron' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('TRIGGER · CRON')).toBeInTheDocument();
+  });
+
   it('updates condition node data with proper conditions array and summary', () => {
     const mockOnChange = vi.fn();
 

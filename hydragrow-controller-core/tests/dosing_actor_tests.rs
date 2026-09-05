@@ -47,7 +47,7 @@ fn dosing_cycle_with_zero_dose_stays_idle() {
 
     let control = ControlVector::default(); // tất cả 0
 
-    actor.start_matrix_cycle(
+    let _ = actor.start_matrix_cycle(
         1000, // uptime_ms
         &control, 1.5, // target_ec
         6.0, // target_ph
@@ -69,7 +69,7 @@ fn dosing_cycle_with_nonzero_dose_not_idle_immediately() {
     let mut control = ControlVector::default();
     control.nutrient_a_ml = 2.0;
 
-    actor.start_matrix_cycle(1000, &control, 1.5, 6.0, 80, &config, &sensors);
+    let _ = actor.start_matrix_cycle(1000, &control, 1.5, 6.0, 80, &config, &sensors);
 
     // Ngay sau start, có thể đang soft start (không idle)
     // Tick một lần
@@ -102,7 +102,7 @@ fn dosing_cycle_eventually_completes() {
 
     let mut control = ControlVector::default();
     control.nutrient_a_ml = 0.2; // dose nhỏ
-    actor.start_matrix_cycle(0, &control, 1.5, 6.0, 80, &config, &sensors);
+    let _ = actor.start_matrix_cycle(0, &control, 1.5, 6.0, 80, &config, &sensors);
 
     let mut completed = false;
     let mut current_ms = 0u64;
@@ -157,7 +157,7 @@ fn pulse_exhaustion_below_target_emits_pump_off_and_fails() {
     let mut control = ControlVector::default();
     control.nutrient_a_ml = 1.0; // Cần 1.0ml, nhưng max 2 xung chỉ đạt 0.2ml!
 
-    actor.start_matrix_cycle(0, &control, 1.5, 6.0, 80, &config, &sensors);
+    let _ = actor.start_matrix_cycle(0, &control, 1.5, 6.0, 80, &config, &sensors);
 
     let mut failed = false;
     let mut pump_turned_off = false;

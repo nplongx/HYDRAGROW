@@ -301,11 +301,7 @@ impl DosingActor {
                 finish_ms: now_ms + config.soft_start_duration as u64,
                 next_state: Box::new(DosingSubState::PumpingA(PulseJob {
                     pump: PumpTarget::NutrientA {
-                        dose_b_ml: if b_active {
-                            control.nutrient_b_ml
-                        } else {
-                            0.0
-                        },
+                        dose_b_ml: if b_active { control.nutrient_b_ml } else { 0.0 },
                     },
                     target_ml: control.nutrient_a_ml,
                     delivered_ml: 0.0,

@@ -5,9 +5,7 @@
 mod helpers;
 use helpers::fixtures::{auto_config, balanced_sensors};
 
-use hydragrow_controller_core::core::actors::dosing_actor::{
-    DosingSubState, PulseJob, PumpTarget,
-};
+use hydragrow_controller_core::core::actors::dosing_actor::{DosingSubState, PulseJob, PumpTarget};
 use hydragrow_controller_core::core::actors::water_actor::{WaterJob, WaterSubState};
 use hydragrow_controller_core::core::fsm::types::PendingCalibrationSample;
 use hydragrow_controller_core::core::fsm::{context::SystemContext, orchestrator};

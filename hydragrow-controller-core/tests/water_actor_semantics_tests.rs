@@ -109,21 +109,22 @@ fn cycle_complete_with_active_water_records_actual_elapsed_seconds() {
     ctx.peripherals.pump_status.water_pump_in = true;
     ctx.peripherals.water_pump_started_uptime_ms = Some(10_000);
 
-    ctx.dosing.sub_state = hydragrow_controller_core::core::actors::dosing_actor::DosingSubState::PumpingPH(
-        hydragrow_controller_core::core::actors::dosing_actor::PulseJob {
-            pump: hydragrow_controller_core::core::actors::dosing_actor::PumpTarget::PhUp,
-            target_ml: 1.0,
-            delivered_ml: 1.0,
-            pulse_on: true,
-            pulse_count: 1,
-            max_pulses: 5,
-            on_ms: 100,
-            off_ms: 100,
-            pwm: 80,
-            ml_per_sec: 1.0,
-            next_toggle_ms: 100,
-        }
-    );
+    ctx.dosing.sub_state =
+        hydragrow_controller_core::core::actors::dosing_actor::DosingSubState::PumpingPH(
+            hydragrow_controller_core::core::actors::dosing_actor::PulseJob {
+                pump: hydragrow_controller_core::core::actors::dosing_actor::PumpTarget::PhUp,
+                target_ml: 1.0,
+                delivered_ml: 1.0,
+                pulse_on: true,
+                pulse_count: 1,
+                max_pulses: 5,
+                on_ms: 100,
+                off_ms: 100,
+                pwm: 80,
+                ml_per_sec: 1.0,
+                next_toggle_ms: 100,
+            },
+        );
 
     let current_uptime = 18_000u64;
     let result = orchestrator::tick(

@@ -8,9 +8,7 @@ use log::warn;
 use std::str::FromStr;
 
 use crate::WaterDirection;
-use crate::core::actors::dosing_actor::{
-    calculate_channel_dosing_duration_ms, DosingPlanResult,
-};
+use crate::core::actors::dosing_actor::{DosingPlanResult, calculate_channel_dosing_duration_ms};
 use crate::core::adaptive::matrix::ControlVector;
 use crate::core::adaptive::solver::{SolveResult, select_solver};
 use crate::core::fsm::context::SystemContext;
@@ -325,7 +323,8 @@ fn apply_decision(
                             "PhDown"
                         }
                     };
-                    ctx.safety.commit_hourly_dose(pump_name, uptime_sec, job.target_ml);
+                    ctx.safety
+                        .commit_hourly_dose(pump_name, uptime_sec, job.target_ml);
                     active_dosing_jobs += 1;
                 }
             }
@@ -334,7 +333,9 @@ fn apply_decision(
             let misting_active = control.misting_sec > 0.0;
 
             if active_dosing_jobs == 0 && !water_active && !misting_active {
-                warn!("  [MONITORING] Không có tác vụ khả thi nào được chuẩn bị. Giữ nguyên trạng thái Monitoring.");
+                warn!(
+                    "  [MONITORING] Không có tác vụ khả thi nào được chuẩn bị. Giữ nguyên trạng thái Monitoring."
+                );
                 result.delta.peripherals = Some(peri_delta);
                 return result;
             }
@@ -366,8 +367,9 @@ fn apply_decision(
                         calculate_channel_dosing_duration_ms(control.ph_up_ml, flow_up, config);
                 }
                 if control.ph_down_ml > 0.0 {
-                    let flow_down = effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config)
-                        .unwrap_or(1.0);
+                    let flow_down =
+                        effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config)
+                            .unwrap_or(1.0);
                     dosing_time_ms +=
                         calculate_channel_dosing_duration_ms(control.ph_down_ml, flow_down, config);
                 }

@@ -56,7 +56,11 @@ fn a_zero_b_positive_job_survives_and_is_executed() {
 
     match plan_result {
         DosingPlanResult::Prepared(jobs) => {
-            assert_eq!(jobs.len(), 1, "Should prepare exactly one job for Nutrient B");
+            assert_eq!(
+                jobs.len(),
+                1,
+                "Should prepare exactly one job for Nutrient B"
+            );
             assert_eq!(jobs[0].pump, DosePumpKind::PumpB);
             assert_eq!(jobs[0].target_ml, 2.5);
         }

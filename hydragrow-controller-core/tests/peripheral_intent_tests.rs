@@ -32,7 +32,10 @@ fn phase_turning_misting_on_makes_osaka_use_misting_pwm_in_same_tick() {
     let result = orchestrator::tick(now_ms, uptime_ms, &config, &sensors, now_ms, &mut ctx);
 
     // Misting should be triggered in this tick
-    let peri_delta = result.delta.peripherals.expect("Must produce peripheral delta");
+    let peri_delta = result
+        .delta
+        .peripherals
+        .expect("Must produce peripheral delta");
     assert_eq!(
         peri_delta.is_misting_active,
         Some(true),
@@ -94,7 +97,9 @@ fn mix_valve_conflict_dosing_owner_wins_and_only_one_command_emitted() {
 
     // Must NOT emit conflicting events (both ON and OFF) or emit OFF when dosing owns it
     assert!(
-        mix_events.iter().all(|e| matches!(e, OrchestratorEvent::SetMixValve { on: true })),
+        mix_events
+            .iter()
+            .all(|e| matches!(e, OrchestratorEvent::SetMixValve { on: true })),
         "Dosing owner must keep mix valve ON, and scheduler must not emit SetMixValve OFF"
     );
     assert!(
@@ -130,7 +135,9 @@ fn same_tick_phase_mix_valve_ownership_suppresses_scheduled_mixing_off() {
     phase_peri.mix_valve = Some(true);
     phase_peri.mix_valve_started_by_dosing = Some(true);
     phase_result.delta.peripherals = Some(phase_peri);
-    phase_result.events.push(OrchestratorEvent::SetMixValve { on: true });
+    phase_result
+        .events
+        .push(OrchestratorEvent::SetMixValve { on: true });
 
     // Run orchestrator tick merging this phase result
     let mut result = hydragrow_controller_core::core::fsm::tick_result::TickResult::default();
@@ -139,13 +146,7 @@ fn same_tick_phase_mix_valve_ownership_suppresses_scheduled_mixing_off() {
     // Now call tick_peripheral_systems
     // We observe whether SetMixValve { on: false } gets appended
     let tick_result = orchestrator::tick_peripheral_systems(
-        result,
-        &ctx,
-        &sensors,
-        now_ms,
-        uptime_ms,
-        &config,
-        true, // is_dosing_active
+        result, &ctx, &sensors, now_ms, uptime_ms, &config, true, // is_dosing_active
     );
 
     let mix_events: Vec<_> = tick_result
@@ -156,8 +157,14 @@ fn same_tick_phase_mix_valve_ownership_suppresses_scheduled_mixing_off() {
 
     // Must NOT have emitted SetMixValve { on: false }
     assert!(
-        mix_events.iter().all(|e| matches!(e, OrchestratorEvent::SetMixValve { on: true })),
+        mix_events
+            .iter()
+            .all(|e| matches!(e, OrchestratorEvent::SetMixValve { on: true })),
         "Dosing ownership declared in current tick must suppress scheduled mixing OFF event"
     );
-    assert_eq!(mix_events.len(), 1, "Must emit exactly one SetMixValve event");
+    assert_eq!(
+        mix_events.len(),
+        1,
+        "Must emit exactly one SetMixValve event"
+    );
 }

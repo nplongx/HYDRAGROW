@@ -184,13 +184,16 @@ pub fn tick(
                 false
             };
             if is_timed_out {
-                tracing::info!("⏱️ [CALIBRATION] SensorCalibration timeout reached, returning to Monitoring");
+                tracing::info!(
+                    "⏱️ [CALIBRATION] SensorCalibration timeout reached, returning to Monitoring"
+                );
                 res.delta.phase = Some(SystemPhase::Monitoring);
                 res.delta.phase_finish_ms = Some(None);
                 res.delta.phase_start_ms = Some(None);
                 res.delta.reset_active_actors = true;
                 res.delta.reset_stabilizer = true;
-                res.delta.calibration = Some(crate::core::fsm::tick_result::CalibrationDelta::Clear);
+                res.delta.calibration =
+                    Some(crate::core::fsm::tick_result::CalibrationDelta::Clear);
             }
             res
         }

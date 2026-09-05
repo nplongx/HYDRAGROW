@@ -169,15 +169,48 @@ pub fn init_mqtt_client(
                         Err(e) => error!("❌ Config JSON parse error: {:?}", e),
                     }
                 }
-                // 2. Update Crop Recipe
-                else if topic_str == topic_recipe_cb {
-                    match serde_json::from_slice::<CropRecipe>(data) {
-                        Ok(recipe) => {
+                // 2. Update Crop Recipe (controller/recipe or signed recipe/set)
+                else if topic_str == topic_recipe_cb || topic_str == topic_recipe_set_cb {
+                    let maybe_recipe: Result<Option<CropRecipe>, String> = if topic_str == topic_recipe_set_cb {
+                        match verify_signed_json_payload(&device_id, data, &command_secret_cb) {
+                            Ok(payload) => {
+                                if let Some(action) = payload.get("action").and_then(|a| a.as_str()) {
+                                    if action == "clear" {
+                                        Ok(None)
+                                    } else {
+                                        match serde_json::from_value::<RecipeSetCommand>(payload.clone())
+                                            .and_then(|cmd| Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?))
+                                        {
+                                            Ok(recipe) => Ok(Some(recipe)),
+                                            Err(e) => Err(format!("invalid_recipe_set_payload: {:?}", e)),
+                                        }
+                                    }
+                                } else {
+                                    match serde_json::from_value::<RecipeSetCommand>(payload.clone())
+                                        .and_then(|cmd| Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?))
+                                    {
+                                        Ok(recipe) => Ok(Some(recipe)),
+                                        Err(e) => Err(format!("invalid_recipe_set_payload: {:?}", e)),
+                                    }
+                                }
+                            }
+                            Err(e) => Err(format!("signature_verification_failed: {:?}", e)),
+                        }
+                    } else {
+                        serde_json::from_slice::<CropRecipe>(data)
+                            .map(Some)
+                            .map_err(|e| format!("invalid_json: {:?}", e))
+                    };
+
+                    match maybe_recipe {
+                        Ok(Some(recipe)) => {
                             let config = shared_config.read().unwrap().clone();
-                            let mut nvs = EspNvs::new(nvs_partition.clone(), "agitech", true).ok();
-                            let current_revision = nvs
-                                .as_mut()
-                                .and_then(|nvs| nvs.get_u64("recipe_rev").ok().flatten());
+                            let mut nvs_store = NvsStore::new(nvs_partition.clone());
+                            let current_revision = nvs_store
+                                .load_active_recipe()
+                                .ok()
+                                .flatten()
+                                .map(|r| r.revision);
 
                             match validate_recipe(
                                 &recipe,
@@ -186,11 +219,11 @@ pub fn init_mqtt_client(
                                 current_revision,
                             ) {
                                 Ok(()) => {
-                                    if let Some(nvs) = nvs.as_mut() {
-                                        if let Ok(serialized) = serde_json::to_string(&recipe) {
-                                            let _ = nvs.set_str("crop_recipe", &serialized);
-                                            let _ = nvs.set_u64("recipe_rev", recipe.revision);
-                                        }
+                                    if let Err(e) = nvs_store.save_active_recipe(&recipe) {
+                                        warn!("⚠️ Failed to persist active recipe to NVS: {:?}", e);
+                                    }
+                                    if let Ok(mut state) = shared_config.write() {
+                                        state.activate_recipe(recipe.clone());
                                     }
                                     let event = serde_json::json!({
                                         "_mqtt_topic_override": recipe_event_topic.clone(),
@@ -209,9 +242,22 @@ pub fn init_mqtt_client(
                                 }
                             }
                         }
-                        Err(e) => {
-                            let reason = format!("invalid_json: {:?}", e);
-                            error!("❌ Recipe JSON parse error: {}", reason);
+                        Ok(None) => {
+                            // Clear recipe request
+                            info!("🗑️ Received recipe clear command. Removing recipe...");
+                            let mut nvs_store = NvsStore::new(nvs_partition.clone());
+                            let _ = nvs_store.clear_active_recipe();
+                            if let Ok(mut state) = shared_config.write() {
+                                state.clear_recipe();
+                            }
+                            let event = serde_json::json!({
+                                "_mqtt_topic_override": recipe_event_topic.clone(),
+                                "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "cleared", 0u64, None)).unwrap_or_default()
+                            });
+                            let _ = recipe_event_tx.send(event.to_string());
+                        }
+                        Err(reason) => {
+                            warn!("❌ Recipe payload rejected: {}", reason);
                             let event = serde_json::json!({
                                 "_mqtt_topic_override": recipe_event_topic.clone(),
                                 "_payload": serde_json::from_str::<serde_json::Value>(&build_recipe_event(&device_id, "rejected", 0u64, Some(&reason))).unwrap_or_default()
@@ -232,7 +278,7 @@ pub fn init_mqtt_client(
                         Err(e) => warn!("⛔ Rejected unsigned/invalid command payload: {:?}", e),
                     }
                 }
-                // 3. Sensor Data Packet
+                // 4. Sensor Data Packet
                 else if topic_str == topic_sensors_cb {
                     if let Ok(payload) = serde_json::from_slice::<IncomingSensorPayload>(data) {
                         if let Ok(mut sensors) = shared_sensor_data.write() {
@@ -241,19 +287,6 @@ pub fn init_mqtt_client(
                                 warn!("⚠️ [SENSORS] Bỏ qua gói tin cảm biến rỗng hoặc không hợp lệ");
                             }
                         }
-                    }
-                } else if topic_str == topic_recipe_set_cb {
-                    match verify_signed_json_payload(&device_id, data, &command_secret_cb)
-                        .and_then(|payload| {
-                            Ok(serde_json::from_value::<RecipeSetCommand>(payload)?)
-                        })
-                        .and_then(|cmd| Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?))
-                    {
-                        Ok(recipe) => {
-                            info!("🌱 Signed crop recipe received: {:?}", recipe);
-                            // TODO: apply recipe to runtime recipe store once CropRecipe has a concrete FSM target.
-                        }
-                        Err(e) => warn!("⛔ Rejected unsigned/invalid recipe payload: {:?}", e),
                     }
                 }
             }

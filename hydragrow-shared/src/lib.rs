@@ -680,6 +680,10 @@ impl ControllerConfig {
             errors.push("ph_target phải trong khoảng [0, 14]".into());
         }
 
+        if self.max_dose_per_hour <= 0.0 {
+            errors.push("max_dose_per_hour phải > 0".into());
+        }
+
         if self.nutrient_a_ratio < 0.0 {
             errors.push("nutrient_a_ratio phải >= 0".into());
         }

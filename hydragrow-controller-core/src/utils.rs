@@ -250,7 +250,7 @@ mod recipe_validation_tests {
 
 pub use hydragrow_shared::recipe::{CropRecipe, CropStage};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DosePumpKind {
     PumpA,
     PumpB,

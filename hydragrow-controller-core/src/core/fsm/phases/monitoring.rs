@@ -8,7 +8,9 @@ use log::warn;
 use std::str::FromStr;
 
 use crate::WaterDirection;
-use crate::core::actors::dosing_actor::calculate_channel_dosing_duration_ms;
+use crate::core::actors::dosing_actor::{
+    calculate_channel_dosing_duration_ms, DosingPlanResult,
+};
 use crate::core::adaptive::matrix::ControlVector;
 use crate::core::adaptive::solver::{SolveResult, select_solver};
 use crate::core::fsm::context::SystemContext;
@@ -254,24 +256,6 @@ fn apply_decision(
             }
 
             // Ghi nhận (commit) transactional khi tất cả các kiểm tra an toàn đều đã đạt
-            if control.nutrient_a_ml > 0.0 {
-                ctx.safety
-                    .commit_hourly_dose("NutrientA", uptime_sec, control.nutrient_a_ml);
-            }
-            if control.nutrient_b_ml > 0.0 {
-                ctx.safety
-                    .commit_hourly_dose("NutrientB", uptime_sec, control.nutrient_b_ml);
-            }
-            if control.ph_up_ml > 0.0 {
-                ctx.safety
-                    .commit_hourly_dose("PhUp", uptime_sec, control.ph_up_ml);
-                peri_delta.ph_up = Some(true);
-            }
-            if control.ph_down_ml > 0.0 {
-                ctx.safety
-                    .commit_hourly_dose("PhDown", uptime_sec, control.ph_down_ml);
-                peri_delta.ph_down = Some(true);
-            }
             if control.water_in_sec > 0.0 {
                 ctx.safety
                     .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32);
@@ -320,36 +304,73 @@ fn apply_decision(
             // [VÁ BUG]: TÍNH TOÁN CHÍNH XÁC THỜI GIAN CẦN THIẾT CHO DOSING ACTOR
             // =================================================================
             let safe_pwm = pwm.clamp(1, 100);
-            let mut dosing_time_ms = config.soft_start_duration as u64;
 
-            if control.nutrient_a_ml > 0.0 {
-                let flow_a =
-                    effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config).unwrap_or(1.0);
-                dosing_time_ms +=
-                    calculate_channel_dosing_duration_ms(control.nutrient_a_ml, flow_a, config);
+            // Truyền uptime_ms vào DosingActor để lập kế hoạch châm định lượng transactional
+            let dosing_plan = ctx.dosing.start_matrix_cycle(
+                uptime_ms, &control, target_ec, target_ph, pwm, config, sensors,
+            );
 
-                // Trạm FSM bơm theo tuần tự: Bơm A xong sẽ trễ (delay) rồi mới bơm B
-                if control.nutrient_b_ml > 0.0 {
-                    dosing_time_ms += (config.delay_between_a_and_b_sec as u64) * 1000;
+            let mut active_dosing_jobs = 0;
+            if let DosingPlanResult::Prepared(ref jobs) = dosing_plan {
+                for job in jobs {
+                    let pump_name = match job.pump {
+                        DosePumpKind::PumpA => "NutrientA",
+                        DosePumpKind::PumpB => "NutrientB",
+                        DosePumpKind::PhUp => {
+                            peri_delta.ph_up = Some(true);
+                            "PhUp"
+                        }
+                        DosePumpKind::PhDown => {
+                            peri_delta.ph_down = Some(true);
+                            "PhDown"
+                        }
+                    };
+                    ctx.safety.commit_hourly_dose(pump_name, uptime_sec, job.target_ml);
+                    active_dosing_jobs += 1;
                 }
             }
-            if control.nutrient_b_ml > 0.0 {
-                let flow_b =
-                    effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config).unwrap_or(1.0);
-                dosing_time_ms +=
-                    calculate_channel_dosing_duration_ms(control.nutrient_b_ml, flow_b, config);
+
+            let water_active = control.water_in_sec > 0.0 || control.water_out_sec > 0.0;
+            let misting_active = control.misting_sec > 0.0;
+
+            if active_dosing_jobs == 0 && !water_active && !misting_active {
+                warn!("  [MONITORING] Không có tác vụ khả thi nào được chuẩn bị. Giữ nguyên trạng thái Monitoring.");
+                result.delta.peripherals = Some(peri_delta);
+                return result;
             }
-            if control.ph_up_ml > 0.0 {
-                let flow_up =
-                    effective_flow_ml_per_sec(DosePumpKind::PhUp, safe_pwm, config).unwrap_or(1.0);
-                dosing_time_ms +=
-                    calculate_channel_dosing_duration_ms(control.ph_up_ml, flow_up, config);
-            }
-            if control.ph_down_ml > 0.0 {
-                let flow_down = effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config)
-                    .unwrap_or(1.0);
-                dosing_time_ms +=
-                    calculate_channel_dosing_duration_ms(control.ph_down_ml, flow_down, config);
+
+            let mut dosing_time_ms = 0u64;
+            if active_dosing_jobs > 0 {
+                dosing_time_ms += config.soft_start_duration as u64;
+                if control.nutrient_a_ml > 0.0 {
+                    let flow_a = effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config)
+                        .unwrap_or(1.0);
+                    dosing_time_ms +=
+                        calculate_channel_dosing_duration_ms(control.nutrient_a_ml, flow_a, config);
+
+                    // Trạm FSM bơm theo tuần tự: Bơm A xong sẽ trễ (delay) rồi mới bơm B
+                    if control.nutrient_b_ml > 0.0 {
+                        dosing_time_ms += (config.delay_between_a_and_b_sec as u64) * 1000;
+                    }
+                }
+                if control.nutrient_b_ml > 0.0 {
+                    let flow_b = effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config)
+                        .unwrap_or(1.0);
+                    dosing_time_ms +=
+                        calculate_channel_dosing_duration_ms(control.nutrient_b_ml, flow_b, config);
+                }
+                if control.ph_up_ml > 0.0 {
+                    let flow_up = effective_flow_ml_per_sec(DosePumpKind::PhUp, safe_pwm, config)
+                        .unwrap_or(1.0);
+                    dosing_time_ms +=
+                        calculate_channel_dosing_duration_ms(control.ph_up_ml, flow_up, config);
+                }
+                if control.ph_down_ml > 0.0 {
+                    let flow_down = effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config)
+                        .unwrap_or(1.0);
+                    dosing_time_ms +=
+                        calculate_channel_dosing_duration_ms(control.ph_down_ml, flow_down, config);
+                }
             }
 
             let water_time_ms = (control.water_in_sec.max(control.water_out_sec) * 1000.0) as u64;
@@ -357,11 +378,6 @@ fn apply_decision(
 
             // Chọn ra khoảng thời gian lớn nhất giữa tất cả các phần cứng đang chạy
             let hardware_run_ms = water_time_ms.max(misting_time_ms).max(dosing_time_ms);
-
-            // Truyền uptime_ms vào DosingActor để bơm xung PWM chính xác trên Monotonic Time
-            ctx.dosing.start_matrix_cycle(
-                uptime_ms, &control, target_ec, target_ph, pwm, config, sensors,
-            );
 
             // =========================================================================
             // CẬP NHẬT TRẠNG THÁI VÀ TIMEOUT CHO PHA MIMO DOSING BẰNG UPTIME_MS

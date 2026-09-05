@@ -47,6 +47,27 @@ pub enum PumpTarget {
     PhDown,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum DosingPlanRejection {
+    ZeroOrEmpty,
+    FlowUnavailable(DosePumpKind),
+    ConflictingPh,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreparedDoseJob {
+    pub pump: DosePumpKind,
+    pub target_ml: f32,
+    pub pwm: u32,
+}
+
+#[must_use]
+#[derive(Debug, Clone, PartialEq)]
+pub enum DosingPlanResult {
+    Prepared(Vec<PreparedDoseJob>),
+    Rejected(DosingPlanRejection),
+}
+
 #[derive(Debug, Clone)]
 pub struct DosingCycleCtx {
     pub dose_a_delivered_ml: f32,
@@ -124,7 +145,113 @@ impl DosingActor {
         pwm: u32,
         config: &ControllerConfig,
         _sensors: &SensorData,
-    ) {
+    ) -> DosingPlanResult {
+        let ph_up_active = control.ph_up_ml > 1e-3;
+        let ph_down_active = control.ph_down_ml > 1e-3;
+
+        // Mutual exclusion: both pH Up and pH Down cannot be active in the same cycle
+        if ph_up_active && ph_down_active {
+            self.reset();
+            return DosingPlanResult::Rejected(DosingPlanRejection::ConflictingPh);
+        }
+
+        let a_active = control.nutrient_a_ml > 1e-3;
+        let b_active = control.nutrient_b_ml > 1e-3;
+
+        if !a_active && !b_active && !ph_up_active && !ph_down_active {
+            self.reset();
+            return DosingPlanResult::Rejected(DosingPlanRejection::ZeroOrEmpty);
+        }
+
+        let safe_pwm = pwm.clamp(1, 100);
+
+        // Verify flow availability for all requested channels
+        let flow_a = if a_active {
+            match effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config) {
+                Some(f) => Some(f),
+                None => {
+                    self.reset();
+                    return DosingPlanResult::Rejected(DosingPlanRejection::FlowUnavailable(
+                        DosePumpKind::PumpA,
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
+        let flow_b = if b_active {
+            match effective_flow_ml_per_sec(DosePumpKind::PumpB, safe_pwm, config) {
+                Some(f) => Some(f),
+                None => {
+                    self.reset();
+                    return DosingPlanResult::Rejected(DosingPlanRejection::FlowUnavailable(
+                        DosePumpKind::PumpB,
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
+        let flow_up = if ph_up_active {
+            match effective_flow_ml_per_sec(DosePumpKind::PhUp, safe_pwm, config) {
+                Some(f) => Some(f),
+                None => {
+                    self.reset();
+                    return DosingPlanResult::Rejected(DosingPlanRejection::FlowUnavailable(
+                        DosePumpKind::PhUp,
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
+        let flow_down = if ph_down_active {
+            match effective_flow_ml_per_sec(DosePumpKind::PhDown, safe_pwm, config) {
+                Some(f) => Some(f),
+                None => {
+                    self.reset();
+                    return DosingPlanResult::Rejected(DosingPlanRejection::FlowUnavailable(
+                        DosePumpKind::PhDown,
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+
+        let mut prepared_jobs = Vec::new();
+        if a_active {
+            prepared_jobs.push(PreparedDoseJob {
+                pump: DosePumpKind::PumpA,
+                target_ml: control.nutrient_a_ml,
+                pwm: safe_pwm,
+            });
+        }
+        if b_active {
+            prepared_jobs.push(PreparedDoseJob {
+                pump: DosePumpKind::PumpB,
+                target_ml: control.nutrient_b_ml,
+                pwm: safe_pwm,
+            });
+        }
+        if ph_up_active {
+            prepared_jobs.push(PreparedDoseJob {
+                pump: DosePumpKind::PhUp,
+                target_ml: control.ph_up_ml,
+                pwm: safe_pwm,
+            });
+        }
+        if ph_down_active {
+            prepared_jobs.push(PreparedDoseJob {
+                pump: DosePumpKind::PhDown,
+                target_ml: control.ph_down_ml,
+                pwm: safe_pwm,
+            });
+        }
+
         self.cycle_ctx = Some(DosingCycleCtx {
             dose_a_delivered_ml: 0.0,
             dose_b_delivered_ml: 0.0,
@@ -133,23 +260,54 @@ impl DosingActor {
         });
 
         self.pending_ph_job = None;
-        let safe_pwm = pwm.clamp(1, 100);
+        if ph_up_active {
+            let f = flow_up.unwrap();
+            let (on_ms, off_ms, max_pulses) = pulse_params(control.ph_up_ml, f, config);
+            self.pending_ph_job = Some(PulseJob {
+                pump: PumpTarget::PhUp,
+                target_ml: control.ph_up_ml,
+                delivered_ml: 0.0,
+                pulse_on: false,
+                pulse_count: 0,
+                max_pulses,
+                on_ms,
+                off_ms,
+                pwm: safe_pwm,
+                ml_per_sec: f,
+                next_toggle_ms: now_ms,
+            });
+        } else if ph_down_active {
+            let f = flow_down.unwrap();
+            let (on_ms, off_ms, max_pulses) = pulse_params(control.ph_down_ml, f, config);
+            self.pending_ph_job = Some(PulseJob {
+                pump: PumpTarget::PhDown,
+                target_ml: control.ph_down_ml,
+                delivered_ml: 0.0,
+                pulse_on: false,
+                pulse_count: 0,
+                max_pulses,
+                on_ms,
+                off_ms,
+                pwm: safe_pwm,
+                ml_per_sec: f,
+                next_toggle_ms: now_ms,
+            });
+        }
 
-        let ph_up_active = control.ph_up_ml > 1e-3;
-        let ph_down_active = control.ph_down_ml > 1e-3;
-
-        if ph_up_active || ph_down_active {
-            let (ph_target_ml, ph_target_pump, pump_kind) = if ph_up_active {
-                (control.ph_up_ml, PumpTarget::PhUp, DosePumpKind::PhUp)
-            } else {
-                (control.ph_down_ml, PumpTarget::PhDown, DosePumpKind::PhDown)
-            };
-
-            if let Some(ml_per_sec) = effective_flow_ml_per_sec(pump_kind, safe_pwm, config) {
-                let (on_ms, off_ms, max_pulses) = pulse_params(ph_target_ml, ml_per_sec, config);
-                self.pending_ph_job = Some(PulseJob {
-                    pump: ph_target_pump,
-                    target_ml: ph_target_ml,
+        if a_active {
+            let f = flow_a.unwrap();
+            let (on_ms, off_ms, max_pulses) = pulse_params(control.nutrient_a_ml, f, config);
+            self.sub_state = DosingSubState::SoftStarting {
+                finish_ms: now_ms + config.soft_start_duration as u64,
+                next_state: Box::new(DosingSubState::PumpingA(PulseJob {
+                    pump: PumpTarget::NutrientA {
+                        dose_b_ml: if b_active {
+                            control.nutrient_b_ml
+                        } else {
+                            0.0
+                        },
+                    },
+                    target_ml: control.nutrient_a_ml,
                     delivered_ml: 0.0,
                     pulse_on: false,
                     pulse_count: 0,
@@ -157,40 +315,29 @@ impl DosingActor {
                     on_ms,
                     off_ms,
                     pwm: safe_pwm,
-                    ml_per_sec,
+                    ml_per_sec: f,
                     next_toggle_ms: now_ms,
-                });
-            }
-        }
-
-        if control.nutrient_a_ml > 1e-3 {
-            if let Some(ml_per_sec) =
-                effective_flow_ml_per_sec(DosePumpKind::PumpA, safe_pwm, config)
-            {
-                let (on_ms, off_ms, max_pulses) =
-                    pulse_params(control.nutrient_a_ml, ml_per_sec, config);
-
-                self.sub_state = DosingSubState::SoftStarting {
-                    finish_ms: now_ms + config.soft_start_duration as u64,
-                    next_state: Box::new(DosingSubState::PumpingA(PulseJob {
-                        pump: PumpTarget::NutrientA {
-                            dose_b_ml: control.nutrient_b_ml,
-                        },
-                        target_ml: control.nutrient_a_ml,
-                        delivered_ml: 0.0,
-                        pulse_on: false,
-                        pulse_count: 0,
-                        max_pulses,
-                        on_ms,
-                        off_ms,
-                        pwm: safe_pwm,
-                        ml_per_sec,
-                        next_toggle_ms: now_ms,
-                    })),
-                };
-            } else {
-                self.sub_state = DosingSubState::Idle;
-            }
+                })),
+            };
+        } else if b_active {
+            let f = flow_b.unwrap();
+            let (on_ms, off_ms, max_pulses) = pulse_params(control.nutrient_b_ml, f, config);
+            self.sub_state = DosingSubState::SoftStarting {
+                finish_ms: now_ms + config.soft_start_duration as u64,
+                next_state: Box::new(DosingSubState::PumpingB(PulseJob {
+                    pump: PumpTarget::NutrientB,
+                    target_ml: control.nutrient_b_ml,
+                    delivered_ml: 0.0,
+                    pulse_on: false,
+                    pulse_count: 0,
+                    max_pulses,
+                    on_ms,
+                    off_ms,
+                    pwm: safe_pwm,
+                    ml_per_sec: f,
+                    next_toggle_ms: now_ms,
+                })),
+            };
         } else if let Some(ph_job) = self.pending_ph_job.take() {
             self.sub_state = DosingSubState::SoftStarting {
                 finish_ms: now_ms + config.soft_start_duration as u64,
@@ -199,6 +346,8 @@ impl DosingActor {
         } else {
             self.sub_state = DosingSubState::Idle;
         }
+
+        DosingPlanResult::Prepared(prepared_jobs)
     }
 
     pub fn tick(

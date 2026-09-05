@@ -1,0 +1,84 @@
+{
+  "requirement_id": "CONTROLLER-FSM-001",
+  "objective": "Harden HYDRAGROW controller FSM, transactional execution boundaries, actuator safety, sensor freshness, and recipe lifecycle.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Field-wise ContextDelta merging preserves independent peripheral fields and resolves conflicts via dosing ownership.",
+      "verification": "Cargo test phase_transition_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Actuator stop/fault paths centralize reset of active actors (dosing, water) and clear ownership flags.",
+      "verification": "Cargo test actor_terminal_reset_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Calibration sampler enforces timeout transition and cleans up pending state on fault/manual transitions.",
+      "verification": "Cargo test calibration_lifecycle_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Sensor data ingestion rejects non-finite/malformed packets and only updates freshness timestamp on valid measurement packets.",
+      "verification": "Cargo test sensor_ingress_tests in hydragrow-shared",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Water actor distinguishes success vs failure, records actual execution duration, and avoids false ActiveMixing transitions on timeout.",
+      "verification": "Cargo test water_actor_semantics_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Safety budget is charged transactionally only for prepared/executable jobs and reflects global hourly limit across pumps.",
+      "verification": "Cargo test safety_budget_executable_tests and safety_budget_scope_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Dosing volume accounting tracks delivered volume based on actual completed pulse execution.",
+      "verification": "Cargo test dosing_volume_accounting_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Water pump hardware commands issue explicit stop and recover cached direction safely.",
+      "verification": "Cargo test event_dispatcher::tests in hydragrow-simulator",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Same-tick peripheral intent conflicts are resolved deterministically before hardware command emission.",
+      "verification": "Cargo test peripheral_intent_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Recipe manager unifies stage calculation, runtime overrides, persistence, and revision reset.",
+      "verification": "Cargo test recipe_lifecycle_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Scheduled water changes plan safe drain/fill volumes clamped to critical tank levels and durations.",
+      "verification": "Cargo test scheduled_water_planning_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-12",
+      "criterion": "In-flight dosing and water jobs snapshot execution parameters (pulse durations, delays, timeouts) resistant to mid-cycle config changes.",
+      "verification": "Cargo test inflight_job_semantics_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Cross-layer FSM regression suite verifies end-to-end recovery, manual mode, emergency shutdown, and partial packet handling.",
+      "verification": "Cargo test cross_layer_fsm_regression_tests and e2e in hydragrow-controller-core",
+      "evidence_required": true
+    }
+  ]
+}

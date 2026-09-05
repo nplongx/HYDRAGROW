@@ -1,0 +1,109 @@
+{
+  "requirement_id": "CONTROLLER-FSM-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "merge_tick_results and merge_from preserve independent peripheral fields; mix valve ownership resolved",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test phase_transition_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "reset_active_actors_and_ownership resets DosingActor, WaterActor, calibration sampler, and ownership flags on fault/stop",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test actor_terminal_reset_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "CalibrationSampler check_timeout_and_abort safely leaves calibration to idle; samples invalidated on noise",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test calibration_lifecycle_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": "Empty and malformed packets do not update freshness timestamp; invalid values rejected by is_valid",
+      "source": "cargo test --manifest-path hydragrow-shared/Cargo.toml --test sensor_ingress_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "actual": "WaterEvent::Done distinguishes success vs timeout; elapsed seconds propagated to calibration; timeout halts MimoDosing",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test water_actor_semantics_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "actual": "Safety budget charged only for Prepared jobs and enforced against global hourly cap across all pumps",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test safety_budget_executable_tests --test safety_budget_scope_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "actual": "Dosing delivered_ml accurately accumulates based on completed pulse duty cycles and pump capacity",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test dosing_volume_accounting_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "actual": "Water pump explicit stop emitted; cached direction recovery safely reasserts hardware state without side-effects",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml event_dispatcher",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:51:00Z"
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "actual": "resolve_peripheral_intent resolves mix valve and misting conflicts deterministically within same tick",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test peripheral_intent_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "actual": "RecipeManager accurately overrides targets per stage, preserves config across updates, and resets cursor on revision change",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test recipe_lifecycle_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "actual": "plan_water_operation clamps drain/fill to critical min level and max duration; invalid requests rejected",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test scheduled_water_planning_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "actual": "DosingCycleCtx snapshots b_job and delay_a_to_b_ms; WaterJob snapshots max_duration_sec; config changes cannot mutate active execution",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test inflight_job_semantics_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    },
+    {
+      "acceptance_id": "AC-13",
+      "status": "PASS",
+      "actual": "All 158 controller-core tests, 28 simulator tests, and 27 shared tests pass; zero warnings under -D warnings",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test cross_layer_fsm_regression_tests",
+      "environment": "sandbox",
+      "verified_at": "2026-09-05T07:50:00Z"
+    }
+  ]
+}

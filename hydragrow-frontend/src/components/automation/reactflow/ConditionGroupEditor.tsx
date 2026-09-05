@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Condition, ConditionGroup, ConditionOrGroup, ComparisonOperator } from '../../../lib/automation/ir';
 import { VariableCombobox } from './VariableCombobox';
+import { Segmented } from './ConfigPanelUI';
 
 const OPERATORS: ComparisonOperator[] = ['>', '<', '>=', '<=', '==', '!='];
 
@@ -175,28 +176,14 @@ export function ConditionGroupEditor({
     <div className={isRoot ? '' : 'ml-3 border-l border-emerald-200 pl-3 my-2'}>
       <div className="mb-2 flex items-center gap-2">
         {!isRoot && <span className="text-xs font-medium text-emerald-800/70">Nhóm con</span>}
-        <div className="flex overflow-hidden rounded border border-emerald-200 text-xs">
-          <button
-            type="button"
-            aria-pressed={group.op === 'and'}
-            className={`px-2 py-1 font-semibold transition-colors ${
-              group.op === 'and' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800 hover:bg-emerald-50'
-            }`}
-            onClick={() => onChange({ ...group, op: 'and' })}
-          >
-            AND
-          </button>
-          <button
-            type="button"
-            aria-pressed={group.op === 'or'}
-            className={`px-2 py-1 font-semibold transition-colors ${
-              group.op === 'or' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800 hover:bg-emerald-50'
-            }`}
-            onClick={() => onChange({ ...group, op: 'or' })}
-          >
-            OR
-          </button>
-        </div>
+        <Segmented
+          options={[
+            { value: "and", label: "AND — tất cả đúng" },
+            { value: "or", label: "OR — bất kỳ đúng" },
+          ]}
+          value={group.op}
+          onChange={(op) => onChange({ ...group, op })}
+        />
       </div>
       {group.children.map((child, i) =>
         isGroup(child) ? (

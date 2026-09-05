@@ -45,6 +45,18 @@ describe('NodeEditorPanel', () => {
     });
   });
 
+  it('shows a sky TRIGGER badge for the selected trigger tab', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'trigger', type: 'trigger', data: { kind: 'cron' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('TRIGGER · CRON')).toBeInTheDocument();
+  });
+
   it('updates condition node data with proper conditions array and summary', () => {
     const mockOnChange = vi.fn();
 
@@ -142,9 +154,35 @@ describe('NodeEditorPanel', () => {
       summary: 'dose 15ml (PUMP_A)',
     });
   });
+
+  it('shows an ACTION badge on the alert action panel', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'a1', type: 'action', data: { actions: [] } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('ACTION · ALERT')).toBeInTheDocument();
+  });
 });
 
 describe('NodeEditorPanel — Config nodes', () => {
+  it('shows a safe-read note on the config read panel', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cfg1', type: 'config', data: { variant: 'read' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('Chỉ đọc — không thay đổi trạng thái thiết bị'),
+    ).toBeInTheDocument();
+  });
+
   it('renders the Config·Read editor and updates configKey/saveToVariable', () => {
     const mockOnChange = vi.fn();
 

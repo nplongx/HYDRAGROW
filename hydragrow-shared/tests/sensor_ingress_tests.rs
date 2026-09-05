@@ -1,5 +1,5 @@
-use hydragrow_shared::sensors::IncomingSensorPayload;
 use hydragrow_shared::SensorData;
+use hydragrow_shared::sensors::IncomingSensorPayload;
 
 fn base_sensor_data() -> SensorData {
     SensorData {
@@ -30,7 +30,10 @@ fn empty_packet_does_not_advance_freshness_timestamp() {
     let payload: IncomingSensorPayload = serde_json::from_str(raw_json).unwrap();
 
     let accepted = sensors.merge_incoming_payload(&payload, 2000);
-    assert!(!accepted, "Empty packet must not be accepted as a valid measurement");
+    assert!(
+        !accepted,
+        "Empty packet must not be accepted as a valid measurement"
+    );
     assert_eq!(
         sensors.controller_received_ms,
         Some(1000),

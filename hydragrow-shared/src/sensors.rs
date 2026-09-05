@@ -1,7 +1,7 @@
 //! Sensor ingress, deserialization, and validation.
 
-use serde::{Deserialize, Serialize};
 use crate::SensorData;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Default)]
 pub struct IncomingSensorPayload {
@@ -39,30 +39,35 @@ impl IncomingSensorPayload {
             return false;
         }
 
-        if let Some(t) = self.temp {
-            if !t.is_finite() || t < -50.0 || t > 100.0 {
-                return false;
-            }
+        if self
+            .temp
+            .is_some_and(|t| !t.is_finite() || !(-50.0..=100.0).contains(&t))
+        {
+            return false;
         }
-        if let Some(e) = self.ec {
-            if !e.is_finite() || e < 0.0 || e > 20.0 {
-                return false;
-            }
+        if self
+            .ec
+            .is_some_and(|e| !e.is_finite() || !(0.0..=20.0).contains(&e))
+        {
+            return false;
         }
-        if let Some(p) = self.ph {
-            if !p.is_finite() || p < 0.0 || p > 14.0 {
-                return false;
-            }
+        if self
+            .ph
+            .is_some_and(|p| !p.is_finite() || !(0.0..=14.0).contains(&p))
+        {
+            return false;
         }
-        if let Some(w) = self.water_level {
-            if !w.is_finite() || w < 0.0 || w > 500.0 {
-                return false;
-            }
+        if self
+            .water_level
+            .is_some_and(|w| !w.is_finite() || !(0.0..=500.0).contains(&w))
+        {
+            return false;
         }
-        if let Some(mv) = self.ph_voltage_mv {
-            if !mv.is_finite() || mv < 0.0 || mv > 5000.0 {
-                return false;
-            }
+        if self
+            .ph_voltage_mv
+            .is_some_and(|mv| !mv.is_finite() || !(0.0..=5000.0).contains(&mv))
+        {
+            return false;
         }
 
         true
@@ -74,7 +79,11 @@ impl SensorData {
     /// - Only overwrites fields that are `Some`.
     /// - Advances `controller_received_ms` ONLY if the payload contains valid measurements.
     /// - Returns `true` if accepted, `false` otherwise.
-    pub fn merge_incoming_payload(&mut self, payload: &IncomingSensorPayload, now_uptime_ms: u64) -> bool {
+    pub fn merge_incoming_payload(
+        &mut self,
+        payload: &IncomingSensorPayload,
+        now_uptime_ms: u64,
+    ) -> bool {
         if !payload.is_valid() {
             return false;
         }

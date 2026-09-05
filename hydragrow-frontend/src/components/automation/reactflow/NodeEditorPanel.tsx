@@ -637,6 +637,8 @@ export function NodeEditorPanel({
         <label className="mb-2 block text-xs text-emerald-800/75">
           Giá trị ghi đè
           <VariableCombobox
+            id={`cfg-${node.id}-override`}
+            ariaLabel="Giá trị ghi đè"
             value={String(node.data?.overrideValue ?? "")}
             onChange={(val) => onChange(node.id, { ...node.data, overrideValue: val })}
             availableVariables={availableVariables}

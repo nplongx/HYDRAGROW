@@ -24,11 +24,12 @@ impl PhaseTick for WaterRefillingPhase {
         match ctx.water.sub_state {
             WaterSubState::Idle => {
                 ctx.water.sub_state = WaterSubState::Starting;
-                ctx.water.start_fill(
+                ctx.water.start_fill_with_duration(
                     uptime_ms, // SỬA: Đưa uptime vào để canh thời gian an toàn
                     config.water_level_target,
                     sensors,
                     "water_refill_phase",
+                    Some(config.max_refill_duration_sec as u64),
                 );
             }
             WaterSubState::Starting => {
@@ -63,6 +64,7 @@ impl PhaseTick for WaterRefillingPhase {
             result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);
+            result.delta.reset_active_actors = true;
             result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 
@@ -86,11 +88,12 @@ impl PhaseTick for WaterDrainingPhase {
         match ctx.water.sub_state {
             WaterSubState::Idle => {
                 ctx.water.sub_state = WaterSubState::Starting;
-                ctx.water.start_drain(
+                ctx.water.start_drain_with_duration(
                     uptime_ms, // SỬA: Dùng uptime
                     config.water_level_target,
                     sensors,
                     "water_drain_phase",
+                    Some(config.max_drain_duration_sec as u64),
                 );
             }
             WaterSubState::Starting => {
@@ -125,6 +128,7 @@ impl PhaseTick for WaterDrainingPhase {
             result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);
+            result.delta.reset_active_actors = true;
             result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 

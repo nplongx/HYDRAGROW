@@ -114,20 +114,36 @@ pub fn start_fsm_control_loop(
         );
         ctx.apply_delta(&mut cmd_delta);
         if !cmd_events.is_empty() {
-            let mut dc = DispatchContext {
-                pumps: &mut pump_ctrl,
-                nvs: &mut nvs,
-                mqtt_tx: &fsm_mqtt_tx,
-                dosing_report_tx: &dosing_report_tx,
-                sensor_cmd_tx: &sensor_cmd_tx,
-                ctx: &ctx,
-                now_sec: current_wall_time_ms / 1000,
-                device_id: &config.device_id,
-                config: &config,
-                observers: &mut observer_set,
+            let fault = {
+                let mut dc = DispatchContext {
+                    pumps: &mut pump_ctrl,
+                    nvs: &mut nvs,
+                    mqtt_tx: &fsm_mqtt_tx,
+                    dosing_report_tx: &dosing_report_tx,
+                    sensor_cmd_tx: &sensor_cmd_tx,
+                    ctx: &ctx,
+                    now_sec: current_wall_time_ms / 1000,
+                    device_id: &config.device_id,
+                    config: &config,
+                    observers: &mut observer_set,
+                };
+                EventDispatcher::dispatch(cmd_events, &mut dc)
             };
-            let fault = EventDispatcher::dispatch(cmd_events, &mut dc);
-            apply_dispatch_fault(fault, &mut ctx);
+            if let Some(fault) = fault {
+                apply_dispatch_fault(
+                    fault,
+                    &mut ctx,
+                    &mut pump_ctrl,
+                    &mut nvs,
+                    &fsm_mqtt_tx,
+                    &dosing_report_tx,
+                    &sensor_cmd_tx,
+                    current_wall_time_ms / 1000,
+                    &config.device_id,
+                    &config,
+                    &mut observer_set,
+                );
+            }
 
             let _ = fsm_mqtt_tx.send(build_status_msg(
                 &ctx,
@@ -159,20 +175,36 @@ pub fn start_fsm_control_loop(
             ctx.apply_delta(&mut timeout_delta);
 
             if !stop_events.is_empty() {
-                let mut dc = DispatchContext {
-                    pumps: &mut pump_ctrl,
-                    nvs: &mut nvs,
-                    mqtt_tx: &fsm_mqtt_tx,
-                    dosing_report_tx: &dosing_report_tx,
-                    sensor_cmd_tx: &sensor_cmd_tx,
-                    ctx: &ctx,
-                    now_sec: current_wall_time_ms / 1000,
-                    device_id: &config.device_id,
-                    config: &config,
-                    observers: &mut observer_set,
+                let fault = {
+                    let mut dc = DispatchContext {
+                        pumps: &mut pump_ctrl,
+                        nvs: &mut nvs,
+                        mqtt_tx: &fsm_mqtt_tx,
+                        dosing_report_tx: &dosing_report_tx,
+                        sensor_cmd_tx: &sensor_cmd_tx,
+                        ctx: &ctx,
+                        now_sec: current_wall_time_ms / 1000,
+                        device_id: &config.device_id,
+                        config: &config,
+                        observers: &mut observer_set,
+                    };
+                    EventDispatcher::dispatch(stop_events, &mut dc)
                 };
-                let fault = EventDispatcher::dispatch(stop_events, &mut dc);
-                apply_dispatch_fault(fault, &mut ctx);
+                if let Some(fault) = fault {
+                    apply_dispatch_fault(
+                        fault,
+                        &mut ctx,
+                        &mut pump_ctrl,
+                        &mut nvs,
+                        &fsm_mqtt_tx,
+                        &dosing_report_tx,
+                        &sensor_cmd_tx,
+                        current_wall_time_ms / 1000,
+                        &config.device_id,
+                        &config,
+                        &mut observer_set,
+                    );
+                }
 
                 // Đồng bộ ngay lập tức trạng thái Tắt lên MQTT để UI Web/App cập nhật tức thì
                 let _ = fsm_mqtt_tx.send(build_status_msg(
@@ -207,20 +239,36 @@ pub fn start_fsm_control_loop(
         ctx.apply_delta(&mut recipe_result.delta);
 
         if !recipe_result.events.is_empty() {
-            let mut dc = DispatchContext {
-                pumps: &mut pump_ctrl,
-                nvs: &mut nvs,
-                mqtt_tx: &fsm_mqtt_tx,
-                dosing_report_tx: &dosing_report_tx,
-                sensor_cmd_tx: &sensor_cmd_tx,
-                ctx: &ctx,
-                now_sec: current_wall_time_ms / 1000,
-                device_id: &updated_config.device_id, // Sử dụng updated_config
-                config: &updated_config,              // Sử dụng updated_config
-                observers: &mut observer_set,
+            let fault = {
+                let mut dc = DispatchContext {
+                    pumps: &mut pump_ctrl,
+                    nvs: &mut nvs,
+                    mqtt_tx: &fsm_mqtt_tx,
+                    dosing_report_tx: &dosing_report_tx,
+                    sensor_cmd_tx: &sensor_cmd_tx,
+                    ctx: &ctx,
+                    now_sec: current_wall_time_ms / 1000,
+                    device_id: &updated_config.device_id, // Sử dụng updated_config
+                    config: &updated_config,              // Sử dụng updated_config
+                    observers: &mut observer_set,
+                };
+                EventDispatcher::dispatch(recipe_result.events, &mut dc)
             };
-            let fault = EventDispatcher::dispatch(recipe_result.events, &mut dc);
-            apply_dispatch_fault(fault, &mut ctx);
+            if let Some(fault) = fault {
+                apply_dispatch_fault(
+                    fault,
+                    &mut ctx,
+                    &mut pump_ctrl,
+                    &mut nvs,
+                    &fsm_mqtt_tx,
+                    &dosing_report_tx,
+                    &sensor_cmd_tx,
+                    current_wall_time_ms / 1000,
+                    &updated_config.device_id,
+                    &updated_config,
+                    &mut observer_set,
+                );
+            }
         }
 
         // 3. Chạy FSM Tick Decision Engine
@@ -236,20 +284,36 @@ pub fn start_fsm_control_loop(
 
         // 4. Thực thi Side Effects
         if !tick_result.events.is_empty() {
-            let mut dc = DispatchContext {
-                pumps: &mut pump_ctrl,
-                nvs: &mut nvs,
-                mqtt_tx: &fsm_mqtt_tx,
-                dosing_report_tx: &dosing_report_tx,
-                sensor_cmd_tx: &sensor_cmd_tx,
-                ctx: &ctx,
-                now_sec: current_wall_time_ms / 1000,
-                device_id: &updated_config.device_id,
-                config: &updated_config,
-                observers: &mut observer_set,
+            let fault = {
+                let mut dc = DispatchContext {
+                    pumps: &mut pump_ctrl,
+                    nvs: &mut nvs,
+                    mqtt_tx: &fsm_mqtt_tx,
+                    dosing_report_tx: &dosing_report_tx,
+                    sensor_cmd_tx: &sensor_cmd_tx,
+                    ctx: &ctx,
+                    now_sec: current_wall_time_ms / 1000,
+                    device_id: &updated_config.device_id,
+                    config: &updated_config,
+                    observers: &mut observer_set,
+                };
+                EventDispatcher::dispatch(tick_result.events, &mut dc)
             };
-            let fault = EventDispatcher::dispatch(tick_result.events, &mut dc);
-            apply_dispatch_fault(fault, &mut ctx);
+            if let Some(fault) = fault {
+                apply_dispatch_fault(
+                    fault,
+                    &mut ctx,
+                    &mut pump_ctrl,
+                    &mut nvs,
+                    &fsm_mqtt_tx,
+                    &dosing_report_tx,
+                    &sensor_cmd_tx,
+                    current_wall_time_ms / 1000,
+                    &updated_config.device_id,
+                    &updated_config,
+                    &mut observer_set,
+                );
+            }
         }
 
         // 5. Báo trạng thái chuyển Phase
@@ -268,14 +332,47 @@ pub fn start_fsm_control_loop(
     }
 }
 
-fn apply_dispatch_fault(fault: Option<hydragrow_shared::fsm::FaultCode>, ctx: &mut SystemContext) {
-    if let Some(f) = fault {
+fn apply_dispatch_fault(
+    fault: hydragrow_shared::fsm::FaultCode,
+    ctx: &mut SystemContext,
+    pump_ctrl: &mut PumpController<'_>,
+    nvs: &mut Option<esp_idf_svc::nvs::EspDefaultNvs>,
+    mqtt_tx: &Sender<String>,
+    dosing_report_tx: &Sender<String>,
+    sensor_cmd_tx: &Sender<String>,
+    now_sec: u64,
+    device_id: &str,
+    config: &hydragrow_shared::ControllerConfig,
+    observers: &mut ObserverSet,
+) {
+    tracing::error!(
+        "🚨 [DISPATCHER] Physical actuator failure: {:?}. Forcing Fault phase and physical ALL-OFF!",
+        fault
+    );
+    let mut tick_result = hydragrow_controller_core::core::fsm::TickResult::default();
+    tick_result.delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(fault));
+    orchestrator::fault_all_outputs_off(&mut tick_result);
+    ctx.apply_delta(&mut tick_result.delta);
+
+    let mut dc = DispatchContext {
+        pumps: pump_ctrl,
+        nvs,
+        mqtt_tx,
+        dosing_report_tx,
+        sensor_cmd_tx,
+        ctx: &*ctx,
+        now_sec,
+        device_id,
+        config,
+        observers,
+    };
+    if let Some(shutdown_fault) =
+        EventDispatcher::dispatch_best_effort_all_off(tick_result.events, &mut dc)
+    {
         tracing::error!(
-            "🚨 [DISPATCHER] Physical actuator failure: {:?}. Forcing Fault phase!",
-            f
+            "🚨 [DISPATCHER] Secondary actuator failure during emergency ALL-OFF: {:?} (primary fault latched: {:?})",
+            shutdown_fault,
+            fault
         );
-        let mut delta = hydragrow_controller_core::core::fsm::ContextDelta::default();
-        delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(f));
-        ctx.apply_delta(&mut delta);
     }
 }

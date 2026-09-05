@@ -83,6 +83,7 @@ pub fn fault_all_outputs_off(result: &mut TickResult) {
     peri_delta.mix_valve_started_by_dosing = Some(false);
     peri_delta.water_pump_started_uptime_ms = Some(None);
     result.delta.peripherals = Some(peri_delta);
+    result.delta.reset_active_actors = true;
 }
 
 pub fn tick(
@@ -98,6 +99,16 @@ pub fn tick(
     // Điều này đảm bảo rằng mỗi khi user lưu cấu hình mới, AI sẽ phản hồi ngay lập tức
     ctx.tuner.sync_with_config(config);
 
+    // Safety check: Emergency shutdown
+    if config.emergency_shutdown {
+        if !matches!(ctx.phase, SystemPhase::Fault(FaultCode::EmergencyStop)) {
+            error!("🚨 [EMERGENCY SHUTDOWN] Config emergency_shutdown is active!");
+            result.delta.phase = Some(SystemPhase::Fault(FaultCode::EmergencyStop));
+            fault_all_outputs_off(&mut result);
+        }
+        return result;
+    }
+
     // [NPL-9] Safety watchdog — chạy bất kể mode (Auto/Manual/Fault)
     let osaka_running = ctx.peripherals.pump_status.osaka_pump;
     let mist_valve_open = ctx.peripherals.pump_status.mist_valve;
@@ -108,11 +119,20 @@ pub fn tick(
         return result;
     }
 
-    // 1. Kiểm tra Sensor Timeout
-    // SỬA: Dùng uptime_ms để kiểm tra timeout, an toàn tuyệt đối trước Time Jump
-    if uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000 {
+    // 1. Kiểm tra Sensor Timeout và tính hợp lệ của giá trị cảm biến
+    let sensor_timed_out = uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000;
+    let sensor_non_finite = !sensors.ec.is_finite()
+        || !sensors.ph.is_finite()
+        || !sensors.temp.is_finite()
+        || !sensors.water_level.is_finite();
+
+    if sensor_timed_out || sensor_non_finite {
         if !ctx.phase.is_fault() {
-            error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
+            if sensor_timed_out {
+                error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
+            } else {
+                error!("🚨 [SENSOR NON-FINITE] Cảm biến trả giá trị không hợp lệ (NaN hoặc Inf).");
+            }
             result.delta.phase = Some(SystemPhase::Fault(FaultCode::SensorTimeout));
             fault_all_outputs_off(&mut result);
         }
@@ -134,6 +154,14 @@ pub fn tick(
 
     if config.control_mode != ControlMode::Auto || !config.is_enabled {
         return stop_automation_if_needed(result, ctx);
+    }
+
+    if ctx.phase == SystemPhase::ManualMode {
+        result.delta.phase = Some(SystemPhase::Monitoring);
+        result.delta.phase_start_ms = Some(None);
+        result.delta.phase_finish_ms = Some(None);
+        result.delta.reset_stabilizer = true;
+        return result;
     }
 
     if matches!(
@@ -158,19 +186,40 @@ pub fn tick(
         SystemPhase::WaterDraining => {
             WaterDrainingPhase.tick(now_ms, uptime_ms, config, sensors, ctx)
         }
+        SystemPhase::SensorCalibration => {
+            let mut res = TickResult::default();
+            let is_timed_out = if let Some(finish_ms) = ctx.phase_finish_ms {
+                uptime_ms >= finish_ms || now_ms >= finish_ms
+            } else {
+                false
+            };
+            if is_timed_out {
+                tracing::info!(
+                    "⏱️ [CALIBRATION] SensorCalibration timeout reached, returning to Monitoring"
+                );
+                res.delta.phase = Some(SystemPhase::Monitoring);
+                res.delta.phase_finish_ms = Some(None);
+                res.delta.phase_start_ms = Some(None);
+                res.delta.reset_active_actors = true;
+                res.delta.reset_stabilizer = true;
+                res.delta.calibration =
+                    Some(crate::core::fsm::tick_result::CalibrationDelta::Clear);
+            }
+            res
+        }
         _ => TickResult::default(),
     };
 
     // 5. Tick Peripheral Controllers
     if !matches!(
         ctx.phase,
-        SystemPhase::Fault(_) | SystemPhase::EmergencyStop(_)
+        SystemPhase::Fault(_) | SystemPhase::EmergencyStop(_) | SystemPhase::SensorCalibration
     ) {
         let is_dosing_active = matches!(
             ctx.phase,
             SystemPhase::MimoDosing | SystemPhase::ActiveMixing | SystemPhase::Stabilizing
         );
-        result = merge_tick_results(result, phase_result);
+        merge_tick_results(&mut result, phase_result);
 
         // SỬA: Truyền thêm uptime_ms vào
         result = tick_peripheral_systems(
@@ -183,7 +232,7 @@ pub fn tick(
             is_dosing_active,
         );
     } else {
-        result = merge_tick_results(result, phase_result);
+        merge_tick_results(&mut result, phase_result);
     }
 
     // Centralized Fault & EmergencyStop invariant: enforce all outputs OFF
@@ -197,79 +246,35 @@ pub fn tick(
     result
 }
 
-fn merge_tick_results(mut base: TickResult, addition: TickResult) -> TickResult {
+pub fn merge_tick_results(base: &mut TickResult, addition: TickResult) {
     base.events.extend(addition.events);
-
-    if addition.delta.phase.is_some() {
-        base.delta.phase = addition.delta.phase;
-    }
-    if addition.delta.phase_start_ms.is_some() {
-        base.delta.phase_start_ms = addition.delta.phase_start_ms;
-    }
-    if addition.delta.phase_finish_ms.is_some() {
-        base.delta.phase_finish_ms = addition.delta.phase_finish_ms;
-    }
-    if addition.delta.peripherals.is_some() {
-        base.delta.peripherals = addition.delta.peripherals;
-    }
-    if addition.delta.calibration.is_some() {
-        base.delta.calibration = addition.delta.calibration;
-    }
-    if addition.delta.dosing_cycle_count_increment {
-        base.delta.dosing_cycle_count_increment = true;
-    }
-    if addition.delta.reset_stabilizer {
-        base.delta.reset_stabilizer = true;
-    }
-    if addition.delta.last_water_change_sec.is_some() {
-        base.delta.last_water_change_sec = addition.delta.last_water_change_sec;
-    }
-    if addition.delta.next_water_change_trigger_sec.is_some() {
-        base.delta.next_water_change_trigger_sec = addition.delta.next_water_change_trigger_sec;
-    }
-    if addition.delta.water_change_cron.is_some() {
-        base.delta.water_change_cron = addition.delta.water_change_cron;
-    }
-    if addition.delta.current_stage_index.is_some() {
-        base.delta.current_stage_index = addition.delta.current_stage_index;
-    }
-    if addition.delta.recipe_completed.is_some() {
-        base.delta.recipe_completed = addition.delta.recipe_completed;
-    }
-    if addition.delta.last_recipe_check_sec.is_some() {
-        base.delta.last_recipe_check_sec = addition.delta.last_recipe_check_sec;
-    }
-    if addition.delta.reset_safety_budget {
-        base.delta.reset_safety_budget = true;
-    }
-    if addition.delta.safety_override_until.is_some() {
-        base.delta.safety_override_until = addition.delta.safety_override_until;
-    }
-    if addition.delta.manual_pump_timeout.is_some() {
-        base.delta.manual_pump_timeout = addition.delta.manual_pump_timeout;
-    }
-    if addition.delta.manual_pump_timeout_clear.is_some() {
-        base.delta.manual_pump_timeout_clear = addition.delta.manual_pump_timeout_clear;
-    }
-
-    base
+    base.delta.merge_from(addition.delta);
 }
 
-fn tick_peripheral_systems(
+pub fn tick_peripheral_systems(
     mut result: TickResult,
     ctx: &SystemContext,
     sensors: &SensorData,
     _now_ms: u64,
     uptime_ms: u64, // SỬA: Nhận uptime_ms
     config: &ControllerConfig,
-    _is_dosing_active: bool,
+    is_dosing_active: bool,
 ) -> TickResult {
     // 1. Rút cái `peripherals` delta hiện tại ra (nếu các pha trước đã có thay đổi thì giữ lại, không thì tạo mới)
     let mut current_peri_delta = result.delta.peripherals.take().unwrap_or_default();
 
+    // Determine ownership considering same-tick phase delta overrides
+    let mist_owned_by_dosing = current_peri_delta
+        .misting_started_by_dosing
+        .unwrap_or(ctx.peripherals.misting_started_by_dosing);
+    let mix_owned_by_dosing = current_peri_delta
+        .mix_valve_started_by_dosing
+        .unwrap_or(ctx.peripherals.mix_valve_started_by_dosing)
+        || is_dosing_active;
+
     // 2. Tính toán Van Phun Sương (Mist)
     let mut mist_delta = PeripheralDelta::default();
-    if !ctx.peripherals.misting_started_by_dosing {
+    if !mist_owned_by_dosing {
         let (delta, mist_events) =
             PeripheralController::tick_misting(&ctx.peripherals, sensors, uptime_ms, config);
         mist_delta = delta;
@@ -278,7 +283,7 @@ fn tick_peripheral_systems(
 
     // 3. Tính toán Van Trộn (Mix)
     let mut mix_delta = PeripheralDelta::default();
-    if !ctx.peripherals.mix_valve_started_by_dosing {
+    if !mix_owned_by_dosing {
         let (delta, mix_events) =
             PeripheralController::tick_scheduled_mixing(&ctx.peripherals, uptime_ms / 1000, config);
         mix_delta = delta;
@@ -301,17 +306,65 @@ fn tick_peripheral_systems(
         None
     };
 
+    let effective_misting_active = current_peri_delta
+        .is_misting_active
+        .unwrap_or(ctx.peripherals.is_misting_active);
+
     // 4. Tính toán Bơm Osaka (Thực thi SAU CÙNG như đã bàn)
     let (osaka_delta, osaka_events) = PeripheralController::tick_osaka(
         &ctx.peripherals,
         &mist_valve_is_open,
         &mix_valve_is_open,
+        effective_misting_active,
         config,
-    ); // dù đã đặt tick_osaka
+    );
     result.events.extend(osaka_events);
 
     // ---> Gộp nốt state của Osaka vào current_peri_delta
     current_peri_delta = merge_peripheral_deltas(current_peri_delta, osaka_delta);
+
+    // Deduplicate valve events so only the final resolved intent per valve is emitted
+    if let Some(final_mix) = current_peri_delta.mix_valve {
+        let mut found = false;
+        result.events.retain(|e| {
+            if matches!(e, OrchestratorEvent::SetMixValve { .. }) {
+                if !found {
+                    found = true;
+                    true
+                } else {
+                    false
+                }
+            } else {
+                true
+            }
+        });
+        for e in result.events.iter_mut() {
+            if let OrchestratorEvent::SetMixValve { on } = e {
+                *on = final_mix;
+            }
+        }
+    }
+
+    if let Some(final_mist) = current_peri_delta.mist_valve {
+        let mut found = false;
+        result.events.retain(|e| {
+            if matches!(e, OrchestratorEvent::SetMistValve { .. }) {
+                if !found {
+                    found = true;
+                    true
+                } else {
+                    false
+                }
+            } else {
+                true
+            }
+        });
+        for e in result.events.iter_mut() {
+            if let OrchestratorEvent::SetMistValve { on } = e {
+                *on = final_mist;
+            }
+        }
+    }
 
     // 5. Đóng gói lại và trả về
     result.delta.peripherals = Some(current_peri_delta);
@@ -387,6 +440,7 @@ fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> Tic
         peri_delta.ph_up = Some(false);
         peri_delta.ph_down = Some(false);
         result.delta.peripherals = Some(peri_delta);
+        result.delta.reset_active_actors = true;
     }
 
     result.delta.phase = Some(SystemPhase::ManualMode);
@@ -395,61 +449,11 @@ fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> Tic
     result
 }
 
-fn merge_peripheral_deltas(
+pub fn merge_peripheral_deltas(
     mut base: PeripheralDelta,
     addition: PeripheralDelta,
 ) -> PeripheralDelta {
-    if addition.osaka_pump.is_some() {
-        base.osaka_pump = addition.osaka_pump;
-    }
-    if addition.osaka_pwm.is_some() {
-        base.osaka_pwm = addition.osaka_pwm;
-    }
-    if addition.is_misting_active.is_some() {
-        base.is_misting_active = addition.is_misting_active;
-    }
-    if addition.last_mist_toggle_time.is_some() {
-        base.last_mist_toggle_time = addition.last_mist_toggle_time;
-    }
-    if addition.mist_valve.is_some() {
-        base.mist_valve = addition.mist_valve;
-    }
-    if addition.is_scheduled_mixing_active.is_some() {
-        base.is_scheduled_mixing_active = addition.is_scheduled_mixing_active;
-    }
-    if addition.last_mixing_start_sec.is_some() {
-        base.last_mixing_start_sec = addition.last_mixing_start_sec;
-    }
-    if addition.water_pump_in.is_some() {
-        base.water_pump_in = addition.water_pump_in;
-    }
-    if addition.water_pump_out.is_some() {
-        base.water_pump_out = addition.water_pump_out;
-    }
-    if addition.pump_a.is_some() {
-        base.pump_a = addition.pump_a;
-    }
-    if addition.pump_b.is_some() {
-        base.pump_b = addition.pump_b;
-    }
-    if addition.ph_up.is_some() {
-        base.ph_up = addition.ph_up;
-    }
-    if addition.ph_down.is_some() {
-        base.ph_down = addition.ph_down;
-    }
-    if addition.last_ec_before_dose.is_some() {
-        base.last_ec_before_dose = addition.last_ec_before_dose;
-    }
-    if addition.last_ph_before_dose.is_some() {
-        base.last_ph_before_dose = addition.last_ph_before_dose;
-    }
-    if addition.misting_started_by_dosing.is_some() {
-        base.misting_started_by_dosing = addition.misting_started_by_dosing;
-    }
-    if addition.mix_valve_started_by_dosing.is_some() {
-        base.mix_valve_started_by_dosing = addition.mix_valve_started_by_dosing;
-    }
+    base.merge_from(addition);
     base
 }
 

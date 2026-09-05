@@ -191,3 +191,80 @@ fn manual_mode_returns_to_monitoring_when_auto_reenabled() {
     assert_eq!(result.delta.phase_finish_ms, Some(None));
     assert!(result.delta.reset_stabilizer);
 }
+
+#[test]
+fn manual_mode_actuator_stop_is_complete() {
+    let mut config = auto_config();
+    config.control_mode = hydragrow_shared::ControlMode::Manual;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::WaterRefilling;
+    ctx.peripherals.pump_status.water_pump_in = true;
+    ctx.peripherals.pump_status.osaka_pump = true;
+    ctx.peripherals.pump_status.mist_valve = true;
+    ctx.peripherals.pump_status.mix_valve = true;
+
+    let result = one_tick(&mut ctx, &config, &balanced_sensors(), 10_000);
+
+    assert_eq!(result.delta.phase, Some(SystemPhase::ManualMode));
+
+    // Verify all actuator groups are commanded OFF in events
+    let has_water_stop = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump { direction } if *direction == WaterDirection::Stop
+        )
+    });
+    let has_mist_off = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetMistValve { on: false }));
+    let has_mix_off = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetMixValve { on: false }));
+    let has_osaka_off = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 }));
+    let has_pump_a_off = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::events::DosingPumpTarget::NutrientA,
+                on: false,
+                ..
+            }
+        )
+    });
+    let has_ph_up_off = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::events::DosingPumpTarget::PhUp,
+                on: false,
+                ..
+            }
+        )
+    });
+
+    assert!(has_water_stop, "Must emit SetWaterPump Stop");
+    assert!(has_mist_off, "Must emit SetMistValve false");
+    assert!(has_mix_off, "Must emit SetMixValve false");
+    assert!(has_osaka_off, "Must emit SetOsakaPump 0");
+    assert!(has_pump_a_off, "Must emit SetDosingPump A false");
+    assert!(has_ph_up_off, "Must emit SetDosingPump PhUp false");
+
+    // Logical peripherals must also be set to false
+    let peri = result
+        .delta
+        .peripherals
+        .expect("Must have peripheral delta");
+    assert_eq!(peri.water_pump_in, Some(false));
+    assert_eq!(peri.mist_valve, Some(false));
+    assert_eq!(peri.mix_valve, Some(false));
+    assert_eq!(peri.osaka_pump, Some(false));
+    assert_eq!(peri.osaka_pwm, Some(0));
+    assert_eq!(peri.pump_a, Some(false));
+    assert_eq!(peri.ph_up, Some(false));
+}

@@ -350,3 +350,45 @@ fn config_update_without_recipe_preserves_existing_recipe() {
     let stage1 = &test_recipe().stages[1];
     assert_eq!(state.effective_config.ec_target, stage1.ec_target);
 }
+
+#[test]
+fn config_update_with_new_recipe_replaces_old_recipe() {
+    let recipe1 = test_recipe();
+    let mut recipe2 = test_recipe();
+    recipe2.recipe_id = "recipe_v2".to_string();
+    recipe2.stages[0].ec_target = 3.5;
+
+    let base = ControllerConfig {
+        active_recipe: Some(recipe1),
+        ..ControllerConfig::default()
+    };
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    // Activate stage 0 of recipe 1
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+    assert_eq!(state.effective_config.ec_target, 2.2);
+
+    // Update base config with recipe 2
+    let new_base = ControllerConfig {
+        active_recipe: Some(recipe2),
+        ..ControllerConfig::default()
+    };
+    state.set_base_config(new_base);
+
+    // New recipe must be active in base_config
+    assert_eq!(
+        state.base_config.active_recipe.as_ref().unwrap().recipe_id,
+        "recipe_v2"
+    );
+
+    // Trigger stage tick for new recipe
+    let tick2 = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick2);
+    ctx.apply_delta(&mut { tick2.delta });
+
+    // Effective config must now reflect new recipe's stage targets
+    assert_eq!(state.effective_config.ec_target, 3.5);
+}

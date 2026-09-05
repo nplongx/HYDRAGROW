@@ -15,6 +15,7 @@ use crate::core::fsm::context::SystemContext;
 use crate::core::fsm::events::OrchestratorEvent;
 use crate::core::fsm::phase_tick::PhaseTick;
 use crate::core::fsm::tick_result::{CalibrationDelta, ContextDelta, TickResult};
+use crate::core::optimizer::plan_water_operation;
 use crate::utils::{DosePumpKind, effective_flow_ml_per_sec};
 
 pub struct MonitoringPhase;
@@ -35,7 +36,7 @@ impl PhaseTick for MonitoringPhase {
 
         // 1. Kiểm tra lịch xả/thay nước định kỳ (Cronjob)
         if let Some(water_change_result) =
-            check_scheduled_water_change(ctx, config, now_sec, &mut result.delta)
+            check_scheduled_water_change(ctx, config, now_sec, &mut result.delta, sensors)
         {
             // Truyền thêm uptime_ms vào apply_decision
             return apply_decision(
@@ -67,6 +68,7 @@ fn check_scheduled_water_change(
     config: &ControllerConfig,
     now_sec: u64,
     delta: &mut ContextDelta,
+    sensors: &SensorData,
 ) -> Option<SolveResult> {
     if !config.enable_water_level_sensor || !config.scheduled_water_change_enabled {
         return None;
@@ -150,6 +152,31 @@ fn check_scheduled_water_change(
         return None;
     }
 
+    let drain_amount = if let Some(recipe) = &config.active_recipe {
+        ctx.current_stage_index
+            .and_then(|idx| recipe.stages.get(idx))
+            .and_then(|s| s.water_change_drain_cm)
+            .unwrap_or(config.scheduled_drain_amount_cm)
+    } else {
+        config.scheduled_drain_amount_cm
+    };
+
+    let plan = match plan_water_operation(
+        WaterDirection::Out,
+        drain_amount,
+        sensors.water_level,
+        None,
+        config,
+    ) {
+        Some(p) => p,
+        None => {
+            warn!(
+                "  [WATER_CHANGE] Kế hoạch xả nước định kỳ bị từ chối do vi phạm an toàn mực nước."
+            );
+            return None;
+        }
+    };
+
     let mut peri_delta = delta.peripherals.take().unwrap_or_default();
     peri_delta.last_mixing_start_sec = Some(now_sec);
     peri_delta.is_scheduled_mixing_active = Some(false);
@@ -157,7 +184,7 @@ fn check_scheduled_water_change(
     delta.calibration = Some(CalibrationDelta::Invalidate);
 
     let control = ControlVector {
-        water_out_sec: config.max_drain_duration_sec as f32,
+        water_out_sec: plan.duration_sec,
         ..Default::default()
     };
 
@@ -274,8 +301,13 @@ fn apply_decision(
                 if !ctx.peripherals.pump_status.water_pump_in {
                     peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
                 }
+                let trigger = if is_water_change {
+                    "scheduled_water_change"
+                } else {
+                    "mimo_dosing"
+                };
                 ctx.water
-                    .start_fill(uptime_ms, config.water_level_target, sensors, "mimo_dosing");
+                    .start_fill(uptime_ms, config.water_level_target, sensors, trigger);
             }
             if control.water_out_sec > 0.0 {
                 result.events.push(OrchestratorEvent::SetWaterPump {
@@ -285,8 +317,27 @@ fn apply_decision(
                 if !ctx.peripherals.pump_status.water_pump_out {
                     peri_delta.water_pump_started_uptime_ms = Some(Some(uptime_ms));
                 }
+                let (target_level, trigger) = if is_water_change {
+                    let drain_amount = if let Some(recipe) = &config.active_recipe {
+                        ctx.current_stage_index
+                            .and_then(|idx| recipe.stages.get(idx))
+                            .and_then(|s| s.water_change_drain_cm)
+                            .unwrap_or(config.scheduled_drain_amount_cm)
+                    } else {
+                        config.scheduled_drain_amount_cm
+                    };
+                    let target = if drain_amount > 0.0 {
+                        (sensors.water_level - drain_amount).max(config.water_level_critical_min)
+                    } else {
+                        config.water_level_critical_min
+                    };
+                    (target, "scheduled_water_change")
+                } else {
+                    (config.water_level_target, "mimo_dosing")
+                };
+
                 ctx.water
-                    .start_drain(uptime_ms, config.water_level_target, sensors, "mimo_dosing");
+                    .start_drain(uptime_ms, target_level, sensors, trigger);
             }
             if control.misting_sec > 0.0 {
                 result

@@ -478,6 +478,8 @@ fn reset_fault_delta_fully_resets_dosing_and_water_actors() {
             dose_b_delivered_ml: 0.0,
             ph_up_delivered_ml: 0.0,
             ph_down_delivered_ml: 0.0,
+            b_job: None,
+            delay_a_to_b_ms: 0,
         },
     );
     ctx.dosing.pending_ph_job = Some(
@@ -505,6 +507,7 @@ fn reset_fault_delta_fully_resets_dosing_and_water_actors() {
                 target_level: 25.0,
                 start_level: 10.0,
                 start_ms: 1000,
+                max_duration_sec: None,
             },
         };
 

@@ -10,8 +10,11 @@ pub mod hestia;
 pub mod log;
 pub mod recipe;
 pub mod safety;
+pub mod sensors;
 pub mod telemetry;
 pub mod topics;
+
+pub use sensors::IncomingSensorPayload;
 
 /// A WiFi network credential tried by a controller in ascending priority order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -675,6 +678,10 @@ impl ControllerConfig {
         }
         if self.ph_target < 0.0 || self.ph_target > 14.0 {
             errors.push("ph_target phải trong khoảng [0, 14]".into());
+        }
+
+        if self.max_dose_per_hour <= 0.0 {
+            errors.push("max_dose_per_hour phải > 0".into());
         }
 
         if self.nutrient_a_ratio < 0.0 {

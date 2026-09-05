@@ -186,6 +186,12 @@ impl ControllerRuntimeState {
         self.recompute_effective_config();
     }
 
+    pub fn activate_recipe(&mut self, recipe: CropRecipe) {
+        self.active_recipe = recipe.stages.first().cloned();
+        self.base_config.active_recipe = Some(recipe);
+        self.recompute_effective_config();
+    }
+
     pub fn clear_recipe(&mut self) {
         self.base_config.active_recipe = None;
         self.active_recipe = None;

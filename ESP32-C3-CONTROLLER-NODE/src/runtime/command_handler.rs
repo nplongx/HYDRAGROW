@@ -211,12 +211,21 @@ pub fn process_mqtt_commands(
             stop_all_hardware(&mut step_events);
             step_delta.phase = Some(SystemPhase::SensorCalibration);
             step_delta.phase_finish_ms = Some(Some(now_uptime_ms + 3_600_000));
+            step_delta.reset_active_actors = true;
 
             let mut peri_delta = PeripheralDelta::default();
             peri_delta.osaka_pump = Some(false);
             peri_delta.osaka_pwm = Some(0);
             peri_delta.is_misting_active = Some(false);
             peri_delta.mist_valve = Some(false);
+            peri_delta.mix_valve = Some(false);
+            peri_delta.is_scheduled_mixing_active = Some(false);
+            peri_delta.pump_a = Some(false);
+            peri_delta.pump_b = Some(false);
+            peri_delta.ph_up = Some(false);
+            peri_delta.ph_down = Some(false);
+            peri_delta.water_pump_in = Some(false);
+            peri_delta.water_pump_out = Some(false);
             step_delta.peripherals = Some(peri_delta);
 
             step_events.push(OrchestratorEvent::SaveNvsSnapshot);
@@ -232,6 +241,7 @@ pub fn process_mqtt_commands(
                 info!("✅ Thoát chế độ hiệu chuẩn, quay về Monitoring.");
                 step_delta.phase = Some(SystemPhase::Monitoring);
                 step_delta.phase_finish_ms = Some(None);
+                step_delta.reset_active_actors = true;
 
                 temp_state.apply_step_delta(&step_delta);
                 merge_delta(&mut accumulated_delta, step_delta);

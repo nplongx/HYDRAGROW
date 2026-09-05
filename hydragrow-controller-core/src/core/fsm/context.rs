@@ -388,6 +388,18 @@ impl Default for SystemContext {
 }
 
 impl SystemContext {
+    /// Reset hoàn toàn các active sub-actors (dosing, water) và xoá ownership/chiếm dụng van & bơm.
+    pub fn reset_active_actors_and_ownership(&mut self) {
+        self.dosing.reset();
+        self.water.reset();
+        self.calibration.pending_sample = None;
+        self.peripherals.misting_started_by_dosing = false;
+        self.peripherals.mix_valve_started_by_dosing = false;
+        self.peripherals.is_misting_active = false;
+        self.peripherals.is_scheduled_mixing_active = false;
+        self.peripherals.water_pump_started_uptime_ms = None;
+    }
+
     /// Áp dụng ContextDelta vào SystemContext (Nơi DUY NHẤT được phép mutate state của Context).
     pub fn apply_delta(&mut self, delta: &mut ContextDelta) {
         // --- 1. Phase Transition Tracking ---
@@ -451,8 +463,11 @@ impl SystemContext {
         if delta.reset_safety_budget {
             self.safety.flush_for_reset();
             self.tuner.on_manual_reset();
-            self.dosing.reset();
-            self.water.reset();
+            self.reset_active_actors_and_ownership();
+        }
+
+        if delta.reset_active_actors {
+            self.reset_active_actors_and_ownership();
         }
 
         if let Some(until) = delta.safety_override_until {
@@ -549,6 +564,9 @@ impl SystemContext {
                     if let Some(s) = self.calibration.pending_sample.as_mut() {
                         s.invalid_by_noise = true;
                     }
+                }
+                CalibrationDelta::Clear => {
+                    self.calibration.pending_sample = None;
                 }
                 CalibrationDelta::UpdatePostMixing { ec, ph, finish_ms } => {
                     if let Some(s) = self.calibration.pending_sample.as_mut() {

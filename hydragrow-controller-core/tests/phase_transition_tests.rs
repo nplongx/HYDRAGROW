@@ -268,3 +268,82 @@ fn manual_mode_actuator_stop_is_complete() {
     assert_eq!(peri.pump_a, Some(false));
     assert_eq!(peri.ph_up, Some(false));
 }
+
+#[test]
+fn merge_tick_results_preserves_independent_peripheral_fields() {
+    use hydragrow_controller_core::core::fsm::orchestrator::merge_tick_results;
+    use hydragrow_controller_core::core::fsm::tick_result::{PeripheralDelta, TickResult};
+
+    let mut base = TickResult::default();
+    base.delta.peripherals = Some(PeripheralDelta {
+        water_pump_in: Some(true),
+        ..Default::default()
+    });
+    let mut addition = TickResult::default();
+    addition.delta.peripherals = Some(PeripheralDelta {
+        mist_valve: Some(true),
+        ..Default::default()
+    });
+    merge_tick_results(&mut base, addition);
+    let pd = base.delta.peripherals.expect("merged peripheral delta");
+    assert_eq!(pd.water_pump_in, Some(true));
+    assert_eq!(pd.mist_valve, Some(true));
+}
+
+#[test]
+fn merge_peripheral_deltas_resolves_valve_conflict_by_dosing_ownership() {
+    use hydragrow_controller_core::core::fsm::tick_result::PeripheralDelta;
+
+    // Case 1: Dosing addition takes ownership and sets mist_valve = true over scheduled false
+    let mut scheduled_base = PeripheralDelta {
+        mist_valve: Some(false),
+        misting_started_by_dosing: Some(false),
+        ..Default::default()
+    };
+    let dosing_addition = PeripheralDelta {
+        mist_valve: Some(true),
+        misting_started_by_dosing: Some(true),
+        ..Default::default()
+    };
+    scheduled_base.merge_from(dosing_addition);
+    assert_eq!(scheduled_base.mist_valve, Some(true));
+    assert_eq!(scheduled_base.misting_started_by_dosing, Some(true));
+
+    // Case 2: Scheduled addition (non-dosing) cannot override existing dosing-owned mist_valve = true
+    let mut dosing_base = PeripheralDelta {
+        mist_valve: Some(true),
+        misting_started_by_dosing: Some(true),
+        ..Default::default()
+    };
+    let scheduled_addition = PeripheralDelta {
+        mist_valve: Some(false),
+        misting_started_by_dosing: Some(false),
+        ..Default::default()
+    };
+    dosing_base.merge_from(scheduled_addition);
+    assert_eq!(
+        dosing_base.mist_valve,
+        Some(true),
+        "Scheduled cannot override dosing ownership"
+    );
+    assert_eq!(dosing_base.misting_started_by_dosing, Some(true));
+
+    // Case 3: Same for mix valve
+    let mut mix_base = PeripheralDelta {
+        mix_valve: Some(true),
+        mix_valve_started_by_dosing: Some(true),
+        ..Default::default()
+    };
+    let scheduled_mix = PeripheralDelta {
+        mix_valve: Some(false),
+        mix_valve_started_by_dosing: Some(false),
+        ..Default::default()
+    };
+    mix_base.merge_from(scheduled_mix);
+    assert_eq!(
+        mix_base.mix_valve,
+        Some(true),
+        "Scheduled cannot override dosing mix ownership"
+    );
+    assert_eq!(mix_base.mix_valve_started_by_dosing, Some(true));
+}

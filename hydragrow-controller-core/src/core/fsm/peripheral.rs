@@ -12,6 +12,7 @@ impl PeripheralController {
         peripherals: &PeripheralState,
         mist_valve_is_open: &Option<bool>, // Mở bơm ngay lập tức khi 1 trong 2 van điện tử được mở
         mix_valve_is_open: &Option<bool>,
+        is_misting_active: bool,
         config: &ControllerConfig,
     ) -> (PeripheralDelta, Vec<OrchestratorEvent>) {
         let mut events = Vec::new();
@@ -24,7 +25,7 @@ impl PeripheralController {
         let needs_osaka = mist_is_open || mix_is_open;
 
         if needs_osaka {
-            let target_pwm = if peripherals.is_misting_active {
+            let target_pwm = if is_misting_active {
                 config.osaka_misting_pwm_percent as u32
             } else {
                 config.osaka_mixing_pwm_percent as u32

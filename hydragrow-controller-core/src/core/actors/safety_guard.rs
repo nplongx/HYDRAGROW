@@ -60,6 +60,18 @@ impl SafetyGuard {
         total + dose_ml <= max_ml
     }
 
+    /// Lấy tổng lượng hóa chất đã châm trong 1 giờ qua cho một bơm cụ thể.
+    pub fn get_hourly_dose(&self, pump: &str, now_sec: u64) -> f32 {
+        match self.hourly_doses.get(pump) {
+            Some(h) => h
+                .iter()
+                .filter(|(ts, _)| now_sec.saturating_sub(*ts) <= 3600)
+                .map(|(_, ml)| *ml)
+                .sum(),
+            None => 0.0,
+        }
+    }
+
     /// Ghi dose vào lịch sử mà không kiểm tra. Chỉ gọi sau khi peek đã pass.
     pub fn commit_hourly_dose(&mut self, pump: &str, now_sec: u64, dose_ml: f32) {
         let history = self.hourly_doses.entry(pump.to_string()).or_default();

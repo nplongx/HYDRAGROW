@@ -5,7 +5,7 @@ use hydragrow_shared::{
 
 use crate::{WaterDirection, core::fsm::OrchestratorEvent};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WaterSubState {
     Idle,
     Starting,
@@ -13,12 +13,13 @@ pub enum WaterSubState {
     Draining { job: WaterJob },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WaterJob {
     pub trigger: String,
     pub target_level: f32,
     pub start_level: f32,
     pub start_ms: u64,
+    pub max_duration_sec: Option<u64>,
 }
 
 #[must_use]
@@ -56,12 +57,24 @@ impl WaterActor {
         sensors: &SensorData,
         trigger: &str,
     ) -> Option<UnifiedSystemLog> {
+        self.start_fill_with_duration(now_ms, target, sensors, trigger, None)
+    }
+
+    pub fn start_fill_with_duration(
+        &mut self,
+        now_ms: u64,
+        target: f32,
+        sensors: &SensorData,
+        trigger: &str,
+        max_duration_sec: Option<u64>,
+    ) -> Option<UnifiedSystemLog> {
         self.sub_state = WaterSubState::Filling {
             job: WaterJob {
                 trigger: trigger.into(),
                 target_level: target,
                 start_level: sensors.water_level,
                 start_ms: now_ms,
+                max_duration_sec,
             },
         };
         self.retry_refill = 0;
@@ -96,12 +109,24 @@ impl WaterActor {
         sensors: &SensorData,
         trigger: &str,
     ) -> Option<UnifiedSystemLog> {
+        self.start_drain_with_duration(now_ms, target, sensors, trigger, None)
+    }
+
+    pub fn start_drain_with_duration(
+        &mut self,
+        now_ms: u64,
+        target: f32,
+        sensors: &SensorData,
+        trigger: &str,
+        max_duration_sec: Option<u64>,
+    ) -> Option<UnifiedSystemLog> {
         self.sub_state = WaterSubState::Draining {
             job: WaterJob {
                 trigger: trigger.into(),
                 target_level: target,
                 start_level: sensors.water_level,
                 start_ms: now_ms,
+                max_duration_sec,
             },
         };
 
@@ -141,9 +166,13 @@ impl WaterActor {
                 }],
                 vec![],
             ),
+            WaterSubState::Idle => (WaterEvent::Pending, vec![], vec![]),
             WaterSubState::Filling { job } => {
                 let elapsed_ms = now_ms.saturating_sub(job.start_ms);
-                let timeout_ms = (config.max_refill_duration_sec as u64).saturating_mul(1000);
+                let timeout_ms = job
+                    .max_duration_sec
+                    .unwrap_or(config.max_refill_duration_sec as u64)
+                    .saturating_mul(1000);
                 let reached = sensors.water_level >= job.target_level;
                 let timeout = elapsed_ms >= timeout_ms;
 
@@ -205,7 +234,10 @@ impl WaterActor {
             }
             WaterSubState::Draining { job } => {
                 let elapsed_ms = now_ms.saturating_sub(job.start_ms);
-                let timeout_ms = (config.max_drain_duration_sec as u64).saturating_mul(1000);
+                let timeout_ms = job
+                    .max_duration_sec
+                    .unwrap_or(config.max_drain_duration_sec as u64)
+                    .saturating_mul(1000);
                 let reached = sensors.water_level <= job.target_level;
                 let timeout = elapsed_ms >= timeout_ms;
 
@@ -265,13 +297,6 @@ impl WaterActor {
                     vec![],
                 )
             }
-            WaterSubState::Idle => (
-                WaterEvent::Pending,
-                vec![OrchestratorEvent::SetWaterPump {
-                    direction: WaterDirection::Stop,
-                }],
-                vec![],
-            ),
         }
     }
 }

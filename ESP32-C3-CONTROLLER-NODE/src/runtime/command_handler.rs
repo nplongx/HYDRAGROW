@@ -444,6 +444,7 @@ fn stop_all_hardware(events: &mut Vec<OrchestratorEvent>) {
         direction: WaterDirection::Stop,
     });
     events.push(OrchestratorEvent::SetMistValve { on: false });
+    events.push(OrchestratorEvent::SetMixValve { on: false });
     events.push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
     events.push(OrchestratorEvent::SetDosingPump {
         pump: DosingPumpTarget::NutrientA,

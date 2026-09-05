@@ -614,3 +614,84 @@ fn osaka_supersession_generation_counter_prevents_stale_soft_start() {
         "Soft-start step must detect generation mismatch and cancel immediately without writing duty"
     );
 }
+
+#[test]
+fn nan_sensor_value_triggers_fault_and_stops_all_actuators() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    let mut sensors = normal_sensor();
+    sensors.ec = f32::NAN;
+    sensors.ph = 6.0;
+
+    let result = orchestrator::tick(1000, 1000, &config, &sensors, 1000, &mut ctx);
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Fault(FaultCode::SensorTimeout)),
+        "NaN EC sensor reading must immediately transition to Fault(SensorTimeout)"
+    );
+
+    // Assert ALL physical outputs are commanded OFF
+    let stops_water = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetWaterPump { direction } if *direction == WaterDirection::Stop
+        )
+    });
+    let stops_osaka = result
+        .events
+        .iter()
+        .any(|e| matches!(e, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 }));
+    let stops_pump_a = result.events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::events::DosingPumpTarget::NutrientA,
+                on: false,
+                ..
+            }
+        )
+    });
+    assert!(stops_water, "Must command water pump STOP");
+    assert!(stops_osaka, "Must command Osaka pump OFF");
+    assert!(stops_pump_a, "Must command dosing pump A OFF");
+}
+
+#[test]
+fn infinity_sensor_value_triggers_fault() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+
+    let mut sensors = normal_sensor();
+    sensors.ec = 1.5;
+    sensors.ph = f32::INFINITY;
+
+    let result = orchestrator::tick(1000, 1000, &config, &sensors, 1000, &mut ctx);
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Fault(FaultCode::SensorTimeout)),
+        "Infinity pH sensor reading must transition to Fault(SensorTimeout)"
+    );
+}
+
+#[test]
+fn valid_sensors_recover_from_nan_sensor_fault() {
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Fault(FaultCode::SensorTimeout);
+
+    // Sensor reading has recovered and is finite
+    let sensors = normal_sensor();
+
+    let result = orchestrator::tick(2000, 2000, &config, &sensors, 2000, &mut ctx);
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Monitoring),
+        "Valid finite sensor data must recover system from SensorTimeout fault back to Monitoring"
+    );
+}

@@ -108,11 +108,20 @@ pub fn tick(
         return result;
     }
 
-    // 1. Kiểm tra Sensor Timeout
-    // SỬA: Dùng uptime_ms để kiểm tra timeout, an toàn tuyệt đối trước Time Jump
-    if uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000 {
+    // 1. Kiểm tra Sensor Timeout và tính hợp lệ của giá trị cảm biến
+    let sensor_timed_out = uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000;
+    let sensor_non_finite = !sensors.ec.is_finite()
+        || !sensors.ph.is_finite()
+        || !sensors.temp.is_finite()
+        || !sensors.water_level.is_finite();
+
+    if sensor_timed_out || sensor_non_finite {
         if !ctx.phase.is_fault() {
-            error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
+            if sensor_timed_out {
+                error!("🚨 [SENSOR TIMEOUT] Quá 90s không nhận được gói tin cảm biến mới.");
+            } else {
+                error!("🚨 [SENSOR NON-FINITE] Cảm biến trả giá trị không hợp lệ (NaN hoặc Inf).");
+            }
             result.delta.phase = Some(SystemPhase::Fault(FaultCode::SensorTimeout));
             fault_all_outputs_off(&mut result);
         }
@@ -134,6 +143,14 @@ pub fn tick(
 
     if config.control_mode != ControlMode::Auto || !config.is_enabled {
         return stop_automation_if_needed(result, ctx);
+    }
+
+    if ctx.phase == SystemPhase::ManualMode {
+        result.delta.phase = Some(SystemPhase::Monitoring);
+        result.delta.phase_start_ms = Some(None);
+        result.delta.phase_finish_ms = Some(None);
+        result.delta.reset_stabilizer = true;
+        return result;
     }
 
     if matches!(

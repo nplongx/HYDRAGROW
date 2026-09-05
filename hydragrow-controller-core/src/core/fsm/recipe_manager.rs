@@ -167,8 +167,28 @@ impl ControllerRuntimeState {
         state
     }
 
-    pub fn set_base_config(&mut self, base_config: ControllerConfig) {
+    pub fn set_base_config(&mut self, mut base_config: ControllerConfig) {
+        if base_config.active_recipe.is_none() && self.base_config.active_recipe.is_some() {
+            base_config.active_recipe = self.base_config.active_recipe.clone();
+        } else if let Some(new_recipe) = &base_config.active_recipe {
+            let is_different = match &self.base_config.active_recipe {
+                Some(old_recipe) => {
+                    old_recipe.recipe_id != new_recipe.recipe_id
+                        || old_recipe.revision != new_recipe.revision
+                }
+                None => true,
+            };
+            if is_different {
+                self.active_recipe = new_recipe.stages.first().cloned();
+            }
+        }
         self.base_config = base_config;
+        self.recompute_effective_config();
+    }
+
+    pub fn clear_recipe(&mut self) {
+        self.base_config.active_recipe = None;
+        self.active_recipe = None;
         self.recompute_effective_config();
     }
 

@@ -63,6 +63,7 @@ impl PhaseTick for WaterRefillingPhase {
             result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);
+            result.delta.reset_active_actors = true;
             result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 
@@ -125,6 +126,7 @@ impl PhaseTick for WaterDrainingPhase {
             result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);
+            result.delta.reset_active_actors = true;
             result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 

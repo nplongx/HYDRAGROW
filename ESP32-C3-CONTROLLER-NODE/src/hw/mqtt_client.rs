@@ -4,7 +4,7 @@
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
-use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_sys::{
     esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t,
 };
@@ -14,13 +14,14 @@ use hydragrow_shared::topics::{
     topic_recipe_events, topic_recipe_set, topic_sensors, topic_status,
 };
 use hydragrow_shared::{
-    ControllerConfig, IncomingSensorPayload, MqttCommandIn, PumpStatus, RecipeSetCommand, SensorData,
+    ControllerConfig, IncomingSensorPayload, MqttCommandIn, PumpStatus, RecipeSetCommand,
+    SensorData,
 };
 use log::{debug, error, info, warn};
-use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use crate::config::SharedConfig;
+use crate::hw::NvsStore;
 use hydragrow_controller_core::utils::{build_recipe_event, validate_recipe};
 use hydragrow_shared::recipe::CropRecipe;
 
@@ -53,6 +54,10 @@ pub fn create_shared_sensor_data(device_id: &str) -> SharedSensorData {
         err_ec: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     }))
 }
 
@@ -171,26 +176,39 @@ pub fn init_mqtt_client(
                 }
                 // 2. Update Crop Recipe (controller/recipe or signed recipe/set)
                 else if topic_str == topic_recipe_cb || topic_str == topic_recipe_set_cb {
-                    let maybe_recipe: Result<Option<CropRecipe>, String> = if topic_str == topic_recipe_set_cb {
+                    let maybe_recipe: Result<Option<CropRecipe>, String> = if topic_str
+                        == topic_recipe_set_cb
+                    {
                         match verify_signed_json_payload(&device_id, data, &command_secret_cb) {
                             Ok(payload) => {
-                                if let Some(action) = payload.get("action").and_then(|a| a.as_str()) {
+                                if let Some(action) = payload.get("action").and_then(|a| a.as_str())
+                                {
                                     if action == "clear" {
                                         Ok(None)
                                     } else {
-                                        match serde_json::from_value::<RecipeSetCommand>(payload.clone())
-                                            .and_then(|cmd| Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?))
-                                        {
+                                        match serde_json::from_value::<RecipeSetCommand>(
+                                            payload.clone(),
+                                        )
+                                        .and_then(|cmd| {
+                                            serde_json::from_value::<CropRecipe>(cmd.recipe)
+                                        }) {
                                             Ok(recipe) => Ok(Some(recipe)),
-                                            Err(e) => Err(format!("invalid_recipe_set_payload: {:?}", e)),
+                                            Err(e) => {
+                                                Err(format!("invalid_recipe_set_payload: {:?}", e))
+                                            }
                                         }
                                     }
                                 } else {
-                                    match serde_json::from_value::<RecipeSetCommand>(payload.clone())
-                                        .and_then(|cmd| Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?))
-                                    {
+                                    match serde_json::from_value::<RecipeSetCommand>(
+                                        payload.clone(),
+                                    )
+                                    .and_then(|cmd| {
+                                        serde_json::from_value::<CropRecipe>(cmd.recipe)
+                                    }) {
                                         Ok(recipe) => Ok(Some(recipe)),
-                                        Err(e) => Err(format!("invalid_recipe_set_payload: {:?}", e)),
+                                        Err(e) => {
+                                            Err(format!("invalid_recipe_set_payload: {:?}", e))
+                                        }
                                     }
                                 }
                             }
@@ -284,7 +302,9 @@ pub fn init_mqtt_client(
                         if let Ok(mut sensors) = shared_sensor_data.write() {
                             let uptime_ms = get_uptime_ms();
                             if !sensors.merge_incoming_payload(&payload, uptime_ms) {
-                                warn!("⚠️ [SENSORS] Bỏ qua gói tin cảm biến rỗng hoặc không hợp lệ");
+                                warn!(
+                                    "⚠️ [SENSORS] Bỏ qua gói tin cảm biến rỗng hoặc không hợp lệ"
+                                );
                             }
                         }
                     }

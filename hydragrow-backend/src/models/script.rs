@@ -233,8 +233,7 @@ pub struct TestScriptRequest {
     pub sample: std::collections::HashMap<String, SampleValue>,
 }
 
-#[derive(Debug, Serialize)]
-#[derive(Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TestScriptResponse {
     pub will_fire: bool,
     pub trace: Vec<ConditionTraceEntry>,

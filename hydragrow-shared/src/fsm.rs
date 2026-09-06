@@ -70,7 +70,7 @@ impl core::fmt::Display for SystemPhase {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FaultCode {
     EcDosingFailed,
     PhDosingFailed,

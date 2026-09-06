@@ -223,7 +223,9 @@ async fn receive_webhook_flow_event(
                 let target_field = m.get("targetField").and_then(|f| f.as_str()).unwrap_or("");
                 if !body_path.is_empty() && !target_field.is_empty() {
                     let pointer_path = format!("/{}", body_path.replace('.', "/"));
-                    let val = payload.pointer(&pointer_path).or_else(|| body.get(body_path));
+                    let val = payload
+                        .pointer(&pointer_path)
+                        .or_else(|| body.get(body_path));
                     if let Some(v) = val {
                         mapped.insert(target_field.to_string(), v.clone());
                     }

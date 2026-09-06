@@ -1,4 +1,5 @@
 use hydragrow_controller_core::core::fsm::context::SystemContext;
+use hydragrow_controller_core::core::fsm::events::OrchestratorEvent;
 use hydragrow_controller_core::core::fsm::recipe_manager::{
     ControllerRuntimeState, RecipeStageResult, calculate_stage_index, tick_recipe_engine,
 };
@@ -473,4 +474,88 @@ fn clear_recipe_resets_all_overrides_and_clears_active_stage() {
     assert_eq!(state.effective_config.ec_target, 1.0);
     assert_eq!(state.effective_config.ph_target, 6.5);
     assert_eq!(ctx.current_stage_index, None);
+}
+
+#[test]
+fn recipe_switch_same_stage_index_triggers_recomputation_and_overrides() {
+    let mut recipe_a = test_recipe();
+    recipe_a.recipe_id = "recipe_a".to_string();
+    recipe_a.stages[0].ec_target = 2.0;
+
+    let base = ControllerConfig {
+        ec_target: 1.0,
+        active_recipe: Some(recipe_a.clone()),
+        ..ControllerConfig::default()
+    };
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    // Tick Recipe A at start time -> stage 0 active
+    let tick_a = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick_a);
+    ctx.apply_delta(&mut { tick_a.delta });
+
+    assert_eq!(ctx.current_stage_index, Some(0));
+    assert_eq!(state.effective_config.ec_target, 2.0);
+
+    // Switch to Recipe B which ALSO has stage 0, but different recipe_id and ec_target 3.5
+    let mut recipe_b = test_recipe();
+    recipe_b.recipe_id = "recipe_b".to_string();
+    recipe_b.stages[0].ec_target = 3.5;
+
+    state.set_base_config(ControllerConfig {
+        ec_target: 1.0,
+        active_recipe: Some(recipe_b.clone()),
+        ..ControllerConfig::default()
+    });
+
+    // Tick Recipe B at same timestamp (stage_index is still 0)
+    let tick_b = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick_b);
+    ctx.apply_delta(&mut { tick_b.delta });
+
+    // Invariant I5: Must detect recipe change even though stage_index is still 0!
+    assert_eq!(ctx.current_stage_index, Some(0));
+    assert_eq!(
+        state.effective_config.ec_target, 3.5,
+        "Effective config must reflect Recipe B overrides even when stage_index is unchanged"
+    );
+    assert!(
+        tick_b
+            .events
+            .iter()
+            .any(|e| matches!(e, OrchestratorEvent::PublishRecipeStageChanged { .. })),
+        "Must emit stage changed event when recipe identity changes"
+    );
+}
+
+#[test]
+fn future_recipe_start_time_does_not_apply_stage_0_before_start() {
+    let mut recipe = test_recipe();
+    recipe.start_time_sec = 1_700_010_000;
+    recipe.stages[0].ec_target = 3.0;
+
+    let base = ControllerConfig {
+        ec_target: 1.2,
+        ph_target: 6.0,
+        ..ControllerConfig::default()
+    };
+    let mut state = ControllerRuntimeState::new(base);
+    let mut ctx = SystemContext::default();
+
+    state.activate_recipe(recipe);
+
+    // Tick before start time (now = 1_700_000_000 < start_time_sec)
+    let tick = tick_recipe_engine(&mut state.effective_config, &ctx, 1_700_000_000);
+    state.apply_recipe_tick_result(&tick);
+    ctx.apply_delta(&mut { tick.delta });
+
+    assert_eq!(
+        ctx.current_stage_index, None,
+        "Stage cursor must be None when recipe is NotStarted"
+    );
+    assert_eq!(
+        state.effective_config.ec_target, 1.2,
+        "Effective config must retain base config before recipe starts"
+    );
 }

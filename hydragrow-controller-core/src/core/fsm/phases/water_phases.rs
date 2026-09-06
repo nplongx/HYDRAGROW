@@ -1,5 +1,5 @@
 // src/core/fsm/phases/water_phases.rs
-use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::fsm::{FaultCode, SystemPhase};
 use hydragrow_shared::{ControllerConfig, SensorData};
 
 use crate::core::actors::water_actor::{WaterEvent, WaterSubState};
@@ -21,21 +21,14 @@ impl PhaseTick for WaterRefillingPhase {
     ) -> TickResult {
         let mut result = TickResult::default();
 
-        match ctx.water.sub_state {
-            WaterSubState::Idle => {
-                ctx.water.sub_state = WaterSubState::Starting;
-                ctx.water.start_fill_with_duration(
-                    uptime_ms, // SỬA: Đưa uptime vào để canh thời gian an toàn
-                    config.water_level_target,
-                    sensors,
-                    "water_refill_phase",
-                    Some(config.max_refill_duration_sec as u64),
-                );
-            }
-            WaterSubState::Starting => {
-                log::warn!("[WATER] Trạng thái Starting bất thường — start_fill chưa được gọi?");
-            }
-            _ => {}
+        if ctx.water.sub_state == WaterSubState::Idle {
+            ctx.water.start_fill_with_duration(
+                uptime_ms, // SỬA: Đưa uptime vào để canh thời gian an toàn
+                config.water_level_target,
+                sensors,
+                "water_refill_phase",
+                Some(config.max_refill_duration_sec as u64),
+            );
         }
 
         // SỬA: Dùng uptime để chạy tick
@@ -60,12 +53,14 @@ impl PhaseTick for WaterRefillingPhase {
         {
             if !success {
                 log::warn!("⚠️ WaterRefilling: timeout sau {}s", duration_sec);
+                result.delta.phase = Some(SystemPhase::Fault(FaultCode::WaterRefillFailed));
+            } else {
+                result.delta.phase = Some(SystemPhase::Monitoring);
+                result.events.push(OrchestratorEvent::SaveNvsSnapshot);
             }
-            result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);
             result.delta.reset_active_actors = true;
-            result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 
         result
@@ -85,21 +80,14 @@ impl PhaseTick for WaterDrainingPhase {
     ) -> TickResult {
         let mut result = TickResult::default();
 
-        match ctx.water.sub_state {
-            WaterSubState::Idle => {
-                ctx.water.sub_state = WaterSubState::Starting;
-                ctx.water.start_drain_with_duration(
-                    uptime_ms, // SỬA: Dùng uptime
-                    config.water_level_target,
-                    sensors,
-                    "water_drain_phase",
-                    Some(config.max_drain_duration_sec as u64),
-                );
-            }
-            WaterSubState::Starting => {
-                log::warn!("[WATER] Trạng thái Starting bất thường — start_drain chưa được gọi?");
-            }
-            _ => {}
+        if ctx.water.sub_state == WaterSubState::Idle {
+            ctx.water.start_drain_with_duration(
+                uptime_ms, // SỬA: Dùng uptime
+                config.water_level_target,
+                sensors,
+                "water_drain_phase",
+                Some(config.max_drain_duration_sec as u64),
+            );
         }
 
         // SỬA: Dùng uptime để chạy tick
@@ -124,12 +112,14 @@ impl PhaseTick for WaterDrainingPhase {
         {
             if !success {
                 log::warn!("⚠️ WaterDraining: timeout sau {}s", duration_sec);
+                result.delta.phase = Some(SystemPhase::Fault(FaultCode::WaterDrainFailed));
+            } else {
+                result.delta.phase = Some(SystemPhase::Monitoring);
+                result.events.push(OrchestratorEvent::SaveNvsSnapshot);
             }
-            result.delta.phase = Some(SystemPhase::Monitoring);
             result.delta.phase_start_ms = Some(None);
             result.delta.phase_finish_ms = Some(None);
             result.delta.reset_active_actors = true;
-            result.events.push(OrchestratorEvent::SaveNvsSnapshot);
         }
 
         result

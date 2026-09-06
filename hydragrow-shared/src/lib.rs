@@ -101,7 +101,7 @@ pub struct PumpStatus {
     pub dosing_pulse_count: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SensorData {
     pub device_id: String,
     #[serde(alias = "tds")]
@@ -132,6 +132,14 @@ pub struct SensorData {
     pub is_continuous: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ph_voltage_mv: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ec_received_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ph_received_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp_received_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub water_received_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -679,6 +687,22 @@ impl ControllerConfig {
         if self.ph_target < 0.0 || self.ph_target > 14.0 {
             errors.push("ph_target phải trong khoảng [0, 14]".into());
         }
+        if self.ph_tolerance < 0.0 {
+            errors.push("ph_tolerance phải >= 0".into());
+        }
+        if self.ph_target - self.ph_tolerance <= 0.0 {
+            errors.push("ph_target - ph_tolerance phải > 0".into());
+        }
+        if self.ph_target + self.ph_tolerance > 14.0 {
+            errors.push("ph_target + ph_tolerance phải <= 14".into());
+        }
+
+        if self.water_level_min >= self.water_level_target {
+            errors.push("water_level_min phải < water_level_target".into());
+        }
+        if self.water_level_target >= self.water_level_max {
+            errors.push("water_level_target phải < water_level_max".into());
+        }
 
         if self.max_dose_per_hour <= 0.0 {
             errors.push("max_dose_per_hour phải > 0".into());
@@ -1078,5 +1102,43 @@ mod config_validation_tests {
         };
         let err = c.validate().unwrap_err();
         assert!(err.iter().any(|e| e.contains("dosing_min_pwm_percent")));
+    }
+
+    #[test]
+    fn rejects_invalid_ph_cross_field_targets() {
+        let c = ControllerConfig {
+            ph_target: 0.5,
+            ph_tolerance: 0.6,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("ph_target - ph_tolerance")));
+
+        let c = ControllerConfig {
+            ph_target: 13.8,
+            ph_tolerance: 0.5,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("ph_target + ph_tolerance")));
+    }
+
+    #[test]
+    fn rejects_invalid_water_level_hierarchy() {
+        let c = ControllerConfig {
+            water_level_min: 25.0,
+            water_level_target: 20.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("water_level_min")));
+
+        let c = ControllerConfig {
+            water_level_target: 25.0,
+            water_level_max: 20.0,
+            ..Default::default()
+        };
+        let err = c.validate().unwrap_err();
+        assert!(err.iter().any(|e| e.contains("water_level_target")));
     }
 }

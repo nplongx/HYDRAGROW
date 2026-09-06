@@ -9,4 +9,3 @@ pub type SharedConfig = Arc<RwLock<ControllerRuntimeState>>;
 pub fn create_shared_config() -> SharedConfig {
     Arc::new(RwLock::new(ControllerRuntimeState::default()))
 }
-

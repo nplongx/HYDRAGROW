@@ -177,6 +177,10 @@ fn sensor_data_round_trip_with_and_without_optional_fields() {
         err_ec: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     };
 
     let with_optionals = SensorData {
@@ -305,6 +309,10 @@ fn golden_payload_snapshots() {
         err_ec: Some(false),
         is_continuous: Some(true),
         ph_voltage_mv: Some(2105.2),
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     };
 
     let command = MqttCommandOut {

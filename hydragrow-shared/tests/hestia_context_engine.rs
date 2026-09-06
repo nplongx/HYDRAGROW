@@ -22,6 +22,10 @@ fn sensor(ec: f32, ph: f32, water_level: f32, temp: f32) -> SensorData {
         err_ec: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     }
 }
 

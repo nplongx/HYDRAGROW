@@ -121,6 +121,10 @@ fn normal_sensor() -> SensorData {
         err_ph: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     }
 }
 

@@ -1,0 +1,101 @@
+{
+  "requirement_id": "CONTROLLER-FSM-002",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test actor_terminal_reset_tests --test fsm_terminal_matrix_tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "Full terminal reset clears active actors and shadow peripherals across all phases."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test water_actor_semantics_tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "WaterActor failsafe timeout transitions to Fault(WaterRefillFailed) and Fault(WaterDrainFailed) and resets actors (6 passed)."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test cross_layer_fsm_regression_tests mimo_dosing_hard_timeout_shuts_down_all_actuators_and_purges_on_events",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "Hard timeout emits OFF events for all dosing pumps, Osaka mist/mix, and purges all ON events."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test cross_layer_fsm_regression_tests water_pump_in_and_out_mutual_exclusion_at_all_layers",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "Mutual exclusion verified across Decision, Delta Merge, and Context Apply layers."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test safety_budget_executable_tests && cargo test --manifest-path hydragrow-simulator/Cargo.toml event_dispatcher::tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:16:12+07:00",
+      "notes": "SafetyTransaction commits only on successful physical actuator dispatch."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test recipe_lifecycle_tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "Recipe execution identity includes id, revision, stage, and start time; resets stage cursor and completion on revision bump (12 passed)."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test sensor_freshness_regression_tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "Per-channel freshness enforces freshness only on enabled channels; disabled channels with stale/NaN values do not trigger fault (3 passed)."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml --bin hydragrow-backend -- api::control",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:17:42+07:00",
+      "notes": "Backend clamps manual dose to server limits; ESP32 bounds force_on dosage to max_dose_per_cycle."
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-simulator/Cargo.toml terminal_reboot_continues_dispatch_even_after_actuator_fault",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:16:12+07:00",
+      "notes": "Terminal reboot continues dispatch and stops other actuators despite primary actuator fault."
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "cargo clippy --manifest-path hydragrow-controller-core/Cargo.toml --all-targets -- -D warnings",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:30+07:00",
+      "notes": "DosingActor single ownership of pulse hardware; duplicate SetDosingPump emissions eliminated."
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-shared/Cargo.toml -- config_validation_tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:18:47+07:00",
+      "notes": "Rejects invalid pH cross-field targets and invalid water level hierarchies."
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test fsm_terminal_matrix_tests",
+      "environment": "linux x86_64 rustc 1.97.1",
+      "verified_at": "2026-09-06T10:15:55+07:00",
+      "notes": "All 18 matrix scenarios verify Invariant I1 across 8 phases and 4 terminal triggers."
+    }
+  ]
+}

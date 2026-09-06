@@ -46,7 +46,21 @@ pub fn tick_recipe_engine(
         return result;
     }
 
-    if ctx.last_recipe_check_sec != 0
+    let Some(recipe) = config.active_recipe.clone() else {
+        if ctx.active_recipe_id.is_some() || ctx.current_stage_index.is_some() {
+            result.delta.active_recipe_id = Some(None);
+            result.delta.active_recipe_revision = Some(None);
+            result.delta.current_stage_index = Some(None);
+            result.delta.recipe_completed = Some(false);
+        }
+        return result;
+    };
+
+    let recipe_changed = ctx.active_recipe_id.as_deref() != Some(&recipe.recipe_id)
+        || ctx.active_recipe_revision != Some(recipe.revision);
+
+    if !recipe_changed
+        && ctx.last_recipe_check_sec != 0
         && now_sec.saturating_sub(ctx.last_recipe_check_sec) < RECIPE_CHECK_INTERVAL_SEC
     {
         return result;
@@ -54,18 +68,26 @@ pub fn tick_recipe_engine(
 
     result.delta.last_recipe_check_sec = Some(now_sec);
 
-    let Some(recipe) = config.active_recipe.clone() else {
-        return result;
-    };
-
     let stage_result = calculate_stage_index(&recipe, now_sec);
     match stage_result {
-        RecipeStageResult::NotStarted => {}
+        RecipeStageResult::NotStarted => {
+            if recipe_changed || ctx.current_stage_index.is_some() {
+                result.delta.active_recipe_id = Some(Some(recipe.recipe_id.clone()));
+                result.delta.active_recipe_revision = Some(Some(recipe.revision));
+                result.delta.current_stage_index = Some(None);
+                result.delta.recipe_completed = Some(false);
+            }
+        }
         RecipeStageResult::Active { stage_index } => {
-            if ctx.current_stage_index != Some(stage_index) || ctx.recipe_completed {
+            if recipe_changed
+                || ctx.current_stage_index != Some(stage_index)
+                || ctx.recipe_completed
+            {
                 if let Some(stage) = recipe.stages.get(stage_index) {
                     apply_stage_override(config, stage);
                 }
+                result.delta.active_recipe_id = Some(Some(recipe.recipe_id.clone()));
+                result.delta.active_recipe_revision = Some(Some(recipe.revision));
                 result.delta.current_stage_index = Some(Some(stage_index));
                 result.delta.recipe_completed = Some(false);
                 emit_stage_event(&mut result, &recipe, Some(stage_index), false, now_sec);
@@ -77,7 +99,9 @@ pub fn tick_recipe_engine(
             }
         }
         RecipeStageResult::Completed => {
-            if !ctx.recipe_completed {
+            if recipe_changed || !ctx.recipe_completed {
+                result.delta.active_recipe_id = Some(Some(recipe.recipe_id.clone()));
+                result.delta.active_recipe_revision = Some(Some(recipe.revision));
                 result.delta.recipe_completed = Some(true);
                 result.delta.current_stage_index = Some(None);
                 emit_stage_event(&mut result, &recipe, None, true, now_sec);
@@ -179,7 +203,7 @@ impl ControllerRuntimeState {
                 None => true,
             };
             if is_different {
-                self.active_recipe = new_recipe.stages.first().cloned();
+                self.active_recipe = None;
             }
         }
         self.base_config = base_config;
@@ -187,7 +211,7 @@ impl ControllerRuntimeState {
     }
 
     pub fn activate_recipe(&mut self, recipe: CropRecipe) {
-        self.active_recipe = recipe.stages.first().cloned();
+        self.active_recipe = None;
         self.base_config.active_recipe = Some(recipe);
         self.recompute_effective_config();
     }
@@ -211,11 +235,18 @@ impl ControllerRuntimeState {
     }
 
     pub fn apply_recipe_tick_result(&mut self, result: &TickResult) {
-        if let Some(Some(stage_idx)) = result.delta.current_stage_index {
-            if let Some(recipe) = &self.base_config.active_recipe {
-                self.active_recipe = recipe.stages.get(stage_idx).cloned();
-            } else if let Some(recipe) = &self.effective_config.active_recipe {
-                self.active_recipe = recipe.stages.get(stage_idx).cloned();
+        if let Some(opt_idx) = result.delta.current_stage_index {
+            match opt_idx {
+                Some(stage_idx) => {
+                    if let Some(recipe) = &self.base_config.active_recipe {
+                        self.active_recipe = recipe.stages.get(stage_idx).cloned();
+                    } else if let Some(recipe) = &self.effective_config.active_recipe {
+                        self.active_recipe = recipe.stages.get(stage_idx).cloned();
+                    }
+                }
+                None => {
+                    self.active_recipe = None;
+                }
             }
             self.recompute_effective_config();
         } else if let Some(true) = result.delta.recipe_completed {

@@ -37,6 +37,10 @@ impl From<SensorDataRow> for SensorData {
             err_ph: None,
             err_ec: None,
             ph_voltage_mv: None,
+            ec_received_ms: None,
+            ph_received_ms: None,
+            temp_received_ms: None,
+            water_received_ms: None,
         }
     }
 }

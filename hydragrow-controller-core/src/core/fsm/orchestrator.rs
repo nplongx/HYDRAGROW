@@ -120,11 +120,32 @@ pub fn tick(
     }
 
     // 1. Kiểm tra Sensor Timeout và tính hợp lệ của giá trị cảm biến
-    let sensor_timed_out = uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000;
-    let sensor_non_finite = !sensors.ec.is_finite()
-        || !sensors.ph.is_finite()
-        || !sensors.temp.is_finite()
-        || !sensors.water_level.is_finite();
+    let ec_last = sensors.ec_received_ms.unwrap_or(sensor_last_update_ms);
+    let ph_last = sensors.ph_received_ms.unwrap_or(sensor_last_update_ms);
+    let temp_last = sensors.temp_received_ms.unwrap_or(sensor_last_update_ms);
+    let water_last = sensors.water_received_ms.unwrap_or(sensor_last_update_ms);
+
+    let any_sensor_enabled = config.enable_ec_sensor
+        || config.enable_ph_sensor
+        || config.enable_temp_sensor
+        || config.enable_water_level_sensor;
+
+    let ec_timed_out = config.enable_ec_sensor && uptime_ms.saturating_sub(ec_last) > 90_000;
+    let ph_timed_out = config.enable_ph_sensor && uptime_ms.saturating_sub(ph_last) > 90_000;
+    let temp_timed_out = config.enable_temp_sensor && uptime_ms.saturating_sub(temp_last) > 90_000;
+    let water_timed_out =
+        config.enable_water_level_sensor && uptime_ms.saturating_sub(water_last) > 90_000;
+
+    let sensor_timed_out = if any_sensor_enabled {
+        ec_timed_out || ph_timed_out || temp_timed_out || water_timed_out
+    } else {
+        uptime_ms.saturating_sub(sensor_last_update_ms) > 90_000
+    };
+
+    let sensor_non_finite = (config.enable_ec_sensor && !sensors.ec.is_finite())
+        || (config.enable_ph_sensor && !sensors.ph.is_finite())
+        || (config.enable_temp_sensor && !sensors.temp.is_finite())
+        || (config.enable_water_level_sensor && !sensors.water_level.is_finite());
 
     if sensor_timed_out || sensor_non_finite {
         if !ctx.phase.is_fault() {
@@ -380,68 +401,56 @@ fn stop_automation_if_needed(mut result: TickResult, ctx: &SystemContext) -> Tic
         return result;
     }
 
-    let automation_was_active = matches!(
-        ctx.phase,
-        SystemPhase::MimoDosing
-            | SystemPhase::ActiveMixing
-            | SystemPhase::Stabilizing
-            | SystemPhase::Cooldown
-            | SystemPhase::WaterRefilling
-            | SystemPhase::WaterDraining
-    );
+    result.events.push(OrchestratorEvent::SetWaterPump {
+        direction: WaterDirection::Stop,
+    });
+    result
+        .events
+        .push(OrchestratorEvent::SetMistValve { on: false });
+    result
+        .events
+        .push(OrchestratorEvent::SetMixValve { on: false });
+    result
+        .events
+        .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: crate::core::fsm::events::DosingPumpTarget::NutrientA,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: crate::core::fsm::events::DosingPumpTarget::NutrientB,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: crate::core::fsm::events::DosingPumpTarget::PhUp,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: crate::core::fsm::events::DosingPumpTarget::PhDown,
+        on: false,
+        pwm_percent: 0,
+    });
 
-    if automation_was_active {
-        result.events.push(OrchestratorEvent::SetWaterPump {
-            direction: WaterDirection::Stop,
-        });
-        result
-            .events
-            .push(OrchestratorEvent::SetMistValve { on: false });
-        result
-            .events
-            .push(OrchestratorEvent::SetMixValve { on: false });
-        result
-            .events
-            .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
-        result.events.push(OrchestratorEvent::SetDosingPump {
-            pump: crate::core::fsm::events::DosingPumpTarget::NutrientA,
-            on: false,
-            pwm_percent: 0,
-        });
-        result.events.push(OrchestratorEvent::SetDosingPump {
-            pump: crate::core::fsm::events::DosingPumpTarget::NutrientB,
-            on: false,
-            pwm_percent: 0,
-        });
-        result.events.push(OrchestratorEvent::SetDosingPump {
-            pump: crate::core::fsm::events::DosingPumpTarget::PhUp,
-            on: false,
-            pwm_percent: 0,
-        });
-        result.events.push(OrchestratorEvent::SetDosingPump {
-            pump: crate::core::fsm::events::DosingPumpTarget::PhDown,
-            on: false,
-            pwm_percent: 0,
-        });
-
-        let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
-        peri_delta.water_pump_in = Some(false);
-        peri_delta.water_pump_out = Some(false);
-        peri_delta.mist_valve = Some(false);
-        peri_delta.mix_valve = Some(false);
-        peri_delta.is_misting_active = Some(false);
-        peri_delta.is_scheduled_mixing_active = Some(false);
-        peri_delta.misting_started_by_dosing = Some(false);
-        peri_delta.mix_valve_started_by_dosing = Some(false);
-        peri_delta.osaka_pump = Some(false);
-        peri_delta.osaka_pwm = Some(0);
-        peri_delta.pump_a = Some(false);
-        peri_delta.pump_b = Some(false);
-        peri_delta.ph_up = Some(false);
-        peri_delta.ph_down = Some(false);
-        result.delta.peripherals = Some(peri_delta);
-        result.delta.reset_active_actors = true;
-    }
+    let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
+    peri_delta.water_pump_in = Some(false);
+    peri_delta.water_pump_out = Some(false);
+    peri_delta.mist_valve = Some(false);
+    peri_delta.mix_valve = Some(false);
+    peri_delta.is_misting_active = Some(false);
+    peri_delta.is_scheduled_mixing_active = Some(false);
+    peri_delta.misting_started_by_dosing = Some(false);
+    peri_delta.mix_valve_started_by_dosing = Some(false);
+    peri_delta.osaka_pump = Some(false);
+    peri_delta.osaka_pwm = Some(0);
+    peri_delta.pump_a = Some(false);
+    peri_delta.pump_b = Some(false);
+    peri_delta.ph_up = Some(false);
+    peri_delta.ph_down = Some(false);
+    result.delta.peripherals = Some(peri_delta);
+    result.delta.reset_active_actors = true;
 
     result.delta.phase = Some(SystemPhase::ManualMode);
     result.delta.phase_start_ms = Some(None);

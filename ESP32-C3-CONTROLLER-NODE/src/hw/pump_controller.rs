@@ -6,7 +6,7 @@ use esp_idf_hal::ledc::LedcDriver;
 pub use hydragrow_controller_core::{PumpType, WaterDirection};
 
 use log::{info, warn};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -25,7 +25,7 @@ pub struct PumpController<'d> {
     osaka_en: esp_idf_hal::gpio::PinDriver<'static, esp_idf_hal::gpio::Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
 
-    soft_start_gen: Arc<AtomicU64>,
+    soft_start_gen: Arc<AtomicU32>,
     current_water_direction: Option<WaterDirection>,
 }
 
@@ -88,7 +88,7 @@ impl<'d> PumpController<'d> {
             valve,
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
-            soft_start_gen: Arc::new(AtomicU64::new(0)),
+            soft_start_gen: Arc::new(AtomicU32::new(0)),
             current_water_direction: Some(WaterDirection::Stop),
         })
     }
@@ -250,10 +250,7 @@ impl<'d> PumpController<'d> {
 
     pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
         let safe_percent = target_pwm_percent.clamp(0, 100);
-        info!(
-            "🌀 Điều khiển khởi động mềm Osaka lên {}%...",
-            safe_percent
-        );
+        info!("🌀 Điều khiển khởi động mềm Osaka lên {}%...", safe_percent);
 
         let current_gen = self.soft_start_gen.fetch_add(1, Ordering::SeqCst) + 1;
         self.osaka_en.set_high()?;
@@ -279,7 +276,11 @@ impl<'d> PumpController<'d> {
 
             for i in 1..=steps {
                 if gen_clone.load(Ordering::SeqCst) != current_gen {
-                    warn!("⚠️ Hủy tiến trình khởi động mềm Osaka (superseded by gen {} != {})!", gen_clone.load(Ordering::SeqCst), current_gen);
+                    warn!(
+                        "⚠️ Hủy tiến trình khởi động mềm Osaka (superseded by gen {} != {})!",
+                        gen_clone.load(Ordering::SeqCst),
+                        current_gen
+                    );
                     return;
                 }
 
@@ -344,12 +345,14 @@ impl<'d> PumpController<'d> {
 }
 
 #[cfg(test)]
+#[allow(unused_imports, dead_code)]
 mod tests {
-    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
 
     #[test]
     fn osaka_generation_counter_invalidates_stale_threads() {
-        let gen = Arc::new(AtomicU64::new(0));
+        let gen = Arc::new(AtomicU32::new(0));
 
         // Start thread 1 with gen 1
         let gen_t1 = gen.fetch_add(1, Ordering::SeqCst) + 1;

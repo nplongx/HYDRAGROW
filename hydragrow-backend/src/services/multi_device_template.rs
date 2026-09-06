@@ -5,7 +5,9 @@ use serde_json::Value;
 /// key nào có trong `device_override` thì override thắng, key nào không có thì lấy từ template.
 pub fn merge_template_with_override(template: &Value, device_override: &Value) -> Value {
     let mut result = template.clone();
-    if let (Some(result_map), Some(override_map)) = (result.as_object_mut(), device_override.as_object()) {
+    if let (Some(result_map), Some(override_map)) =
+        (result.as_object_mut(), device_override.as_object())
+    {
         for (k, v) in override_map {
             result_map.insert(k.clone(), v.clone());
         }
@@ -40,8 +42,10 @@ pub async fn apply_template(
         if let Some((existing_id, existing_overrides)) = existing {
             let merged = merge_template_with_override(&template_ir, &existing_overrides.0);
             sqlx::query("UPDATE user_scripts SET ir_json = $1 WHERE id = $2")
-                .bind(&merged).bind(existing_id)
-                .execute(pool).await?;
+                .bind(&merged)
+                .bind(existing_id)
+                .execute(pool)
+                .await?;
             applied_ids.push(existing_id);
         } else {
             let merged = merge_template_with_override(&template_ir, &target.overrides);

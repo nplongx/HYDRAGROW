@@ -313,7 +313,11 @@ pub fn start_fsm_control_loop(
                     &updated_config,
                     &mut observer_set,
                 );
+            } else if let Some(tx) = &tick_result.safety_transaction {
+                ctx.commit_safety_transaction(tx);
             }
+        } else if let Some(tx) = &tick_result.safety_transaction {
+            ctx.commit_safety_transaction(tx);
         }
 
         // 5. Báo trạng thái chuyển Phase
@@ -332,6 +336,7 @@ pub fn start_fsm_control_loop(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_dispatch_fault(
     fault: hydragrow_shared::fsm::FaultCode,
     ctx: &mut SystemContext,

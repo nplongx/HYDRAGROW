@@ -8,7 +8,6 @@ use crate::{WaterDirection, core::fsm::OrchestratorEvent};
 #[derive(Debug, Clone, PartialEq)]
 pub enum WaterSubState {
     Idle,
-    Starting,
     Filling { job: WaterJob },
     Draining { job: WaterJob },
 }
@@ -43,10 +42,19 @@ impl WaterActor {
         }
     }
 
-    /// Reset hoàn toàn trạng thái WaterActor về Idle và xoá số lần retry.
-    pub fn reset(&mut self) {
+    pub fn is_idle(&self) -> bool {
+        matches!(self.sub_state, WaterSubState::Idle)
+    }
+
+    /// Huỷ và đặt trạng thái WaterActor về Idle ngay lập tức.
+    pub fn abort(&mut self) {
         self.sub_state = WaterSubState::Idle;
         self.retry_refill = 0;
+    }
+
+    /// Reset hoàn toàn trạng thái WaterActor về Idle và xoá số lần retry.
+    pub fn reset(&mut self) {
+        self.abort();
     }
 
     /// Bắt đầu cấp nước, trả về log Info (nếu muốn gửi ngay).
@@ -159,13 +167,6 @@ impl WaterActor {
         config: &ControllerConfig,
     ) -> (WaterEvent, Vec<OrchestratorEvent>, Vec<UnifiedSystemLog>) {
         match self.sub_state.clone() {
-            WaterSubState::Starting => (
-                WaterEvent::Pending,
-                vec![OrchestratorEvent::SetWaterPump {
-                    direction: WaterDirection::Stop,
-                }],
-                vec![],
-            ),
             WaterSubState::Idle => (WaterEvent::Pending, vec![], vec![]),
             WaterSubState::Filling { job } => {
                 let elapsed_ms = now_ms.saturating_sub(job.start_ms);
@@ -324,6 +325,10 @@ mod tests {
             err_ph: None,
             is_continuous: None,
             ph_voltage_mv: None,
+            ec_received_ms: None,
+            ph_received_ms: None,
+            temp_received_ms: None,
+            water_received_ms: None,
         }
     }
 

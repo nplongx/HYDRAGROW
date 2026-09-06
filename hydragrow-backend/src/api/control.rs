@@ -451,18 +451,17 @@ async fn validate_manual_dose_safety(
     let capacity_ml_per_sec = capacity_ml_per_sec(&dosing_cfg, normalized_pump);
     let estimated_ml = capacity_ml_per_sec * (pwm as f32 / 100.0) * duration_sec as f32;
 
-    let max_allowed_ml = match manual_max_allowed_ml {
-        Some(v) if v > 0.0 => v,
-        _ => load_max_dose_per_cycle(pg_pool, device_id)
-            .await
-            .map_err(|e| {
-                error!(
-                    "Không thể tải safety_config cho kiểm tra an toàn manual [{}]: {:?}",
-                    device_id, e
-                );
-                HttpResponse::InternalServerError().json(json!({"error": "DB Error"}))
-            })?,
-    };
+    let server_max = load_max_dose_per_cycle(pg_pool, device_id)
+        .await
+        .map_err(|e| {
+            error!(
+                "Không thể tải safety_config cho kiểm tra an toàn manual [{}]: {:?}",
+                device_id, e
+            );
+            HttpResponse::InternalServerError().json(json!({"error": "DB Error"}))
+        })?;
+
+    let max_allowed_ml = compute_effective_max_allowed_ml(manual_max_allowed_ml, server_max);
 
     if estimated_ml > max_allowed_ml {
         warn!(
@@ -509,6 +508,16 @@ async fn load_max_dose_per_cycle(pg_pool: &PgPool, device_id: &str) -> anyhow::R
             ..Default::default()
         })
         .max_dose_per_cycle)
+}
+
+pub(crate) fn compute_effective_max_allowed_ml(
+    manual_max_allowed_ml: Option<f32>,
+    server_max: f32,
+) -> f32 {
+    match manual_max_allowed_ml {
+        Some(v) if v > 0.0 => v.min(server_max),
+        _ => server_max,
+    }
 }
 
 fn normalize_dosing_pump_name(pump: &str) -> Option<&'static str> {
@@ -752,5 +761,26 @@ mod tests {
                 key
             );
         }
+    }
+
+    #[test]
+    fn manual_max_allowed_ml_cannot_exceed_server_max_dose_per_cycle() {
+        assert_eq!(
+            super::compute_effective_max_allowed_ml(Some(100.0), 10.0),
+            10.0
+        );
+        assert_eq!(
+            super::compute_effective_max_allowed_ml(Some(5.0), 10.0),
+            5.0
+        );
+        assert_eq!(super::compute_effective_max_allowed_ml(None, 10.0), 10.0);
+        assert_eq!(
+            super::compute_effective_max_allowed_ml(Some(0.0), 10.0),
+            10.0
+        );
+        assert_eq!(
+            super::compute_effective_max_allowed_ml(Some(-1.0), 10.0),
+            10.0
+        );
     }
 }

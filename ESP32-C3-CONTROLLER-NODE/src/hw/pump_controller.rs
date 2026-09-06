@@ -250,10 +250,7 @@ impl<'d> PumpController<'d> {
 
     pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
         let safe_percent = target_pwm_percent.clamp(0, 100);
-        info!(
-            "🌀 Điều khiển khởi động mềm Osaka lên {}%...",
-            safe_percent
-        );
+        info!("🌀 Điều khiển khởi động mềm Osaka lên {}%...", safe_percent);
 
         let current_gen = self.soft_start_gen.fetch_add(1, Ordering::SeqCst) + 1;
         self.osaka_en.set_high()?;
@@ -279,7 +276,11 @@ impl<'d> PumpController<'d> {
 
             for i in 1..=steps {
                 if gen_clone.load(Ordering::SeqCst) != current_gen {
-                    warn!("⚠️ Hủy tiến trình khởi động mềm Osaka (superseded by gen {} != {})!", gen_clone.load(Ordering::SeqCst), current_gen);
+                    warn!(
+                        "⚠️ Hủy tiến trình khởi động mềm Osaka (superseded by gen {} != {})!",
+                        gen_clone.load(Ordering::SeqCst),
+                        current_gen
+                    );
                     return;
                 }
 

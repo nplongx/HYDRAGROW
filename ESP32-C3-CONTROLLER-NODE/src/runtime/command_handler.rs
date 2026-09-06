@@ -406,7 +406,9 @@ pub fn process_mqtt_commands(
             let duration = duration_sec.unwrap_or(120);
             let pwm_val = pwm.unwrap_or(100);
 
-            if let Some(norm_pump) = hydragrow_shared::dosing::normalize_dosing_pump_name(&pump_name) {
+            if let Some(norm_pump) =
+                hydragrow_shared::dosing::normalize_dosing_pump_name(&pump_name)
+            {
                 let cap = hydragrow_shared::dosing::capacity_ml_per_sec_for_pump(
                     config.pump_a_capacity_ml_per_sec,
                     config.pump_b_capacity_ml_per_sec,

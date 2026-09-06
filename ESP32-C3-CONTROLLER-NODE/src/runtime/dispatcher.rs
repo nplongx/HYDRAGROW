@@ -3,8 +3,8 @@
 
 use esp_idf_svc::nvs::EspDefaultNvs;
 use hydragrow_controller_core::WaterDirection;
-use hydragrow_shared::ControllerConfig;
 use hydragrow_shared::fsm::FaultCode;
+use hydragrow_shared::ControllerConfig;
 use std::sync::mpsc::Sender;
 use tracing::warn;
 
@@ -33,9 +33,12 @@ impl EventDispatcher {
         events: Vec<OrchestratorEvent>,
         dc: &mut DispatchContext<'_, '_>,
     ) -> Option<FaultCode> {
-        let has_terminal = events
-            .iter()
-            .any(|e| matches!(e, OrchestratorEvent::RebootDevice | OrchestratorEvent::FactoryReset));
+        let has_terminal = events.iter().any(|e| {
+            matches!(
+                e,
+                OrchestratorEvent::RebootDevice | OrchestratorEvent::FactoryReset
+            )
+        });
         let mut first_fault = None;
 
         for event in events {
@@ -279,7 +282,9 @@ impl EventDispatcher {
                 }
             }
             OrchestratorEvent::FactoryReset => {
-                log::warn!("⚠️ [DISPATCHER] Factory Reset: xoá toàn bộ runtime NVS keys và reboot...");
+                log::warn!(
+                    "⚠️ [DISPATCHER] Factory Reset: xoá toàn bộ runtime NVS keys và reboot..."
+                );
                 if let Some(nvs) = dc.nvs.as_mut() {
                     let empty = hydragrow_shared::WifiCredentialList::default();
                     let _ = crate::hw::save_wifi_list(nvs, &empty);

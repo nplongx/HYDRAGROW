@@ -41,7 +41,7 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     // response header/Location dài mà esp_http_client mặc định có thể không chứa nổi.
     let http_config = Configuration {
         crt_bundle_attach: Some(esp_crt_bundle_attach),
-        timeout: Some(Duration::from_secs(10)),
+        timeout: Some(Duration::from_secs(60)),
         buffer_size: Some(8192),
         buffer_size_tx: Some(2048),
         ..Default::default()

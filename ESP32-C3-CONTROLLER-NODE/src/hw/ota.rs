@@ -71,86 +71,94 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
         return Err(anyhow::anyhow!("GitHub API failed"));
     }
 
-    // Đọc JSON response
-    let mut response_buf: Vec<u8> = Vec::with_capacity(8192);
-    let mut chunk = [0u8; 1024];
-    loop {
-        let n = http_client.read(&mut chunk)?;
-        if n == 0 {
-            break;
-        }
-        response_buf.extend_from_slice(&chunk[..n]);
-        if response_buf.len() >= 32768 {
-            warn!("⚠️ [OTA] GitHub API response > 32KB, cắt bớt để tiết kiệm heap");
-            break;
-        }
-    }
-    let json_str = std::str::from_utf8(&response_buf)
-        .map_err(|e| anyhow::anyhow!("GitHub API response không phải UTF-8: {}", e))?;
-
-    // Parse JSON tìm browser_download_url
-    let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
-        error!(
-            "❌ [OTA] Không parse được GitHub API response ({} bytes): {}",
-            json_str.len(),
-            e
-        );
-        anyhow::anyhow!("JSON parse error: {}", e)
-    })?;
-
-    let tag_name = parsed["tag_name"].as_str().unwrap_or("");
-    if tag_name.is_empty() {
-        error!(
-            "❌ [OTA] GitHub API không trả về tag_name. Response preview: {}",
-            &json_str[..json_str.len().min(200)]
-        );
-        return Err(anyhow::anyhow!("tag_name missing in GitHub response"));
-    }
-
-    if tag_name == CURRENT_VERSION {
-        info!(
-            "✅ [OTA] Đang ở phiên bản mới nhất ({}). Không cần cập nhật.",
-            CURRENT_VERSION
-        );
-        publish_ota_event(
-            &mqtt_tx,
-            device_id,
-            "Info",
-            "Firmware đã mới nhất",
-            CURRENT_VERSION,
-        );
-        return Ok(());
-    }
-
-    info!(
-        "🚀 [OTA] Tìm thấy phiên bản mới: {}. Đang tìm link tải...",
-        tag_name
-    );
-
-    let mut download_url = String::new();
-    if let Some(assets) = parsed["assets"].as_array() {
-        for asset in assets {
-            if asset["name"].as_str().unwrap_or("") == "firmware.bin" {
-                download_url = asset["browser_download_url"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
+    // Parse toàn bộ metadata trong scope riêng để giải phóng JSON buffer
+    // và HTTP/TLS client trước khi mở TLS connection thứ 2 để tải firmware.
+    let (tag_name, download_url) = {
+        let mut response_buf: Vec<u8> = Vec::with_capacity(8192);
+        let mut chunk = [0u8; 1024];
+        loop {
+            let n = http_client.read(&mut chunk)?;
+            if n == 0 {
+                break;
+            }
+            response_buf.extend_from_slice(&chunk[..n]);
+            if response_buf.len() >= 32768 {
+                warn!("⚠️ [OTA] GitHub API response > 32KB, cắt bớt để tiết kiệm heap");
                 break;
             }
         }
-    }
+        let json_str = std::str::from_utf8(&response_buf)
+            .map_err(|e| anyhow::anyhow!("GitHub API response không phải UTF-8: {}", e))?;
 
-    if download_url.is_empty() {
-        error!("❌ [OTA] Không tìm thấy file 'firmware.bin' trong Release Assets.");
-        publish_ota_event(
-            &mqtt_tx,
-            device_id,
-            "Critical",
-            "Cập nhật firmware thất bại",
-            "Không tìm thấy firmware.bin trong bản phát hành.",
+        let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+            error!(
+                "❌ [OTA] Không parse được GitHub API response ({} bytes): {}",
+                json_str.len(),
+                e
+            );
+            anyhow::anyhow!("JSON parse error: {}", e)
+        })?;
+
+        let tag_name = parsed["tag_name"].as_str().unwrap_or("");
+        if tag_name.is_empty() {
+            error!(
+                "❌ [OTA] GitHub API không trả về tag_name. Response preview: {}",
+                &json_str[..json_str.len().min(200)]
+            );
+            return Err(anyhow::anyhow!("tag_name missing in GitHub response"));
+        }
+
+        if tag_name == CURRENT_VERSION {
+            info!(
+                "✅ [OTA] Đang ở phiên bản mới nhất ({}). Không cần cập nhật.",
+                CURRENT_VERSION
+            );
+            publish_ota_event(
+                &mqtt_tx,
+                device_id,
+                "Info",
+                "Firmware đã mới nhất",
+                CURRENT_VERSION,
+            );
+            return Ok(());
+        }
+
+        info!(
+            "🚀 [OTA] Tìm thấy phiên bản mới: {}. Đang tìm link tải...",
+            tag_name
         );
-        return Err(anyhow::anyhow!("Binary not found"));
-    }
+
+        let mut download_url = String::new();
+        if let Some(assets) = parsed["assets"].as_array() {
+            for asset in assets {
+                if asset["name"].as_str().unwrap_or("") == "firmware.bin" {
+                    download_url = asset["browser_download_url"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string();
+                    break;
+                }
+            }
+        }
+
+        if download_url.is_empty() {
+            error!("❌ [OTA] Không tìm thấy file 'firmware.bin' trong Release Assets.");
+            publish_ota_event(
+                &mqtt_tx,
+                device_id,
+                "Critical",
+                "Cập nhật firmware thất bại",
+                "Không tìm thấy firmware.bin trong bản phát hành.",
+            );
+            return Err(anyhow::anyhow!("Binary not found"));
+        }
+
+        (tag_name.to_string(), download_url)
+    };
+
+    // Quan trọng trên ESP32-C3: giải phóng TLS connection của GitHub API
+    // trước khi tạo connection TLS thứ 2 cho firmware download.
+    drop(http_client);
 
     info!("⬇️ [OTA] Bắt đầu tải firmware từ: {}", download_url);
     publish_ota_event(

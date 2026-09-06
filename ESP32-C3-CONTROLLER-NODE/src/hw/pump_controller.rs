@@ -1,6 +1,7 @@
 // src/hw/pump_controller.rs
 //! Driver điều khiển Bơm, Van và Xung PWM phần cứng ESP32-C3.
 
+use esp_idf_hal::gpio::PinDriver;
 use esp_idf_hal::ledc::LedcDriver;
 
 pub use hydragrow_controller_core::{PumpType, WaterDirection};
@@ -19,8 +20,13 @@ pub struct PumpController<'d> {
     pump_ph_up: LedcDriver<'static>,
     pump_ph_down: LedcDriver<'static>,
 
-    // PCF8574: P4/P5 = valves, P6/P7 = water pumps.
+    // PCF8574: P4/P5 = valves.
     valve: I2cExpander<'d>,
+
+    // Dedicated ESP32-C3 GPIOs for water pumps.
+    // GPIO2 = WaterPumpIn, GPIO1 = WaterPumpOut.
+    water_pump_in: PinDriver<'static, esp_idf_hal::gpio::Output>,
+    water_pump_out: PinDriver<'static, esp_idf_hal::gpio::Output>,
 
     osaka_en: esp_idf_hal::gpio::PinDriver<'static, esp_idf_hal::gpio::Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
@@ -39,6 +45,9 @@ impl<'d> PumpController<'d> {
 
         mut valve: I2cExpander<'d>,
 
+        mut water_pump_in: PinDriver<'static, esp_idf_hal::gpio::Output>,
+        mut water_pump_out: PinDriver<'static, esp_idf_hal::gpio::Output>,
+
         mut osaka_en: esp_idf_hal::gpio::PinDriver<'static, esp_idf_hal::gpio::Output>,
         mut osaka_rpwm: LedcDriver<'static>,
     ) -> anyhow::Result<Self> {
@@ -47,17 +56,11 @@ impl<'d> PumpController<'d> {
         pump_ph_up.set_duty(0)?;
         pump_ph_down.set_duty(0)?;
 
-        // -------------------------------------------------------------------
-        // PCF8574
-        //
+        // PCF8574:
         // P0..P3 = TTP223 INPUT
-        // P4    = Mist Valve OUTPUT
-        // P5    = Mix Valve OUTPUT
-        // P6    = Water Pump IN OUTPUT
-        // P7    = Water Pump OUT OUTPUT
-        //
-        // init() đặt P0..P3 HIGH/released và P4..P7 LOW/OFF.
-        // -------------------------------------------------------------------
+        // P4 = Mist Valve OUTPUT
+        // P5 = Mix Valve OUTPUT
+        // P6/P7 are no longer used for water pumps.
         valve
             .init()
             .map_err(|e| anyhow::anyhow!("PCF8574 init failed: {:?}", e))?;
@@ -75,10 +78,12 @@ impl<'d> PumpController<'d> {
             .set_low(ExpanderPin::WaterPumpOut)
             .map_err(|e| anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e))?;
 
+        water_pump_in.set_low()?;
+        water_pump_out.set_low()?;
         osaka_en.set_low()?;
         osaka_rpwm.set_duty(0)?;
 
-        info!("🔌 Initialize PumpController (Water Pump IN=P6, OUT=P7).");
+        info!("Initialize PumpController (Water Pump IN=GPIO2, OUT=GPIO1).");
 
         Ok(Self {
             pump_a,
@@ -86,6 +91,8 @@ impl<'d> PumpController<'d> {
             pump_ph_up,
             pump_ph_down,
             valve,
+            water_pump_in,
+            water_pump_out,
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
             soft_start_gen: Arc::new(AtomicU32::new(0)),
@@ -93,14 +100,9 @@ impl<'d> PumpController<'d> {
         })
     }
 
-    /// Xóa cache chiều bơm nước để buộc lệnh kế tiếp phát sinh ghi phần cứng thực sự
     pub fn invalidate_water_direction_cache(&mut self) {
         self.current_water_direction = None;
     }
-
-    // =========================================================================
-    // DOSING PUMPS
-    // =========================================================================
 
     pub fn set_dosing_pump_pwm(
         &mut self,
@@ -132,17 +134,9 @@ impl<'d> PumpController<'d> {
         self.set_dosing_pump_pwm(pump, state, 100)
     }
 
-    // =========================================================================
-    // WATER PUMP - PCF8574 P6/P7
-    // =========================================================================
-
-    /// Điều khiển bơm nước In / Out qua PCF8574:
-    ///
-    /// P6 = WaterPumpIn
-    /// P7 = WaterPumpOut
-    ///
-    /// Khi đảo chiều, luôn tắt bơm đang chạy trước, chờ relay nhả 100ms,
-    /// rồi mới bật bơm còn lại.
+    /// Điều khiển bơm nước bằng GPIO trực tiếp:
+    /// GPIO2 = Water Pump IN, GPIO1 = Water Pump OUT.
+    /// Khi đảo chiều, tắt bơm đang chạy, chờ relay nhả 100ms, rồi bật bơm còn lại.
     pub fn set_water_pump(&mut self, direction: WaterDirection) -> anyhow::Result<()> {
         if self.current_water_direction == Some(direction) {
             return Ok(());
@@ -151,68 +145,31 @@ impl<'d> PumpController<'d> {
         match direction {
             WaterDirection::In => {
                 if self.current_water_direction == Some(WaterDirection::Out) {
-                    if let Err(e) = self.valve.set_low(ExpanderPin::WaterPumpOut) {
-                        self.current_water_direction = None;
-                        return Err(anyhow::anyhow!("PCF8574 WaterPumpOut OFF failed: {:?}", e));
-                    }
+                    self.water_pump_out.set_low()?;
                     thread::sleep(Duration::from_millis(100));
                 }
-                if let Err(e) = self.valve.set_high(ExpanderPin::WaterPumpIn) {
-                    self.current_water_direction = None;
-                    return Err(anyhow::anyhow!("PCF8574 WaterPumpIn ON failed: {:?}", e));
-                }
+                self.water_pump_in.set_high()?;
                 self.current_water_direction = Some(WaterDirection::In);
             }
 
             WaterDirection::Out => {
                 if self.current_water_direction == Some(WaterDirection::In) {
-                    if let Err(e) = self.valve.set_low(ExpanderPin::WaterPumpIn) {
-                        self.current_water_direction = None;
-                        return Err(anyhow::anyhow!("PCF8574 WaterPumpIn OFF failed: {:?}", e));
-                    }
+                    self.water_pump_in.set_low()?;
                     thread::sleep(Duration::from_millis(100));
                 }
-                if let Err(e) = self.valve.set_high(ExpanderPin::WaterPumpOut) {
-                    self.current_water_direction = None;
-                    return Err(anyhow::anyhow!("PCF8574 WaterPumpOut ON failed: {:?}", e));
-                }
+                self.water_pump_out.set_high()?;
                 self.current_water_direction = Some(WaterDirection::Out);
             }
 
             WaterDirection::Stop => {
-                let res_in = self.valve.set_low(ExpanderPin::WaterPumpIn);
-                let res_out = self.valve.set_low(ExpanderPin::WaterPumpOut);
-
-                match (res_in, res_out) {
-                    (Ok(()), Ok(())) => {
-                        self.current_water_direction = Some(WaterDirection::Stop);
-                    }
-                    (Err(e_in), Ok(())) => {
-                        self.current_water_direction = None;
-                        anyhow::bail!("PCF8574 WaterPumpIn OFF failed: {:?}", e_in);
-                    }
-                    (Ok(()), Err(e_out)) => {
-                        self.current_water_direction = None;
-                        anyhow::bail!("PCF8574 WaterPumpOut OFF failed: {:?}", e_out);
-                    }
-                    (Err(e_in), Err(e_out)) => {
-                        self.current_water_direction = None;
-                        anyhow::bail!(
-                            "PCF8574 WaterPumpIn AND WaterPumpOut OFF failed: in={:?}, out={:?}",
-                            e_in,
-                            e_out
-                        );
-                    }
-                }
+                self.water_pump_in.set_low()?;
+                self.water_pump_out.set_low()?;
+                self.current_water_direction = Some(WaterDirection::Stop);
             }
         }
 
         Ok(())
     }
-
-    // =========================================================================
-    // MIST VALVE
-    // =========================================================================
 
     pub fn set_mist_valve(&mut self, state: bool) -> anyhow::Result<()> {
         if state {
@@ -227,10 +184,6 @@ impl<'d> PumpController<'d> {
         Ok(())
     }
 
-    // =========================================================================
-    // MIX VALVE
-    // =========================================================================
-
     pub fn set_mix_valve(&mut self, state: bool) -> anyhow::Result<()> {
         if state {
             self.valve
@@ -243,10 +196,6 @@ impl<'d> PumpController<'d> {
         }
         Ok(())
     }
-
-    // =========================================================================
-    // OSAKA PUMP
-    // =========================================================================
 
     pub fn start_osaka_pump_soft(&mut self, target_pwm_percent: u32) -> anyhow::Result<()> {
         let safe_percent = target_pwm_percent.clamp(0, 100);
@@ -306,7 +255,6 @@ impl<'d> PumpController<'d> {
     }
 
     pub fn set_osaka_pump_pwm(&mut self, duty_percent: u32) -> anyhow::Result<()> {
-        // Hủy mọi tiến trình soft-start đang chạy dở bằng cách tăng generation
         self.soft_start_gen.fetch_add(1, Ordering::SeqCst);
 
         if duty_percent == 0 {
@@ -333,10 +281,6 @@ impl<'d> PumpController<'d> {
         Ok(())
     }
 
-    // =========================================================================
-    // TANK ALERT / TTP223
-    // =========================================================================
-
     pub fn check_tank_alert(&mut self) -> anyhow::Result<TankAlert> {
         self.valve
             .parse_tank_alert()
@@ -353,17 +297,11 @@ mod tests {
     #[test]
     fn osaka_generation_counter_invalidates_stale_threads() {
         let gen = Arc::new(AtomicU32::new(0));
-
-        // Start thread 1 with gen 1
         let gen_t1 = gen.fetch_add(1, Ordering::SeqCst) + 1;
         assert_eq!(gen_t1, 1);
         assert_eq!(gen.load(Ordering::SeqCst), 1);
-
-        // Newer command arrives (direct PWM or second soft start)
         let gen_t2 = gen.fetch_add(1, Ordering::SeqCst) + 1;
         assert_eq!(gen_t2, 2);
-
-        // Older thread 1 must detect that its generation is no longer current
         assert_ne!(gen.load(Ordering::SeqCst), gen_t1);
         assert_eq!(gen.load(Ordering::SeqCst), gen_t2);
     }

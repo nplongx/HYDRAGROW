@@ -359,6 +359,8 @@ pub struct SystemContext {
     pub current_stage_index: Option<usize>,
     pub recipe_completed: bool,
     pub last_recipe_check_sec: u64,
+    pub active_recipe_id: Option<String>,
+    pub active_recipe_revision: Option<u64>,
 }
 
 impl Default for SystemContext {
@@ -383,16 +385,20 @@ impl Default for SystemContext {
             current_stage_index: None,
             recipe_completed: false,
             last_recipe_check_sec: 0,
+            active_recipe_id: None,
+            active_recipe_revision: None,
         }
     }
 }
 
 impl SystemContext {
-    /// Reset hoàn toàn các active sub-actors (dosing, water) và xoá ownership/chiếm dụng van & bơm.
+    /// Reset hoàn toàn các active sub-actors (dosing, water), xoá shadow pump state và xoá ownership/chiếm dụng van & bơm.
     pub fn reset_active_actors_and_ownership(&mut self) {
         self.dosing.reset();
         self.water.reset();
         self.calibration.pending_sample = None;
+        self.peripherals.pump_status = PumpStatus::default();
+        self.peripherals.osaka_pwm = 0;
         self.peripherals.misting_started_by_dosing = false;
         self.peripherals.mix_valve_started_by_dosing = false;
         self.peripherals.is_misting_active = false;
@@ -459,6 +465,14 @@ impl SystemContext {
             self.last_recipe_check_sec = v;
         }
 
+        if let Some(v) = delta.active_recipe_id.clone() {
+            self.active_recipe_id = v;
+        }
+
+        if let Some(v) = delta.active_recipe_revision {
+            self.active_recipe_revision = v;
+        }
+
         // --- 3. Safety & Budget Reset ---
         if delta.reset_safety_budget {
             self.safety.flush_for_reset();
@@ -499,9 +513,19 @@ impl SystemContext {
             }
             if let Some(v) = pd.water_pump_in {
                 p.pump_status.water_pump_in = v;
+                if v {
+                    p.pump_status.water_pump_out = false;
+                }
             }
             if let Some(v) = pd.water_pump_out {
                 p.pump_status.water_pump_out = v;
+                if v {
+                    p.pump_status.water_pump_in = false;
+                }
+            }
+            if p.pump_status.water_pump_in && p.pump_status.water_pump_out {
+                p.pump_status.water_pump_in = false;
+                p.pump_status.water_pump_out = false;
             }
             if let Some(v) = pd.mist_valve {
                 p.pump_status.mist_valve = v;
@@ -579,6 +603,11 @@ impl SystemContext {
             }
         }
     }
+
+    /// Áp dụng giao dịch ngân sách an toàn sau khi phần cứng dispatch thành công.
+    pub fn commit_safety_transaction(&mut self, tx: &super::tick_result::SafetyTransaction) {
+        tx.commit(&mut self.safety);
+    }
 }
 
 // ============================================================================
@@ -653,6 +682,10 @@ pub struct NvsSnapshot {
 
     #[serde(default)]
     pub current_stage_index: Option<usize>,
+    #[serde(default)]
+    pub active_recipe_id: Option<String>,
+    #[serde(default)]
+    pub active_recipe_revision: Option<u64>,
 }
 
 impl NvsSnapshot {
@@ -732,6 +765,8 @@ impl NvsSnapshot {
             matrix_update_count: ctx.tuner.matrix_update_count,
             matrix_is_warm: ctx.tuner.matrix_is_warm,
             current_stage_index: ctx.current_stage_index,
+            active_recipe_id: ctx.active_recipe_id.clone(),
+            active_recipe_revision: ctx.active_recipe_revision,
         }
     }
 }

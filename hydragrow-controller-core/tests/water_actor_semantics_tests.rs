@@ -149,3 +149,105 @@ fn cycle_complete_with_active_water_records_actual_elapsed_seconds() {
         panic!("Expected CalibrationDelta::Start in result");
     }
 }
+
+#[test]
+fn water_watchdog_timeout_aborts_actor_and_prevents_subsequent_on() {
+    let mut config = auto_config();
+    config.max_refill_duration_sec = 10;
+    let mut sensors = balanced_sensors();
+    sensors.water_level = 10.0;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::MimoDosing;
+    ctx.phase_start_ms = Some(1000);
+    ctx.phase_finish_ms = Some(100_000);
+    ctx.peripherals.pump_status.water_pump_in = true;
+    ctx.peripherals.water_pump_started_uptime_ms = Some(1000);
+
+    ctx.water.sub_state = WaterSubState::Filling {
+        job: WaterJob {
+            trigger: "test_refill".to_string(),
+            target_level: 25.0,
+            start_level: 10.0,
+            start_ms: 1000,
+            max_duration_sec: Some(10),
+        },
+    };
+
+    // Tick 1: trigger watchdog timeout (elapsed 11s >= 10s)
+    let t1 = 12_000u64;
+    let mut r1 = orchestrator::tick(t1, t1, &config, &sensors, t1, &mut ctx);
+    ctx.apply_delta(&mut r1.delta);
+
+    // Actor must be aborted/idle after watchdog timeout
+    assert_eq!(
+        ctx.water.sub_state,
+        WaterSubState::Idle,
+        "Water actor must be Idle after watchdog timeout"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.water_pump_in,
+        "Shadow water_pump_in must be false"
+    );
+
+    // Tick 2: Subsequent tick must NOT re-emit SetWaterPump(In)
+    let t2 = 13_000u64;
+    let r2 = orchestrator::tick(t2, t2, &config, &sensors, t2, &mut ctx);
+    assert!(
+        !r2.events.iter().any(|e| matches!(
+            e,
+            hydragrow_controller_core::core::fsm::events::OrchestratorEvent::SetWaterPump {
+                direction: hydragrow_controller_core::WaterDirection::In
+            }
+        )),
+        "Tick after timeout must NOT emit SetWaterPump(In)"
+    );
+}
+
+#[test]
+fn water_refill_phase_timeout_faults_with_water_refill_failed() {
+    let mut config = auto_config();
+    config.max_refill_duration_sec = 5;
+    let mut sensors = balanced_sensors();
+    sensors.water_level = 10.0;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::WaterRefilling;
+    ctx.water
+        .start_fill_with_duration(1000, 25.0, &sensors, "test", Some(5));
+
+    // Tick at 1000 + 5001ms -> times out
+    let t = 6001u64;
+    let r = orchestrator::tick(t, t, &config, &sensors, t, &mut ctx);
+    assert_eq!(
+        r.delta.phase,
+        Some(SystemPhase::Fault(
+            hydragrow_shared::fsm::FaultCode::WaterRefillFailed
+        )),
+        "WaterRefilling timeout must transition to Fault(WaterRefillFailed)"
+    );
+}
+
+#[test]
+fn water_drain_phase_timeout_faults_with_water_drain_failed() {
+    let mut config = auto_config();
+    config.max_drain_duration_sec = 5;
+    let mut sensors = balanced_sensors();
+    sensors.water_level = 30.0;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::WaterDraining;
+    ctx.water
+        .start_drain_with_duration(1000, 10.0, &sensors, "test", Some(5));
+
+    // Tick at 1000 + 5001ms -> times out
+    let t = 6001u64;
+    let r = orchestrator::tick(t, t, &config, &sensors, t, &mut ctx);
+    assert_eq!(
+        r.delta.phase,
+        Some(SystemPhase::Fault(
+            hydragrow_shared::fsm::FaultCode::WaterDrainFailed
+        )),
+        "WaterDraining timeout must transition to Fault(WaterDrainFailed)"
+    );
+}

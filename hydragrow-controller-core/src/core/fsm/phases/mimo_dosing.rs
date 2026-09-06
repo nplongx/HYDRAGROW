@@ -4,7 +4,7 @@ use hydragrow_shared::{ControllerConfig, SensorData};
 use log::warn;
 
 use crate::WaterDirection;
-use crate::core::actors::dosing_actor::{DosingEvent, PumpTarget};
+use crate::core::actors::dosing_actor::DosingEvent;
 use crate::core::actors::water_actor::{WaterEvent, WaterSubState};
 use crate::core::fsm::tick_result::CalibrationDelta;
 use crate::core::fsm::types::PendingCalibrationSample;
@@ -30,7 +30,10 @@ impl PhaseTick for MimoDosingPhase {
         let elapsed_ms = uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime));
 
         // 1. Kiểm tra Safety Timeout của bơm nước dựa trên water_pump_started_uptime_ms
-        self.check_water_pump_timeouts(uptime, config, ctx, &mut result, &mut peri_delta);
+        if self.check_water_pump_timeouts(uptime, config, ctx, &mut result, &mut peri_delta) {
+            result.delta.peripherals = Some(peri_delta);
+            return result;
+        }
 
         // 2. Hard Timeout toàn Phase -> Chuyển Cooldown
         // SỬA: Dùng `uptime` để so sánh và thiết lập mốc thời gian tương lai
@@ -41,7 +44,7 @@ impl PhaseTick for MimoDosingPhase {
                 .saturating_add(5_000)
         {
             warn!("⚠️ [FSM] Dosing phase timeout cứng! Chuyển về Cooldown.");
-            stop_water_and_misting(ctx, &mut result, &mut peri_delta);
+            shutdown_all_actuators(ctx, &mut result, &mut peri_delta);
 
             result.events.push(OrchestratorEvent::PublishFsmTransition {
                 from_phase: SystemPhase::MimoDosing,
@@ -156,24 +159,9 @@ impl PhaseTick for MimoDosingPhase {
                     }
                 }
             }
-            DosingEvent::SoftStartDone | DosingEvent::PhaseTransition => {}
-            DosingEvent::PulseToggle { pump, pulse_on } => {
-                let target_pump = match pump {
-                    PumpTarget::NutrientA { .. } => DosingPumpTarget::NutrientA,
-                    PumpTarget::NutrientB => DosingPumpTarget::NutrientB,
-                    PumpTarget::PhUp => DosingPumpTarget::PhUp,
-                    PumpTarget::PhDown => DosingPumpTarget::PhDown,
-                };
-                result.events.push(OrchestratorEvent::SetDosingPump {
-                    pump: target_pump,
-                    on: pulse_on,
-                    pwm_percent: if pulse_on {
-                        config.dosing_pwm_percent as u32
-                    } else {
-                        0
-                    },
-                });
-            }
+            DosingEvent::SoftStartDone
+            | DosingEvent::PhaseTransition
+            | DosingEvent::PulseToggle { .. } => {}
             DosingEvent::CycleComplete {
                 dose_a_ml,
                 dose_b_ml,
@@ -217,6 +205,7 @@ impl PhaseTick for MimoDosingPhase {
                 transition_to_active_mixing(uptime, sample, ctx, &mut result); // SỬA: Dùng uptime
             }
             DosingEvent::Failed(code) => {
+                shutdown_all_actuators(ctx, &mut result, &mut peri_delta);
                 result.delta.phase = Some(SystemPhase::Fault(code));
             }
         }
@@ -232,34 +221,131 @@ impl MimoDosingPhase {
         &self,
         uptime: u64,
         config: &ControllerConfig,
-        ctx: &SystemContext,
+        ctx: &mut SystemContext,
         result: &mut TickResult,
         peri_delta: &mut PeripheralDelta,
-    ) {
+    ) -> bool {
         let pump_elapsed_ms = uptime.saturating_sub(
             ctx.peripherals
                 .water_pump_started_uptime_ms
                 .unwrap_or(uptime),
         );
-        if ctx.peripherals.pump_status.water_pump_in
-            && pump_elapsed_ms >= (config.max_refill_duration_sec as u64 * 1000)
-        {
-            result.events.push(OrchestratorEvent::SetWaterPump {
-                direction: WaterDirection::Stop,
-            });
-            peri_delta.water_pump_in = Some(false);
-            peri_delta.water_pump_started_uptime_ms = Some(None);
+        let max_refill_duration_ms = match &ctx.water.sub_state {
+            WaterSubState::Filling { job } => {
+                job.max_duration_sec
+                    .unwrap_or(config.max_refill_duration_sec as u64)
+                    * 1000
+            }
+            _ => config.max_refill_duration_sec as u64 * 1000,
+        };
+        let max_drain_duration_ms = match &ctx.water.sub_state {
+            WaterSubState::Draining { job } => {
+                job.max_duration_sec
+                    .unwrap_or(config.max_drain_duration_sec as u64)
+                    * 1000
+            }
+            _ => config.max_drain_duration_sec as u64 * 1000,
+        };
+
+        if ctx.peripherals.pump_status.water_pump_in && pump_elapsed_ms >= max_refill_duration_ms {
+            warn!(
+                "🚨 [MIMO] Water pump IN timed out in failsafe check. Aborting cycle to Cooldown!"
+            );
+            shutdown_all_actuators(ctx, result, peri_delta);
+            result.delta.phase = Some(SystemPhase::Cooldown);
+            result.delta.phase_finish_ms =
+                Some(Some(uptime + config.cooldown_sec.max(30) as u64 * 1000));
+            return true;
         }
-        if ctx.peripherals.pump_status.water_pump_out
-            && pump_elapsed_ms >= (config.max_drain_duration_sec as u64 * 1000)
-        {
-            result.events.push(OrchestratorEvent::SetWaterPump {
-                direction: WaterDirection::Stop,
-            });
-            peri_delta.water_pump_out = Some(false);
-            peri_delta.water_pump_started_uptime_ms = Some(None);
+        if ctx.peripherals.pump_status.water_pump_out && pump_elapsed_ms >= max_drain_duration_ms {
+            warn!(
+                "🚨 [MIMO] Water pump OUT timed out in failsafe check. Aborting cycle to Cooldown!"
+            );
+            shutdown_all_actuators(ctx, result, peri_delta);
+            result.delta.phase = Some(SystemPhase::Cooldown);
+            result.delta.phase_finish_ms =
+                Some(Some(uptime + config.cooldown_sec.max(30) as u64 * 1000));
+            return true;
         }
+        false
     }
+}
+
+/// Dừng toàn bộ actuators, abort sub-actors và xoá mọi lệnh ON trong hàng đợi
+fn shutdown_all_actuators(
+    ctx: &mut SystemContext,
+    result: &mut TickResult,
+    peri_delta: &mut PeripheralDelta,
+) {
+    // 1. Abort cả 2 sub-actors
+    ctx.dosing.abort();
+    ctx.water.abort();
+
+    // 2. Loại bỏ toàn bộ lệnh ON trong hàng đợi trước khi ngắt
+    result.events.retain(|e| match e {
+        OrchestratorEvent::SetDosingPump { on: true, .. } => false,
+        OrchestratorEvent::SetWaterPump {
+            direction: WaterDirection::In | WaterDirection::Out,
+        } => false,
+        OrchestratorEvent::SetMistValve { on: true } => false,
+        OrchestratorEvent::SetMixValve { on: true } => false,
+        OrchestratorEvent::SetOsakaPump { pwm_percent } if *pwm_percent > 0 => false,
+        OrchestratorEvent::StartOsakaSoft { .. } => false,
+        _ => true,
+    });
+
+    // 3. Phát lệnh ngắt vật lý cho mọi nhóm ngoại vi
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::NutrientA,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::NutrientB,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::PhUp,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetDosingPump {
+        pump: DosingPumpTarget::PhDown,
+        on: false,
+        pwm_percent: 0,
+    });
+    result.events.push(OrchestratorEvent::SetWaterPump {
+        direction: WaterDirection::Stop,
+    });
+    result
+        .events
+        .push(OrchestratorEvent::SetMistValve { on: false });
+    result
+        .events
+        .push(OrchestratorEvent::SetMixValve { on: false });
+    result
+        .events
+        .push(OrchestratorEvent::SetOsakaPump { pwm_percent: 0 });
+
+    // 4. Cập nhật shadow delta
+    peri_delta.pump_a = Some(false);
+    peri_delta.pump_b = Some(false);
+    peri_delta.ph_up = Some(false);
+    peri_delta.ph_down = Some(false);
+    peri_delta.water_pump_in = Some(false);
+    peri_delta.water_pump_out = Some(false);
+    peri_delta.mist_valve = Some(false);
+    peri_delta.mix_valve = Some(false);
+    peri_delta.osaka_pump = Some(false);
+    peri_delta.osaka_pwm = Some(0);
+    peri_delta.is_misting_active = Some(false);
+    peri_delta.is_scheduled_mixing_active = Some(false);
+    peri_delta.misting_started_by_dosing = Some(false);
+    peri_delta.mix_valve_started_by_dosing = Some(false);
+    peri_delta.water_pump_started_uptime_ms = Some(None);
+
+    result.delta.reset_active_actors = true;
 }
 
 // --- Helper Functions Thuần Tuý Cho Module ---

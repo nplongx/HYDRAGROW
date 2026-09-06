@@ -324,3 +324,277 @@ fn emergency_shutdown_faults_and_emits_all_off() {
         "Emergency shutdown must emit dosing pump OFF events"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Scenario 7: Mimo hard-timeout must abort dosing execution and turn off pumps
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mimo_dosing_hard_timeout_shuts_down_all_actuators_and_aborts_actor() {
+    let config = auto_config();
+    let sensors = balanced_sensors();
+
+    let mut ctx = SystemContext {
+        phase: SystemPhase::MimoDosing,
+        phase_start_ms: Some(1000),
+        phase_finish_ms: Some(10_000),
+        ..SystemContext::default()
+    };
+
+    let control = ControlVector {
+        nutrient_a_ml: 10.0,
+        ..ControlVector::default()
+    };
+    let _ = ctx
+        .dosing
+        .start_matrix_cycle(1000, &control, 1.5, 6.0, 80, &config, &sensors);
+    ctx.peripherals.pump_status.pump_a = true;
+
+    // Trigger hard timeout (uptime >= 10_000 + 5_000 -> 15_001)
+    let hard_timeout_ms = 15_001u64;
+    let mut result = orchestrator::tick(
+        hard_timeout_ms,
+        hard_timeout_ms,
+        &config,
+        &sensors,
+        hard_timeout_ms,
+        &mut ctx,
+    );
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Cooldown),
+        "Hard timeout must transition to Cooldown"
+    );
+
+    // Must emit OFF event for NutrientA
+    assert!(
+        result.events.iter().any(|e| matches!(
+            e,
+            OrchestratorEvent::SetDosingPump {
+                pump: hydragrow_controller_core::core::fsm::DosingPumpTarget::NutrientA,
+                on: false,
+                ..
+            }
+        )),
+        "Hard timeout must emit SetDosingPump(NutrientA, OFF)"
+    );
+
+    // Must NOT contain any ON events
+    assert!(
+        !result
+            .events
+            .iter()
+            .any(|e| matches!(e, OrchestratorEvent::SetDosingPump { on: true, .. })),
+        "Hard timeout must not emit any dosing ON events"
+    );
+
+    // Apply delta and assert actor is idle and shadow state is cleared
+    ctx.apply_delta(&mut result.delta);
+    assert!(
+        ctx.dosing.is_idle(),
+        "Dosing actor must be Idle after hard timeout"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.pump_a,
+        "Shadow pump_a must be false after hard timeout"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 8: Invariant I2 — Water IN/OUT mutual exclusion
+// ---------------------------------------------------------------------------
+
+#[test]
+fn water_in_and_out_mutual_exclusion_enforced() {
+    use hydragrow_controller_core::core::fsm::tick_result::{ContextDelta, PeripheralDelta};
+
+    // 1. Setting water_pump_out when water_pump_in was true must clear water_pump_in to false
+    let mut base_delta = ContextDelta {
+        peripherals: Some(PeripheralDelta {
+            water_pump_in: Some(true),
+            ..PeripheralDelta::default()
+        }),
+        ..ContextDelta::default()
+    };
+
+    let addition_delta = ContextDelta {
+        peripherals: Some(PeripheralDelta {
+            water_pump_out: Some(true),
+            ..PeripheralDelta::default()
+        }),
+        ..ContextDelta::default()
+    };
+
+    base_delta.merge_from(addition_delta);
+    let peri = base_delta.peripherals.expect("peripherals must exist");
+    assert_eq!(peri.water_pump_out, Some(true));
+    assert_eq!(
+        peri.water_pump_in,
+        Some(false),
+        "Setting water_pump_out to true must force water_pump_in to Some(false)"
+    );
+
+    // 2. Conflicting simultaneous true in addition must reject both
+    let mut delta2 = ContextDelta::default();
+    let conflict = ContextDelta {
+        peripherals: Some(PeripheralDelta {
+            water_pump_in: Some(true),
+            water_pump_out: Some(true),
+            ..PeripheralDelta::default()
+        }),
+        ..ContextDelta::default()
+    };
+    delta2.merge_from(conflict);
+    let peri2 = delta2.peripherals.expect("peripherals must exist");
+    assert!(
+        !(peri2.water_pump_in == Some(true) && peri2.water_pump_out == Some(true)),
+        "Both water_pump_in and water_pump_out cannot be true simultaneously"
+    );
+    assert_eq!(peri2.water_pump_in, Some(false));
+    assert_eq!(peri2.water_pump_out, Some(false));
+
+    // 3. SystemContext::apply_delta must never allow both pump_status flags to be true
+    let mut ctx = SystemContext::default();
+    ctx.apply_delta(&mut ContextDelta {
+        peripherals: Some(PeripheralDelta {
+            water_pump_in: Some(true),
+            water_pump_out: Some(true),
+            ..PeripheralDelta::default()
+        }),
+        ..ContextDelta::default()
+    });
+    assert!(
+        !(ctx.peripherals.pump_status.water_pump_in && ctx.peripherals.pump_status.water_pump_out),
+        "Invariant I2: ctx.peripherals.pump_status must never have water_pump_in and water_pump_out both true"
+    );
+
+    // 4. apply_decision with conflicting water_in_sec and water_out_sec must reject both
+    let config = auto_config();
+    let sensors = balanced_sensors();
+    let mut ctx4 = SystemContext::default();
+    let conflict_control = ControlVector {
+        water_in_sec: 10.0,
+        water_out_sec: 10.0,
+        ..ControlVector::default()
+    };
+    let decision = hydragrow_controller_core::core::adaptive::solver::SolveResult::Execute {
+        control: conflict_control,
+        target_ec: 1.5,
+        target_ph: 6.0,
+        pwm: 80,
+    };
+    let result4 = hydragrow_controller_core::core::fsm::phases::monitoring::apply_decision(
+        decision,
+        &mut ctx4,
+        &config,
+        &sensors,
+        1000,
+        1000,
+        hydragrow_controller_core::core::fsm::tick_result::TickResult::default(),
+        false,
+    );
+    assert!(
+        !result4
+            .events
+            .iter()
+            .any(|e| matches!(e, OrchestratorEvent::SetWaterPump { .. })),
+        "Conflicting water decision must not emit any SetWaterPump event"
+    );
+    assert!(
+        ctx4.water.is_idle(),
+        "Water actor must remain idle after conflicting decision"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 9: Invariant I3 — Safety budget transaction & dispatch fault recovery
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dispatch_failure_does_not_commit_safety_budget_and_aborts_actor() {
+    let config = auto_config();
+    let sensors = balanced_sensors();
+    let mut ctx = SystemContext {
+        phase: SystemPhase::Monitoring,
+        ..SystemContext::default()
+    };
+
+    let uptime_ms = 50_000u64;
+    let uptime_sec = uptime_ms / 1000;
+
+    // Decision requesting dosing of NutrientA
+    let control = ControlVector {
+        nutrient_a_ml: 10.0,
+        ..ControlVector::default()
+    };
+    let decision = hydragrow_controller_core::core::adaptive::solver::SolveResult::Execute {
+        control,
+        target_ec: 1.5,
+        target_ph: 6.0,
+        pwm: 80,
+    };
+
+    let result = hydragrow_controller_core::core::fsm::phases::monitoring::apply_decision(
+        decision,
+        &mut ctx,
+        &config,
+        &sensors,
+        uptime_ms,
+        uptime_ms,
+        hydragrow_controller_core::core::fsm::tick_result::TickResult::default(),
+        false,
+    );
+
+    // 1. Before dispatch: safety transaction must be staged in result, NOT committed to ctx.safety
+    assert!(
+        result.safety_transaction.is_some(),
+        "Result must contain staged SafetyTransaction"
+    );
+    let dose_before_dispatch = ctx.safety.get_hourly_dose("NutrientA", uptime_sec);
+    assert_eq!(
+        dose_before_dispatch, 0.0,
+        "Safety budget must NOT be committed before dispatch succeeds"
+    );
+
+    // 2. Simulate hardware dispatch failure
+    // Apply tick delta first as fsm_loop does
+    let mut delta = result.delta;
+    ctx.apply_delta(&mut delta);
+    assert!(!ctx.dosing.is_idle(), "Actor was started for the cycle");
+
+    // Dispatch failure recovery (as performed by apply_dispatch_fault in fsm_loop)
+    let mut recovery_result = hydragrow_controller_core::core::fsm::TickResult::default();
+    recovery_result.delta.phase = Some(SystemPhase::Fault(FaultCode::EcDosingFailed));
+    orchestrator::fault_all_outputs_off(&mut recovery_result);
+    ctx.apply_delta(&mut recovery_result.delta);
+
+    // Assert actor aborted, shadow cleared, and safety budget NOT committed
+    assert!(
+        ctx.dosing.is_idle(),
+        "Dosing actor must be Idle after dispatch fault recovery"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.pump_a,
+        "Shadow pump_a must be false"
+    );
+    assert_eq!(
+        ctx.phase,
+        SystemPhase::Fault(FaultCode::EcDosingFailed),
+        "FSM must be in Fault"
+    );
+    let dose_after_fail = ctx.safety.get_hourly_dose("NutrientA", uptime_sec);
+    assert_eq!(
+        dose_after_fail, 0.0,
+        "Invariant I3: Safety budget must remain uncommitted when dispatch fails"
+    );
+
+    // 3. Verify companion case: successful dispatch commits the transaction
+    let safety_tx = result.safety_transaction.unwrap();
+    ctx.commit_safety_transaction(&safety_tx);
+    let dose_after_success = ctx.safety.get_hourly_dose("NutrientA", uptime_sec);
+    assert!(
+        dose_after_success > 0.0,
+        "Safety budget must be committed after commit_safety_transaction"
+    );
+}

@@ -37,6 +37,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         err_ec: incoming.err_ec,
         is_continuous: incoming.is_continuous,
         ph_voltage_mv: incoming.ph_voltage_mv,
+        ec_received_ms: incoming.ec_received_ms,
+        ph_received_ms: incoming.ph_received_ms,
+        temp_received_ms: incoming.temp_received_ms,
+        water_received_ms: incoming.water_received_ms,
     };
 
     debug!(
@@ -338,6 +342,10 @@ mod tests {
             err_ec: None,
             is_continuous: None,
             ph_voltage_mv: Some(2450.0),
+            ec_received_ms: None,
+            ph_received_ms: None,
+            temp_received_ms: None,
+            water_received_ms: None,
         }
     }
 

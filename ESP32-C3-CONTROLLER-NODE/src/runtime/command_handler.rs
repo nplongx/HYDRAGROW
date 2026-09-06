@@ -341,7 +341,7 @@ pub fn process_mqtt_commands(
             stop_all_hardware(&mut step_events);
             step_events.push(OrchestratorEvent::RebootDevice);
             all_events.append(&mut step_events);
-            continue;
+            break;
         }
 
         if action_lower == "factory_reset" {
@@ -355,7 +355,7 @@ pub fn process_mqtt_commands(
             temp_state.apply_step_delta(&step_delta);
             merge_delta(&mut accumulated_delta, step_delta);
             all_events.append(&mut step_events);
-            continue;
+            break;
         }
 
         // Nếu đang ở chế độ AUTO thì bỏ qua lệnh điều khiển tay đơn lẻ
@@ -404,6 +404,26 @@ pub fn process_mqtt_commands(
 
         if is_force_on {
             let duration = duration_sec.unwrap_or(120);
+            let pwm_val = pwm.unwrap_or(100);
+
+            if let Some(norm_pump) = hydragrow_shared::dosing::normalize_dosing_pump_name(&pump_name) {
+                let cap = hydragrow_shared::dosing::capacity_ml_per_sec_for_pump(
+                    config.pump_a_capacity_ml_per_sec,
+                    config.pump_b_capacity_ml_per_sec,
+                    config.pump_ph_up_capacity_ml_per_sec,
+                    config.pump_ph_down_capacity_ml_per_sec,
+                    norm_pump,
+                );
+                let estimated_ml = hydragrow_shared::dosing::estimate_ml(cap, pwm_val, duration);
+                if estimated_ml > config.max_dose_per_cycle {
+                    warn!(
+                        "⛔ BLOCKED: Lệnh force_on cho {} vượt ngưỡng an toàn liều lượng ({:.2}ml > max_dose_per_cycle {:.2}ml)",
+                        pump_name, estimated_ml, config.max_dose_per_cycle
+                    );
+                    continue;
+                }
+            }
+
             step_delta.safety_override_until = Some(now_uptime_ms + (duration * 1000));
             let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
                 &config.device_id,

@@ -38,6 +38,10 @@ pub fn read_sensor(tank: &Tank, _config: &NoiseConfig) -> SensorData {
         is_continuous: None,
         ph_voltage_mv: None,
         uptime: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     }
 }
 

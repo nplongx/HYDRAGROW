@@ -1,0 +1,78 @@
+{
+  "requirement_id": "CONTROLLER-FSM-002",
+  "objective": "Remediate remaining gaps between Decision, Actor, Shadow, and Hardware across terminal transitions, water lifecycle, safety budget transactions, recipe synchronization, sensor freshness, and manual control safety.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Terminal abort transitions clear active actors (DosingActor, WaterActor), reset peripheral shadow outputs (pump_status, osaka_pwm), and clear ownership flags across all system phases.",
+      "verification": "Cargo test actor_terminal_reset_tests and fsm_terminal_matrix_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "WaterActor owns its timeout and abort semantics, transitioning to Fault(WaterRefillFailed) or Fault(WaterDrainFailed) on phase timeout and resetting active actors.",
+      "verification": "Cargo test water_actor_semantics_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "MIMO dosing hard timeout stops all dosing pumps and Osaka mist/mix peripherals, and purges trailing ON events.",
+      "verification": "Cargo test cross_layer_fsm_regression_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Water pump IN and OUT mutual exclusion is enforced across Decision, Context Delta Merge, and SystemContext Apply layers.",
+      "verification": "Cargo test water_pump_in_and_out_mutual_exclusion_at_all_layers in cross_layer_fsm_regression_tests",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Safety budget transactions are staged during ticks and committed only upon verified physical actuator dispatch success.",
+      "verification": "Cargo test safety_budget_executable_tests in hydragrow-controller-core and sim_dispatcher in hydragrow-simulator",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Recipe execution identity includes id, revision, stage, and start time, resetting stage cursor and completion on revision bump.",
+      "verification": "Cargo test recipe_lifecycle_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Sensor freshness is tracked per channel, and disabled sensor channels do not trigger stale or NaN faults.",
+      "verification": "Cargo test sensor_freshness_regression_tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Manual dosing requests are clamped to server safety limits, and ESP32 force_on commands validate estimated dose against max_dose_per_cycle.",
+      "verification": "Cargo test api::control in hydragrow-backend and command_handler in ESP32 runtime",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Terminal commands (RebootDevice, FactoryReset) dispatch reliably even when preceding best-effort stop operations encounter actuator errors.",
+      "verification": "Cargo test terminal_reboot_continues_dispatch_even_after_actuator_fault in hydragrow-simulator",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-10",
+      "criterion": "DosingActor is the single authority for pulse hardware events, preventing duplicate hardware emissions during pulse toggles.",
+      "verification": "Cargo clippy and unit tests in hydragrow-controller-core",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Controller configuration enforces cross-field validation rules for pH targets and water level hierarchy.",
+      "verification": "Cargo test config_validation_tests in hydragrow-shared",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Full 18-case terminal transition regression matrix verifies Invariant I1 across all system phases and terminal triggers.",
+      "verification": "Cargo test fsm_terminal_matrix_tests in hydragrow-controller-core",
+      "evidence_required": true
+    }
+  ]
+}

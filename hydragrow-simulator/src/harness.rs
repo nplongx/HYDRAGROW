@@ -151,6 +151,10 @@ impl HarnessBuilder {
             err_ph: None,
             is_continuous: None,
             ph_voltage_mv: None,
+            ec_received_ms: None,
+            ph_received_ms: None,
+            temp_received_ms: None,
+            water_received_ms: None,
         };
 
         let ctx = SystemContext {
@@ -228,6 +232,9 @@ impl Harness {
 
         for event in &result.events {
             self.dispatcher.dispatch(event, &mut self.hw);
+        }
+        if let Some(tx) = &result.safety_transaction {
+            self.ctx.commit_safety_transaction(tx);
         }
         self.last_sensor = sensor.clone();
 

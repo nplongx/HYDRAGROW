@@ -184,6 +184,35 @@ mod tests {
     }
 
     #[test]
+    fn terminal_reboot_continues_dispatch_even_after_actuator_fault() {
+        let mut hw = VirtualHardwareState::default();
+        hw.water_pump_in.on = true;
+
+        let events = vec![
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: true,
+                pwm_percent: 50,
+            },
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop,
+            },
+            OrchestratorEvent::RebootDevice,
+        ];
+
+        let result =
+            dispatch_events_transactional(&mut hw, &events, Some(DosingPumpTarget::NutrientA));
+        assert!(
+            result.is_err(),
+            "Dispatcher must still report hardware failure"
+        );
+        assert!(
+            !hw.water_pump_in.on,
+            "Water pump stop must execute despite pump A fault when terminal reboot is present"
+        );
+    }
+
+    #[test]
     fn off_command_fails_during_all_off_latches_primary_and_reports_secondary() {
         let mut hw = VirtualHardwareState::default();
         hw.pump_b.on = true;
@@ -347,15 +376,34 @@ pub fn dispatch_events_transactional(
     events: &[OrchestratorEvent],
     failing_pump: Option<DosingPumpTarget>,
 ) -> Result<(), String> {
+    let has_terminal = events.iter().any(|e| {
+        matches!(
+            e,
+            OrchestratorEvent::RebootDevice | OrchestratorEvent::FactoryReset
+        )
+    });
+    let mut first_fault = None;
+
     for event in events {
-        if let OrchestratorEvent::SetDosingPump { pump, on: true, .. } = event
+        if let OrchestratorEvent::SetDosingPump { pump, .. } = event
             && Some(*pump) == failing_pump
         {
-            return Err(format!("Hardware fault on pump {:?}", pump));
+            if first_fault.is_none() {
+                first_fault = Some(format!("Hardware fault on pump {:?}", pump));
+            }
+            if !has_terminal {
+                return Err(format!("Hardware fault on pump {:?}", pump));
+            }
+            continue;
         }
         apply_event(hw, event);
     }
-    Ok(())
+
+    if let Some(err) = first_fault {
+        Err(err)
+    } else {
+        Ok(())
+    }
 }
 
 pub fn dispatch_best_effort_all_off(

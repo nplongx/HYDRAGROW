@@ -33,13 +33,23 @@ impl EventDispatcher {
         events: Vec<OrchestratorEvent>,
         dc: &mut DispatchContext<'_, '_>,
     ) -> Option<FaultCode> {
+        let has_terminal = events
+            .iter()
+            .any(|e| matches!(e, OrchestratorEvent::RebootDevice | OrchestratorEvent::FactoryReset));
+        let mut first_fault = None;
+
         for event in events {
             if let Some(fault) = Self::handle_event(event.clone(), dc) {
                 warn!(
                     "🚨 [DISPATCHER] Actuator command failed with fault {:?}, aborting remaining events",
                     fault
                 );
-                return Some(fault);
+                if first_fault.is_none() {
+                    first_fault = Some(fault);
+                }
+                if !has_terminal {
+                    return Some(fault);
+                }
             }
 
             let oc = ObserverContext {
@@ -51,7 +61,7 @@ impl EventDispatcher {
             };
             dc.observers.notify_all(&event, &oc);
         }
-        None
+        first_fault
     }
 
     pub fn dispatch_best_effort_all_off(

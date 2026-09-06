@@ -14,7 +14,9 @@ use crate::core::adaptive::solver::{SolveResult, select_solver};
 use crate::core::fsm::context::SystemContext;
 use crate::core::fsm::events::OrchestratorEvent;
 use crate::core::fsm::phase_tick::PhaseTick;
-use crate::core::fsm::tick_result::{CalibrationDelta, ContextDelta, TickResult};
+use crate::core::fsm::tick_result::{
+    CalibrationDelta, ContextDelta, SafetyTransaction, TickResult,
+};
 use crate::core::optimizer::plan_water_operation;
 use crate::utils::{DosePumpKind, effective_flow_ml_per_sec};
 
@@ -198,7 +200,7 @@ fn check_scheduled_water_change(
 
 // Xử lý và áp dụng quyết định từ AI/Solver xuống Hardware
 #[allow(clippy::too_many_arguments)]
-fn apply_decision(
+pub fn apply_decision(
     decision: SolveResult,
     ctx: &mut SystemContext,
     config: &ControllerConfig,
@@ -210,11 +212,19 @@ fn apply_decision(
 ) -> TickResult {
     match decision {
         SolveResult::Execute {
-            control,
+            mut control,
             target_ec,
             target_ph,
             pwm,
         } => {
+            if control.water_in_sec > 0.0 && control.water_out_sec > 0.0 {
+                warn!(
+                    "  [MONITORING] Rejected conflicting water decision: water_in_sec={:.1} and water_out_sec={:.1} both > 0",
+                    control.water_in_sec, control.water_out_sec
+                );
+                control.water_in_sec = 0.0;
+                control.water_out_sec = 0.0;
+            }
             let mut peri_delta = result.delta.peripherals.take().unwrap_or_default();
 
             // Tính số giây uptime cho Safety Budget (Miễn nhiễm rủi ro do NTP Jump)
@@ -280,14 +290,13 @@ fn apply_decision(
                 }
             }
 
-            // Ghi nhận (commit) transactional khi tất cả các kiểm tra an toàn đều đã đạt
+            // Ghi nhận dự kiến vào SafetyTransaction (chỉ commit transactional khi dispatch thành công)
+            let mut safety_tx = SafetyTransaction::default();
             if control.water_in_sec > 0.0 {
-                ctx.safety
-                    .record_refill(uptime_sec, config.max_refill_cycles_per_hour as u32);
+                safety_tx.refill = Some((uptime_sec, config.max_refill_cycles_per_hour as u32));
             }
             if control.water_out_sec > 0.0 {
-                ctx.safety
-                    .record_drain(uptime_sec, config.max_drain_cycles_per_hour as u32);
+                safety_tx.drain = Some((uptime_sec, config.max_drain_cycles_per_hour as u32));
             }
 
             // =========================================================================
@@ -384,8 +393,9 @@ fn apply_decision(
                             "PhDown"
                         }
                     };
-                    ctx.safety
-                        .commit_hourly_dose(pump_name, uptime_sec, job.target_ml);
+                    safety_tx
+                        .hourly_doses
+                        .push((pump_name.to_string(), uptime_sec, job.target_ml));
                     active_dosing_jobs += 1;
                 }
             }
@@ -475,6 +485,10 @@ fn apply_decision(
             result.events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });
+
+            if !safety_tx.is_empty() {
+                result.safety_transaction = Some(safety_tx);
+            }
 
             result.delta.peripherals = Some(peri_delta);
         }

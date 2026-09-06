@@ -157,3 +157,97 @@ fn manual_mode_transition_resets_active_actors_and_ownership() {
         "DosingActor must remain Idle after re-enabling Auto"
     );
 }
+
+#[test]
+fn full_terminal_reset_clears_all_actors_shadow_pumps_and_ownership() {
+    let mut ctx = SystemContext::default();
+
+    // 1. Activate actors
+    ctx.phase = SystemPhase::MimoDosing;
+    ctx.dosing.sub_state = DosingSubState::PumpingA(dummy_pulse_job());
+    ctx.water.sub_state = WaterSubState::Filling {
+        job: dummy_water_job(),
+    };
+
+    // 2. Activate shadow peripheral states
+    ctx.peripherals.pump_status.pump_a = true;
+    ctx.peripherals.pump_status.pump_b = true;
+    ctx.peripherals.pump_status.ph_up = true;
+    ctx.peripherals.pump_status.ph_down = true;
+    ctx.peripherals.pump_status.water_pump_in = true;
+    ctx.peripherals.pump_status.water_pump_out = true;
+    ctx.peripherals.pump_status.mist_valve = true;
+    ctx.peripherals.pump_status.mix_valve = true;
+    ctx.peripherals.pump_status.osaka_pump = true;
+    ctx.peripherals.pump_status.osaka_pwm = Some(75);
+    ctx.peripherals.osaka_pwm = 75;
+    ctx.peripherals.is_misting_active = true;
+    ctx.peripherals.is_scheduled_mixing_active = true;
+    ctx.peripherals.misting_started_by_dosing = true;
+    ctx.peripherals.mix_valve_started_by_dosing = true;
+    ctx.peripherals.water_pump_started_uptime_ms = Some(12345);
+
+    // 3. Execute canonical abort / reset
+    ctx.reset_active_actors_and_ownership();
+
+    // 4. Assert full convergence
+    assert_eq!(
+        ctx.dosing.sub_state,
+        DosingSubState::Idle,
+        "Dosing actor must be Idle"
+    );
+    assert_eq!(
+        ctx.water.sub_state,
+        WaterSubState::Idle,
+        "Water actor must be Idle"
+    );
+    assert!(!ctx.peripherals.pump_status.pump_a, "Pump A must be OFF");
+    assert!(!ctx.peripherals.pump_status.pump_b, "Pump B must be OFF");
+    assert!(!ctx.peripherals.pump_status.ph_up, "pH Up must be OFF");
+    assert!(!ctx.peripherals.pump_status.ph_down, "pH Down must be OFF");
+    assert!(
+        !ctx.peripherals.pump_status.water_pump_in,
+        "Water IN must be OFF"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.water_pump_out,
+        "Water OUT must be OFF"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.mist_valve,
+        "Mist valve must be OFF"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.mix_valve,
+        "Mix valve must be OFF"
+    );
+    assert!(
+        !ctx.peripherals.pump_status.osaka_pump,
+        "Osaka pump must be OFF"
+    );
+    assert_eq!(
+        ctx.peripherals.pump_status.osaka_pwm, None,
+        "Osaka PWM shadow must be None"
+    );
+    assert_eq!(ctx.peripherals.osaka_pwm, 0, "Osaka PWM must be 0");
+    assert!(
+        !ctx.peripherals.misting_started_by_dosing,
+        "Misting ownership must be false"
+    );
+    assert!(
+        !ctx.peripherals.mix_valve_started_by_dosing,
+        "Mix ownership must be false"
+    );
+    assert!(
+        !ctx.peripherals.is_misting_active,
+        "is_misting_active must be false"
+    );
+    assert!(
+        !ctx.peripherals.is_scheduled_mixing_active,
+        "is_scheduled_mixing_active must be false"
+    );
+    assert!(
+        ctx.peripherals.water_pump_started_uptime_ms.is_none(),
+        "water_pump_started_uptime_ms must be None"
+    );
+}

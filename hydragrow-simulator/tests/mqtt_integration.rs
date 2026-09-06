@@ -92,6 +92,10 @@ fn test_mqtt_publish_and_receive() {
         err_temp: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     };
     bridge.publish_sensors(&data);
 

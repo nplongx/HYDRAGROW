@@ -90,15 +90,19 @@ impl SensorData {
 
         if let Some(t) = payload.temp {
             self.temp = t;
+            self.temp_received_ms = Some(now_uptime_ms);
         }
         if let Some(e) = payload.ec {
             self.ec = e;
+            self.ec_received_ms = Some(now_uptime_ms);
         }
         if let Some(p) = payload.ph {
             self.ph = p;
+            self.ph_received_ms = Some(now_uptime_ms);
         }
         if let Some(w) = payload.water_level {
             self.water_level = w;
+            self.water_received_ms = Some(now_uptime_ms);
         }
         if let Some(mv) = payload.ph_voltage_mv {
             self.ph_voltage_mv = Some(mv as f64);

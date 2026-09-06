@@ -140,6 +140,10 @@ fn e2e_full_dosing_cycle_monitoring_to_cooldown_to_monitoring() {
         err_ph: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     };
 
     // === Phase 1: Monitoring → MimoDosing ===
@@ -223,6 +227,10 @@ fn e2e_dosing_start_emits_correct_hardware_events() {
         err_ph: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     };
 
     let mut all_events = Vec::new();
@@ -271,6 +279,10 @@ fn e2e_low_ph_triggers_ph_up_dosing() {
         err_ph: None,
         is_continuous: None,
         ph_voltage_mv: None,
+        ec_received_ms: None,
+        ph_received_ms: None,
+        temp_received_ms: None,
+        water_received_ms: None,
     };
 
     let _events = tick_apply(&mut ctx, &config, &low_ph, 10_000);

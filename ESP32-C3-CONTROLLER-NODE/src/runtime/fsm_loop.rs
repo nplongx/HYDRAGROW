@@ -313,7 +313,11 @@ pub fn start_fsm_control_loop(
                     &updated_config,
                     &mut observer_set,
                 );
+            } else if let Some(tx) = &tick_result.safety_transaction {
+                ctx.commit_safety_transaction(tx);
             }
+        } else if let Some(tx) = &tick_result.safety_transaction {
+            ctx.commit_safety_transaction(tx);
         }
 
         // 5. Báo trạng thái chuyển Phase

@@ -48,6 +48,12 @@ pub struct ContextDelta {
     /// Mốc lần cuối recipe engine được kiểm tra (wall-clock seconds).
     pub last_recipe_check_sec: Option<u64>,
 
+    /// Recipe execution identity: ID
+    pub active_recipe_id: Option<Option<String>>,
+
+    /// Recipe execution identity: revision
+    pub active_recipe_revision: Option<Option<u64>>,
+
     /// Xóa các budget/history an toàn khi reset lỗi thủ công
     pub reset_safety_budget: bool,
 
@@ -121,7 +127,13 @@ impl ContextDelta {
         if addition.phase_finish_ms.is_some() {
             self.phase_finish_ms = addition.phase_finish_ms;
         }
-        if let Some(addition_peri) = addition.peripherals {
+        if let Some(mut addition_peri) = addition.peripherals {
+            if addition_peri.water_pump_in == Some(true)
+                && addition_peri.water_pump_out == Some(true)
+            {
+                addition_peri.water_pump_in = Some(false);
+                addition_peri.water_pump_out = Some(false);
+            }
             match &mut self.peripherals {
                 Some(base_peri) => base_peri.merge_from(addition_peri),
                 None => self.peripherals = Some(addition_peri),
@@ -153,6 +165,12 @@ impl ContextDelta {
         }
         if addition.last_recipe_check_sec.is_some() {
             self.last_recipe_check_sec = addition.last_recipe_check_sec;
+        }
+        if addition.active_recipe_id.is_some() {
+            self.active_recipe_id = addition.active_recipe_id;
+        }
+        if addition.active_recipe_revision.is_some() {
+            self.active_recipe_revision = addition.active_recipe_revision;
         }
         if addition.reset_safety_budget {
             self.reset_safety_budget = true;
@@ -192,11 +210,27 @@ impl PeripheralDelta {
         if addition.ph_down.is_some() {
             self.ph_down = addition.ph_down;
         }
-        if addition.water_pump_in.is_some() {
-            self.water_pump_in = addition.water_pump_in;
+        if addition.water_pump_in == Some(true) && addition.water_pump_out == Some(true) {
+            // Conflicting simultaneous assertion: reject both for safety
+            self.water_pump_in = Some(false);
+            self.water_pump_out = Some(false);
+        } else if addition.water_pump_in == Some(true) {
+            self.water_pump_in = Some(true);
+            self.water_pump_out = Some(false);
+        } else if addition.water_pump_out == Some(true) {
+            self.water_pump_out = Some(true);
+            self.water_pump_in = Some(false);
+        } else {
+            if addition.water_pump_in.is_some() {
+                self.water_pump_in = addition.water_pump_in;
+            }
+            if addition.water_pump_out.is_some() {
+                self.water_pump_out = addition.water_pump_out;
+            }
         }
-        if addition.water_pump_out.is_some() {
-            self.water_pump_out = addition.water_pump_out;
+        if self.water_pump_in == Some(true) && self.water_pump_out == Some(true) {
+            self.water_pump_in = Some(false);
+            self.water_pump_out = Some(false);
         }
         if addition.osaka_pump.is_some() {
             self.osaka_pump = addition.osaka_pump;
@@ -285,6 +319,35 @@ impl PeripheralDelta {
     }
 }
 
+/// Giao dịch an toàn cần commit sau khi phần cứng dispatch thành công.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SafetyTransaction {
+    /// Cấp nước: (uptime_sec, max_refill_cycles_per_hour)
+    pub refill: Option<(u64, u32)>,
+    /// Xả nước: (uptime_sec, max_drain_cycles_per_hour)
+    pub drain: Option<(u64, u32)>,
+    /// Dosing: danh sách (pump_name, uptime_sec, amount_ml)
+    pub hourly_doses: Vec<(String, u64, f32)>,
+}
+
+impl SafetyTransaction {
+    pub fn is_empty(&self) -> bool {
+        self.refill.is_none() && self.drain.is_none() && self.hourly_doses.is_empty()
+    }
+
+    pub fn commit(&self, safety: &mut crate::core::actors::safety_guard::SafetyGuard) {
+        if let Some((uptime_sec, max)) = self.refill {
+            safety.record_refill(uptime_sec, max);
+        }
+        if let Some((uptime_sec, max)) = self.drain {
+            safety.record_drain(uptime_sec, max);
+        }
+        for (pump_name, uptime_sec, ml) in &self.hourly_doses {
+            safety.commit_hourly_dose(pump_name, *uptime_sec, *ml);
+        }
+    }
+}
+
 /// Output của một tick Pure Decision Engine.
 #[derive(Debug, Default)]
 pub struct TickResult {
@@ -293,4 +356,7 @@ pub struct TickResult {
 
     /// Các side effect cần thực thi (hardware, MQTT, NVS...)
     pub events: Vec<OrchestratorEvent>,
+
+    /// Giao dịch an toàn (chỉ commit khi hardware dispatch thành công)
+    pub safety_transaction: Option<SafetyTransaction>,
 }

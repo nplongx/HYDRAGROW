@@ -4,7 +4,7 @@
 use esp_idf_svc::mqtt::client::{
     EspMqttClient, EventPayload, LwtConfiguration, MqttClientConfiguration, QoS,
 };
-use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs};
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_sys::{
     esp_get_free_heap_size, esp_timer_get_time, esp_wifi_sta_get_ap_info, wifi_ap_record_t,
 };
@@ -18,10 +18,10 @@ use hydragrow_shared::{
     SensorData,
 };
 use log::{debug, error, info, warn};
-use serde::Deserialize;
 use std::sync::{mpsc::Sender, Arc, RwLock};
 
 use crate::config::SharedConfig;
+use crate::hw::NvsStore;
 use hydragrow_controller_core::utils::{build_recipe_event, validate_recipe};
 use hydragrow_shared::recipe::CropRecipe;
 

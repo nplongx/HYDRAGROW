@@ -354,7 +354,7 @@ fn apply_dispatch_fault(
         fault
     );
     let mut tick_result = hydragrow_controller_core::core::fsm::TickResult::default();
-    tick_result.delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(fault));
+    tick_result.delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(fault.clone()));
     orchestrator::fault_all_outputs_off(&mut tick_result);
     ctx.apply_delta(&mut tick_result.delta);
 

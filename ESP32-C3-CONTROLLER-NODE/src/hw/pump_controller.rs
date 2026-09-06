@@ -6,7 +6,7 @@ use esp_idf_hal::ledc::LedcDriver;
 pub use hydragrow_controller_core::{PumpType, WaterDirection};
 
 use log::{info, warn};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -25,7 +25,7 @@ pub struct PumpController<'d> {
     osaka_en: esp_idf_hal::gpio::PinDriver<'static, esp_idf_hal::gpio::Output>,
     osaka_rpwm: Arc<Mutex<LedcDriver<'static>>>,
 
-    soft_start_gen: Arc<AtomicU64>,
+    soft_start_gen: Arc<AtomicU32>,
     current_water_direction: Option<WaterDirection>,
 }
 
@@ -88,7 +88,7 @@ impl<'d> PumpController<'d> {
             valve,
             osaka_en,
             osaka_rpwm: Arc::new(Mutex::new(osaka_rpwm)),
-            soft_start_gen: Arc::new(AtomicU64::new(0)),
+            soft_start_gen: Arc::new(AtomicU32::new(0)),
             current_water_direction: Some(WaterDirection::Stop),
         })
     }

@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "esp32-c3-mist-weaver-os"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "ds18b20",

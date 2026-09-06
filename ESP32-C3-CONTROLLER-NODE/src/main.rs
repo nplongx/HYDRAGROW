@@ -121,8 +121,10 @@ fn main() -> anyhow::Result<()> {
         warn!("⚠️ PCF8574 không khởi tạo được sau 3 lần thử — tiếp tục boot, valve/pump sẽ không hoạt động.");
     }
 
-    // Water pump IN/OUT no longer consume GPIO5/GPIO1.
-    // They are driven by PCF8574 P6/P7 through PumpController.
+    // Water pump IN/OUT use dedicated ESP32-C3 GPIOs.
+    // GPIO2 = Water Pump IN.
+    // GPIO1 = Water Pump OUT.
+    // GPIO5 remains reserved for Osaka pump enable.
     let pump_controller = PumpController::new(
         LedcDriver::new(
             peripherals.ledc.channel1,
@@ -145,13 +147,18 @@ fn main() -> anyhow::Result<()> {
             peripherals.pins.gpio4,
         )?,
         valve,
-        PinDriver::output(peripherals.pins.gpio2)?,
+        PinDriver::output(peripherals.pins.gpio5)?,
         LedcDriver::new(
             peripherals.ledc.channel0,
             timer_driver.clone(),
             peripherals.pins.gpio3,
         )?,
     )?;
+
+    let mut water_pump_in = PinDriver::output(peripherals.pins.gpio2)?;
+    let mut water_pump_out = PinDriver::output(peripherals.pins.gpio1)?;
+    water_pump_in.set_low()?;
+    water_pump_out.set_low()?;
 
     let mut int_pin = PinDriver::input(peripherals.pins.gpio10, esp_idf_hal::gpio::Pull::Up)?;
     int_pin.set_interrupt_type(esp_idf_hal::gpio::InterruptType::NegEdge)?;
@@ -180,8 +187,10 @@ fn main() -> anyhow::Result<()> {
         conn_tx.clone(),
     )?;
 
-    use std::time::Duration as StdDuration;
-    let _wifi_up = match conn_rx.recv_timeout(StdDuration::from_secs(120)) {
+    let _ = (&mut water_pump_in, &mut water_pump_out);
+    let _ = get_current_time_sec;
+
+    let _wifi_up = match conn_rx.recv_timeout(std::time::Duration::from_secs(120)) {
         Ok(crate::hw::mqtt_client::ConnectionState::WifiConnected) => {
             info!("✅ WiFi connected normally.");
             let _ = conn_tx.send(crate::hw::mqtt_client::ConnectionState::WifiConnected);
@@ -192,7 +201,7 @@ fn main() -> anyhow::Result<()> {
             match hw::run_captive_portal(nvs_partition.clone(), None) {
                 Ok(true) => {
                     info!("✅ [PORTAL] Credentials saved, rebooting...");
-                    std::thread::sleep(StdDuration::from_millis(500));
+                    std::thread::sleep(std::time::Duration::from_millis(500));
                     unsafe {
                         esp_idf_svc::sys::esp_restart();
                     }

@@ -253,7 +253,7 @@ impl EventDispatcher {
                 let mqtt_tx = dc.mqtt_tx.clone();
                 std::thread::Builder::new()
                     .name("ota_thread".to_string())
-                    .stack_size(60_000)
+                    .stack_size(16_000)
                     .spawn(move || {
                         if let Err(e) = crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx)) {
                             log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);

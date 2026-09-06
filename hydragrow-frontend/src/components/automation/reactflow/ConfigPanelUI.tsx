@@ -56,11 +56,21 @@ export function FieldGroup({
   label,
   children,
   htmlFor,
+  as = "label",
 }: {
   label: string;
   children: ReactNode;
   htmlFor?: string;
+  as?: "label" | "div";
 }) {
+  if (as === "div") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] text-emerald-800/70">{label}</span>
+        {children}
+      </div>
+    );
+  }
   return (
     <label htmlFor={htmlFor} className="flex flex-col gap-1.5">
       <span className="text-[11px] text-emerald-800/70">{label}</span>
@@ -166,3 +176,177 @@ export function SafeNote({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+export function InputWithSuffix({
+  value,
+  onChange,
+  suffix,
+  type = "text",
+  placeholder,
+  ariaLabel,
+  disabled,
+  min,
+  max,
+  step,
+  id,
+}: {
+  value: string | number;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  suffix: string;
+  type?: string;
+  placeholder?: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  id?: string;
+}) {
+  return (
+    <div className="relative flex items-center">
+      <input
+        id={id}
+        type={type}
+        aria-label={ariaLabel}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        min={min}
+        max={max}
+        step={step}
+        placeholder={placeholder}
+        className="ui-input w-full pr-14 text-xs font-medium"
+      />
+      <span className="pointer-events-none absolute right-2.5 text-xs text-slate-400 select-none font-medium">
+        {suffix}
+      </span>
+    </div>
+  );
+}
+
+export function InputWithButton({
+  value,
+  readOnly = true,
+  buttonText = "Sao chép",
+  onButtonClick,
+  ariaLabel,
+}: {
+  value: string;
+  readOnly?: boolean;
+  buttonText?: string;
+  onButtonClick?: () => void;
+  ariaLabel?: string;
+}) {
+  return (
+    <div className="relative flex items-center">
+      <input
+        type="text"
+        readOnly={readOnly}
+        aria-label={ariaLabel}
+        value={value}
+        className="ui-input w-full pr-20 text-xs font-mono text-slate-700 bg-slate-50/50"
+      />
+      <button
+        type="button"
+        onClick={onButtonClick}
+        className="absolute right-1 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors cursor-pointer"
+      >
+        {buttonText}
+      </button>
+    </div>
+  );
+}
+
+export function PillsSelector({
+  options,
+  selectedValues,
+  onToggle,
+  tone = "sky",
+}: {
+  options: { value: string; label: string }[];
+  selectedValues: string[];
+  onToggle: (value: string) => void;
+  tone?: Tone;
+}) {
+  const activeBg =
+    tone === "emerald"
+      ? "bg-emerald-100 border-emerald-300 text-emerald-900"
+      : tone === "amber"
+        ? "bg-amber-100 border-amber-300 text-amber-900"
+        : tone === "indigo"
+          ? "bg-indigo-100 border-indigo-300 text-indigo-900"
+          : "bg-sky-100 border-sky-300 text-sky-900";
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((opt) => {
+        const isSelected = selectedValues.includes(opt.value);
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onToggle(opt.value)}
+            className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+              isSelected
+                ? `${activeBg} font-semibold`
+                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {opt.label} {isSelected && "✓"}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function DashedTag({
+  label,
+  onRemove,
+}: {
+  label: string;
+  onRemove?: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-sky-300 bg-sky-50/60 text-[11px] font-mono text-sky-800">
+      {label}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-sky-600 hover:text-sky-900 font-bold ml-0.5 cursor-pointer"
+          aria-label={`Xóa ${label}`}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+export function InspectorShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-emerald-950">{title}</h3>
+        <button
+          type="button"
+          className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+          onClick={onClose}
+        >
+          Đóng
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+

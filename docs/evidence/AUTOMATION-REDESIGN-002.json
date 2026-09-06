@@ -1,0 +1,93 @@
+{
+  "requirement_id": "AUTOMATION-REDESIGN-002",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Trigger Sensor fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Probe selector, EMA 5 samples pill, 30s interval with suffix, and disconnect toggle verified."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Trigger FSM fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Machine selector, Vào giai đoạn mới pill, and 3 days duration verified."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Trigger Cron fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Preset select, cron expression 0 7 * * *, Asia/Ho_Chi_Minh timezone, catch-up and offline toggles verified."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Trigger Webhook fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Endpoint with Copy button, flow mode, HMAC auth, and payload sample tags verified."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Condition Single fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "pH (thời gian thực) variable, > operator, threshold 6.8 pH, 5 minutes window, debounce toggle verified."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Condition Group fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Group operator segmented, removable chips, add button, and NOT toggle verified."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Action Chain fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Next flow select with available scripts, delay 5 seconds, pass context toggle, loop limit 3 verified."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Action Dose/Water fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "PUMP_A selector, volume 50 ml, PWM 80%, safety limit toggle verified."
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Action Alert fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "Warning level, App + Telegram channel pills, message template, cooldown 30 min verified."
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Config Read fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "ph_target key, target device group, ph_current_target var, safe read notice verified."
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "source": "Vitest NodeEditorPanel.test.tsx > renders Config Overwrite fields",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-06T08:36:42+07:00",
+      "notes": "ec_target key, override value 1.8 mS/cm, apply condition, rollback toggle, restore mode verified."
+    }
+  ]
+}

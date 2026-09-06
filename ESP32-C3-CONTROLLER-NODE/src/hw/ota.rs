@@ -37,10 +37,13 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
         "Đang kiểm tra phiên bản mới trên GitHub...",
     );
 
-    // 1. Cấu hình HTTP Client với mảng chứng chỉ SSL có sẵn của ESP-IDF
+    // GitHub Release redirects sang host khác; tăng HTTP receive buffer để chứa
+    // response header/Location dài mà esp_http_client mặc định có thể không chứa nổi.
     let http_config = Configuration {
         crt_bundle_attach: Some(esp_crt_bundle_attach),
         timeout: Some(Duration::from_secs(10)),
+        buffer_size: 8192,
+        buffer_size_tx: 2048,
         ..Default::default()
     };
 
@@ -156,8 +159,7 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
         (tag_name.to_string(), download_url)
     };
 
-    // Quan trọng trên ESP32-C3: giải phóng TLS connection của GitHub API
-    // trước khi tạo connection TLS thứ 2 cho firmware download.
+    // Giải phóng TLS connection của GitHub API trước khi tạo connection TLS thứ 2.
     drop(http_client);
 
     info!("⬇️ [OTA] Bắt đầu tải firmware từ: {}", download_url);
@@ -173,9 +175,9 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     let mut ota = EspOta::new()?;
     let mut ota_update = ota.initiate_update()?;
 
-    // Khởi tạo HTTP request mới để tải file Binary
-    // Lưu ý: GitHub releases thường redirect (Mã 302) tới máy chủ AWS,
-    // EspHttpConnection mặc định sẽ tự động follow redirect.
+    // Khởi tạo HTTP request mới để tải file Binary.
+    // GitHub releases thường redirect (302) tới máy chủ AWS;
+    // buffer 8KB giúp esp_http_client chứa header/redirect dài.
     let mut download_client = EspHttpConnection::new(&http_config)?;
     download_client.initiate_request(Method::Get, &download_url, &headers)?;
     download_client.initiate_response()?;
@@ -231,11 +233,9 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
 mod tests {
     #[test]
     fn detects_truncated_json() {
-        // Mô phỏng JSON bị cắt giữa chừng
         let truncated =
             r#"{"tag_name":"v1.2.3","assets":[{"name":"firmware.bin","browser_download_"#;
         let result = serde_json::from_str::<serde_json::Value>(truncated);
-        // Xác nhận parse fail với JSON không đầy đủ
         assert!(result.is_err(), "Truncated JSON phải fail parse");
     }
 

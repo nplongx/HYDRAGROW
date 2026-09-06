@@ -9,6 +9,10 @@ import {
   Segmented,
   ToggleRow,
   SafeNote,
+  InputWithSuffix,
+  InputWithButton,
+  PillsSelector,
+  DashedTag,
 } from "./ConfigPanelUI";
 
 describe("ConfigPanelUI", () => {
@@ -86,4 +90,45 @@ describe("ConfigPanelUI", () => {
     expect(screen.getByText("Safe note content")).toBeInTheDocument();
     expect(screen.getByText("✓")).toBeInTheDocument();
   });
+
+  it("renders InputWithSuffix and displays suffix", () => {
+    const onChange = vi.fn();
+    render(<InputWithSuffix value={30} onChange={onChange} suffix="giây" ariaLabel="Chu kỳ đọc" />);
+    expect(screen.getByLabelText("Chu kỳ đọc")).toBeInTheDocument();
+    expect(screen.getByText("giây")).toBeInTheDocument();
+  });
+
+  it("renders InputWithButton and handles button click", () => {
+    const onButtonClick = vi.fn();
+    render(<InputWithButton value="/hooks/f-2201" buttonText="Sao chép" onButtonClick={onButtonClick} />);
+    expect(screen.getByDisplayValue("/hooks/f-2201")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sao chép" }));
+    expect(onButtonClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders PillsSelector and toggles selection", () => {
+    const onToggle = vi.fn();
+    render(
+      <PillsSelector
+        options={[
+          { value: "seedling", label: "Cây con" },
+          { value: "flowering", label: "Ra hoa" },
+        ]}
+        selectedValues={["flowering"]}
+        onToggle={onToggle}
+      />
+    );
+    expect(screen.getByRole("button", { name: /Ra hoa/ })).toHaveTextContent("✓");
+    fireEvent.click(screen.getByRole("button", { name: /Cây con/ }));
+    expect(onToggle).toHaveBeenCalledWith("seedling");
+  });
+
+  it("renders DashedTag with remove button", () => {
+    const onRemove = vi.fn();
+    render(<DashedTag label="ec_out:flow" onRemove={onRemove} />);
+    expect(screen.getByText("ec_out:flow")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xóa ec_out:flow" }));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
 });
+

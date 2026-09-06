@@ -16,7 +16,9 @@ describe('NodeEditorPanel', () => {
     );
 
     expect(screen.getByText(/Hành động — Kích hoạt Flow khác/)).toBeInTheDocument();
-    expect(screen.getByText(/Để chọn Flow cần kích hoạt/)).toBeInTheDocument();
+    expect(screen.getByText(/Chạy tiếp Flow khác/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Flow tiếp theo')).toBeInTheDocument();
+    expect(screen.getByLabelText('Độ trễ trước khi chạy')).toBeInTheDocument();
   });
 
   it('selects preset daily 7am and triggers onChange with 6-field cronExpression', () => {
@@ -31,7 +33,7 @@ describe('NodeEditorPanel', () => {
       />
     );
 
-    const select = screen.getByRole('combobox');
+    const select = screen.getByRole('combobox', { name: 'Lịch dựng sẵn' });
     fireEvent.change(select, { target: { value: 'daily_7am' } });
 
     expect(mockOnChange).toHaveBeenCalledWith('trigger', {
@@ -332,6 +334,130 @@ describe('NodeEditorPanel — Alert template preview', () => {
       actions: [{ type: 'alert', level: 'info', title: '', message: 'Giá trị: {{ec}}' }],
       summary: 'alert (info): Giá trị: {{ec}}',
     });
+  });
+});
+
+describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
+  it('renders Trigger Sensor fields: source probe, interval with unit, filter, and fallback toggle', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 't1', type: 'trigger', data: { kind: 'sensor' } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('TRIGGER · SENSOR')).toBeInTheDocument();
+    expect(screen.getByText('pH (thời gian thực)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cảm biến nguồn')).toBeInTheDocument();
+    expect(screen.getByLabelText('Chu kỳ đọc')).toBeInTheDocument();
+    expect(screen.getByText('giây')).toBeInTheDocument();
+    expect(screen.getByLabelText('Lọc nhiễu tín hiệu')).toBeInTheDocument();
+    expect(screen.getByLabelText('Dùng giá trị gần nhất khi mất kết nối')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Chu kỳ đọc'), { target: { value: '45' } });
+    expect(mockOnChange).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'sensor', intervalSec: 45 }));
+  });
+
+  it('renders Trigger FSM fields: state machine, trigger timing, stages pills, and min duration', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="recipe_override"
+        node={{ id: 't2', type: 'trigger', data: { kind: 'fsm' } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('TRIGGER · FSM')).toBeInTheDocument();
+    expect(screen.getByText('Giai đoạn canh tác (FSM)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Máy trạng thái')).toBeInTheDocument();
+    expect(screen.getByLabelText('Kích hoạt khi')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ra hoa/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Thời lượng tối thiểu trong giai đoạn')).toBeInTheDocument();
+    expect(screen.getByText('ngày')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Sinh trưởng/ }));
+    expect(mockOnChange).toHaveBeenCalledWith('t2', expect.objectContaining({ kind: 'fsm', stage: 'Sinh trưởng' }));
+  });
+
+  it('renders Trigger Webhook fields: endpoint with copy button, mode, auth, and payload tags', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 't3', type: 'trigger', data: { kind: 'webhook' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('TRIGGER · WEBHOOK')).toBeInTheDocument();
+    expect(screen.getByText('Nhận dữ liệu từ bên ngoài')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('/hooks/f-2201')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sao chép' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Chế độ xử lý')).toBeInTheDocument();
+    expect(screen.getByLabelText('Xác thực')).toBeInTheDocument();
+    expect(screen.getByText('ec_out:flow')).toBeInTheDocument();
+  });
+
+  it('renders Condition Group fields: group operator, condition chips, and NOT toggle', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'cg1',
+          type: 'condition_group',
+          data: {
+            isGroup: true,
+            groupOp: 'and',
+            conditions: [
+              { sensor: 'ec', operator: '>', value: 1.8 },
+              { sensor: 'temp', operator: '<', value: 26 },
+            ],
+          },
+        }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Tất cả đều đúng')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /AND/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('ec > 1.8')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Thêm điều kiện' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Đảo ngược kết quả (NOT)')).toBeInTheDocument();
+  });
+
+  it('renders Action Dose/Water with pump, volume, PWM, and safety limit toggle', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="action_command"
+        node={{
+          id: 'act-dose',
+          type: 'action',
+          data: {
+            pump: 'PUMP_A',
+            volumeMl: 12,
+            pwm: 60,
+            safetyLimit: true,
+          },
+        }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('ACTION · DOSE/WATER')).toBeInTheDocument();
+    expect(screen.getByText('Định lượng dinh dưỡng A')).toBeInTheDocument();
+    expect(screen.getByLabelText('Bơm')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Liều \(ml\)/)).toHaveValue(12);
+    expect(screen.getByLabelText(/Công suất PWM/)).toHaveValue(60);
+    expect(screen.getByLabelText('Giới hạn an toàn: tối đa 3 lần / giờ')).toBeChecked();
   });
 });
 

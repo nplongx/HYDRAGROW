@@ -252,6 +252,7 @@ export function FlowDetailDrawer({
             node={builder.selectedNode}
             nodes={builder.nodes}
             edges={builder.edges}
+            availableFlows={otherScripts}
             onChange={builder.updateNodeData}
             onClose={() => builder.setSelectedNodeId(null)}
             onOpenAuditModal={() => setShowAuditModal(true)}

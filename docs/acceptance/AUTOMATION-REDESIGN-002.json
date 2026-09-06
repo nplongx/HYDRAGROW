@@ -1,0 +1,61 @@
+{
+  "requirement_id": "AUTOMATION-REDESIGN-002",
+  "objective": "Redesign configuration panels inside each React Flow node according to the mockup design covering 11 node types across Trigger, Condition, Config, and Action categories.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Trigger Sensor inspector renders probe selector, filter pills, read interval with suffix, and disconnect auto-stop toggle.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Trigger FSM inspector renders machine selector, trigger stage pills, and minimum duration input.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Trigger Cron inspector renders preset schedule, cron expression, timezone selector, catch-up and offline toggles.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Trigger Webhook inspector renders endpoint with copy button, mode selector, auth selector, and payload sample tags.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Condition Single inspector renders comparison variable, operator selector, threshold with unit, application window, and debounce toggle.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Condition Group inspector renders group operator segmented control, removable child condition chips, add condition button, and NOT toggle.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Action Chain inspector renders next flow selector, delay with unit suffix, pass context toggle, and loop iteration limit.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Action Dose/Water inspector renders pump selector, volume ml, PWM power percentage, and safety limit toggle.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Action Alert inspector renders severity level segmented control, channel pills, message template textarea, and cooldown duration.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Config Read inspector renders config key selector, target device group selector, store-in variable input, and safe access notice.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Config Overwrite inspector renders config key, override value with unit, execution condition, safety rollback toggle, and restore mode selector.",
+      "verification": "Vitest src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    }
+  ]
+}

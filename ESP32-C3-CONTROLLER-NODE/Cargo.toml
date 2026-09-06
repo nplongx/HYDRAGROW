@@ -1,6 +1,6 @@
 [package]
 name = "esp32-c3-mist-weaver-os"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["nplongx <nplong.dev@gmail.com>"]
 edition = "2021"
 resolver = "2"

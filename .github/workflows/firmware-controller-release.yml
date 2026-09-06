@@ -50,9 +50,24 @@ jobs:
       - name: Build release firmware
         working-directory: ESP32-C3-CONTROLLER-NODE
         shell: bash
+        env:
+          HYDRAGROW_WIFI_SSID: ${{ secrets.HYDRAGROW_WIFI_SSID }}
+          HYDRAGROW_WIFI_PASSWORD: ${{ secrets.HYDRAGROW_WIFI_PASSWORD }}
+          HYDRAGROW_MQTT_URL: ${{ secrets.HYDRAGROW_MQTT_URL }}
+          HYDRAGROW_MQTT_COMMAND_SECRET: ${{ secrets.HYDRAGROW_MQTT_COMMAND_SECRET }}
+          HYDRAGROW_DEVICE_ID: ${{ secrets.HYDRAGROW_DEVICE_ID }}
+          HYDRAGROW_MQTT_USER: ${{ secrets.HYDRAGROW_MQTT_USER }}
+          HYDRAGROW_MQTT_PASSWORD: ${{ secrets.HYDRAGROW_MQTT_PASSWORD }}
         run: |
           set -euo pipefail
           source "$HOME/export-esp.sh"
+
+          test -n "$HYDRAGROW_WIFI_SSID" || { echo "::error::Missing HYDRAGROW_WIFI_SSID secret"; exit 1; }
+          test -n "$HYDRAGROW_WIFI_PASSWORD" || { echo "::error::Missing HYDRAGROW_WIFI_PASSWORD secret"; exit 1; }
+          test -n "$HYDRAGROW_MQTT_URL" || { echo "::error::Missing HYDRAGROW_MQTT_URL secret"; exit 1; }
+          test -n "$HYDRAGROW_MQTT_COMMAND_SECRET" || { echo "::error::Missing HYDRAGROW_MQTT_COMMAND_SECRET secret"; exit 1; }
+          test -n "$HYDRAGROW_DEVICE_ID" || { echo "::error::Missing HYDRAGROW_DEVICE_ID secret"; exit 1; }
+
           cargo build --release --locked
 
       - name: Install espflash

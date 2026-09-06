@@ -1,5 +1,7 @@
 // src/runtime/command_handler.rs
 //! CommandHandler — Chuyển đổi lệnh MQTT thành ContextDelta và OrchestratorEvent.
+#![allow(clippy::field_reassign_with_default)]
+
 use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
 use hydragrow_shared::{ControlMode, ControllerConfig, MqttCommandIn};
@@ -652,6 +654,7 @@ pub fn build_stop_pump_events(
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use hydragrow_shared::fsm::{FaultCode, SystemPhase};

@@ -336,6 +336,7 @@ pub fn start_fsm_control_loop(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_dispatch_fault(
     fault: hydragrow_shared::fsm::FaultCode,
     ctx: &mut SystemContext,
@@ -354,7 +355,7 @@ fn apply_dispatch_fault(
         fault
     );
     let mut tick_result = hydragrow_controller_core::core::fsm::TickResult::default();
-    tick_result.delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(fault.clone()));
+    tick_result.delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(fault));
     orchestrator::fault_all_outputs_off(&mut tick_result);
     ctx.apply_delta(&mut tick_result.delta);
 

@@ -185,6 +185,7 @@ impl NvsStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn factory_reset(&mut self) -> Result<()> {
         if let Some(nvs) = self.nvs.as_mut() {
             let _ = nvs.remove(ACTIVE_RECIPE_KEY);

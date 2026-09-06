@@ -346,11 +346,12 @@ impl<'d> PumpController<'d> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
 
     #[test]
     fn osaka_generation_counter_invalidates_stale_threads() {
-        let gen = Arc::new(AtomicU64::new(0));
+        let gen = Arc::new(AtomicU32::new(0));
 
         // Start thread 1 with gen 1
         let gen_t1 = gen.fetch_add(1, Ordering::SeqCst) + 1;

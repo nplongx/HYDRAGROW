@@ -190,7 +190,7 @@ pub fn init_mqtt_client(
                                             payload.clone(),
                                         )
                                         .and_then(|cmd| {
-                                            Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?)
+                                            serde_json::from_value::<CropRecipe>(cmd.recipe)
                                         }) {
                                             Ok(recipe) => Ok(Some(recipe)),
                                             Err(e) => {
@@ -203,7 +203,7 @@ pub fn init_mqtt_client(
                                         payload.clone(),
                                     )
                                     .and_then(|cmd| {
-                                        Ok(serde_json::from_value::<CropRecipe>(cmd.recipe)?)
+                                        serde_json::from_value::<CropRecipe>(cmd.recipe)
                                     }) {
                                         Ok(recipe) => Ok(Some(recipe)),
                                         Err(e) => {

@@ -48,7 +48,7 @@ impl EventDispatcher {
                     fault
                 );
                 if first_fault.is_none() {
-                    first_fault = Some(fault.clone());
+                    first_fault = Some(fault);
                 }
                 if !has_terminal {
                     return Some(fault);

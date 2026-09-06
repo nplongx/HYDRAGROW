@@ -251,12 +251,15 @@ impl EventDispatcher {
             OrchestratorEvent::TriggerOtaUpdate => {
                 let device_id = dc.device_id.to_string();
                 let mqtt_tx = dc.mqtt_tx.clone();
-                std::thread::spawn(move || {
-                    if let Err(e) = crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx)) {
-                        log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);
-                        // Cân nhắc gửi một MQTT message báo lỗi ở đây
-                    }
-                });
+                std::thread::Builder::new()
+                    .name("ota_thread".to_string())
+                    .stack_size(60_000)
+                    .spawn(move || {
+                        if let Err(e) = crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx)) {
+                            log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);
+                        }
+                    })
+                    .expect("Không thể tạo OTA worker thread");
             }
             OrchestratorEvent::UpdateWifiList { list } => {
                 if let Some(flash) = dc.nvs.as_mut() {

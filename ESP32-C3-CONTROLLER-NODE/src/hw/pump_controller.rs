@@ -345,6 +345,7 @@ impl<'d> PumpController<'d> {
 }
 
 #[cfg(test)]
+#[allow(unused_imports, dead_code)]
 mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;

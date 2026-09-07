@@ -414,6 +414,30 @@ pub fn process_mqtt_commands(
             continue;
         }
 
+        // --- 4c. Fleet identity provisioning: persist a logical device id. ---
+        if action_lower == "provision_identity" {
+            let requested = cmd
+                .params
+                .as_ref()
+                .and_then(|params| params.device_id.clone())
+                .unwrap_or_default();
+            let trimmed = requested.trim();
+            if trimmed.is_empty() || trimmed.len() > 32 {
+                warn!("⚠️ [CMD] Rejecting provision_identity with invalid id (metadata only).");
+                all_events.push(OrchestratorEvent::PublishCommandRejected {
+                    reason: "invalid device id: must be 1..=32 chars".into(),
+                    requested: true,
+                });
+            } else {
+                // Device ids are identity, not secrets — safe to log.
+                info!("🆔 [CMD] Provisioning device identity: {}", trimmed);
+                all_events.push(OrchestratorEvent::ProvisionDeviceId {
+                    device_id: trimmed.to_string(),
+                });
+            }
+            continue;
+        }
+
         if action_lower == "reboot_device" {
             info!("🔄 [CMD] Nhận lệnh reboot_device. Dừng hardware...");
             stop_all_hardware(&mut step_events);
@@ -771,6 +795,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,
@@ -834,6 +859,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,
@@ -885,6 +911,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,
@@ -911,6 +938,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,
@@ -946,6 +974,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,
@@ -965,6 +994,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,
@@ -1021,6 +1051,7 @@ mod tests {
                     ota_url: None,
                     candidates: None,
                     ota_provision: None,
+                    device_id: None,
                 }),
                 pump: None,
                 duration_sec: None,

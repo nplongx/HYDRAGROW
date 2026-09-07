@@ -200,6 +200,9 @@ pub struct MqttCommandInParams {
     pub candidates: Option<Vec<WifiCandidate>>,
     #[serde(default)]
     pub ota_provision: Option<OtaProvisionParams>,
+    /// Logical device id for `provision_identity` commands.
+    #[serde(default)]
+    pub device_id: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MqttCommandParams {

@@ -10,6 +10,9 @@ use log::{info, warn};
 const ACTIVE_RECIPE_KEY: &str = "active_recipe";
 const ACTIVE_RECIPE_BUF_SIZE: usize = 4096;
 
+/// NVS key holding the persistent logical device identity.
+pub const DEVICE_ID_KEY: &str = "device_id";
+
 /// Deterministic factory identity from the WiFi station eFuse MAC.
 /// Used only when neither NVS nor a compile-time default provides an id,
 /// so release firmware never needs a per-device baked-in identity.
@@ -83,7 +86,7 @@ impl NvsStore {
     pub fn load_or_init_device_id(&mut self, default_id: &str) -> String {
         let saved: Option<String> = self.nvs.as_mut().and_then(|nvs| {
             let mut buf = [0u8; 64];
-            match nvs.get_str("device_id", &mut buf) {
+            match nvs.get_str(DEVICE_ID_KEY, &mut buf) {
                 Ok(Some(id)) => Some(id.to_string()),
                 _ => None,
             }
@@ -96,7 +99,7 @@ impl NvsStore {
         // Persist the resolved id so the fleet identity is stable across boots.
         if let Some(nvs) = self.nvs.as_mut() {
             if saved.as_deref() != Some(resolved.as_str()) {
-                let _ = nvs.set_str("device_id", &resolved);
+                let _ = nvs.set_str(DEVICE_ID_KEY, &resolved);
             }
         }
         info!("🆔 [NVS] device_id resolved: {}", resolved);

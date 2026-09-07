@@ -20,6 +20,14 @@ pub struct ClaimedMqttCredentials {
     pub mqtt_password: String,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ClaimError {
+    #[error("device_id {device_id} is already bound to different hardware")]
+    DuplicateHardware { device_id: String },
+    #[error("claim query failed: {0}")]
+    Db(#[from] sqlx::Error),
+}
+
 fn generate_mqtt_credentials(device_id: &str) -> (String, String) {
     let mqtt_username = format!("device_{}", device_id);
     let mut bytes = [0u8; 32];
@@ -38,17 +46,46 @@ fn hash_mqtt_password(password: &str) -> Result<String, argon2::password_hash::E
 
 /// Gán thiết bị cho user (upsert: cập nhật label nếu đã tồn tại).
 /// Sinh credential MQTT riêng cho thiết bị nếu chưa có (không ghi đè nếu đã claim trước đó).
+///
+/// `hardware_id` là factory identity của phần cứng (vd. `esp32c3-<mac>`).
+/// Nếu logical `device_id` đã gắn với một hardware khác, claim bị từ chối
+/// bằng [`ClaimError::DuplicateHardware`] để hai ESP không bao giờ chia sẻ
+/// một device_id.
 pub async fn claim_device(
     pool: &PgPool,
     user_id: i64,
     device_id: &str,
     label: Option<&str>,
-) -> Result<(DeviceOwnershipRecord, Option<ClaimedMqttCredentials>), sqlx::Error> {
+    hardware_id: Option<&str>,
+) -> Result<(DeviceOwnershipRecord, Option<ClaimedMqttCredentials>), ClaimError> {
+    let bound: Vec<(Option<String>,)> =
+        sqlx::query_as("SELECT hardware_id FROM device_ownership WHERE device_id = $1")
+            .bind(device_id)
+            .fetch_all(pool)
+            .await
+            .map_err(ClaimError::Db)?;
+    for (existing,) in &bound {
+        match (existing.as_deref(), hardware_id) {
+            (Some(known), Some(presented)) if known != presented => {
+                return Err(ClaimError::DuplicateHardware {
+                    device_id: device_id.to_string(),
+                });
+            }
+            (Some(_), None) => {
+                // Hardware-bound id claimed without proof of possession.
+                return Err(ClaimError::DuplicateHardware {
+                    device_id: device_id.to_string(),
+                });
+            }
+            _ => {}
+        }
+    }
     let existing_username: Option<(Option<String>,)> =
         sqlx::query_as("SELECT mqtt_username FROM device_ownership WHERE device_id = $1 LIMIT 1")
             .bind(device_id)
             .fetch_optional(pool)
-            .await?;
+            .await
+            .map_err(ClaimError::Db)?;
 
     let already_has_credentials = existing_username.map(|(u,)| u.is_some()).unwrap_or(false);
 
@@ -64,9 +101,9 @@ pub async fn claim_device(
     let record = if let Some((ref mqtt_username, _, ref password_hash)) = new_credentials {
         sqlx::query_as::<_, DeviceOwnershipRecord>(
             r#"
-            INSERT INTO device_ownership (user_id, device_id, label, mqtt_username, mqtt_password_hash)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (user_id, device_id) DO UPDATE SET label = EXCLUDED.label
+            INSERT INTO device_ownership (user_id, device_id, label, mqtt_username, mqtt_password_hash, hardware_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (user_id, device_id) DO UPDATE SET label = EXCLUDED.label, hardware_id = COALESCE(EXCLUDED.hardware_id, device_ownership.hardware_id)
             RETURNING id, user_id, device_id, label
             "#,
         )
@@ -75,22 +112,26 @@ pub async fn claim_device(
         .bind(label)
         .bind(mqtt_username)
         .bind(password_hash)
+        .bind(hardware_id)
         .fetch_one(pool)
-        .await?
+        .await
+        .map_err(ClaimError::Db)?
     } else {
         sqlx::query_as::<_, DeviceOwnershipRecord>(
             r#"
-            INSERT INTO device_ownership (user_id, device_id, label)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id, device_id) DO UPDATE SET label = EXCLUDED.label
+            INSERT INTO device_ownership (user_id, device_id, label, hardware_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, device_id) DO UPDATE SET label = EXCLUDED.label, hardware_id = COALESCE(EXCLUDED.hardware_id, device_ownership.hardware_id)
             RETURNING id, user_id, device_id, label
             "#,
         )
         .bind(user_id)
         .bind(device_id)
         .bind(label)
+        .bind(hardware_id)
         .fetch_one(pool)
-        .await?
+        .await
+        .map_err(ClaimError::Db)?
     };
 
     let returned_credentials =

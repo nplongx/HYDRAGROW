@@ -13,6 +13,7 @@ pub mod wifi_store;
 pub use mqtt_client::create_shared_sensor_data;
 pub use ntp::sync_sntp_time;
 pub use nvs_store::NvsStore;
+pub use nvs_store::DEVICE_ID_KEY;
 pub use pump_controller::{PumpController, WaterDirection};
 pub use wifi::connect_wifi;
 pub use wifi_store::{

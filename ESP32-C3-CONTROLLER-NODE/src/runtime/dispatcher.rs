@@ -357,6 +357,36 @@ impl EventDispatcher {
                     let _ = dc.mqtt_tx.send(json);
                 }
             }
+            // Fleet claim: persist the provisioned logical id, then reboot so
+            // all command/status topics use the stored runtime device_id.
+            OrchestratorEvent::ProvisionDeviceId { device_id } => {
+                let new_id = device_id.trim().to_string();
+                if new_id.is_empty() || new_id.len() > 32 {
+                    warn!("⚠️ [DISPATCHER] Rejecting invalid provisioned device id.");
+                } else if new_id == dc.device_id {
+                    log::info!("🆔 [DISPATCHER] Device id already provisioned; no change.");
+                } else if let Some(nvs) = dc.nvs.as_mut() {
+                    match nvs.set_str(crate::hw::DEVICE_ID_KEY, &new_id) {
+                        Ok(()) => {
+                            let payload = serde_json::json!({
+                                "type": "system_alert", "device_id": dc.device_id, "level": "Success",
+                                "category": "system", "title": "Đã gán device id mới",
+                                "message": format!("Provisioned as {new_id}; rebooting..."),
+                                "timestamp_ms": dc.now_sec * 1000,
+                            });
+                            let _ = dc.mqtt_tx.send(payload.to_string());
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            unsafe {
+                                esp_idf_svc::sys::esp_restart();
+                            }
+                        }
+                        Err(error) => warn!(
+                            "⚠️ [DISPATCHER] Cannot persist provisioned device id: {:?}",
+                            error
+                        ),
+                    }
+                }
+            }
             OrchestratorEvent::RebootDevice => {
                 log::info!("🔄 [DISPATCHER] Thực hiện reboot...");
                 std::thread::sleep(std::time::Duration::from_millis(200));

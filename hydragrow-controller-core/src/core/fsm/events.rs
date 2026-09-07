@@ -83,6 +83,11 @@ pub enum OrchestratorEvent {
     UpdateWifiList {
         list: hydragrow_shared::WifiCredentialList,
     },
+    /// Persist a provisioned logical device id in NVS (fleet claim flow).
+    /// The dispatcher reboots after storing so all topics use the new id.
+    ProvisionDeviceId {
+        device_id: String,
+    },
 
     /// Stage a transactional WiFi config in NVS without touching active credentials.
     /// Keep entries are resolved against the active NVS list by the dispatcher.

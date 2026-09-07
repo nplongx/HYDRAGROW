@@ -255,7 +255,9 @@ impl EventDispatcher {
                     .name("ota_thread".to_string())
                     .stack_size(16_000)
                     .spawn(move || {
-                        if let Err(e) = crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx)) {
+                        if let Err(e) =
+                            crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx))
+                        {
                             log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);
                         }
                     })
@@ -277,6 +279,86 @@ impl EventDispatcher {
                     }
                 }
             }
+            // Transactional prepare: full validation (incl. version freshness)
+            // with NVS, Keep resolution against active, then stage pending.
+            // Active wifi_list is never touched here.
+            OrchestratorEvent::PrepareWifiConfig { config, version } => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    let current = crate::hw::get_active_wifi_version(flash);
+                    match hydragrow_shared::wifi_tx::validate_provision_config(&config, current)
+                    {
+                        Err(reason) => {
+                            warn!(
+                                "⚠️ [DISPATCHER] Rejecting stale/invalid WiFi provision: {} (version={}).",
+                                reason, version
+                            );
+                        }
+                        Ok(()) => {
+                            // Read active list for Keep resolution (passwords stay in NVS/RAM).
+                            let active =
+                                crate::hw::load_active_wifi_list_from_nvs(flash);
+                            match hydragrow_shared::wifi_tx::resolve_provision_credentials(
+                                &config, &active,
+                            ) {
+                                Err(reason) => warn!(
+                                    "⚠️ [DISPATCHER] Cannot resolve WiFi provision: {}.",
+                                    reason
+                                ),
+                                Ok(list) => {
+                                    let count = list.sorted_valid().len();
+                                    match crate::hw::prepare_pending_wifi(flash, &list, version) {
+                                        Ok(()) => {
+                                            // Metadata only — never log credential payloads.
+                                            let payload = serde_json::json!({
+                                                "type": "system_alert", "device_id": dc.device_id, "level": "Success",
+                                                "category": "system", "title": "Đã stage WiFi pending",
+                                                "message": format!("{} SSID staged as pending; OTA must commit before boot applies them.", count),
+                                                "timestamp_ms": dc.now_sec * 1000,
+                                            });
+                                            let _ = dc.mqtt_tx.send(payload.to_string());
+                                        }
+                                        Err(error) => warn!(
+                                            "⚠️ [DISPATCHER] Cannot stage pending wifi: {:?}",
+                                            error
+                                        ),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            OrchestratorEvent::CommitPendingWifiConfig => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    if let Err(error) = crate::hw::commit_pending_wifi(flash) {
+                        warn!("⚠️ [DISPATCHER] Cannot commit pending wifi: {:?}", error);
+                    }
+                }
+            }
+            OrchestratorEvent::RollbackPendingWifiConfig => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    if let Err(error) = crate::hw::rollback_pending_wifi(flash) {
+                        warn!("⚠️ [DISPATCHER] Cannot roll back pending wifi: {:?}", error);
+                    }
+                }
+            }
+            // Password-free provisioning result for the backend delivery table.
+            OrchestratorEvent::PublishWifiConfigStatus { version, state } => {
+                let ssid_count = dc
+                    .nvs
+                    .as_mut()
+                    .map(crate::hw::count_active_ssids)
+                    .unwrap_or_default();
+                let status = hydragrow_shared::wifi_tx::WifiConfigStatus::new(
+                    dc.device_id,
+                    version,
+                    &state,
+                    ssid_count,
+                );
+                if let Ok(json) = serde_json::to_string(&status) {
+                    let _ = dc.mqtt_tx.send(json);
+                }
+            }
             OrchestratorEvent::RebootDevice => {
                 log::info!("🔄 [DISPATCHER] Thực hiện reboot...");
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -296,6 +378,16 @@ impl EventDispatcher {
                     let _ = nvs.remove("current_stage");
                     let _ = nvs.remove("last_w_change");
                     let _ = nvs.remove("safety_budget");
+                    // Factory reset clears pending WiFi + transaction state too.
+                    use crate::hw::wifi_store::{
+                        WIFI_ACTIVE_VERSION_KEY, WIFI_PENDING_KEY, WIFI_PENDING_TARGET_KEY,
+                        WIFI_PENDING_VERSION_KEY, WIFI_TRANSACTION_STATE_KEY,
+                    };
+                    let _ = nvs.remove(WIFI_PENDING_KEY);
+                    let _ = nvs.remove(WIFI_PENDING_VERSION_KEY);
+                    let _ = nvs.remove(WIFI_PENDING_TARGET_KEY);
+                    let _ = nvs.remove(WIFI_ACTIVE_VERSION_KEY);
+                    let _ = nvs.remove(WIFI_TRANSACTION_STATE_KEY);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(200));
                 unsafe {

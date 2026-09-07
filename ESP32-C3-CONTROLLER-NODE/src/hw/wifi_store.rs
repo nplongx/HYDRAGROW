@@ -110,6 +110,33 @@ pub fn load_pending_wifi_list(nvs_partition: EspDefaultNvsPartition) -> Option<W
     }
 }
 
+/// Read the active WiFi list via an already-open NVS handle (for Keep resolution).
+pub fn load_active_wifi_list_from_nvs(nvs: &mut EspDefaultNvs) -> WifiCredentialList {
+    let mut buffer = [0u8; WIFI_LIST_BUF_SIZE];
+    match nvs.get_str(WIFI_LIST_KEY, &mut buffer) {
+        Ok(Some(raw)) => serde_json::from_str::<WifiCredentialList>(raw).unwrap_or_default(),
+        _ => WifiCredentialList::default(),
+    }
+}
+
+/// Read the active WiFi config version (defaults to 0 when unset).
+pub fn get_active_wifi_version(nvs: &mut EspDefaultNvs) -> i64 {
+    nvs.get_i64(WIFI_ACTIVE_VERSION_KEY)
+        .unwrap_or(None)
+        .unwrap_or_default()
+}
+
+/// Count active SSIDs without exposing secrets (for status payloads).
+pub fn count_active_ssids(nvs: &mut EspDefaultNvs) -> usize {
+    let mut buffer = [0u8; WIFI_LIST_BUF_SIZE];
+    match nvs.get_str(WIFI_LIST_KEY, &mut buffer) {
+        Ok(Some(raw)) => serde_json::from_str::<WifiCredentialList>(raw)
+            .map(|list| list.sorted_valid().len())
+            .unwrap_or_default(),
+        _ => 0,
+    }
+}
+
 /// Load the persisted transaction marker; defaults to `Committed`.
 pub fn load_transaction_state(nvs_partition: EspDefaultNvsPartition) -> String {
     let Ok(nvs) = EspNvs::new(nvs_partition, "agitech", true) else {

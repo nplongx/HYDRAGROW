@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{WifiCandidate, WifiCredentialList};
+use crate::{WifiCandidate, WifiCredentialList, WifiProvisionConfig, WifiSecretAction};
 
 /// A versioned WiFi credential set (active or pending).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,7 +130,99 @@ impl WifiConfigStatus {
     }
 }
 
-/// Convenience constructors for tests.
+/// Validate an OTA+WiFi provision transaction at the command boundary.
+/// Never logs or retains passwords; only counts and metadata are inspected.
+pub fn validate_provision_config(
+    config: &WifiProvisionConfig,
+    current_version: i64,
+) -> Result<(), String> {
+    validate_provision_structure(config)?;
+    if config.config_version <= current_version {
+        return Err(format!(
+            "stale wifi config version: {} <= current {current_version}",
+            config.config_version
+        ));
+    }
+    Ok(())
+}
+
+/// Structural validation without the NVS version check, for use at the
+/// command boundary where the active version is not yet available.
+/// The dispatcher re-runs the full check (including freshness) with NVS.
+pub fn validate_provision_structure(config: &WifiProvisionConfig) -> Result<(), String> {
+    const MAX_ENTRIES: usize = 8;
+    if config.entries.is_empty() {
+        return Err("wifi config must contain at least one entry".into());
+    }
+    if config.entries.len() > MAX_ENTRIES {
+        return Err(format!(
+            "too many wifi entries: {} > {MAX_ENTRIES}",
+            config.entries.len()
+        ));
+    }
+    let mut seen_priorities = std::collections::HashSet::new();
+    for entry in &config.entries {
+        let ssid_len = entry.ssid.trim().len();
+        if ssid_len == 0 || ssid_len > 32 {
+            return Err("ssid must be 1..=32 bytes after trimming".into());
+        }
+        if let Some(password) = &entry.password {
+            if password.len() > 64 {
+                return Err("password must be 0..=64 bytes".into());
+            }
+        }
+        entry.validate()?;
+        if !seen_priorities.insert(entry.priority) {
+            return Err(format!("duplicate wifi priority: {}", entry.priority));
+        }
+    }
+    Ok(())
+}
+
+/// Resolve a validated provision config into concrete credentials.
+/// `Keep` entries reuse the password from the active list; `Clear` entries
+/// are dropped. Fails when a `Keep` SSID is unknown or nothing remains.
+pub fn resolve_provision_credentials(
+    config: &WifiProvisionConfig,
+    active: &WifiCredentialList,
+) -> Result<WifiCredentialList, String> {
+    let mut candidates = Vec::with_capacity(config.entries.len());
+    for entry in &config.entries {
+        match entry.secret_action {
+            WifiSecretAction::Set => {
+                let password = entry.password.clone().unwrap_or_default();
+                candidates.push(WifiCandidate {
+                    ssid: entry.ssid.trim().to_string(),
+                    password,
+                    priority: entry.priority,
+                });
+            }
+            WifiSecretAction::Keep => {
+                let known = active
+                    .candidates
+                    .iter()
+                    .find(|c| c.ssid.trim() == entry.ssid.trim());
+                match known {
+                    Some(candidate) => candidates.push(WifiCandidate {
+                        ssid: entry.ssid.trim().to_string(),
+                        password: candidate.password.clone(),
+                        priority: entry.priority,
+                    }),
+                    None => {
+                        return Err("keep requested for unknown ssid (metadata only)".into());
+                    }
+                }
+            }
+            WifiSecretAction::Clear => {}
+        }
+    }
+    if candidates.is_empty() {
+        return Err("provision resolves to an empty credential list".into());
+    }
+    candidates.sort_by_key(|c| c.priority);
+    Ok(WifiCredentialList { candidates })
+}
+
 pub fn active(ssid: &str, password: &str) -> WifiCredentialList {
     WifiCredentialList {
         candidates: vec![WifiCandidate {
@@ -197,5 +289,161 @@ mod tests {
         };
         assert!(!state.is_fresh_version(7));
         assert!(state.is_fresh_version(8));
+    }
+
+    fn provision_entry(
+        ssid: &str,
+        priority: u8,
+        action: WifiSecretAction,
+        password: Option<&str>,
+    ) -> crate::WifiProvisionEntry {
+        crate::WifiProvisionEntry {
+            ssid: ssid.into(),
+            priority,
+            secret_action: action,
+            password: password.map(|p| p.into()),
+        }
+    }
+
+    fn provision_config(
+        version: i64,
+        entries: Vec<crate::WifiProvisionEntry>,
+    ) -> crate::WifiProvisionConfig {
+        crate::WifiProvisionConfig {
+            config_version: version,
+            entries,
+        }
+    }
+
+    #[test]
+    fn ota_with_keep_does_not_require_password() {
+        let config = provision_config(
+            8,
+            vec![provision_entry("Farm-A", 0, WifiSecretAction::Keep, None)],
+        );
+        assert!(validate_provision_config(&config, 7).is_ok());
+    }
+
+    #[test]
+    fn ota_with_set_requires_password() {
+        let missing = provision_config(
+            8,
+            vec![provision_entry("Farm-A", 0, WifiSecretAction::Set, None)],
+        );
+        assert!(validate_provision_config(&missing, 7).is_err());
+
+        let empty = provision_config(
+            8,
+            vec![provision_entry(
+                "Farm-A",
+                0,
+                WifiSecretAction::Set,
+                Some(""),
+            )],
+        );
+        assert!(validate_provision_config(&empty, 7).is_err());
+
+        let ok = provision_config(
+            8,
+            vec![provision_entry(
+                "Farm-A",
+                0,
+                WifiSecretAction::Set,
+                Some("secret"),
+            )],
+        );
+        assert!(validate_provision_config(&ok, 7).is_ok());
+    }
+
+    #[test]
+    fn ota_with_clear_requires_no_password() {
+        let with_password = provision_config(
+            8,
+            vec![provision_entry(
+                "Farm-A",
+                0,
+                WifiSecretAction::Clear,
+                Some("secret"),
+            )],
+        );
+        assert!(validate_provision_config(&with_password, 7).is_err());
+
+        let clean = provision_config(
+            8,
+            vec![provision_entry("Farm-A", 0, WifiSecretAction::Clear, None)],
+        );
+        assert!(validate_provision_config(&clean, 7).is_ok());
+    }
+
+    #[test]
+    fn invalid_wifi_version_is_rejected_before_ota() {
+        let stale = provision_config(
+            7,
+            vec![provision_entry(
+                "Farm-A",
+                0,
+                WifiSecretAction::Set,
+                Some("secret"),
+            )],
+        );
+        assert!(validate_provision_config(&stale, 7).is_err());
+    }
+    #[test]
+    fn rejects_oversize_and_duplicate_provision_entries() {
+        let too_many: Vec<_> = (0..9)
+            .map(|i| provision_entry("Farm-A", i, WifiSecretAction::Keep, None))
+            .collect();
+        assert!(validate_provision_config(&provision_config(8, too_many), 7).is_err());
+
+        let dup_priority = provision_config(
+            8,
+            vec![
+                provision_entry("Farm-A", 0, WifiSecretAction::Keep, None),
+                provision_entry("Farm-B", 0, WifiSecretAction::Keep, None),
+            ],
+        );
+        assert!(validate_provision_config(&dup_priority, 7).is_err());
+
+        let blank_ssid = provision_config(
+            8,
+            vec![provision_entry("   ", 0, WifiSecretAction::Keep, None)],
+        );
+        assert!(validate_provision_config(&blank_ssid, 7).is_err());
+    }
+
+    #[test]
+    fn keep_resolves_password_from_active_list() {
+        let active_list = active("Farm-A", "old-secret");
+        let config = provision_config(
+            8,
+            vec![provision_entry("Farm-A", 0, WifiSecretAction::Keep, None)],
+        );
+        let resolved = resolve_provision_credentials(&config, &active_list).unwrap();
+        assert_eq!(resolved.candidates[0].password, "old-secret");
+    }
+
+    #[test]
+    fn keep_for_unknown_ssid_is_rejected() {
+        let active_list = active("Farm-A", "old-secret");
+        let config = provision_config(
+            8,
+            vec![provision_entry(
+                "Farm-Unknown",
+                0,
+                WifiSecretAction::Keep,
+                None,
+            )],
+        );
+        assert!(resolve_provision_credentials(&config, &active_list).is_err());
+    }
+
+    #[test]
+    fn clear_only_resolves_to_empty_and_is_rejected() {
+        let active_list = active("Farm-A", "old-secret");
+        let config = provision_config(
+            8,
+            vec![provision_entry("Farm-A", 0, WifiSecretAction::Clear, None)],
+        );
+        assert!(resolve_provision_credentials(&config, &active_list).is_err());
     }
 }

@@ -315,6 +315,82 @@ pub fn process_mqtt_commands(
             continue;
         }
 
+        // --- 4b. Combined OTA + WiFi provisioning transaction ---
+        // Ordering enforced downstream: prepare pending WiFi in NVS first,
+        // then OTA download over the CURRENT active WiFi. Boot applies
+        // pending only after the OTA reboot; commit happens on connect.
+        if action_lower == "update_firmware" {
+            info!("⚠️ Nhận lệnh OTA Update! Dừng hệ thống để chuẩn bị flash...");
+            stop_all_hardware(&mut step_events);
+
+            step_delta.phase = Some(SystemPhase::Fault(
+                hydragrow_shared::fsm::FaultCode::EmergencyStop,
+            ));
+
+            let mut peri_delta = PeripheralDelta::default();
+            peri_delta.osaka_pump = Some(false);
+            peri_delta.mist_valve = Some(false);
+            peri_delta.mix_valve = Some(false);
+            step_delta.peripherals = Some(peri_delta);
+
+            let provision = cmd
+                .params
+                .as_ref()
+                .and_then(|params| params.ota_provision.clone());
+            match provision {
+                // OTA-only: no WiFi payload, active credentials untouched.
+                None => {
+                    step_events.push(OrchestratorEvent::TriggerOtaUpdate);
+                }
+                Some(provision) => match provision.wifi {
+                    // OTA-only with explicit release metadata.
+                    None => {
+                        step_events.push(OrchestratorEvent::TriggerOtaUpdate);
+                    }
+                    Some(wifi) => {
+                        // Structural validation at the command boundary.
+                        // Version freshness vs NVS is re-checked by the
+                        // dispatcher, which owns the NVS handle.
+                        // NOTE: passwords are never logged here.
+                        let entry_count = wifi.entries.len();
+                        let version = wifi.config_version;
+                        match hydragrow_shared::wifi_tx::validate_provision_structure(&wifi) {
+                            Ok(()) => {
+                                info!(
+                                    "📶 [CMD] Staging transactional WiFi: count={}, version={} (metadata only).",
+                                    entry_count, version
+                                );
+                                step_events.push(OrchestratorEvent::PrepareWifiConfig {
+                                    config: wifi,
+                                    version,
+                                });
+                                step_events.push(OrchestratorEvent::TriggerOtaUpdate);
+                            }
+                            Err(reason) => {
+                                warn!(
+                                    "⚠️ [CMD] Rejecting update_firmware with invalid WiFi: {} (count={}, version={}).",
+                                    reason, entry_count, version
+                                );
+                                all_events.push(OrchestratorEvent::PublishCommandRejected {
+                                    reason: format!("invalid wifi provision: {reason}"),
+                                    requested: true,
+                                });
+                                temp_state.apply_step_delta(&step_delta);
+                                merge_delta(&mut accumulated_delta, step_delta);
+                                all_events.append(&mut step_events);
+                                continue;
+                            }
+                        }
+                    }
+                },
+            }
+
+            temp_state.apply_step_delta(&step_delta);
+            merge_delta(&mut accumulated_delta, step_delta);
+            all_events.append(&mut step_events);
+            continue;
+        }
+
         // HMAC/replay validation happens in mqtt_client.rs before cmd_tx.send —
         // see verify_signed_json_payload. Do not remove that check assuming it's
         // redundant; commands reaching this function are already verified.

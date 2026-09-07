@@ -1,6 +1,6 @@
 use hydragrow_shared::{
     ControllerConfig,
-    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog, emit_system_log_event},
+    log::{LogCategory, LogLevel, SystemLogEvent, UnifiedSystemLog},
 };
 use std::{
     sync::{
@@ -507,7 +507,9 @@ pub fn get_current_time_sec() -> u64 {
         .as_secs()
 }
 
-/// Hàm tiện ích để đóng gói và gửi log hệ thống
+/// Hàm tiện ích để đóng gói và gửi log hệ thống. Mọi thất bại (serialize lỗi
+/// hoặc kênh MQTT đã đóng) được đếm vào LOG_DROP_COUNT thay vì bị bỏ qua âm
+/// thầm, để diagnostics_snapshot.log_drop_count phản ánh đúng thực tế.
 pub fn send_system_log(
     tx: &Sender<String>,
     device_id: &str,
@@ -520,18 +522,21 @@ pub fn send_system_log(
 
     let log = UnifiedSystemLog {
         device_id: device_id.to_string(),
-        level: level.clone(),
-        category: category.clone(),
+        level,
+        category,
         title: title.to_string(),
-        event: event.clone(),
+        event,
         timestamp_ms: ts,
     };
 
-    if let Ok(json) = serde_json::to_string(&log) {
-        let _ = tx.send(json);
-    }
+    let sent = match serde_json::to_string(&log) {
+        Ok(json) => tx.send(json).is_ok(),
+        Err(_) => false,
+    };
 
-    emit_system_log_event(device_id, level, category, title, event, ts);
+    if !sent {
+        LOG_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 pub fn get_log_drop_count() -> u32 {
@@ -540,4 +545,70 @@ pub fn get_log_drop_count() -> u32 {
 
 pub fn log_drop_counter() -> &'static AtomicU32 {
     &LOG_DROP_COUNT
+}
+
+#[cfg(test)]
+mod send_system_log_tests {
+    use super::*;
+    use hydragrow_shared::log::BasicSystemLogMetadata;
+    use std::sync::mpsc::channel;
+
+    fn sample_event() -> SystemLogEvent {
+        SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
+            cycle_id: None,
+            source: "test".to_string(),
+            message: "hello".to_string(),
+            skip_reason: None,
+        })
+    }
+
+    #[test]
+    fn send_system_log_increments_drop_count_when_channel_closed() {
+        let (tx, rx) = channel::<String>();
+        drop(rx); // simulate a closed/full MQTT channel on the other end
+
+        let before = get_log_drop_count();
+        send_system_log(
+            &tx,
+            "dev-1",
+            LogLevel::Warning,
+            LogCategory::System,
+            "Test title",
+            sample_event(),
+        );
+        let after = get_log_drop_count();
+
+        assert_eq!(
+            after,
+            before + 1,
+            "send_system_log should increment LOG_DROP_COUNT when the channel receiver is gone"
+        );
+    }
+
+    #[test]
+    fn send_system_log_does_not_increment_drop_count_on_success() {
+        let (tx, rx) = channel::<String>();
+
+        let before = get_log_drop_count();
+        send_system_log(
+            &tx,
+            "dev-1",
+            LogLevel::Info,
+            LogCategory::System,
+            "Test title",
+            sample_event(),
+        );
+        let after = get_log_drop_count();
+
+        assert_eq!(
+            after, before,
+            "send_system_log must not increment LOG_DROP_COUNT when the send succeeds"
+        );
+
+        let received = rx.try_recv().expect("expected a JSON payload on the channel");
+        let parsed: UnifiedSystemLog =
+            serde_json::from_str(&received).expect("payload must be valid UnifiedSystemLog JSON");
+        assert_eq!(parsed.device_id, "dev-1");
+        assert_eq!(parsed.title, "Test title");
+    }
 }

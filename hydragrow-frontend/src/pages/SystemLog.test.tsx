@@ -3,7 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SystemLog from './SystemLog';
 import { useDeviceStore } from '../store/useDeviceStore';
+import { httpFetch } from '../platform/http';
 import type { AppSettings } from '../types/models';
+import type { SystemEvent } from '../components/logs/EventLogCard';
 
 vi.mock('../lib/apiClient', () => ({
   apiGet: vi.fn((path: string) => {
@@ -18,6 +20,18 @@ vi.mock('../lib/apiClient', () => ({
 }));
 
 vi.mock('../platform/http', () => ({ httpFetch: vi.fn() }));
+
+function makeEvents(count: number, prefix: string, startTimestamp: number): SystemEvent[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: startTimestamp - i,
+    device_id: 'device-1',
+    level: 'info',
+    category: 'dosing',
+    title: `${prefix} ${i}`,
+    message: `msg ${i}`,
+    timestamp: startTimestamp - i * 1000,
+  }));
+}
 
 function withQueryClient(children: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -56,5 +70,49 @@ describe('SystemLog page', () => {
     render(withQueryClient(<SystemLog />));
     await waitFor(() => expect(screen.getByText('Mở Grafana')).toBeInTheDocument());
     expect(screen.getByText('Mở Grafana').closest('a')).toHaveAttribute('href', 'http://localhost:3000');
+  });
+});
+
+describe('SystemLog pagination', () => {
+  const page1 = makeEvents(200, 'Dosing event', 2_000_000_000_000);
+  const page2 = makeEvents(50, 'Older dosing event', 1_000_000_000_000);
+
+  beforeEach(() => {
+    vi.mocked(httpFetch).mockReset();
+  });
+
+  it('tải thêm sự kiện cũ hơn khi bấm nút "Tải thêm sự kiện cũ hơn"', async () => {
+    vi.mocked(httpFetch).mockImplementation((url) => {
+      const target = String(url);
+      const data = target.includes('before_timestamp') ? page2 : page1;
+      return Promise.resolve({ ok: true, json: async () => ({ status: 'success', data }) } as Response);
+    });
+
+    render(withQueryClient(<SystemLog />));
+
+    await waitFor(() => expect(screen.getByText('Dosing event 0')).toBeInTheDocument());
+    expect(screen.queryByText('Older dosing event 0')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Tải thêm sự kiện cũ hơn'));
+
+    await waitFor(() => expect(screen.getByText('Older dosing event 0')).toBeInTheDocument());
+
+    const secondCallUrl = vi
+      .mocked(httpFetch)
+      .mock.calls.map((call) => String(call[0]))
+      .find((url) => url.includes('before_timestamp'));
+    expect(secondCallUrl).toContain(`before_timestamp=${page1[page1.length - 1].timestamp}`);
+  });
+
+  it('ẩn nút "Tải thêm" khi trang cuối trả về ít hơn PAGE_SIZE sự kiện', async () => {
+    vi.mocked(httpFetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'success', data: page2 }),
+    } as Response);
+
+    render(withQueryClient(<SystemLog />));
+
+    await waitFor(() => expect(screen.getByText('Older dosing event 0')).toBeInTheDocument());
+    expect(screen.queryByText('Tải thêm sự kiện cũ hơn')).not.toBeInTheDocument();
   });
 });

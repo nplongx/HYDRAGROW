@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Clock, Filter, AlertTriangle, FlaskConical, Waves, UserCheck, Cpu, Download, Zap, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 // --- STORE, GLEAM & COMPONENTS ---
 import { useDeviceStore } from '../store/useDeviceStore';
@@ -16,6 +16,8 @@ import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
 import { buildLogRows, filterEventsBySearch, type LogViewMode } from '../lib/logs/eventGrouping';
 import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
+
+const PAGE_SIZE = 200;
 
 const FILTERS = [
   { id: 'all', label: 'Tất cả', icon: Filter },
@@ -36,23 +38,33 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
 
   const { data: healthSummary } = useSystemHealthSummary(deviceId || '');
 
-  // TanStack Query tự động caching & cancellation
-  const { data: systemEvents = [], isLoading } = useQuery({
+  // TanStack Query tự động caching & cancellation. Mỗi trang tối đa PAGE_SIZE sự
+  // kiện; trang tiếp theo dùng before_timestamp = timestamp của event cũ nhất
+  // trong trang trước (API đã hỗ trợ cursor này, xem hydragrow-backend/src/api/alert.rs).
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ['system-events', deviceId, filter],
-    queryFn: async () => {
+    initialPageParam: undefined as number | undefined,
+    queryFn: async ({ pageParam }) => {
       if (!deviceId || !settings?.backend_url) return [];
-      let url = `${settings.backend_url}/api/devices/${deviceId}/events?limit=200`;
+      let url = `${settings.backend_url}/api/devices/${deviceId}/events?limit=${PAGE_SIZE}`;
       if (filter !== 'all') {
         const category = filter === 'user_action' ? 'user_action,alert' : filter;
         url += `&category=${encodeURIComponent(category)}`;
       }
+      if (pageParam) url += `&before_timestamp=${pageParam}`;
       const res = await httpFetch(url, { headers: { 'X-API-Key': settings.api_key || '' } });
       if (!res.ok) return [];
       const json = await res.json();
-      return json.data ?? [];
+      return (json.data ?? []) as SystemEvent[];
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return lastPage[lastPage.length - 1]?.timestamp;
     },
     enabled: Boolean(deviceId && settings?.backend_url)
   });
+
+  const systemEvents = useMemo(() => (data?.pages ?? []).flat(), [data]);
 
   const visibleRows = useMemo(() => {
     const filtered = filterEventsBySearch(systemEvents as SystemEvent[], search);
@@ -170,6 +182,17 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                   );
                 })}
               </div>
+              {hasNextPage && (
+                <div className="flex justify-center pt-4">
+                  <button
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="text-xs font-semibold text-sky-700 hover:text-sky-800 disabled:opacity-50 px-4 py-2"
+                  >
+                    {isFetchingNextPage ? 'Đang tải...' : 'Tải thêm sự kiện cũ hơn'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

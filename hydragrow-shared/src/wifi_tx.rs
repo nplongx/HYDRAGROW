@@ -106,6 +106,30 @@ impl BootWifiDecision {
     }
 }
 
+/// Device → backend provisioning result. Never carries passwords.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiConfigStatus {
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub device_id: String,
+    pub config_version: i64,
+    /// One of: applied | rolled_back | rejected.
+    pub state: String,
+    pub ssid_count: usize,
+}
+
+impl WifiConfigStatus {
+    pub fn new(device_id: &str, config_version: i64, state: &str, ssid_count: usize) -> Self {
+        Self {
+            event_type: "wifi_config_status".into(),
+            device_id: device_id.into(),
+            config_version,
+            state: state.into(),
+            ssid_count,
+        }
+    }
+}
+
 /// Convenience constructors for tests.
 pub fn active(ssid: &str, password: &str) -> WifiCredentialList {
     WifiCredentialList {

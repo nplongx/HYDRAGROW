@@ -88,6 +88,28 @@ pub fn rollback_pending_wifi(nvs: &mut EspDefaultNvs) -> Result<()> {
     Ok(())
 }
 
+/// Load the staged pending WiFi config, if any.
+pub fn load_pending_wifi_list(nvs_partition: EspDefaultNvsPartition) -> Option<WifiCredentialList> {
+    let nvs = EspNvs::new(nvs_partition, "agitech", true).ok()?;
+    let mut buffer = [0u8; WIFI_PENDING_BUF_SIZE];
+    match nvs.get_str(WIFI_PENDING_KEY, &mut buffer) {
+        Ok(Some(raw)) => match serde_json::from_str::<WifiCredentialList>(raw) {
+            Ok(list) => {
+                info!(
+                    "📶 [WIFI] Found {} pending SSIDs in NVS.",
+                    list.candidates.len()
+                );
+                Some(list)
+            }
+            Err(error) => {
+                warn!("📶 [WIFI] Ignoring invalid pending WiFi list: {:?}", error);
+                None
+            }
+        },
+        _ => None,
+    }
+}
+
 /// Load the persisted transaction marker; defaults to `Committed`.
 pub fn load_transaction_state(nvs_partition: EspDefaultNvsPartition) -> String {
     let Ok(nvs) = EspNvs::new(nvs_partition, "agitech", true) else {

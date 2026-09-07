@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use esp_idf_svc::mqtt::client::{EspMqttClient, QoS};
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use esp_idf_svc::ota::EspOta;
 use hydragrow_shared::fsm::{FsmBudgets, FsmSnapshot};
 use hydragrow_shared::hestia::{HestiaAction, HestiaContext, HestiaEngine};
 use hydragrow_shared::telemetry::health::{DeviceHealthSnapshot, KalmanConfidence};
@@ -104,6 +105,7 @@ pub fn run_main_health_loop(
 ) -> anyhow::Result<()> {
     let mut mqtt_client: Option<EspMqttClient> = None;
     let mut is_mqtt_connected = false;
+    let mut ota_gate = hydragrow_controller_core::core::ota_health::OtaValidationGate::new();
 
     info!("🔄 Đang chạy Main Event Loop...");
 
@@ -148,6 +150,15 @@ pub fn run_main_health_loop(
                 ConnectionState::MqttConnected => {
                     info!("📡 MQTT Client: ĐÃ KẾT NỐI THÀNH CÔNG");
                     is_mqtt_connected = true;
+
+                    if ota_gate.mark_if_needed() {
+                        match EspOta::new().and_then(|mut ota| ota.mark_running_slot_valid()) {
+                            Ok(()) => info!(
+                                "✅ [OTA] Firmware xác nhận hoạt động tốt — huỷ pending rollback."
+                            ),
+                            Err(e) => warn!("⚠️ [OTA] Không thể xác nhận rollback: {:?}", e),
+                        }
+                    }
 
                     if let Some(client) = mqtt_client.as_mut() {
                         let device_id = read_or_recover(&shared_config).effective_config.device_id;

@@ -120,6 +120,12 @@ pub fn topic_calibration(device_id: &str) -> String {
 pub fn topic_dosing_report(device_id: &str) -> String {
     MqttTopics::dosing_report(device_id)
 }
+pub fn topic_wifi_config_status(device_id: &str) -> String {
+    format!("AGITECH/{device_id}/controller/wifi-config-status")
+}
+pub fn topic_ota_status(device_id: &str) -> String {
+    format!("AGITECH/{device_id}/controller/ota-status")
+}
 
 pub fn parse_agitech_topic(topic: &str) -> Option<ParsedAgitechTopic<'_>> {
     let mut parts = topic.splitn(3, '/');

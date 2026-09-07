@@ -168,6 +168,7 @@ pub async fn update_wifi_list(
             state: None,
             ota_url: None,
             candidates: Some(candidates),
+            ota_provision: None,
         }),
         ts: None,
         nonce: None,

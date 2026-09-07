@@ -15,6 +15,9 @@ pub use ntp::sync_sntp_time;
 pub use nvs_store::NvsStore;
 pub use pump_controller::{PumpController, WaterDirection};
 pub use wifi::connect_wifi;
-pub use wifi_store::{load_wifi_list, save_wifi_list};
+pub use wifi_store::{
+    commit_pending_wifi, load_transaction_state, load_wifi_list, prepare_pending_wifi,
+    rollback_pending_wifi, save_wifi_list,
+};
 pub mod ota;
 pub use ota::CURRENT_VERSION;

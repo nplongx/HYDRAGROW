@@ -13,6 +13,7 @@ pub mod safety;
 pub mod sensors;
 pub mod telemetry;
 pub mod topics;
+pub mod wifi_tx;
 
 pub use sensors::IncomingSensorPayload;
 

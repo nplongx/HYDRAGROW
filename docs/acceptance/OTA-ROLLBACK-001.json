@@ -1,0 +1,26 @@
+{
+  "acceptance": [
+    {
+      "criterion": "OtaValidationGate::mark_if_needed returns true exactly once per boot: first call true, all subsequent calls false.",
+      "id": "AC-1",
+      "verification": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml ota_health"
+    },
+    {
+      "criterion": "ESP-IDF bootloader app-rollback is armed: sdkconfig.defaults sets CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y so a freshly-flashed image boots ESP_OTA_IMG_PENDING_VERIFY.",
+      "id": "AC-2",
+      "verification": "git diff inspection of ESP32-C3-CONTROLLER-NODE/sdkconfig.defaults"
+    },
+    {
+      "criterion": "Running image is confirmed exactly once on first ConnectionState::MqttConnected via EspOta::mark_running_slot_valid, gated by OtaValidationGate; failures log a warning without crashing the health loop.",
+      "id": "AC-3",
+      "verification": "code inspection of ESP32-C3-CONTROLLER-NODE/src/runtime/health.rs plus ESP firmware cargo check"
+    },
+    {
+      "criterion": "No regressions: full hydragrow-controller-core test suite passes.",
+      "id": "AC-4",
+      "verification": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml"
+    }
+  ],
+  "objective": "Make a bad OTA release recoverable: after flashing, the ESP32-C3 controller confirms its image healthy (WiFi + MQTT reachable) before the bootloader commits to it, otherwise the bootloader auto-reverts to the last known-good firmware.",
+  "requirement_id": "OTA-ROLLBACK-001"
+}

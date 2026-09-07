@@ -69,9 +69,7 @@ pub fn commit_pending_wifi(nvs: &mut EspDefaultNvs) -> Result<()> {
         Some(raw) => serde_json::from_str(raw)?,
         None => anyhow::bail!("no pending wifi config to commit"),
     };
-    let version = nvs
-        .get_i64(WIFI_PENDING_VERSION_KEY)?
-        .unwrap_or_default();
+    let version = nvs.get_i64(WIFI_PENDING_VERSION_KEY)?.unwrap_or_default();
     save_wifi_list(nvs, &pending)?;
     nvs.set_i64(WIFI_ACTIVE_VERSION_KEY, version)?;
     nvs.remove(WIFI_PENDING_KEY)?;

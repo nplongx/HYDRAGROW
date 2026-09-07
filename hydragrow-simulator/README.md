@@ -14,11 +14,17 @@ Per tick, `Harness::tick(dt_ms)` executes the following deterministic data flow:
 2. **Fault Injection:** Query `ScenarioEngine::activate_between(prev_ms, current_ms)` and register new fault events in `Injector`.
 3. **Actuator Faults:** Apply active hardware fault overrides to `VirtualHardwareState`.
 4. **Plant Dynamics:** Advance virtual plant dynamics via `Tank::step(dt_ms, hw, config)`.
-5. **Sensor Measurement & Faults:** Read `SensorData` via `read_sensor(&tank, &noise)` and apply active sensor faults (e.g., frozen readings).
+5. **Sensor Measurement & Faults:** Read `SensorData` via `read_sensor(&tank, &noise, &mut rng)` and apply active sensor faults (e.g., frozen readings).
 6. **Controller FSM Execution:** Call pure FSM handler `orchestrator::tick(...)` using simulated clock timestamp.
 7. **Context Mutation:** Apply state delta to `SystemContext`.
 8. **Event Dispatch:** Mutate `VirtualHardwareState` based on `OrchestratorEvent`s emitted by the state machine.
 9. **Telemetry Output:** Stream sensor readings to MQTT broker (via `MqttBridge`) and append tick records to CSV file (via `Recorder`) when configured.
+
+### Notes on model fidelity
+
+- **Sensor noise** (`NoiseConfig`) is real Gaussian noise (Box-Muller), seeded per `Harness` for reproducible runs. `NoiseConfig::none()` (the default used by every deterministic test) adds exactly zero noise and consumes no randomness.
+- **Water level** changes at a rate derived from `ControllerConfig` (`tank_height / max_refill_duration_sec` or `/ max_drain_duration_sec`), clamped to `[0, tank_height]`. `volume_l` is intentionally not modified by refill/drain: there is no existing config field converting a level reading to liters.
+- **`fsm/state` MQTT payload** is a real `hydragrow_shared::fsm::FsmSnapshot` built from the live `SystemContext` (phase, previous phase, pump status, trailing-hour dosing/refill/drain budgets, diagnostics) — not a placeholder `{}`.
 
 ---
 

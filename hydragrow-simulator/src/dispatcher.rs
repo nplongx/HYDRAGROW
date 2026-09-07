@@ -1,28 +1,17 @@
 use crate::actuators::virtual_hw::VirtualHardwareState;
 use crate::event_dispatcher::apply_event;
-use crate::telemetry::mqtt_bridge::MqttBridge;
 use hydragrow_controller_core::core::fsm::events::OrchestratorEvent;
 
-pub struct SimDispatcher {
-    pub mqtt_bridge: Option<MqttBridge>,
-}
-
-impl Default for SimDispatcher {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+#[derive(Default)]
+pub struct SimDispatcher;
 
 impl SimDispatcher {
     pub fn new() -> Self {
-        Self { mqtt_bridge: None }
+        Self
     }
 
     pub fn dispatch(&mut self, event: &OrchestratorEvent, hw: &mut VirtualHardwareState) {
         apply_event(hw, event);
-        if let Some(bridge) = &mut self.mqtt_bridge {
-            bridge.publish_event(event);
-        }
     }
 }
 

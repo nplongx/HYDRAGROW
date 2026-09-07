@@ -14,10 +14,10 @@ MCU = "esp32c3"
 ESP_IDF_VERSION = "v5.5.3"
 ESP_IDF_TOOLS_INSTALL_DIR = "workspace"
 
-HYDRAGROW_WIFI_SSID = { value = "", force = false }
-HYDRAGROW_WIFI_PASSWORD = { value = "", force = false }
+# Fleet-shared bootstrap only. Per-device WiFi secrets and device identity
+# must NEVER be baked into the firmware artifact — they are provisioned at
+# runtime via NVS, the captive portal, or the OTA+WiFi claim flow.
 HYDRAGROW_MQTT_URL = { value = "mqtt://localhost:1883", force = false }
 HYDRAGROW_MQTT_COMMAND_SECRET = { value = "", force = false }
-HYDRAGROW_DEVICE_ID = { value = "device_001", force = false }
 HYDRAGROW_MQTT_USER = { value = "", force = false }
 HYDRAGROW_MQTT_PASSWORD = { value = "", force = false }

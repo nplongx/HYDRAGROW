@@ -285,8 +285,7 @@ impl EventDispatcher {
             OrchestratorEvent::PrepareWifiConfig { config, version } => {
                 if let Some(flash) = dc.nvs.as_mut() {
                     let current = crate::hw::get_active_wifi_version(flash);
-                    match hydragrow_shared::wifi_tx::validate_provision_config(&config, current)
-                    {
+                    match hydragrow_shared::wifi_tx::validate_provision_config(&config, current) {
                         Err(reason) => {
                             warn!(
                                 "⚠️ [DISPATCHER] Rejecting stale/invalid WiFi provision: {} (version={}).",
@@ -295,8 +294,7 @@ impl EventDispatcher {
                         }
                         Ok(()) => {
                             // Read active list for Keep resolution (passwords stay in NVS/RAM).
-                            let active =
-                                crate::hw::load_active_wifi_list_from_nvs(flash);
+                            let active = crate::hw::load_active_wifi_list_from_nvs(flash);
                             match hydragrow_shared::wifi_tx::resolve_provision_credentials(
                                 &config, &active,
                             ) {

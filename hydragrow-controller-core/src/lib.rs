@@ -5,6 +5,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
 pub mod core;
+pub mod device_identity;
 pub mod ota_verify;
 pub mod pump_types;
 pub mod utils;

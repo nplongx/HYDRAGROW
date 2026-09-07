@@ -4,7 +4,6 @@ use hydragrow_simulator::harness::Harness;
 use hydragrow_simulator::plant::tank::Tank;
 use hydragrow_simulator::sensors::sensor_model::NoiseConfig;
 use std::fs;
-use std::path::PathBuf;
 
 /// `Recorder` was previously only unit-tested in isolation
 /// (`telemetry/recorder.rs::test_record_csv_line`) — never through the actual
@@ -12,7 +11,7 @@ use std::path::PathBuf;
 /// CLI's `--record` flag depends on. This proves that wiring end-to-end.
 #[test]
 fn harness_records_real_tick_rows_to_csv() -> Result<()> {
-    let path = PathBuf::from(std::env::temp_dir()).join("hydragrow_sim_recorder_e2e.csv");
+    let path = std::env::temp_dir().join("hydragrow_sim_recorder_e2e.csv");
     let _ = fs::remove_file(&path);
 
     let config = ControllerConfig::default();

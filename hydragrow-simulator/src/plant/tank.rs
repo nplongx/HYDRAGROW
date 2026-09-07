@@ -138,7 +138,10 @@ mod tests {
         // rate = tank_height / max_refill_duration_sec = 100/50 = 2.0 units/sec.
         // Over 10s that is +20, which would overshoot tank_height(100) from 90 -> must clamp.
         tank.step(10_000, &hw, &config);
-        assert_eq!(tank.water_level, 100.0, "water level must clamp at tank_height");
+        assert_eq!(
+            tank.water_level, 100.0,
+            "water level must clamp at tank_height"
+        );
     }
 
     #[test]

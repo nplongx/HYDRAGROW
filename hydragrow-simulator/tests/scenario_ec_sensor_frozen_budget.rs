@@ -62,14 +62,14 @@ fn frozen_ec_sensor_drives_repeated_dosing_into_hardware_fault() -> Result<()> {
         reached_dosing_fault,
         "a frozen EC sensor stuck below target must eventually trip EcDosingFailed \
          via the residual diagnostic; final phase was {:?}, tank ec={}",
-        harness.ctx.phase,
-        harness.tank.ec
+        harness.ctx.phase, harness.tank.ec
     );
 
     // Control: identical plant and config, no injected fault — the tank converges
     // and the same fault must not appear within the same budget.
-    let mut control =
-        Harness::builder(test_config(), test_tank()).noise(NoiseConfig::none()).build()?;
+    let mut control = Harness::builder(test_config(), test_tank())
+        .noise(NoiseConfig::none())
+        .build()?;
     for _ in 0..TICKS {
         control.tick(1000)?;
         assert_ne!(

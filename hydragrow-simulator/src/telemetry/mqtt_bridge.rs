@@ -97,7 +97,12 @@ impl MqttBridge {
         let _ = self.client.publish(topic, QoS::AtLeastOnce, false, payload);
     }
 
-    pub fn publish_event(&mut self, event: &OrchestratorEvent, ctx: &SystemContext, uptime_ms: u64) {
+    pub fn publish_event(
+        &mut self,
+        event: &OrchestratorEvent,
+        ctx: &SystemContext,
+        uptime_ms: u64,
+    ) {
         if let OrchestratorEvent::PublishFsmState = event {
             let snapshot = build_fsm_snapshot(ctx, uptime_ms);
             let topic = topics::topic_fsm_state(&self.device_id);

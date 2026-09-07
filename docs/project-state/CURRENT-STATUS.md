@@ -7,4 +7,5 @@
 - Automation Flow Editor Centered Layout & Node Inspector Redesign: VERIFIED
 - Automation Node Configuration Inspector Redesign (11 Node Types, AUTOMATION-REDESIGN-002): VERIFIED
 - Controller FSM Remediation & Safety Invariants Hardening (CONTROLLER-FSM-002): VERIFIED
+- Device WiFi SSID Metadata Tracking (WIFI-METADATA-001): IMPLEMENTED
 

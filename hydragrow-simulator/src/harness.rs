@@ -248,7 +248,7 @@ impl Harness {
             if let Some(mqtt) = outputs.mqtt.as_mut() {
                 mqtt.publish_sensors(&sensor);
                 for event in &result.events {
-                    mqtt.publish_event(event);
+                    mqtt.publish_event(event, &self.ctx, self.clock.uptime_ms);
                 }
             }
             if let Some(recorder) = outputs.recorder.as_mut() {

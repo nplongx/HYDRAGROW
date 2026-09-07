@@ -10,4 +10,5 @@
 | AUTOMATION-REDESIGN-002 | AC-1..AC-11 | hydragrow-frontend/src/components/automation/reactflow/{ConfigPanelUI,NodeEditorPanel}.tsx, FlowDetailDrawer.tsx | docs/evidence/AUTOMATION-REDESIGN-002.json | Vitest (ConfigPanelUI.test.tsx, NodeEditorPanel.test.tsx) |
 | CONTROLLER-FSM-002 | AC-1..AC-12 | hydragrow-controller-core/src/*, hydragrow-shared/src/*, hydragrow-backend/src/*, ESP32-C3-CONTROLLER-NODE/src/*, hydragrow-simulator/src/* | docs/evidence/CONTROLLER-FSM-002.json | Cargo test & Clippy (controller-core, simulator, shared, backend) |
 | WIFI-METADATA-001 | AC-1..AC-4 | hydragrow-backend/migrations/20260907120000_add_device_wifi_config.sql, hydragrow-backend/src/db/device_wifi.rs, hydragrow-backend/src/api/device_admin.rs | docs/evidence/WIFI-METADATA-001.json | Cargo test (sqlx) & fmt |
+| OTA-ROLLBACK-001 | AC-1..AC-4 | hydragrow-controller-core/src/core/ota_health.rs, ESP32-C3-CONTROLLER-NODE/src/runtime/health.rs, ESP32-C3-CONTROLLER-NODE/sdkconfig.defaults | docs/evidence/OTA-ROLLBACK-001.json | Cargo test (ota_health) & ESP cargo check |
 

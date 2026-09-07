@@ -1,0 +1,37 @@
+{
+  "requirement_id": "WIFI-METADATA-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "hydragrow-backend/migrations/20260907120000_add_device_wifi_config.sql",
+      "environment": "local-postgres-scratch",
+      "verified_at": "2026-09-07T00:00:00Z",
+      "notes": "Full migrate run from scratch applied 20260907120000 with no errors; column check shows exactly id, device_id, ssid, priority, config_version, updated_at — no password column."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/db/tests/test_device_wifi.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-07T00:00:00Z",
+      "notes": "5/5 #[sqlx::test] tests passed: version-one insert, version bump, cross-device isolation, empty-for-unknown, priority ordering."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/device_admin.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-07T00:00:00Z",
+      "notes": "candidates_to_ssid_entries_strips_password plus 2 response-builder tests passed; candidates_to_ssid_entries maps ssid+priority only and replace_device_wifi_config receives ssid_entries while full candidates go to MQTT params only."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test + cargo fmt --check in hydragrow-backend",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-07T00:00:00Z",
+      "notes": "Full backend suite 217 passed / 0 failed; cargo fmt --check clean."
+    }
+  ]
+}

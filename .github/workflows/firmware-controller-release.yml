@@ -83,6 +83,8 @@ jobs:
             target/riscv32imc-esp-espidf/release/esp32-c3-mist-weaver-os \
             firmware.bin
           ls -la firmware.bin
+          sha256sum firmware.bin > firmware.bin.sha256
+          cat firmware.bin.sha256
 
       - name: Create GitHub Release with firmware.bin asset
         env:
@@ -90,7 +92,7 @@ jobs:
         working-directory: ESP32-C3-CONTROLLER-NODE
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" firmware.bin \
+          gh release create "$GITHUB_REF_NAME" firmware.bin firmware.bin.sha256 \
             --title "Firmware $GITHUB_REF_NAME" \
             --notes "Automated release built from commit $GITHUB_SHA." \
             --latest

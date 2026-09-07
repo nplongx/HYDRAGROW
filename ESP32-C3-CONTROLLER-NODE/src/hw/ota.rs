@@ -3,7 +3,9 @@ use esp_idf_svc::http::client::{Configuration, EspHttpConnection};
 use esp_idf_svc::http::Method;
 use esp_idf_svc::ota::EspOta;
 use esp_idf_sys::esp_crt_bundle_attach;
+use hydragrow_controller_core::ota_verify;
 use log::{error, info, warn};
+use sha2::{Digest, Sha256};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -76,7 +78,7 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
 
     // Parse toàn bộ metadata trong scope riêng để giải phóng JSON buffer
     // và HTTP/TLS client trước khi mở TLS connection thứ 2 để tải firmware.
-    let (tag_name, download_url) = {
+    let (tag_name, download_url, sha256_url) = {
         let mut response_buf: Vec<u8> = Vec::with_capacity(8192);
         let mut chunk = [0u8; 1024];
         loop {
@@ -111,10 +113,13 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
             return Err(anyhow::anyhow!("tag_name missing in GitHub response"));
         }
 
-        if tag_name == CURRENT_VERSION {
+        // Anti-rollback: chỉ chấp nhận bản mới hơn bản đang chạy một cách
+        // nghiêm ngặt. Cùng version, downgrade, và tag sai định dạng đều bị
+        // từ chối trước khi chạm vào flash.
+        if let Err(reason) = ota_verify::is_upgrade(CURRENT_VERSION, tag_name) {
             info!(
-                "✅ [OTA] Đang ở phiên bản mới nhất ({}). Không cần cập nhật.",
-                CURRENT_VERSION
+                "✅ [OTA] Từ chối cập nhật ({}); giữ firmware hiện tại {}.",
+                reason, CURRENT_VERSION
             );
             publish_ota_event(
                 &mqtt_tx,
@@ -131,36 +136,55 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
             tag_name
         );
 
-        let mut download_url = String::new();
-        if let Some(assets) = parsed["assets"].as_array() {
-            for asset in assets {
-                if asset["name"].as_str().unwrap_or("") == "firmware.bin" {
-                    download_url = asset["browser_download_url"]
-                        .as_str()
-                        .unwrap_or("")
-                        .to_string();
-                    break;
-                }
+        let release = ota_verify::parse_release_metadata(&parsed).map_err(|e| {
+            error!("❌ [OTA] Metadata release không hợp lệ: {}", e);
+            anyhow::anyhow!(e)
+        })?;
+        let download_url = release.firmware_url;
+        let sha256_url = match release.sha256_url {
+            Some(url) => url,
+            None => {
+                error!("❌ [OTA] Release thiếu asset 'firmware.bin.sha256'; từ chối cập nhật không kiểm chứng.");
+                publish_ota_event(
+                    &mqtt_tx,
+                    device_id,
+                    "Critical",
+                    "Cập nhật firmware thất bại",
+                    "Bản phát hành thiếu checksum SHA-256.",
+                );
+                return Err(anyhow::anyhow!("firmware checksum asset missing"));
             }
-        }
+        };
 
-        if download_url.is_empty() {
-            error!("❌ [OTA] Không tìm thấy file 'firmware.bin' trong Release Assets.");
-            publish_ota_event(
-                &mqtt_tx,
-                device_id,
-                "Critical",
-                "Cập nhật firmware thất bại",
-                "Không tìm thấy firmware.bin trong bản phát hành.",
-            );
-            return Err(anyhow::anyhow!("Binary not found"));
-        }
-
-        (tag_name.to_string(), download_url)
+        (tag_name.to_string(), download_url, sha256_url)
     };
 
     // Giải phóng TLS connection của GitHub API trước khi tạo connection TLS thứ 2.
     drop(http_client);
+
+    // Tải checksum SHA-256 kỳ vọng trước khi ghi bất kỳ byte firmware nào.
+    let expected_sha256 = {
+        let mut digest_client = EspHttpConnection::new(&http_config)?;
+        digest_client.initiate_request(Method::Get, &sha256_url, &headers)?;
+        digest_client.initiate_response()?;
+        let mut digest_buf = [0u8; 256];
+        let mut digest_body: Vec<u8> = Vec::with_capacity(128);
+        loop {
+            let n = digest_client.read(&mut digest_buf)?;
+            if n == 0 {
+                break;
+            }
+            digest_body.extend_from_slice(&digest_buf[..n]);
+            if digest_body.len() >= 256 {
+                break;
+            }
+        }
+        drop(digest_client);
+        let body = std::str::from_utf8(&digest_body)
+            .map_err(|e| anyhow::anyhow!("Checksum response không phải UTF-8: {}", e))?;
+        ota_verify::parse_checksum_file(body)
+            .ok_or_else(|| anyhow::anyhow!("Không parse được SHA-256 từ checksum asset"))?
+    };
 
     info!("⬇️ [OTA] Bắt đầu tải firmware từ: {}", download_url);
     publish_ota_event(
@@ -184,6 +208,7 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
 
     let mut binary_buf = [0u8; 2048];
     let mut total_bytes = 0;
+    let mut hasher = Sha256::new();
 
     // 4. Vòng lặp đọc stream và ghi thẳng xuống Flash
     loop {
@@ -191,6 +216,7 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
         if n == 0 {
             break; // Hết file
         }
+        hasher.update(&binary_buf[..n]);
         ota_update.write(&binary_buf[..n])?;
         total_bytes += n;
 
@@ -208,9 +234,25 @@ pub fn perform_ota_update(device_id: &str, mqtt_tx: Option<Sender<String>>) -> a
     }
 
     info!(
-        "✅ [OTA] Hoàn tất tải firmware ({} bytes). Chuyển phân vùng boot...",
+        "✅ [OTA] Hoàn tất tải firmware ({} bytes). Kiểm chứng SHA-256...",
         total_bytes
     );
+
+    // Chỉ commit khi digest khớp. Nếu sai, slot OTA không được commit và
+    // firmware cũ vẫn là bản bootable — thiết bị không brick.
+    let actual_sha256 = hex::encode(hasher.finalize());
+    if !actual_sha256.eq_ignore_ascii_case(&expected_sha256) {
+        error!("❌ [OTA] SHA-256 mismatch; từ chối commit firmware.");
+        publish_ota_event(
+            &mqtt_tx,
+            device_id,
+            "Critical",
+            "Cập nhật firmware thất bại",
+            "Checksum firmware không khớp; giữ bản cũ.",
+        );
+        return Err(anyhow::anyhow!("firmware SHA-256 mismatch"));
+    }
+    info!("✅ [OTA] SHA-256 khớp. Chuyển phân vùng boot...");
 
     // 5. Commit bản cập nhật và khởi động lại
     ota_update.complete()?;

@@ -14,7 +14,7 @@ import { build_full_unified_payload_json } from '../../gleam_core/build/dev/java
 import { Save, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDeviceStore } from '../store/useDeviceStore';
-import type { OtaStatus, WifiCandidate } from '../types/models';
+import type { OtaStatus, WifiCandidate, WifiConfigStatus, WifiProvisionEntry } from '../types/models';
 
 import { GeneralSection } from './settings/GeneralSection';
 import { ThresholdsSection } from './settings/ThresholdsSection';
@@ -139,6 +139,8 @@ const Settings = () => {
   const [isTriggeringOta, setIsTriggeringOta] = useState(false);
   const [wifiCandidates, setWifiCandidates] = useState<WifiCandidate[]>([{ ssid: '', password: '', priority: 0 }]);
   const [isSavingWifi, setIsSavingWifi] = useState(false);
+  const [wifiConfig, setWifiConfig] = useState<WifiConfigStatus | null>(null);
+  const [isProvisioningOta, setIsProvisioningOta] = useState(false);
   const calibrationPoints = [7, 4];
   const [wizardStep, setWizardStep] = useState(0);
   const [isCapturingPoint, setIsCapturingPoint] = useState(false);
@@ -195,6 +197,7 @@ const Settings = () => {
     if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version}?\nThiết bị sẽ khởi động lại và tạm ngừng điều khiển trong quá trình cập nhật.`)) return;
     setIsTriggeringOta(true);
     try {
+      // OTA-only: no wifi payload, active credentials untouched.
       await callApi(
         `/api/devices/${deviceId}/ota/trigger`,
         'POST',
@@ -206,6 +209,92 @@ const Settings = () => {
       toast.success('Đã gửi lệnh cập nhật. Theo dõi tiến trình trong Nhật ký hệ thống.');
     } catch { toast.error('Không gửi được lệnh cập nhật firmware.'); }
     finally { setIsTriggeringOta(false); }
+  };
+
+  const knownSsids = (wifiConfig?.ssids ?? []).map((entry) => entry.ssid.trim());
+
+  // Load password-blind desired state; seed secret inputs blank (keep semantics).
+  useEffect(() => {
+    const deviceId = ctxDeviceId;
+    const settings = runtimeSettings || appSettings;
+    if (!deviceId || !settings?.backend_url || !settings?.api_key) { setWifiConfig(null); return; }
+    callApi(`/api/devices/${deviceId}/wifi`, 'GET', null, settings)
+      .then((config) => {
+        const view = config as WifiConfigStatus;
+        setWifiConfig(view);
+        if (view?.ssids?.length) {
+          setWifiCandidates(view.ssids.map((entry) => ({ ssid: entry.ssid, password: '', priority: entry.priority })));
+        }
+      })
+      .catch(() => setWifiConfig(null));
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [appSettings.api_key, appSettings.backend_url, ctxDeviceId, runtimeSettings]);
+
+  const refreshWifiConfig = async () => {
+    const deviceId = ctxDeviceId;
+    const settings = runtimeSettings || appSettings;
+    if (!deviceId) return;
+    try {
+      const config = await callApi(`/api/devices/${deviceId}/wifi`, 'GET', null, settings);
+      setWifiConfig(config as WifiConfigStatus);
+    } catch { /* keep last known state */ }
+  };
+
+  const clearTransientPasswords = () => {
+    setWifiCandidates((current) => current.map((candidate) => ({ ...candidate, password: '' })));
+  };
+
+  // Build keep/set entries from metadata-loaded SSIDs + transient inputs.
+  // Blank password on a known SSID = keep; typed password = set.
+  // New SSIDs require a password; set with empty password is never sent.
+  const buildProvisionEntries = (): WifiProvisionEntry[] | null => {
+    const seen = new Set<string>();
+    const entries: WifiProvisionEntry[] = [];
+    for (const candidate of wifiCandidates) {
+      const ssid = candidate.ssid.trim();
+      if (!ssid) continue;
+      if (ssid.length > 32) { toast.error(`SSID "${ssid}" vượt quá 32 ký tự.`); return null; }
+      if (seen.has(ssid)) { toast.error(`SSID "${ssid}" bị trùng.`); return null; }
+      seen.add(ssid);
+      if (candidate.password) {
+        if (candidate.password.length > 64) { toast.error(`Mật khẩu của "${ssid}" vượt quá 64 ký tự.`); return null; }
+        entries.push({ ssid, priority: candidate.priority, secret_action: 'set', password: candidate.password });
+      } else if (knownSsids.includes(ssid)) {
+        entries.push({ ssid, priority: candidate.priority, secret_action: 'keep' });
+      } else {
+        toast.error(`SSID mới "${ssid}" cần nhập mật khẩu.`);
+        return null;
+      }
+    }
+    if (!entries.length) { toast.error('Cần nhập ít nhất một SSID.'); return null; }
+    if (entries.length > 8) { toast.error('Tối đa 8 mạng WiFi.'); return null; }
+    return entries;
+  };
+
+  const handleTriggerOtaWifi = async () => {
+    const deviceId = ctxDeviceId;
+    const settings = runtimeSettings || appSettings;
+    if (!deviceId || !otaStatus?.update_available || isProvisioningOta) return;
+    const entries = buildProvisionEntries();
+    if (!entries) return;
+    const configVersion = (wifiConfig?.config_version ?? 0) + 1;
+    if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version} và áp dụng ${entries.length} mạng WiFi (config v${configVersion})?\nThiết bị sẽ khởi động lại; WiFi mới chỉ có hiệu lực sau khi OTA thành công.`)) return;
+    setIsProvisioningOta(true);
+    try {
+      await callApi(
+        `/api/devices/${deviceId}/ota/trigger`,
+        'POST',
+        { wifi: { config_version: configVersion, entries } },
+        settings,
+        undefined,
+        { 'X-User-Confirmed': 'true' }
+      );
+      // Minimize password lifetime in browser memory.
+      clearTransientPasswords();
+      toast.success(`Đã gửi OTA + WiFi config v${configVersion}. Theo dõi trạng thái áp dụng bên dưới.`);
+      await refreshWifiConfig();
+    } catch { toast.error('Không gửi được lệnh OTA + WiFi.'); }
+    finally { setIsProvisioningOta(false); }
   };
 
   const updateWifiCandidate = (index: number, patch: Partial<WifiCandidate>) => {
@@ -581,11 +670,15 @@ const Settings = () => {
           otaStatus={otaStatus}
           isTriggeringOta={isTriggeringOta}
           handleTriggerOta={handleTriggerOta}
+          isProvisioningOta={isProvisioningOta}
+          handleTriggerOtaWifi={handleTriggerOtaWifi}
           wifiCandidates={wifiCandidates}
           setWifiCandidates={setWifiCandidates}
           updateWifiCandidate={updateWifiCandidate}
           isSavingWifi={isSavingWifi}
           handleSaveWifiList={handleSaveWifiList}
+          wifiConfig={wifiConfig}
+          knownSsids={knownSsids}
         />}
 
         {openSection === 'general' && <DangerZoneSection

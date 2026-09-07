@@ -202,6 +202,22 @@ export interface WifiCandidate {
   priority: number;
 }
 
+export type WifiSecretAction = 'keep' | 'set' | 'clear';
+
+export interface WifiProvisionEntry {
+  ssid: string;
+  priority: number;
+  secret_action: WifiSecretAction;
+  password?: string;
+}
+
+export interface WifiConfigStatus {
+  device_id: string;
+  ssids: Array<{ ssid: string; priority: number }>;
+  config_version: number;
+  state: 'pending' | 'applied' | 'rolled_back' | 'rejected' | 'unknown';
+}
+
 // --- Types từ hydragrow-shared/src/telemetry/health.rs ---
 export interface KalmanConfidence {
   nutrient_a: number;

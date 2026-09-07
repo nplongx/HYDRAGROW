@@ -3,7 +3,7 @@ import { Network, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AccordionSection } from '../../components/ui/AccordionSection';
 import { InputGroup } from '../../components/ui/InputGroup';
-import type { OtaStatus, WifiCandidate } from '../../types/models';
+import type { OtaStatus, WifiCandidate, WifiConfigStatus } from '../../types/models';
 
 type InputEvent = React.ChangeEvent<HTMLInputElement | HTMLSelectElement>;
 
@@ -19,12 +19,24 @@ export interface ConnectivitySectionProps {
   otaStatus: OtaStatus | null;
   isTriggeringOta: boolean;
   handleTriggerOta: () => void;
+  isProvisioningOta: boolean;
+  handleTriggerOtaWifi: () => void;
   wifiCandidates: WifiCandidate[];
   setWifiCandidates: React.Dispatch<React.SetStateAction<WifiCandidate[]>>;
   updateWifiCandidate: (index: number, patch: Partial<WifiCandidate>) => void;
   isSavingWifi: boolean;
   handleSaveWifiList: () => void;
+  wifiConfig: WifiConfigStatus | null;
+  knownSsids: string[];
 }
+
+const WIFI_STATE_LABEL: Record<string, string> = {
+  applied: 'Đã áp dụng',
+  pending: 'Đang áp dụng...',
+  rolled_back: 'Rollback, giữ cấu hình cũ',
+  rejected: 'Bị từ chối',
+  unknown: 'Chưa có thông tin',
+};
 
 export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
   openSection,
@@ -38,11 +50,15 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
   otaStatus,
   isTriggeringOta,
   handleTriggerOta,
+  isProvisioningOta,
+  handleTriggerOtaWifi,
   wifiCandidates,
   setWifiCandidates,
   updateWifiCandidate,
   isSavingWifi,
   handleSaveWifiList,
+  wifiConfig,
+  knownSsids,
 }) => {
   return (
     <div className="space-y-4">
@@ -156,6 +172,16 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
               </div>
               <button
                 type="button"
+                disabled={!otaStatus.update_available || isProvisioningOta}
+                onClick={handleTriggerOtaWifi}
+                className="w-full rounded-xl border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isProvisioningOta
+                  ? 'Đang gửi OTA + WiFi...'
+                  : 'Cập nhật firmware & áp dụng WiFi'}
+              </button>
+              <button
+                type="button"
                 disabled={!otaStatus.update_available || isTriggeringOta}
                 onClick={handleTriggerOta}
                 className="w-full rounded-xl border border-amber-300 bg-amber-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -163,9 +189,12 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
                 {isTriggeringOta
                   ? 'Đang gửi lệnh cập nhật...'
                   : otaStatus.update_available
-                  ? 'Cập nhật ngay (thiết bị sẽ khởi động lại)'
+                  ? 'Cập nhật firmware, giữ WiFi hiện tại'
                   : 'Đã ở phiên bản mới nhất'}
               </button>
+              <p className="text-xs text-emerald-700/75">
+                WiFi mới chỉ có hiệu lực sau khi OTA thành công và thiết bị khởi động lại; mật khẩu sai sẽ tự rollback về WiFi cũ.
+              </p>
             </>
           ) : (
             <p className="text-xs text-emerald-700/75">Đang tải thông tin firmware...</p>
@@ -182,7 +211,14 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
         onToggle={() => onToggleSection('wifi')}
       >
         <div className="space-y-3 p-1">
-          {wifiCandidates.map((candidate, index) => (
+          {wifiConfig && (
+            <p className="text-xs font-medium text-emerald-800" data-testid="wifi-config-state">
+              WiFi config v{wifiConfig.config_version} — {WIFI_STATE_LABEL[wifiConfig.state] ?? wifiConfig.state}
+            </p>
+          )}
+          {wifiCandidates.map((candidate, index) => {
+            const isKnown = knownSsids.includes(candidate.ssid.trim()) && candidate.ssid.trim() !== '';
+            return (
             <div key={`${index}-${candidate.priority}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_80px_32px] md:items-end">
               <InputGroup
                 label={`SSID #${index + 1}`}
@@ -194,6 +230,7 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
                 label="Mật khẩu"
                 type="password"
                 value={candidate.password}
+                placeholder={isKnown ? 'Để trống để giữ mật khẩu hiện tại' : undefined}
                 onChange={(event: InputEvent) => updateWifiCandidate(index, { password: event.target.value })}
               />
               <InputGroup
@@ -211,7 +248,8 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
                 ✕
               </button>
             </div>
-          ))}
+            );
+          })}
           <button
             type="button"
             onClick={() => setWifiCandidates((current) => [...current, { ssid: '', password: '', priority: current.length }])}
@@ -225,8 +263,11 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
             onClick={handleSaveWifiList}
             className="w-full rounded-xl border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {isSavingWifi ? 'Đang gửi...' : 'Lưu danh sách WiFi (áp dụng sau khi khởi động lại)'}
+            {isSavingWifi ? 'Đang gửi...' : 'Lưu WiFi & áp dụng (không cập nhật firmware)'}
           </button>
+          <p className="text-xs text-emerald-700/75">
+            Mật khẩu chỉ tồn tại trong lúc gửi; hệ thống không bao giờ hiển thị lại mật khẩu đã lưu — để trống nghĩa là giữ nguyên.
+          </p>
         </div>
       </AccordionSection>
     </div>

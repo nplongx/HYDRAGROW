@@ -64,6 +64,14 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handlers::status::handle_controller(device_id, &payload_bytes, app_state).await
         }
 
+        "/controller/wifi-config-status" => {
+            handlers::status::handle_wifi_config_status(device_id, &payload_bytes, app_state).await
+        }
+
+        "/controller/ota-status" => {
+            handlers::status::handle_ota_status(device_id, &payload_bytes, app_state).await
+        }
+
         "/fsm/state" => handlers::fsm::handle_state(device_id, &payload_bytes, app_state).await,
 
         "/fsm/events" => handlers::events::handle(device_id, &payload_bytes, app_state).await,

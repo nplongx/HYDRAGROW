@@ -134,6 +134,53 @@ pub struct UpdateWifiListReq {
     pub candidates: Vec<WifiCandidate>,
 }
 
+/// Strips passwords out of a candidate list before it touches the database
+/// — the DB schema has no column to put one in, but this keeps the
+/// conversion itself unit-testable and explicit about the boundary.
+pub fn candidates_to_ssid_entries(
+    candidates: &[WifiCandidate],
+) -> Vec<crate::db::device_wifi::WifiSsidEntry> {
+    candidates
+        .iter()
+        .map(|c| crate::db::device_wifi::WifiSsidEntry {
+            ssid: c.ssid.clone(),
+            priority: c.priority as i16,
+        })
+        .collect()
+}
+
+#[derive(Debug, Serialize)]
+pub struct WifiConfigEntryResponse {
+    pub ssid: String,
+    pub priority: i16,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WifiConfigResponse {
+    pub device_id: String,
+    pub ssids: Vec<WifiConfigEntryResponse>,
+    pub config_version: i64,
+}
+
+pub fn build_wifi_config_response(
+    device_id: String,
+    rows: Vec<crate::db::device_wifi::DeviceWifiConfigRow>,
+) -> WifiConfigResponse {
+    let config_version = rows.first().map(|r| r.config_version).unwrap_or(0);
+    let ssids = rows
+        .into_iter()
+        .map(|r| WifiConfigEntryResponse {
+            ssid: r.ssid,
+            priority: r.priority,
+        })
+        .collect();
+    WifiConfigResponse {
+        device_id,
+        ssids,
+        config_version,
+    }
+}
+
 pub async fn update_wifi_list(
     path: web::Path<String>,
     req: HttpRequest,
@@ -158,6 +205,7 @@ pub async fn update_wifi_list(
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error":"Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}));
     }
+    let ssid_entries = candidates_to_ssid_entries(&candidates);
     let command = MqttCommandOut {
         target: "all".to_string(),
         action: "update_wifi_list".to_string(),
@@ -174,12 +222,43 @@ pub async fn update_wifi_list(
         signature: None,
     };
     match publish_command(&app_state, &device_id, &command).await {
-        Ok(()) => HttpResponse::Accepted()
-            .json(serde_json::json!({"status":"wifi_list_sent", "device_id":device_id})),
+        Ok(()) => {
+            if let Err(error) = crate::db::device_wifi::replace_device_wifi_config(
+                &app_state.pg_pool,
+                &device_id,
+                &ssid_entries,
+            )
+            .await
+            {
+                warn!(%device_id, ?error, "Failed to persist WiFi config metadata to DB");
+            }
+            HttpResponse::Accepted()
+                .json(serde_json::json!({"status":"wifi_list_sent", "device_id":device_id}))
+        }
         Err(error) => {
             warn!(%device_id, ?error, "Failed to send WiFi provisioning command");
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({"error":"Could not send WiFi list"}))
+        }
+    }
+}
+
+pub async fn get_wifi_config(
+    path: web::Path<String>,
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    if !auth_from(&req).has_scope("device:network") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Missing required scope: device:network"}));
+    }
+    match crate::db::device_wifi::get_device_wifi_config(&app_state.pg_pool, &device_id).await {
+        Ok(rows) => HttpResponse::Ok().json(build_wifi_config_response(device_id, rows)),
+        Err(error) => {
+            warn!(%device_id, ?error, "Failed to load WiFi config metadata");
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error":"Could not load WiFi config"}))
         }
     }
 }
@@ -306,6 +385,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route("/ota/status", web::get().to(get_ota_status))
         .route("/ota/trigger", web::post().to(trigger_ota))
         .route("/wifi", web::post().to(update_wifi_list))
+        .route("/wifi", web::get().to(get_wifi_config))
         .route("/reboot", web::post().to(reboot_device))
         .route("/factory-reset", web::post().to(factory_reset_device));
 }
@@ -328,6 +408,21 @@ mod tests {
     fn ota_status_does_not_claim_update_without_latest_version() {
         assert!(!build_ota_status_response("v1.2.0".into(), None).update_available);
     }
+
+    #[test]
+    fn candidates_to_ssid_entries_strips_password() {
+        let candidates = vec![WifiCandidate {
+            ssid: "Home".to_string(),
+            password: "supersecret".to_string(),
+            priority: 0,
+        }];
+        let entries = candidates_to_ssid_entries(&candidates);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].ssid, "Home");
+        assert_eq!(entries[0].priority, 0);
+        // WifiSsidEntry has no password field at all — if it ever grew one,
+        // this test would need updating to prove it's still never populated.
+    }
 }
 
 #[cfg(test)]
@@ -345,5 +440,38 @@ mod status_tests {
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["is_online"], true);
         assert_eq!(json["firmware_version"], "1.2.3");
+    }
+
+    #[test]
+    fn wifi_config_response_uses_first_rows_version_and_lists_all_ssids() {
+        use chrono::Utc;
+        let rows = vec![
+            crate::db::device_wifi::DeviceWifiConfigRow {
+                device_id: "esp-1".to_string(),
+                ssid: "First".to_string(),
+                priority: 0,
+                config_version: 3,
+                updated_at: Utc::now(),
+            },
+            crate::db::device_wifi::DeviceWifiConfigRow {
+                device_id: "esp-1".to_string(),
+                ssid: "Second".to_string(),
+                priority: 1,
+                config_version: 3,
+                updated_at: Utc::now(),
+            },
+        ];
+        let resp = build_wifi_config_response("esp-1".to_string(), rows);
+        assert_eq!(resp.device_id, "esp-1");
+        assert_eq!(resp.config_version, 3);
+        assert_eq!(resp.ssids.len(), 2);
+        assert_eq!(resp.ssids[0].ssid, "First");
+    }
+
+    #[test]
+    fn wifi_config_response_defaults_version_to_zero_when_empty() {
+        let resp = build_wifi_config_response("esp-empty".to_string(), vec![]);
+        assert_eq!(resp.config_version, 0);
+        assert!(resp.ssids.is_empty());
     }
 }

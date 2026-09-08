@@ -1,10 +1,94 @@
 // 1. 👇 SỬA IMPORT: Thêm get_events_by_cycle_id
 use crate::{
     AppState,
-    db::postgres::{get_events_by_cycle_id, get_system_events},
+    api::middleware::auth::AuthContext,
+    db::postgres::{NewSystemEventRecord, get_events_by_cycle_id, get_system_events, insert_system_event},
 };
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde_json::json;
+
+fn default_reason_codes() -> Vec<String> {
+    Vec::new()
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateEventRequest {
+    pub level: String,
+    pub category: String,
+    pub title: String,
+    pub message: String,
+    #[serde(default = "default_reason_codes")]
+    pub reason_codes: Vec<String>,
+    #[serde(default)]
+    pub confidence: Option<f32>,
+    #[serde(default)]
+    pub observations: Option<serde_json::Value>,
+}
+
+fn validate_reason_codes(codes: &[String]) -> Result<(), String> {
+    let valid = hydragrow_shared::supervisor::SupervisorReasonCode::all_as_str();
+    for code in codes {
+        if !valid.contains(&code.as_str()) {
+            return Err(format!("unknown reason_code: {code}"));
+        }
+    }
+    Ok(())
+}
+
+pub async fn create_event(
+    path: web::Path<String>,
+    req: HttpRequest,
+    body: web::Json<CreateEventRequest>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("events:write") {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "events:write"
+        }));
+    }
+    if let Err(e) = validate_reason_codes(&body.reason_codes) {
+        return HttpResponse::BadRequest().json(json!({ "error": e }));
+    }
+    let source = req
+        .headers()
+        .get("X-Supervisor-Source")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if source != "watchdog" && source != "ai_supervisor" {
+        return HttpResponse::BadRequest().json(json!({ "error": "Invalid X-Supervisor-Source" }));
+    }
+    let device_id = path.into_inner();
+    let now = chrono::Utc::now().timestamp_millis();
+    let record = NewSystemEventRecord {
+        device_id,
+        level: body.level.clone(),
+        category: body.category.clone(),
+        title: body.title.clone(),
+        message: body.message.clone(),
+        reason: None,
+        metadata: Some(json!({
+            "reason_codes": body.reason_codes,
+            "confidence": body.confidence,
+            "observations": body.observations,
+        })),
+        timestamp: now,
+        source: source.to_string(),
+        primary_reason_code: body.reason_codes.first().cloned(),
+    };
+    match insert_system_event(&app_state.pg_pool, &record).await {
+        Ok(()) => HttpResponse::Created().json(json!({ "status": "created", "timestamp": now })),
+        Err(e) => {
+            tracing::error!("Lỗi insert system_event: {:?}", e);
+            HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
+        }
+    }
+}
 
 #[derive(serde::Deserialize)]
 pub struct EventsQuery {
@@ -159,6 +243,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         "/events/cycle/{cycle_id}",
         web::get().to(get_cycle_timeline),
     );
+    cfg.route("/events", web::post().to(create_event));
 }
 
 #[cfg(test)]
@@ -206,5 +291,30 @@ mod tests {
         let query: EventsQuery = serde_urlencoded::from_str(qs).unwrap();
         assert_eq!(query.after_timestamp, None);
         assert_eq!(query.before_timestamp, None);
+    }
+
+    #[actix_web::test]
+    async fn deserializes_with_optional_reason_code() {
+        let v: CreateEventRequest = serde_json::from_value(json!({
+            "level": "warning", "category": "alert",
+            "title": "t", "message": "m",
+            "reason_codes": ["leak_suspected"], "confidence": 0.9
+        }))
+        .unwrap();
+        assert_eq!(v.reason_codes, vec!["leak_suspected".to_string()]);
+        assert_eq!(v.confidence, Some(0.9));
+        assert!(v.observations.is_none());
+    }
+
+    #[actix_web::test]
+    async fn rejects_unknown_reason_code_via_validation() {
+        let err = validate_reason_codes(&["bogus_code".to_string()]).unwrap_err();
+        assert_eq!(err, "unknown reason_code: bogus_code");
+    }
+
+    #[actix_web::test]
+    async fn accepts_known_reason_code() {
+        assert!(validate_reason_codes(&["leak_suspected".to_string()]).is_ok());
+        assert!(validate_reason_codes(&[]).is_ok());
     }
 }

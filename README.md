@@ -52,6 +52,7 @@ Hệ thống điều khiển và giám sát thủy canh thông minh.
 | `AGITECH/{device_id}/system/log` | CONTROLLER-NODE | Backend | `UnifiedSystemLog` |
 | `AGITECH/{device_id}/fsm/transition` | CONTROLLER-NODE | Backend | `FsmTransitionEvent` |
 | `AGITECH/{device_id}/command/#` | Backend | CONTROLLER-NODE | JSON commands |
+| `AGITECH/{device_id}/command` | Backend | SENSOR-NODE | JSON commands (`trigger_ota`, `restart`, `get_status`, `update_wifi_list`) |
 
 ## Databases
 
@@ -80,6 +81,7 @@ Xem README của từng subsystem để build/run chi tiết. Thứ tự khởi 
 | `frontend-ci` | push/PR chạm `hydragrow-frontend/` | tsc + eslint + vitest + cargo check (src-tauri) |
 | `firmware-controller-ci` | push/PR chạm `ESP32-C3-CONTROLLER-NODE/` | cargo check + fmt + clippy (esp-rs nightly) |
 | `firmware-sensor-ci` | push/PR chạm `ESP32-C3-SENSOR-NODE/` | pio run + pio test (native) |
+| `firmware-release` | push tag `v*.*.*` | Build & release cả 2 firmware (`firmware.bin` + `sensor-firmware.bin`) |
 
 Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy trình PR và [docs/superpowers/specs/module-rules/](docs/superpowers/specs/module-rules/README.md) cho ràng buộc từng subsystem.
 

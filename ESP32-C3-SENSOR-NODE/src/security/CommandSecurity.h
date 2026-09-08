@@ -12,7 +12,6 @@ public:
 private:
     static constexpr int MAX_NONCES = 20;
 
-    String canonicalValue(JsonVariant value);
     String canonicalCommandPayload(JsonDocument& doc);
 
     String calculateHmac(

@@ -1,6 +1,6 @@
 {
-  "pid": 9970,
-  "version": "0.9.7",
-  "socketPath": "/home/long/HYDRAGROW/.codegraph/daemon.sock",
-  "startedAt": 1780111862740
+  "pid": 228167,
+  "version": "1.6.0",
+  "socketPath": "/home/nplong/HYDRAGROW/.codegraph/daemon.sock",
+  "startedAt": 1788869170457
 }

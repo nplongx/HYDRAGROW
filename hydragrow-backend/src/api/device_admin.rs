@@ -10,6 +10,7 @@ use tracing::{info, warn};
 use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
+use crate::api::mqtt_utils::publish_sensor_command;
 use crate::db::device_wifi;
 
 #[derive(Debug, Serialize)]
@@ -598,10 +599,52 @@ pub async fn get_device_status(
     })
 }
 
+pub async fn trigger_sensor_ota(
+    path: web::Path<String>,
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+
+    if !auth_from(&req).has_scope("device:ota") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Missing required scope: device:ota"}));
+    }
+
+    if !has_dangerous_confirmation(&req) {
+        return HttpResponse::Forbidden().json(
+            serde_json::json!({"error": "Dangerous command requires X-User-Confirmed:true or X-Elevated-Token"}),
+        );
+    }
+
+    let command = MqttCommandOut {
+        target: "all".to_string(),
+        action: "trigger_ota".to_string(),
+        params: None,
+        ts: None,
+        nonce: None,
+        signature: None,
+    };
+
+    match publish_sensor_command(&app_state, &device_id, &command).await {
+        Ok(()) => {
+            info!(%device_id, "Sensor OTA command sent");
+            HttpResponse::Accepted()
+                .json(serde_json::json!({"status":"ota_triggered", "device_id":device_id}))
+        }
+        Err(error) => {
+            warn!(%device_id, ?error, "Failed to send sensor OTA command");
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error":"Could not send sensor OTA command"}))
+        }
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/status", web::get().to(get_device_status))
         .route("/ota/status", web::get().to(get_ota_status))
         .route("/ota/trigger", web::post().to(trigger_ota))
+        .route("/sensor/ota/trigger", web::post().to(trigger_sensor_ota))
         .route("/wifi", web::get().to(get_wifi_config))
         .route("/wifi", web::post().to(update_wifi_list))
         .route("/reboot", web::post().to(reboot_device))

@@ -5,6 +5,8 @@
 #include "../test/stubs/Preferences.h"
 #include "../src/wifi/WifiProvisioner.cpp"
 #include "../src/filters/HybridFilter.cpp"
+#include "../src/ota/OtaVersionCheck.cpp"
+#include "../src/ota/OtaValidationGate.h"
 
 void test_load_returns_empty_when_nvs_empty() {
     Preferences prefs;  // stub: không có key nào
@@ -65,6 +67,65 @@ void test_ph_filter_rate_limiting_step_change() {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 7.0475f, updated);
 }
 
+void test_no_update_when_tag_matches_current_version() {
+    TEST_ASSERT_FALSE(OtaVersionCheck::isUpdateAvailable("v0.1.0", "v0.1.0"));
+}
+
+void test_update_available_when_tag_differs() {
+    TEST_ASSERT_TRUE(OtaVersionCheck::isUpdateAvailable("v0.1.0", "v0.2.0"));
+}
+
+void test_no_update_when_tag_is_empty() {
+    TEST_ASSERT_FALSE(OtaVersionCheck::isUpdateAvailable("v0.1.0", ""));
+}
+
+void test_finds_sensor_firmware_asset_url() {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, R"JSON(
+{
+    "tag_name": "v0.2.0",
+    "assets": [
+        {"name": "firmware.bin", "browser_download_url": "https://example.com/firmware.bin"},
+        {"name": "sensor-firmware.bin", "browser_download_url": "https://example.com/sensor-firmware.bin"}
+    ]
+}
+)JSON");
+    TEST_ASSERT_FALSE(err);
+
+    String url = OtaVersionCheck::findAssetDownloadUrl(doc, "sensor-firmware.bin");
+    TEST_ASSERT_EQUAL_STRING("https://example.com/sensor-firmware.bin", url.c_str());
+}
+
+void test_returns_empty_when_asset_not_found() {
+    JsonDocument doc;
+    deserializeJson(doc, R"JSON({"tag_name": "v0.2.0", "assets": []})JSON");
+
+    String url = OtaVersionCheck::findAssetDownloadUrl(doc, "sensor-firmware.bin");
+    TEST_ASSERT_EQUAL(0, url.length());
+}
+
+void test_returns_empty_when_assets_field_missing() {
+    JsonDocument doc;
+    deserializeJson(doc, R"JSON({"tag_name": "v0.2.0"})JSON");
+
+    String url = OtaVersionCheck::findAssetDownloadUrl(doc, "sensor-firmware.bin");
+    TEST_ASSERT_EQUAL(0, url.length());
+}
+
+void test_validation_gate_marks_exactly_once() {
+    OtaValidationGate gate;
+    TEST_ASSERT_TRUE(gate.markIfNeeded());
+    TEST_ASSERT_FALSE(gate.markIfNeeded());
+    TEST_ASSERT_FALSE(gate.markIfNeeded());
+}
+
+void test_validation_gate_first_call_returns_true() {
+    // Nếu gate coi như "đã mark" ngay từ đầu thì sẽ không bao giờ gọi
+    // esp_ota_mark_app_valid_cancel_rollback() ở lần kết nối MQTT đầu tiên.
+    OtaValidationGate gate;
+    TEST_ASSERT_TRUE(gate.markIfNeeded());
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_load_returns_empty_when_nvs_empty);
@@ -72,5 +133,13 @@ int main(int argc, char **argv) {
     RUN_TEST(test_load_with_fallback_secret_when_nvs_empty);
     RUN_TEST(test_ph_filter_initialization_on_boot);
     RUN_TEST(test_ph_filter_rate_limiting_step_change);
+    RUN_TEST(test_no_update_when_tag_matches_current_version);
+    RUN_TEST(test_update_available_when_tag_differs);
+    RUN_TEST(test_no_update_when_tag_is_empty);
+    RUN_TEST(test_finds_sensor_firmware_asset_url);
+    RUN_TEST(test_returns_empty_when_asset_not_found);
+    RUN_TEST(test_returns_empty_when_assets_field_missing);
+    RUN_TEST(test_validation_gate_marks_exactly_once);
+    RUN_TEST(test_validation_gate_first_call_returns_true);
     return UNITY_END();
 }

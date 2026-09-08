@@ -4,9 +4,11 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::models::config::DeviceConfig;
+use crate::services::config_registry::{self, ValueType};
 
-/// Các config key mà Config·Read / Config·Overwrite được phép nhắm tới — khớp
-/// DEVICE_CONFIG_KEYS ở hydragrow-frontend/src/components/automation/reactflow/NodeEditorPanel.tsx.
+/// Các config key mà Config·Read / Config·Overwrite được phép nhắm tới.
+/// Key số tra từ config_registry (nguồn duy nhất); control_mode/is_enabled
+/// giữ ngoài registry vì không phải số có min/max.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConfigFieldKind {
     Numeric,
@@ -17,26 +19,30 @@ enum ConfigFieldKind {
 
 fn config_field_kind(key: &str) -> Option<ConfigFieldKind> {
     match key {
-        "ec_target" | "ec_tolerance" | "ph_target" | "ph_tolerance" => {
-            Some(ConfigFieldKind::Numeric)
-        }
-        "delay_between_a_and_b_sec" => Some(ConfigFieldKind::Integer),
-        "control_mode" => Some(ConfigFieldKind::Text),
-        "is_enabled" => Some(ConfigFieldKind::Bool),
-        _ => None,
+        "control_mode" => return Some(ConfigFieldKind::Text),
+        "is_enabled" => return Some(ConfigFieldKind::Bool),
+        _ => {}
+    }
+    let def = config_registry::lookup(key)?;
+    match def.value_type {
+        ValueType::Float => Some(ConfigFieldKind::Numeric),
+        ValueType::Integer => Some(ConfigFieldKind::Integer),
     }
 }
 
 /// Đọc 1 field số hiện tại của `config` — CHỈ field số (dùng để nạp execution
 /// context cho Condition.valueVariable). Field không phải số trả về `None`.
 pub fn read_numeric_field(config: &DeviceConfig, key: &str) -> Option<f64> {
-    match key {
-        "ec_target" => Some(config.ec_target as f64),
-        "ec_tolerance" => Some(config.ec_tolerance as f64),
-        "ph_target" => Some(config.ph_target as f64),
-        "ph_tolerance" => Some(config.ph_tolerance as f64),
-        "delay_between_a_and_b_sec" => Some(config.delay_between_a_and_b_sec as f64),
-        _ => None,
+    let def = config_registry::lookup(key)?;
+    match def.value_type {
+        ValueType::Float | ValueType::Integer => match key {
+            "ec_target" => Some(config.ec_target as f64),
+            "ec_tolerance" => Some(config.ec_tolerance as f64),
+            "ph_target" => Some(config.ph_target as f64),
+            "ph_tolerance" => Some(config.ph_tolerance as f64),
+            "delay_between_a_and_b_sec" => Some(config.delay_between_a_and_b_sec as f64),
+            _ => None,
+        },
     }
 }
 
@@ -59,12 +65,14 @@ pub fn read_field_as_string(config: &DeviceConfig, key: &str) -> Option<String> 
 /// `raw` có thể là literal ("1.8", "true") hoặc, khi trùng tên 1 key trong
 /// `context`, giá trị số được lấy từ `context` — khớp hành vi VariableCombobox
 /// ở Config·Overwrite (người dùng có thể gõ số hoặc chọn 1 biến).
+/// Giá trị số được kẹp (clamp) theo [min, max] của registry.
+/// Trả về `Ok(true)` nếu đã clamp, `Ok(false)` nếu ghi nguyên văn.
 pub fn write_field(
     config: &mut DeviceConfig,
     key: &str,
     raw: &str,
     context: &HashMap<String, f64>,
-) -> Result<()> {
+) -> Result<bool> {
     let kind = config_field_kind(key).context(format!("Unknown config key: {key}"))?;
     let resolved_numeric = || -> Result<f64> {
         if let Some(v) = context.get(raw) {
@@ -76,7 +84,8 @@ pub fn write_field(
     };
     match kind {
         ConfigFieldKind::Numeric => {
-            let v = resolved_numeric()? as f32;
+            let (clamped, did_clamp) = config_registry::clamp(key, resolved_numeric()?);
+            let v = clamped as f32;
             match key {
                 "ec_target" => config.ec_target = v,
                 "ec_tolerance" => config.ec_tolerance = v,
@@ -84,20 +93,24 @@ pub fn write_field(
                 "ph_tolerance" => config.ph_tolerance = v,
                 _ => unreachable!("config_field_kind and this match must stay in sync"),
             }
+            Ok(did_clamp)
         }
         ConfigFieldKind::Integer => {
-            config.delay_between_a_and_b_sec = resolved_numeric()? as i32;
+            let (clamped, did_clamp) = config_registry::clamp(key, resolved_numeric()?);
+            config.delay_between_a_and_b_sec = clamped as i32;
+            Ok(did_clamp)
         }
         ConfigFieldKind::Text => {
             config.control_mode = raw.to_string();
+            Ok(false)
         }
         ConfigFieldKind::Bool => {
             config.is_enabled = raw
                 .parse::<bool>()
                 .context(format!("'{raw}' is not a valid bool for is_enabled"))?;
+            Ok(false)
         }
     }
-    Ok(())
 }
 
 /// 1 chỉ thị Config·Overwrite đã được phân giải từ `ir_json.configOverwrite`
@@ -295,7 +308,7 @@ mod tests {
     #[test]
     fn write_field_parses_a_literal_number_for_numeric_fields() {
         let mut cfg = sample_config();
-        write_field(&mut cfg, "ec_target", "2.4", &HashMap::new()).unwrap();
+        let _ = write_field(&mut cfg, "ec_target", "2.4", &HashMap::new()).unwrap();
         assert!((cfg.ec_target - 2.4).abs() < 0.001);
     }
 
@@ -303,16 +316,16 @@ mod tests {
     fn write_field_resolves_a_context_variable_name_before_parsing_as_literal() {
         let mut cfg = sample_config();
         let ctx: HashMap<String, f64> = [("ph_target_now".to_string(), 6.4)].into_iter().collect();
-        write_field(&mut cfg, "ph_target", "ph_target_now", &ctx).unwrap();
+        let _ = write_field(&mut cfg, "ph_target", "ph_target_now", &ctx).unwrap();
         assert!((cfg.ph_target - 6.4).abs() < 0.001);
     }
 
     #[test]
     fn write_field_parses_bool_and_text_fields() {
         let mut cfg = sample_config();
-        write_field(&mut cfg, "is_enabled", "false", &HashMap::new()).unwrap();
+        let _ = write_field(&mut cfg, "is_enabled", "false", &HashMap::new()).unwrap();
         assert!(!cfg.is_enabled);
-        write_field(&mut cfg, "control_mode", "manual", &HashMap::new()).unwrap();
+        let _ = write_field(&mut cfg, "control_mode", "manual", &HashMap::new()).unwrap();
         assert_eq!(cfg.control_mode, "manual");
     }
 
@@ -326,6 +339,39 @@ mod tests {
     fn write_field_errors_when_literal_is_neither_a_number_nor_a_known_variable() {
         let mut cfg = sample_config();
         assert!(write_field(&mut cfg, "ec_target", "not_a_number", &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn write_field_clamps_a_too_high_value_to_registry_max() {
+        let mut cfg = sample_config();
+        let clamped =
+            write_field(&mut cfg, "ec_target", "99.0", &HashMap::new()).unwrap();
+        assert!(clamped, "expected clamp flag for out-of-range high value");
+        assert!((cfg.ec_target - 3.2).abs() < 0.001);
+    }
+
+    #[test]
+    fn write_field_clamps_a_too_low_value_to_registry_min() {
+        let mut cfg = sample_config();
+        let clamped =
+            write_field(&mut cfg, "ec_target", "0.1", &HashMap::new()).unwrap();
+        assert!(clamped, "expected clamp flag for out-of-range low value");
+        assert!((cfg.ec_target - 0.8).abs() < 0.001);
+    }
+
+    #[test]
+    fn write_field_reports_no_clamp_for_an_in_range_value() {
+        let mut cfg = sample_config();
+        let clamped =
+            write_field(&mut cfg, "ec_target", "2.4", &HashMap::new()).unwrap();
+        assert!(!clamped, "in-range value must not report clamping");
+        assert!((cfg.ec_target - 2.4).abs() < 0.001);
+    }
+
+    #[test]
+    fn write_field_still_errors_on_dose_max_ml() {
+        let mut cfg = sample_config();
+        assert!(write_field(&mut cfg, "dose_max_ml", "10", &HashMap::new()).is_err());
     }
 
     async fn seed_device(pool: &sqlx::PgPool, device_id: &str) {

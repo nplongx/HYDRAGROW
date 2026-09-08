@@ -9,7 +9,7 @@ describe("AutomationMetricsBanner", () => {
     expect(screen.getByText("Flow đang hoạt động")).toBeInTheDocument();
     expect(screen.getByText("Cảnh báo trong 24h")).toBeInTheDocument();
     expect(screen.getByText("Ghi đè Config hôm nay")).toBeInTheDocument();
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.getByText("Tỉ lệ thực thi thành công")).toBeInTheDocument();
   });
 

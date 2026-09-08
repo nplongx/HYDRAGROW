@@ -8,7 +8,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useAutomationScripts, useConfigOverrides, useRevertConfigOverride } from "../hooks/useAutomationScripts";
+import { useAutomationScripts, useConfigOverrides, useExecutionSuccessRate, useRevertConfigOverride } from "../hooks/useAutomationScripts";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiPut } from "../lib/apiClient";
 import toast from "react-hot-toast";
@@ -41,6 +41,7 @@ export function Automation() {
     enabled: !!deviceId,
   });
   const revertMutation = useRevertConfigOverride(deviceId);
+  const { data: successRatePercent } = useExecutionSuccessRate(deviceId);
   const queryClient = useQueryClient();
 
   const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -138,7 +139,7 @@ export function Automation() {
           activeFlows: activeScripts.filter((s) => s.enabled).length,
           alerts24h: activeScripts.filter((s) => s.kind === "alert" && s.enabled).length,
           configOverridesToday: configOverridesData?.active?.length ?? 0,
-          successRatePercent: 100,
+          successRatePercent: successRatePercent ?? null,
         }}
       />
 

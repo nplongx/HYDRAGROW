@@ -106,3 +106,14 @@ export function useRevertConfigOverride(deviceId: string) {
   });
 }
 
+export function useExecutionSuccessRate(deviceId: string) {
+  return useQuery({
+    queryKey: ['execution-success-rate', deviceId],
+    queryFn: () =>
+      apiGet<{ status: string; data: { successRatePercent: number | null } }>(
+        `/devices/${deviceId}/scripts/execution-success-rate`,
+      ).then((r) => r.data.successRatePercent),
+    enabled: Boolean(deviceId),
+  });
+}
+

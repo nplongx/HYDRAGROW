@@ -338,7 +338,7 @@ describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
     expect(mockOnChange).toHaveBeenCalledWith('t2', expect.objectContaining({ kind: 'fsm', stage: 'Sinh trưởng' }));
   });
 
-  it('renders Trigger Webhook fields: endpoint with copy button, mode, auth, and payload tags', () => {
+  it('Trigger Webhook panel shows endpoint and points to the Webhook & Chain panel (no fictional auth/mode fields)', () => {
     render(
       <NodeEditorPanel
         kind="alert"
@@ -350,11 +350,13 @@ describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
 
     expect(screen.getByText('TRIGGER · WEBHOOK')).toBeInTheDocument();
     expect(screen.getByText('Nhận dữ liệu từ bên ngoài')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('/hooks/f-2201')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('(được cấp khi lưu Flow lần đầu)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sao chép' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Chế độ xử lý')).toBeInTheDocument();
-    expect(screen.getByLabelText('Xác thực')).toBeInTheDocument();
-    expect(screen.getByText('ec_out:flow')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Xác thực')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Chế độ xử lý')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Cấu hình chi tiết ánh xạ trường ở panel Webhook & Chain phía dưới/),
+    ).toBeInTheDocument();
   });
 
   it('renders Condition Group fields: group operator, condition chips, and NOT toggle', () => {

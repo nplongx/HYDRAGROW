@@ -25,6 +25,7 @@ vi.mock('../hooks/useAutomationScripts', () => ({
   useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
   useAllConfigOverrides: () => ({ data: [], isLoading: false }),
   useRevertConfigOverride: () => ({ mutate: vi.fn(), isPending: false }),
+  useExecutionSuccessRate: () => ({ data: null }),
 }));
 
 class ResizeObserverMock {

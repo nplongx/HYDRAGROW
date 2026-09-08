@@ -28,7 +28,6 @@ import {
   InputWithSuffix,
   InputWithButton,
   PillsSelector,
-  DashedTag,
   InspectorShell,
 } from "./ConfigPanelUI";
 
@@ -408,83 +407,21 @@ export function NodeEditorPanel({
               <FieldGroup label="Endpoint">
                 <InputWithButton
                   ariaLabel="Endpoint"
-                  value={(node.data.endpoint as string) || "/hooks/f-2201"}
+                  value={(node.data.endpoint as string) || "(được cấp khi lưu Flow lần đầu)"}
                   buttonText={copiedEndpoint ? "Đã chép ✓" : "Sao chép"}
                   onButtonClick={() => {
-                    const url = (node.data.endpoint as string) || "/hooks/f-2201";
-                    navigator.clipboard?.writeText(url);
+                    const url = (node.data.endpoint as string) || "";
+                    if (url) navigator.clipboard?.writeText(url);
                     setCopiedEndpoint(true);
                     setTimeout(() => setCopiedEndpoint(false), 2000);
                   }}
                 />
               </FieldGroup>
 
-              <FieldGroup label="Chế độ xử lý">
-                <select
-                  aria-label="Chế độ xử lý"
-                  className="ui-input w-full text-xs"
-                  value={(node.data.mode as string) || "flow (nối tiếp)"}
-                  onChange={(e) =>
-                    onChange(node.id, {
-                      ...node.data,
-                      kind: "webhook",
-                      mode: e.target.value,
-                    })
-                  }
-                >
-                  <option value="flow (nối tiếp)">flow (nối tiếp)</option>
-                  <option value="direct (trực tiếp)">direct (trực tiếp)</option>
-                </select>
-              </FieldGroup>
-
-              <FieldGroup label="Xác thực">
-                <select
-                  aria-label="Xác thực"
-                  className="ui-input w-full text-xs"
-                  value={(node.data.auth as string) || "Chữ ký HMAC - ****3f2a"}
-                  onChange={(e) =>
-                    onChange(node.id, {
-                      ...node.data,
-                      kind: "webhook",
-                      auth: e.target.value,
-                    })
-                  }
-                >
-                  <option value="Chữ ký HMAC - ****3f2a">Chữ ký HMAC - ****3f2a</option>
-                  <option value="Bearer Token">Bearer Token</option>
-                  <option value="API Key">API Key</option>
-                  <option value="Không xác thực">Không xác thực</option>
-                </select>
-              </FieldGroup>
-
-              <div className="flex flex-col gap-1.5 pt-1">
-                <span className="text-[11px] text-emerald-800/70">Các biến payload</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {((node.data.payloadFields as string[]) || [
-                    "ec_out:flow",
-                    "ph_ext:fgh",
-                    "temp_out:temp",
-                  ]).map((tag, idx) => (
-                    <DashedTag
-                      key={idx}
-                      label={tag}
-                      onRemove={() => {
-                        const current =
-                          (node.data.payloadFields as string[]) || [
-                            "ec_out:flow",
-                            "ph_ext:fgh",
-                            "temp_out:temp",
-                          ];
-                        onChange(node.id, {
-                          ...node.data,
-                          kind: "webhook",
-                          payloadFields: current.filter((_, i) => i !== idx),
-                        });
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
+              <p className="text-[11px] text-emerald-800/70 leading-relaxed">
+                Cấu hình chi tiết ánh xạ trường ở panel Webhook & Chain phía dưới canvas — nơi đó cũng cho
+                thấy Flow này sẽ nối tiếp sang Flow nào.
+              </p>
             </div>
           )}
         </ConfigCard>

@@ -400,6 +400,21 @@ pub async fn eval_flow_chain(
                 device_id,
                 config_key, error = %e, "config overwrite reconcile failed"
             );
+            for c in contenders {
+                let _ = crate::services::execution_log::log_error(
+                    pool,
+                    c.script_id,
+                    device_id,
+                    &format!("config overwrite reconcile failed: {e}"),
+                )
+                .await;
+            }
+        }
+    }
+
+    for (script_id, _result) in &fired {
+        if let Err(e) = crate::services::execution_log::log_success(pool, *script_id, device_id).await {
+            warn!(device_id, script_id = %script_id, error = %e, "failed to write execution log");
         }
     }
 

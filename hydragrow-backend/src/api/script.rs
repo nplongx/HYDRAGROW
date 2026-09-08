@@ -566,11 +566,23 @@ pub async fn revert_config_override(
         .json(json!({"status": "success", "message": "Đã khôi phục cấu hình về giá trị gốc"}))
 }
 
+pub async fn get_execution_success_rate(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    match crate::services::execution_log::success_rate_percent(&app_state.pg_pool, &device_id).await {
+        Ok(rate) => HttpResponse::Ok().json(json!({ "status": "success", "data": { "successRatePercent": rate } })),
+        Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("", web::get().to(list_scripts))
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
         .route("/test", web::post().to(test_script))
+        .route("/execution-success-rate", web::get().to(get_execution_success_rate))
         .route("/config-overrides", web::get().to(list_config_overrides))
         .route(
             "/config-overrides/{override_id}/revert",

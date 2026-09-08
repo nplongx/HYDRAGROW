@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 import type { UpsertScriptRequest, UserScript, TestScriptRequest, TestScriptResponse } from '../types/automation';
 
@@ -74,6 +74,23 @@ export function useConfigOverrides(deviceId: string, options?: { enabled?: boole
         `/devices/${deviceId}/scripts/config-overrides`,
       ).then((r) => r.data),
     enabled: options?.enabled !== undefined ? options.enabled && !!deviceId : !!deviceId,
+  });
+}
+
+export function useAllConfigOverrides(deviceIds: string[]) {
+  return useQueries({
+    queries: deviceIds.map((id) => ({
+      queryKey: ['config-overrides', id],
+      queryFn: () =>
+        apiGet<{ status: string; data: import('../types/automation').ConfigOverridesResponse }>(
+          `/devices/${id}/scripts/config-overrides`,
+        ).then((r) => r.data),
+      enabled: !!id,
+    })),
+    combine: (results) => ({
+      data: results.flatMap((r) => r.data?.active ?? []),
+      isLoading: results.some((r) => r.isLoading),
+    }),
   });
 }
 

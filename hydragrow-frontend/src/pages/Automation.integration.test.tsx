@@ -23,6 +23,7 @@ vi.mock('../hooks/useAutomationScripts', () => ({
   useTestAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false, data: null }),
   useApplyTemplate: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, isError: false }),
   useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
+  useAllConfigOverrides: () => ({ data: [], isLoading: false }),
   useRevertConfigOverride: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 

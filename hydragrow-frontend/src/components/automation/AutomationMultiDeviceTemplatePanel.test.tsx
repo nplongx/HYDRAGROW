@@ -1,16 +1,17 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AutomationMultiDeviceTemplatePanel } from "./AutomationMultiDeviceTemplatePanel";
 
-// Mock dependencies
 vi.mock("../../hooks/useOwnedDevices", () => ({
   useOwnedDevices: () => ({
-    data: [
-      { id: "dev1", name: "Device 1", online: true },
-      { id: "dev2", name: "Device 2 (Local Override)", online: true },
+    devices: [
+      { device_id: "dev1", label: "Device 1" },
+      { device_id: "dev2", label: "Device 2" },
     ],
-    isLoading: false,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
   }),
 }));
 
@@ -22,42 +23,68 @@ vi.mock("../../hooks/useAutomationScripts", () => ({
     isSuccess: false,
     isError: false,
   }),
+  useAllConfigOverrides: () => ({
+    data: [
+      {
+        configKey: "ec_target",
+        deviceId: "dev2",
+        originalValue: "1.2",
+        currentValue: "2.0",
+        flowName: "Flow B",
+        status: "active",
+      },
+    ],
+    isLoading: false,
+  }),
 }));
 
-const queryClient = new QueryClient();
+function renderPanel(irJson: any = { configOverwrite: { configKey: "ec_target", value: "1.8" } }) {
+  const queryClient = new QueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AutomationMultiDeviceTemplatePanel
+        currentScript={{ id: "script1", device_id: "dev-root", name: "Test Script", ir_json: irJson } as any}
+      />
+    </QueryClientProvider>,
+  );
+}
 
 describe("AutomationMultiDeviceTemplatePanel", () => {
-  it("renders multi-device template application UI and allows applying to selected devices", () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AutomationMultiDeviceTemplatePanel
-          currentScript={{ id: "script1", device_id: "dev-root", name: "Test Script" } as any}
-        />
-      </QueryClientProvider>,
-    );
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
+  it("detects real local overrides from useAllConfigOverrides (not device name)", () => {
+    renderPanel();
+    // dev2 has a real override for ec_target -> badge; dev1 does not
+    expect(screen.getByText("Device 2")).toBeInTheDocument();
+    expect(screen.getAllByText("Có override cục bộ")).toHaveLength(1);
+    expect(screen.getAllByText("Giống gốc")).toHaveLength(1);
+    // per-device line shows real current value
+    expect(screen.queryByText(/Nhóm:/)).not.toBeInTheDocument();
+  });
+
+  it("shows dynamic preview for targetConfigKey/value, with fallback when no configOverwrite", () => {
+    renderPanel();
+    expect(screen.getByText("ec_target sẽ được ghi đè → 1.8")).toBeInTheDocument();
+  });
+
+  it("shows fallback text when the flow has no configOverwrite node", () => {
+    renderPanel(null);
     expect(
-      screen.getByText("Áp Flow template cho nhiều thiết bị"),
+      screen.getByText(/không chứa node Ghi đè Config/),
     ).toBeInTheDocument();
+  });
 
-    expect(screen.getByText("Device 1")).toBeInTheDocument();
-    expect(screen.getByText("Device 2 (Local Override)")).toBeInTheDocument();
-
+  it("sends { configOverwrite: null } for preserved devices and {} otherwise", () => {
+    renderPanel();
     const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(2);
-
-    // Initial state: 0 selected, button disabled
-    const applyButton = screen.getByRole("button", { name: /Áp dụng cho 0 thiết bị đã chọn/i });
-    expect(applyButton).toBeDisabled();
-
-    // Check first device
     fireEvent.click(checkboxes[0]);
-    expect(screen.getByRole("button", { name: /Áp dụng cho 1 thiết bị đã chọn/i })).not.toBeDisabled();
-
-    // Click apply
-    fireEvent.click(screen.getByRole("button", { name: /Áp dụng cho 1 thiết bị đã chọn/i }));
+    fireEvent.click(checkboxes[1]);
+    fireEvent.click(screen.getByRole("button", { name: /Áp dụng cho 2 thiết bị đã chọn/i }));
     expect(mutateMock).toHaveBeenCalledWith([
       { device_id: "dev1", overrides: {} },
+      { device_id: "dev2", overrides: { configOverwrite: null } },
     ]);
   });
 });

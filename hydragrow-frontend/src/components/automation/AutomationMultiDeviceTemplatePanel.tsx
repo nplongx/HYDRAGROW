@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, AlertTriangle } from "lucide-react";
 import { useOwnedDevices } from "../../hooks/useOwnedDevices";
-import { useApplyTemplate } from "../../hooks/useAutomationScripts";
+import { useAllConfigOverrides, useApplyTemplate } from "../../hooks/useAutomationScripts";
 import type { UserScript } from "../../types/automation";
 
 interface Props {
@@ -11,7 +11,6 @@ interface Props {
 interface TargetDeviceMeta {
   id: string;
   name: string;
-  group: string;
   hasLocalOverride: boolean;
   currentOverrideVal?: string;
 }
@@ -21,16 +20,38 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
   const rawDevices = ownedRes?.devices ?? ownedRes?.data ?? [];
   const applyMutation = useApplyTemplate(currentScript.device_id, currentScript.id);
 
-  // Map real devices
+  const targetConfigKey = currentScript.ir_json?.configOverwrite?.configKey;
+  const targetConfigValue = currentScript.ir_json?.configOverwrite?.value;
+
+  const candidateIds = (rawDevices ?? [])
+    .map((d: any) => d.device_id || d.id)
+    .filter((id: string) => id && id !== currentScript.device_id);
+  const allOverrides = useAllConfigOverrides(candidateIds);
+
+  // Real override data: only overrides matching this template's configKey count.
+  const overrideByDeviceId = new Map(
+    (allOverrides.data ?? [])
+      .filter(
+        (o) => o.deviceId !== currentScript.device_id && (!targetConfigKey || o.configKey === targetConfigKey),
+      )
+      .map((o) => [o.deviceId, o]),
+  );
+
+  // Map real devices (excluding current device — can't apply template to itself)
   const devices: TargetDeviceMeta[] = (rawDevices && rawDevices.length > 0)
-    ? rawDevices.map((d: any) => ({
-        id: d.device_id || d.id,
-        name: d.label || d.name || `Thiết bị ${d.device_id || d.id}`,
-        group: d.group || "Khu vực sản xuất",
-        hasLocalOverride: Boolean(d.hasLocalOverride || (d.name && String(d.name).toLowerCase().includes("override")) || (d.label && String(d.label).toLowerCase().includes("override"))),
-        currentOverrideVal: d.currentOverrideVal,
-      }))
-    : [];
+    ? rawDevices
+        .filter((d: any) => (d.device_id || d.id) !== currentScript.device_id)
+        .map((d: any) => {
+          const id = d.device_id || d.id;
+          const override = overrideByDeviceId.get(id);
+          return {
+            id,
+            name: d.label || d.name || `Thiết bị ${d.device_id || d.id}`,
+            hasLocalOverride: override !== undefined,
+            currentOverrideVal: override ? String(override.currentValue) : undefined,
+          };
+        })
+      : [];
 
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
@@ -65,7 +86,7 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
       .filter((d) => selectedIds[d.id])
       .map((d) => ({
         device_id: d.id,
-        overrides: {},
+        overrides: d.hasLocalOverride ? { configOverwrite: null } : {},
       }));
 
     if (targets.length === 0) return;
@@ -133,7 +154,6 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
                     />
                     <div>
                       <div className="text-xs font-bold text-emerald-950">{d.name}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">Nhóm: {d.group}</div>
                     </div>
                   </div>
 
@@ -167,7 +187,9 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
 
           <div className="bg-white rounded-2xl border border-indigo-100 p-3.5 space-y-2 text-xs">
             <div className="font-semibold text-indigo-950">
-              ec_target sẽ được ghi đè &rarr; 1.8 mS/cm
+              {targetConfigKey
+                ? `${targetConfigKey} sẽ được ghi đè → ${targetConfigValue}`
+                : "Flow này không chứa node Ghi đè Config — các thiết bị sẽ nhận toàn bộ Trigger/Condition/Action"}
             </div>
             <div className="text-[11px] text-emerald-700 flex items-center gap-1.5">
               <Check className="w-3.5 h-3.5 shrink-0" />
@@ -206,7 +228,7 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
                     <span className="font-medium text-slate-800 text-[11px]">{d.name}</span>
                     <span className="text-[10px] text-slate-500 ml-auto">
                       {d.hasLocalOverride
-                        ? `Giữ override cục bộ · ec_target hiện tại ${d.currentOverrideVal}`
+                        ? `Giữ override cục bộ · ${targetConfigKey ?? "config"} hiện tại ${d.currentOverrideVal}`
                         : "Áp dụng đầy đủ"}
                     </span>
                   </div>

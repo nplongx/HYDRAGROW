@@ -23,12 +23,16 @@ export function buildIrFromGraph(params: {
     nodes.map((n) => ({ id: n.id, type: n.type, data: n.data as Record<string, unknown> })),
   );
 
+  // Trigger node lưu sẵn dạng ĐÚNG shape của AutomationIr['trigger'] trong
+  // node.data.trigger — trước bản sửa này, field đó bị bỏ qua hoàn toàn.
+  const triggerNode = nodes.find((n) => n.type === 'trigger');
+  const savedTrigger = (triggerNode?.data as { trigger?: AutomationIr['trigger'] } | undefined)?.trigger;
+  const trigger: AutomationIr['trigger'] =
+    savedTrigger ?? { type: kind === 'recipe_override' ? 'fsm' : 'sensor' };
+
   return {
     kind,
-    // recipe_override chạy trên FSM transition (fsm.rs); alert và
-    // action_command đều chạy trên sensor MQTT data (sensors.rs) — xem
-    // hydragrow-backend/src/models/script.rs::ScriptKind.
-    trigger: { type: kind === 'recipe_override' ? 'fsm' : 'sensor' },
+    trigger,
     conditions,
     actions,
     nodes: nodes.map((n) => ({

@@ -230,13 +230,25 @@ pub enum WifiSecretAction {
     Clear,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WifiProvisionEntry {
     pub ssid: String,
     pub priority: u8,
     pub secret_action: WifiSecretAction,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+}
+
+/// Redacted Debug: passwords must never appear in logs, even via `{:?}`.
+impl std::fmt::Debug for WifiProvisionEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WifiProvisionEntry")
+            .field("ssid", &self.ssid)
+            .field("priority", &self.priority)
+            .field("secret_action", &self.secret_action)
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

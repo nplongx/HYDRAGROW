@@ -578,3 +578,38 @@ fn wifi_config_status_topic_is_canonical() {
         "AGITECH/device-001/controller/ota-status"
     );
 }
+
+#[test]
+fn wifi_command_debug_output_does_not_include_password() {
+    let secret = "DO_NOT_LOG_ME";
+    let entry = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Set,
+        password: Some(secret.into()),
+    };
+    let config = WifiProvisionConfig {
+        config_version: 8,
+        entries: vec![entry.clone()],
+    };
+    let params = OtaProvisionParams {
+        firmware_release: Some("v0.9.0".into()),
+        wifi: Some(config),
+    };
+    // The explicit audit/log representation must never contain the secret,
+    // even through Debug formatting.
+    for representation in [
+        format!("{entry:?}"),
+        format!("{params:?}"),
+        format!(
+            "staging wifi count={} version={}",
+            params.wifi.as_ref().unwrap().entries.len(),
+            params.wifi.as_ref().unwrap().config_version
+        ),
+    ] {
+        assert!(
+            !representation.contains(secret),
+            "log representation leaked password: {representation}"
+        );
+    }
+}

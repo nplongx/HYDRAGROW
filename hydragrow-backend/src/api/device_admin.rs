@@ -118,6 +118,11 @@ pub async fn trigger_ota(
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden().json(serde_json::json!({"error": "Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}));
     }
+    if wifi.is_some() && !check_provision_throttle(&device_id) {
+        warn!(%device_id, "Provision throttle exceeded");
+        return HttpResponse::TooManyRequests()
+            .json(serde_json::json!({"error": "Too many provisioning attempts for this device; retry later"}));
+    }
     if let Some(config) = &wifi {
         if let Err(reason) = hydragrow_shared::wifi_tx::validate_provision_structure(config) {
             return HttpResponse::BadRequest()
@@ -139,9 +144,11 @@ pub async fn trigger_ota(
         }
     }
     let command = build_update_firmware_command(wifi.clone());
+    // Audit log uses the metadata-only summary — never the command itself.
+    let audit = command_audit_summary(&command);
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => {
-            info!(%device_id, wifi_attached = wifi.is_some(), "OTA provision command sent");
+            info!(%device_id, %audit, "OTA provision command sent");
             if let Some(config) = &wifi {
                 // Persist SSID metadata only — passwords never cross this boundary.
                 let metadata = device_wifi::metadata_from_provision(config);
@@ -189,6 +196,47 @@ pub async fn trigger_ota(
     }
 }
 
+/// Metadata-only audit summary for a provision command. Passwords never
+/// appear here — log this instead of the command itself.
+pub fn command_audit_summary(command: &MqttCommandOut) -> String {
+    let (count, version) = command
+        .params
+        .as_ref()
+        .and_then(|params| params.ota_provision.as_ref())
+        .and_then(|provision| provision.wifi.as_ref())
+        .map(|wifi| (wifi.entries.len(), wifi.config_version))
+        .unwrap_or((0, 0));
+    format!(
+        "action={} wifi_entries={} config_version={}",
+        command.action, count, version
+    )
+}
+
+/// Explicit per-device provision throttle: at most PROVISION_MAX_ATTEMPTS
+/// combined OTA+WiFi provisions per PROVISION_WINDOW. Pure decision helper
+/// so the policy is unit-testable without the global map.
+pub const PROVISION_MAX_ATTEMPTS: usize = 5;
+pub const PROVISION_WINDOW_SECS: u64 = 300;
+
+pub fn provision_allowed(attempts: &mut Vec<std::time::Instant>, now: std::time::Instant) -> bool {
+    attempts.retain(|at| now.duration_since(*at).as_secs() < PROVISION_WINDOW_SECS);
+    if attempts.len() >= PROVISION_MAX_ATTEMPTS {
+        return false;
+    }
+    attempts.push(now);
+    true
+}
+
+static PROVISION_THROTTLE: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, Vec<std::time::Instant>>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+fn check_provision_throttle(device_id: &str) -> bool {
+    let now = std::time::Instant::now();
+    let mut map = PROVISION_THROTTLE.lock().unwrap_or_else(|e| e.into_inner());
+    let attempts = map.entry(device_id.to_string()).or_default();
+    provision_allowed(attempts, now)
+}
 /// Build the fleet `update_firmware` command. OTA-only when `wifi` is None;
 /// combined OTA+WiFi otherwise. Passwords stay in the returned MQTT payload
 /// (transient) and must never be persisted by callers.
@@ -512,6 +560,37 @@ mod tests {
         let value = serde_json::to_value(&entry).unwrap();
         assert!(value.get("password").is_none());
         assert!(value.get("secret").is_none());
+    }
+
+    #[test]
+    fn wifi_command_audit_output_does_not_include_password() {
+        let secret = "DO_NOT_LOG_ME";
+        let command = build_update_firmware_command(Some(WifiProvisionConfig {
+            config_version: 8,
+            entries: vec![WifiProvisionEntry {
+                ssid: "Farm-A".into(),
+                priority: 0,
+                secret_action: WifiSecretAction::Set,
+                password: Some(secret.into()),
+            }],
+        }));
+        let audit = command_audit_summary(&command);
+        assert!(!audit.contains(secret));
+        assert!(!audit.contains("password"));
+        assert!(audit.contains("config_version=8"));
+    }
+
+    #[test]
+    fn provision_throttle_blocks_bursts() {
+        let now = std::time::Instant::now();
+        let mut attempts = Vec::new();
+        for _ in 0..PROVISION_MAX_ATTEMPTS {
+            assert!(provision_allowed(&mut attempts, now));
+        }
+        assert!(!provision_allowed(&mut attempts, now));
+        // After the window passes, provisioning is allowed again.
+        let later = now + std::time::Duration::from_secs(PROVISION_WINDOW_SECS + 1);
+        assert!(provision_allowed(&mut attempts, later));
     }
 
     #[test]

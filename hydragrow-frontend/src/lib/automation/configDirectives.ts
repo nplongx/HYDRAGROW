@@ -10,6 +10,7 @@ export interface ConfigOverwriteDirective {
   value: string;
   readOriginalBeforeWrite: boolean;
   restoreMode: 'on_condition_false';
+  priority: number;
 }
 
 /**
@@ -38,11 +39,15 @@ export function collectConfigDirectives(nodes: GraphNode[]): {
     } else if (node.data.variant === 'overwrite' && !configOverwrite) {
       const value = node.data.overrideValue !== undefined ? String(node.data.overrideValue) : '';
       if (value) {
+        const rawPriority = node.data.priority;
+        const priority =
+          typeof rawPriority === 'number' && Number.isInteger(rawPriority) ? rawPriority : 0;
         configOverwrite = {
           configKey,
           value,
           readOriginalBeforeWrite: Boolean(node.data.readOriginalBeforeWrite),
           restoreMode: 'on_condition_false',
+          priority,
         };
       }
     }

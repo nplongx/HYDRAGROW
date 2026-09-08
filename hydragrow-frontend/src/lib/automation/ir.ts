@@ -178,6 +178,7 @@ export const ConfigOverwriteSchema = z.object({
   value: z.string().min(1),
   readOriginalBeforeWrite: z.boolean().default(false),
   restoreMode: z.literal('on_condition_false').default('on_condition_false'),
+  priority: z.number().int().default(0),
 });
 export type ConfigOverwrite = z.infer<typeof ConfigOverwriteSchema>;
 

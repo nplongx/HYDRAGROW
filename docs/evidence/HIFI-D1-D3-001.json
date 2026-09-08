@@ -1,0 +1,29 @@
+{
+  "requirement_id": "HIFI-D1-D3-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "vitest hydragrow-frontend/src/hooks/useDeviceControl.test.ts",
+      "value": "6 passed"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-backend emergency_stop && vitest EmergencyStopConfirmDialog.test.tsx",
+      "value": "Passed backend, firmware, and frontend emergency stop tests"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "vitest scheduleConflicts.test.ts AutomationConflictBanner.test.tsx",
+      "value": "7 passed"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "vitest StatusPill.test.tsx AdvancedDeviceControl.test.tsx",
+      "value": "10 passed"
+    }
+  ]
+}

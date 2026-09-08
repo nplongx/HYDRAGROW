@@ -1,4 +1,5 @@
 import type { GraphNode } from './contextVariables';
+import type { UserScript } from '../../types/automation';
 
 export interface ContextReadDirective {
   configKey: string;
@@ -54,4 +55,15 @@ export function collectConfigDirectives(nodes: GraphNode[]): {
   }
 
   return { contextReads, configOverwrite };
+}
+
+/** Nguồn sự thật DUY NHẤT để biết 1 Flow có Config·Overwrite hay không: có
+ * field `ir_json.configOverwrite` hay không. KHÔNG dùng `kind ===
+ * 'config_override'` — giá trị kind đó chỉ còn tồn tại ở dữ liệu Flow cũ từ
+ * trước bản redesign canvas (action-based `config_override`, xem
+ * ConfigOverrideActionSchema trong ir.ts), Flow mới tạo qua canvas luôn có
+ * kind là 'alert'/'action_command'/'recipe_override' + field configOverwrite
+ * riêng. Cũng không dùng heuristic đoán qua tên Flow. */
+export function hasConfigOverride(script: Pick<UserScript, 'ir_json'>): boolean {
+  return Boolean(script.ir_json?.configOverwrite);
 }

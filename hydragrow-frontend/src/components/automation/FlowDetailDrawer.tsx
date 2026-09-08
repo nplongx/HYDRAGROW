@@ -10,6 +10,8 @@ import { TestPanel } from "./reactflow/TestPanel";
 import { fieldsForKind } from "../../hooks/useAutomationBuilder";
 import { ConfigNodeInspector } from "./reactflow/ConfigNodeInspector";
 import { NextFlowSelector } from "./NextFlowSelector";
+import { WebhookAndChainPanel } from "./WebhookAndChainPanel";
+import type { WebhookTriggerConfig } from "../../lib/automation/ir";
 import { useAutomationBuilder } from "../../hooks/useAutomationBuilder";
 import { AutomationIrSchema, type AutomationIr } from "../../lib/automation/ir";
 import { compileToRhai } from "../../lib/automation/compileToRhai";
@@ -153,6 +155,16 @@ export function FlowDetailDrawer({
   const auditLogsForSelectedKey = (configOverridesData?.history ?? []).filter(
     (l) => !selectedConfigKey || l.configKey === selectedConfigKey,
   );
+
+  const triggerNode = builder.nodes.find((n) => n.type === "trigger");
+  const triggerConfig = triggerNode?.data?.trigger as WebhookTriggerConfig | undefined;
+  const isWebhookTrigger = triggerConfig?.type === "webhook";
+  const configOverwriteNode = builder.nodes.find(
+    (n) => n.type === "config" && (n.data as Record<string, unknown>)?.variant === "overwrite",
+  );
+  const configOverwriteSummary = configOverwriteNode
+    ? `${(configOverwriteNode.data as Record<string, unknown>)?.configKey} → ${(configOverwriteNode.data as Record<string, unknown>)?.overrideValue}`
+    : undefined;
 
   return (
     <div data-testid="flow-detail-drawer" className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40">
@@ -303,16 +315,36 @@ export function FlowDetailDrawer({
         )}
       </div>
 
-      {otherScripts.length > 0 && (
-        <NextFlowSelector
+      {isWebhookTrigger ? (
+        <WebhookAndChainPanel
+          webhookUrl={(triggerNode?.data as Record<string, unknown>)?.endpoint as string | undefined}
+          mode={triggerConfig?.mode ?? "flow"}
+          onModeChange={(mode) =>
+            builder.updateNodeData(triggerNode!.id, { ...triggerNode!.data, trigger: { ...triggerConfig, type: "webhook", mode } })
+          }
+          mappings={triggerConfig?.fieldMappings ?? []}
+          onMappingsChange={(fieldMappings) =>
+            builder.updateNodeData(triggerNode!.id, { ...triggerNode!.data, trigger: { ...triggerConfig, type: "webhook", fieldMappings } })
+          }
+          currentScriptName={isNew ? name : script.name}
+          currentScriptKind={builder.kind}
+          configOverwriteSummary={configOverwriteSummary}
           scripts={otherScripts}
-          selectedIds={nextFlowIds}
-          currentScriptId={isNew ? null : script.id}
-          onToggle={(id) => toggleNextFlow(id)}
-          allScripts={allScripts ?? []}
-          passContextVariables={passContextVariables}
-          onTogglePassContext={setPassContextVariables}
+          selectedNextFlowIds={nextFlowIds}
+          onToggleNextFlow={(id) => toggleNextFlow(id)}
         />
+      ) : (
+        otherScripts.length > 0 && (
+          <NextFlowSelector
+            scripts={otherScripts}
+            selectedIds={nextFlowIds}
+            currentScriptId={isNew ? null : script.id}
+            onToggle={(id) => toggleNextFlow(id)}
+            allScripts={allScripts ?? []}
+            passContextVariables={passContextVariables}
+            onTogglePassContext={setPassContextVariables}
+          />
+        )
       )}
     </div>
   );

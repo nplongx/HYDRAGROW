@@ -2,7 +2,7 @@ export interface AutomationMetrics {
   activeFlows: number;
   alerts24h: number;
   configOverridesToday: number;
-  successRatePercent: number;
+  successRatePercent: number | null;
 }
 
 interface Props {
@@ -14,7 +14,7 @@ export function AutomationMetricsBanner({ metrics }: Props) {
     activeFlows: metrics?.activeFlows ?? 0,
     alerts24h: metrics?.alerts24h ?? 0,
     configOverridesToday: metrics?.configOverridesToday ?? 0,
-    successRatePercent: metrics?.successRatePercent ?? 100,
+    successRatePercent: metrics?.successRatePercent ?? null,
   };
 
   return (
@@ -35,7 +35,7 @@ export function AutomationMetricsBanner({ metrics }: Props) {
       </div>
 
       <div className="bg-white rounded-2xl border border-sky-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-        <div className="text-3xl font-bold text-sky-700">{data.successRatePercent}%</div>
+        <div className="text-3xl font-bold text-sky-700">{data.successRatePercent == null ? "—" : `${data.successRatePercent}%`}</div>
         <div className="text-xs text-sky-900/70 font-medium mt-1">Tỉ lệ thực thi thành công</div>
       </div>
     </div>

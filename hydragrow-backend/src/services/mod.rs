@@ -5,6 +5,7 @@ pub mod config_context;
 pub mod config_override;
 pub mod config_registry;
 pub mod cron_scheduler;
+pub mod execution_log;
 pub mod fcm;
 pub mod firebase_auth;
 pub mod flow_graph;

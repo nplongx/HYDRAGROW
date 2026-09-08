@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod command;
 pub mod config_context;
 pub mod config_override;
+pub mod config_registry;
 pub mod cron_scheduler;
 pub mod fcm;
 pub mod firebase_auth;

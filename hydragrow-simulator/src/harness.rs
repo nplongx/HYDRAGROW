@@ -13,6 +13,8 @@ use hydragrow_controller_core::{
     core::fsm::{context::SystemContext, orchestrator},
 };
 use hydragrow_shared::{ControllerConfig, SensorData};
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,6 +55,7 @@ pub struct Harness {
     pub dispatcher: SimDispatcher,
     pub tank: Tank,
     pub noise: NoiseConfig,
+    pub rng: StdRng,
     pub injector: Injector,
     pub clock: SimClock,
     pub sensor_last_update_ms: u64,
@@ -162,6 +165,8 @@ impl HarnessBuilder {
             ..Default::default()
         };
 
+        let rng = StdRng::seed_from_u64(self.noise.seed);
+
         Ok(Harness {
             config: self.config,
             ctx,
@@ -169,6 +174,7 @@ impl HarnessBuilder {
             dispatcher: SimDispatcher::new(),
             tank: self.tank,
             noise: self.noise,
+            rng,
             injector: Injector::new(),
             clock: clock.clone(),
             sensor_last_update_ms: clock.now_ms,
@@ -214,7 +220,7 @@ impl Harness {
 
         self.injector.apply_hardware_faults(&mut self.hw);
         self.tank.step(dt_ms, &self.hw, &self.config);
-        let mut sensor = read_sensor(&self.tank, &self.noise);
+        let mut sensor = read_sensor(&self.tank, &self.noise, &mut self.rng);
         sensor.device_id = self.device_id.clone();
         self.injector.apply_sensor_faults(&mut sensor);
 
@@ -242,7 +248,7 @@ impl Harness {
             if let Some(mqtt) = outputs.mqtt.as_mut() {
                 mqtt.publish_sensors(&sensor);
                 for event in &result.events {
-                    mqtt.publish_event(event);
+                    mqtt.publish_event(event, &self.ctx, self.clock.uptime_ms);
                 }
             }
             if let Some(recorder) = outputs.recorder.as_mut() {

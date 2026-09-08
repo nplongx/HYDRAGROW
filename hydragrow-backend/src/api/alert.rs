@@ -76,10 +76,7 @@ pub async fn health_summary(
                 .count();
             let water_operation_count = recent.iter().filter(|e| e.category == "water").count();
             let warning_count = recent.iter().filter(|e| e.level == "warning").count();
-            let critical_count = recent
-                .iter()
-                .filter(|e| e.level == "critical" || e.level == "error")
-                .count();
+            let critical_count = recent.iter().filter(|e| e.level == "critical").count();
             let latest_ph_dosing_at = recent
                 .iter()
                 .filter(|e| e.category == "dosing" && e.title.to_lowercase().contains("ph"))

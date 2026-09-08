@@ -5,10 +5,9 @@
 
 use super::ObserverContext;
 use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
-use hydragrow_shared::log::{
-    emit_basic_system_log, emit_system_log_json, LogCategory, LogLevel, SystemLogRecord,
-    UnifiedSystemLog,
-};
+use hydragrow_controller_core::utils::log_drop_counter;
+use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+use std::sync::atomic::Ordering;
 
 pub struct SystemLogObserver {
     /// Đếm số pump-on events kể từ boot (dùng để correlate log)
@@ -24,8 +23,9 @@ impl SystemLogObserver {
         match event {
             // Pass-through: orchestrator đã build log payload đầy đủ
             OrchestratorEvent::PublishSystemLog { payload_json } => {
-                let _ = oc.mqtt_tx.send(payload_json.clone());
-                emit_system_log_json(payload_json);
+                if oc.mqtt_tx.send(payload_json.clone()).is_err() {
+                    log_drop_counter().fetch_add(1, Ordering::Relaxed);
+                }
             }
 
             // Implicit log: bơm dosing bật → ghi log tự động
@@ -107,25 +107,16 @@ impl SystemLogObserver {
     ) {
         let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
             &oc.config.device_id,
-            level.clone(),
-            category.clone(),
+            level,
+            category,
             title,
-            message.clone(),
+            message,
             None,
             "system_log_observer",
             oc.now_ms,
         );
-        let _ = oc.mqtt_tx.send(log_payload);
-
-        emit_basic_system_log(SystemLogRecord {
-            device_id: &oc.config.device_id,
-            level,
-            category,
-            title,
-            source: "system_log_observer",
-            message: &message,
-            cycle_id: None,
-            timestamp_ms: oc.now_ms,
-        });
+        if oc.mqtt_tx.send(log_payload).is_err() {
+            log_drop_counter().fetch_add(1, Ordering::Relaxed);
+        }
     }
 }

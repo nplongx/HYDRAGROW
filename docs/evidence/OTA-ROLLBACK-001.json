@@ -1,0 +1,37 @@
+{
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "environment": "local-cargo-test",
+      "notes": "3/3 gate tests passed: first_call_returns_true, second_call_returns_false, many_calls_only_mark_once.",
+      "source": "hydragrow-controller-core/src/core/ota_health.rs",
+      "status": "PASS",
+      "verified_at": "2026-09-07T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "environment": "local-git-diff",
+      "notes": "Commit cafa1355 appends only the 9-line OTA ROLLBACK SAFETY NET block ending in CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y (single occurrence).",
+      "source": "ESP32-C3-CONTROLLER-NODE/sdkconfig.defaults",
+      "status": "PASS",
+      "verified_at": "2026-09-07T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "environment": "local-esp-cargo-check",
+      "notes": "Health-loop diff is +11/-0 (EspOta import, gate creation, mark-once block on MqttConnected); ESP firmware cargo check exited 0.",
+      "source": "ESP32-C3-CONTROLLER-NODE/src/runtime/health.rs",
+      "status": "PASS",
+      "verified_at": "2026-09-07T00:00:00Z"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "environment": "local-cargo-test",
+      "notes": "Full hydragrow-controller-core suite green: unit suite 56 passed (incl. 3 new gate tests), all integration suites green, 0 failures.",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml",
+      "status": "PASS",
+      "verified_at": "2026-09-07T00:00:00Z"
+    }
+  ],
+  "requirement_id": "OTA-ROLLBACK-001"
+}

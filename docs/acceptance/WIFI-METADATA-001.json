@@ -1,0 +1,26 @@
+{
+  "requirement_id": "WIFI-METADATA-001",
+  "objective": "Let the backend (and eventually the UI) know which SSIDs a device is configured to use — SSID, priority, monotonically increasing config version — without ever writing the WiFi password to the database.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Migration creates device_wifi_config (id, device_id, ssid, priority, config_version, updated_at + index on device_id) and applies cleanly; no password column exists.",
+      "verification": "cargo sqlx migrate run against scratch Postgres plus information_schema column check"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "replace_device_wifi_config inserts with version 1, bumps to 2 on rewrite, isolates devices, and get_device_wifi_config orders by priority / returns empty for unknown devices.",
+      "verification": "DATABASE_URL=... cargo test test_device_wifi (5 tests)"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "POST /wifi persists SSID metadata after successful MQTT publish (DB failure logs a warning, request still succeeds); passwords never reach the DB layer; GET /wifi returns stored SSIDs + version under device:network scope.",
+      "verification": "cargo test candidates_to_ssid_entries + response-builder tests; code inspection of update_wifi_list/get_wifi_config"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "No regressions: full hydragrow-backend test suite passes and cargo fmt --check is clean.",
+      "verification": "DATABASE_URL=... cargo test (full) && cargo fmt --check in hydragrow-backend"
+    }
+  ]
+}

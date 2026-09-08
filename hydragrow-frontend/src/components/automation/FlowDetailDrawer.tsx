@@ -264,13 +264,13 @@ export function FlowDetailDrawer({
           <ConfigNodeInspector
             initialKey={(builder.selectedNode.data?.configKey as string) ?? "ec_target"}
             initialValue={Number(builder.selectedNode.data?.overrideValue ?? 1.8)}
-            onSave={(updated: { configKey: string; overrideValue: number; applyMode: string; autoRestore: boolean }) => {
+            onSave={(updated: { configKey: string; overrideValue: number; autoRestore: boolean; priority: number }) => {
               builder.updateNodeData(builder.selectedNode!.id, {
                 ...builder.selectedNode!.data,
                 configKey: updated.configKey,
                 overrideValue: updated.overrideValue,
-                applyMode: updated.applyMode,
                 autoRestore: updated.autoRestore,
+                priority: updated.priority,
                 summary: `Ghi đè ${updated.configKey} -> ${updated.overrideValue}`,
               });
               setShowAuditModal(false);

@@ -7,22 +7,28 @@ import type { ConfigAuditLogEntry } from "../../../types/automation";
 interface Props {
   initialKey?: string;
   initialValue?: number;
+  initialAutoRestore?: boolean;
+  initialPriority?: number;
+  conditionSummary?: string;
   auditLogs?: ConfigAuditLogEntry[];
-  onSave?: (data: { configKey: string; overrideValue: number; applyMode: string; autoRestore: boolean }) => void;
+  onSave?: (data: { configKey: string; overrideValue: number; autoRestore: boolean; priority: number }) => void;
   onClose: () => void;
 }
 
 export function ConfigNodeInspector({
   initialKey = "ec_target",
   initialValue = 1.8,
+  initialAutoRestore = true,
+  initialPriority = 0,
+  conditionSummary = "Chưa cấu hình",
   auditLogs = [],
   onSave,
   onClose,
 }: Props) {
   const [configKey, setConfigKey] = useState(initialKey);
   const [overrideValue, setOverrideValue] = useState<number>(initialValue);
-  const [applyMode, setApplyMode] = useState<string>("during_true");
-  const [autoRestore, setAutoRestore] = useState(true);
+  const [autoRestore, setAutoRestore] = useState(initialAutoRestore);
+  const [priority, setPriority] = useState<number>(initialPriority);
 
   const settings = useDeviceStore((s) => s.settings);
 
@@ -161,52 +167,10 @@ export function ConfigNodeInspector({
               </div>
 
               <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3 mb-4">
-                <div className="font-semibold text-xs text-amber-950">Khung giờ ban đêm</div>
+                <div className="font-semibold text-xs text-amber-950">Điều kiện của Flow</div>
                 <div className="text-[11px] text-amber-900/80 font-mono mt-0.5">
-                  time.hour &isin; [22,24) &cup; [0,5)
+                  {conditionSummary}
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[11px] font-semibold text-emerald-900/80 block uppercase tracking-wider mb-1">
-                  ÁP DỤNG GHI ĐÈ KHI
-                </label>
-
-                <label className="flex items-center gap-2.5 p-2 rounded-xl border border-emerald-100/80 bg-white text-xs text-emerald-950 cursor-pointer hover:bg-emerald-50/40">
-                  <input
-                    type="radio"
-                    name="applyMode"
-                    value="once"
-                    checked={applyMode === "once"}
-                    onChange={(e) => setApplyMode(e.target.value)}
-                    className="text-emerald-600"
-                  />
-                  <span>Điều kiện vừa chuyển sang đúng (once)</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 p-2 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs font-medium text-emerald-950 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="applyMode"
-                    value="during_true"
-                    checked={applyMode === "during_true"}
-                    onChange={(e) => setApplyMode(e.target.value)}
-                    className="text-emerald-600"
-                  />
-                  <span>Trong suốt thời gian điều kiện đúng</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 p-2 rounded-xl border border-emerald-100/80 bg-white text-xs text-emerald-950 cursor-pointer hover:bg-emerald-50/40">
-                  <input
-                    type="radio"
-                    name="applyMode"
-                    value="until_next_flow"
-                    checked={applyMode === "until_next_flow"}
-                    onChange={(e) => setApplyMode(e.target.value)}
-                    className="text-emerald-600"
-                  />
-                  <span>Cho đến khi có Flow khác thay đổi</span>
-                </label>
               </div>
 
               <div className="mt-4 pt-3 border-t border-emerald-100">
@@ -275,13 +239,26 @@ export function ConfigNodeInspector({
                   </div>
                 </div>
 
+                <div>
+                  <label className="text-[11px] font-semibold text-emerald-900/80 block uppercase tracking-wider mb-1">
+                    ĐỘ ƯU TIÊN (PRIORITY)
+                  </label>
+                  <input
+                    type="number"
+                    aria-label="Priority"
+                    value={priority}
+                    onChange={(e) => setPriority(parseInt(e.target.value, 10) || 0)}
+                    className="ui-input text-xs w-full font-medium"
+                  />
+                </div>
+
                 {/* Conflict warning */}
                 <div className="mt-4 bg-amber-50 border border-amber-200/80 rounded-xl p-3 text-[11px] text-amber-950 leading-relaxed">
                   <div className="font-bold flex items-center gap-1.5 text-amber-800 mb-1">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     CẢNH BÁO AN TOÀN
                   </div>
-                  Nếu 2 Flow cùng ghi đè 1 config key, Flow ưu tiên cao hơn (theo thứ tự trong danh sách) sẽ thắng — xung đột được ghi vào nhật ký.
+                  Nếu 2 Flow cùng ghi đè 1 config key, Flow có priority cao hơn sẽ thắng — xung đột được ghi vào nhật ký.
                 </div>
               </div>
             </div>
@@ -292,8 +269,8 @@ export function ConfigNodeInspector({
                 onSave?.({
                   configKey,
                   overrideValue: clampedVal,
-                  applyMode,
                   autoRestore,
+                  priority,
                 });
                 onClose();
               }}

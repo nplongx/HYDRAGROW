@@ -185,7 +185,7 @@ describe('NodeEditorPanel — Config nodes', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the Config·Read editor and updates configKey/saveToVariable', () => {
+  it('renders the Config read editor and updates configKey/saveToVariable via registry dropdown', () => {
     const mockOnChange = vi.fn();
 
     render(
@@ -203,7 +203,13 @@ describe('NodeEditorPanel — Config nodes', () => {
 
     expect(screen.getByText('Config — Đọc')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Config key'), { target: { value: 'ph_target' } });
+    const combo = screen.getByLabelText('Config key') as HTMLSelectElement;
+    expect(combo.tagName).toBe('SELECT');
+    const opts = Array.from(combo.querySelectorAll('option')).map((o) => o.value);
+    expect(opts).toContain('delay_between_a_and_b_sec');
+    expect(opts).not.toContain('dose_max_ml');
+
+    fireEvent.change(combo, { target: { value: 'ph_target' } });
     expect(mockOnChange).toHaveBeenCalledWith('cfg-1', {
       variant: 'read',
       configKey: 'ph_target',
@@ -218,7 +224,19 @@ describe('NodeEditorPanel — Config nodes', () => {
     });
   });
 
-  it('renders the Config·Overwrite editor with rollback toggle and restore mode', () => {
+  it('has no device group selector on the config read panel', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cfg-1', type: 'config', data: { variant: 'read' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText('Thiết bị / nhóm')).not.toBeInTheDocument();
+  });
+
+  it('renders the Config Overwrite editor with rollback toggle and Priority field', () => {
     const mockOnChange = vi.fn();
 
     render(
@@ -231,9 +249,8 @@ describe('NodeEditorPanel — Config nodes', () => {
             variant: 'overwrite',
             configKey: 'ec_target',
             overrideValue: '1.8',
-            applyWhen: 'previous_condition_true',
+            priority: 0,
             readOriginalBeforeWrite: false,
-            restoreMode: 'on_condition_false',
           },
         }}
         onChange={mockOnChange}
@@ -248,10 +265,53 @@ describe('NodeEditorPanel — Config nodes', () => {
       variant: 'overwrite',
       configKey: 'ec_target',
       overrideValue: '1.8',
-      applyWhen: 'previous_condition_true',
+      priority: 0,
       readOriginalBeforeWrite: true,
-      restoreMode: 'on_condition_false',
     });
+  });
+
+  it('writes node.data.priority from the Priority field', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cfg-2', type: 'config', data: { variant: 'overwrite', priority: 0 } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Priority'), { target: { value: '5' } });
+    expect(mockOnChange).toHaveBeenCalledWith('cfg-2', expect.objectContaining({ priority: 5 }));
+  });
+
+  it('has no dead selects on the overwrite panel', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cfg-2', type: 'config', data: { variant: 'overwrite' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText('Thời điểm áp dụng')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Chế độ khôi phục')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Thiết bị / nhóm')).not.toBeInTheDocument();
+  });
+
+  it('uses a registry dropdown for the overwrite config key', () => {
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cfg-2', type: 'config', data: { variant: 'overwrite', configKey: '' } }}
+        onChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const combo = screen.getByLabelText('Config key') as HTMLSelectElement;
+    expect(combo.tagName).toBe('SELECT');
+    const opts = Array.from(combo.querySelectorAll('option')).map((o) => o.value);
+    expect(opts).toContain('delay_between_a_and_b_sec');
+    expect(opts).not.toContain('dose_max_ml');
   });
 
   it('lets the overwrite value reference a context variable via the combobox', () => {

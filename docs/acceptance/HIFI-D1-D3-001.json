@@ -1,0 +1,30 @@
+{
+  "requirement_id": "HIFI-D1-D3-001",
+  "objective": "Fill functional gaps for Hi-Fi D1-D3 including pH interlock, Emergency Stop, schedule conflict detection, and real-time command status.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "pH Up and pH Down pumps are interlocked so they cannot run simultaneously.",
+      "verification": "Unit test in useDeviceControl.test.ts",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Emergency stop command turns off all hardware, sets FSM fault phase, and is supported across backend, firmware, and frontend UI.",
+      "verification": "Unit tests in control.rs, command_handler.rs, and EmergencyStopConfirmDialog.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Automation schedule conflict banner displays when active flows share equipment at identical cron schedules.",
+      "verification": "Unit tests in scheduleConflicts.test.ts and AutomationConflictBanner.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Command status pill and inline PWM/flow rate display on device control cards.",
+      "verification": "Unit tests in StatusPill.test.tsx and AdvancedDeviceControl.test.tsx",
+      "evidence_required": true
+    }
+  ]
+}

@@ -43,4 +43,47 @@ describe("ConfigNodeInspector", () => {
     );
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("does not render dead applyMode radios", () => {
+    render(<ConfigNodeInspector onClose={vi.fn()} />);
+    expect(screen.queryByText(/ÁP DỤNG GHI ĐÈ KHI/i)).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("during_true")).not.toBeInTheDocument();
+  });
+
+  it("displays conditionSummary prop and default copy", () => {
+    const { rerender } = render(
+      <ConfigNodeInspector onClose={vi.fn()} conditionSummary="pH > 6.0" />,
+    );
+    expect(screen.getByText("pH > 6.0")).toBeInTheDocument();
+    rerender(<ConfigNodeInspector onClose={vi.fn()} />);
+    expect(screen.getByText("Chưa cấu hình")).toBeInTheDocument();
+  });
+
+  it("saves priority and autoRestore without applyMode", () => {
+    const onSave = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ConfigNodeInspector
+        onSave={onSave}
+        onClose={onClose}
+        initialPriority={5}
+        initialAutoRestore={false}
+      />,
+    );
+    const priorityInput = screen.getByLabelText("Priority");
+    expect(priorityInput).toBeInTheDocument();
+    fireEvent.change(priorityInput, { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: /Lưu cấu hình Node/i }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 7, autoRestore: false }),
+    );
+    const payload = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("applyMode");
+  });
+
+  it("shows priority-based conflict warning copy", () => {
+    render(<ConfigNodeInspector onClose={vi.fn()} />);
+    expect(screen.getByText(/priority cao hơn sẽ thắng/i)).toBeInTheDocument();
+    expect(screen.queryByText(/thứ tự trong danh sách/i)).not.toBeInTheDocument();
+  });
 });

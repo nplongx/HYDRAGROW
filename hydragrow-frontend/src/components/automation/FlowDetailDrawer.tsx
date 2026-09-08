@@ -13,9 +13,11 @@ import { NextFlowSelector } from "./NextFlowSelector";
 import { useAutomationBuilder } from "../../hooks/useAutomationBuilder";
 import { AutomationIrSchema, type AutomationIr } from "../../lib/automation/ir";
 import { compileToRhai } from "../../lib/automation/compileToRhai";
+import { summarizeConditionTree } from "../../lib/automation/conditionTree";
 import type { UserScript } from "../../types/automation";
 import {
   useAutomationScripts,
+  useConfigOverrides,
   useCreateAutomationScript,
   useDeleteAutomationScript,
   useUpdateAutomationScript,
@@ -131,9 +133,26 @@ export function FlowDetailDrawer({
     deleteScript.mutate(script.id, { onSuccess: onClose });
   };
 
-  const [showAuditModal, setShowAuditModal] = useState(false);
-  const isConfigNode = builder.selectedNode?.type === "config";
-  const isConfigOverwrite = isConfigNode && builder.selectedNode?.data?.variant === "overwrite";
+  const selectedNode = builder.selectedNode;
+  const selectedData = (selectedNode?.data ?? {}) as Record<string, unknown>;
+  const isConfigOverwrite =
+    selectedNode?.type === "config" && selectedData?.variant === "overwrite";
+
+  const conditionSummary = summarizeConditionTree(
+    (builder.nodes ?? [])
+      .filter((n) => n.type === "condition" || n.type === "condition_group")
+      .flatMap((n) =>
+        Array.isArray((n.data as Record<string, unknown>)?.conditions)
+          ? ((n.data as Record<string, unknown>).conditions as Parameters<typeof summarizeConditionTree>[0])
+          : [],
+      ),
+  );
+
+  const { data: configOverridesData } = useConfigOverrides(deviceId);
+  const selectedConfigKey = selectedData?.configKey as string | undefined;
+  const auditLogsForSelectedKey = (configOverridesData?.history ?? []).filter(
+    (l) => !selectedConfigKey || l.configKey === selectedConfigKey,
+  );
 
   return (
     <div data-testid="flow-detail-drawer" className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40">
@@ -245,8 +264,8 @@ export function FlowDetailDrawer({
           )}
         </div>
 
-        {/* Node Editor Panel (handles Trigger, Condition, Config Read, Config Overwrite, Action) */}
-        {builder.selectedNode && (
+        {/* Node Editor Panel (handles Trigger, Condition, Config Read, Action) */}
+        {builder.selectedNode && !isConfigOverwrite && (
           <NodeEditorPanel
             kind={builder.kind}
             node={builder.selectedNode}
@@ -255,27 +274,31 @@ export function FlowDetailDrawer({
             availableFlows={otherScripts}
             onChange={builder.updateNodeData}
             onClose={() => builder.setSelectedNodeId(null)}
-            onOpenAuditModal={() => setShowAuditModal(true)}
           />
         )}
 
-        {/* Specialized Config Node Inspector Modal (Opened on demand for audit & safety visualization) */}
-        {showAuditModal && isConfigOverwrite && builder.selectedNode && (
+        {/* Config·Overwrite nodes open ConfigNodeInspector directly */}
+        {isConfigOverwrite && builder.selectedNode && (
           <ConfigNodeInspector
-            initialKey={(builder.selectedNode.data?.configKey as string) ?? "ec_target"}
-            initialValue={Number(builder.selectedNode.data?.overrideValue ?? 1.8)}
-            onSave={(updated: { configKey: string; overrideValue: number; applyMode: string; autoRestore: boolean }) => {
+            initialKey={(selectedData.configKey as string) ?? "ec_target"}
+            initialValue={(() => { const n = Number(selectedData.overrideValue ?? 1.8); return Number.isNaN(n) ? 1.8 : n; })()}
+            initialAutoRestore={(selectedData.readOriginalBeforeWrite as boolean) ?? true}
+            initialPriority={Number(selectedData.priority ?? 0)}
+            conditionSummary={conditionSummary}
+            auditLogs={auditLogsForSelectedKey}
+            onSave={(updated: { configKey: string; overrideValue: number; autoRestore: boolean; priority: number }) => {
               builder.updateNodeData(builder.selectedNode!.id, {
                 ...builder.selectedNode!.data,
                 configKey: updated.configKey,
                 overrideValue: updated.overrideValue,
-                applyMode: updated.applyMode,
                 autoRestore: updated.autoRestore,
+                readOriginalBeforeWrite: updated.autoRestore,
+                priority: updated.priority,
                 summary: `Ghi đè ${updated.configKey} -> ${updated.overrideValue}`,
               });
-              setShowAuditModal(false);
+              builder.setSelectedNodeId(null);
             }}
-            onClose={() => setShowAuditModal(false)}
+            onClose={() => builder.setSelectedNodeId(null)}
           />
         )}
       </div>

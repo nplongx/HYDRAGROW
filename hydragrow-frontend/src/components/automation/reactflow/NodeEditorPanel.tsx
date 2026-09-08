@@ -16,7 +16,6 @@ import { DEVICE_CONFIG_BOUNDS } from "../../../lib/automation/ir";
 
 import { getAvailableContextVariables } from "../../../lib/automation/contextVariables";
 import { extractTemplateTokens, renderTemplatePreview } from "../../../lib/automation/templateVars";
-import { VariableCombobox } from "./VariableCombobox";
 import {
   Badge,
   ConfigCard,
@@ -53,7 +52,6 @@ export interface NodeEditorPanelProps {
   availableFlows?: Array<{ id: string; name: string }>;
   onChange: (nodeId: string, data: Record<string, unknown>) => void;
   onClose: () => void;
-  onOpenAuditModal?: () => void;
 }
 
 export function NodeEditorPanel({
@@ -64,7 +62,6 @@ export function NodeEditorPanel({
   availableFlows,
   onChange,
   onClose,
-  onOpenAuditModal,
 }: NodeEditorPanelProps) {
   const fields = fieldsForKind(kind);
   const [triggerTab, setTriggerTab] = useState<"sensor" | "fsm" | "cron" | "webhook">("sensor");
@@ -1222,8 +1219,7 @@ export function NodeEditorPanel({
     const variant = (node.data?.variant as string) === "overwrite" ? "overwrite" : "read";
 
     // 4.1 CONFIG · ĐỌC (MỚI)
-    if (variant === "read") {
-      return (
+    if (variant === "read") {      return (
         <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-emerald-950">Config — Đọc</h3>
@@ -1285,102 +1281,6 @@ export function NodeEditorPanel({
         </div>
       );
     }
-
-    // 4.2 CONFIG · GHI ĐÈ (MỚI)
-    return (
-      <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-emerald-950">Config — Ghi đè</h3>
-          <button
-            type="button"
-            className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
-            onClick={onClose}
-          >
-            Đóng
-          </button>
-        </div>
-
-        <ConfigCard tone="indigo" emphasized>
-          <Badge tone="indigo">CONFIG · GHI ĐÈ (MỚI)</Badge>
-
-          <h4 className="text-sm font-bold text-slate-900 leading-snug">
-            {(node.data.title as string) || "Ghi đè ec_target → 1.8"}
-          </h4>
-
-          <FieldGroup label="Config key">
-            <select
-              aria-label="Config key"
-              className="ui-input text-xs"
-              value={(node.data?.configKey as string) ?? ""}
-              onChange={(e) =>
-                onChange(node.id, { ...node.data, variant: "overwrite", configKey: e.target.value })
-              }
-            >
-              <option value="" disabled>
-                -- Chọn config key --
-              </option>
-              {Object.keys(DEVICE_CONFIG_BOUNDS).map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-          </FieldGroup>
-
-          <FieldGroup label="Giá trị ghi đè">
-            <div className="relative flex items-center">
-              <VariableCombobox
-                id={`cfg-${node.id}-override`}
-                ariaLabel="Giá trị ghi đè"
-                value={String(node.data?.overrideValue ?? "")}
-                onChange={(val) =>
-                  onChange(node.id, { ...node.data, variant: "overwrite", overrideValue: val })
-                }
-                availableVariables={availableVariables}
-                placeholder="vd: 1.8 hoặc chọn biến..."
-              />
-              <span className="pointer-events-none absolute right-2.5 text-xs text-slate-400 select-none font-medium">
-                mS/cm
-              </span>
-            </div>
-          </FieldGroup>
-
-          <FieldGroup label="Priority">
-            <input
-              type="number"
-              aria-label="Priority"
-              className="ui-input text-xs"
-              value={Number(node.data?.priority ?? 0)}
-              onChange={(e) =>
-                onChange(node.id, { ...node.data, variant: "overwrite", priority: Number(e.target.value) })
-              }
-            />
-          </FieldGroup>
-
-          <ToggleRow
-            label="Đọc giá trị gốc trước khi ghi (rollback an toàn)"
-            checked={Boolean(node.data?.readOriginalBeforeWrite ?? true)}
-            onChange={(v) =>
-              onChange(node.id, {
-                ...node.data,
-                variant: "overwrite",
-                readOriginalBeforeWrite: v,
-              })
-            }
-          />
-
-          {onOpenAuditModal && (
-            <button
-              type="button"
-              onClick={onOpenAuditModal}
-              className="w-full mt-3 py-1.5 px-3 rounded-xl border border-indigo-200 bg-indigo-50/80 text-indigo-900 text-xs font-semibold hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              Mở chi tiết an toàn & Audit Log →
-            </button>
-          )}
-        </ConfigCard>
-      </div>
-    );
   }
 
   return null;

@@ -20,16 +20,58 @@ const mockValidate = vi.fn().mockResolvedValue({ valid: true });
 
 vi.mock('../../hooks/useAutomationScripts', () => ({
   useAutomationScripts: vi.fn().mockReturnValue({ data: [] }),
+  useConfigOverrides: vi.fn().mockReturnValue({ data: { active: [], history: [] } }),
   useCreateAutomationScript: () => ({ mutateAsync: mockMutate, isPending: false }),
   useUpdateAutomationScript: () => ({ mutateAsync: mockMutate, isPending: false }),
   useDeleteAutomationScript: () => ({ mutateAsync: mockMutate, isPending: false }),
   useValidateAutomationScript: () => ({ mutateAsync: mockValidate }),
 }));
 
+let builderOverride: any = null;
+
+vi.mock('../../hooks/useAutomationBuilder', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    useAutomationBuilder: (...args: any[]) =>
+      builderOverride ?? actual.useAutomationBuilder(...args),
+  };
+});
+
 describe('FlowDetailDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    builderOverride = null;
   });
+
+  function setSelectedConfigNode(variant: 'overwrite' | 'read') {
+    const selectedNode = {
+      id: 'cfg-1',
+      type: 'config',
+      position: { x: 0, y: 0 },
+      data: variant === 'overwrite'
+        ? { variant: 'overwrite', configKey: 'ec_target', overrideValue: 1.8, readOriginalBeforeWrite: true, priority: 0 }
+        : { variant: 'read', configKey: 'ph_target', saveToVariable: 'ph_target_now' },
+    };
+    builderOverride = {
+      kind: 'alert',
+      nodes: [
+        { id: 'trigger', type: 'trigger', position: { x: 0, y: 0 }, data: {} },
+        selectedNode,
+      ],
+      edges: [],
+      selectedNode,
+      updateNodeData: vi.fn(),
+      setSelectedNodeId: vi.fn(),
+      setKind: vi.fn(),
+      loadFromIr: vi.fn(),
+      addNode: vi.fn(),
+      updateTrigger: vi.fn(),
+      onNodesChange: vi.fn(),
+      onEdgesChange: vi.fn(),
+      onConnect: vi.fn(),
+    };
+  }
 
   it('renders a title for a new Flow and hides the delete button', () => {
     render(
@@ -110,5 +152,63 @@ describe('FlowDetailDrawer', () => {
 
     const checkbox = await screen.findByLabelText('Truyền biến ngữ cảnh sang flow tiếp theo');
     expect(checkbox).toBeChecked();
+  });
+
+  it('selecting a config overwrite node renders ConfigNodeInspector directly', () => {
+    setSelectedConfigNode('overwrite');
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FlowDetailDrawer deviceId="device-1" script="new" onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText('Đọc & Ghi đè Config theo điều kiện')).toBeInTheDocument();
+    expect(screen.queryByText('Mở chi tiết an toàn & Audit Log →')).not.toBeInTheDocument();
+  });
+
+  it('selecting a config read node still renders NodeEditorPanel', () => {
+    setSelectedConfigNode('read');
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FlowDetailDrawer deviceId="device-1" script="new" onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByText('Config — Đọc')).toBeInTheDocument();
+    expect(screen.queryByText('Đọc & Ghi đè Config theo điều kiện')).not.toBeInTheDocument();
+  });
+
+  it('overwrite node with variable-ref overrideValue falls back to numeric default (no NaN)', () => {
+    const selectedNode = {
+      id: 'cfg-1',
+      type: 'config',
+      position: { x: 0, y: 0 },
+      data: { variant: 'overwrite', configKey: 'ec_target', overrideValue: 'ec', readOriginalBeforeWrite: true, priority: 0 },
+    };
+    builderOverride = {
+      kind: 'alert',
+      nodes: [{ id: 'trigger', type: 'trigger', position: { x: 0, y: 0 }, data: {} }, selectedNode],
+      edges: [],
+      selectedNode,
+      updateNodeData: vi.fn(),
+      setSelectedNodeId: vi.fn(),
+      setKind: vi.fn(),
+      loadFromIr: vi.fn(),
+      addNode: vi.fn(),
+      updateTrigger: vi.fn(),
+      onNodesChange: vi.fn(),
+      onEdgesChange: vi.fn(),
+      onConnect: vi.fn(),
+    };
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <FlowDetailDrawer deviceId="device-1" script="new" onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(screen.getByText('Đọc & Ghi đè Config theo điều kiện')).toBeInTheDocument();
+    const numInput = container.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(numInput).not.toBeNull();
+    expect(numInput.value).toBe('1.8');
+    expect(Number(numInput.value)).not.toBeNaN();
   });
 });

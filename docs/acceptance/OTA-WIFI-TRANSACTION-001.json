@@ -1,0 +1,56 @@
+{
+  "requirement_id": "OTA-WIFI-TRANSACTION-001",
+  "objective": "Fleet-safe OTA with per-device WiFi provisioning: one firmware artifact for the fleet, passwords durable only in ESP32 NVS, backend persists SSID metadata plus applied/rolled-back state only, with explicit OTA+WiFi transaction, recovery, rollback, checksum integrity, and anti-rollback.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Transactional protocol types (WifiSecretAction Keep/Set/Clear, WifiProvisionEntry, WifiProvisionConfig, OtaProvisionParams) exist in hydragrow-shared with Keep=>no password, Set=>non-empty password, Clear=>no password rules, and canonical wifi-config-status/ota-status topic helpers.",
+      "verification": "cargo test -p hydragrow-shared (round-trip, semantics, topic tests)"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Controller stages pending WiFi in NVS without replacing the active wifi_list (prepare), promotes on commit, and discards on rollback; boot tries pending first only for Prepared transactions and otherwise uses active only, with bounded retry limits.",
+      "verification": "Host unit tests for WifiConfigState/BootWifiDecision plus code inspection of wifi_store.rs and main.rs"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Combined update_firmware command validates at the command boundary, emits PrepareWifiConfig before TriggerOtaUpdate so OTA downloads over the current active WiFi, rejects invalid/stale configs before OTA, and never logs credential payloads.",
+      "verification": "Host validation tests plus code inspection of command_handler.rs and dispatcher.rs"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "OTA verifies the streamed firmware SHA-256 against the release firmware.bin.sha256 asset and calls complete() only on digest match; same-version, downgrade, and malformed tags are rejected; the release pipeline publishes the checksum asset; firmware.bin asset name is unchanged.",
+      "verification": "Host ota_verify tests plus code inspection of hw/ota.rs and firmware-controller-release.yml"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Backend POST /devices/{id}/ota/trigger accepts optional wifi payload (OTA-only when absent), relays passwords transiently over MQTT, persists SSID metadata only (no password column, param, or log), tracks pending delivery state, and exposes password-blind GET /wifi.",
+      "verification": "Backend unit tests (redaction) and sqlx integration tests against Postgres"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Device wifi_config_status reports update delivery state only for matching device_id and config_version; stale/future/cross-device reports are ignored; status payloads never carry passwords.",
+      "verification": "Backend status-handler unit tests"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Frontend offers OTA-only, combined OTA+WiFi, and legacy WiFi-only actions; known SSIDs render with blank masked passwords (blank = keep, typed = set, new SSID requires password); pending/applied/rollback state is displayed; passwords are cleared from memory after submit.",
+      "verification": "Vitest rendering/interaction tests and production build"
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Release firmware contains no required per-device WiFi secrets or baked-in fleet identity; device id resolves NVS -> compile default -> MAC-derived factory id; release workflow fails if required per-device secrets reappear.",
+      "verification": "Secret-dependency grep check plus host device_identity tests"
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Claim flow binds logical device_id to hardware identity and rejects duplicate bindings (409); controller accepts provision_identity to persist the logical id and reboots onto identity-scoped topics.",
+      "verification": "Backend claim integration tests plus code inspection of dispatcher provision arm"
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Secret transit hardening: redacted Debug for secret-bearing types, metadata-only audit logs, per-device provision throttle, X-User-Confirmed retained for OTA+WiFi, and MQTT TLS opt-in without adding a new plaintext path.",
+      "verification": "Redaction/throttle unit tests plus code inspection of mqtt transport setup"
+    }
+  ]
+}

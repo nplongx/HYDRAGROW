@@ -13,6 +13,7 @@ pub mod safety;
 pub mod sensors;
 pub mod telemetry;
 pub mod topics;
+pub mod wifi_tx;
 
 pub use sensors::IncomingSensorPayload;
 
@@ -183,7 +184,7 @@ pub struct MqttCommandIn {
     pub pwm: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MqttCommandInParams {
     #[serde(default)]
     pub pump_id: Option<String>,
@@ -197,8 +198,13 @@ pub struct MqttCommandInParams {
     pub ota_url: Option<String>,
     #[serde(default)]
     pub candidates: Option<Vec<WifiCandidate>>,
+    #[serde(default)]
+    pub ota_provision: Option<OtaProvisionParams>,
+    /// Logical device id for `provision_identity` commands.
+    #[serde(default)]
+    pub device_id: Option<String>,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MqttCommandParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pump_id: Option<String>,
@@ -212,6 +218,71 @@ pub struct MqttCommandParams {
     pub ota_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidates: Option<Vec<WifiCandidate>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ota_provision: Option<OtaProvisionParams>,
+}
+
+/// Keep => password must be absent; Set => password must be non-empty; Clear => password must be absent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WifiSecretAction {
+    Keep,
+    Set,
+    Clear,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiProvisionEntry {
+    pub ssid: String,
+    pub priority: u8,
+    pub secret_action: WifiSecretAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+}
+
+/// Redacted Debug: passwords must never appear in logs, even via `{:?}`.
+impl std::fmt::Debug for WifiProvisionEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WifiProvisionEntry")
+            .field("ssid", &self.ssid)
+            .field("priority", &self.priority)
+            .field("secret_action", &self.secret_action)
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WifiProvisionConfig {
+    pub config_version: i64,
+    pub entries: Vec<WifiProvisionEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OtaProvisionParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_release: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wifi: Option<WifiProvisionConfig>,
+}
+
+impl WifiProvisionEntry {
+    pub fn validate(&self) -> Result<(), String> {
+        match self.secret_action {
+            WifiSecretAction::Keep | WifiSecretAction::Clear => {
+                if self.password.is_some() {
+                    return Err(format!(
+                        "{:?} requires password to be absent",
+                        self.secret_action
+                    ));
+                }
+            }
+            WifiSecretAction::Set => match &self.password {
+                Some(p) if !p.is_empty() => {}
+                _ => return Err("Set requires non-empty password".into()),
+            },
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

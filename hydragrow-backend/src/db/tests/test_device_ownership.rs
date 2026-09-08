@@ -17,7 +17,7 @@ mod tests {
     #[sqlx::test]
     async fn is_owner_of_all_returns_false_when_one_not_owned(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 1).await;
-        let _ = claim_device(&pool, uid, "dev-a", None).await.unwrap();
+        let _ = claim_device(&pool, uid, "dev-a", None, None).await.unwrap();
         let result = is_owner_of_all(&pool, uid, &["dev-a", "dev-b"])
             .await
             .unwrap();
@@ -27,8 +27,8 @@ mod tests {
     #[sqlx::test]
     async fn list_device_ids_for_user_returns_only_owned(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 2).await;
-        let _ = claim_device(&pool, uid, "dev-x", None).await.unwrap();
-        let _ = claim_device(&pool, uid, "dev-y", None).await.unwrap();
+        let _ = claim_device(&pool, uid, "dev-x", None, None).await.unwrap();
+        let _ = claim_device(&pool, uid, "dev-y", None, None).await.unwrap();
         let ids = list_device_ids_for_user(&pool, uid).await.unwrap();
         assert!(ids.contains(&"dev-x".to_string()));
         assert!(ids.contains(&"dev-y".to_string()));
@@ -40,7 +40,7 @@ mod tests {
     #[sqlx::test]
     async fn claim_device_returns_mqtt_credentials_on_first_claim(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 10).await;
-        let (record, credentials) = claim_device(&pool, uid, "dev-new", Some("My Sensor"))
+        let (record, credentials) = claim_device(&pool, uid, "dev-new", Some("My Sensor"), None)
             .await
             .unwrap();
         assert_eq!(record.device_id, "dev-new");
@@ -53,10 +53,12 @@ mod tests {
     #[sqlx::test]
     async fn claim_device_does_not_regenerate_credentials_on_reclaim(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 11).await;
-        let (_, first_creds) = claim_device(&pool, uid, "dev-reclaim", None).await.unwrap();
+        let (_, first_creds) = claim_device(&pool, uid, "dev-reclaim", None, None)
+            .await
+            .unwrap();
         let first_user = first_creds.unwrap().mqtt_username;
 
-        let (_, second_creds) = claim_device(&pool, uid, "dev-reclaim", Some("Updated"))
+        let (_, second_creds) = claim_device(&pool, uid, "dev-reclaim", Some("Updated"), None)
             .await
             .unwrap();
         assert!(
@@ -73,7 +75,7 @@ mod tests {
     #[sqlx::test]
     async fn unclaim_device_removes_ownership(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 20).await;
-        let _ = claim_device(&pool, uid, "dev-z", None).await.unwrap();
+        let _ = claim_device(&pool, uid, "dev-z", None, None).await.unwrap();
         let rows = unclaim_device(&pool, uid, "dev-z").await.unwrap();
         assert_eq!(rows, 1);
         assert!(!is_owner(&pool, uid, "dev-z").await.unwrap());
@@ -88,7 +90,9 @@ mod tests {
     #[sqlx::test]
     async fn is_owner_returns_true_for_claimed(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 30).await;
-        let _ = claim_device(&pool, uid, "dev-owned", None).await.unwrap();
+        let _ = claim_device(&pool, uid, "dev-owned", None, None)
+            .await
+            .unwrap();
         assert!(is_owner(&pool, uid, "dev-owned").await.unwrap());
     }
 
@@ -96,7 +100,7 @@ mod tests {
     async fn is_owner_returns_false_for_different_user(pool: sqlx::PgPool) {
         let uid40 = create_test_user(&pool, 40).await;
         let uid41 = create_test_user(&pool, 41).await;
-        let _ = claim_device(&pool, uid40, "dev-shared", None)
+        let _ = claim_device(&pool, uid40, "dev-shared", None, None)
             .await
             .unwrap();
         assert!(!is_owner(&pool, uid41, "dev-shared").await.unwrap());
@@ -106,5 +110,43 @@ mod tests {
     async fn list_devices_for_user_returns_empty_for_new_user(pool: sqlx::PgPool) {
         let devices = list_devices_for_user(&pool, 999).await.unwrap();
         assert!(devices.is_empty());
+    }
+
+    #[sqlx::test]
+    async fn duplicate_device_id_is_rejected_by_backend_claim(pool: sqlx::PgPool) {
+        let uid_a = create_test_user(&pool, 101).await;
+        let uid_b = create_test_user(&pool, 102).await;
+        // First hardware binds the logical id.
+        let _ = claim_device(&pool, uid_a, "dev-dup", None, Some("esp32c3-aaaaaa"))
+            .await
+            .unwrap();
+        // Same hardware reclaiming is fine.
+        let _ = claim_device(&pool, uid_a, "dev-dup", None, Some("esp32c3-aaaaaa"))
+            .await
+            .unwrap();
+        // Different hardware presenting the same logical id is rejected.
+        let err = match claim_device(&pool, uid_b, "dev-dup", None, Some("esp32c3-bbbbbb")).await {
+            Ok(_) => panic!("duplicate hardware claim must be rejected"),
+            Err(err) => err,
+        };
+        assert!(matches!(err, ClaimError::DuplicateHardware { .. }));
+        // Claiming a hardware-bound id without proof of possession is rejected.
+        let err = match claim_device(&pool, uid_b, "dev-dup", None, None).await {
+            Ok(_) => panic!("possession-less claim must be rejected"),
+            Err(err) => err,
+        };
+        assert!(matches!(err, ClaimError::DuplicateHardware { .. }));
+    }
+
+    #[sqlx::test]
+    async fn unbound_device_id_accepts_first_hardware_claim(pool: sqlx::PgPool) {
+        let uid = create_test_user(&pool, 103).await;
+        // Legacy rows without hardware binding accept the first hardware claim.
+        let _ = claim_device(&pool, uid, "dev-fresh", None, None)
+            .await
+            .unwrap();
+        let _ = claim_device(&pool, uid, "dev-fresh", None, Some("esp32c3-cccccc"))
+            .await
+            .unwrap();
     }
 }

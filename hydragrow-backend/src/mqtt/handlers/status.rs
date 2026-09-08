@@ -4,10 +4,12 @@ use serde_json::json;
 use tracing::{error, info, instrument};
 
 use crate::AppState;
+use crate::db::device_wifi;
 use crate::metrics::*;
 use crate::models::alert::AlertMessage;
 use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
 use hydragrow_shared::telemetry::DeviceHealthSnapshot;
+use hydragrow_shared::wifi_tx::WifiConfigStatus;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct DeviceStatusPayload {
@@ -294,6 +296,100 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
     }
 }
 
+/// Pure delivery-state decision for a device wifi_config_status report.
+/// Returns the state to record, or None when the report must be ignored:
+/// device mismatch, stale version, unknown future version, or bad state.
+/// SSID metadata rows are never deleted on failure — apply state is tracked
+/// separately in the delivery table.
+pub fn decide_wifi_delivery_update(
+    topic_device_id: &str,
+    stored_version: i64,
+    status: &WifiConfigStatus,
+) -> Option<String> {
+    if status.device_id != topic_device_id {
+        return None;
+    }
+    if status.config_version != stored_version {
+        return None;
+    }
+    match status.state.as_str() {
+        "applied" => Some(device_wifi::delivery_state::APPLIED.to_string()),
+        "rolled_back" => Some(device_wifi::delivery_state::ROLLED_BACK.to_string()),
+        "rejected" => Some(device_wifi::delivery_state::REJECTED.to_string()),
+        _ => None,
+    }
+}
+
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
+pub async fn handle_ota_status(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
+    let value: serde_json::Value = match serde_json::from_slice(payload) {
+        Ok(value) => value,
+        Err(e) => {
+            error!(error = ?e, "Lỗi parse ota-status");
+            return;
+        }
+    };
+    info!(
+        device_id = %device_id,
+        title = value.get("title").and_then(|v| v.as_str()).unwrap_or("ota"),
+        message = value.get("message").and_then(|v| v.as_str()).unwrap_or(""),
+        "Nhận OTA lifecycle event",
+    );
+    let _ = app_state.event_bus.send(AppEvent::ControllerStatus(value));
+}
+
+#[instrument(skip(app_state, payload), fields(device_id = %device_id))]
+pub async fn handle_wifi_config_status(
+    device_id: String,
+    payload: &[u8],
+    app_state: web::Data<AppState>,
+) {
+    let status: WifiConfigStatus = match serde_json::from_slice(payload) {
+        Ok(status) => status,
+        Err(e) => {
+            error!(error = ?e, "Lỗi parse wifi_config_status");
+            return;
+        }
+    };
+    let stored_version = match device_wifi::get_wifi_metadata(&app_state.pg_pool, &device_id).await
+    {
+        Ok((_, version)) => version,
+        Err(e) => {
+            error!(error = ?e, "Không đọc được wifi metadata cho delivery update");
+            return;
+        }
+    };
+    match decide_wifi_delivery_update(&device_id, stored_version, &status) {
+        Some(state) => {
+            info!(
+                device_id = %device_id,
+                config_version = status.config_version,
+                state = %state,
+                "Cập nhật trạng thái WiFi delivery"
+            );
+            if let Err(e) = device_wifi::set_delivery_state(
+                &app_state.pg_pool,
+                &device_id,
+                status.config_version,
+                &state,
+                None,
+            )
+            .await
+            {
+                error!(error = ?e, "Không ghi được wifi delivery state");
+            }
+        }
+        None => {
+            tracing::debug!(
+                device_id = %device_id,
+                config_version = status.config_version,
+                state = %status.state,
+                "Bỏ qua wifi_config_status không khớp (stale/unknown)"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -382,5 +478,60 @@ mod tests {
 
         assert!(parsed.health_snapshot.is_none());
         assert_eq!(parsed.raw_json["pump_status"]["pump_a"], true);
+    }
+
+    use super::decide_wifi_delivery_update;
+    use hydragrow_shared::wifi_tx::WifiConfigStatus;
+
+    fn config_status(device: &str, version: i64, state: &str) -> WifiConfigStatus {
+        WifiConfigStatus::new(device, version, state, 2)
+    }
+
+    #[test]
+    fn applied_wifi_status_marks_matching_version_applied() {
+        let status = config_status("device-001", 8, "applied");
+        assert_eq!(
+            decide_wifi_delivery_update("device-001", 8, &status),
+            Some("applied".to_string())
+        );
+    }
+
+    #[test]
+    fn rollback_status_does_not_mark_new_config_applied() {
+        // Stale rollback for an older version must not touch the new desired state.
+        let stale_rollback = config_status("device-001", 7, "rolled_back");
+        assert_eq!(
+            decide_wifi_delivery_update("device-001", 8, &stale_rollback),
+            None
+        );
+        // Future unknown version is ignored too.
+        let future = config_status("device-001", 9, "applied");
+        assert_eq!(decide_wifi_delivery_update("device-001", 8, &future), None);
+        // Matching rollback is recorded.
+        let matching = config_status("device-001", 8, "rolled_back");
+        assert_eq!(
+            decide_wifi_delivery_update("device-001", 8, &matching),
+            Some("rolled_back".to_string())
+        );
+    }
+
+    #[test]
+    fn cross_device_status_is_rejected() {
+        let status = config_status("device-002", 8, "applied");
+        assert_eq!(decide_wifi_delivery_update("device-001", 8, &status), None);
+    }
+
+    #[test]
+    fn password_never_appears_in_serialized_status() {
+        let status = config_status("device-001", 8, "applied");
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(!json.contains("password"));
+        assert!(!json.contains("secret"));
+        // A hostile payload smuggling a password field still deserializes
+        // without capturing it (unknown fields are ignored).
+        let hostile = br#"{"type":"wifi_config_status","device_id":"device-001","config_version":8,"state":"applied","ssid_count":1,"password":"smuggled"}"#;
+        let parsed: WifiConfigStatus = serde_json::from_slice(hostile).unwrap();
+        assert_eq!(parsed.state, "applied");
+        assert!(!serde_json::to_string(&parsed).unwrap().contains("smuggled"));
     }
 }

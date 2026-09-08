@@ -1,5 +1,6 @@
 use hydragrow_shared::{
-    MqttCommandOut, MqttCommandParams, PumpStatus, SensorData,
+    MqttCommandOut, MqttCommandParams, OtaProvisionParams, PumpStatus, SensorData, WifiCandidate,
+    WifiProvisionConfig, WifiProvisionEntry, WifiSecretAction,
     log::{
         AlertMetadata, BasicSystemLogMetadata, CalibrationMetadata, LogCategory, LogLevel,
         RecipeAppliedMetadata, RecipeCompletedMetadata, RecipeRejectedMetadata,
@@ -220,6 +221,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 state: Some(true),
                 ota_url: None,
                 candidates: None,
+                ota_provision: None,
             }),
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
@@ -235,6 +237,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 state: Some(false),
                 ota_url: None,
                 candidates: None,
+                ota_provision: None,
             }),
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
@@ -250,6 +253,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
                 state: None,
                 ota_url: None,
                 candidates: None,
+                ota_provision: None,
             }),
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
@@ -325,6 +329,7 @@ fn golden_payload_snapshots() {
             state: Some(true),
             ota_url: None,
             candidates: None,
+            ota_provision: None,
         }),
         ts: Some(1_771_000_000),
         nonce: Some("nonce-golden".into()),
@@ -472,4 +477,139 @@ fn device_health_snapshot_deserializes_without_firmware_version_field() {
     let snapshot: hydragrow_shared::telemetry::health::DeviceHealthSnapshot =
         serde_json::from_str(old_json).expect("legacy health payload must deserialize");
     assert_eq!(snapshot.firmware_version, "unknown");
+}
+
+#[test]
+fn ota_wifi_payload_round_trips_with_set_passwords() {
+    let cmd = MqttCommandOut {
+        target: "device-001".into(),
+        action: "update_firmware".into(),
+        params: Some(MqttCommandParams {
+            pump_id: None,
+            duration_sec: None,
+            pwm: None,
+            state: None,
+            ota_url: None,
+            candidates: Some(vec![WifiCandidate {
+                ssid: "Farm-A".into(),
+                password: "secret".into(),
+                priority: 0,
+            }]),
+            ota_provision: Some(OtaProvisionParams {
+                firmware_release: Some("v0.9.0".into()),
+                wifi: Some(WifiProvisionConfig {
+                    config_version: 7,
+                    entries: vec![WifiProvisionEntry {
+                        ssid: "Farm-A".into(),
+                        priority: 0,
+                        secret_action: WifiSecretAction::Set,
+                        password: Some("secret".into()),
+                    }],
+                }),
+            }),
+        }),
+        ts: Some(1_700_000_000),
+        nonce: Some("n1".into()),
+        signature: Some("sig".into()),
+    };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: MqttCommandOut = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded, cmd);
+}
+
+#[test]
+fn wifi_config_semantics_distinguish_keep_from_set() {
+    let keep = WifiSecretAction::Keep;
+    let set = WifiSecretAction::Set;
+    assert_ne!(keep, set);
+}
+
+#[test]
+fn wifi_provision_entry_enforces_secret_action_rules() {
+    let keep_with_password = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Keep,
+        password: Some("secret".into()),
+    };
+    assert!(keep_with_password.validate().is_err());
+
+    let keep_without_password = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Keep,
+        password: None,
+    };
+    assert!(keep_without_password.validate().is_ok());
+
+    let set_empty = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Set,
+        password: Some(String::new()),
+    };
+    assert!(set_empty.validate().is_err());
+
+    let set_ok = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Set,
+        password: Some("secret".into()),
+    };
+    assert!(set_ok.validate().is_ok());
+
+    let clear_with_password = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Clear,
+        password: Some("secret".into()),
+    };
+    assert!(clear_with_password.validate().is_err());
+}
+
+#[test]
+fn wifi_config_status_topic_is_canonical() {
+    assert_eq!(
+        hydragrow_shared::topics::topic_wifi_config_status("device-001"),
+        "AGITECH/device-001/controller/wifi-config-status"
+    );
+    assert_eq!(
+        hydragrow_shared::topics::topic_ota_status("device-001"),
+        "AGITECH/device-001/controller/ota-status"
+    );
+}
+
+#[test]
+fn wifi_command_debug_output_does_not_include_password() {
+    let secret = "DO_NOT_LOG_ME";
+    let entry = WifiProvisionEntry {
+        ssid: "Farm-A".into(),
+        priority: 0,
+        secret_action: WifiSecretAction::Set,
+        password: Some(secret.into()),
+    };
+    let config = WifiProvisionConfig {
+        config_version: 8,
+        entries: vec![entry.clone()],
+    };
+    let params = OtaProvisionParams {
+        firmware_release: Some("v0.9.0".into()),
+        wifi: Some(config),
+    };
+    // The explicit audit/log representation must never contain the secret,
+    // even through Debug formatting.
+    for representation in [
+        format!("{entry:?}"),
+        format!("{params:?}"),
+        format!(
+            "staging wifi count={} version={}",
+            params.wifi.as_ref().unwrap().entries.len(),
+            params.wifi.as_ref().unwrap().config_version
+        ),
+    ] {
+        assert!(
+            !representation.contains(secret),
+            "log representation leaked password: {representation}"
+        );
+    }
 }

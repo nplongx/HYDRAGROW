@@ -16,6 +16,9 @@ pub fn user_id_from(req: &HttpRequest) -> Option<i64> {
 pub struct ClaimRequest {
     pub device_id: String,
     pub label: Option<String>,
+    /// Factory hardware identity (e.g. `esp32c3-<mac>`) proving possession.
+    /// Required when the device_id is already hardware-bound.
+    pub hardware_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,6 +54,7 @@ pub async fn claim_device(
         user_id,
         &device_id,
         body.label.as_deref(),
+        body.hardware_id.as_deref(),
     )
     .await
     {
@@ -64,6 +68,12 @@ pub async fn claim_device(
                 mqtt_username: mqtt_credentials.as_ref().map(|c| c.mqtt_username.clone()),
                 mqtt_password: mqtt_credentials.map(|c| c.mqtt_password),
             })
+        }
+        Err(device_ownership::ClaimError::DuplicateHardware { device_id }) => {
+            HttpResponse::Conflict().json(serde_json::json!({
+                "error": "device_id already bound to different hardware",
+                "device_id": device_id,
+            }))
         }
         Err(e) => {
             tracing::error!(?e, "Lỗi claim device");

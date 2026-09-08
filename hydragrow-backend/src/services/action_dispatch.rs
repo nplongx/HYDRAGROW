@@ -147,6 +147,7 @@ pub async fn dispatch_action_command(
             state: None,
             ota_url: None,
             candidates: None,
+            ota_provision: None,
         }),
         ts: None,
         nonce: None,

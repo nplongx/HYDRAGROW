@@ -83,6 +83,27 @@ pub enum OrchestratorEvent {
     UpdateWifiList {
         list: hydragrow_shared::WifiCredentialList,
     },
+    /// Persist a provisioned logical device id in NVS (fleet claim flow).
+    /// The dispatcher reboots after storing so all topics use the new id.
+    ProvisionDeviceId {
+        device_id: String,
+    },
+
+    /// Stage a transactional WiFi config in NVS without touching active credentials.
+    /// Keep entries are resolved against the active NVS list by the dispatcher.
+    PrepareWifiConfig {
+        config: hydragrow_shared::WifiProvisionConfig,
+        version: i64,
+    },
+    /// Promote staged pending WiFi to active.
+    CommitPendingWifiConfig,
+    /// Discard staged pending WiFi; active credentials stay untouched.
+    RollbackPendingWifiConfig,
+    /// Publish a password-free provisioning result for the backend delivery table.
+    PublishWifiConfigStatus {
+        version: i64,
+        state: String,
+    },
 
     /// Reboot thiết bị ngay lập tức (sau khi dừng hardware).
     RebootDevice,

@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 pub mod device_ownership;
+pub mod device_wifi;
 pub mod influx;
 pub mod postgres;
 pub mod recipes;

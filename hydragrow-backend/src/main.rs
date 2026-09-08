@@ -224,6 +224,19 @@ async fn main() -> anyhow::Result<()> {
     mqttoptions.set_keep_alive(Duration::from_secs(30));
     mqttoptions.set_clean_session(false);
 
+    // Provisioning relays WiFi secrets over MQTT, so TLS must be available
+    // wherever the broker is not confined to a trusted local network.
+    // Set MQTT_TLS=1 (and MQTT_PORT=8883 unless overridden) to use native
+    // platform certs. Plain TCP stays the default to avoid breaking existing
+    // local deployments; provisioning must not add any NEW plaintext path.
+    let mqtt_tls = env::var("MQTT_TLS").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    if mqtt_tls {
+        mqttoptions.set_transport(rumqttc::Transport::tls_with_config(
+            rumqttc::TlsConfiguration::Native,
+        ));
+        info!("MQTT TLS enabled (native platform certs)");
+    }
+
     let mqtt_user = env::var("MQTT_USER").unwrap_or_default();
     let mqtt_pass = env::var("MQTT_PASSWORD").unwrap_or_default();
     if !mqtt_user.is_empty() && !mqtt_pass.is_empty() {

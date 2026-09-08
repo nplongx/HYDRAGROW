@@ -119,6 +119,8 @@ mod tests {
             reason: None,
             metadata: Some(serde_json::json!({ "recipe_id": "r1" })),
             timestamp: chrono::Utc::now().timestamp_millis(),
+            source: "rule".to_string(),
+            primary_reason_code: None,
         };
         insert_system_event(&pool, &event).await.unwrap();
 
@@ -127,6 +129,124 @@ mod tests {
             .unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].category, "dosing");
+        assert_eq!(events[0].source, "rule");
+        assert!(events[0].primary_reason_code.is_none());
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn insert_ai_supervisor_event_with_reason_code(pool: sqlx::PgPool) {
+        let cfg = DeviceConfig {
+            device_id: "test-dev-ai".to_string(),
+            ec_target: 1.4,
+            ec_tolerance: 0.1,
+            ph_target: 6.0,
+            ph_tolerance: 0.2,
+            control_mode: "auto".to_string(),
+            is_enabled: true,
+            delay_between_a_and_b_sec: 5,
+            last_updated: chrono::Utc::now(),
+        };
+        upsert_device_config(&pool, &cfg).await.unwrap();
+
+        let event = NewSystemEventRecord {
+            device_id: "test-dev-ai".to_string(),
+            level: "warning".to_string(),
+            category: "alert".to_string(),
+            title: "Suspected leak".to_string(),
+            message: "Water level dropping fast".to_string(),
+            reason: None,
+            metadata: Some(serde_json::json!({ "reason_codes": ["leak_suspected"], "confidence": 0.9 })),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            source: "ai_supervisor".to_string(),
+            primary_reason_code: Some("leak_suspected".to_string()),
+        };
+        insert_system_event(&pool, &event).await.unwrap();
+
+        let events = get_system_events(&pool, "test-dev-ai", &[], 10, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].source, "ai_supervisor");
+        assert_eq!(events[0].primary_reason_code.as_deref(), Some("leak_suspected"));
+    }
+
+    // ── find_recent_alert (supervisor dedup) ──────────────────────────────────
+
+    async fn dedup_cfg(pool: &sqlx::PgPool, device_id: &str) {
+        let cfg = DeviceConfig {
+            device_id: device_id.to_string(),
+            ec_target: 1.4,
+            ec_tolerance: 0.1,
+            ph_target: 6.0,
+            ph_tolerance: 0.2,
+            control_mode: "auto".to_string(),
+            is_enabled: true,
+            delay_between_a_and_b_sec: 5,
+            last_updated: chrono::Utc::now(),
+        };
+        upsert_device_config(pool, &cfg).await.unwrap();
+    }
+
+    fn dedup_event(device_id: &str, ts: i64, source: &str, code: &str) -> NewSystemEventRecord {
+        NewSystemEventRecord {
+            device_id: device_id.to_string(),
+            level: "warning".to_string(),
+            category: "alert".to_string(),
+            title: "t".to_string(),
+            message: "m".to_string(),
+            reason: None,
+            metadata: None,
+            timestamp: ts,
+            source: source.to_string(),
+            primary_reason_code: Some(code.to_string()),
+        }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn find_recent_alert_returns_true_within_cooldown(pool: sqlx::PgPool) {
+        dedup_cfg(&pool, "test-dev-dedup").await;
+        let now = chrono::Utc::now().timestamp_millis();
+        insert_system_event(&pool, &dedup_event("test-dev-dedup", now, "ai_supervisor", "leak_suspected"))
+            .await
+            .unwrap();
+        let found =
+            find_recent_alert(&pool, "test-dev-dedup", "ai_supervisor", "leak_suspected", 20)
+                .await
+                .unwrap();
+        assert!(found);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn find_recent_alert_ignores_different_source(pool: sqlx::PgPool) {
+        dedup_cfg(&pool, "test-dev-dedup").await;
+        let now = chrono::Utc::now().timestamp_millis();
+        insert_system_event(&pool, &dedup_event("test-dev-dedup", now, "watchdog", "topic_stale_controller_status"))
+            .await
+            .unwrap();
+        let found = find_recent_alert(
+            &pool,
+            "test-dev-dedup",
+            "ai_supervisor",
+            "topic_stale_controller_status",
+            20,
+        )
+        .await
+        .unwrap();
+        assert!(!found);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn find_recent_alert_returns_false_outside_cooldown(pool: sqlx::PgPool) {
+        dedup_cfg(&pool, "test-dev-dedup").await;
+        let old = chrono::Utc::now().timestamp_millis() - 30 * 60 * 1000;
+        insert_system_event(&pool, &dedup_event("test-dev-dedup", old, "ai_supervisor", "leak_suspected"))
+            .await
+            .unwrap();
+        let found =
+            find_recent_alert(&pool, "test-dev-dedup", "ai_supervisor", "leak_suspected", 20)
+                .await
+                .unwrap();
+        assert!(!found);
     }
 
     // ── dosing_reports ────────────────────────────────────────────────────────

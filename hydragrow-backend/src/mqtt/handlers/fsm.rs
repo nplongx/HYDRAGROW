@@ -527,6 +527,8 @@ async fn apply_end_season(
                 reason: Some(script.name.clone()),
                 metadata: Some(serde_json::json!({ "script_id": script.id })),
                 timestamp,
+                source: "rule".to_string(),
+                primary_reason_code: None,
             };
             if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {
                 tracing::error!(error = ?e, device_id, "Không thể lưu end_season event");
@@ -598,6 +600,8 @@ async fn apply_recipe_override(
                     "recipe_id": recipe_id,
                 })),
                 timestamp,
+                source: "rule".to_string(),
+                primary_reason_code: None,
             };
             if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {
                 tracing::error!(error = ?e, device_id, "Không thể lưu recipe_override event");
@@ -648,6 +652,8 @@ fn transition_system_event_record(event: &FsmTransitionEvent) -> Option<NewSyste
                     "phase_duration_ms": event.phase_duration_ms,
                 })),
                 timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
             })
         }
         hydragrow_shared::fsm::SystemPhase::EmergencyStop(reason) => Some(NewSystemEventRecord {
@@ -665,6 +671,8 @@ fn transition_system_event_record(event: &FsmTransitionEvent) -> Option<NewSyste
                 "phase_duration_ms": event.phase_duration_ms,
             })),
             timestamp: event.timestamp_ms as i64,
+            source: "rule".to_string(),
+            primary_reason_code: None,
         }),
         _ => None,
     }

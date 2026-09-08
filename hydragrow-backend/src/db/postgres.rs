@@ -43,6 +43,8 @@ pub struct NewSystemEventRecord {
     pub reason: Option<String>,
     pub metadata: Option<serde_json::Value>, // Sử dụng JsonValue của sqlx
     pub timestamp: i64,
+    pub source: String,
+    pub primary_reason_code: Option<String>,
 }
 
 /// Struct dùng để ĐỌC từ DB (id là i32 do SERIAL).
@@ -57,6 +59,8 @@ pub struct SystemEventRecord {
     pub reason: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub timestamp: i64,
+    pub source: String,
+    pub primary_reason_code: Option<String>,
 }
 
 // Device Config
@@ -507,9 +511,9 @@ pub async fn insert_system_event(
 ) -> Result<(), sqlx::Error> {
     let query = r#"
         INSERT INTO system_events (
-            device_id, level, category, title, message, reason, metadata, timestamp
+            device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     "#;
 
     sqlx::query(query)
@@ -521,6 +525,8 @@ pub async fn insert_system_event(
         .bind(&record.reason)
         .bind(&record.metadata)
         .bind(record.timestamp)
+        .bind(&record.source)
+        .bind(&record.primary_reason_code)
         .execute(executor)
         .await?;
 
@@ -538,7 +544,7 @@ pub async fn get_system_events(
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
         r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
         FROM system_events
         WHERE device_id = $1
           AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
@@ -567,7 +573,7 @@ pub async fn get_events_by_cycle_id(
     cycle_id: &str,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     let query = r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
         FROM system_events
         WHERE device_id = $1
           AND (
@@ -582,6 +588,34 @@ pub async fn get_events_by_cycle_id(
         .bind(cycle_id)
         .fetch_all(pool)
         .await
+}
+
+/// Dedup lookup for AI supervisor alerts (§5).
+/// Returns true if a matching alert exists within the cooldown window.
+/// `source` is part of the dedup key so watchdog and ai_supervisor rows
+/// never suppress each other.
+pub async fn find_recent_alert(
+    pool: &PgPool,
+    device_id: &str,
+    source: &str,
+    primary_reason_code: &str,
+    cooldown_minutes: i64,
+) -> Result<bool, sqlx::Error> {
+    let cutoff = chrono::Utc::now().timestamp_millis() - cooldown_minutes * 60 * 1000;
+    let row: Option<(i32,)> = sqlx::query_as(
+        r#"
+        SELECT id FROM system_events
+        WHERE device_id = $1 AND source = $2 AND primary_reason_code = $3 AND timestamp >= $4
+        LIMIT 1
+        "#,
+    )
+    .bind(device_id)
+    .bind(source)
+    .bind(primary_reason_code)
+    .bind(cutoff)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.is_some())
 }
 
 // FCM Tokens

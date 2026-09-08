@@ -3,4 +3,6 @@ pub mod test_device_wifi;
 pub mod test_fcm_tokens;
 pub mod test_postgres;
 pub mod test_recipes;
+pub mod test_service_api_keys;
+pub mod test_topic_last_seen;
 pub mod test_users;

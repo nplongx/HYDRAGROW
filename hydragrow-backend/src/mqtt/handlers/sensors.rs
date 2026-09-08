@@ -230,6 +230,8 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                             reason: alert_msg.reason.clone(),
                             metadata: alert_msg.metadata.clone(),
                             timestamp: alert_msg.timestamp as i64,
+                            source: "rule".to_string(),
+                            primary_reason_code: None,
                         };
                         if let Err(e) =
                             crate::db::postgres::insert_system_event(&app_state.pg_pool, &db_record)

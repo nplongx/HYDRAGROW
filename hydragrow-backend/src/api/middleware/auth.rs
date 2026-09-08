@@ -154,8 +154,9 @@ where
             });
         }
 
-        // 3. Fallback: X-API-Key tĩnh (đường cũ, giữ để tương thích ngược)
+        // 3. Fallback: X-API-Key — service_api_keys first, legacy shared key second.
         let expected_api_key = app_state.api_key.clone();
+        let pg_pool = app_state.pg_pool.clone();
 
         let header_key = req
             .headers()
@@ -163,41 +164,61 @@ where
             .and_then(|hv| hv.to_str().ok())
             .map(ToString::to_string);
 
-        let is_authorized = header_key
-            .as_deref()
-            .is_some_and(|key| key == expected_api_key);
-
-        if !is_authorized {
-            let response = HttpResponse::Unauthorized()
-                .json(serde_json::json!({"error": "Unauthorized: Invalid or missing API Key"}))
-                .map_into_right_body();
-            let (http_req, _payload) = req.into_parts();
-            return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
-        }
-
-        let scopes = default_legacy_scopes();
-
-        let auth_context = AuthContext {
-            scopes,
-            user_id: req
-                .headers()
-                .get("X-User-Id")
-                .and_then(|hv| hv.to_str().ok())
-                .map(ToString::to_string),
-            session_id: req
-                .headers()
-                .get("X-Session-Id")
-                .and_then(|hv| hv.to_str().ok())
-                .map(ToString::to_string),
-        };
-
-        req.extensions_mut().insert(auth_context);
+        let user_id = req
+            .headers()
+            .get("X-User-Id")
+            .and_then(|hv| hv.to_str().ok())
+            .map(ToString::to_string);
+        let session_id = req
+            .headers()
+            .get("X-Session-Id")
+            .and_then(|hv| hv.to_str().ok())
+            .map(ToString::to_string);
 
         let srv = Rc::clone(&self.service);
-        Box::pin(async move {
+        return Box::pin(async move {
+            if let Some(key) = header_key.as_deref() {
+                let key_hash = crate::db::service_api_keys::sha256_hex(key);
+                if let Some(svc) =
+                    crate::db::service_api_keys::find_active_by_key_hash(&pg_pool, &key_hash)
+                        .await
+                {
+                    let auth_context = AuthContext {
+                        scopes: svc.scopes,
+                        user_id: None,
+                        session_id: None,
+                    };
+                    req.extensions_mut().insert(auth_context);
+                    let res = srv.call(req).await?;
+                    return Ok(res.map_into_left_body());
+                }
+            }
+
+            let is_authorized = header_key
+                .as_deref()
+                .is_some_and(|key| key == expected_api_key);
+
+            if !is_authorized {
+                let response = HttpResponse::Unauthorized()
+                    .json(serde_json::json!({"error": "Unauthorized: Invalid or missing API Key"}))
+                    .map_into_right_body();
+                let (http_req, _payload) = req.into_parts();
+                return Ok(ServiceResponse::new(http_req, response));
+            }
+
+            let scopes = default_legacy_scopes();
+
+            let auth_context = AuthContext {
+                scopes,
+                user_id,
+                session_id,
+            };
+
+            req.extensions_mut().insert(auth_context);
+
             let res = srv.call(req).await?;
             Ok(res.map_into_left_body())
-        })
+        });
     }
 }
 

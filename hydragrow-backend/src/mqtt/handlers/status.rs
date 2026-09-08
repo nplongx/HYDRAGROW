@@ -13,7 +13,22 @@ use hydragrow_shared::wifi_tx::WifiConfigStatus;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct DeviceStatusPayload {
-    pub online: bool,
+    #[serde(default)]
+    pub online: Option<bool>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub firmware_version: Option<String>,
+}
+
+fn interpret_online_signal(status: &DeviceStatusPayload) -> Option<bool> {
+    if let Some(online) = status.online {
+        return Some(online);
+    }
+    if status.status.as_deref() == Some("online") {
+        return Some(true);
+    }
+    None
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +64,24 @@ pub async fn handle_device(
         }
     };
 
-    let is_online = status.online;
+    if let Some(fw) = status.firmware_version.as_deref()
+        && !fw.is_empty()
+        && fw != "unknown"
+    {
+        info!(device_id = %device_id, firmware_version = %fw, "Cập nhật firmware version map");
+        app_state
+            .device_firmware
+            .write()
+            .await
+            .insert(device_id.clone(), fw.to_string());
+    }
+
+    let is_online = match interpret_online_signal(&status) {
+        None => return,
+        Some(v) => v,
+    };
+
+    let _ = crate::db::topic_last_seen::touch_topic(&app_state.pg_pool, &device_id, "controller/status", chrono::Utc::now()).await;
 
     let _ = crate::db::topic_last_seen::touch_topic(&app_state.pg_pool, &device_id, "controller/status", chrono::Utc::now()).await;
 
@@ -535,5 +567,55 @@ mod tests {
         let parsed: WifiConfigStatus = serde_json::from_slice(hostile).unwrap();
         assert_eq!(parsed.state, "applied");
         assert!(!serde_json::to_string(&parsed).unwrap().contains("smuggled"));
+    }
+
+    use super::{DeviceStatusPayload, interpret_online_signal};
+
+    #[test]
+    fn interpret_online_signal_uses_bool_field_when_present() {
+        let on = DeviceStatusPayload {
+            online: Some(true),
+            status: None,
+            firmware_version: None,
+        };
+        assert_eq!(interpret_online_signal(&on), Some(true));
+        let off = DeviceStatusPayload {
+            online: Some(false),
+            status: Some("online".to_string()),
+            firmware_version: None,
+        };
+        assert_eq!(interpret_online_signal(&off), Some(false));
+    }
+
+    #[test]
+    fn treats_status_online_as_true() {
+        let s = DeviceStatusPayload {
+            online: None,
+            status: Some("online".to_string()),
+            firmware_version: None,
+        };
+        assert_eq!(interpret_online_signal(&s), Some(true));
+    }
+
+    #[test]
+    fn does_not_infer_offline_from_other_status_values() {
+        for other in ["offline", "idle", "error", ""] {
+            let s = DeviceStatusPayload {
+                online: None,
+                status: Some(other.to_string()),
+                firmware_version: None,
+            };
+            assert_eq!(interpret_online_signal(&s), None);
+        }
+    }
+
+    #[test]
+    fn returns_none_when_no_signal_present() {
+        let s = DeviceStatusPayload {
+            online: None,
+            status: None,
+            firmware_version: None,
+        };
+        assert_eq!(interpret_online_signal(&s), None);
     }
 }

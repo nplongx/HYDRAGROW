@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use hydragrow_shared::{MqttCommandOut, topics::topic_controller_command};
+use hydragrow_shared::{MqttCommandOut, topics::topic_controller_command, topics::topic_sensor_node_command};
 use rumqttc::QoS;
 use serde::Serialize;
 use serde_json::Value;
@@ -99,6 +99,16 @@ pub async fn publish_command(
     payload: &MqttCommandOut,
 ) -> Result<()> {
     let topic = topic_controller_command(device_id);
+    publish_signed_payload(app_state, device_id, topic, payload).await?;
+    Ok(())
+}
+
+pub async fn publish_sensor_command(
+    app_state: &AppState,
+    device_id: &str,
+    payload: &MqttCommandOut,
+) -> Result<()> {
+    let topic = topic_sensor_node_command(device_id);
     publish_signed_payload(app_state, device_id, topic, payload).await?;
     Ok(())
 }

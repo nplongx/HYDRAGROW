@@ -1,0 +1,204 @@
+name: firmware-release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-controller:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches Cargo.toml version
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        run: |
+          set -euo pipefail
+          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match Cargo.toml version $CARGO_VERSION — bump Cargo.toml before tagging."
+            exit 1
+          fi
+          echo "Tag matches Cargo.toml version: $CARGO_VERSION"
+
+      - name: Install Rust nightly + esp-rs toolchain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L https://github.com/esp-rs/espup/releases/latest/download/espup-x86_64-unknown-linux-gnu -o espup
+          chmod +x espup
+          ./espup install --targets esp32c3
+          rustup component add rust-src
+
+      - name: Install ldproxy
+        run: cargo install ldproxy --locked
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ESP32-C3-CONTROLLER-NODE
+          cache-targets: true
+
+      - name: Ensure release artifact has no per-device compile-time secrets
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        shell: bash
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -Rn 'env!("HYDRAGROW_WIFI_SSID"\|env!("HYDRAGROW_WIFI_PASSWORD"\|env!("HYDRAGROW_DEVICE_ID"' src || true)
+          FORBIDDEN=$(echo "$MATCHES" | grep -v 'option_env!' || true)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "::error::release artifact still depends on per-device WiFi compile-time secrets:"
+            echo "$FORBIDDEN"
+            exit 1
+          fi
+          echo "No required per-device compile-time secrets in firmware source."
+
+      - name: Build release firmware
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        shell: bash
+        env:
+          HYDRAGROW_MQTT_URL: ${{ secrets.HYDRAGROW_MQTT_URL }}
+          HYDRAGROW_MQTT_COMMAND_SECRET: ${{ secrets.HYDRAGROW_MQTT_COMMAND_SECRET }}
+          HYDRAGROW_MQTT_USER: ${{ secrets.HYDRAGROW_MQTT_USER }}
+          HYDRAGROW_MQTT_PASSWORD: ${{ secrets.HYDRAGROW_MQTT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          source "$HOME/export-esp.sh"
+
+          test -n "$HYDRAGROW_MQTT_URL" || { echo "::error::Missing HYDRAGROW_MQTT_URL secret"; exit 1; }
+          test -n "$HYDRAGROW_MQTT_COMMAND_SECRET" || { echo "::error::Missing HYDRAGROW_MQTT_COMMAND_SECRET secret"; exit 1; }
+
+          cargo build --release --locked
+
+      - name: Install espflash
+        run: cargo install espflash --locked
+
+      - name: Produce OTA-flashable firmware.bin
+        working-directory: ESP32-C3-CONTROLLER-NODE
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/export-esp.sh"
+          espflash save-image --chip esp32c3 \
+            target/riscv32imc-esp-espidf/release/esp32-c3-mist-weaver-os \
+            firmware.bin
+          ls -la firmware.bin
+          sha256sum firmware.bin > firmware.bin.sha256
+          cat firmware.bin.sha256
+
+      - name: Upload controller firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: controller-firmware
+          path: ESP32-C3-CONTROLLER-NODE/firmware.bin
+          retention-days: 1
+
+  build-sensor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches FIRMWARE_VERSION
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: |
+          set -euo pipefail
+          FW_VERSION=$(grep -m1 'FIRMWARE_VERSION' src/config/Version.h | sed -E 's/.*"(.*)".*/\1/')
+          if [ "$FW_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match src/config/Version.h FIRMWARE_VERSION $FW_VERSION — bump Version.h before tagging."
+            exit 1
+          fi
+          echo "Tag matches FIRMWARE_VERSION: $FW_VERSION"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('ESP32-C3-SENSOR-NODE/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Generate production secrets header
+        working-directory: ESP32-C3-SENSOR-NODE
+        env:
+          HYDRAGROW_SENSOR_WIFI_SSID: ${{ secrets.HYDRAGROW_SENSOR_WIFI_SSID }}
+          HYDRAGROW_SENSOR_WIFI_PASSWORD: ${{ secrets.HYDRAGROW_SENSOR_WIFI_PASSWORD }}
+          HYDRAGROW_SENSOR_MQTT_HOST: ${{ secrets.HYDRAGROW_SENSOR_MQTT_HOST }}
+          HYDRAGROW_SENSOR_MQTT_USERNAME: ${{ secrets.HYDRAGROW_SENSOR_MQTT_USERNAME }}
+          HYDRAGROW_SENSOR_MQTT_PASSWORD: ${{ secrets.HYDRAGROW_SENSOR_MQTT_PASSWORD }}
+          HYDRAGROW_SENSOR_MQTT_CLIENT_ID: ${{ secrets.HYDRAGROW_SENSOR_MQTT_CLIENT_ID }}
+          HYDRAGROW_SENSOR_DEVICE_ID: ${{ secrets.HYDRAGROW_SENSOR_DEVICE_ID }}
+          HYDRAGROW_SENSOR_COMMAND_HMAC_KEY: ${{ secrets.HYDRAGROW_SENSOR_COMMAND_HMAC_KEY }}
+        run: |
+          set -euo pipefail
+          for v in HYDRAGROW_SENSOR_WIFI_SSID HYDRAGROW_SENSOR_WIFI_PASSWORD HYDRAGROW_SENSOR_MQTT_HOST HYDRAGROW_SENSOR_MQTT_USERNAME HYDRAGROW_SENSOR_MQTT_PASSWORD HYDRAGROW_SENSOR_MQTT_CLIENT_ID HYDRAGROW_SENSOR_DEVICE_ID HYDRAGROW_SENSOR_COMMAND_HMAC_KEY; do
+            test -n "${!v:-}" || { echo "::error::Missing $v secret"; exit 1; }
+          done
+          {
+            echo '#pragma once'
+            echo '#define WIFI_SSID "'"$HYDRAGROW_SENSOR_WIFI_SSID"'"'
+            echo '#define WIFI_PASSWORD "'"$HYDRAGROW_SENSOR_WIFI_PASSWORD"'"'
+            echo '#define MQTT_HOST "'"$HYDRAGROW_SENSOR_MQTT_HOST"'"'
+            echo '#define MQTT_PORT 8883'
+            echo '#define MQTT_USERNAME "'"$HYDRAGROW_SENSOR_MQTT_USERNAME"'"'
+            echo '#define MQTT_PASSWORD "'"$HYDRAGROW_SENSOR_MQTT_PASSWORD"'"'
+            echo '#define MQTT_CLIENT_ID "'"$HYDRAGROW_SENSOR_MQTT_CLIENT_ID"'"'
+            echo '#define DEVICE_ID "'"$HYDRAGROW_SENSOR_DEVICE_ID"'"'
+            echo '#define COMMAND_HMAC_KEY "'"$HYDRAGROW_SENSOR_COMMAND_HMAC_KEY"'"'
+          } > src/secrets.h
+
+      - name: Build sensor firmware (esp32-c3-devkitm-1)
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: pio run --environment esp32-c3-devkitm-1
+
+      - name: Rename firmware for release asset
+        working-directory: ESP32-C3-SENSOR-NODE
+        run: cp .pio/build/esp32-c3-devkitm-1/firmware.bin sensor-firmware.bin
+
+      - name: Upload sensor firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sensor-firmware
+          path: ESP32-C3-SENSOR-NODE/sensor-firmware.bin
+          retention-days: 1
+
+  create-release:
+    needs: [build-controller, build-sensor]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download controller firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: controller-firmware
+
+      - name: Download sensor firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: sensor-firmware
+
+      - name: Create GitHub Release with both firmware assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ls -la firmware.bin sensor-firmware.bin
+          gh release create "$GITHUB_REF_NAME" firmware.bin sensor-firmware.bin \
+            --title "Firmware $GITHUB_REF_NAME" \
+            --notes "Automated release built from commit $GITHUB_SHA. Includes ESP32-C3-CONTROLLER-NODE (firmware.bin) and ESP32-C3-SENSOR-NODE (sensor-firmware.bin)." \
+            --latest

@@ -96,6 +96,11 @@ pub fn topic_controller_status(device_id: &str) -> String {
 pub fn topic_sensor_command(device_id: &str) -> String {
     format!("AGITECH/{}/sensor/command", device_id)
 }
+/// Sensor-node command topic (no role infix): addressed to a sensor node
+/// directly, unlike [`topic_sensor_command`] which targets the `sensor/` role namespace.
+pub fn topic_sensor_node_command(device_id: &str) -> String {
+    format!("AGITECH/{}/command", device_id)
+}
 pub fn topic_sensors_config(device_id: &str) -> String {
     MqttTopics::sensors_config(device_id)
 }
@@ -221,6 +226,13 @@ mod tests {
         assert_eq!(topic, "hydragrow/device-01/integrations/out");
     }
 
+    #[test]
+    fn sensor_node_command_topic_has_no_role_infix() {
+        assert_eq!(
+            topic_sensor_node_command("device-01"),
+            "AGITECH/device-01/command"
+        );
+    }
     #[test]
     fn command_topics_are_isolated_per_device() {
         // A command addressed to ESP-001 must never route to ESP-002.

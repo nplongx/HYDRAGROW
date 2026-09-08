@@ -120,6 +120,7 @@ pub struct ConfigOverwriteDirective {
     pub config_key: String,
     pub value: String,
     pub read_original_before_write: bool,
+    pub priority: i32,
 }
 
 /// Áp dụng hoặc khôi phục Config·Overwrite dựa trên chuyển trạng thái điều kiện
@@ -398,6 +399,7 @@ mod tests {
             config_key: "ec_target".to_string(),
             value: "2.4".to_string(),
             read_original_before_write: true,
+            priority: 0,
         }
     }
 

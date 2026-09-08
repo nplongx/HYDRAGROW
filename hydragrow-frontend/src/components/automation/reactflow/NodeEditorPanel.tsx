@@ -12,6 +12,7 @@ import {
 import {
   summarizeConditionTree,
 } from "../../../lib/automation/conditionTree";
+import { DEVICE_CONFIG_BOUNDS } from "../../../lib/automation/ir";
 
 import { getAvailableContextVariables } from "../../../lib/automation/contextVariables";
 import { extractTemplateTokens, renderTemplatePreview } from "../../../lib/automation/templateVars";
@@ -1243,30 +1244,22 @@ export function NodeEditorPanel({
             </h4>
 
             <FieldGroup label="Config key">
-              <input
-                type="text"
+              <select
                 aria-label="Config key"
                 className="ui-input text-xs"
-                placeholder="ph_target"
                 value={(node.data?.configKey as string) ?? ""}
                 onChange={(e) =>
                   onChange(node.id, { ...node.data, variant: "read", configKey: e.target.value })
                 }
-              />
-            </FieldGroup>
-
-            <FieldGroup label="Thiết bị / nhóm">
-              <select
-                aria-label="Thiết bị / nhóm"
-                className="ui-input text-xs"
-                value={(node.data?.deviceGroup as string) ?? "Zone A - Bơm dinh dưỡng"}
-                onChange={(e) =>
-                  onChange(node.id, { ...node.data, variant: "read", deviceGroup: e.target.value })
-                }
               >
-                <option value="Zone A - Bơm dinh dưỡng">Zone A - Bơm dinh dưỡng</option>
-                <option value="Zone B - Hệ thống tưới">Zone B - Hệ thống tưới</option>
-                <option value="Toàn hệ thống">Toàn hệ thống</option>
+                <option value="" disabled>
+                  -- Chọn config key --
+                </option>
+                {Object.keys(DEVICE_CONFIG_BOUNDS).map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
               </select>
             </FieldGroup>
 
@@ -1315,16 +1308,23 @@ export function NodeEditorPanel({
           </h4>
 
           <FieldGroup label="Config key">
-            <input
-              type="text"
+            <select
               aria-label="Config key"
               className="ui-input text-xs"
-              placeholder="ec_target"
               value={(node.data?.configKey as string) ?? ""}
               onChange={(e) =>
                 onChange(node.id, { ...node.data, variant: "overwrite", configKey: e.target.value })
               }
-            />
+            >
+              <option value="" disabled>
+                -- Chọn config key --
+              </option>
+              {Object.keys(DEVICE_CONFIG_BOUNDS).map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
           </FieldGroup>
 
           <FieldGroup label="Giá trị ghi đè">
@@ -1345,18 +1345,16 @@ export function NodeEditorPanel({
             </div>
           </FieldGroup>
 
-          <FieldGroup label="Thời điểm áp dụng">
-            <select
-              aria-label="Thời điểm áp dụng"
+          <FieldGroup label="Priority">
+            <input
+              type="number"
+              aria-label="Priority"
               className="ui-input text-xs"
-              value={(node.data?.applyWhen as string) ?? "previous_condition_true"}
+              value={Number(node.data?.priority ?? 0)}
               onChange={(e) =>
-                onChange(node.id, { ...node.data, variant: "overwrite", applyWhen: e.target.value })
+                onChange(node.id, { ...node.data, variant: "overwrite", priority: Number(e.target.value) })
               }
-            >
-              <option value="previous_condition_true">Khi điều kiện trước đúng</option>
-              <option value="always">Luôn áp dụng</option>
-            </select>
+            />
           </FieldGroup>
 
           <ToggleRow
@@ -1370,21 +1368,6 @@ export function NodeEditorPanel({
               })
             }
           />
-
-          <FieldGroup label="Chế độ khôi phục">
-            <select
-              aria-label="Chế độ khôi phục"
-              className="ui-input text-xs"
-              value={(node.data?.restoreMode as string) ?? "on_flow_exit"}
-              onChange={(e) =>
-                onChange(node.id, { ...node.data, variant: "overwrite", restoreMode: e.target.value })
-              }
-            >
-              <option value="manual">Thủ công (không tự khôi phục)</option>
-              <option value="on_flow_exit">Khi Flow kết thúc</option>
-              <option value="on_condition_false">Khi điều kiện không còn đúng</option>
-            </select>
-          </FieldGroup>
 
           {onOpenAuditModal && (
             <button

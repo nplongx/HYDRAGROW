@@ -79,7 +79,7 @@ mod tests {
         assert!(a2.is_empty());
 
         // With row-based version storage, deleting the last rows means version
-        // becomes 0. Keep this assertion only if that behavior is intentional.
+        // becomes 0.
         assert_eq!(va2, 0);
 
         let (b2, _) = get_wifi_metadata(&pool, "device-B").await.unwrap();

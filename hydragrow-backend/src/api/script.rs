@@ -402,7 +402,8 @@ pub fn get_config_unit(key: &str) -> &'static str {
 #[derive(Debug, serde::Serialize, sqlx::FromRow)]
 pub struct ConfigOverrideRow {
     pub id: Uuid, pub script_id: Uuid, pub device_id: String, pub config_key: String,
-    pub original_value: String, pub applied_at: chrono::DateTime<chrono::Utc>,
+    pub original_value: String, pub override_value: String,
+    pub applied_at: chrono::DateTime<chrono::Utc>,
     pub restored_at: Option<chrono::DateTime<chrono::Utc>>, pub flow_name: Option<String>,
 }
 
@@ -443,7 +444,7 @@ pub async fn list_config_overrides(
         .ok();
 
     let active_rows = sqlx::query_as::<_, ConfigOverrideRow>(
-        "SELECT fco.id, fco.script_id, fco.device_id, fco.config_key, fco.original_value, fco.applied_at, fco.restored_at, s.name as flow_name FROM flow_config_overrides fco LEFT JOIN user_scripts s ON s.id = fco.script_id WHERE fco.device_id = $1 AND fco.restored_at IS NULL ORDER BY fco.applied_at DESC",
+        "SELECT fco.id, fco.script_id, fco.device_id, fco.config_key, fco.original_value, fco.override_value, fco.applied_at, fco.restored_at, s.name as flow_name FROM flow_config_overrides fco LEFT JOIN user_scripts s ON s.id = fco.script_id WHERE fco.device_id = $1 AND fco.restored_at IS NULL ORDER BY fco.applied_at DESC",
     )
     .bind(&device_id).fetch_all(&app_state.pg_pool).await.unwrap_or_default();
 
@@ -475,7 +476,7 @@ pub async fn list_config_overrides(
         .collect();
 
     let history_rows = sqlx::query_as::<_, ConfigOverrideRow>(
-        "SELECT fco.id, fco.script_id, fco.device_id, fco.config_key, fco.original_value, fco.applied_at, fco.restored_at, s.name as flow_name FROM flow_config_overrides fco LEFT JOIN user_scripts s ON s.id = fco.script_id WHERE fco.device_id = $1 ORDER BY fco.applied_at DESC LIMIT 50",
+        "SELECT fco.id, fco.script_id, fco.device_id, fco.config_key, fco.original_value, fco.override_value, fco.applied_at, fco.restored_at, s.name as flow_name FROM flow_config_overrides fco LEFT JOIN user_scripts s ON s.id = fco.script_id WHERE fco.device_id = $1 ORDER BY fco.applied_at DESC LIMIT 50",
     )
     .bind(&device_id).fetch_all(&app_state.pg_pool).await.unwrap_or_default();
 
@@ -501,7 +502,7 @@ pub async fn list_config_overrides(
                 device_name: None,
                 config_key: row.config_key,
                 original_value: row.original_value.clone(),
-                override_value: row.original_value,
+                override_value: row.override_value,
                 unit,
                 reason,
                 status,
@@ -1014,5 +1015,61 @@ mod tests {
             .collect();
         let mut trace = Vec::new();
         assert!(eval_condition_tree(&node, &sample, &mut trace));
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn config_override_history_reports_the_real_override_value_not_a_copy_of_original(
+        pool: sqlx::PgPool,
+    ) {
+        use crate::services::config_override::{
+            reconcile_config_overwrite_group, ConfigOverwriteDirective, OverwriteContender,
+        };
+        crate::db::postgres::upsert_device_config(
+            &pool,
+            &crate::models::config::DeviceConfig {
+                device_id: "dev-history".to_string(),
+                ec_target: 1.8,
+                ec_tolerance: 0.2,
+                ph_target: 6.0,
+                ph_tolerance: 0.3,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 5,
+                last_updated: chrono::Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+        let script_id = uuid::Uuid::new_v4();
+        let directive = ConfigOverwriteDirective {
+            config_key: "ec_target".to_string(),
+            value: "2.4".to_string(),
+            read_original_before_write: true,
+            priority: 0,
+        };
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-history",
+            "ec_target",
+            &[OverwriteContender {
+                script_id,
+                directive,
+                condition_state: true,
+                context: std::collections::HashMap::new(),
+            }],
+        )
+        .await
+        .unwrap();
+
+        let row: (String, String) = sqlx::query_as(
+            "SELECT original_value, override_value FROM flow_config_overrides WHERE script_id = $1",
+        )
+        .bind(script_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.0, "1.8");
+        assert_eq!(row.1, "2.4");
+        assert_ne!(row.0, row.1, "override_value must no longer duplicate original_value");
     }
 }

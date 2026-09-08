@@ -26,6 +26,7 @@ import { useFlowCanvas } from "../hooks/useFlowCanvas";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useDeviceStore } from "../store/useDeviceStore";
 import type { UserScript } from "../types/automation";
+import { hasConfigOverride } from "../lib/automation/configDirectives";
 
 const nodeTypes = {
   flowSummary: FlowSummaryNode,
@@ -72,7 +73,7 @@ export function Automation() {
   const counts = useMemo(() => {
     let alert = 0, recipe = 0, action = 0, config = 0;
     activeScripts.forEach((s) => {
-      const isCfg = s.kind === "config_override" || s.ir_json?.kind === "config_override" || s.name.toLowerCase().includes("config") || s.name.toLowerCase().includes("ngưỡng ec");
+      const isCfg = hasConfigOverride(s);
       if (isCfg) config++;
       else if (s.kind === "alert") alert++;
       else if (s.kind === "recipe_override") recipe++;
@@ -83,7 +84,7 @@ export function Automation() {
 
   const filteredScripts = useMemo(() => {
     return activeScripts.filter((s) => {
-      const isCfg = s.kind === "config_override" || s.ir_json?.kind === "config_override" || s.name.toLowerCase().includes("config") || s.name.toLowerCase().includes("ngưỡng ec");
+      const isCfg = hasConfigOverride(s);
       let matchKind = true;
       if (filterKind === "config") matchKind = isCfg;
       else if (filterKind === "alert") matchKind = !isCfg && s.kind === "alert";
@@ -136,7 +137,7 @@ export function Automation() {
         metrics={{
           activeFlows: activeScripts.filter((s) => s.enabled).length,
           alerts24h: activeScripts.filter((s) => s.kind === "alert" && s.enabled).length,
-          configOverridesToday: (configOverridesData?.active?.length ?? 0) + activeScripts.filter((s) => s.kind === "config_override" && s.enabled).length,
+          configOverridesToday: configOverridesData?.active?.length ?? 0,
           successRatePercent: 100,
         }}
       />

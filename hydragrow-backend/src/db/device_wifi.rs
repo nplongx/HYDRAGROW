@@ -14,7 +14,7 @@ use super::{DbError, DbResult};
 
 /// A single SSID metadata row. Deliberately has NO password field —
 /// adding one here must fail review.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, FromRow)]
 pub struct WifiSsidEntry {
     pub ssid: String,
     pub priority: i16,
@@ -152,7 +152,7 @@ pub async fn replace_wifi_metadata(
     Ok(())
 }
 
-/// Load stored SSID metadata plus latest stored version (0 when none).
+/// Load stored SSID metadata plus the latest stored version (0 when none).
 pub async fn get_wifi_metadata(
     pool: &PgPool,
     device_id: &str,
@@ -243,7 +243,6 @@ pub async fn set_delivery_state(
     .execute(pool)
     .await
     .map_err(DbError::PostgresError)?;
-
     Ok(())
 }
 

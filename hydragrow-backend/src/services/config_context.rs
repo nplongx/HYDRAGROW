@@ -34,6 +34,10 @@ pub fn parse_config_overwrite(ir_json: &serde_json::Value) -> Option<ConfigOverw
             .get("readOriginalBeforeWrite")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        priority: node
+            .get("priority")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32,
     })
 }
 
@@ -119,6 +123,35 @@ mod tests {
     fn parse_config_overwrite_returns_none_when_field_absent() {
         let ir_json = serde_json::json!({ "conditions": [] });
         assert!(parse_config_overwrite(&ir_json).is_none());
+    }
+
+    #[test]
+    fn parse_config_overwrite_extracts_priority() {
+        let ir_json = serde_json::json!({
+            "configOverwrite": {
+                "configKey": "ec_target",
+                "value": "1.8",
+                "readOriginalBeforeWrite": true,
+                "restoreMode": "on_condition_false",
+                "priority": 5
+            }
+        });
+        let directive = parse_config_overwrite(&ir_json).unwrap();
+        assert_eq!(directive.priority, 5);
+    }
+
+    #[test]
+    fn parse_config_overwrite_defaults_priority_to_zero() {
+        let ir_json = serde_json::json!({
+            "configOverwrite": {
+                "configKey": "ec_target",
+                "value": "1.8",
+                "readOriginalBeforeWrite": false,
+                "restoreMode": "on_condition_false"
+            }
+        });
+        let directive = parse_config_overwrite(&ir_json).unwrap();
+        assert_eq!(directive.priority, 0);
     }
 
     #[test]

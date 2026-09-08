@@ -161,7 +161,6 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             &app_state.influx_client,
             &app_state.influx_bucket,
             &app_state.pg_pool,
-            &app_state.condition_state_cache,
         )
         .await;
 

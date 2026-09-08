@@ -171,6 +171,7 @@ describe('buildIrFromGraph', () => {
       value: '1.8',
       readOriginalBeforeWrite: true,
       restoreMode: 'on_condition_false',
+      priority: 0,
     });
   });
 

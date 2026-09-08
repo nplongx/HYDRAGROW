@@ -27,6 +27,7 @@ pub fn build_ota_status_response(
     let update_available = latest_version
         .as_ref()
         .is_some_and(|latest| current_version != "unknown" && latest != &current_version);
+
     OtaStatusResponse {
         device_id: String::new(),
         current_version,
@@ -70,8 +71,11 @@ pub async fn get_ota_status(
         .get(&device_id)
         .cloned()
         .unwrap_or_else(|| "unknown".to_string());
-    let mut response = build_ota_status_response(current_version, fetch_latest_release_tag().await);
+
+    let mut response =
+        build_ota_status_response(current_version, fetch_latest_release_tag().await);
     response.device_id = device_id;
+
     HttpResponse::Ok().json(response)
 }
 
@@ -80,6 +84,7 @@ async fn fetch_latest_release_tag() -> Option<String> {
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .ok()?;
+
     let response = client
         .get("https://api.github.com/repos/nplongx/HYDRAGROW/releases/latest")
         .header("User-Agent", "Hydragrow-Backend")
@@ -88,6 +93,7 @@ async fn fetch_latest_release_tag() -> Option<String> {
         .ok()?
         .error_for_status()
         .ok()?;
+
     response
         .json::<serde_json::Value>()
         .await
@@ -104,30 +110,41 @@ pub async fn trigger_ota(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
     if !auth_from(&req).has_scope("device:ota") {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Missing required scope: device:ota"}));
     }
+
     // The browser's current passwords are used to build the MQTT payload
     // immediately below. They are never read back from Postgres.
     let wifi = body.and_then(|body| body.into_inner().wifi);
+
     if wifi.is_some() && !auth_from(&req).has_scope("device:network") {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Missing required scope: device:network"}));
     }
+
     if !has_dangerous_confirmation(&req) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error": "Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}));
+        return HttpResponse::Forbidden().json(
+            serde_json::json!({"error": "Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}),
+        );
     }
+
     if wifi.is_some() && !check_provision_throttle(&device_id) {
         warn!(%device_id, "Provision throttle exceeded");
-        return HttpResponse::TooManyRequests()
-            .json(serde_json::json!({"error": "Too many provisioning attempts for this device; retry later"}));
+        return HttpResponse::TooManyRequests().json(
+            serde_json::json!({"error": "Too many provisioning attempts for this device; retry later"}),
+        );
     }
+
     if let Some(config) = &wifi {
         if let Err(reason) = hydragrow_shared::wifi_tx::validate_provision_structure(config) {
-            return HttpResponse::BadRequest()
-                .json(serde_json::json!({"error": format!("Invalid wifi provision: {reason}")}));
+            return HttpResponse::BadRequest().json(
+                serde_json::json!({"error": format!("Invalid wifi provision: {reason}")}),
+            );
         }
+
         match device_wifi::get_wifi_metadata(&app_state.pg_pool, &device_id).await {
             Ok((_, stored_version)) if config.config_version <= stored_version => {
                 return HttpResponse::Conflict().json(serde_json::json!({
@@ -143,15 +160,20 @@ pub async fn trigger_ota(
             _ => {}
         }
     }
+
     let command = build_update_firmware_command(wifi.clone());
+
     // Audit log uses the metadata-only summary — never the command itself.
     let audit = command_audit_summary(&command);
+
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => {
             info!(%device_id, %audit, "OTA provision command sent");
+
             if let Some(config) = &wifi {
                 // Persist SSID metadata only — passwords never cross this boundary.
                 let metadata = device_wifi::metadata_from_provision(config);
+
                 if let Err(error) = device_wifi::replace_wifi_metadata(
                     &app_state.pg_pool,
                     &device_id,
@@ -160,7 +182,12 @@ pub async fn trigger_ota(
                 )
                 .await
                 {
-                    warn!(%device_id, ?error, "OTA sent but wifi metadata persist failed");
+                    warn!(
+                        %device_id,
+                        ?error,
+                        "OTA sent but wifi metadata persist failed"
+                    );
+
                     return HttpResponse::Accepted().json(serde_json::json!({
                         "status": "ota_provision_sent",
                         "device_id": device_id,
@@ -168,6 +195,7 @@ pub async fn trigger_ota(
                         "warning": "metadata persist failed; device state is authoritative",
                     }));
                 }
+
                 if let Err(error) = device_wifi::set_delivery_state(
                     &app_state.pg_pool,
                     &device_id,
@@ -179,17 +207,20 @@ pub async fn trigger_ota(
                 {
                     warn!(%device_id, ?error, "Failed to record wifi delivery state");
                 }
+
                 return HttpResponse::Accepted().json(serde_json::json!({
                     "status": "ota_provision_sent",
                     "device_id": device_id,
                     "config_version": config.config_version,
                 }));
             }
+
             HttpResponse::Accepted()
                 .json(serde_json::json!({"status":"ota_triggered", "device_id":device_id}))
         }
         Err(error) => {
             warn!(%device_id, ?error, "Failed to send OTA command");
+
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({"error":"Could not send OTA command"}))
         }
@@ -206,6 +237,7 @@ pub fn command_audit_summary(command: &MqttCommandOut) -> String {
         .and_then(|provision| provision.wifi.as_ref())
         .map(|wifi| (wifi.entries.len(), wifi.config_version))
         .unwrap_or((0, 0));
+
     format!(
         "action={} wifi_entries={} config_version={}",
         command.action, count, version
@@ -218,11 +250,16 @@ pub fn command_audit_summary(command: &MqttCommandOut) -> String {
 pub const PROVISION_MAX_ATTEMPTS: usize = 5;
 pub const PROVISION_WINDOW_SECS: u64 = 300;
 
-pub fn provision_allowed(attempts: &mut Vec<std::time::Instant>, now: std::time::Instant) -> bool {
+pub fn provision_allowed(
+    attempts: &mut Vec<std::time::Instant>,
+    now: std::time::Instant,
+) -> bool {
     attempts.retain(|at| now.duration_since(*at).as_secs() < PROVISION_WINDOW_SECS);
+
     if attempts.len() >= PROVISION_MAX_ATTEMPTS {
         return false;
     }
+
     attempts.push(now);
     true
 }
@@ -237,6 +274,7 @@ fn check_provision_throttle(device_id: &str) -> bool {
     let attempts = map.entry(device_id.to_string()).or_default();
     provision_allowed(attempts, now)
 }
+
 /// Build the fleet `update_firmware` command. OTA-only when `wifi` is None;
 /// combined OTA+WiFi otherwise. Passwords stay in the returned MQTT payload
 /// (transient) and must never be persisted by callers.
@@ -275,14 +313,17 @@ pub async fn get_wifi_config(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
     if !auth_from(&req).has_scope("device:network") {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Missing required scope: device:network"}));
     }
+
     match device_wifi::get_wifi_config_view(&app_state.pg_pool, &device_id).await {
         Ok(view) => HttpResponse::Ok().json(view),
         Err(error) => {
             warn!(%device_id, ?error, "Failed to load wifi config view");
+
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({"error": "Could not load wifi config"}))
         }
@@ -331,6 +372,7 @@ pub fn build_wifi_config_response(
     rows: Vec<crate::db::device_wifi::DeviceWifiConfigRow>,
 ) -> WifiConfigResponse {
     let config_version = rows.first().map(|r| r.config_version).unwrap_or(0);
+
     let ssids = rows
         .into_iter()
         .map(|r| WifiConfigEntryResponse {
@@ -338,12 +380,14 @@ pub fn build_wifi_config_response(
             priority: r.priority,
         })
         .collect();
+
     WifiConfigResponse {
         device_id,
         ssids,
         config_version,
     }
 }
+
 pub async fn update_wifi_list(
     path: web::Path<String>,
     req: HttpRequest,
@@ -351,25 +395,34 @@ pub async fn update_wifi_list(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
     if !auth_from(&req).has_scope("device:network") {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Missing required scope: device:network"}));
     }
+
     let candidates: Vec<_> = body
         .into_inner()
         .candidates
         .into_iter()
         .filter(|candidate| !candidate.ssid.trim().is_empty())
         .collect();
+
     if candidates.is_empty() {
         return HttpResponse::BadRequest()
             .json(serde_json::json!({"error":"At least one non-empty SSID is required"}));
     }
+
     if !has_dangerous_confirmation(&req) {
-        return HttpResponse::Forbidden().json(serde_json::json!({"error":"Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}));
+        return HttpResponse::Forbidden().json(
+            serde_json::json!({"error":"Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}),
+        );
     }
+
     info!(%device_id, ssid_count = candidates.len(), "legacy POST /wifi used");
+
     let ssid_entries = candidates_to_ssid_entries(&candidates);
+
     let command = MqttCommandOut {
         target: "all".to_string(),
         action: "update_wifi_list".to_string(),
@@ -386,6 +439,7 @@ pub async fn update_wifi_list(
         nonce: None,
         signature: None,
     };
+
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => {
             if let Err(error) = crate::db::device_wifi::replace_device_wifi_config(
@@ -395,13 +449,19 @@ pub async fn update_wifi_list(
             )
             .await
             {
-                warn!(%device_id, ?error, "Failed to persist WiFi config metadata to DB");
+                warn!(
+                    %device_id,
+                    ?error,
+                    "Failed to persist WiFi config metadata to DB"
+                );
             }
+
             HttpResponse::Accepted()
                 .json(serde_json::json!({"status":"wifi_list_sent", "device_id":device_id}))
         }
         Err(error) => {
             warn!(%device_id, ?error, "Failed to send WiFi provisioning command");
+
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({"error":"Could not send WiFi list"}))
         }
@@ -414,14 +474,17 @@ pub async fn reboot_device(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
     if !auth_from(&req).has_scope("device:admin") {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Missing scope: device:admin"}));
     }
+
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Requires X-User-Confirmed: true"}));
     }
+
     let command = MqttCommandOut {
         target: "all".to_string(),
         action: "reboot_device".to_string(),
@@ -430,11 +493,13 @@ pub async fn reboot_device(
         nonce: None,
         signature: None,
     };
+
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => HttpResponse::Accepted()
             .json(serde_json::json!({"status": "reboot_triggered", "device_id": device_id})),
         Err(e) => {
             warn!(%device_id, ?e, "Failed to send reboot command");
+
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({"error": "Could not send reboot command"}))
         }
@@ -447,14 +512,17 @@ pub async fn factory_reset_device(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
     if !auth_from(&req).has_scope("device:admin") {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Missing scope: device:admin"}));
     }
+
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden()
             .json(serde_json::json!({"error": "Requires X-User-Confirmed: true"}));
     }
+
     let command = MqttCommandOut {
         target: "all".to_string(),
         action: "factory_reset".to_string(),
@@ -463,11 +531,13 @@ pub async fn factory_reset_device(
         nonce: None,
         signature: None,
     };
+
     match publish_command(&app_state, &device_id, &command).await {
         Ok(()) => HttpResponse::Accepted()
             .json(serde_json::json!({"status": "factory_reset_triggered", "device_id": device_id})),
         Err(e) => {
             warn!(%device_id, ?e, "Failed to send factory_reset command");
+
             HttpResponse::InternalServerError()
                 .json(serde_json::json!({"error": "Could not send factory_reset"}))
         }
@@ -494,10 +564,12 @@ pub async fn get_device_status(
     let (is_online, last_seen) = match raw {
         Some(s) => {
             let parsed: serde_json::Value = serde_json::from_str(&s).unwrap_or_default();
+
             let ts = parsed
                 .get("controller_status_ts")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
+
             // Online if a heartbeat landed in the last 30s
             // (firmware publish cycle is 10s — see health.rs run_main_health_loop)
             let is_online = ts
@@ -505,6 +577,7 @@ pub async fn get_device_status(
                 .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
                 .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_seconds() < 30)
                 .unwrap_or(false);
+
             (is_online, ts)
         }
         None => (false, None),
@@ -565,9 +638,12 @@ mod tests {
     fn combined_ota_request_strips_password_for_db_metadata() {
         let config = provision_config(8);
         let metadata = device_wifi::metadata_from_provision(&config);
+
         assert_eq!(metadata.len(), 2);
+
         let json = serde_json::to_value(&metadata).unwrap();
         let serialized = json.to_string();
+
         assert!(!serialized.contains("super-secret"));
         assert!(!serialized.contains("password"));
         assert_eq!(json[0]["ssid"], "Farm-A");
@@ -576,7 +652,9 @@ mod tests {
     #[test]
     fn ota_only_request_does_not_require_wifi_payload() {
         let command = build_update_firmware_command(None);
+
         assert_eq!(command.action, "update_firmware");
+
         let provision = command.params.unwrap().ota_provision.unwrap();
         assert!(provision.wifi.is_none());
     }
@@ -584,9 +662,14 @@ mod tests {
     #[test]
     fn combined_command_carries_transient_passwords_only_in_mqtt_payload() {
         let command = build_update_firmware_command(Some(provision_config(8)));
+
         let wifi = command.params.unwrap().ota_provision.unwrap().wifi.unwrap();
+
         assert_eq!(wifi.config_version, 8);
-        assert_eq!(wifi.entries[0].password.as_deref(), Some("super-secret"));
+        assert_eq!(
+            wifi.entries[0].password.as_deref(),
+            Some("super-secret")
+        );
     }
 
     #[test]
@@ -600,7 +683,9 @@ mod tests {
                 password: None,
             }],
         };
+
         let metadata = device_wifi::metadata_from_provision(&config);
+
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata[0].ssid, "Farm-Backup");
         assert!(
@@ -616,7 +701,9 @@ mod tests {
             ssid: "Farm-A".into(),
             priority: 0,
         };
+
         let value = serde_json::to_value(&entry).unwrap();
+
         assert!(value.get("password").is_none());
         assert!(value.get("secret").is_none());
     }
@@ -624,6 +711,7 @@ mod tests {
     #[test]
     fn wifi_command_audit_output_does_not_include_password() {
         let secret = "DO_NOT_LOG_ME";
+
         let command = build_update_firmware_command(Some(WifiProvisionConfig {
             config_version: 8,
             entries: vec![WifiProvisionEntry {
@@ -633,7 +721,9 @@ mod tests {
                 password: Some(secret.into()),
             }],
         }));
+
         let audit = command_audit_summary(&command);
+
         assert!(!audit.contains(secret));
         assert!(!audit.contains("password"));
         assert!(audit.contains("config_version=8"));
@@ -643,10 +733,13 @@ mod tests {
     fn provision_throttle_blocks_bursts() {
         let now = std::time::Instant::now();
         let mut attempts = Vec::new();
+
         for _ in 0..PROVISION_MAX_ATTEMPTS {
             assert!(provision_allowed(&mut attempts, now));
         }
+
         assert!(!provision_allowed(&mut attempts, now));
+
         // After the window passes, provisioning is allowed again.
         let later = now + std::time::Duration::from_secs(PROVISION_WINDOW_SECS + 1);
         assert!(provision_allowed(&mut attempts, later));
@@ -654,17 +747,26 @@ mod tests {
 
     #[test]
     fn ota_status_marks_version_difference_available() {
-        assert!(build_ota_status_response("v1.2.0".into(), Some("v1.3.0".into())).update_available);
+        assert!(
+            build_ota_status_response("v1.2.0".into(), Some("v1.3.0".into()))
+                .update_available
+        );
     }
+
     #[test]
     fn ota_status_does_not_mark_matching_version_available() {
         assert!(
-            !build_ota_status_response("v1.3.0".into(), Some("v1.3.0".into())).update_available
+            !build_ota_status_response("v1.3.0".into(), Some("v1.3.0".into()))
+                .update_available
         );
     }
+
     #[test]
     fn ota_status_does_not_claim_update_without_latest_version() {
-        assert!(!build_ota_status_response("v1.2.0".into(), None).update_available);
+        assert!(
+            !build_ota_status_response("v1.2.0".into(), None)
+                .update_available
+        );
     }
 
     #[test]
@@ -674,12 +776,12 @@ mod tests {
             password: "supersecret".to_string(),
             priority: 0,
         }];
+
         let entries = candidates_to_ssid_entries(&candidates);
+
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].ssid, "Home");
         assert_eq!(entries[0].priority, 0);
-        // WifiSsidEntry has no password field at all — if it ever grew one,
-        // this test would need updating to prove it's still never populated.
     }
 }
 
@@ -695,7 +797,9 @@ mod status_tests {
             firmware_version: "1.2.3".to_string(),
             last_seen: Some("2026-08-23T10:00:00+00:00".to_string()),
         };
+
         let json = serde_json::to_value(&resp).unwrap();
+
         assert_eq!(json["is_online"], true);
         assert_eq!(json["firmware_version"], "1.2.3");
     }
@@ -703,6 +807,7 @@ mod status_tests {
     #[test]
     fn wifi_config_response_uses_first_rows_version_and_lists_all_ssids() {
         use chrono::Utc;
+
         let rows = vec![
             crate::db::device_wifi::DeviceWifiConfigRow {
                 device_id: "esp-1".to_string(),
@@ -719,7 +824,9 @@ mod status_tests {
                 updated_at: Utc::now(),
             },
         ];
+
         let resp = build_wifi_config_response("esp-1".to_string(), rows);
+
         assert_eq!(resp.device_id, "esp-1");
         assert_eq!(resp.config_version, 3);
         assert_eq!(resp.ssids.len(), 2);
@@ -729,6 +836,7 @@ mod status_tests {
     #[test]
     fn wifi_config_response_defaults_version_to_zero_when_empty() {
         let resp = build_wifi_config_response("esp-empty".to_string(), vec![]);
+
         assert_eq!(resp.config_version, 0);
         assert!(resp.ssids.is_empty());
     }

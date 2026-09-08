@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Play, Check, X } from "lucide-react";
 import { useTestAutomationScript } from "../../../hooks/useAutomationScripts";
-import { DEVICE_CONFIG_BOUNDS, type AutomationIr } from "../../../lib/automation/ir";
+import { DEVICE_CONFIG_BOUNDS, clampConfigValue, type AutomationIr } from "../../../lib/automation/ir";
 import { useDeviceStore } from "../../../store/useDeviceStore";
 import type { ConditionTraceEntry } from "../../../types/automation";
 
@@ -225,10 +225,21 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                       </span>
                     </div>
                   </div>
-                  <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Trong giới hạn cho phép ({bound.min} – {bound.max} {bound.unit})</span>
-                  </div>
+                  {(() => {
+                    const parsed = parseFloat(String(overrideVal));
+                    const clamp = clampConfigValue(targetKey, Number.isNaN(parsed) ? bound.defaultVal : parsed);
+                    return clamp.clamped ? (
+                      <div className="text-[11px] text-amber-700 flex items-center gap-1 font-medium">
+                        <X className="w-3.5 h-3.5" />
+                        <span>Vượt giới hạn — giá trị sẽ bị kẹp (clamp) về {clamp.value} {bound.unit} (cho phép {bound.min} – {bound.max} {bound.unit})</span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Trong giới hạn cho phép ({bound.min} – {bound.max} {bound.unit})</span>
+                      </div>
+                    );
+                  })()}
                   <div className="text-[11px] text-slate-600">
                     &circlearrowright; Tự động khôi phục {actualBeforeVal} {bound.unit} khi điều kiện hết đúng
                   </div>

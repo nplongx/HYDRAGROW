@@ -178,6 +178,7 @@ export const ConfigOverwriteSchema = z.object({
   value: z.string().min(1),
   readOriginalBeforeWrite: z.boolean().default(false),
   restoreMode: z.literal('on_condition_false').default('on_condition_false'),
+  priority: z.number().int().default(0),
 });
 export type ConfigOverwrite = z.infer<typeof ConfigOverwriteSchema>;
 
@@ -225,6 +226,20 @@ export const AutomationIrSchema = z
 
 export type AutomationIr = z.infer<typeof AutomationIrSchema>;
 
+import deviceConfigKeys from './device-config-keys.json';
+
+export interface DeviceConfigKeyDef {
+  key: string;
+  valueType: string;
+  min: number;
+  max: number;
+  unit: string;
+  step: number;
+  label: string;
+  sourceGroup: string;
+  defaultVal: number;
+}
+
 export interface DeviceConfigBound {
   min: number;
   max: number;
@@ -235,14 +250,12 @@ export interface DeviceConfigBound {
   defaultVal: number;
 }
 
-export const DEVICE_CONFIG_BOUNDS: Record<string, DeviceConfigBound> = {
-  ec_target: { min: 0.8, max: 3.2, unit: 'mS/cm', step: 0.1, label: 'ec_target', sourceGroup: 'Recipe hiện tại (Stage 3 - Tăng trưởng)', defaultVal: 2.4 },
-  ec_tolerance: { min: 0.05, max: 0.5, unit: 'mS/cm', step: 0.01, label: 'ec_tolerance', sourceGroup: 'Cấu hình thiết bị', defaultVal: 0.2 },
-  ph_target: { min: 4.5, max: 8.5, unit: '', step: 0.1, label: 'ph_target', sourceGroup: 'Recipe hiện tại (Stage 3 - Tăng trưởng)', defaultVal: 6.2 },
-  ph_tolerance: { min: 0.1, max: 1.0, unit: '', step: 0.05, label: 'ph_tolerance', sourceGroup: 'Cấu hình thiết bị', defaultVal: 0.2 },
-  dose_max_ml: { min: 1, max: 50, unit: 'ml', step: 1, label: 'dose_max_ml', sourceGroup: 'An toàn thiết bị', defaultVal: 15 },
-  water_cycle_sec: { min: 60, max: 7200, unit: 's', step: 60, label: 'water_cycle_sec', sourceGroup: 'Lịch tưới', defaultVal: 1800 },
-};
+export const DEVICE_CONFIG_BOUNDS: Record<string, DeviceConfigBound> = Object.fromEntries(
+  (deviceConfigKeys as DeviceConfigKeyDef[]).map((d) => [
+    d.key,
+    { min: d.min, max: d.max, unit: d.unit, step: d.step, label: d.label, sourceGroup: d.sourceGroup, defaultVal: d.defaultVal },
+  ]),
+);
 
 export function clampConfigValue(key: string, val: number): { value: number; clamped: boolean; bound?: DeviceConfigBound } {
   const bound = DEVICE_CONFIG_BOUNDS[key];

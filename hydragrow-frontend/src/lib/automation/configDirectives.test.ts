@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectConfigDirectives } from './configDirectives';
+import { collectConfigDirectives, hasConfigOverride } from './configDirectives';
 import type { GraphNode } from './contextVariables';
 
 function configNode(id: string, data: Record<string, unknown>): GraphNode {
@@ -28,19 +28,55 @@ describe('collectConfigDirectives', () => {
 
   it('collects the first config_overwrite node as configOverwrite, ignoring later ones', () => {
     const nodes: GraphNode[] = [
-      configNode('a', { variant: 'overwrite', configKey: 'ec_target', overrideValue: '1.8', readOriginalBeforeWrite: true }),
-      configNode('b', { variant: 'overwrite', configKey: 'ph_target', overrideValue: '6.0' }),
+      configNode('a', { variant: 'overwrite', configKey: 'ec_target', overrideValue: '1.8', readOriginalBeforeWrite: true, priority: 5 }),
+      configNode('b', { variant: 'overwrite', configKey: 'ph_target', overrideValue: '6.0', priority: 10 }),
     ];
     expect(collectConfigDirectives(nodes).configOverwrite).toEqual({
       configKey: 'ec_target',
       value: '1.8',
       readOriginalBeforeWrite: true,
       restoreMode: 'on_condition_false',
+      priority: 5,
+    });
+  });
+
+  it('defaults priority to 0 when the overwrite node has no priority', () => {
+    const nodes: GraphNode[] = [
+      configNode('a', { variant: 'overwrite', configKey: 'ec_target', overrideValue: '1.8', readOriginalBeforeWrite: true }),
+    ];
+    expect(collectConfigDirectives(nodes).configOverwrite).toEqual({
+      configKey: 'ec_target',
+      value: '1.8',
+      readOriginalBeforeWrite: true,
+      restoreMode: 'on_condition_false',
+      priority: 0,
     });
   });
 
   it('returns configOverwrite undefined when no overwrite node is configured', () => {
     const nodes: GraphNode[] = [configNode('a', { variant: 'read', configKey: 'ph_target', saveToVariable: 'x' })];
     expect(collectConfigDirectives(nodes).configOverwrite).toBeUndefined();
+  });
+});
+
+describe('hasConfigOverride', () => {
+  it('is true when ir_json.configOverwrite is present, regardless of kind or name', () => {
+    expect(
+      hasConfigOverride({
+        kind: 'alert',
+        name: 'Cảnh báo mất nước',
+        ir_json: { configOverwrite: { configKey: 'ec_target', value: '1.8' } },
+      } as never),
+    ).toBe(true);
+  });
+
+  it('is false when ir_json.configOverwrite is absent, even if the name mentions "config"', () => {
+    expect(
+      hasConfigOverride({
+        kind: 'alert',
+        name: 'Config cảnh báo nhiệt độ',
+        ir_json: null,
+      } as never),
+    ).toBe(false);
   });
 });

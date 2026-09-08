@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutomationIrSchema, AutomationNodeSchema, ConditionSchema } from "./ir";
+import { AutomationIrSchema, AutomationNodeSchema, ConditionSchema, DEVICE_CONFIG_BOUNDS, clampConfigValue } from "./ir";
 
 describe("ConditionSchema range mode and windowSec", () => {
   it('condition instant (mặc định) không cần field mode/windowSec', () => {
@@ -393,5 +393,20 @@ describe('contextReads + configOverwrite + chainConfig.iterationLimit', () => {
       contextReads: [{ configKey: 'ph_target', saveToVariable: '' }],
     };
     expect(AutomationIrSchema.safeParse(ir).success).toBe(false);
+  });
+});
+
+describe('DEVICE_CONFIG_BOUNDS derived from device-config-keys.json', () => {
+  it('has no dose_max_ml/water_cycle_sec', () => {
+    expect(DEVICE_CONFIG_BOUNDS).not.toHaveProperty('dose_max_ml');
+    expect(DEVICE_CONFIG_BOUNDS).not.toHaveProperty('water_cycle_sec');
+  });
+
+  it('has delay_between_a_and_b_sec', () => {
+    expect(DEVICE_CONFIG_BOUNDS.delay_between_a_and_b_sec).toEqual({ min: 1, max: 600, unit: 's', step: 1, label: 'delay_between_a_and_b_sec', sourceGroup: 'Cấu hình thiết bị', defaultVal: 5 });
+  });
+
+  it("clampConfigValue('ec_target', 99) clamps to max", () => {
+    expect(clampConfigValue('ec_target', 99)).toEqual({ value: 3.2, clamped: true, bound: DEVICE_CONFIG_BOUNDS.ec_target });
   });
 });

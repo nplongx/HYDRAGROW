@@ -105,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_template_uses_this_requests_overrides_even_for_an_already_linked_device() {
+    fn merge_prefers_current_request_overrides_over_stale_stored_ones() {
         // Pure merge-level: the already-linked branch must merge with the
         // CURRENT request's overrides, not the stale stored ones.
         let template_ir = json!({"conditions": [1], "actions": ["old"]});
@@ -131,7 +131,10 @@ mod tests {
             name: "tpl".to_string(),
             source: "fn main(input) {}".to_string(),
             enabled: true,
-            ir_json: Some(json!({"conditions": [1], "actions": ["orig"]})),
+            ir_json: Some(json!({
+                "conditions": [{"sensor":"ec","operator":">","value":3.0}],
+                "configOverwrite": {"configKey":"ec_target","value":"2.4"}
+            })),
             next_flow_ids: vec![],
             cron_next_run_at: None,
             template_source_id: None,
@@ -146,22 +149,31 @@ mod tests {
         .bind(source.id).bind(&source.device_id).bind(&source.kind).bind(&source.name)
         .bind(&source.source).bind(source.ir_json.clone().unwrap()).bind(source.template_source_id).bind(serde_json::json!({}))
         .execute(&pool).await.unwrap();
-        // First apply with one override choice.
-        apply_template(&pool, &source, vec![TemplateTarget {
-            device_id: "dev-1".to_string(),
-            overrides: json!({"actions": ["first"]}),
+        // First apply with empty overrides → linked script keeps configOverwrite.
+        let first_ids = apply_template(&pool, &source, vec![TemplateTarget {
+            device_id: "dev-target".to_string(),
+            overrides: json!({}),
         }]).await.unwrap();
-        // Re-apply with a different override choice — current request must win.
-        apply_template(&pool, &source, vec![TemplateTarget {
-            device_id: "dev-1".to_string(),
-            overrides: json!({"actions": ["second"]}),
-        }]).await.unwrap();
-        let row: (serde_json::Value, serde_json::Value) = sqlx::query_as(
-            "SELECT ir_json, template_overrides FROM user_scripts WHERE device_id = 'dev-1' AND template_source_id = $1",
+        let row1: (serde_json::Value,) = sqlx::query_as(
+            "SELECT ir_json FROM user_scripts WHERE device_id = 'dev-target' AND template_source_id = $1",
         )
         .bind(source.id)
         .fetch_one(&pool).await.unwrap();
-        assert_eq!(row.0["actions"], json!(["second"]));
-        assert_eq!(row.1["actions"], json!(["second"]));
+        assert_eq!(row1.0["configOverwrite"], json!({"configKey":"ec_target","value":"2.4"}));
+        // Second apply with the null tombstone → same script id, configOverwrite
+        // REMOVED, other template keys (conditions) still synced.
+        let second_ids = apply_template(&pool, &source, vec![TemplateTarget {
+            device_id: "dev-target".to_string(),
+            overrides: json!({"configOverwrite": null}),
+        }]).await.unwrap();
+        assert_eq!(first_ids, second_ids);
+        let row2: (serde_json::Value, serde_json::Value) = sqlx::query_as(
+            "SELECT ir_json, template_overrides FROM user_scripts WHERE device_id = 'dev-target' AND template_source_id = $1",
+        )
+        .bind(source.id)
+        .fetch_one(&pool).await.unwrap();
+        assert!(!row2.0.as_object().unwrap().contains_key("configOverwrite"));
+        assert_eq!(row2.0["conditions"], json!([{"sensor":"ec","operator":">","value":3.0}]));
+        assert_eq!(row2.1, json!({"configOverwrite": null}));
     }
 }

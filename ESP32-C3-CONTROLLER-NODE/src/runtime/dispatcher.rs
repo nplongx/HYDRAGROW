@@ -263,19 +263,34 @@ impl EventDispatcher {
                     })
                     .expect("Không thể tạo OTA worker thread");
             }
+            // Legacy network-only command, mapped onto the same
+            // pending/active transaction primitives so older backends/UIs
+            // cannot corrupt active WiFi state. Staged pending applies at
+            // the next reboot; see PrepareWifiConfig for the full flow.
             OrchestratorEvent::UpdateWifiList { list } => {
                 if let Some(flash) = dc.nvs.as_mut() {
-                    match crate::hw::save_wifi_list(flash, &list) {
-                        Ok(()) => {
-                            let payload = serde_json::json!({
-                                "type": "system_alert", "device_id": dc.device_id, "level": "Success",
-                                "category": "system", "title": "Đã lưu danh sách WiFi mới",
-                                "message": format!("{} SSID đã lưu; áp dụng sau lần khởi động tiếp theo.", list.sorted_valid().len()),
-                                "timestamp_ms": dc.now_sec * 1000,
-                            });
-                            let _ = dc.mqtt_tx.send(payload.to_string());
+                    let valid = list.sorted_valid();
+                    if valid.is_empty() {
+                        warn!("⚠️ [DISPATCHER] Ignoring legacy wifi list without a valid SSID.");
+                    } else {
+                        let staged = hydragrow_shared::WifiCredentialList { candidates: valid };
+                        let count = staged.sorted_valid().len();
+                        let version = crate::hw::get_active_wifi_version(flash) + 1;
+                        match crate::hw::prepare_pending_wifi(flash, &staged, version) {
+                            Ok(()) => {
+                                let payload = serde_json::json!({
+                                    "type": "system_alert", "device_id": dc.device_id, "level": "Success",
+                                    "category": "system", "title": "Đã stage WiFi pending (legacy)",
+                                    "message": format!("{} SSID staged as pending v{}; áp dụng sau lần khởi động tiếp theo.", count, version),
+                                    "timestamp_ms": dc.now_sec * 1000,
+                                });
+                                let _ = dc.mqtt_tx.send(payload.to_string());
+                            }
+                            Err(error) => warn!(
+                                "⚠️ [DISPATCHER] Cannot stage legacy pending wifi: {:?}",
+                                error
+                            ),
                         }
-                        Err(error) => warn!("⚠️ [DISPATCHER] Cannot save wifi_list: {:?}", error),
                     }
                 }
             }

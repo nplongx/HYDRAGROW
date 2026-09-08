@@ -263,7 +263,7 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
             onClick={handleSaveWifiList}
             className="w-full rounded-xl border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            {isSavingWifi ? 'Đang gửi...' : 'Lưu WiFi & áp dụng (không cập nhật firmware)'}
+            {isSavingWifi ? 'Đang gửi...' : 'Lưu WiFi (áp dụng sau khi khởi động lại)'}
           </button>
           <p className="text-xs text-emerald-700/75">
             Mật khẩu chỉ tồn tại trong lúc gửi; hệ thống không bao giờ hiển thị lại mật khẩu đã lưu — để trống nghĩa là giữ nguyên.

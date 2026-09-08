@@ -1,4 +1,6 @@
+use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
+use crate::db::topic_last_seen::{get_all_topics, get_topics_for_device};
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -48,24 +50,58 @@ fn auth_or_forbidden(req: &HttpRequest) -> Result<AuthContext, HttpResponse> {
     Ok(auth)
 }
 
-pub async fn get_all_health_topics(req: HttpRequest) -> impl Responder {
+pub async fn get_all_health_topics(
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
     if let Err(resp) = auth_or_forbidden(&req) {
         return resp;
     }
-    let grouped: HashMap<String, Vec<TopicStatus>> = HashMap::new();
-    HttpResponse::Ok().json(json!({ "status": "success", "data": grouped }))
+    match get_all_topics(&app_state.pg_pool).await {
+        Ok(rows) => {
+            let grouped = group_by_device(
+                rows.into_iter()
+                    .map(|r| TopicRow {
+                        device_id: r.device_id,
+                        topic_category: r.topic_category,
+                        last_seen_at: r.last_seen_at,
+                    })
+                    .collect(),
+            );
+            HttpResponse::Ok().json(json!({ "status": "success", "data": grouped }))
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch all health topics: {:?}", e);
+            HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
+        }
+    }
 }
 
 pub async fn get_device_health_topics(
     path: web::Path<String>,
     req: HttpRequest,
+    app_state: web::Data<AppState>,
 ) -> impl Responder {
     if let Err(resp) = auth_or_forbidden(&req) {
         return resp;
     }
-    let _device_id = path.into_inner();
-    let topics: Vec<TopicStatus> = Vec::new();
-    HttpResponse::Ok().json(json!({ "status": "success", "data": topics }))
+    let device_id = path.into_inner();
+    match get_topics_for_device(&app_state.pg_pool, &device_id).await {
+        Ok(rows) => {
+            let topics: Vec<TopicStatus> = rows
+                .into_iter()
+                .map(|r| TopicStatus {
+                    topic_category: r.topic_category,
+                    last_seen_at: r.last_seen_at,
+                })
+                .collect();
+            HttpResponse::Ok().json(json!({ "status": "success", "data": topics }))
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch health topics for device {}: {:?}", device_id, e);
+            HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
+        }
+    }
 }
 
 pub fn init_fleet_routes(cfg: &mut web::ServiceConfig) {

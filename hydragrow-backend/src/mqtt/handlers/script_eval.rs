@@ -256,7 +256,6 @@ pub async fn eval_flow_chain(
     influx_client: &influxdb2::Client,
     influx_bucket: &str,
     pool: &sqlx::PgPool,
-    condition_state_cache: &Arc<tokio::sync::RwLock<HashMap<Uuid, bool>>>,
 ) -> Vec<(Uuid, ChainFireResult)> {
     let mut keys: Vec<RangeStatKey> = all_scripts
         .iter()
@@ -329,16 +328,22 @@ pub async fn eval_flow_chain(
     );
 
     // Config·Overwrite apply/restore — độc lập với việc action chính có fire
-    // hay không (đây là 1 loại "action" khác, xem
-    // hydragrow-backend/src/services/config_override.rs).
+    // hay không (xem hydragrow-backend/src/services/config_override.rs).
+    // Gom theo config_key vì nhiều Flow có thể cùng nhắm 1 key trên cùng
+    // thiết bị — reconcile_config_overwrite_group quyết định ai thắng mỗi
+    // tick dựa trên priority tường minh, tính lại từ đầu mỗi lần (không cần
+    // cache trạng thái trước đó).
+    let mut contenders_by_key: HashMap<
+        String,
+        Vec<crate::services::config_override::OverwriteContender>,
+    > = HashMap::new();
     for s in all_scripts {
         let Some(ir_json) = &s.ir_json else { continue };
         let Some(directive) = crate::services::config_context::parse_config_overwrite(ir_json)
         else {
             continue;
         };
-        let empty = HashMap::new();
-        let ctx = resolved_context_by_node.get(&s.id).unwrap_or(&empty);
+        let ctx = resolved_context_by_node.get(&s.id).cloned().unwrap_or_default();
         let mut sample: HashMap<String, crate::models::script::SampleValue> = [
             (
                 "ph".to_string(),
@@ -359,7 +364,7 @@ pub async fn eval_flow_chain(
         ]
         .into_iter()
         .collect();
-        for (k, v) in ctx {
+        for (k, v) in &ctx {
             sample.insert(k.clone(), crate::models::script::SampleValue::Value(*v));
         }
         let conditions = ir_json
@@ -372,29 +377,30 @@ pub async fn eval_flow_chain(
             .iter()
             .all(|c| crate::api::script::eval_condition_tree(c, &sample, &mut trace));
 
-        let previous_state = { condition_state_cache.read().await.get(&s.id).copied() };
-        if let Err(e) = crate::services::config_override::apply_config_overwrite_transition(
+        contenders_by_key
+            .entry(directive.config_key.clone())
+            .or_default()
+            .push(crate::services::config_override::OverwriteContender {
+                script_id: s.id,
+                directive,
+                condition_state,
+                context: ctx,
+            });
+    }
+    for (config_key, contenders) in &contenders_by_key {
+        if let Err(e) = crate::services::config_override::reconcile_config_overwrite_group(
             pool,
-            s.id,
             device_id,
-            &directive,
-            ctx,
-            previous_state,
-            condition_state,
+            config_key,
+            contenders,
         )
         .await
         {
             warn!(
-                script_id = %s.id,
                 device_id,
-                error = %e,
-                "config overwrite apply/restore failed"
+                config_key, error = %e, "config overwrite reconcile failed"
             );
         }
-        condition_state_cache
-            .write()
-            .await
-            .insert(s.id, condition_state);
     }
 
     fired

@@ -21,7 +21,6 @@ use tracing_subscriber::filter::filter_fn;
 
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
-use uuid::Uuid;
 
 use crate::{mqtt::process_message, services::solana::SolanaTraceability};
 
@@ -109,11 +108,6 @@ pub struct AppState {
 
     /// Last firmware version reported by each controller health snapshot.
     pub device_firmware: Arc<RwLock<HashMap<String, String>>>,
-
-    /// Trạng thái condition (true/false) của lần eval gần nhất cho mỗi script
-    /// — dùng để phát hiện chuyển true->false và trigger khôi phục
-    /// Config·Overwrite. Xem services/config_override.rs.
-    pub condition_state_cache: Arc<RwLock<HashMap<Uuid, bool>>>,
 
     // Solana
     pub solana_traceability: SolanaTraceability,
@@ -287,7 +281,6 @@ async fn main() -> anyhow::Result<()> {
         firebase_auth,
         device_states,
         device_firmware,
-        condition_state_cache: Arc::new(RwLock::new(HashMap::new())),
         solana_traceability: solana_service,
         fcm_tokens: Arc::new(Mutex::new(HashMap::new())),
         event_bus: event_bus.clone(),

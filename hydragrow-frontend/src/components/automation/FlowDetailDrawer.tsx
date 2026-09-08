@@ -281,7 +281,7 @@ export function FlowDetailDrawer({
         {isConfigOverwrite && builder.selectedNode && (
           <ConfigNodeInspector
             initialKey={(selectedData.configKey as string) ?? "ec_target"}
-            initialValue={Number(selectedData.overrideValue ?? 1.8)}
+            initialValue={(() => { const n = Number(selectedData.overrideValue ?? 1.8); return Number.isNaN(n) ? 1.8 : n; })()}
             initialAutoRestore={(selectedData.readOriginalBeforeWrite as boolean) ?? true}
             initialPriority={Number(selectedData.priority ?? 0)}
             conditionSummary={conditionSummary}

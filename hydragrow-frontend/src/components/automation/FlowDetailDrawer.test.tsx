@@ -177,4 +177,38 @@ describe('FlowDetailDrawer', () => {
     expect(screen.getByText('Config — Đọc')).toBeInTheDocument();
     expect(screen.queryByText('Đọc & Ghi đè Config theo điều kiện')).not.toBeInTheDocument();
   });
+
+  it('overwrite node with variable-ref overrideValue falls back to numeric default (no NaN)', () => {
+    const selectedNode = {
+      id: 'cfg-1',
+      type: 'config',
+      position: { x: 0, y: 0 },
+      data: { variant: 'overwrite', configKey: 'ec_target', overrideValue: 'ec', readOriginalBeforeWrite: true, priority: 0 },
+    };
+    builderOverride = {
+      kind: 'alert',
+      nodes: [{ id: 'trigger', type: 'trigger', position: { x: 0, y: 0 }, data: {} }, selectedNode],
+      edges: [],
+      selectedNode,
+      updateNodeData: vi.fn(),
+      setSelectedNodeId: vi.fn(),
+      setKind: vi.fn(),
+      loadFromIr: vi.fn(),
+      addNode: vi.fn(),
+      updateTrigger: vi.fn(),
+      onNodesChange: vi.fn(),
+      onEdgesChange: vi.fn(),
+      onConnect: vi.fn(),
+    };
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <FlowDetailDrawer deviceId="device-1" script="new" onClose={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(screen.getByText('Đọc & Ghi đè Config theo điều kiện')).toBeInTheDocument();
+    const numInput = container.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(numInput).not.toBeNull();
+    expect(numInput.value).toBe('1.8');
+    expect(Number(numInput.value)).not.toBeNaN();
+  });
 });

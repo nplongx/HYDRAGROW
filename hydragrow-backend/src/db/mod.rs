@@ -5,6 +5,7 @@ pub mod device_wifi;
 pub mod influx;
 pub mod postgres;
 pub mod recipes;
+pub mod service_api_keys;
 #[cfg(test)]
 pub mod tests;
 pub mod users;

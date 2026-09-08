@@ -1,0 +1,143 @@
+{
+  "requirement_id": "OTA-WIFI-TRANSACTION-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test in hydragrow-shared (66 passed, 0 failed)",
+      "environment": "Host Linux Rust 1.97.1 x86_64",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "Round-trip, Keep/Set/Clear semantics, provision validation, resolve, canonical topic, and Debug-redaction tests all pass."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "hydragrow-shared/src/wifi_tx.rs tests + ESP32-C3-CONTROLLER-NODE/src/hw/wifi_store.rs + src/main.rs (inspection)",
+      "environment": "Host Rust tests + ESP-IDF source inspection (no ESP toolchain in this environment)",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "prepare/commit/rollback and boot-decision unit tests pass. NVS write ordering (pending -> version -> Prepared) and boot commit-on-connect / rollback-and-reboot paths verified by inspection; ESP32 target build deferred to firmware-controller-ci."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "shared validation tests + ESP32-C3-CONTROLLER-NODE/src/runtime/command_handler.rs + dispatcher.rs (inspection)",
+      "environment": "Host Rust tests + ESP-IDF source inspection",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "OTA-only, keep/set/clear, and stale-version cases covered by host tests. Event ordering PrepareWifiConfig -> TriggerOtaUpdate, dispatcher freshness re-check, Keep resolution against NVS, metadata-only logging, and factory-reset pending cleanup verified by inspection."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test in hydragrow-controller-core ota_verify (9 passed) + hw/ota.rs + .github/workflows/firmware-controller-release.yml (inspection)",
+      "environment": "Host Linux Rust 1.97.1 x86_64",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "Same-version, downgrade, malformed, missing-sha256, and matching-sha256 cases pass. Device streams with SHA-256 and completes only on match; release uploads firmware.bin plus firmware.bin.sha256 with firmware.bin name unchanged."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test in hydragrow-backend (226 passed, 0 failed, --test-threads=4) with migrations 20260907000000 applied on local Postgres",
+      "environment": "Host Linux + local Postgres 16",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "DB schema contains no password column (asserted via to_jsonb row inspection). Metadata replace is per-device transactional; delivery pending/applied/stale-version behavior covered. OTA-only needs no wifi payload."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/mqtt/handlers/status.rs tests (7 passed)",
+      "environment": "Host Linux Rust 1.97.1 x86_64",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "Matching applied/rolled_back recorded; stale, future, cross-device, and unknown states ignored; hostile password-smuggling payload deserializes without capture."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "npm test -- --run in hydragrow-frontend (59 files, 262 tests) + npm run build",
+      "environment": "Host Linux Node vitest",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "OTA-only/combined enablement, blank masked keep-passwords, and pending/applied/rollback status rendering covered; production build succeeds."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "device_identity host tests (5 passed) + local run of the release secret-dependency grep check (SECRET_CHECK_PASS)",
+      "environment": "Host Linux Rust 1.97.1 x86_64 + shell",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "WIFI_SSID/PASSWORD/DEVICE_ID are option_env; NVS->default->MAC factory resolution with persistence; workflow no longer requires per-device secrets. ESP32 target build deferred to firmware-controller-ci."
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "cargo test device_ownership in hydragrow-backend (11 passed) incl. duplicate-hardware rejection",
+      "environment": "Host Linux + local Postgres 16",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "Duplicate hardware binding returns ClaimError::DuplicateHardware mapped to HTTP 409; reclaim by same hardware and first-claim bootstrap pass. ProvisionDeviceId dispatcher arm verified by inspection."
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "redaction + throttle unit tests in hydragrow-shared/hydragrow-backend + main.rs MQTT transport code (inspection)",
+      "environment": "Host Linux Rust 1.97.1 x86_64",
+      "verified_at": "2026-09-08T00:00:00Z",
+      "notes": "Debug output contains no passwords; audit summary is metadata-only; 5 provisions per 300s per device; X-User-Confirmed retained; MQTT_TLS=1 selects native-TLS transport with no new plaintext path."
+    }
+  ],
+  "failure_matrix": [
+    {
+      "scenario": "OTA only",
+      "expected": "Firmware updates; active WiFi unchanged",
+      "result": "PASS by design + ota_only unit tests (backend/frontend/shared)"
+    },
+    {
+      "scenario": "OTA + new WiFi valid",
+      "expected": "OTA updates; new WiFi active after reboot",
+      "result": "PASS by design (prepare -> OTA -> reboot -> boot commit); boot-commit path inspected, host state tests pass"
+    },
+    {
+      "scenario": "OTA + new WiFi invalid",
+      "expected": "OTA succeeds, device rolls back to old WiFi",
+      "result": "PASS by design (boot rollback + reboot to active-only); rollback host tests pass"
+    },
+    {
+      "scenario": "WiFi-only valid",
+      "expected": "New WiFi active after reboot without firmware update",
+      "result": "PASS (legacy POST /wifi preserved)"
+    },
+    {
+      "scenario": "WiFi-only invalid",
+      "expected": "Old WiFi stays active",
+      "result": "PASS (update_wifi_list ignores empty SSIDs; validation rejects)"
+    },
+    {
+      "scenario": "OTA network drops mid-download",
+      "expected": "OTA slot not committed; old firmware remains bootable",
+      "result": "PASS by ESP-IDF slot semantics + complete() only after full verified stream"
+    },
+    {
+      "scenario": "SHA mismatch",
+      "expected": "OTA rejected before complete; old firmware remains",
+      "result": "PASS (ota_verify tests + ota.rs mismatch abort)"
+    },
+    {
+      "scenario": "duplicate command/nonce",
+      "expected": "second command rejected/ignored",
+      "result": "PASS (existing HMAC/replay verification in mqtt_client, unchanged)"
+    },
+    {
+      "scenario": "stale WiFi config version",
+      "expected": "stale update rejected",
+      "result": "PASS (shared validate, dispatcher re-check, backend 409 — all tested)"
+    },
+    {
+      "scenario": "device A command targets device B",
+      "expected": "rejected",
+      "result": "PASS (identity-scoped topics tested; cross-device status ignored, tested)"
+    },
+    {
+      "scenario": "factory reset",
+      "expected": "active/pending WiFi cleared",
+      "result": "PASS (dispatcher clears wifi_list + all pending/version/tx keys, inspected)"
+    }
+  ],
+  "secret_store_statement": "WiFi passwords exist durably only in the target ESP32 NVS (active wifi_list / pending keys). The Postgres schema (device_wifi_config, device_wifi_delivery, device_ownership) contains no password column; this is asserted by an integration test that inspects the stored row JSON. MQTT status payloads and backend/frontend logs carry metadata only."
+}

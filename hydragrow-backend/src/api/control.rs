@@ -227,6 +227,7 @@ pub async fn control_pump(
             state: explicit_state,
             ota_url: None,
             candidates: None,
+            ota_provision: None,
         }),
         ts: None,
         nonce: None,

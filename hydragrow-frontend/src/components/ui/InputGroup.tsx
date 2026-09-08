@@ -16,11 +16,12 @@ interface InputGroupProps {
   min?: number;
   max?: number;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 export const InputGroup: React.FC<InputGroupProps> = ({
   label, unit, helperText, desc, error, errorText, children,
-  type = 'number', value, onChange, step, min, max, disabled
+  type = 'number', value, onChange, step, min, max, disabled, placeholder
 }) => {
   const displayHelper = helperText || desc;
   const displayError = error || errorText;
@@ -40,6 +41,7 @@ export const InputGroup: React.FC<InputGroupProps> = ({
           value={value ?? ''}
           onChange={onChange}
           disabled={disabled}
+          placeholder={placeholder}
           className={`w-full bg-white text-emerald-950 text-sm rounded-lg p-2.5 outline-none transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${
             displayError
               ? 'border-red-300 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'

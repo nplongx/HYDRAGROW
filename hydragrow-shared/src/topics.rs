@@ -120,6 +120,12 @@ pub fn topic_calibration(device_id: &str) -> String {
 pub fn topic_dosing_report(device_id: &str) -> String {
     MqttTopics::dosing_report(device_id)
 }
+pub fn topic_wifi_config_status(device_id: &str) -> String {
+    format!("AGITECH/{device_id}/controller/wifi-config-status")
+}
+pub fn topic_ota_status(device_id: &str) -> String {
+    format!("AGITECH/{device_id}/controller/ota-status")
+}
 
 pub fn parse_agitech_topic(topic: &str) -> Option<ParsedAgitechTopic<'_>> {
     let mut parts = topic.splitn(3, '/');
@@ -213,5 +219,18 @@ mod tests {
     fn integration_events_topic_is_scoped_to_device() {
         let topic = topic_integration_events("device-01");
         assert_eq!(topic, "hydragrow/device-01/integrations/out");
+    }
+
+    #[test]
+    fn command_topics_are_isolated_per_device() {
+        // A command addressed to ESP-001 must never route to ESP-002.
+        assert_ne!(
+            topic_controller_command("ESP-001"),
+            topic_controller_command("ESP-002")
+        );
+        assert_ne!(
+            topic_wifi_config_status("ESP-001"),
+            topic_wifi_config_status("ESP-002")
+        );
     }
 }

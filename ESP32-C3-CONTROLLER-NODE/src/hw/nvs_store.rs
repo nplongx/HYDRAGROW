@@ -10,6 +10,27 @@ use log::{info, warn};
 const ACTIVE_RECIPE_KEY: &str = "active_recipe";
 const ACTIVE_RECIPE_BUF_SIZE: usize = 4096;
 
+/// NVS key holding the persistent logical device identity.
+pub const DEVICE_ID_KEY: &str = "device_id";
+
+/// Deterministic factory identity from the WiFi station eFuse MAC.
+/// Used only when neither NVS nor a compile-time default provides an id,
+/// so release firmware never needs a per-device baked-in identity.
+fn factory_device_id() -> String {
+    // SAFETY: esp_read_mac writes exactly 6 bytes into the provided buffer.
+    unsafe {
+        let mut mac = [0u8; 6];
+        let err = esp_idf_sys::esp_read_mac(
+            mac.as_mut_ptr(),
+            esp_idf_sys::esp_mac_type_t_ESP_MAC_WIFI_STA,
+        );
+        if err == esp_idf_sys::ESP_OK as i32 {
+            return hydragrow_controller_core::device_identity::format_factory_id(&mac);
+        }
+    }
+    "esp32c3-unknown".to_string()
+}
+
 pub struct NvsStore {
     nvs: Option<EspDefaultNvs>,
 }
@@ -63,15 +84,26 @@ impl NvsStore {
     }
 
     pub fn load_or_init_device_id(&mut self, default_id: &str) -> String {
-        if let Some(nvs) = self.nvs.as_mut() {
+        let saved: Option<String> = self.nvs.as_mut().and_then(|nvs| {
             let mut buf = [0u8; 64];
-            if let Ok(Some(saved_id)) = nvs.get_str("device_id", &mut buf) {
-                return saved_id.to_string();
-            } else {
-                let _ = nvs.set_str("device_id", default_id);
+            match nvs.get_str(DEVICE_ID_KEY, &mut buf) {
+                Ok(Some(id)) => Some(id.to_string()),
+                _ => None,
+            }
+        });
+        let resolved = hydragrow_controller_core::device_identity::resolve_device_id(
+            saved.as_deref(),
+            default_id,
+            &factory_device_id(),
+        );
+        // Persist the resolved id so the fleet identity is stable across boots.
+        if let Some(nvs) = self.nvs.as_mut() {
+            if saved.as_deref() != Some(resolved.as_str()) {
+                let _ = nvs.set_str(DEVICE_ID_KEY, &resolved);
             }
         }
-        default_id.to_string()
+        info!("🆔 [NVS] device_id resolved: {}", resolved);
+        resolved
     }
 
     pub fn load_or_init_mqtt_credentials(

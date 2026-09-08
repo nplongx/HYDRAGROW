@@ -255,25 +255,150 @@ impl EventDispatcher {
                     .name("ota_thread".to_string())
                     .stack_size(16_000)
                     .spawn(move || {
-                        if let Err(e) = crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx)) {
+                        if let Err(e) =
+                            crate::hw::ota::perform_ota_update(&device_id, Some(mqtt_tx))
+                        {
                             log::error!("❌ [DISPATCHER] Lỗi trong quá trình OTA: {:?}", e);
                         }
                     })
                     .expect("Không thể tạo OTA worker thread");
             }
+            // Legacy network-only command, mapped onto the same
+            // pending/active transaction primitives so older backends/UIs
+            // cannot corrupt active WiFi state. Staged pending applies at
+            // the next reboot; see PrepareWifiConfig for the full flow.
             OrchestratorEvent::UpdateWifiList { list } => {
                 if let Some(flash) = dc.nvs.as_mut() {
-                    match crate::hw::save_wifi_list(flash, &list) {
+                    let valid = list.sorted_valid();
+                    if valid.is_empty() {
+                        warn!("⚠️ [DISPATCHER] Ignoring legacy wifi list without a valid SSID.");
+                    } else {
+                        let staged = hydragrow_shared::WifiCredentialList { candidates: valid };
+                        let count = staged.sorted_valid().len();
+                        let version = crate::hw::get_active_wifi_version(flash) + 1;
+                        match crate::hw::prepare_pending_wifi(flash, &staged, version) {
+                            Ok(()) => {
+                                let payload = serde_json::json!({
+                                    "type": "system_alert", "device_id": dc.device_id, "level": "Success",
+                                    "category": "system", "title": "Đã stage WiFi pending (legacy)",
+                                    "message": format!("{} SSID staged as pending v{}; áp dụng sau lần khởi động tiếp theo.", count, version),
+                                    "timestamp_ms": dc.now_sec * 1000,
+                                });
+                                let _ = dc.mqtt_tx.send(payload.to_string());
+                            }
+                            Err(error) => warn!(
+                                "⚠️ [DISPATCHER] Cannot stage legacy pending wifi: {:?}",
+                                error
+                            ),
+                        }
+                    }
+                }
+            }
+            // Transactional prepare: full validation (incl. version freshness)
+            // with NVS, Keep resolution against active, then stage pending.
+            // Active wifi_list is never touched here.
+            OrchestratorEvent::PrepareWifiConfig { config, version } => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    let current = crate::hw::get_active_wifi_version(flash);
+                    match hydragrow_shared::wifi_tx::validate_provision_config(&config, current) {
+                        Err(reason) => {
+                            warn!(
+                                "⚠️ [DISPATCHER] Rejecting stale/invalid WiFi provision: {} (version={}).",
+                                reason, version
+                            );
+                        }
+                        Ok(()) => {
+                            // Read active list for Keep resolution (passwords stay in NVS/RAM).
+                            let active = crate::hw::load_active_wifi_list_from_nvs(flash);
+                            match hydragrow_shared::wifi_tx::resolve_provision_credentials(
+                                &config, &active,
+                            ) {
+                                Err(reason) => warn!(
+                                    "⚠️ [DISPATCHER] Cannot resolve WiFi provision: {}.",
+                                    reason
+                                ),
+                                Ok(list) => {
+                                    let count = list.sorted_valid().len();
+                                    match crate::hw::prepare_pending_wifi(flash, &list, version) {
+                                        Ok(()) => {
+                                            // Metadata only — never log credential payloads.
+                                            let payload = serde_json::json!({
+                                                "type": "system_alert", "device_id": dc.device_id, "level": "Success",
+                                                "category": "system", "title": "Đã stage WiFi pending",
+                                                "message": format!("{} SSID staged as pending; OTA must commit before boot applies them.", count),
+                                                "timestamp_ms": dc.now_sec * 1000,
+                                            });
+                                            let _ = dc.mqtt_tx.send(payload.to_string());
+                                        }
+                                        Err(error) => warn!(
+                                            "⚠️ [DISPATCHER] Cannot stage pending wifi: {:?}",
+                                            error
+                                        ),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            OrchestratorEvent::CommitPendingWifiConfig => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    if let Err(error) = crate::hw::commit_pending_wifi(flash) {
+                        warn!("⚠️ [DISPATCHER] Cannot commit pending wifi: {:?}", error);
+                    }
+                }
+            }
+            OrchestratorEvent::RollbackPendingWifiConfig => {
+                if let Some(flash) = dc.nvs.as_mut() {
+                    if let Err(error) = crate::hw::rollback_pending_wifi(flash) {
+                        warn!("⚠️ [DISPATCHER] Cannot roll back pending wifi: {:?}", error);
+                    }
+                }
+            }
+            // Password-free provisioning result for the backend delivery table.
+            OrchestratorEvent::PublishWifiConfigStatus { version, state } => {
+                let ssid_count = dc
+                    .nvs
+                    .as_mut()
+                    .map(crate::hw::count_active_ssids)
+                    .unwrap_or_default();
+                let status = hydragrow_shared::wifi_tx::WifiConfigStatus::new(
+                    dc.device_id,
+                    version,
+                    &state,
+                    ssid_count,
+                );
+                if let Ok(json) = serde_json::to_string(&status) {
+                    let _ = dc.mqtt_tx.send(json);
+                }
+            }
+            // Fleet claim: persist the provisioned logical id, then reboot so
+            // all command/status topics use the stored runtime device_id.
+            OrchestratorEvent::ProvisionDeviceId { device_id } => {
+                let new_id = device_id.trim().to_string();
+                if new_id.is_empty() || new_id.len() > 32 {
+                    warn!("⚠️ [DISPATCHER] Rejecting invalid provisioned device id.");
+                } else if new_id == dc.device_id {
+                    log::info!("🆔 [DISPATCHER] Device id already provisioned; no change.");
+                } else if let Some(nvs) = dc.nvs.as_mut() {
+                    match nvs.set_str(crate::hw::DEVICE_ID_KEY, &new_id) {
                         Ok(()) => {
                             let payload = serde_json::json!({
                                 "type": "system_alert", "device_id": dc.device_id, "level": "Success",
-                                "category": "system", "title": "Đã lưu danh sách WiFi mới",
-                                "message": format!("{} SSID đã lưu; áp dụng sau lần khởi động tiếp theo.", list.sorted_valid().len()),
+                                "category": "system", "title": "Đã gán device id mới",
+                                "message": format!("Provisioned as {new_id}; rebooting..."),
                                 "timestamp_ms": dc.now_sec * 1000,
                             });
                             let _ = dc.mqtt_tx.send(payload.to_string());
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            unsafe {
+                                esp_idf_svc::sys::esp_restart();
+                            }
                         }
-                        Err(error) => warn!("⚠️ [DISPATCHER] Cannot save wifi_list: {:?}", error),
+                        Err(error) => warn!(
+                            "⚠️ [DISPATCHER] Cannot persist provisioned device id: {:?}",
+                            error
+                        ),
                     }
                 }
             }
@@ -296,6 +421,16 @@ impl EventDispatcher {
                     let _ = nvs.remove("current_stage");
                     let _ = nvs.remove("last_w_change");
                     let _ = nvs.remove("safety_budget");
+                    // Factory reset clears pending WiFi + transaction state too.
+                    use crate::hw::wifi_store::{
+                        WIFI_ACTIVE_VERSION_KEY, WIFI_PENDING_KEY, WIFI_PENDING_TARGET_KEY,
+                        WIFI_PENDING_VERSION_KEY, WIFI_TRANSACTION_STATE_KEY,
+                    };
+                    let _ = nvs.remove(WIFI_PENDING_KEY);
+                    let _ = nvs.remove(WIFI_PENDING_VERSION_KEY);
+                    let _ = nvs.remove(WIFI_PENDING_TARGET_KEY);
+                    let _ = nvs.remove(WIFI_ACTIVE_VERSION_KEY);
+                    let _ = nvs.remove(WIFI_TRANSACTION_STATE_KEY);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(200));
                 unsafe {

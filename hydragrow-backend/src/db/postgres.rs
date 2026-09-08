@@ -590,6 +590,34 @@ pub async fn get_events_by_cycle_id(
         .await
 }
 
+/// Dedup lookup for AI supervisor alerts (§5).
+/// Returns true if a matching alert exists within the cooldown window.
+/// `source` is part of the dedup key so watchdog and ai_supervisor rows
+/// never suppress each other.
+pub async fn find_recent_alert(
+    pool: &PgPool,
+    device_id: &str,
+    source: &str,
+    primary_reason_code: &str,
+    cooldown_minutes: i64,
+) -> Result<bool, sqlx::Error> {
+    let cutoff = chrono::Utc::now().timestamp_millis() - cooldown_minutes * 60 * 1000;
+    let row: Option<(i32,)> = sqlx::query_as(
+        r#"
+        SELECT id FROM system_events
+        WHERE device_id = $1 AND source = $2 AND primary_reason_code = $3 AND timestamp >= $4
+        LIMIT 1
+        "#,
+    )
+    .bind(device_id)
+    .bind(source)
+    .bind(primary_reason_code)
+    .bind(cutoff)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.is_some())
+}
+
 // FCM Tokens
 
 pub async fn upsert_fcm_token(

@@ -1,6 +1,7 @@
 // src/mqtt/handlers/system_log.rs
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
+use crate::metrics::MQTT_PROCESSING_ERRORS_TOTAL;
 use crate::models::alert::AlertMessage;
 use actix_web::web;
 use hydragrow_shared::events::AppEvent;
@@ -19,6 +20,9 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 device_id = %device_id,
                 "Lỗi parse UnifiedSystemLog: {:?}. Raw: {}", e, raw_preview
             );
+            MQTT_PROCESSING_ERRORS_TOTAL
+                .with_label_values(&["system_log", "parse_error"])
+                .inc();
             return;
         }
     };
@@ -145,6 +149,9 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
 
     if let Err(e) = insert_system_event(&app_state.pg_pool, &db_record).await {
         error!("Lưu Database thất bại: {:?}", e);
+        MQTT_PROCESSING_ERRORS_TOTAL
+            .with_label_values(&["system_log", "db_insert_error"])
+            .inc();
     }
 
     // 3. Đẩy thông báo thời gian thực qua WebSocket & FCM
@@ -203,5 +210,19 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hydragrow_shared::log::UnifiedSystemLog;
+
+    #[test]
+    fn malformed_payload_fails_to_decode_as_unified_system_log() {
+        // Locks in the exact precondition that triggers the parse_error metric
+        // branch in handle(): a payload that is not valid UnifiedSystemLog JSON.
+        let bad_payload = b"not valid json";
+        let result: Result<UnifiedSystemLog, _> = serde_json::from_slice(bad_payload);
+        assert!(result.is_err());
     }
 }

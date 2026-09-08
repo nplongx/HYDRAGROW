@@ -25,10 +25,26 @@ impl Injector {
         for fault in &self.active_faults {
             match fault {
                 FaultEventKind::PumpStuckOn { pump } => match pump.to_ascii_uppercase().as_str() {
-                    "PUMP_A" => hw.pump_a.on = true,
-                    "PUMP_B" => hw.pump_b.on = true,
-                    "PUMP_PH_UP" | "PH_UP" => hw.pump_ph_up.on = true,
-                    "PUMP_PH_DOWN" | "PH_DOWN" => hw.pump_ph_down.on = true,
+                    // A relay stuck closed runs the pump: forcing only `on = true`
+                    // while leaving `pwm_percent = 0` would deliver zero flow, which is
+                    // physically incoherent and invisible to the plant model
+                    // (`Tank::step` scales flow by `pwm_percent / 100`).
+                    "PUMP_A" => {
+                        hw.pump_a.on = true;
+                        hw.pump_a.pwm_percent = 100;
+                    }
+                    "PUMP_B" => {
+                        hw.pump_b.on = true;
+                        hw.pump_b.pwm_percent = 100;
+                    }
+                    "PUMP_PH_UP" | "PH_UP" => {
+                        hw.pump_ph_up.on = true;
+                        hw.pump_ph_up.pwm_percent = 100;
+                    }
+                    "PUMP_PH_DOWN" | "PH_DOWN" => {
+                        hw.pump_ph_down.on = true;
+                        hw.pump_ph_down.pwm_percent = 100;
+                    }
                     "WATER_PUMP_IN" | "WATER_IN" => hw.water_pump_in.on = true,
                     "WATER_PUMP_OUT" | "WATER_OUT" => hw.water_pump_out.on = true,
                     _ => {}

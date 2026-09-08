@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
@@ -91,6 +92,7 @@ const normalizePumpStatus = (rawPumpStatus: any = {}): PumpStatus => {
 export function useDeviceSync() {
   const deviceId = useDeviceStore((s) => s.deviceId);
   const settings = useDeviceStore((s) => s.settings);
+  const queryClient = useQueryClient();
   const sensorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetSensorTimeout = useCallback(() => {
@@ -330,6 +332,10 @@ export function useDeviceSync() {
                 .getState()
                 .setSystemEvents((prev: any[]) => [alert, ...(prev || [])].slice(0, 50));
 
+              // Nhật Ký Hành Trình (SystemLog.tsx) đọc từ query cache riêng —
+              // đánh dấu stale để nó tự fetch lại thay vì phải đợi người dùng đổi filter.
+              queryClient.invalidateQueries({ queryKey: ['system-events', deviceId] });
+
               if (alert.reason === 'tank_level_alert' || alert.metadata?.tank_a_low !== undefined) {
                 const details = alert.metadata || {};
                 useDeviceStore.getState().setTankAlert({
@@ -374,5 +380,6 @@ export function useDeviceSync() {
     refreshDeviceSnapshot,
     applyPumpStatus,
     applyDeviceSnapshot,
+    queryClient,
   ]);
 }

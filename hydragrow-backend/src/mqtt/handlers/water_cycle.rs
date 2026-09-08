@@ -51,6 +51,8 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         reason: Some(data.trigger.clone()),
         metadata: serde_json::to_value(&data).ok(),
         timestamp: data.timestamp_ms as i64,
+        source: "rule".to_string(),
+        primary_reason_code: None,
     };
 
     if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {

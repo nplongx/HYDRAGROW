@@ -293,6 +293,8 @@ pub async fn handle_dosing_cycle(
         metadata: Some(report_payload.clone()),
 
         timestamp: event.timestamp_ms as i64,
+        source: "rule".to_string(),
+        primary_reason_code: None,
     };
 
     if let Err(e) = insert_system_event(&app_state.pg_pool, &event_record).await {

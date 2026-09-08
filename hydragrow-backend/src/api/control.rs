@@ -312,6 +312,8 @@ pub async fn control_pump(
             reason: alert_msg.reason.clone(),
             metadata: Some(metadata),
             timestamp: timestamp as i64,
+            source: "rule".to_string(),
+            primary_reason_code: None,
         },
     )
     .await;
@@ -380,6 +382,8 @@ async fn audit_control_command(
             reason: required_scope.map(ToString::to_string),
             metadata: Some(metadata),
             timestamp,
+            source: "rule".to_string(),
+            primary_reason_code: None,
         },
     )
     .await;

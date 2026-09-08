@@ -103,6 +103,8 @@ async fn handle_system_alert(
         reason: Some("tank_level_alert".to_string()),
         metadata: details.clone(),
         timestamp: timestamp_ms as i64,
+        source: "rule".to_string(),
+        primary_reason_code: None,
     };
 
     if let Err(e) = insert_system_event(&app_state.pg_pool, &record).await {

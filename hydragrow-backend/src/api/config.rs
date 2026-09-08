@@ -888,6 +888,8 @@ pub async fn finish_sensor_calibration(
                 "finished_at": now
             })),
             timestamp: now.timestamp_millis(),
+            source: "rule".to_string(),
+            primary_reason_code: None,
         };
 
         if insert_system_event(&mut *tx, &event).await.is_err() {

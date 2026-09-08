@@ -43,6 +43,8 @@ pub struct NewSystemEventRecord {
     pub reason: Option<String>,
     pub metadata: Option<serde_json::Value>, // Sử dụng JsonValue của sqlx
     pub timestamp: i64,
+    pub source: String,
+    pub primary_reason_code: Option<String>,
 }
 
 /// Struct dùng để ĐỌC từ DB (id là i32 do SERIAL).
@@ -57,6 +59,8 @@ pub struct SystemEventRecord {
     pub reason: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub timestamp: i64,
+    pub source: String,
+    pub primary_reason_code: Option<String>,
 }
 
 // Device Config
@@ -507,9 +511,9 @@ pub async fn insert_system_event(
 ) -> Result<(), sqlx::Error> {
     let query = r#"
         INSERT INTO system_events (
-            device_id, level, category, title, message, reason, metadata, timestamp
+            device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     "#;
 
     sqlx::query(query)
@@ -521,6 +525,8 @@ pub async fn insert_system_event(
         .bind(&record.reason)
         .bind(&record.metadata)
         .bind(record.timestamp)
+        .bind(&record.source)
+        .bind(&record.primary_reason_code)
         .execute(executor)
         .await?;
 
@@ -538,7 +544,7 @@ pub async fn get_system_events(
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
         r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
         FROM system_events
         WHERE device_id = $1
           AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
@@ -567,7 +573,7 @@ pub async fn get_events_by_cycle_id(
     cycle_id: &str,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     let query = r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
         FROM system_events
         WHERE device_id = $1
           AND (

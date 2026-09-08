@@ -131,6 +131,8 @@ mod tests {
             reason: None,
             metadata: None,
             timestamp: ts,
+            source: "rule".to_string(),
+            primary_reason_code: None,
         }
     }
 

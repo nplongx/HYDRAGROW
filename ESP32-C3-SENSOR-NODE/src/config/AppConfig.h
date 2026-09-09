@@ -6,7 +6,7 @@ struct SensorConfig {
     float phV686;           // ph_v7 / pH 6.86 reference
     float phV4;             // ph_v4 / pH 4.01 reference
     float phV918;           // ph_v10 / pH 9.18 reference
-    String phCalibrationMode = "2-point";
+    String phCalibrationMode;
     float tdsFactor;        // ec_factor
     float tdsOffset;        // ec_offset
     float tempOffset;       // temp_offset

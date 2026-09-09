@@ -186,84 +186,15 @@ export function NodeEditorPanel({
           {currentKind === "fsm" && (
             <div className="flex flex-col gap-3">
               <h4 className="text-sm font-bold text-slate-900 leading-snug">
-                {(node.data.title as string) || "Giai đoạn canh tác (FSM)"}
+                Giai đoạn canh tác (FSM)
               </h4>
-
-              <FieldGroup label="Máy trạng thái">
-                <select
-                  aria-label="Máy trạng thái"
-                  className="ui-input w-full text-xs"
-                  value={(node.data.fsmMachine as string) || "Vòng đời cây trồng"}
-                  onChange={(e) =>
-                    onChange(node.id, {
-                      ...node.data,
-                      kind: "fsm",
-                      fsmMachine: e.target.value,
-                    })
-                  }
-                >
-                  <option value="Vòng đời cây trồng">Vòng đời cây trồng</option>
-                  <option value="Chu trình vệ sinh CIP">Chu trình vệ sinh CIP</option>
-                  <option value="Quy trình súc rửa">Quy trình súc rửa</option>
-                </select>
-              </FieldGroup>
-
-              <FieldGroup label="Kích hoạt khi">
-                <select
-                  aria-label="Kích hoạt khi"
-                  className="ui-input w-full text-xs"
-                  value={(node.data.triggerWhen as string) || "Vào giai đoạn mới"}
-                  onChange={(e) =>
-                    onChange(node.id, {
-                      ...node.data,
-                      kind: "fsm",
-                      triggerWhen: e.target.value,
-                    })
-                  }
-                >
-                  <option value="Vào giai đoạn mới">Vào giai đoạn mới</option>
-                  <option value="Rời khỏi giai đoạn">Rời khỏi giai đoạn</option>
-                  <option value="Trong suốt giai đoạn">Trong suốt giai đoạn</option>
-                </select>
-              </FieldGroup>
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] text-emerald-800/70">Giai đoạn</span>
-                <PillsSelector
-                  options={[
-                    { value: "Cây con", label: "Cây con" },
-                    { value: "Sinh trưởng", label: "Sinh trưởng" },
-                    { value: "Ra hoa", label: "Ra hoa" },
-                    { value: "Thu hoạch", label: "Thu hoạch" },
-                  ]}
-                  selectedValues={[(node.data.stage as string) || "Ra hoa"]}
-                  onToggle={(val) =>
-                    onChange(node.id, {
-                      ...node.data,
-                      kind: "fsm",
-                      stage: val,
-                    })
-                  }
-                  tone="sky"
-                />
-              </div>
-
-              <FieldGroup label="Thời lượng tối thiểu trong giai đoạn">
-                <InputWithSuffix
-                  type="number"
-                  ariaLabel="Thời lượng tối thiểu trong giai đoạn"
-                  value={Number(node.data.minDurationDays ?? 3)}
-                  onChange={(e) =>
-                    onChange(node.id, {
-                      ...node.data,
-                      kind: "fsm",
-                      minDurationDays: Number(e.target.value),
-                    })
-                  }
-                  suffix="ngày"
-                  min={0}
-                />
-              </FieldGroup>
+              <p className="text-xs text-emerald-900/80 leading-relaxed">
+                Flow này sẽ chạy khi Condition bên dưới đúng — giống hệt mọi Flow khác, không có cấu
+                hình trigger riêng cho FSM. Dùng Condition để chọn thời điểm (vd. số ngày trong giai
+                đoạn, giá trị cảm biến), và chọn action <code className="font-mono text-[11px]">advance_stage</code>{" "}
+                hoặc <code className="font-mono text-[11px]">end_season</code> ở panel Action bên dưới
+                để quyết định điều gì xảy ra.
+              </p>
             </div>
           )}
 

@@ -43,4 +43,23 @@ describe('GeneralSection', () => {
     fireEvent.click(screen.getByText('Ghép thiết bị mới'));
     expect(screen.getByText('Pairing page')).toBeInTheDocument();
   });
+
+  it('gọi callback khi đổi chế độ hoạt động', () => {
+    const onControlModeChange = vi.fn();
+    render(
+      <MemoryRouter>
+        <GeneralSection
+          userEmail="test@hydragrow.dev"
+          onLogout={vi.fn()}
+          isAdvancedMode={false}
+          onToggleAdvancedMode={() => {}}
+          controlMode="auto"
+          onControlModeChange={onControlModeChange}
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thủ công' }));
+    expect(onControlModeChange).toHaveBeenCalledWith('manual');
+  });
 });

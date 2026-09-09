@@ -359,7 +359,7 @@ describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders Condition Group fields: group operator, condition chips, and NOT toggle', () => {
+  it('renders the real ConditionGroupEditor for a condition_group node — can edit an existing condition in place', () => {
     const mockOnChange = vi.fn();
     render(
       <NodeEditorPanel
@@ -368,11 +368,8 @@ describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
           id: 'cg1',
           type: 'condition_group',
           data: {
-            isGroup: true,
-            groupOp: 'and',
             conditions: [
-              { sensor: 'ec', operator: '>', value: 1.8 },
-              { sensor: 'temp', operator: '<', value: 26 },
+              { op: 'and', children: [{ sensor: 'ec', operator: '>', value: 1.8 }] },
             ],
           },
         }}
@@ -381,11 +378,67 @@ describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
       />,
     );
 
-    expect(screen.getByText('Tất cả đều đúng')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /AND/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('ec > 1.8')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '+ Thêm điều kiện' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Đảo ngược kết quả (NOT)')).toBeInTheDocument();
+    // AND/OR segmented control from the real editor.
+    expect(screen.getAllByRole('button', { name: /AND — tất cả đúng/ })[0]).toBeInTheDocument();
+    // The existing condition's VALUE field can be edited in place (not just
+    // removed and re-added) — this is exactly what the old Chip UI could not do.
+    const valueInput = screen.getByLabelText('Giá trị') as HTMLInputElement;
+    expect(valueInput.value).toBe('1.8');
+    fireEvent.change(valueInput, { target: { value: '2.1' } });
+    expect(mockOnChange).toHaveBeenCalledWith('cg1', expect.objectContaining({
+      conditions: [{ op: 'and', children: [{ sensor: 'ec', operator: '>', value: 2.1 }] }],
+    }));
+  });
+
+  it('exposes the real time-window fields (mode + windowSec) for a plain condition node', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{
+          id: 'tw1',
+          type: 'condition',
+          data: { type: 'time-window', conditions: [{ sensor: 'ec', operator: '>', value: 1.8 }] },
+        }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Chế độ đọc'), { target: { value: 'mean' } });
+    expect(mockOnChange).toHaveBeenCalledWith('tw1', expect.objectContaining({
+      conditions: [{ sensor: 'ec', operator: '>', value: 1.8, mode: 'mean', windowSec: 900 }],
+    }));
+  });
+
+  it('supports adding a nested AND/OR sub-group — the old UI could not do this at all', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cg2', type: 'condition_group', data: { conditions: [{ op: 'and', children: [] }] } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: '+ Thêm nhóm con (AND/OR)' })[0]);
+    expect(mockOnChange).toHaveBeenCalledWith('cg2', expect.objectContaining({
+      conditions: [{ op: 'and', children: [{ op: 'and', children: [] }] }],
+    }));
+  });
+
+  it('no longer writes the dead groupOp/applyWindow/debounceContinuous fields', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'cg3', type: 'condition_group', data: { conditions: [{ op: 'and', children: [] }] } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText('Áp dụng trong')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Chống nhiễu/)).not.toBeInTheDocument();
   });
 
   it('renders Action Dose/Water with pump, volume, PWM, and safety limit toggle', () => {

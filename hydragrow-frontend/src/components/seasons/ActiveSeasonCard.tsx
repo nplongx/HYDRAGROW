@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { CropSeason } from '../../types/models';
 import { InputGroup } from '../ui/InputGroup';
 import { ActiveRecipeStatus } from '../recipes/ActiveRecipeStatus';
+import { useActiveRecipeStatus } from '../../hooks/useActiveRecipeStatus';
+import { totalPlannedDays, elapsedDays, delayDays } from '../../lib/seasons/seasonProgress';
 
 interface ActiveSeasonCardProps {
   activeSeason: CropSeason;
@@ -22,6 +24,13 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   const [editName, setEditName] = useState(activeSeason.name || '');
   const [editPlant, setEditPlant] = useState(activeSeason.plant_type || '');
   const [editDesc, setEditDesc] = useState(activeSeason.description || '');
+
+  const { activeRecipe, currentStage } = useActiveRecipeStatus();
+  const elapsed = elapsedDays(activeSeason.start_time);
+  const totalDays = activeRecipe ? totalPlannedDays(activeRecipe.stages) : null;
+  const delay = activeRecipe
+    ? delayDays(activeRecipe.stages, activeRecipe.current_stage_index, elapsed)
+    : 0;
 
   useEffect(() => {
     if (activeSeason && isEditing) {
@@ -52,6 +61,26 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
     <div className="space-y-6 mb-6">
       <div className="bg-white border border-emerald-100 rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 md:p-6 flex flex-col gap-5">
+          {activeRecipe && totalDays !== null && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                <span>Giai đoạn: {currentStage?.name || '—'} · Ngày {Math.floor(elapsed)}/{Math.round(totalDays)}</span>
+              </div>
+              <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-600 rounded-full transition-all"
+                  style={{ width: `${Math.min(100, (elapsed / totalDays) * 100)}%` }}
+                />
+              </div>
+              {delay > 0 && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-900">
+                  <span className="font-bold">⚠ Chậm hơn dự kiến {Math.ceil(delay)} ngày</span>
+                  <span className="text-amber-700/80">— So với "{activeRecipe.recipe_id}" đang áp dụng</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between border-b border-emerald-100 pb-4">
             <div className="flex items-center gap-2 text-emerald-950">
               <Play size={18} className="text-emerald-500 fill-emerald-500/20" />

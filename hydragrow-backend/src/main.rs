@@ -126,6 +126,7 @@ pub struct AppState {
     pub command_rate_limits: Arc<Mutex<HashMap<String, CommandRateEntry>>>,
 
     pub script_cache: crate::services::script_engine::ScriptCache,
+    pub cloudinary: Option<crate::services::cloudinary::CloudinaryConfig>,
 }
 
 #[tokio::main]
@@ -259,6 +260,11 @@ async fn main() -> anyhow::Result<()> {
     let solana_service =
         SolanaTraceability::new("https://api.devnet.solana.com", private_key.as_deref());
 
+    let cloudinary = crate::services::cloudinary::CloudinaryConfig::from_env();
+    if cloudinary.is_none() {
+        tracing::warn!("CLOUDINARY_* chưa được cấu hình đầy đủ — tính năng Nhật ký ảnh (D4) sẽ tạm tắt.");
+    }
+
     let (event_bus, _) = broadcast::channel(256);
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let firebase_project_id =
@@ -292,6 +298,7 @@ async fn main() -> anyhow::Result<()> {
             let engine = Arc::new(crate::services::script_engine::ScriptEngine::new());
             crate::services::script_engine::ScriptCache::new(engine)
         },
+        cloudinary,
     });
 
     // Nạp lại toàn bộ script đã enable từ DB vào cache khi khởi động
@@ -525,6 +532,7 @@ async fn main() -> anyhow::Result<()> {
                             .configure(api::config::init_routes)
                             .configure(api::calibration::init_routes)
                             .configure(api::crop_season::init_routes)
+                            .configure(api::crop_season_photo::init_routes)
                             .configure(api::analytics::init_routes)
                             .configure(api::alert::init_routes)
                             .configure(api::health_topics::init_device_routes)

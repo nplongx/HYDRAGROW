@@ -3,6 +3,7 @@ import { useCropSeason } from '../hooks/useCropSeason';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingState } from '../components/ui/LoadingState';
 import { ActiveSeasonCard } from '../components/seasons/ActiveSeasonCard';
+import { SeasonPhotoJournal } from '../components/seasons/SeasonPhotoJournal';
 import { CreateSeasonForm } from '../components/seasons/CreateSeasonForm';
 import { SeasonHistoryList } from '../components/seasons/SeasonHistoryList';
 
@@ -20,12 +21,15 @@ export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone'
     <>
       {/* Mùa vụ đang chạy HOẶC Form tạo mới */}
       {activeSeason ? (
-        <ActiveSeasonCard
-          activeSeason={activeSeason}
-          isLoading={isLoading}
-          onEndSeason={endSeason}
-          onUpdateSeason={updateSeason}
-        />
+        <>
+          <ActiveSeasonCard
+            activeSeason={activeSeason}
+            isLoading={isLoading}
+            onEndSeason={endSeason}
+            onUpdateSeason={updateSeason}
+          />
+          <SeasonPhotoJournal seasonId={activeSeason.id} seasonStartTime={activeSeason.start_time} />
+        </>
       ) : (
         <CreateSeasonForm isLoading={isLoading} onCreateSeason={createSeason} />
       )}

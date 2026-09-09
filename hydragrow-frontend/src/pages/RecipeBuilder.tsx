@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 import { httpFetch } from '../platform/http';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { useOwnedDevices } from '../hooks/useOwnedDevices';
+import { useActiveRecipeStatus } from '../hooks/useActiveRecipeStatus';
+import { useCropSeason } from '../hooks/useCropSeason';
 import { apiBulkPost } from '../lib/apiClient';
 import { CropStage, RecipeTemplate, BulkApplyResult } from '../types/models';
 
@@ -90,6 +92,25 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
   const [description, setDescription] = useState('Quy trình chuẩn dinh dưỡng và vi khí hậu');
   const [stages, setStages] = useState<EditableStage[]>([createDefaultStage(1), createDefaultStage(2)]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  const { activeSeason } = useCropSeason();
+  const { activeRecipe } = useActiveRecipeStatus();
+
+  const handleSaveSeasonAsRecipe = () => {
+    if (!activeSeason || !activeRecipe) return;
+    setSelectedTemplateId(null);
+    setTemplateName(activeSeason.name);
+    setCropType(activeSeason.plant_type || '');
+    setDescription(`Sao chép từ mùa vụ "${activeSeason.name}"`);
+    setStages(
+      activeRecipe.stages.map((stage, index) => ({
+        id: createDefaultStage(index + 1).id,
+        ...stage,
+        duration_days: Math.round(stage.duration_sec / 86400),
+      })),
+    );
+    toast.success('Đã điền sẵn thông tin từ mùa vụ hiện tại — chỉnh sửa rồi bấm Lưu bên dưới.');
+  };
 
   const headers = useMemo(
     () => ({
@@ -271,6 +292,15 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
 
   const contentNode = (
     <>
+      {activeSeason && activeRecipe && (
+        <button
+          onClick={handleSaveSeasonAsRecipe}
+          className="w-full mb-4 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-2xl font-bold text-sm transition-colors"
+        >
+          💾 Lưu mùa vụ hiện tại thành công thức mới
+        </button>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Danh sách mẫu có sẵn & Nút Xóa */}
         <div className="ui-card space-y-4 h-fit">

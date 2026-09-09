@@ -14,6 +14,8 @@ import { DosingSummaryCard } from '../components/ui/DosingSummaryCard';
 import { LoadingState } from '../components/ui/LoadingState';
 import { useFCM } from '../hooks/useFCM';
 import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
+import { pumpLabels, pumpColors } from '../lib/pumpLabels';
+import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${color}`}>
@@ -21,24 +23,6 @@ const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => 
     {label}
   </span>
 );
-
-const pumpLabels: Record<string, string> = {
-  pump_a: 'Dinh dưỡng A', pump_b: 'Dinh dưỡng B',
-  ph_up: 'pH Up', ph_down: 'pH Down',
-  osaka_pump: 'Trộn tuần hoàn', mist_valve: 'Phun sương',
-  water_pump_in: 'Cấp nước', water_pump_out: 'Xả nước'
-};
-
-const pumpColors: Record<string, string> = {
-  pump_a: 'bg-orange-50 text-orange-700 border-orange-200',
-  pump_b: 'bg-orange-50 text-orange-700 border-orange-200',
-  ph_up: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
-  ph_down: 'bg-rose-50 text-rose-700 border-rose-200',
-  osaka_pump: 'bg-sky-50 text-sky-700 border-sky-200',
-  mist_valve: 'bg-sky-50 text-sky-700 border-sky-200',
-  water_pump_in: 'bg-sky-50 text-sky-700 border-sky-200',
-  water_pump_out: 'bg-cyan-50 text-cyan-700 border-cyan-200'
-};
 
 const formatNumber = (value: any, digits = 1) => {
   const num = Number(value);
@@ -295,6 +279,8 @@ const Dashboard = () => {
         totalCount={dosingTotalCount}
         lastDosedAt={healthSummary?.latest_ph_dosing_at ?? null}
       />
+
+      <EmergencyStopButton deviceId={deviceId} variant="floating" />
     </div>
   );
 };

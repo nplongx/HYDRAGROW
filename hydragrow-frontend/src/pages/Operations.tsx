@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import ControlPanel from './ControlPanel';
 import { Automation } from './Automation';
+import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
+import { useDeviceStore } from '../store/useDeviceStore';
 
 const TABS = [
   { id: 'control', label: 'Điều khiển' },
@@ -9,6 +11,7 @@ const TABS = [
 
 export function Operations() {
   const [active, setActive] = useState<(typeof TABS)[number]['id']>('control');
+  const deviceId = useDeviceStore((s) => s.deviceId);
 
   return (
     <div className="app-page h-[calc(100vh-4rem)] flex flex-col">
@@ -27,9 +30,10 @@ export function Operations() {
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden pb-20 lg:pb-0">
         {active === 'control' ? <ControlPanel variant="embedded" /> : <Automation />}
       </div>
+      <EmergencyStopButton deviceId={deviceId} variant="bar" />
     </div>
   );
 }

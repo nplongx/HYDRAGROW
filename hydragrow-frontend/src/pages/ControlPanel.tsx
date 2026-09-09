@@ -2,7 +2,7 @@ import { Settings2, RefreshCw, Sparkles, AlertTriangle, FlaskConical, Activity, 
 
 // --- ZUSTAND, GLEAM & HOOKS ---
 import { useDeviceStore } from '../store/useDeviceStore';
-import { useDeviceControl } from '../hooks/useDeviceControl';
+import { useDeviceControl, INTERLOCK_PAIRS } from '../hooks/useDeviceControl';
 import { extract_fault_code_str } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
 
@@ -11,6 +11,28 @@ import { AdvancedDeviceControl } from '../components/control/AdvancedDeviceContr
 import { ActiveRecipeStatus } from '../components/recipes/ActiveRecipeStatus';
 import { LoadingState } from '../components/ui/LoadingState';
 import { PumpStatus } from '../types/models';
+
+const PUMP_DISPLAY_LABEL: Record<string, string> = {
+  PH_UP: 'Bơm pH Up',
+  PH_DOWN: 'Bơm pH Down',
+  WATER_PUMP_IN: 'Van cấp nước',
+  WATER_PUMP_OUT: 'Bơm xả thoát',
+};
+
+const PUMP_STATUS_KEY: Record<string, string> = {
+  PH_UP: 'ph_up',
+  PH_DOWN: 'ph_down',
+  WATER_PUMP_IN: 'water_pump_in',
+  WATER_PUMP_OUT: 'water_pump_out',
+};
+
+const lockedByFor = (pumpId: string, pumps: Partial<PumpStatus>) => {
+  const partnerId = INTERLOCK_PAIRS[pumpId];
+  if (!partnerId) return undefined;
+  const partnerKey = PUMP_STATUS_KEY[partnerId];
+  const partnerRunning = partnerKey ? Boolean((pumps as any)[partnerKey]) : false;
+  return partnerRunning ? partnerId : undefined;
+};
 
 const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
   const deviceId = useDeviceStore((s) => s.deviceId);
@@ -88,8 +110,34 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm phân A" icon={FlaskConical} currentStatus={Boolean(pumps.pump_a)} allowPwm={true} colorTheme="orange" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
             <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm phân B" icon={FlaskConical} currentStatus={Boolean(pumps.pump_b)} allowPwm={true} colorTheme="orange" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_UP" title="Bơm pH Up" icon={Activity} currentStatus={Boolean(pumps.ph_up)} allowPwm={true} colorTheme="purple" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="PH_DOWN" title="Bơm pH Down" icon={Activity} currentStatus={Boolean(pumps.ph_down)} allowPwm={true} colorTheme="fuchsia" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl
+              deviceId={deviceId}
+              pumpId="PH_UP"
+              title="Bơm pH Up"
+              icon={Activity}
+              currentStatus={Boolean(pumps.ph_up)}
+              allowPwm={true}
+              colorTheme="purple"
+              canSendCommands={canSendCommands}
+              isEmergency={isEmergency}
+              isAutoMode={isAutoMode}
+              lockedByPumpId={lockedByFor('PH_UP', pumps)}
+              lockedByPumpLabel={PUMP_DISPLAY_LABEL[lockedByFor('PH_UP', pumps) || '']}
+            />
+            <AdvancedDeviceControl
+              deviceId={deviceId}
+              pumpId="PH_DOWN"
+              title="Bơm pH Down"
+              icon={Activity}
+              currentStatus={Boolean(pumps.ph_down)}
+              allowPwm={true}
+              colorTheme="fuchsia"
+              canSendCommands={canSendCommands}
+              isEmergency={isEmergency}
+              isAutoMode={isAutoMode}
+              lockedByPumpId={lockedByFor('PH_DOWN', pumps)}
+              lockedByPumpLabel={PUMP_DISPLAY_LABEL[lockedByFor('PH_DOWN', pumps) || '']}
+            />
           </div>
         </div>
 

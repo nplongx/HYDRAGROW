@@ -13,6 +13,7 @@ pub struct AuthContext {
     pub scopes: Vec<String>,
     pub user_id: Option<String>,
     pub session_id: Option<String>,
+    pub service_key_label: Option<String>,
 }
 
 impl AuthContext {
@@ -126,6 +127,7 @@ where
                             scopes: user.scopes,
                             user_id: Some(user.id.to_string()),
                             session_id: Some(claims.sub),
+                        service_key_label: None,
                         };
                         req.extensions_mut().insert(auth_context);
                         let res = srv.call(req).await?;
@@ -187,6 +189,7 @@ where
                         scopes: svc.scopes,
                         user_id: None,
                         session_id: None,
+                        service_key_label: Some(svc.label),
                     };
                     req.extensions_mut().insert(auth_context);
                     let res = srv.call(req).await?;
@@ -212,6 +215,7 @@ where
                 scopes,
                 user_id,
                 session_id,
+                service_key_label: None,
             };
 
             req.extensions_mut().insert(auth_context);

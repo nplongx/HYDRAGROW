@@ -53,7 +53,7 @@ jobs:
         env:
           WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
 
       - name: Skip if a matching hotfix issue is already open
         id: dedup
@@ -112,7 +112,7 @@ jobs:
           *Auto-filed bởi \`.github/workflows/jules-ci-autofix.yml\`*
           BODY
         env:
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
 
       - name: Create hotfix issue
         if: steps.dedup.outputs.existing == ''

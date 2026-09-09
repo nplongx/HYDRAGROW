@@ -178,7 +178,7 @@ where
             .map(ToString::to_string);
 
         let srv = Rc::clone(&self.service);
-        return Box::pin(async move {
+        Box::pin(async move {
             if let Some(key) = header_key.as_deref() {
                 let key_hash = crate::db::service_api_keys::sha256_hex(key);
                 if let Some(svc) =
@@ -221,7 +221,7 @@ where
 
             let res = srv.call(req).await?;
             Ok(res.map_into_left_body())
-        });
+        })
     }
 }
 

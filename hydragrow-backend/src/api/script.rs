@@ -1056,7 +1056,7 @@ mod tests {
             },
         )
         .await
-        .unwrap();
+        .expect("upsert_device_config should succeed");
         let script_id = uuid::Uuid::new_v4();
         let directive = ConfigOverwriteDirective {
             config_key: "ec_target".to_string(),
@@ -1076,7 +1076,7 @@ mod tests {
             }],
         )
         .await
-        .unwrap();
+        .expect("reconcile_config_overwrite_group should succeed");
 
         let row: (String, String) = sqlx::query_as(
             "SELECT original_value, override_value FROM flow_config_overrides WHERE script_id = $1",
@@ -1084,7 +1084,7 @@ mod tests {
         .bind(script_id)
         .fetch_one(&pool)
         .await
-        .unwrap();
+        .expect("fetch_one should succeed");
         assert_eq!(row.0, "1.8");
         assert_eq!(row.1, "2.4");
         assert_ne!(

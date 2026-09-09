@@ -1,0 +1,53 @@
+{
+  "requirement_id": "SUPERVISOR-QUERY-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "hydragrow-supervisor-query/src/query.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-09T00:00:00Z",
+      "notes": "deserializes_tagged_json_for_every_variant and deserialize_rejects_unknown_query_type passed."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "hydragrow-supervisor-query/src/query.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-09T00:00:00Z",
+      "notes": "validate_and_clamp_caps_* and validate_and_clamp_rejects_empty_device_id passed."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "hydragrow-supervisor-query/src/query.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-09T00:00:00Z",
+      "notes": "validate_device_scope_accepts_matching_device and validate_device_scope_rejects_mismatched_device passed."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "hydragrow-supervisor-query/src/backend.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-09T00:00:00Z",
+      "notes": "every_query_variant_issues_only_get_requests, execute_*_calls_expected_endpoint, and execute_dosing_history_calls_range_endpoint_and_caps_rows passed."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "hydragrow-supervisor-query/src/backend.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-09T00:00:00Z",
+      "notes": "execute_truncates_oversized_response passed (truncated to <= 16384 bytes, truncated flag true)."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "hydragrow-supervisor-query/src/testing.rs",
+      "environment": "local-cargo-test",
+      "verified_at": "2026-09-09T00:00:00Z",
+      "notes": "FakeQueryBackend implemented and exported in testing module; full crate suite 14/14 tests pass."
+    }
+  ]
+}

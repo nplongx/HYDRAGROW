@@ -1,0 +1,36 @@
+{
+  "requirement_id": "SUPERVISOR-QUERY-001",
+  "objective": "A shared hydragrow-supervisor-query library crate providing a closed, typed allowlist of 6 read-only queries against hydragrow-backend with validation, limits clamping, device scope checking, GET-only HTTP execution, output size truncation, and a test fake.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "SupervisorQuery enum has exactly 6 closed variants, deserializes tagged JSON, and rejects unknown query_type strings.",
+      "verification": "cargo test -p hydragrow-supervisor-query (query::tests)"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "validate_and_clamp normalizes bounds (sensor history, dosing history window, FSM limit) to caps and rejects empty device IDs.",
+      "verification": "cargo test -p hydragrow-supervisor-query (query::tests)"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "validate_device_scope rejects queries targeting a device ID different from the expected session device ID.",
+      "verification": "cargo test -p hydragrow-supervisor-query (query::tests)"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "HttpQueryBackend executes queries issuing only GET requests to hydragrow-backend endpoints and caps dosing history row counts.",
+      "verification": "cargo test -p hydragrow-supervisor-query (backend::tests)"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "truncate_if_needed truncates oversized responses (most-recent-first) to MAX_OUTPUT_BYTES (16,384 bytes) and sets truncated: true.",
+      "verification": "cargo test -p hydragrow-supervisor-query (backend::tests)"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "FakeQueryBackend is provided in testing.rs with thread-safe responses and call logging for downstream consumer testing.",
+      "verification": "cargo test -p hydragrow-supervisor-query"
+    }
+  ]
+}

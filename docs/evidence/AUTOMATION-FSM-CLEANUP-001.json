@@ -1,0 +1,29 @@
+{
+  "requirement_id": "AUTOMATION-FSM-CLEANUP-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/automation/reactflow/NodeEditorPanel.test.tsx",
+      "environment": "local-dev",
+      "verified_at": "2026-09-09T09:44:26Z",
+      "notes": "NodeEditorPanel.test.tsx passed asserting queryByLabelText for fake FSM fields is not present"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/automation/reactflow/NodeEditorPanel.test.tsx",
+      "environment": "local-dev",
+      "verified_at": "2026-09-09T09:44:26Z",
+      "notes": "NodeEditorPanel.test.tsx passed asserting presence of explanation text describing Condition + advance_stage/end_season mechanism"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run",
+      "environment": "local-dev",
+      "verified_at": "2026-09-09T09:44:38Z",
+      "notes": "71 test files passed (331 tests passed)"
+    }
+  ]
+}

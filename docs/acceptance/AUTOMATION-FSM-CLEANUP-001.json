@@ -1,0 +1,21 @@
+{
+  "requirement_id": "AUTOMATION-FSM-CLEANUP-001",
+  "objective": "Clean up decorative FSM trigger fields with no backend schema backing and explain real FSM mechanism",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "NodeEditorPanel FSM trigger panel does not render decorative state machine select or stage fields",
+      "verification": "cd hydragrow-frontend && npx vitest run src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "NodeEditorPanel FSM trigger panel renders clear explanation of Condition + advance_stage/end_season actions",
+      "verification": "cd hydragrow-frontend && npx vitest run src/components/automation/reactflow/NodeEditorPanel.test.tsx"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Frontend unit test suite passes for NodeEditorPanel and related automation components",
+      "verification": "cd hydragrow-frontend && npx vitest run"
+    }
+  ]
+}

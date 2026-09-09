@@ -1,5 +1,5 @@
 import React from 'react';
-import { LockKeyhole } from 'lucide-react';
+import { LockKeyhole, Power } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Switch } from '../../components/ui/Switch';
 
@@ -9,6 +9,8 @@ interface GeneralSectionProps {
   onGoToPairing?: () => void;
   isAdvancedMode: boolean;
   onToggleAdvancedMode: (value: boolean) => void;
+  controlMode: 'auto' | 'manual';
+  onControlModeChange: (value: 'auto' | 'manual') => void;
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
@@ -16,6 +18,8 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   onLogout,
   isAdvancedMode,
   onToggleAdvancedMode,
+  controlMode,
+  onControlModeChange,
 }) => {
   const navigate = useNavigate();
 
@@ -33,6 +37,36 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         >
           Đăng xuất
         </button>
+      </div>
+
+      <div className="ui-card space-y-3">
+        <div className="flex items-center gap-2">
+          <Power size={17} className="text-emerald-700" />
+          <h3 className="farm-section-title">Chế độ hoạt động</h3>
+        </div>
+        <p className="text-xs text-emerald-700/75">
+          Chọn cách hệ thống điều khiển thiết bị. Tự động dùng các ngưỡng đã cấu hình; Thủ công cho phép điều khiển trực tiếp.
+        </p>
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Chế độ hoạt động">
+          {(['auto', 'manual'] as const).map((mode) => {
+            const selected = controlMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onControlModeChange(mode)}
+                className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                  selected
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50'
+                }`}
+              >
+                {mode === 'auto' ? 'Tự động' : 'Thủ công'}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="ui-card space-y-3">

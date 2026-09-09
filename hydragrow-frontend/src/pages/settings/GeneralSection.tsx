@@ -9,8 +9,8 @@ interface GeneralSectionProps {
   onGoToPairing?: () => void;
   isAdvancedMode: boolean;
   onToggleAdvancedMode: (value: boolean) => void;
-  controlMode: 'auto' | 'manual';
-  onControlModeChange: (value: 'auto' | 'manual') => void;
+  controlMode?: 'auto' | 'manual';
+  onControlModeChange?: (value: 'auto' | 'manual') => void;
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
@@ -18,7 +18,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   onLogout,
   isAdvancedMode,
   onToggleAdvancedMode,
-  controlMode,
+  controlMode = 'auto',
   onControlModeChange,
 }) => {
   const navigate = useNavigate();
@@ -55,7 +55,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
                 key={mode}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => onControlModeChange(mode)}
+                onClick={() => onControlModeChange?.(mode)}
                 className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
                   selected
                     ? 'border-emerald-600 bg-emerald-600 text-white'

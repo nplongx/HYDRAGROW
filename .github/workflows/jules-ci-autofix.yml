@@ -1,7 +1,7 @@
 name: jules-ci-autofix
 
-# Khi 1 trong các CI workflow fail trên `main`, tự động tạo issue
-# hotfix cho Jules xử lý.
+# Khi CI fail trên `main` hoặc CI của một Pull Request fail, tự động tạo issue
+# hotfix cho Jules/Juleson xử lý.
 #
 # IMPORTANT: do not add the `jules` label here. That label can trigger the
 # native GitHub Jules integration and cause a duplicate task. The
@@ -30,18 +30,30 @@ jobs:
     runs-on: ubuntu-latest
     if: >
       github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.head_branch == 'main'
+      (
+        github.event.workflow_run.head_branch == 'main' ||
+        github.event.workflow_run.pull_requests[0].number != null
+      )
     steps:
       - name: Compute identifiers
         id: ids
         run: |
           set -euo pipefail
           SHA_SHORT="${WORKFLOW_SHA:0:7}"
+          if [ -n "${PR_NUMBER}" ]; then
+            TITLE="[Jules Hotfix] PR #${PR_NUMBER} CI failure: ${WORKFLOW_NAME} (${SHA_SHORT})"
+            CONTEXT="Pull Request: #${PR_NUMBER}"
+          else
+            TITLE="[Jules Hotfix] CI failure: ${WORKFLOW_NAME} on main (${SHA_SHORT})"
+            CONTEXT="Target: main"
+          fi
           echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
-          echo "title=[Jules Hotfix] CI failure: ${WORKFLOW_NAME} on main (${SHA_SHORT})" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "context=$CONTEXT" >> "$GITHUB_OUTPUT"
         env:
           WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
 
       - name: Skip if a matching hotfix issue is already open
         id: dedup
@@ -61,12 +73,20 @@ jobs:
         if: steps.dedup.outputs.existing == ''
         run: |
           set -euo pipefail
+          if [ -n "${PR_NUMBER}" ]; then
+            PR_SECTION="**Pull Request:** https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}"
+          else
+            PR_SECTION="**Pull Request:** none (failure on main)"
+          fi
+
           cat > /tmp/hotfix_body.md << BODY
-          ## 🔴 CI failure on \`main\` — auto-filed
+          ## 🔴 CI failure — auto-filed
 
           **Workflow:** \`${{ github.event.workflow_run.name }}\`
           **Commit:** \`${{ github.event.workflow_run.head_sha }}\`
           **Run:** ${{ github.event.workflow_run.html_url }}
+          **Context:** ${{ steps.ids.outputs.context }}
+          ${PR_SECTION}
 
           ### Task type: Hotfix (priority: high)
 
@@ -80,7 +100,10 @@ jobs:
           3. Viết/khôi phục test tái hiện lỗi trước khi fix.
           4. Fix tối thiểu, chạy lại toàn bộ verify commands, đảm bảo
              exit code 0.
-          5. Mở PR, base \`main\`, paste output verify vào PR description.
+          5. Nếu lỗi đến từ PR, giữ fix trong đúng phạm vi PR và mở/update
+             PR để CI chạy lại.
+          6. Nếu lỗi đến từ main, mở PR mới base \`main\` và paste output verify
+             vào PR description.
 
           **Abort condition:** > 4 lần fix không qua test → comment
           \`ABORT_UNRESOLVABLE\` và dừng.
@@ -88,6 +111,8 @@ jobs:
           ---
           *Auto-filed bởi \`.github/workflows/jules-ci-autofix.yml\`*
           BODY
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
 
       - name: Create hotfix issue
         if: steps.dedup.outputs.existing == ''

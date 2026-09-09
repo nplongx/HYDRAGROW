@@ -1,11 +1,12 @@
 name: jules-ci-autofix
 
 # Khi 1 trong các CI workflow fail trên `main`, tự động tạo issue
-# hotfix cho Jules xử lý — không cần người phát hiện rồi chạy
-# `./scripts/jules hotfix` bằng tay.
+# hotfix cho Jules xử lý.
 #
-# Dùng workflow_run vì CI workflows hiện tại chạy trên `push` trực
-# tiếp, không có success/failure output nào khác để hook vào.
+# IMPORTANT: do not add the `jules` label here. That label can trigger the
+# native GitHub Jules integration and cause a duplicate task. The
+# `jules-auto-dispatch` workflow owns Juleson dispatch and adds the dedicated
+# `juleson-dispatched` marker only after a session is successfully created.
 
 on:
   workflow_run:
@@ -34,6 +35,7 @@ jobs:
       - name: Compute identifiers
         id: ids
         run: |
+          set -euo pipefail
           SHA_SHORT="${WORKFLOW_SHA:0:7}"
           echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
           echo "title=[Jules Hotfix] CI failure: ${WORKFLOW_NAME} on main (${SHA_SHORT})" >> "$GITHUB_OUTPUT"
@@ -44,10 +46,11 @@ jobs:
       - name: Skip if a matching hotfix issue is already open
         id: dedup
         run: |
+          set -euo pipefail
           EXISTING=$(gh issue list \
             --repo "${{ github.repository }}" \
             --state open \
-            --label "jules,hotfix" \
+            --label "hotfix" \
             --search "in:title \"${{ steps.ids.outputs.title }}\"" \
             --json number -q '.[0].number' || true)
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
@@ -57,6 +60,7 @@ jobs:
       - name: Build issue body
         if: steps.dedup.outputs.existing == ''
         run: |
+          set -euo pipefail
           cat > /tmp/hotfix_body.md << BODY
           ## 🔴 CI failure on \`main\` — auto-filed
 
@@ -72,7 +76,7 @@ jobs:
           1. Checkout commit \`${{ github.event.workflow_run.head_sha }}\`,
              mở run log ở trên để xem lỗi cụ thể.
           2. Reproduce lỗi bằng đúng lệnh verify của subsystem liên quan
-             (xem \`.agent/jules.yml\` → \`commands\`).
+             (xem \`.agent/jules.yml\` → \`commands`).
           3. Viết/khôi phục test tái hiện lỗi trước khi fix.
           4. Fix tối thiểu, chạy lại toàn bộ verify commands, đảm bảo
              exit code 0.
@@ -88,10 +92,11 @@ jobs:
       - name: Create hotfix issue
         if: steps.dedup.outputs.existing == ''
         run: |
+          set -euo pipefail
           gh issue create \
             --repo "${{ github.repository }}" \
             --title "${{ steps.ids.outputs.title }}" \
             --body-file /tmp/hotfix_body.md \
-            --label "jules,hotfix"
+            --label "hotfix"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

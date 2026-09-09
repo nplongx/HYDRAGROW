@@ -635,6 +635,8 @@ const Settings = () => {
           onGoToPairing={() => { window.location.href = '/pairing'; }}
           isAdvancedMode={isAdvancedMode}
           onToggleAdvancedMode={setIsAdvancedMode}
+          controlMode={config.control_mode === 'manual' ? 'manual' : 'auto'}
+          onControlModeChange={(value) => setConfig((current: any) => ({ ...current, control_mode: value }))}
         />}
 
         <ThresholdsSection

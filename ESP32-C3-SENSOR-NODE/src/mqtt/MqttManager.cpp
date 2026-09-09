@@ -311,17 +311,14 @@ void MqttManager::handleConfigDocument(JsonDocument& doc) {
     Logger::debugPrintln("[CONFIG] Nhan cau hinh tu Backend, dang ap dung...");
     appConfig.applyFromJson(doc);
 
-    // AppConfig stores pH calibration voltages in volts. PhSensorConfig stores mV.
-    // Apply the converted values immediately so the next pH sample uses the new calibration.
     const float v686Mv = appConfig.sensor.phV686 * 1000.0f;
     const float v4Mv = appConfig.sensor.phV4 * 1000.0f;
     const float v918Mv = appConfig.sensor.phV918 * 1000.0f;
     const String mode = appConfig.sensor.phCalibrationMode;
 
     sensors_.applyPhCalibration(v686Mv, v4Mv, v918Mv, mode);
-
     sensors_.enablePh(appConfig.sensor.enablePh);
-    sensors_.enableTemperature(appConfig.sensor.enableTemperature);
+    sensors_.enableTemperature(appConfig.sensor.enableTemp);
     sensors_.enableTds(appConfig.sensor.enableTds);
 
     Logger::debugPrintf("[CONFIG] publish_interval=%lu ms, enablePh=%d, enableTds=%d\n",

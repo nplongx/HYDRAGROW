@@ -73,6 +73,10 @@ pub struct AlertOutput {
     pub level: String, // "info" | "warning" | "error"
     pub title: String,
     pub message: String,
+    /// Ghi đè tường minh việc có gửi FCM hay không, bất kể level — xem
+    /// hydragrow-backend/src/mqtt/handlers/script_eval.rs::handle_fired_alert.
+    /// `None` = không ghi đè, dùng mặc định theo level (warning/critical).
+    pub notify_fcm: Option<bool>,
 }
 
 /// Kết quả sau khi eval một recipe_override script

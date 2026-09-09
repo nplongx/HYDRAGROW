@@ -96,52 +96,62 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
             );
 
             for (_id, res) in results {
-                #[allow(clippy::collapsible_if)]
-                if let crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) = res
-                {
-                    if let Ok(cfg) = crate::db::postgres::get_safety_config(
-                        &app_state.pg_pool,
-                        &script.device_id,
-                    )
-                    .await
-                    {
-                        let limits = hydragrow_shared::safety::DoseSafetyLimits {
-                            max_dose_per_cycle_ml: cfg.max_dose_per_cycle,
-                            max_dose_per_hour_ml: cfg.max_dose_per_hour,
-                            cooldown_sec: cfg.cooldown_sec as u64,
-                        };
-                        let calibration = crate::db::postgres::fetch_dosing_calibration(
-                            &app_state.pg_pool,
-                            &script.device_id,
-                        )
-                        .await
-                        .unwrap_or(None);
-                        let hourly = crate::db::postgres::get_dosing_history_last_hour(
-                            &app_state.pg_pool,
-                            &script.device_id,
-                        )
-                        .await
-                        .unwrap_or_default();
-                        let last_dose = crate::db::postgres::get_last_dose_at(
-                            &app_state.pg_pool,
-                            &script.device_id,
-                        )
-                        .await
-                        .unwrap_or(None);
-                        let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
-
-                        let _ = crate::services::action_dispatch::dispatch_action_command(
+                match res {
+                    crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
+                        crate::mqtt::handlers::script_eval::handle_fired_alert(
                             app_state,
+                            alert,
                             &script.device_id,
-                            cmd,
-                            &limits,
-                            &hourly,
-                            now_sec,
-                            last_dose,
-                            calibration.as_ref(),
+                            chrono::Utc::now().timestamp_millis(),
                         )
                         .await;
                     }
+                    crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) => {
+                        if let Ok(cfg) = crate::db::postgres::get_safety_config(
+                            &app_state.pg_pool,
+                            &script.device_id,
+                        )
+                        .await
+                        {
+                            let limits = hydragrow_shared::safety::DoseSafetyLimits {
+                                max_dose_per_cycle_ml: cfg.max_dose_per_cycle,
+                                max_dose_per_hour_ml: cfg.max_dose_per_hour,
+                                cooldown_sec: cfg.cooldown_sec as u64,
+                            };
+                            let calibration = crate::db::postgres::fetch_dosing_calibration(
+                                &app_state.pg_pool,
+                                &script.device_id,
+                            )
+                            .await
+                            .unwrap_or(None);
+                            let hourly = crate::db::postgres::get_dosing_history_last_hour(
+                                &app_state.pg_pool,
+                                &script.device_id,
+                            )
+                            .await
+                            .unwrap_or_default();
+                            let last_dose = crate::db::postgres::get_last_dose_at(
+                                &app_state.pg_pool,
+                                &script.device_id,
+                            )
+                            .await
+                            .unwrap_or(None);
+                            let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
+
+                            let _ = crate::services::action_dispatch::dispatch_action_command(
+                                app_state,
+                                &script.device_id,
+                                cmd,
+                                &limits,
+                                &hourly,
+                                now_sec,
+                                last_dose,
+                                calibration.as_ref(),
+                            )
+                            .await;
+                        }
+                    }
+                    crate::mqtt::handlers::script_eval::ChainFireResult::RecipeOverride(_) => {}
                 }
             }
         }
@@ -207,12 +217,32 @@ mod tests {
             water_received_ms: None,
         };
         let payload = build_cron_payload(&latest, "dev-1");
-        assert_eq!(payload.get("ph").and_then(|v| v.as_f64()), Some(6.4f32 as f64));
-        assert_eq!(payload.get("ec").and_then(|v| v.as_f64()), Some(1.9f32 as f64));
-        assert_eq!(payload.get("temp").and_then(|v| v.as_f64()), Some(25.5f32 as f64));
-        assert_eq!(payload.get("water_level").and_then(|v| v.as_f64()), Some(80.0f32 as f64));
-        assert_eq!(payload.get("device_id").and_then(|v| v.as_str()), Some("dev-1"));
-        assert!(payload.get("timestamp_ms").and_then(|v| v.as_i64()).is_some());
+        assert_eq!(
+            payload.get("ph").and_then(|v| v.as_f64()),
+            Some(6.4f32 as f64)
+        );
+        assert_eq!(
+            payload.get("ec").and_then(|v| v.as_f64()),
+            Some(1.9f32 as f64)
+        );
+        assert_eq!(
+            payload.get("temp").and_then(|v| v.as_f64()),
+            Some(25.5f32 as f64)
+        );
+        assert_eq!(
+            payload.get("water_level").and_then(|v| v.as_f64()),
+            Some(80.0f32 as f64)
+        );
+        assert_eq!(
+            payload.get("device_id").and_then(|v| v.as_str()),
+            Some("dev-1")
+        );
+        assert!(
+            payload
+                .get("timestamp_ms")
+                .and_then(|v| v.as_i64())
+                .is_some()
+        );
     }
 
     #[test]

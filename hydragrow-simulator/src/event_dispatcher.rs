@@ -46,7 +46,12 @@ pub fn apply_event(hw: &mut VirtualHardwareState, event: &OrchestratorEvent) {
         | OrchestratorEvent::TriggerOtaUpdate
         | OrchestratorEvent::UpdateWifiList { .. }
         | OrchestratorEvent::RebootDevice
-        | OrchestratorEvent::FactoryReset => {
+        | OrchestratorEvent::FactoryReset
+        | OrchestratorEvent::ProvisionDeviceId { .. }
+        | OrchestratorEvent::PrepareWifiConfig { .. }
+        | OrchestratorEvent::CommitPendingWifiConfig
+        | OrchestratorEvent::RollbackPendingWifiConfig
+        | OrchestratorEvent::PublishWifiConfigStatus { .. } => {
             tracing::debug!(
                 ?event,
                 "simulator event has no direct virtual-hardware mutation"

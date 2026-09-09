@@ -262,7 +262,9 @@ async fn main() -> anyhow::Result<()> {
 
     let cloudinary = crate::services::cloudinary::CloudinaryConfig::from_env();
     if cloudinary.is_none() {
-        tracing::warn!("CLOUDINARY_* chưa được cấu hình đầy đủ — tính năng Nhật ký ảnh (D4) sẽ tạm tắt.");
+        tracing::warn!(
+            "CLOUDINARY_* chưa được cấu hình đầy đủ — tính năng Nhật ký ảnh (D4) sẽ tạm tắt."
+        );
     }
 
     let (event_bus, _) = broadcast::channel(256);

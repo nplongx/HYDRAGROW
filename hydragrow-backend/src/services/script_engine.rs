@@ -94,10 +94,13 @@ impl ScriptEngine {
             return Ok(None);
         }
 
+        let notify_fcm = map.get("notify_fcm").and_then(|v| v.as_bool().ok());
+
         Ok(Some(AlertOutput {
             level,
             title,
             message,
+            notify_fcm,
         }))
     }
 
@@ -305,6 +308,7 @@ impl ScriptEngine {
                         level,
                         title,
                         message,
+                        notify_fcm: None,
                     }))
                 }
             }
@@ -794,6 +798,42 @@ fn main(input) {
 
         let scripts_other = cache.get_alert_scripts("device_999").await;
         assert_eq!(scripts_other.len(), 0);
+    }
+
+    #[test]
+    fn eval_alert_with_context_reads_an_explicit_notify_fcm_override() {
+        let engine = ScriptEngine::new();
+        let ast = engine
+            .compile(r#"fn main(input) { #{"level": "info", "title": "t", "message": "m", "notify_fcm": true} }"#)
+            .unwrap();
+        let input = ScriptSensorInput {
+            ph: 6.0,
+            ec: 1.5,
+            temp: 24.0,
+            water_level: 80.0,
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
+        let result = engine.eval_alert(&ast, &input).unwrap().unwrap();
+        assert_eq!(result.notify_fcm, Some(true));
+    }
+
+    #[test]
+    fn eval_alert_with_context_leaves_notify_fcm_none_when_absent() {
+        let engine = ScriptEngine::new();
+        let ast = engine
+            .compile(r#"fn main(input) { #{"level": "info", "title": "t", "message": "m"} }"#)
+            .unwrap();
+        let input = ScriptSensorInput {
+            ph: 6.0,
+            ec: 1.5,
+            temp: 24.0,
+            water_level: 80.0,
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
+        let result = engine.eval_alert(&ast, &input).unwrap().unwrap();
+        assert_eq!(result.notify_fcm, None);
     }
 
     #[test]

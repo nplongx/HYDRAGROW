@@ -155,7 +155,9 @@ mod tests {
             title: "Suspected leak".to_string(),
             message: "Water level dropping fast".to_string(),
             reason: None,
-            metadata: Some(serde_json::json!({ "reason_codes": ["leak_suspected"], "confidence": 0.9 })),
+            metadata: Some(
+                serde_json::json!({ "reason_codes": ["leak_suspected"], "confidence": 0.9 }),
+            ),
             timestamp: chrono::Utc::now().timestamp_millis(),
             source: "ai_supervisor".to_string(),
             primary_reason_code: Some("leak_suspected".to_string()),
@@ -167,7 +169,10 @@ mod tests {
             .unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].source, "ai_supervisor");
-        assert_eq!(events[0].primary_reason_code.as_deref(), Some("leak_suspected"));
+        assert_eq!(
+            events[0].primary_reason_code.as_deref(),
+            Some("leak_suspected")
+        );
     }
 
     // ── find_recent_alert (supervisor dedup) ──────────────────────────────────
@@ -206,13 +211,21 @@ mod tests {
     async fn find_recent_alert_returns_true_within_cooldown(pool: sqlx::PgPool) {
         dedup_cfg(&pool, "test-dev-dedup").await;
         let now = chrono::Utc::now().timestamp_millis();
-        insert_system_event(&pool, &dedup_event("test-dev-dedup", now, "ai_supervisor", "leak_suspected"))
-            .await
-            .unwrap();
-        let found =
-            find_recent_alert(&pool, "test-dev-dedup", "ai_supervisor", "leak_suspected", 20)
-                .await
-                .unwrap();
+        insert_system_event(
+            &pool,
+            &dedup_event("test-dev-dedup", now, "ai_supervisor", "leak_suspected"),
+        )
+        .await
+        .unwrap();
+        let found = find_recent_alert(
+            &pool,
+            "test-dev-dedup",
+            "ai_supervisor",
+            "leak_suspected",
+            20,
+        )
+        .await
+        .unwrap();
         assert!(found);
     }
 
@@ -220,9 +233,17 @@ mod tests {
     async fn find_recent_alert_ignores_different_source(pool: sqlx::PgPool) {
         dedup_cfg(&pool, "test-dev-dedup").await;
         let now = chrono::Utc::now().timestamp_millis();
-        insert_system_event(&pool, &dedup_event("test-dev-dedup", now, "watchdog", "topic_stale_controller_status"))
-            .await
-            .unwrap();
+        insert_system_event(
+            &pool,
+            &dedup_event(
+                "test-dev-dedup",
+                now,
+                "watchdog",
+                "topic_stale_controller_status",
+            ),
+        )
+        .await
+        .unwrap();
         let found = find_recent_alert(
             &pool,
             "test-dev-dedup",
@@ -239,13 +260,21 @@ mod tests {
     async fn find_recent_alert_returns_false_outside_cooldown(pool: sqlx::PgPool) {
         dedup_cfg(&pool, "test-dev-dedup").await;
         let old = chrono::Utc::now().timestamp_millis() - 30 * 60 * 1000;
-        insert_system_event(&pool, &dedup_event("test-dev-dedup", old, "ai_supervisor", "leak_suspected"))
-            .await
-            .unwrap();
-        let found =
-            find_recent_alert(&pool, "test-dev-dedup", "ai_supervisor", "leak_suspected", 20)
-                .await
-                .unwrap();
+        insert_system_event(
+            &pool,
+            &dedup_event("test-dev-dedup", old, "ai_supervisor", "leak_suspected"),
+        )
+        .await
+        .unwrap();
+        let found = find_recent_alert(
+            &pool,
+            "test-dev-dedup",
+            "ai_supervisor",
+            "leak_suspected",
+            20,
+        )
+        .await
+        .unwrap();
         assert!(!found);
     }
 

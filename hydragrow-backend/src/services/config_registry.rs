@@ -112,9 +112,8 @@ mod tests {
     /// không có trong build context của backend.
     #[test]
     fn backend_copy_matches_frontend_copy_byte_for_byte() {
-        const FRONTEND_COPY: &str = include_str!(
-            "../../../hydragrow-frontend/src/lib/automation/device-config-keys.json"
-        );
+        const FRONTEND_COPY: &str =
+            include_str!("../../../hydragrow-frontend/src/lib/automation/device-config-keys.json");
         assert_eq!(
             REGISTRY_JSON, FRONTEND_COPY,
             "hydragrow-backend/config/device-config-keys.json đã lệch với \

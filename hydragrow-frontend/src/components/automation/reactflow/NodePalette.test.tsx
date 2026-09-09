@@ -17,8 +17,8 @@ describe('NodePalette', () => {
     expect(screen.getByText('+ Condition Group (AND/OR)')).toBeInTheDocument();
     expect(screen.getByText('+ Time-window (mean/min/max)')).toBeInTheDocument();
 
-    expect(screen.getByText('DELAY')).toBeInTheDocument();
-    expect(screen.getByText('+ Delay')).toBeInTheDocument();
+    expect(screen.queryByText('DELAY')).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Delay')).not.toBeInTheDocument();
 
     expect(screen.getByText('ACTION')).toBeInTheDocument();
     expect(screen.getByText('+ Alert')).toBeInTheDocument();
@@ -51,8 +51,6 @@ describe('NodePalette', () => {
     fireEvent.click(screen.getByText('+ Chain — chạy Flow khác'));
     expect(onAddNode).toHaveBeenCalledWith('action', 'chain');
 
-    fireEvent.click(screen.getByText('+ Delay'));
-    expect(onAddNode).toHaveBeenCalledWith('action', 'delay');
 
     fireEvent.click(screen.getByText('+ Time-window (mean/min/max)'));
     expect(onAddNode).toHaveBeenCalledWith('condition', 'time-window');

@@ -2,7 +2,9 @@
 use crate::{
     AppState,
     api::middleware::auth::AuthContext,
-    db::postgres::{NewSystemEventRecord, get_events_by_cycle_id, get_system_events, insert_system_event},
+    db::postgres::{
+        NewSystemEventRecord, get_events_by_cycle_id, get_system_events, insert_system_event,
+    },
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde_json::json;

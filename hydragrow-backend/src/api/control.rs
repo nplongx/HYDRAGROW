@@ -122,7 +122,14 @@ pub async fn control_pump(
         return HttpResponse::BadRequest().json(json!({"error": "Invalid pump name"}));
     }
 
-    let valid_actions = ["on", "off", "reset_fault", "set_pwm", "force_on", "emergency_stop"];
+    let valid_actions = [
+        "on",
+        "off",
+        "reset_fault",
+        "set_pwm",
+        "force_on",
+        "emergency_stop",
+    ];
     if !valid_actions.contains(&req_data.action.as_str()) {
         warn!("Từ chối lệnh: Hành động không hợp lệ ({})", req_data.action);
         return HttpResponse::BadRequest()

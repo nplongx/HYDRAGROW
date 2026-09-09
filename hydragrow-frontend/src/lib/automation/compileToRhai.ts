@@ -42,13 +42,18 @@ function actionToRhaiMap(action: Action): string {
   switch (action.type) {
     case "alert": {
       const title = action.title ?? action.message;
-      return [
+      const lines = [
         "#{",
         ` "level": "${rhaiString(action.level)}",`,
         ` "title": "${rhaiString(title)}",`,
         ` "message": "${rhaiString(action.message)}"`,
-        "}",
-      ].join("\n ");
+      ];
+      if (action.notifyFcm !== undefined) {
+        lines[lines.length - 1] += ",";
+        lines.push(` "notify_fcm": ${action.notifyFcm}`);
+      }
+      lines.push("}");
+      return lines.join("\n ");
     }
     case "advance_stage": {
       const offsetExpr =

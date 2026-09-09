@@ -19,6 +19,8 @@ import { FlowOverviewCard } from "../components/automation/FlowOverviewCard";
 import { ConfigExplorerWidget } from "../components/automation/ConfigExplorerWidget";
 import { ConfigExplorerView } from "../components/automation/ConfigExplorerView";
 import { AutomationMultiDeviceTemplatePanel } from "../components/automation/AutomationMultiDeviceTemplatePanel";
+import { AutomationConflictBanner } from "../components/automation/AutomationConflictBanner";
+import { findScheduleConflicts } from "../lib/automation/scheduleConflicts";
 import { FlowSummaryNode } from "../components/automation/reactflow/FlowSummaryNode";
 import { LoadingState } from "../components/ui/LoadingState";
 import { FaultExplanation } from "../components/ui/FaultExplanation";
@@ -53,6 +55,7 @@ export function Automation() {
   const [filterKind, setFilterKind] = useState<"all" | "alert" | "recipe" | "action" | "config">("all");
 
   const activeScripts = scripts ?? [];
+  const scheduleConflicts = useMemo(() => findScheduleConflicts(activeScripts), [activeScripts]);
 
   const toggleScriptEnabled = async (script: UserScript, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -141,6 +144,11 @@ export function Automation() {
           configOverridesToday: configOverridesData?.active?.length ?? 0,
           successRatePercent: successRatePercent ?? null,
         }}
+      />
+
+      <AutomationConflictBanner
+        conflicts={scheduleConflicts}
+        onViewDetail={(script) => canvas.openEditor(script)}
       />
 
       {/* Search & Filter Bar */}

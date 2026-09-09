@@ -5,18 +5,48 @@ import { httpFetch } from "../platform/http";
 import { isTauriRuntime } from "../platform/settings";
 import { invoke } from "@tauri-apps/api/core";
 
-const ensureWaterInterlock = async (
+export const INTERLOCK_PAIRS: Record<string, string> = {
+  WATER_PUMP_IN: "WATER_PUMP_OUT",
+  WATER_PUMP_OUT: "WATER_PUMP_IN",
+  PH_UP: "PH_DOWN",
+  PH_DOWN: "PH_UP",
+};
+
+const INTERLOCK_LABELS: Record<string, string> = {
+  WATER_PUMP_IN: "Van cấp nước",
+  WATER_PUMP_OUT: "Bơm xả thoát",
+  PH_UP: "Bơm pH Up",
+  PH_DOWN: "Bơm pH Down",
+};
+
+const isPumpRunning = (
+  pumps: Record<string, boolean> | undefined,
+  pumpId: string,
+): boolean => {
+  switch (pumpId) {
+    case "WATER_PUMP_IN":
+      return Boolean(pumps?.water_pump_in);
+    case "WATER_PUMP_OUT":
+      return Boolean(pumps?.water_pump_out);
+    case "PH_UP":
+      return Boolean(pumps?.ph_up);
+    case "PH_DOWN":
+      return Boolean(pumps?.ph_down);
+    default:
+      return false;
+  }
+};
+
+export const ensureInterlock = async (
   pumpId: string,
   action: string,
 ): Promise<string | null> => {
-  if (action !== "on" || !["WATER_PUMP_IN", "WATER_PUMP_OUT"].includes(pumpId))
-    return null;
+  const partnerId = INTERLOCK_PAIRS[pumpId];
+  if (action !== "on" || !partnerId) return null;
 
   const pumps = useDeviceStore.getState().sensorData?.pump_status;
-  const conflict =
-    pumpId === "WATER_PUMP_IN" ? pumps?.water_pump_out : pumps?.water_pump_in;
-  if (conflict) {
-    return "⛔ XUNG ĐỘT AN TOÀN: Không thể bật cấp nước và xả nước cùng lúc.";
+  if (isPumpRunning(pumps as Record<string, boolean> | undefined, partnerId)) {
+    return `⛔ XUNG ĐỘT AN TOÀN: Không thể bật ${INTERLOCK_LABELS[pumpId]} khi ${INTERLOCK_LABELS[partnerId]} đang chạy.`;
   }
 
   if (isTauriRuntime()) {
@@ -65,24 +95,26 @@ export const useDeviceControl = (deviceId: string) => {
       action: string,
       duration_sec?: number,
       pwm?: number,
+      forceConfirmed = false,
     ) => {
       if (!deviceId || !settings?.backend_url) {
         toast.error("Chưa cấu hình máy chủ!");
         return false;
       }
-      const interlockError = await ensureWaterInterlock(pumpId, action);
+      const interlockError = await ensureInterlock(pumpId, action);
       if (interlockError) {
         setCommandStatus((prev) => ({ ...prev, [pumpId]: "safety_blocked" }));
         toast.error(interlockError);
         return false;
       }
       const dangerous = isDangerousCommand(pumpId, action, pwm);
-      if (dangerous) {
+      if (dangerous && !forceConfirmed) {
         const confirmed = window.confirm(
           `Lệnh nguy hiểm: ${action} cho ${pumpId}. Xác nhận thực thi?`,
         );
         if (!confirmed) return false;
       }
+      const isConfirmed = dangerous || forceConfirmed;
       setIsProcessing(true);
       cooldownPump(pumpId, "sending");
       try {
@@ -109,7 +141,7 @@ export const useDeviceControl = (deviceId: string) => {
             headers: {
               "Content-Type": "application/json",
               "X-API-Key": settings.api_key || "",
-              ...(dangerous ? { "X-User-Confirmed": "true" } : {}),
+              ...(isConfirmed ? { "X-User-Confirmed": "true" } : {}),
             },
             body: JSON.stringify(payload),
           },
@@ -143,6 +175,7 @@ export const useDeviceControl = (deviceId: string) => {
   const setPwm = (pumpId: string, pwmValue: number, durationSec?: number) =>
     sendCommand(pumpId, "set_pwm", durationSec, pwmValue);
   const resetFault = () => sendCommand("ALL", "reset_fault");
+  const emergencyStop = () => sendCommand("ALL", "emergency_stop", undefined, undefined, true);
 
   return {
     isProcessing,
@@ -152,5 +185,6 @@ export const useDeviceControl = (deviceId: string) => {
     forceOn,
     setPwm,
     resetFault,
+    emergencyStop,
   };
 };

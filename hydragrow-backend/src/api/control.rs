@@ -122,11 +122,11 @@ pub async fn control_pump(
         return HttpResponse::BadRequest().json(json!({"error": "Invalid pump name"}));
     }
 
-    let valid_actions = ["on", "off", "reset_fault", "set_pwm", "force_on"];
+    let valid_actions = ["on", "off", "reset_fault", "set_pwm", "force_on", "emergency_stop"];
     if !valid_actions.contains(&req_data.action.as_str()) {
         warn!("Từ chối lệnh: Hành động không hợp lệ ({})", req_data.action);
         return HttpResponse::BadRequest()
-            .json(json!({"error": "Action must be 'on', 'off', 'reset_fault', or 'set_pwm'"}));
+            .json(json!({"error": "Action must be 'on', 'off', 'reset_fault', 'set_pwm', 'force_on', or 'emergency_stop'"}));
     }
 
     let auth = http_req
@@ -214,6 +214,7 @@ pub async fn control_pump(
         "reset_fault" => "reset_fault",
         "set_pwm" => "set_pwm",
         "force_on" => "force_on",
+        "emergency_stop" => "emergency_stop",
         _ => "pump_off",
     };
 
@@ -390,7 +391,7 @@ async fn audit_control_command(
 }
 
 fn required_control_scope(action: &str, pwm: Option<u32>, pump: &str) -> &'static str {
-    if action == "reset_fault" || action == "force_on" {
+    if action == "reset_fault" || action == "force_on" || action == "emergency_stop" {
         return "control:emergency";
     }
 
@@ -405,6 +406,7 @@ fn is_dangerous_control(action: &str, pwm: Option<u32>, pump: &str) -> bool {
     action == "force_on"
         || action == "reset_fault"
         || action == "set_pwm"
+        || action == "emergency_stop"
         || pwm.is_some()
         || normalize_dosing_pump_name(pump).is_some()
 }
@@ -622,6 +624,7 @@ fn control_event_level(action: &str) -> &'static str {
     match action {
         "force_on" => "warning",
         "reset_fault" => "success",
+        "emergency_stop" => "critical",
         _ => "info",
     }
 }
@@ -671,6 +674,24 @@ mod tests {
             required_control_scope("reset_fault", None, "ALL"),
             "control:emergency"
         );
+    }
+
+    #[test]
+    fn emergency_stop_requires_control_emergency_scope() {
+        assert_eq!(
+            required_control_scope("emergency_stop", None, "ALL"),
+            "control:emergency"
+        );
+    }
+
+    #[test]
+    fn emergency_stop_is_dangerous() {
+        assert!(is_dangerous_control("emergency_stop", None, "ALL"));
+    }
+
+    #[test]
+    fn emergency_stop_event_level_is_critical() {
+        assert_eq!(control_event_level("emergency_stop"), "critical");
     }
 
     #[test]

@@ -460,6 +460,32 @@ pub fn process_mqtt_commands(
             break;
         }
 
+        if action_lower == "emergency_stop" {
+            warn!("🛑 [CMD] Nhận lệnh emergency_stop. Dừng toàn bộ thiết bị...");
+            stop_all_hardware(&mut step_events);
+            step_delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(
+                hydragrow_shared::fsm::FaultCode::EmergencyStop,
+            ));
+            let log_payload = UnifiedSystemLog::build_basic_log_json_with_ts(
+                &config.device_id,
+                LogLevel::Critical,
+                LogCategory::UserAction,
+                "Dừng khẩn cấp",
+                "Người dùng đã kích hoạt Dừng khẩn cấp từ ứng dụng.".to_string(),
+                None,
+                "fsm_command",
+                now_wall_time_ms,
+            );
+            step_events.push(OrchestratorEvent::PublishSystemLog {
+                payload_json: log_payload,
+            });
+
+            temp_state.apply_step_delta(&step_delta);
+            merge_delta(&mut accumulated_delta, step_delta);
+            all_events.append(&mut step_events);
+            continue;
+        }
+
         // Nếu đang ở chế độ AUTO thì bỏ qua lệnh điều khiển tay đơn lẻ
         if config.control_mode == ControlMode::Auto {
             warn!("⚠️ Bỏ qua lệnh thủ công vì hệ thống đang ở chế độ AUTO.");
@@ -822,6 +848,85 @@ mod tests {
         assert_eq!(
             delta.peripherals.as_ref().and_then(|p| p.pump_a),
             Some(true)
+        );
+    }
+
+    #[test]
+    fn emergency_stop_turns_off_all_hardware_and_sets_fault_phase() {
+        let (cmd_tx, cmd_rx) = channel();
+        let (mqtt_tx, _mqtt_rx) = channel();
+        let mut config = ControllerConfig::default();
+        config.control_mode = ControlMode::Manual;
+
+        let mut ctx = SystemContext::default();
+        ctx.phase = SystemPhase::Monitoring;
+
+        cmd_tx
+            .send(MqttCommandIn {
+                action: "emergency_stop".to_string(),
+                target: Some("all".to_string()),
+                params: None,
+                pump: None,
+                duration_sec: None,
+                pwm: None,
+            })
+            .unwrap();
+
+        let (delta, events) = process_mqtt_commands(&cmd_rx, &config, &ctx, 1000, 1000, &mqtt_tx);
+
+        assert!(matches!(
+            delta.phase,
+            Some(SystemPhase::Fault(FaultCode::EmergencyStop))
+        ));
+
+        let water_stopped = events.iter().any(|e| {
+            matches!(
+                e,
+                OrchestratorEvent::SetWaterPump {
+                    direction: WaterDirection::Stop
+                }
+            )
+        });
+        let ph_up_off = events.iter().any(|e| {
+            matches!(
+                e,
+                OrchestratorEvent::SetDosingPump {
+                    pump: DosingPumpTarget::PhUp,
+                    on: false,
+                    ..
+                }
+            )
+        });
+        assert!(water_stopped, "emergency_stop phải dừng bơm/van nước");
+        assert!(ph_up_off, "emergency_stop phải tắt bơm pH Up");
+    }
+
+    #[test]
+    fn emergency_stop_works_even_in_auto_mode() {
+        let (cmd_tx, cmd_rx) = channel();
+        let (mqtt_tx, _mqtt_rx) = channel();
+        let mut config = ControllerConfig::default();
+        config.control_mode = ControlMode::Auto;
+
+        let mut ctx = SystemContext::default();
+        ctx.phase = SystemPhase::Monitoring;
+
+        cmd_tx
+            .send(MqttCommandIn {
+                action: "emergency_stop".to_string(),
+                target: Some("all".to_string()),
+                params: None,
+                pump: None,
+                duration_sec: None,
+                pwm: None,
+            })
+            .unwrap();
+
+        let (delta, _events) = process_mqtt_commands(&cmd_rx, &config, &ctx, 1000, 1000, &mqtt_tx);
+
+        assert!(
+            matches!(delta.phase, Some(SystemPhase::Fault(FaultCode::EmergencyStop))),
+            "emergency_stop không được bị chặn bởi guard chế độ AUTO (giống reboot_device/factory_reset)"
         );
     }
 

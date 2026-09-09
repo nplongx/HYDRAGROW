@@ -5,6 +5,17 @@ import toast from 'react-hot-toast';
 import { useDeviceStore } from '../../store/useDeviceStore';
 import { useDeviceControl } from '../../hooks/useDeviceControl';
 import { Switch } from '../ui/Switch';
+import { StatusPill } from '../ui/StatusPill';
+
+// Hệ thống quy đổi PWM(%) -> ml/phút, tạm thời tuyến tính cho hiển thị nhanh trên card.
+// TODO(sau khi có dữ liệu hiệu chuẩn DosingCalibration thật): thay bằng giá trị đo thực tế theo từng bơm.
+const PWM_TO_ML_PER_MIN: Record<string, number> = {
+  PUMP_A: 0.12,
+  PUMP_B: 0.12,
+  PH_UP: 0.1,
+  PH_DOWN: 0.1,
+  OSAKA: 0.15,
+};
 
 interface AdvancedDeviceControlProps {
   deviceId: string | null;
@@ -17,6 +28,8 @@ interface AdvancedDeviceControlProps {
   isEmergency: boolean;
   isAutoMode: boolean;
   colorTheme: 'orange' | 'fuchsia' | 'water' | 'sky' | string;
+  lockedByPumpId?: string;
+  lockedByPumpLabel?: string;
 }
 
 export const AdvancedDeviceControl = ({
@@ -29,9 +42,11 @@ export const AdvancedDeviceControl = ({
   canSendCommands,
   isEmergency,
   isAutoMode,
-  colorTheme
+  colorTheme,
+  lockedByPumpId,
+  lockedByPumpLabel,
 }: AdvancedDeviceControlProps) => {
-  const { togglePump, setPwm, forceOn } = useDeviceControl(deviceId || '');
+  const { togglePump, setPwm, forceOn, commandStatus } = useDeviceControl(deviceId || '');
   const pwmPreferences = useDeviceStore((s) => s.pwmPreferences);
   const savePwmPreference = useDeviceStore((s) => s.savePwmPreference);
 
@@ -42,7 +57,7 @@ export const AdvancedDeviceControl = ({
   const [isToggling, setIsToggling] = useState(false);
   const pendingTargetRef = useRef<boolean | null>(null);
 
-  const isLocked = isAutoMode || (isEmergency && !currentStatus);
+  const isLocked = isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId);
 
   const themeClasses: Record<string, { activeIcon: string; glow: string; border: string }> = {
     orange: { activeIcon: 'bg-orange-600 text-white', glow: 'border-orange-200 bg-orange-50', border: 'border-orange-300' },
@@ -168,6 +183,7 @@ export const AdvancedDeviceControl = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <StatusPill commandStatus={commandStatus[pumpId]} />
             {isLocked && !currentStatus && <Lock size={12} className="text-emerald-700/60 mr-0.5" />}
             <Switch
               isOn={currentStatus}
@@ -177,6 +193,22 @@ export const AdvancedDeviceControl = ({
             />
           </div>
         </div>
+
+        {lockedByPumpId && (
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700/80 bg-emerald-50/80 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+            <Lock size={11} className="shrink-0" />
+            <span>Đã khoá vì {lockedByPumpLabel || 'thiết bị xung khắc'} đang chạy — tránh trung hoà lẫn nhau</span>
+          </div>
+        )}
+
+        {allowPwm && currentStatus && (
+          <div className="flex items-center justify-between text-[10px] font-semibold text-emerald-800 bg-emerald-50/60 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+            <span>Công suất</span>
+            <span className="font-mono">
+              {pwmValue}% ≈ {((pwmValue * (PWM_TO_ML_PER_MIN[pumpId.toUpperCase()] ?? 0.12))).toFixed(1)} ml/phút
+            </span>
+          </div>
+        )}
 
         {/* Cài đặt kỹ thuật & Hẹn giờ */}
         <div className="border-t border-emerald-100 pt-2.5">

@@ -1,0 +1,24 @@
+{
+  "requirement_id": "WATCHDOG-001",
+  "objective": "Implement standalone hydragrow-watchdog binary crate to poll backend topic freshness and raise staleness alerts.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Watchdog polls /api/health/topics and creates warning alert via POST /api/devices/{id}/events when controller/status topic is stale.",
+      "verification": "cargo test -p hydragrow-watchdog",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Watchdog checks recent alerts via /api/devices/{id}/events/recent-check before creating an alert to avoid duplicate alerts.",
+      "verification": "cargo test -p hydragrow-watchdog",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Watchdog ignores fsm/transition staleness entirely.",
+      "verification": "cargo test -p hydragrow-watchdog",
+      "evidence_required": true
+    }
+  ]
+}

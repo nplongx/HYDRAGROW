@@ -1,0 +1,26 @@
+{
+  "requirement_id": "WATCHDOG-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-watchdog backend_client::tests::create_alert_posts_expected_body",
+      "environment": "local sandbox",
+      "verified_at": "2026-09-09"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-watchdog tick::tests::run_tick_alerts_only_stale_and_not_recently_alerted_devices",
+      "environment": "local sandbox",
+      "verified_at": "2026-09-09"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-watchdog staleness::tests::ignores_fsm_transition_staleness_entirely",
+      "environment": "local sandbox",
+      "verified_at": "2026-09-09"
+    }
+  ]
+}

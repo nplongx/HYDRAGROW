@@ -762,25 +762,38 @@ export function NodeEditorPanel({
               />
             </FieldGroup>
 
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] text-emerald-800/70">Kênh thông báo</span>
-              <PillsSelector
-                options={[
-                  { value: "fcm", label: "FCM" },
-                  { value: "email", label: "Email" },
-                  { value: "webhook", label: "Webhook" },
-                ]}
-                selectedValues={(node.data.channels as string[]) || ["fcm"]}
-                onToggle={(val) => {
-                  const current = (node.data.channels as string[]) || ["fcm"];
-                  const next = current.includes(val)
-                    ? current.filter((c) => c !== val)
-                    : [...current, val];
-                  onChange(node.id, { ...node.data, channels: next });
+            <FieldGroup label="Gửi thông báo FCM">
+              <select
+                aria-label="Gửi thông báo FCM"
+                className="ui-input w-full text-xs"
+                value={
+                  (alertAct?.notifyFcm ?? (node.data?.notifyFcm as boolean | undefined)) === true
+                    ? "always"
+                    : (alertAct?.notifyFcm ?? (node.data?.notifyFcm as boolean | undefined)) === false
+                    ? "never"
+                    : "auto"
+                }
+                onChange={(e) => {
+                  const notifyFcm =
+                    e.target.value === "always" ? true : e.target.value === "never" ? false : undefined;
+                  setAction({
+                    type: "alert",
+                    level,
+                    title,
+                    message,
+                    ...(notifyFcm !== undefined ? { notifyFcm } : {}),
+                  });
                 }}
-                tone="emerald"
-              />
-            </div>
+              >
+                <option value="auto">Tự động theo mức độ (Warning/Critical mới gửi)</option>
+                <option value="always">Luôn gửi</option>
+                <option value="never">Không bao giờ gửi</option>
+              </select>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Đây là kênh thông báo duy nhất đang hoạt động thật. Email/Webhook ra ngoài chưa được xây
+                — chọn ở đây không có nghĩa là sẽ gửi qua các kênh đó.
+              </p>
+            </FieldGroup>
 
             <FieldGroup label="Nội dung thông báo">
               <textarea

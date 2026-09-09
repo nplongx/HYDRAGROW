@@ -653,6 +653,58 @@ pub fn eval_alert_scripts_chained(
         .collect()
 }
 
+/// Xử lý 1 AlertOutput sau khi 1 Flow fire: ghi system_event, phát lên
+/// event_bus, và gửi FCM nếu cần (ưu tiên notify_fcm tường minh trên Action,
+/// mặc định theo level nếu Action không ghi đè). Dùng CHUNG bởi đường
+/// sensor-tick (sensors.rs) và đường cron (cron_scheduler.rs) — trước bản sửa
+/// này, cron không gọi hàm tương đương nào cả nên Alert từ Flow cron không
+/// hề tạo system_event hay gửi FCM.
+pub async fn handle_fired_alert(
+    app_state: &crate::AppState,
+    alert: AlertOutput,
+    device_id: &str,
+    timestamp_ms: i64,
+) {
+    let notify_fcm_override = alert.notify_fcm;
+    let alert_msg = alert_output_to_system_alert(alert, device_id, timestamp_ms);
+
+    let db_record = crate::db::postgres::NewSystemEventRecord {
+        device_id: device_id.to_string(),
+        level: alert_msg.level.clone(),
+        category: alert_msg.category.clone(),
+        title: alert_msg.title.clone(),
+        message: alert_msg.message.clone(),
+        reason: alert_msg.reason.clone(),
+        metadata: alert_msg.metadata.clone(),
+        timestamp: alert_msg.timestamp as i64,
+        source: "rule".to_string(),
+        primary_reason_code: None,
+    };
+    if let Err(e) = crate::db::postgres::insert_system_event(&app_state.pg_pool, &db_record).await {
+        tracing::error!(error = ?e, device_id = %device_id, "Lỗi persist script alert vào DB");
+    }
+    let _ = app_state
+        .event_bus
+        .send(hydragrow_shared::events::AppEvent::SystemAlert(alert_msg.clone()));
+
+    let level_lower = alert_msg.level.to_lowercase();
+    let should_send_fcm =
+        notify_fcm_override.unwrap_or(level_lower == "warning" || level_lower == "critical");
+    if should_send_fcm {
+        let tokens = match app_state.fcm_tokens.lock() {
+            Ok(guard) => guard.get(device_id).cloned().unwrap_or_default(),
+            Err(poisoned) => poisoned.into_inner().get(device_id).cloned().unwrap_or_default(),
+        };
+        if !tokens.is_empty() {
+            let title = alert_msg.title.clone();
+            let message = alert_msg.message.clone();
+            tokio::spawn(async move {
+                crate::services::fcm::send_push_notification(&title, &message, tokens).await;
+            });
+        }
+    }
+}
+
 /// Convert AlertOutput thành AlertMessage để gửi vào event bus.
 pub fn alert_output_to_system_alert(
     alert: AlertOutput,

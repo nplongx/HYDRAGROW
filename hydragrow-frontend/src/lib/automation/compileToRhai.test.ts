@@ -198,6 +198,38 @@ describe("compileToRhai", () => {
     });
   });
 
+  it('emits notify_fcm into the compiled alert map when the action sets it', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [],
+      actions: [{ type: 'alert', level: 'info', message: 'x', notifyFcm: true }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
+    };
+    const source = compileToRhai(ir);
+    expect(source).toContain('"notify_fcm": true');
+  });
+
+  it('omits notify_fcm entirely when the action leaves it unset (backend falls back to level)', () => {
+    const ir: AutomationIr = {
+      kind: 'alert',
+      trigger: { type: 'sensor' },
+      conditions: [],
+      actions: [{ type: 'alert', level: 'info', message: 'x' }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+      chainConfig: { passContextVariables: false, iterationLimit: 5 },
+      contextReads: [],
+    };
+    const source = compileToRhai(ir);
+    expect(source).not.toContain('notify_fcm');
+  });
+
   it('escapes double quotes in user-supplied strings', () => {
     const ir: AutomationIr = {
       kind: "alert",

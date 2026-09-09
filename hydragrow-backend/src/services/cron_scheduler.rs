@@ -96,52 +96,62 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
             );
 
             for (_id, res) in results {
-                #[allow(clippy::collapsible_if)]
-                if let crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) = res
-                {
-                    if let Ok(cfg) = crate::db::postgres::get_safety_config(
-                        &app_state.pg_pool,
-                        &script.device_id,
-                    )
-                    .await
-                    {
-                        let limits = hydragrow_shared::safety::DoseSafetyLimits {
-                            max_dose_per_cycle_ml: cfg.max_dose_per_cycle,
-                            max_dose_per_hour_ml: cfg.max_dose_per_hour,
-                            cooldown_sec: cfg.cooldown_sec as u64,
-                        };
-                        let calibration = crate::db::postgres::fetch_dosing_calibration(
-                            &app_state.pg_pool,
-                            &script.device_id,
-                        )
-                        .await
-                        .unwrap_or(None);
-                        let hourly = crate::db::postgres::get_dosing_history_last_hour(
-                            &app_state.pg_pool,
-                            &script.device_id,
-                        )
-                        .await
-                        .unwrap_or_default();
-                        let last_dose = crate::db::postgres::get_last_dose_at(
-                            &app_state.pg_pool,
-                            &script.device_id,
-                        )
-                        .await
-                        .unwrap_or(None);
-                        let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
-
-                        let _ = crate::services::action_dispatch::dispatch_action_command(
+                match res {
+                    crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
+                        crate::mqtt::handlers::script_eval::handle_fired_alert(
                             app_state,
+                            alert,
                             &script.device_id,
-                            cmd,
-                            &limits,
-                            &hourly,
-                            now_sec,
-                            last_dose,
-                            calibration.as_ref(),
+                            chrono::Utc::now().timestamp_millis(),
                         )
                         .await;
                     }
+                    crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) => {
+                        if let Ok(cfg) = crate::db::postgres::get_safety_config(
+                            &app_state.pg_pool,
+                            &script.device_id,
+                        )
+                        .await
+                        {
+                            let limits = hydragrow_shared::safety::DoseSafetyLimits {
+                                max_dose_per_cycle_ml: cfg.max_dose_per_cycle,
+                                max_dose_per_hour_ml: cfg.max_dose_per_hour,
+                                cooldown_sec: cfg.cooldown_sec as u64,
+                            };
+                            let calibration = crate::db::postgres::fetch_dosing_calibration(
+                                &app_state.pg_pool,
+                                &script.device_id,
+                            )
+                            .await
+                            .unwrap_or(None);
+                            let hourly = crate::db::postgres::get_dosing_history_last_hour(
+                                &app_state.pg_pool,
+                                &script.device_id,
+                            )
+                            .await
+                            .unwrap_or_default();
+                            let last_dose = crate::db::postgres::get_last_dose_at(
+                                &app_state.pg_pool,
+                                &script.device_id,
+                            )
+                            .await
+                            .unwrap_or(None);
+                            let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
+
+                            let _ = crate::services::action_dispatch::dispatch_action_command(
+                                app_state,
+                                &script.device_id,
+                                cmd,
+                                &limits,
+                                &hourly,
+                                now_sec,
+                                last_dose,
+                                calibration.as_ref(),
+                            )
+                            .await;
+                        }
+                    }
+                    crate::mqtt::handlers::script_eval::ChainFireResult::RecipeOverride(_) => {}
                 }
             }
         }

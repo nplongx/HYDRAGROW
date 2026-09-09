@@ -168,6 +168,26 @@ describe('NodeEditorPanel', () => {
     );
     expect(screen.getByText('ACTION · ALERT')).toBeInTheDocument();
   });
+
+  it('Alert action has a real FCM override control, not fake Email/Webhook channel pills', () => {
+    const mockOnChange = vi.fn();
+    render(
+      <NodeEditorPanel
+        kind="alert"
+        node={{ id: 'a1', type: 'action', data: { actions: [{ type: 'alert', level: 'warning', message: 'x' }] } }}
+        onChange={mockOnChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+    expect(screen.queryByText('Webhook')).not.toBeInTheDocument();
+    const select = screen.getByLabelText('Gửi thông báo FCM') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'always' } });
+    expect(mockOnChange).toHaveBeenCalledWith('a1', expect.objectContaining({
+      actions: [{ type: 'alert', level: 'warning', title: '', message: 'x', notifyFcm: true }],
+    }));
+  });
 });
 
 describe('NodeEditorPanel — Config nodes', () => {

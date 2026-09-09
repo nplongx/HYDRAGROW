@@ -73,19 +73,6 @@ export function NodePalette({ onAddNode, onUpdateTrigger }: Props) {
           </button>
         </div>
 
-        {/* 3. DELAY */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-800 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">
-            DELAY
-          </span>
-          <button
-            type="button"
-            onClick={() => onAddNode("action", "delay")}
-            className="palette-btn bg-orange-50/70 text-orange-800 border-orange-200 hover:bg-orange-100"
-          >
-            + Delay
-          </button>
-        </div>
 
         {/* 4. CONFIG */}
         <div className="flex items-center gap-1.5 flex-wrap">

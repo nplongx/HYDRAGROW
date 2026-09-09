@@ -1,0 +1,53 @@
+{
+  "requirement_id": "AI-SUPERVISOR-BACKEND-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml test_service_api_keys",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-09T03:30:00Z",
+      "notes": "Verified service_api_keys table migration and AuthContext middleware resolution."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-shared/Cargo.toml supervisor",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-09T03:30:00Z",
+      "notes": "Verified SupervisorReasonCode enum variants and serialization."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml insert_ai_supervisor_event_with_reason_code",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-09T03:30:00Z",
+      "notes": "Verified source and primary_reason_code persistence in system_events."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml find_recent_alert",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-09T03:30:00Z",
+      "notes": "Verified find_recent_alert cooldown windows and source isolation."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml create_event_request",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-09T03:30:00Z",
+      "notes": "Verified create_event and check_recent_alert endpoint handlers and validation."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml test_topic_last_seen health_topics",
+      "environment": "Local Cargo Test",
+      "verified_at": "2026-09-09T03:30:00Z",
+      "notes": "Verified device_topic_last_seen upserts and GET /health/topics endpoints."
+    }
+  ]
+}

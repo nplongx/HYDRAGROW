@@ -1,0 +1,36 @@
+{
+  "requirement_id": "AI-SUPERVISOR-BACKEND-001",
+  "objective": "AI Supervisor Backend Foundations — Add scoped service API keys, SupervisorReasonCode enum, source/primary_reason_code in system_events, alert dedup lookup & write endpoints, and per-topic liveness tracking.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "service_api_keys table and auth middleware allow scoped machine credentials.",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml test_service_api_keys"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "SupervisorReasonCode enum provides bounded reason codes for AI supervisor.",
+      "verification": "cargo test --manifest-path hydragrow-shared/Cargo.toml supervisor"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "system_events schema includes source and primary_reason_code columns with constraints.",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml insert_ai_supervisor_event_with_reason_code"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "find_recent_alert dedup lookup correctly checks cooldown and source isolation.",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml find_recent_alert"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "POST /api/devices/{id}/events and recent-check endpoints perform scope validation and dedup.",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml create_event_request"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Per-topic last-seen tracking and GET /health/topics endpoints function accurately.",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml test_topic_last_seen health_topics"
+    }
+  ]
+}

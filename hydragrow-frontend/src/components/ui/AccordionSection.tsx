@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronDown, LucideIcon } from 'lucide-react';
 
 interface AccordionSectionProps {
@@ -25,17 +25,21 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   badge,
   hidden = false,
 }) => {
-  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const isControlled = controlledIsOpen !== undefined;
-  const open = isControlled ? controlledIsOpen : internalOpen;
+  const [internalOpen, setInternalOpen] = useState(defaultOpen || controlledIsOpen === true);
+
+  // Settings uses controlledIsOpen for active tab selection, not accordion state.
+  // Sync the local accordion state when the active tab changes.
+  useEffect(() => {
+    if (isControlled) setInternalOpen(controlledIsOpen);
+  }, [controlledIsOpen, isControlled]);
+
+  const open = internalOpen;
 
   const handleToggle = () => {
-    if (onToggle) {
-      onToggle();
-    }
-    if (!isControlled) {
-      setInternalOpen(!internalOpen);
-    }
+    setInternalOpen((current) => !current);
+    // Controlled Settings accordions must not change the active tab.
+    if (!isControlled) onToggle?.();
   };
 
   return (

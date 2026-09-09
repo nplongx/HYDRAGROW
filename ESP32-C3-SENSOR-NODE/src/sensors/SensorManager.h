@@ -43,6 +43,10 @@ public:
     void enablePh(bool enabled);
     void enableTds(bool enabled);
 
+    // Apply the current application calibration to the pH sensor.
+    // Values are expected in mV, matching PhSensorConfig.
+    void applyPhCalibration(float v686, float v4, float v918, const String& calibrationMode = "2-point");
+
 private:
     TempSensor tempSensor_;
     WaterLevelSensor waterLevelSensor_;

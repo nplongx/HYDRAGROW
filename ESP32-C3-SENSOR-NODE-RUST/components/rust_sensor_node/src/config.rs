@@ -3,9 +3,9 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorConfig {
-    pub ph_v686: f32, // pH 7 calibration voltage in volts, e.g. 2.50V
-    pub ph_v4: f32,   // pH 4 calibration voltage in volts, e.g. 3.04V
-    pub ph_v918: f32, // pH 10 calibration voltage in volts, e.g. 1.75V
+    pub ph_v686: f32, // pH 7 calibration voltage (V)
+    pub ph_v4: f32,   // pH 4 calibration voltage (V)
+    pub ph_v918: f32, // pH 10 calibration voltage (V)
     pub tds_factor: f32, // ec_factor
     pub ec_offset: f32,
     pub temp_offset: f32,
@@ -54,7 +54,7 @@ impl Default for AppConfig {
 impl AppConfig {
     /// Áp config từ JSON document gửi từ backend.
     /// Chỉ update field có trong JSON (merge partial).
-    /// pH calibration values use volts at the API/DB boundary.
+    /// pH calibration values are stored in volts at the API/DB boundary.
     pub fn apply_from_json(&mut self, doc: &Value) {
         if let Some(v) = doc["ph_v7"].as_f64() {
             self.sensor.ph_v686 = v as f32;

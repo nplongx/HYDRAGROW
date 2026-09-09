@@ -8,9 +8,9 @@ pub enum CalibrationMode {
 
 #[derive(Debug, Clone)]
 pub struct PhSensorConfig {
-    pub v686: f32, // Điện áp tại pH 6.86 (mV)
+    pub v686: f32, // Điện áp tại pH 7.00 (mV); field name kept for config compatibility
     pub v4: f32,   // Điện áp tại pH 4.00 (mV)
-    pub v918: f32, // Điện áp tại pH 9.18 (mV)
+    pub v918: f32, // Điện áp tại pH 10.00 (mV); field name kept for config compatibility
     pub calibration_mode: CalibrationMode,
     pub enable_temp_comp: bool,
     pub nominal_vcc_mv: f32, // VCC chuẩn (mV)
@@ -98,6 +98,10 @@ impl PhSensor {
     }
 
     fn calculate_ph(&self, voltage_mv: f32, temperature: f32) -> f32 {
+        const PH7: f32 = 7.0;
+        const PH4: f32 = 4.0;
+        const PH10: f32 = 10.0;
+
         let (mut slope, base_ph, base_v) = match self.config.calibration_mode {
             CalibrationMode::ThreePoint => {
                 if voltage_mv > self.config.v686 {
@@ -105,17 +109,17 @@ impl PhSensor {
                     let s = if diff.abs() < 0.1 {
                         -0.006
                     } else {
-                        (4.0 - 6.86) / diff
+                        (PH4 - PH7) / diff
                     };
-                    (s, 6.86_f32, self.config.v686)
+                    (s, PH7, self.config.v686)
                 } else {
                     let diff = self.config.v686 - self.config.v918;
                     let s = if diff.abs() < 0.1 {
                         -0.006
                     } else {
-                        (6.86 - 9.18) / diff
+                        (PH7 - PH10) / diff
                     };
-                    (s, 9.18_f32, self.config.v918)
+                    (s, PH10, self.config.v918)
                 }
             }
             CalibrationMode::TwoPoint => {
@@ -123,9 +127,9 @@ impl PhSensor {
                 let s = if diff.abs() < 0.1 {
                     -0.006
                 } else {
-                    (4.0 - 6.86) / diff
+                    (PH4 - PH7) / diff
                 };
-                (s, 6.86_f32, self.config.v686)
+                (s, PH7, self.config.v686)
             }
         };
 

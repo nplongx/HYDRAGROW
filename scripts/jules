@@ -18,7 +18,7 @@
 set -euo pipefail
 
 REPO="nplongx/HYDRAGROW"
-JULES_LABEL="jules"          # Label Jules theo dõi để nhận task
+JULES_LABEL="juleson-dispatch" # Explicit label owned by repo Juleson automation
 REVIEW_LABEL="review"
 AUDIT_LABEL="audit"
 BUG_LABEL="bug"
@@ -90,7 +90,6 @@ cmd_review() {
   validate_subsystem "$subsystem"
   require_gh
 
-  # Lấy context diff
   local diff_context=""
   if [[ -n "$diff_file" && -f "$diff_file" ]]; then
     diff_context="$(cat "$diff_file")"
@@ -195,7 +194,6 @@ cmd_issue() {
   local type="${1:-}"; shift || true
   local title="" subsystem="" body_file="" extra_body="" assignee=""
 
-  # Validate type
   local valid_type=0
   for t in "${ISSUE_TYPES[@]}"; do [[ "$type" == "$t" ]] && valid_type=1 && break; done
   [[ $valid_type -eq 0 ]] && die "issue type không hợp lệ: '$type'. Chọn: ${ISSUE_TYPES[*]}"
@@ -378,48 +376,38 @@ ${hint:+**Gợi ý vị trí:**  $hint}
 
 **Phase 3 — Fix & Verify**
 - [ ] Implement minimal fix
-- [ ] Tất cả test pass: \`$(_test_cmd "$subsystem")\`
-- [ ] Không weakening assertions, không disable test
-- [ ] Commit: \`fix(<subsystem>): <desc>\`
+- [ ] Tất cả test pass: \`$(_test_commands "$subsystem")\`
+- [ ] Rebase main trước PR
 
-### Abort condition
-
-Nếu sau 4 lần thử test vẫn FAIL → output \`<status>ABORT_UNRESOLVABLE</status>\` và dừng.
-
-### Verification output yêu cầu (paste vào PR)
-
-\`\`\`
-# Verification
-$(_verify_cmd "$subsystem")
-
-exit code: 0 ✓
-\`\`\`
+### Acceptance criteria
+- [ ] Root cause xác định bằng evidence
+- [ ] Regression test fail trước fix, pass sau fix
+- [ ] Verification commands exit 0
+- [ ] PR body theo \`.github/pull_request_template.md\`
 
 ---
-*Dispatched bởi \`scripts/jules hotfix\` | $(date -u +"%Y-%m-%dT%H:%M:%SZ")*
+*Dispatched bởi \`scripts/jules hotfix\` | Branch: \`$branch\` | $(date -u +"%Y-%m-%dT%H:%M:%SZ")*
 BODY
 )
 
-  create_issue "$title" "$body" "${JULES_LABEL},${HOTFIX_LABEL},${BUG_LABEL}"
+  create_issue "$title" "$body" "${JULES_LABEL},${HOTFIX_LABEL}"
 }
 
-# ─── COMMAND: task ────────────────────────────────────────────────────────────
+# ─── COMMAND: task ───────────────────────────────────────────────────────────
 cmd_task() {
   local task_file="${1:-}"
-  [[ -z "$task_file" || ! -f "$task_file" ]] && die "task: cần đường dẫn file task hợp lệ. VD: .agent/tasks/my-task.md"
+  [[ -z "$task_file" ]] && die "task: cần task-file.md"
+  [[ ! -f "$task_file" ]] && die "Không tìm thấy: $task_file"
   require_gh
-
+  info "Đọc task envelope: $task_file"
   local title
-  title=$(grep -m1 '^# ' "$task_file" | sed 's/^# //' || echo "Jules Task — $(basename "$task_file")")
-  local body; body=$(cat "$task_file")
-
-  info "Dispatch task từ: $task_file"
-  create_issue "$title" "$body" "$JULES_LABEL"
+  title="[Jules Task] $(basename "$task_file" .md)"
+  create_issue "$title" "$(cat "$task_file")" "$JULES_LABEL"
 }
 
 # ─── COMMAND: status ─────────────────────────────────────────────────────────
 cmd_status() {
-  local limit=10
+  local limit=20
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --limit|-n) limit="$2"; shift 2 ;;
@@ -427,237 +415,117 @@ cmd_status() {
     esac
   done
   require_gh
-
   hr
-  info "Jules issues đang mở (label: $JULES_LABEL)"
+  info "Issues đang chờ Jules (limit=$limit)"
+  gh issue list --repo "$REPO" --label "$JULES_LABEL" --state open --limit "$limit"
   hr
-  gh issue list \
-    --repo "$REPO" \
-    --label "$JULES_LABEL" \
-    --state open \
-    --limit "$limit" \
-    --json number,title,labels,assignees,createdAt \
-    --template '{{range .}}#{{.number}} {{.title}}{{"\n"}}  Labels: {{range .labels}}{{.name}} {{end}}{{"\n"}}  Created: {{.createdAt}}{{"\n\n"}}{{end}}'
+  info "PRs đang mở"
+  gh pr list --repo "$REPO" --state open --limit "$limit"
 }
 
-# ─── default templates ────────────────────────────────────────────────────────
+# ─── DEFAULT TEMPLATES ──────────────────────────────────────────────────────
 _default_bug_template() {
-  local s="${1:-}"
-  cat <<T
-## 🐛 Bug Report — Jules Fix Task
+  local subsystem="${1:-unknown}"
+  cat <<BODY
+## 🐛 Jules Bug Fix Task
 
-**Subsystem:** \`${s:-?}\`
+**Subsystem:** \`$subsystem\`
 
-### Steps to reproduce
-<!-- Mô tả bước tái hiện lỗi -->
+### 3-phase protocol
+1. Discovery — trace root cause, no code yet
+2. Oracle/Test — write failing regression test
+3. Fix — minimal implementation + full verification
 
-### Expected
-<!-- Hành vi mong muốn -->
-
-### Actual
-<!-- Hành vi thực tế + log/stacktrace -->
-
-### Jules task
-1. Reproduce bằng failing test (Phase 2 của 3-phase protocol)
-2. Fix minimal, không weakening assertions
-3. Verify: \`$(_test_cmd "$s")\`
-4. PR với title: \`fix(${s:-subsystem}): <mô tả>\`
-
----
-*Created via \`scripts/jules issue bug\`*
-T
+### Acceptance
+- Regression test proves bug before fix
+- All subsystem verification commands pass
+- No restricted files modified
+BODY
 }
 
 _default_feature_template() {
-  local s="${1:-}"
-  cat <<T
-## ✨ Feature Request — Jules Implementation Task
+  local subsystem="${1:-unknown}"
+  cat <<BODY
+## ✨ Jules Feature Task
 
-**Subsystem:** \`${s:-?}\`
+**Subsystem:** \`$subsystem\`
 
-### Mục tiêu
-<!-- Mô tả tính năng cần thêm -->
+### Protocol
+1. Discovery — understand existing architecture
+2. Test — define acceptance with tests
+3. Implement — minimal change
 
-### Acceptance criteria (binary scoreable)
-- [ ] ...
-- [ ] ...
-
-### Jules task — 3-phase protocol
-**Phase 1 — Discovery:** Đọc module-rule của \`$s\`, trace symbol liên quan
-**Phase 2 — Test:** Viết test cho acceptance criteria trước khi code
-**Phase 3 — Implement:** Minimal implementation, verify pass, open PR
-
-### Constraints
-- Tuân thủ \`docs/superpowers/specs/module-rules/${s:-README}.md\`
-- Shared type mới → thêm vào \`hydragrow-shared\` trước
-- PR title: \`feat(${s:-subsystem}): <mô tả>\`
-
----
-*Created via \`scripts/jules issue feature\`*
-T
+### Acceptance
+- Feature works as specified
+- Tests pass
+- Documentation updated if required
+BODY
 }
 
 _default_review_template() {
-  local s="${1:-}"
-  cat <<T
-## 👁 Code Review Task — Jules
+  local subsystem="${1:-unknown}"
+  cat <<BODY
+## 🔍 Jules Review Task
 
-**Subsystem:** \`${s:-toàn bộ}\`
+**Subsystem:** \`$subsystem\`
 
-Jules review code và tạo findings dưới dạng comment + sub-issues.
-
-### Scope
-- [ ] Module-rules compliance (\`docs/superpowers/specs/module-rules/\`)
-- [ ] Clippy + fmt + test
-- [ ] Security checklist
-- [ ] Test quality
-
----
-*Created via \`scripts/jules issue review\`*
-T
+Review code for correctness, security, tests, and module-rules compliance.
+Create finding issues for Critical/High problems.
+BODY
 }
 
 _default_audit_template() {
-  local s="${1:-}"
-  cat <<T
-## 🔍 Audit Task — Jules
+  local subsystem="${1:-unknown}"
+  cat <<BODY
+## 🔎 Jules Audit Task
 
-**Subsystem:** \`${s:-toàn bộ workspace}\`
+**Subsystem:** \`$subsystem\`
 
-Jules thực hiện audit toàn bộ và tạo issues cho vi phạm.
-
-$(_default_audit_commands "$s")
-
----
-*Created via \`scripts/jules issue audit\`*
-T
+Audit architecture, dependencies, security, tests, and module boundaries.
+BODY
 }
 
 _default_hotfix_template() {
-  local s="${1:-}"
-  cat <<T
-## 🚨 Hotfix Task — Jules
+  local subsystem="${1:-unknown}"
+  cat <<BODY
+## 🚨 Jules Hotfix Task
 
-**Subsystem:** \`${s:-?}\`
+**Subsystem:** \`$subsystem\`
 
-### 3-phase: Discovery → Test → Fix
-
-Xem AGENTS.md §4 cho full protocol.
-
----
-*Created via \`scripts/jules issue hotfix\`*
-T
+Discovery → failing regression test → minimal fix → full verification.
+BODY
 }
 
-_default_techdebt_template() {
-  local s="${1:-}"
-  cat <<T
-## 🧹 Tech Debt — Jules
-
-**Subsystem:** \`${s:-?}\`
-
-### Mô tả debt
-<!-- Vấn đề cần refactor/cleanup -->
-
-### Acceptance criteria
-- [ ] Code sạch hơn nhưng behavior không đổi
-- [ ] Test coverage không giảm
-- [ ] Clippy clean
-
----
-*Created via \`scripts/jules issue tech-debt\`*
-T
+_test_commands() {
+  case "${1:-}" in
+    backend) echo "cargo test --manifest-path hydragrow-backend/Cargo.toml" ;;
+    shared) echo "cargo test --manifest-path hydragrow-shared/Cargo.toml" ;;
+    frontend) echo "cd hydragrow-frontend && npx vitest run" ;;
+    controller-core) echo "cargo test --manifest-path hydragrow-controller-core/Cargo.toml" ;;
+    simulator) echo "cargo test --manifest-path hydragrow-simulator/Cargo.toml" ;;
+    *) echo "bash scripts/test.sh" ;;
+  esac
 }
 
-_default_audit_commands() {
-  local s="${1:-}"
-  case "$s" in
-    backend)   echo "cd hydragrow-backend && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test" ;;
-    shared)    echo "cd hydragrow-shared && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test" ;;
-    frontend)  echo "cd hydragrow-frontend && npx tsc --noEmit && npx eslint . && npx vitest run" ;;
-    controller-core) echo "cd hydragrow-controller-core && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test" ;;
-    simulator) echo "cd hydragrow-simulator && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test" ;;
+_audit_commands() {
+  case "${1:-}" in
+    backend) echo "cargo build --manifest-path hydragrow-backend/Cargo.toml && cargo test --manifest-path hydragrow-backend/Cargo.toml && cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings" ;;
+    frontend) echo "cd hydragrow-frontend && npm run build && npx vitest run && npx eslint . && npx tsc --noEmit" ;;
     *) echo "bash scripts/verify.sh" ;;
   esac
 }
 
-_audit_commands() { _default_audit_commands "$@"; }
-
-_test_cmd() {
-  local s="${1:-}"
-  case "$s" in
-    backend)        echo "cargo test --manifest-path hydragrow-backend/Cargo.toml" ;;
-    shared)         echo "cargo test --manifest-path hydragrow-shared/Cargo.toml" ;;
-    frontend)       echo "cd hydragrow-frontend && npx vitest run" ;;
-    controller-core) echo "cargo test --manifest-path hydragrow-controller-core/Cargo.toml" ;;
-    simulator)      echo "cargo test --manifest-path hydragrow-simulator/Cargo.toml" ;;
-    *)              echo "bash scripts/test.sh" ;;
-  esac
-}
-
-_verify_cmd() {
-  local s="${1:-}"
-  case "$s" in
-    frontend) echo "cd hydragrow-frontend && npx tsc --noEmit && npx vitest run" ;;
-    *)        echo "bash scripts/verify.sh" ;;
-  esac
-}
-
-# ─── help ─────────────────────────────────────────────────────────────────────
-usage() {
-  cat <<EOF
-${BOLD}HYDRAGROW Jules CLI${RESET}
-
-${BOLD}USAGE${RESET}
-  ./scripts/jules <command> [options]
-
-${BOLD}COMMANDS${RESET}
-  ${CYAN}review${RESET}   [--subsystem <name>] [--pr <n>] [--diff <file>]
-             Tạo issue review task cho Jules
-
-  ${CYAN}issue${RESET}    <type> [--title "..."] [--subsystem <name>] [--body-file <f>]
-             type: ${ISSUE_TYPES[*]}
-
-  ${CYAN}audit${RESET}    [--subsystem <name>]
-             Full audit task — Jules quét và tạo sub-issues
-
-  ${CYAN}hotfix${RESET}   [--subsystem <name>] [--hint "..."]
-             Hotfix task với 3-phase protocol
-
-  ${CYAN}task${RESET}     <file.md>
-             Dispatch task từ markdown template
-
-  ${CYAN}status${RESET}   [--limit <n>]
-             Liệt kê Jules issues đang mở
-
-${BOLD}SUBSYSTEMS${RESET}
-  ${SUBSYSTEMS[*]}
-
-${BOLD}EXAMPLES${RESET}
-  ./scripts/jules review --pr 42
-  ./scripts/jules review --subsystem backend
-  ./scripts/jules issue bug --title "pH sensor reads 0 after reboot" --subsystem firmware-sensor
-  ./scripts/jules issue feature --title "Add WebSocket reconnect backoff" --subsystem frontend
-  ./scripts/jules audit --subsystem backend
-  ./scripts/jules hotfix --subsystem controller-core --hint "dosing actor FSM"
-  ./scripts/jules task .agent/tasks/my-task.md
-  ./scripts/jules status --limit 20
-EOF
-}
-
-# ─── entrypoint ───────────────────────────────────────────────────────────────
-main() {
-  local cmd="${1:-help}"; shift || true
-  case "$cmd" in
-    review) cmd_review  "$@" ;;
-    issue)  cmd_issue   "$@" ;;
-    audit)  cmd_audit   "$@" ;;
-    hotfix) cmd_hotfix  "$@" ;;
-    task)   cmd_task    "$@" ;;
-    status) cmd_status  "$@" ;;
-    help|--help|-h) usage ;;
-    *) usage; die "Lệnh không biết: $cmd" ;;
-  esac
-}
-
-main "$@"
+# ─── main ────────────────────────────────────────────────────────────────────
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  review)  cmd_review "$@" ;;
+  issue)   cmd_issue "$@" ;;
+  audit)   cmd_audit "$@" ;;
+  hotfix)  cmd_hotfix "$@" ;;
+  task)   cmd_task "$@" ;;
+  status) cmd_status "$@" ;;
+  help|-h|--help)
+    sed -n '2,18p' "$0"
+    ;;
+  *) die "Unknown command: $cmd. Dùng: review|issue|audit|hotfix|task|status" ;;
+esac

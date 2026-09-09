@@ -6,9 +6,9 @@ pub mod influx;
 pub mod postgres;
 pub mod recipes;
 pub mod service_api_keys;
-pub mod topic_last_seen;
 #[cfg(test)]
 pub mod tests;
+pub mod topic_last_seen;
 pub mod users;
 
 #[derive(Error, Debug)]

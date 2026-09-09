@@ -1,6 +1,6 @@
 pub mod action_dispatch;
-pub mod cloudinary;
 pub mod analytics;
+pub mod cloudinary;
 pub mod command;
 pub mod config_context;
 pub mod config_override;

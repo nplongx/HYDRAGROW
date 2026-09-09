@@ -45,12 +45,14 @@ pub async fn apply_template(
 
         if let Some((existing_id, _stale_overrides)) = existing {
             let merged = merge_template_with_override(&template_ir, &target.overrides);
-            sqlx::query("UPDATE user_scripts SET ir_json = $1, template_overrides = $2 WHERE id = $3")
-                .bind(&merged)
-                .bind(&target.overrides)
-                .bind(existing_id)
-                .execute(pool)
-                .await?;
+            sqlx::query(
+                "UPDATE user_scripts SET ir_json = $1, template_overrides = $2 WHERE id = $3",
+            )
+            .bind(&merged)
+            .bind(&target.overrides)
+            .bind(existing_id)
+            .execute(pool)
+            .await?;
             applied_ids.push(existing_id);
         } else {
             let merged = merge_template_with_override(&template_ir, &target.overrides);
@@ -150,22 +152,37 @@ mod tests {
         .bind(&source.source).bind(source.ir_json.clone().unwrap()).bind(source.template_source_id).bind(serde_json::json!({}))
         .execute(&pool).await.unwrap();
         // First apply with empty overrides → linked script keeps configOverwrite.
-        let first_ids = apply_template(&pool, &source, vec![TemplateTarget {
-            device_id: "dev-target".to_string(),
-            overrides: json!({}),
-        }]).await.unwrap();
+        let first_ids = apply_template(
+            &pool,
+            &source,
+            vec![TemplateTarget {
+                device_id: "dev-target".to_string(),
+                overrides: json!({}),
+            }],
+        )
+        .await
+        .unwrap();
         let row1: (serde_json::Value,) = sqlx::query_as(
             "SELECT ir_json FROM user_scripts WHERE device_id = 'dev-target' AND template_source_id = $1",
         )
         .bind(source.id)
         .fetch_one(&pool).await.unwrap();
-        assert_eq!(row1.0["configOverwrite"], json!({"configKey":"ec_target","value":"2.4"}));
+        assert_eq!(
+            row1.0["configOverwrite"],
+            json!({"configKey":"ec_target","value":"2.4"})
+        );
         // Second apply with the null tombstone → same script id, configOverwrite
         // REMOVED, other template keys (conditions) still synced.
-        let second_ids = apply_template(&pool, &source, vec![TemplateTarget {
-            device_id: "dev-target".to_string(),
-            overrides: json!({"configOverwrite": null}),
-        }]).await.unwrap();
+        let second_ids = apply_template(
+            &pool,
+            &source,
+            vec![TemplateTarget {
+                device_id: "dev-target".to_string(),
+                overrides: json!({"configOverwrite": null}),
+            }],
+        )
+        .await
+        .unwrap();
         assert_eq!(first_ids, second_ids);
         let row2: (serde_json::Value, serde_json::Value) = sqlx::query_as(
             "SELECT ir_json, template_overrides FROM user_scripts WHERE device_id = 'dev-target' AND template_source_id = $1",
@@ -173,7 +190,10 @@ mod tests {
         .bind(source.id)
         .fetch_one(&pool).await.unwrap();
         assert!(!row2.0.as_object().unwrap().contains_key("configOverwrite"));
-        assert_eq!(row2.0["conditions"], json!([{"sensor":"ec","operator":">","value":3.0}]));
+        assert_eq!(
+            row2.0["conditions"],
+            json!([{"sensor":"ec","operator":">","value":3.0}])
+        );
         assert_eq!(row2.1, json!({"configOverwrite": null}));
     }
 }

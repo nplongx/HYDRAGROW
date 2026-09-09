@@ -81,9 +81,21 @@ pub async fn handle_device(
         Some(v) => v,
     };
 
-    let _ = crate::db::topic_last_seen::touch_topic(&app_state.pg_pool, &device_id, "controller/status", chrono::Utc::now()).await;
+    let _ = crate::db::topic_last_seen::touch_topic(
+        &app_state.pg_pool,
+        &device_id,
+        "controller/status",
+        chrono::Utc::now(),
+    )
+    .await;
 
-    let _ = crate::db::topic_last_seen::touch_topic(&app_state.pg_pool, &device_id, "controller/status", chrono::Utc::now()).await;
+    let _ = crate::db::topic_last_seen::touch_topic(
+        &app_state.pg_pool,
+        &device_id,
+        "controller/status",
+        chrono::Utc::now(),
+    )
+    .await;
 
     info!(
         "Trạng thái: {}",

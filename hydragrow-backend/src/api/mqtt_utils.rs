@@ -1,7 +1,9 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use hydragrow_shared::{MqttCommandOut, topics::topic_controller_command, topics::topic_sensor_node_command};
+use hydragrow_shared::{
+    MqttCommandOut, topics::topic_controller_command, topics::topic_sensor_node_command,
+};
 use rumqttc::QoS;
 use serde::Serialize;
 use serde_json::Value;

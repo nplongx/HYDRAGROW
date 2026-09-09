@@ -98,7 +98,11 @@ pub async fn get_device_health_topics(
             HttpResponse::Ok().json(json!({ "status": "success", "data": topics }))
         }
         Err(e) => {
-            tracing::error!("Failed to fetch health topics for device {}: {:?}", device_id, e);
+            tracing::error!(
+                "Failed to fetch health topics for device {}: {:?}",
+                device_id,
+                e
+            );
             HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
         }
     }

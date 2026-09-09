@@ -168,11 +168,7 @@ pub async fn get_wifi_metadata(
     .await
     .map_err(DbError::PostgresError)?;
 
-    let version = rows
-        .iter()
-        .map(|row| row.config_version)
-        .max()
-        .unwrap_or(0);
+    let version = rows.iter().map(|row| row.config_version).max().unwrap_or(0);
 
     let entries = rows
         .into_iter()
@@ -261,13 +257,7 @@ pub async fn get_delivery(
     .await
     .map_err(DbError::PostgresError)?;
 
-    Ok(row.map(|row| {
-        (
-            row.config_version,
-            row.desired_state,
-            row.last_result,
-        )
-    }))
+    Ok(row.map(|row| (row.config_version, row.desired_state, row.last_result)))
 }
 
 #[derive(FromRow)]
@@ -278,10 +268,7 @@ struct DeliveryRow {
 }
 
 /// Full desired-state view for GET /wifi: metadata + delivery state.
-pub async fn get_wifi_config_view(
-    pool: &PgPool,
-    device_id: &str,
-) -> DbResult<WifiConfigView> {
+pub async fn get_wifi_config_view(pool: &PgPool, device_id: &str) -> DbResult<WifiConfigView> {
     let (ssids, version) = get_wifi_metadata(pool, device_id).await?;
 
     let state = match get_delivery(pool, device_id).await? {

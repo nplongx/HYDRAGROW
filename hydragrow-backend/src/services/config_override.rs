@@ -440,8 +440,7 @@ mod tests {
     #[test]
     fn write_field_clamps_a_too_high_value_to_registry_max() {
         let mut cfg = sample_config();
-        let clamped =
-            write_field(&mut cfg, "ec_target", "99.0", &HashMap::new()).unwrap();
+        let clamped = write_field(&mut cfg, "ec_target", "99.0", &HashMap::new()).unwrap();
         assert!(clamped, "expected clamp flag for out-of-range high value");
         assert!((cfg.ec_target - 3.2).abs() < 0.001);
     }
@@ -449,8 +448,7 @@ mod tests {
     #[test]
     fn write_field_clamps_a_too_low_value_to_registry_min() {
         let mut cfg = sample_config();
-        let clamped =
-            write_field(&mut cfg, "ec_target", "0.1", &HashMap::new()).unwrap();
+        let clamped = write_field(&mut cfg, "ec_target", "0.1", &HashMap::new()).unwrap();
         assert!(clamped, "expected clamp flag for out-of-range low value");
         assert!((cfg.ec_target - 0.8).abs() < 0.001);
     }
@@ -458,8 +456,7 @@ mod tests {
     #[test]
     fn write_field_reports_no_clamp_for_an_in_range_value() {
         let mut cfg = sample_config();
-        let clamped =
-            write_field(&mut cfg, "ec_target", "2.4", &HashMap::new()).unwrap();
+        let clamped = write_field(&mut cfg, "ec_target", "2.4", &HashMap::new()).unwrap();
         assert!(!clamped, "in-range value must not report clamping");
         assert!((cfg.ec_target - 2.4).abs() < 0.001);
     }
@@ -564,9 +561,14 @@ mod tests {
     async fn reconcile_applies_the_single_winner_and_backs_up_the_original(pool: sqlx::PgPool) {
         seed_device(&pool, "dev-a").await;
         let script_id = uuid::Uuid::new_v4();
-        reconcile_config_overwrite_group(&pool, "dev-a", "ec_target", &single_contender(script_id, true))
-            .await
-            .unwrap();
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-a",
+            "ec_target",
+            &single_contender(script_id, true),
+        )
+        .await
+        .unwrap();
 
         let cfg = get_device_config(&pool, "dev-a").await.unwrap();
         assert!((cfg.ec_target - 2.4).abs() < 0.001);
@@ -588,12 +590,22 @@ mod tests {
     async fn reconcile_restores_the_original_once_nobody_wants_the_key_anymore(pool: sqlx::PgPool) {
         seed_device(&pool, "dev-b").await;
         let script_id = uuid::Uuid::new_v4();
-        reconcile_config_overwrite_group(&pool, "dev-b", "ec_target", &single_contender(script_id, true))
-            .await
-            .unwrap();
-        reconcile_config_overwrite_group(&pool, "dev-b", "ec_target", &single_contender(script_id, false))
-            .await
-            .unwrap();
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-b",
+            "ec_target",
+            &single_contender(script_id, true),
+        )
+        .await
+        .unwrap();
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-b",
+            "ec_target",
+            &single_contender(script_id, false),
+        )
+        .await
+        .unwrap();
 
         let cfg = get_device_config(&pool, "dev-b").await.unwrap();
         assert!(
@@ -612,15 +624,27 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn reconcile_does_not_create_a_second_backup_while_the_same_winner_stays_true(pool: sqlx::PgPool) {
+    async fn reconcile_does_not_create_a_second_backup_while_the_same_winner_stays_true(
+        pool: sqlx::PgPool,
+    ) {
         seed_device(&pool, "dev-c").await;
         let script_id = uuid::Uuid::new_v4();
-        reconcile_config_overwrite_group(&pool, "dev-c", "ec_target", &single_contender(script_id, true))
-            .await
-            .unwrap();
-        reconcile_config_overwrite_group(&pool, "dev-c", "ec_target", &single_contender(script_id, true))
-            .await
-            .unwrap();
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-c",
+            "ec_target",
+            &single_contender(script_id, true),
+        )
+        .await
+        .unwrap();
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-c",
+            "ec_target",
+            &single_contender(script_id, true),
+        )
+        .await
+        .unwrap();
 
         let backup_count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM flow_config_overrides WHERE script_id = $1")
@@ -632,7 +656,9 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn reconcile_hands_the_key_to_a_higher_priority_flow_and_back_when_it_yields(pool: sqlx::PgPool) {
+    async fn reconcile_hands_the_key_to_a_higher_priority_flow_and_back_when_it_yields(
+        pool: sqlx::PgPool,
+    ) {
         seed_device(&pool, "dev-e").await;
         let low = uuid::Uuid::new_v4();
         let high = uuid::Uuid::new_v4();
@@ -654,7 +680,12 @@ mod tests {
             &pool,
             "dev-e",
             "ec_target",
-            &[OverwriteContender { script_id: low, directive: low_directive.clone(), condition_state: true, context: HashMap::new() }],
+            &[OverwriteContender {
+                script_id: low,
+                directive: low_directive.clone(),
+                condition_state: true,
+                context: HashMap::new(),
+            }],
         )
         .await
         .unwrap();
@@ -666,8 +697,18 @@ mod tests {
             "dev-e",
             "ec_target",
             &[
-                OverwriteContender { script_id: low, directive: low_directive.clone(), condition_state: true, context: HashMap::new() },
-                OverwriteContender { script_id: high, directive: high_directive.clone(), condition_state: true, context: HashMap::new() },
+                OverwriteContender {
+                    script_id: low,
+                    directive: low_directive.clone(),
+                    condition_state: true,
+                    context: HashMap::new(),
+                },
+                OverwriteContender {
+                    script_id: high,
+                    directive: high_directive.clone(),
+                    condition_state: true,
+                    context: HashMap::new(),
+                },
             ],
         )
         .await
@@ -691,8 +732,18 @@ mod tests {
             "dev-e",
             "ec_target",
             &[
-                OverwriteContender { script_id: low, directive: low_directive, condition_state: true, context: HashMap::new() },
-                OverwriteContender { script_id: high, directive: high_directive, condition_state: false, context: HashMap::new() },
+                OverwriteContender {
+                    script_id: low,
+                    directive: low_directive,
+                    condition_state: true,
+                    context: HashMap::new(),
+                },
+                OverwriteContender {
+                    script_id: high,
+                    directive: high_directive,
+                    condition_state: false,
+                    context: HashMap::new(),
+                },
             ],
         )
         .await
@@ -709,9 +760,14 @@ mod tests {
     ) {
         seed_device(&pool, "dev-d").await;
         let script_id = uuid::Uuid::new_v4();
-        reconcile_config_overwrite_group(&pool, "dev-d", "ec_target", &single_contender(script_id, true))
-            .await
-            .unwrap();
+        reconcile_config_overwrite_group(
+            &pool,
+            "dev-d",
+            "ec_target",
+            &single_contender(script_id, true),
+        )
+        .await
+        .unwrap();
         // Không gọi reconcile lần 2 — mô phỏng flow dừng đột ngột (crash/mất điện).
         let recovered = recover_orphan_overrides(&pool).await.unwrap();
         assert_eq!(recovered, 1);

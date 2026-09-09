@@ -127,7 +127,7 @@ where
                             scopes: user.scopes,
                             user_id: Some(user.id.to_string()),
                             session_id: Some(claims.sub),
-                        service_key_label: None,
+                            service_key_label: None,
                         };
                         req.extensions_mut().insert(auth_context);
                         let res = srv.call(req).await?;
@@ -178,12 +178,11 @@ where
             .map(ToString::to_string);
 
         let srv = Rc::clone(&self.service);
-        return Box::pin(async move {
+        Box::pin(async move {
             if let Some(key) = header_key.as_deref() {
                 let key_hash = crate::db::service_api_keys::sha256_hex(key);
                 if let Some(svc) =
-                    crate::db::service_api_keys::find_active_by_key_hash(&pg_pool, &key_hash)
-                        .await
+                    crate::db::service_api_keys::find_active_by_key_hash(&pg_pool, &key_hash).await
                 {
                     let auth_context = AuthContext {
                         scopes: svc.scopes,
@@ -222,7 +221,7 @@ where
 
             let res = srv.call(req).await?;
             Ok(res.map_into_left_body())
-        });
+        })
     }
 }
 

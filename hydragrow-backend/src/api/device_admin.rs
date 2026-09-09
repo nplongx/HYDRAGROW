@@ -73,8 +73,7 @@ pub async fn get_ota_status(
         .cloned()
         .unwrap_or_else(|| "unknown".to_string());
 
-    let mut response =
-        build_ota_status_response(current_version, fetch_latest_release_tag().await);
+    let mut response = build_ota_status_response(current_version, fetch_latest_release_tag().await);
     response.device_id = device_id;
 
     HttpResponse::Ok().json(response)
@@ -141,9 +140,8 @@ pub async fn trigger_ota(
 
     if let Some(config) = &wifi {
         if let Err(reason) = hydragrow_shared::wifi_tx::validate_provision_structure(config) {
-            return HttpResponse::BadRequest().json(
-                serde_json::json!({"error": format!("Invalid wifi provision: {reason}")}),
-            );
+            return HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": format!("Invalid wifi provision: {reason}")}));
         }
 
         match device_wifi::get_wifi_metadata(&app_state.pg_pool, &device_id).await {
@@ -251,10 +249,7 @@ pub fn command_audit_summary(command: &MqttCommandOut) -> String {
 pub const PROVISION_MAX_ATTEMPTS: usize = 5;
 pub const PROVISION_WINDOW_SECS: u64 = 300;
 
-pub fn provision_allowed(
-    attempts: &mut Vec<std::time::Instant>,
-    now: std::time::Instant,
-) -> bool {
+pub fn provision_allowed(attempts: &mut Vec<std::time::Instant>, now: std::time::Instant) -> bool {
     attempts.retain(|at| now.duration_since(*at).as_secs() < PROVISION_WINDOW_SECS);
 
     if attempts.len() >= PROVISION_MAX_ATTEMPTS {
@@ -709,10 +704,7 @@ mod tests {
         let wifi = command.params.unwrap().ota_provision.unwrap().wifi.unwrap();
 
         assert_eq!(wifi.config_version, 8);
-        assert_eq!(
-            wifi.entries[0].password.as_deref(),
-            Some("super-secret")
-        );
+        assert_eq!(wifi.entries[0].password.as_deref(), Some("super-secret"));
     }
 
     #[test]
@@ -790,26 +782,19 @@ mod tests {
 
     #[test]
     fn ota_status_marks_version_difference_available() {
-        assert!(
-            build_ota_status_response("v1.2.0".into(), Some("v1.3.0".into()))
-                .update_available
-        );
+        assert!(build_ota_status_response("v1.2.0".into(), Some("v1.3.0".into())).update_available);
     }
 
     #[test]
     fn ota_status_does_not_mark_matching_version_available() {
         assert!(
-            !build_ota_status_response("v1.3.0".into(), Some("v1.3.0".into()))
-                .update_available
+            !build_ota_status_response("v1.3.0".into(), Some("v1.3.0".into())).update_available
         );
     }
 
     #[test]
     fn ota_status_does_not_claim_update_without_latest_version() {
-        assert!(
-            !build_ota_status_response("v1.2.0".into(), None)
-                .update_available
-        );
+        assert!(!build_ota_status_response("v1.2.0".into(), None).update_available);
     }
 
     #[test]

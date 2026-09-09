@@ -343,7 +343,10 @@ pub async fn eval_flow_chain(
         else {
             continue;
         };
-        let ctx = resolved_context_by_node.get(&s.id).cloned().unwrap_or_default();
+        let ctx = resolved_context_by_node
+            .get(&s.id)
+            .cloned()
+            .unwrap_or_default();
         let mut sample: HashMap<String, crate::models::script::SampleValue> = [
             (
                 "ph".to_string(),
@@ -389,10 +392,7 @@ pub async fn eval_flow_chain(
     }
     for (config_key, contenders) in &contenders_by_key {
         if let Err(e) = crate::services::config_override::reconcile_config_overwrite_group(
-            pool,
-            device_id,
-            config_key,
-            contenders,
+            pool, device_id, config_key, contenders,
         )
         .await
         {
@@ -413,7 +413,9 @@ pub async fn eval_flow_chain(
     }
 
     for (script_id, _result) in &fired {
-        if let Err(e) = crate::services::execution_log::log_success(pool, *script_id, device_id).await {
+        if let Err(e) =
+            crate::services::execution_log::log_success(pool, *script_id, device_id).await
+        {
             warn!(device_id, script_id = %script_id, error = %e, "failed to write execution log");
         }
     }

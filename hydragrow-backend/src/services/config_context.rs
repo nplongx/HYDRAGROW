@@ -34,10 +34,7 @@ pub fn parse_config_overwrite(ir_json: &serde_json::Value) -> Option<ConfigOverw
             .get("readOriginalBeforeWrite")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
-        priority: node
-            .get("priority")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32,
+        priority: node.get("priority").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
     })
 }
 

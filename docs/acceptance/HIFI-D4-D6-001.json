@@ -1,0 +1,36 @@
+{
+  "requirement_id": "HIFI-D4-D6-001",
+  "objective": "Implement Hi-Fi D4-D6 features: crop season progress bar & stage delay warning, Cloudinary photo journal, saving active crop seasons as recipe templates, and dosing history time-range tabs with hourly chart & anomaly detection.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "CloudinaryConfig environment soft-loading and SHA-256 signed upload calculation.",
+      "verification": "Unit test in hydragrow-backend/src/services/cloudinary.rs",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Crop season progress bar calculation and delay warning display when current stage is overdue.",
+      "verification": "Unit tests in seasonProgress.test.ts and ActiveSeasonCard.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Photo journal gallery and direct signed Cloudinary photo upload.",
+      "verification": "Unit tests in SeasonPhotoJournal.test.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Saving current active crop season as a new recipe template.",
+      "verification": "TypeScript type check and unit tests in RecipeBuilder.tsx",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Dosing history time-range tabs, total daily volume card, hourly chart, and 3x anomaly detection banner.",
+      "verification": "Unit tests in dosingAggregates.test.ts and DosingHistory.tsx",
+      "evidence_required": true
+    }
+  ]
+}

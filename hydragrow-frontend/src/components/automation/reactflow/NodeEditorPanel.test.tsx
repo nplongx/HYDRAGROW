@@ -328,14 +328,13 @@ describe('NodeEditorPanel — Detailed Node Mockup Configurations', () => {
 
     expect(screen.getByText('TRIGGER · FSM')).toBeInTheDocument();
     expect(screen.getByText('Giai đoạn canh tác (FSM)')).toBeInTheDocument();
-    expect(screen.getByLabelText('Máy trạng thái')).toBeInTheDocument();
-    expect(screen.getByLabelText('Kích hoạt khi')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ra hoa/ })).toBeInTheDocument();
-    expect(screen.getByLabelText('Thời lượng tối thiểu trong giai đoạn')).toBeInTheDocument();
-    expect(screen.getByText('ngày')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Sinh trưởng/ }));
-    expect(mockOnChange).toHaveBeenCalledWith('t2', expect.objectContaining({ kind: 'fsm', stage: 'Sinh trưởng' }));
+    expect(screen.queryByLabelText('Máy trạng thái')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Kích hoạt khi')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Thời lượng tối thiểu trong giai đoạn')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chu trình vệ sinh CIP')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Flow này sẽ chạy khi Condition bên dưới đúng/),
+    ).toBeInTheDocument();
   });
 
   it('Trigger Webhook panel shows endpoint and points to the Webhook & Chain panel (no fictional auth/mode fields)', () => {

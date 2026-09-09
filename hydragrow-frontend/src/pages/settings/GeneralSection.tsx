@@ -6,6 +6,7 @@ import { Switch } from '../../components/ui/Switch';
 interface GeneralSectionProps {
   userEmail: string | null | undefined;
   onLogout: () => void;
+  onGoToPairing?: () => void;
   isAdvancedMode: boolean;
   onToggleAdvancedMode: (value: boolean) => void;
 }

@@ -1,0 +1,24 @@
+{
+  "requirement_id": "SUPERVISOR-CLI-001",
+  "objective": "A thin, human-facing CLI binary, supervisor-cli, that lets an engineer run any of the six SupervisorQuery types against a real device from a terminal.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "supervisor-cli parses subcommands into SupervisorQuery variants and applies defaults.",
+      "verification": "Cargo test in hydragrow-supervisor-cli",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "supervisor-cli executes queries through QueryBackend, applying validation and clamping before printing JSON.",
+      "verification": "Cargo test run module in hydragrow-supervisor-cli",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "supervisor-cli main binary wires HttpQueryBackend and exits with code 1 on query errors.",
+      "verification": "Cargo test and cargo run -- --help",
+      "evidence_required": true
+    }
+  ]
+}

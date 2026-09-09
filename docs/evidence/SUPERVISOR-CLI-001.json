@@ -1,0 +1,29 @@
+{
+  "requirement_id": "SUPERVISOR-CLI-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": "Cli parses sensor-history, dosing-history, fsm-events, health-topics, hestia-snapshot, crop-target subcommands and converts to SupervisorQuery",
+      "source": "cargo test -p hydragrow-supervisor-cli --lib cli",
+      "environment": "sandbox",
+      "verified_at": "2026-09-09T16:45:00Z"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": "run() validates/clamps query, delegates to FakeQueryBackend, and formats pretty or compact JSON",
+      "source": "cargo test -p hydragrow-supervisor-cli --lib run",
+      "environment": "sandbox",
+      "verified_at": "2026-09-09T16:45:00Z"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": "main.rs wires HttpQueryBackend, prints JSON output on Ok, and calls std::process::exit(1) on Err; 8 unit tests green",
+      "source": "cargo test --manifest-path hydragrow-supervisor-cli/Cargo.toml",
+      "environment": "sandbox",
+      "verified_at": "2026-09-09T16:45:00Z"
+    }
+  ]
+}

@@ -3,9 +3,9 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensorConfig {
-    pub ph_v686: f32, // ph_v7
-    pub ph_v4: f32,
-    pub ph_v918: f32, // ph_v10
+    pub ph_v686: f32, // pH 7 calibration voltage in volts, e.g. 2.50V
+    pub ph_v4: f32,   // pH 4 calibration voltage in volts, e.g. 3.04V
+    pub ph_v918: f32, // pH 10 calibration voltage in volts, e.g. 1.75V
     pub tds_factor: f32, // ec_factor
     pub ec_offset: f32,
     pub temp_offset: f32,
@@ -19,9 +19,9 @@ pub struct SensorConfig {
 impl Default for SensorConfig {
     fn default() -> Self {
         Self {
-            ph_v686: 2650.0,
-            ph_v4: 3555.0,
-            ph_v918: 1750.0,
+            ph_v686: 2.650,
+            ph_v4: 3.555,
+            ph_v918: 1.750,
             tds_factor: 0.88,
             ec_offset: 0.0,
             temp_offset: 0.0,
@@ -54,6 +54,7 @@ impl Default for AppConfig {
 impl AppConfig {
     /// Áp config từ JSON document gửi từ backend.
     /// Chỉ update field có trong JSON (merge partial).
+    /// pH calibration values use volts at the API/DB boundary.
     pub fn apply_from_json(&mut self, doc: &Value) {
         if let Some(v) = doc["ph_v7"].as_f64() {
             self.sensor.ph_v686 = v as f32;
@@ -102,10 +103,10 @@ mod tests {
     #[test]
     fn test_apply_partial_json() {
         let mut cfg = AppConfig::default();
-        cfg.apply_from_json(&json!({ "ph_v7": 2700.0, "publish_interval": 10000 }));
-        assert_eq!(cfg.sensor.ph_v686, 2700.0);
+        cfg.apply_from_json(&json!({ "ph_v7": 2.700, "publish_interval": 10000 }));
+        assert_eq!(cfg.sensor.ph_v686, 2.700);
         assert_eq!(cfg.publish_interval_ms, 10000);
-        assert_eq!(cfg.sensor.ph_v4, 3555.0); // unchanged
+        assert_eq!(cfg.sensor.ph_v4, 3.555); // unchanged
     }
 
     #[test]

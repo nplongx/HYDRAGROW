@@ -1,35 +1,9 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { RefreshCcw, Sprout, Droplets, Waves, CheckCircle2 } from 'lucide-react';
-import { httpFetch } from '../../platform/http';
-import { useDeviceStore } from '../../store/useDeviceStore';
-import { CropStage } from '../../types/models';
+import { useActiveRecipeStatus } from '../../hooks/useActiveRecipeStatus';
 
 export const ActiveRecipeStatus: React.FC = () => {
-  const settings = useDeviceStore((s) => s.settings);
-  const deviceId = useDeviceStore((s) => s.deviceId);
-
-  const recipeStatus = useQuery({
-    queryKey: ['recipe-status', settings?.backend_url, deviceId],
-    enabled: Boolean(settings?.backend_url && deviceId),
-    queryFn: async () => {
-      const res = await httpFetch(`${settings!.backend_url}/api/devices/${deviceId}/recipe/status`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': settings?.api_key || '',
-        },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      return res.json();
-    },
-  });
-
-  const activeRecipe = recipeStatus.data?.data?.active_recipe || recipeStatus.data?.active_recipe;
-  const currentStage: CropStage | undefined =
-    activeRecipe?.stages && activeRecipe.current_stage_index !== undefined
-      ? activeRecipe.stages[activeRecipe.current_stage_index]
-      : undefined;
+  const { activeRecipe, currentStage, isError, error, isFetching, refetch } = useActiveRecipeStatus();
 
   return (
     <section className="ui-card space-y-3">
@@ -43,17 +17,17 @@ export const ActiveRecipeStatus: React.FC = () => {
         </div>
         <button
           className="ui-btn-md bg-white border border-emerald-200 py-1.5 px-3 text-xs text-emerald-900 flex items-center gap-1.5"
-          onClick={() => recipeStatus.refetch()}
-          disabled={recipeStatus.isFetching}
+          onClick={() => refetch()}
+          disabled={isFetching}
         >
-          <RefreshCcw size={14} className={recipeStatus.isFetching ? 'animate-spin' : ''} />
+          <RefreshCcw size={14} className={isFetching ? 'animate-spin' : ''} />
           Làm mới
         </button>
       </div>
 
-      {recipeStatus.isError ? (
+      {isError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          Không thể lấy thông tin recipe: {(recipeStatus.error as Error).message}
+          Không thể lấy thông tin recipe: {(error as Error).message}
         </div>
       ) : !activeRecipe ? (
         <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-4 text-center text-xs text-emerald-800">

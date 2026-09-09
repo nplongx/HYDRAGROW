@@ -1,4 +1,5 @@
 pub mod action_dispatch;
+pub mod cloudinary;
 pub mod analytics;
 pub mod command;
 pub mod config_context;

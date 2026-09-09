@@ -444,6 +444,45 @@ pub async fn create_crop_season(
     get_active_crop_season(pool, device_id).await
 }
 
+pub async fn create_crop_season_photo(
+    pool: &PgPool,
+    device_id: &str,
+    season_id: &str,
+    req: crate::models::crop_season_photo::CreateCropSeasonPhotoRequest,
+) -> Result<crate::models::crop_season_photo::CropSeasonPhoto, sqlx::Error> {
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO crop_season_photos (id, season_id, device_id, cloudinary_public_id, cloudinary_url, day_offset) VALUES ($1, $2, $3, $4, $5, $6)"
+    )
+    .bind(&id)
+    .bind(season_id)
+    .bind(device_id)
+    .bind(&req.cloudinary_public_id)
+    .bind(&req.cloudinary_url)
+    .bind(req.day_offset)
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as::<_, crate::models::crop_season_photo::CropSeasonPhoto>(
+        "SELECT * FROM crop_season_photos WHERE id = $1",
+    )
+    .bind(&id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn list_crop_season_photos(
+    pool: &PgPool,
+    season_id: &str,
+) -> Result<Vec<crate::models::crop_season_photo::CropSeasonPhoto>, sqlx::Error> {
+    sqlx::query_as::<_, crate::models::crop_season_photo::CropSeasonPhoto>(
+        "SELECT * FROM crop_season_photos WHERE season_id = $1 ORDER BY day_offset ASC",
+    )
+    .bind(season_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn end_active_crop_season(pool: &PgPool, device_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE crop_seasons SET status = 'completed', end_time = CURRENT_TIMESTAMP WHERE device_id = $1 AND status = 'active'",

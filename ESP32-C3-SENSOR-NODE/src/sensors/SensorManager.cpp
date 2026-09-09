@@ -66,6 +66,19 @@ void SensorManager::enableWaterLevel(bool enabled)  { enableWaterLevel_ = enable
 void SensorManager::enablePh(bool enabled)          { enablePh_ = enabled; }
 void SensorManager::enableTds(bool enabled)         { enableTds_ = enabled; }
 
+void SensorManager::applyPhCalibration(float v686, float v4, float v918, const String& calibrationMode) {
+    PhSensorConfig config = phSensor_.getConfig();
+    config.v686 = v686;
+    config.v4 = v4;
+    config.v918 = v918;
+    config.calibrationMode = calibrationMode;
+    phSensor_.setConfig(config);
+
+    Logger::debugPrintf(
+        "[PH] Calibration applied: pH6.86=%.1f mV, pH4=%.1f mV, pH9.18=%.1f mV, mode=%s\n",
+        v686, v4, v918, calibrationMode.c_str());
+}
+
 void SensorManager::updateTemperature() {
     if (!enableTemperature_) return;
     float raw = tempSensor_.read();

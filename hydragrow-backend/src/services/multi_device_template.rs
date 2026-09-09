@@ -126,6 +126,40 @@ mod tests {
     ) {
         use crate::models::script::UserScript;
         use chrono::Utc;
+        crate::db::postgres::upsert_device_config(
+            &pool,
+            &crate::models::config::DeviceConfig {
+                device_id: "src-dev".to_string(),
+                ec_target: 1.8,
+                ec_tolerance: 0.2,
+                ph_target: 6.0,
+                ph_tolerance: 0.3,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 5,
+                last_updated: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+
+        crate::db::postgres::upsert_device_config(
+            &pool,
+            &crate::models::config::DeviceConfig {
+                device_id: "dev-target".to_string(),
+                ec_target: 1.8,
+                ec_tolerance: 0.2,
+                ph_target: 6.0,
+                ph_tolerance: 0.3,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 5,
+                last_updated: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+
         let source = UserScript {
             id: uuid::Uuid::new_v4(),
             device_id: "src-dev".to_string(),

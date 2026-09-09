@@ -2,8 +2,8 @@ import { useState } from "react";
 import type {
   Action,
   AutomationIr,
+  ConditionGroup,
   ConditionOrGroup,
-  ComparisonOperator,
 } from "../../../lib/automation/ir";
 import {
   fieldsForKind,
@@ -16,11 +16,11 @@ import { DEVICE_CONFIG_BOUNDS } from "../../../lib/automation/ir";
 
 import { getAvailableContextVariables } from "../../../lib/automation/contextVariables";
 import { extractTemplateTokens, renderTemplatePreview } from "../../../lib/automation/templateVars";
+import { ConditionGroupEditor } from "./ConditionGroupEditor";
 import {
   Badge,
   ConfigCard,
   FieldGroup,
-  Chip,
   ChipsRow,
   Segmented,
   ToggleRow,
@@ -430,255 +430,36 @@ export function NodeEditorPanel({
   }
 
   if (node.type === "condition" || node.type === "condition_group") {
+    // node.data.conditions đã đúng là ConditionOrGroup[] (xem addNode trong
+    // useAutomationBuilder.ts và buildIrFromGraph trong buildIr.ts — cả hai
+    // đọc/ghi field này trực tiếp, không có bước chuyển đổi nào). Bọc nó
+    // trong 1 group AND ẩn để ConditionGroupEditor (vốn thao tác trên 1
+    // ConditionGroup) có chỗ để hoạt động; mở gói lại y hệt khi lưu, nên
+    // không đổi hình dạng dữ liệu thật của node.
     const rawConditions = Array.isArray(node.data?.conditions)
       ? (node.data.conditions as ConditionOrGroup[])
       : [];
-
-    const isGroupCondition =
-      node.type === "condition_group" ||
-      node.data?.isGroup === true ||
-      node.data?.type === "condition_group" ||
-      (rawConditions.length > 0 && "op" in (rawConditions[0] as any)) ||
-      rawConditions.length > 1;
-
-    // 2.2 CONDITION · NHÓM
-    if (isGroupCondition) {
-      const groupOp = (node.data?.groupOp as "and" | "or") || "and";
-      const subConditions =
-        rawConditions.length > 0
-          ? rawConditions
-          : [
-              { sensor: "ec", operator: ">" as ComparisonOperator, value: 1.8 },
-              { sensor: "temp", operator: "<" as ComparisonOperator, value: 26 },
-              { sensor: "giờ", operator: "==" as ComparisonOperator, value: "22:00-05:00" },
-            ];
-
-      return (
-        <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-emerald-950">Điều kiện</h3>
-            <button
-              type="button"
-              className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
-              onClick={onClose}
-            >
-              Đóng
-            </button>
-          </div>
-
-          <ConfigCard tone="amber">
-            <div className="flex items-center gap-1.5">
-              <Badge tone="amber">CONDITION</Badge>
-              <Badge tone="amber">NHÓM</Badge>
-            </div>
-
-            <h4 className="text-sm font-bold text-slate-900 leading-snug">
-              {(node.data.title as string) ||
-                (groupOp === "and" ? "Tất cả đều đúng" : "Một trong số điều kiện đúng")}
-            </h4>
-
-            <FieldGroup label="Toán tử nhóm" as="div">
-              <Segmented
-                options={[
-                  { value: "and", label: "AND — tất cả đúng" },
-                  { value: "or", label: "OR — bất kỳ đúng" },
-                ]}
-                value={groupOp}
-                onChange={(op) =>
-                  onChange(node.id, {
-                    ...node.data,
-                    isGroup: true,
-                    groupOp: op,
-                  })
-                }
-              />
-            </FieldGroup>
-
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] text-emerald-800/70">
-                {subConditions.length} điều kiện con
-              </span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {subConditions.map((c: any, idx: number) => {
-                  const label =
-                    typeof c === "string"
-                      ? c
-                      : c.sensor === "temp"
-                        ? `${c.sensor} < ${c.value}°C`
-                        : `${c.sensor} ${c.operator} ${c.value}`;
-                  return (
-                    <Chip
-                      key={idx}
-                      tone="amber"
-                      onRemove={() => {
-                        const next = subConditions.filter((_, i) => i !== idx);
-                        onChange(node.id, {
-                          ...node.data,
-                          isGroup: true,
-                          conditions: next,
-                          summary: summarizeConditionTree(next as any),
-                        });
-                      }}
-                    >
-                      {label}
-                    </Chip>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = [
-                      ...subConditions,
-                      { sensor: fields[0] || "ph", operator: ">" as ComparisonOperator, value: 7.0 },
-                    ];
-                    onChange(node.id, {
-                      ...node.data,
-                      isGroup: true,
-                      conditions: next,
-                      summary: summarizeConditionTree(next as any),
-                    });
-                  }}
-                  className="rounded-full border border-dashed border-amber-300 bg-amber-50/50 px-2.5 py-1 text-[10.5px] font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer transition-colors"
-                >
-                  + Thêm điều kiện
-                </button>
-              </div>
-            </div>
-
-            <ToggleRow
-              label="Đảo ngược kết quả (NOT)"
-              checked={Boolean(node.data.invertNot ?? false)}
-              onChange={(v) =>
-                onChange(node.id, {
-                  ...node.data,
-                  isGroup: true,
-                  invertNot: v,
-                })
-              }
-            />
-          </ConfigCard>
-        </div>
-      );
-    }
-
-    // 2.1 CONDITION (Đơn lẻ)
-    const firstCond: any = rawConditions[0] || {};
-    const sensor = firstCond.sensor || (node.data.sensor as string) || "ph";
-    const operator = firstCond.operator || (node.data.operator as string) || ">";
-    const value =
-      firstCond.value !== undefined
-        ? firstCond.value
-        : node.data.value !== undefined
-          ? node.data.value
-          : 7.2;
-    const unit = sensor === "ec" ? "mS/cm" : sensor === "temp" ? "°C" : "pH";
-
-    const updateSingleCondition = (updates: Partial<{ sensor: string; operator: ComparisonOperator; value: number }>) => {
-      const nextSensor = updates.sensor ?? sensor;
-      const nextOp = (updates.operator ?? operator) as ComparisonOperator;
-      const nextVal = updates.value ?? value;
-      const newConditions = [{ sensor: nextSensor, operator: nextOp, value: nextVal }];
-      onChange(node.id, {
-        ...node.data,
-        conditions: newConditions,
-        summary: `${nextSensor} ${nextOp} ${nextVal}`,
-      });
-    };
+    const wrapperGroup: ConditionGroup = { op: "and", children: rawConditions };
 
     return (
-      <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-emerald-950">Điều kiện</h3>
-          <button
-            type="button"
-            className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
-            onClick={onClose}
-          >
-            Đóng
-          </button>
-        </div>
-
+      <InspectorShell title="Điều kiện" onClose={onClose}>
         <ConfigCard tone="amber">
           <Badge tone="amber">CONDITION</Badge>
-
-          <h4 className="text-sm font-bold text-slate-900 leading-snug">
-            {(node.data.title as string) || "pH vượt ngưỡng an toàn"}
-          </h4>
-
-          <FieldGroup label="Biến so sánh">
-            <select
-              aria-label="Biến so sánh"
-              className="ui-input w-full text-xs"
-              value={sensor}
-              onChange={(e) => updateSingleCondition({ sensor: e.target.value })}
-            >
-              <option value="ph">pH (tức thời)</option>
-              <option value="ec">EC (tức thời)</option>
-              <option value="temp">Nhiệt độ (tức thời)</option>
-              <option value="water_level">Mực nước (tức thời)</option>
-            </select>
-          </FieldGroup>
-
-          <FieldGroup label="Toán tử">
-            <select
-              aria-label="Toán tử"
-              className="ui-input w-full text-xs"
-              value={operator}
-              onChange={(e) =>
-                updateSingleCondition({ operator: e.target.value as ComparisonOperator })
-              }
-            >
-              <option value=">">&gt; lớn hơn</option>
-              <option value="<">&lt; nhỏ hơn</option>
-              <option value=">=">&gt;= lớn hơn hoặc bằng</option>
-              <option value="<=">&lt;= nhỏ hơn hoặc bằng</option>
-              <option value="==">== bằng</option>
-              <option value="!=">!= khác</option>
-            </select>
-          </FieldGroup>
-
-          <FieldGroup label="Giá trị ngưỡng">
-            <InputWithSuffix
-              type="number"
-              ariaLabel="Giá trị"
-              step={0.1}
-              value={value}
-              onChange={(e) => updateSingleCondition({ value: Number(e.target.value) })}
-              suffix={unit}
-            />
-          </FieldGroup>
-
-          <FieldGroup label="Áp dụng trong">
-            <select
-              aria-label="Áp dụng trong"
-              className="ui-input w-full text-xs"
-              value={(node.data.applyWindow as string) || "Luôn luôn"}
-              onChange={(e) =>
-                onChange(node.id, {
-                  ...node.data,
-                  applyWindow: e.target.value,
-                })
-              }
-            >
-              <option value="Luôn luôn">Luôn luôn</option>
-              <option value="Ban ngày (06:00 - 18:00)">Ban ngày (06:00 - 18:00)</option>
-              <option value="Ban đêm (18:00 - 06:00)">Ban đêm (18:00 - 06:00)</option>
-            </select>
-          </FieldGroup>
-
-          <ToggleRow
-            label="Chống nhiễu: yêu cầu đúng liên tục = 3 chu kỳ"
-            checked={Boolean(node.data.debounceContinuous ?? true)}
-            onChange={(v) =>
+          <ConditionGroupEditor
+            group={wrapperGroup}
+            fields={fields}
+            availableVariables={availableVariables}
+            isRoot
+            onChange={(nextGroup) =>
               onChange(node.id, {
                 ...node.data,
-                debounceContinuous: v,
+                conditions: nextGroup.children,
+                summary: summarizeConditionTree(nextGroup.children),
               })
             }
           />
         </ConfigCard>
-      </div>
+      </InspectorShell>
     );
   }
 

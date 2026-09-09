@@ -1,9 +1,8 @@
 name: jules-review
 
 # Trigger Jules review automatically when a PR is opened/updated and marked needs-review.
-# IMPORTANT: this workflow dispatches Jules DIRECTLY. It must not rely on the
-# jules-auto-dispatch workflow, because an issue created with GITHUB_TOKEN does not
-# start another workflow run.
+# This workflow dispatches Jules DIRECTLY through Juleson; it does not use the
+# native `jules` label or the issue-dispatch workflow.
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
@@ -156,7 +155,7 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "[Jules Review] PR #${PR_NUM} — ${PR_TITLE}" \
             --body-file /tmp/issue_body.md \
-            --label "jules,review")
+            --label "review")
           echo "issue_url=$ISSUE_URL" >> "$GITHUB_OUTPUT"
           echo "Created Jules review issue: $ISSUE_URL"
         env:
@@ -165,7 +164,7 @@ jobs:
       - name: Install juleson CLI
         run: |
           set -euo pipefail
-          curl -fsSL https://github.com/SamyRai/Juleson/releases/latest/download/install.sh | bash
+          curl -fsSL https://github.com/SamyRai/juleson/releases/latest/download/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Build Jules session prompt
@@ -265,6 +264,6 @@ Jules kiểm tra:
 
 ---
 *Auto-dispatched khi \`hydragrow-shared/\` bị chạm*" \
-            --label "jules,review,shared-contract"
+            --label "review,shared-contract"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

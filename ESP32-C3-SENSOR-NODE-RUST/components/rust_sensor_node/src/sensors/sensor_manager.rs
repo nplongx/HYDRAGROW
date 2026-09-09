@@ -87,22 +87,18 @@ impl SensorManager {
 
     /// Khởi tạo hardware. Gọi sau khi I2C driver và GPIO đã được cấu hình.
     pub fn begin(&mut self) {
-        // HC-SR04
         unsafe {
             ffi::hcsr04_init(PIN_TRIG, PIN_ECHO);
         }
 
-        // ADS1115 pH
         if !self.ph.begin() {
             warn!("[SensorManager] Không tìm thấy ADS1115 pH (0x48)!");
         }
 
-        // ADS1115 TDS
         if !self.tds.begin() {
             warn!("[SensorManager] Không tìm thấy ADS1115 TDS (0x49)!");
         }
 
-        // DS18B20 init stub (Rust đọc trực tiếp qua ds18b20 crate)
         unsafe {
             ffi::ds18b20_init(PIN_DS18B20);
         }
@@ -177,12 +173,16 @@ impl SensorManager {
             .set_config(TempSensorConfig {
                 offset: cfg.sensor.temp_offset,
             });
+
+        // AppConfig stores calibration in volts because DB/API values are volts.
+        // PhSensor performs its calculation in mV, so convert exactly once here.
         self.ph.set_config(PhSensorConfig {
-            v686: cfg.sensor.ph_v686,
-            v4: cfg.sensor.ph_v4,
-            v918: cfg.sensor.ph_v918,
+            v686: cfg.sensor.ph_v686 * 1000.0,
+            v4: cfg.sensor.ph_v4 * 1000.0,
+            v918: cfg.sensor.ph_v918 * 1000.0,
             ..Default::default()
         });
+
         self.tds.set_config(TdsSensorConfig {
             tds_factor: cfg.sensor.tds_factor,
             ec_offset: cfg.sensor.ec_offset,

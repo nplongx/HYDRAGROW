@@ -47,9 +47,6 @@ struct OtaLogEvent {
 
 QueueHandle_t otaLogQueue = nullptr;
 
-// Gọi TỪ luồng chính (update()/reconnect()) — publish trực tiếp lên MQTT.
-// KHÔNG được gọi hàm này từ task OTA (chạy trên luồng khác) vì PubSubClient
-// không thread-safe — xem enqueueOtaLog() bên dưới.
 void publishSystemLogEvent(const char* level, const char* title, const char* message) {
     JsonDocument doc;
     doc["type"] = "system_alert";
@@ -65,9 +62,6 @@ void publishSystemLogEvent(const char* level, const char* title, const char* mes
     mqttClient.publish(TOPIC_SYSTEM_LOG.c_str(), reinterpret_cast<const uint8_t*>(buffer), len, false);
 }
 
-// Gọi được từ BẤT KỲ task nào (kể cả task OTA) — chỉ ghi vào hàng đợi
-// FreeRTOS, KHÔNG đụng vào mqttClient trực tiếp. update() (luồng chính) sẽ
-// drain hàng đợi này và mới thực sự publish.
 void enqueueOtaLog(const char* level, const char* title, const char* message) {
     if (!otaLogQueue) return;
     OtaLogEvent evt{};
@@ -77,8 +71,6 @@ void enqueueOtaLog(const char* level, const char* title, const char* message) {
     xQueueSend(otaLogQueue, &evt, 0);
 }
 
-// *** KEY FIX: publish KHÔNG được gọi từ bên trong callback ***
-// Dùng flag để defer ra update() loop
 void publishStatus(const char* status, const char* message) {
     JsonDocument doc;
     doc["device_id"] = MQTT_CLIENT_ID;
@@ -105,10 +97,6 @@ void otaTaskEntry(void* param) {
 void handleTriggerOta() {
     publishStatus("ok", "OTA update starting");
     String* deviceIdCopy = new String(DEVICE_ID);
-    // Stack 10240 byte — thực nghiệm cộng đồng ESP32 cho thấy bắt tay TLS
-    // (mbedTLS, dùng bởi WiFiClientSecure trong OtaUpdater) cần stack sâu
-    // hơn nhiều so với 1 task thông thường; dùng dư ra để tránh stack
-    // overflow âm thầm làm hỏng bộ nhớ.
     BaseType_t created = xTaskCreatePinnedToCore(
         otaTaskEntry,
         "ota_task",
@@ -150,12 +138,11 @@ void MqttManager::begin() {
     }
 
     wifiClient.setInsecure();
-    // wifiClient.setCACert(ROOT_CA);
     mqttClient.setServer(MQTT_HOST, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
     mqttClient.setBufferSize(2048);
-    mqttClient.setKeepAlive(60);      // FIX: tăng từ default 15s lên 60s
-    mqttClient.setSocketTimeout(15);  // FIX: timeout rõ ràng
+    mqttClient.setKeepAlive(60);
+    mqttClient.setSocketTimeout(15);
 
     otaLogQueue = xQueueCreate(8, sizeof(OtaLogEvent));
 
@@ -205,7 +192,6 @@ void MqttManager::update() {
 
     mqttClient.loop();
 
-    // Drain hàng đợi OTA log (từ task OTA chạy trên core khác)
     if (otaLogQueue) {
         OtaLogEvent evt;
         while (xQueueReceive(otaLogQueue, &evt, 0) == pdTRUE) {
@@ -213,8 +199,6 @@ void MqttManager::update() {
         }
     }
 
-    // *** KEY FIX: flush deferred actions SAU khi loop() hoàn thành ***
-    // Lúc này buffer của PubSubClient đã free, publish an toàn
     if (pendingStatusOk_) {
         pendingStatusOk_ = false;
         publishStatus("ok", "configuration applied");
@@ -236,11 +220,6 @@ void MqttManager::reconnect() {
 
     Logger::debugPrintln("MQTT da ket noi thanh cong!");
 
-    // Giới hạn nền tảng thật (xem Global Constraints trong plan
-    // sensor-node-ota): framework=arduino không cho cấu hình
-    // CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE như bên controller
-    // (ESP-IDF). Gọi hàm này vẫn đúng/an toàn — vô hại nếu bootloader
-    // hiện tại không hỗ trợ rollback tự động.
     if (otaValidationGate.markIfNeeded()) {
         esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
         if (err == ESP_OK) {
@@ -250,10 +229,8 @@ void MqttManager::reconnect() {
         }
     }
 
-    // FIX: subscribe QoS 0 cho config topic — tránh QoS 1 PUBACK bị corrupt
-    // bởi publish() gọi trong callback (cùng buffer)
     mqttClient.subscribe(TOPIC_COMMAND.c_str(), 0);
-    mqttClient.subscribe(TOPIC_CONFIG.c_str(), 0);  // ← QoS 0, không cần PUBACK
+    mqttClient.subscribe(TOPIC_CONFIG.c_str(), 0);
 
     publishStatus("online", "Sensor node connected");
 }
@@ -271,7 +248,6 @@ void MqttManager::mqttCallback(char* topic, byte* payload, unsigned int length) 
         instance->handleCommand(message);
     } else if (strcmp(topic, TOPIC_CONFIG.c_str()) == 0) {
         instance->handleConfig(message);
-        // KHÔNG publishStatus ở đây — set flag, flush ở update()
     }
 }
 
@@ -325,7 +301,6 @@ void MqttManager::handleUpdateWifiList(JsonDocument& doc) {
 void MqttManager::handleConfig(const String& payload) {
     JsonDocument doc;
     if (deserializeJson(doc, payload)) {
-        // Lỗi parse — không publish từ đây, set flag lỗi nếu cần
         Logger::debugPrintln("[CONFIG] Loi parse JSON config");
         return;
     }
@@ -336,15 +311,24 @@ void MqttManager::handleConfigDocument(JsonDocument& doc) {
     Logger::debugPrintln("[CONFIG] Nhan cau hinh tu Backend, dang ap dung...");
     appConfig.applyFromJson(doc);
 
+    // AppConfig stores pH calibration voltages in volts. PhSensorConfig stores mV.
+    // Apply the converted values immediately so the next pH sample uses the new calibration.
+    const float v686Mv = appConfig.sensor.phV686 * 1000.0f;
+    const float v4Mv = appConfig.sensor.phV4 * 1000.0f;
+    const float v918Mv = appConfig.sensor.phV918 * 1000.0f;
+    const String mode = appConfig.sensor.phCalibrationMode;
+
+    sensors_.applyPhCalibration(v686Mv, v4Mv, v918Mv, mode);
+
+    sensors_.enablePh(appConfig.sensor.enablePh);
+    sensors_.enableTemperature(appConfig.sensor.enableTemperature);
+    sensors_.enableTds(appConfig.sensor.enableTds);
+
     Logger::debugPrintf("[CONFIG] publish_interval=%lu ms, enablePh=%d, enableTds=%d\n",
         appConfig.publishInterval,
         (int)appConfig.sensor.enablePh,
         (int)appConfig.sensor.enableTds);
 
-    // *** KEY FIX: KHÔNG gọi publishStatus() trực tiếp ở đây ***
-    // publishStatus() ghi vào mqttClient buffer, nhưng lúc này
-    // PubSubClient đang dùng buffer đó để gửi PUBACK (nếu QoS 1).
-    // Dù đã subscribe QoS 0, vẫn defer để an toàn tuyệt đối.
     pendingStatusOk_ = true;
 }
 
@@ -367,12 +351,12 @@ void MqttManager::publishSensorData() {
     doc["temp"]           = data.temperature;
     doc["water_level"]    = data.waterLevel;
     doc["ph_voltage_mv"]  = data.phVoltageMv;
-    doc["time"]           = timeBuffer;
-    doc["rssi"]           = WiFi.RSSI();
+    doc["time"]            = timeBuffer;
+    doc["rssi"]            = WiFi.RSSI();
     doc["free_heap"]      = ESP.getFreeHeap();
 
     doc["err_temp"]       = data.errTemperature;
-    doc["err_water"]      = data.errWaterLevel;
+    doc["err_water"]       = data.errWaterLevel;
     doc["err_ph"]         = data.errPh;
     doc["err_tds"]        = data.errTds;
 

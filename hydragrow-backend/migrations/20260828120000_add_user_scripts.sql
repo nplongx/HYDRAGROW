@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS user_scripts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+    device_id TEXT NOT NULL REFERENCES device_config(device_id) ON DELETE CASCADE,
     kind TEXT NOT NULL CHECK (kind IN ('alert', 'recipe_override')),
     name TEXT NOT NULL,
     source TEXT NOT NULL,

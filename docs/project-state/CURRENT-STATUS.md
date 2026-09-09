@@ -10,4 +10,4 @@
 - Fleet OTA + WiFi Provisioning Transaction (OTA-WIFI-TRANSACTION-001): IMPLEMENTED — host suites green (shared 66, core 202, backend 226, frontend 262); ESP32 target build + pilot rollout pending (Tasks 13-14)
 - Hi-Fi D1–D3 (HIFI-D1-D3-001): VERIFIED — pH interlock, global emergency stop, schedule conflict banner, and real-time status pills implemented and tested across backend, firmware, and frontend.
 - Hi-Fi D4–D6 (HIFI-D4-D6-001): VERIFIED — crop season progress bar & delay calculation, Cloudinary photo journal, saving active crop season as recipe template, and dosing history time-range tabs with hourly chart & anomaly detection implemented and tested.
-
+- AI Supervisor Shared Query Crate (SUPERVISOR-QUERY-001): VERIFIED — hydragrow-supervisor-query library crate implemented with closed 6-query allowlist, validate_and_clamp bounds, device-scope checking, GET-only HttpQueryBackend, output truncation, and FakeQueryBackend for testing (14 unit tests green).

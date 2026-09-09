@@ -26,7 +26,10 @@ impl CloudinaryConfig {
     /// sha256("param1=val1&param2=val2&...&api_secret={secret}") với tham số sắp theo alphabet.
     /// Ở đây chỉ ký "folder" và "timestamp" (đã đúng thứ tự alphabet: folder < timestamp).
     pub fn sign_upload(&self, folder: &str, timestamp: i64) -> String {
-        let to_sign = format!("folder={}&timestamp={}{}", folder, timestamp, self.api_secret);
+        let to_sign = format!(
+            "folder={}&timestamp={}{}",
+            folder, timestamp, self.api_secret
+        );
         let mut hasher = Sha256::new();
         hasher.update(to_sign.as_bytes());
         hex::encode(hasher.finalize())

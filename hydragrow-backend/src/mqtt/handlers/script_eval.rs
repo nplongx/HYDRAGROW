@@ -343,7 +343,10 @@ pub async fn eval_flow_chain(
         else {
             continue;
         };
-        let ctx = resolved_context_by_node.get(&s.id).cloned().unwrap_or_default();
+        let ctx = resolved_context_by_node
+            .get(&s.id)
+            .cloned()
+            .unwrap_or_default();
         let mut sample: HashMap<String, crate::models::script::SampleValue> = [
             (
                 "ph".to_string(),
@@ -389,10 +392,7 @@ pub async fn eval_flow_chain(
     }
     for (config_key, contenders) in &contenders_by_key {
         if let Err(e) = crate::services::config_override::reconcile_config_overwrite_group(
-            pool,
-            device_id,
-            config_key,
-            contenders,
+            pool, device_id, config_key, contenders,
         )
         .await
         {
@@ -413,7 +413,9 @@ pub async fn eval_flow_chain(
     }
 
     for (script_id, _result) in &fired {
-        if let Err(e) = crate::services::execution_log::log_success(pool, *script_id, device_id).await {
+        if let Err(e) =
+            crate::services::execution_log::log_success(pool, *script_id, device_id).await
+        {
             warn!(device_id, script_id = %script_id, error = %e, "failed to write execution log");
         }
     }
@@ -685,7 +687,9 @@ pub async fn handle_fired_alert(
     }
     let _ = app_state
         .event_bus
-        .send(hydragrow_shared::events::AppEvent::SystemAlert(alert_msg.clone()));
+        .send(hydragrow_shared::events::AppEvent::SystemAlert(
+            alert_msg.clone(),
+        ));
 
     let level_lower = alert_msg.level.to_lowercase();
     let should_send_fcm =
@@ -693,7 +697,11 @@ pub async fn handle_fired_alert(
     if should_send_fcm {
         let tokens = match app_state.fcm_tokens.lock() {
             Ok(guard) => guard.get(device_id).cloned().unwrap_or_default(),
-            Err(poisoned) => poisoned.into_inner().get(device_id).cloned().unwrap_or_default(),
+            Err(poisoned) => poisoned
+                .into_inner()
+                .get(device_id)
+                .cloned()
+                .unwrap_or_default(),
         };
         if !tokens.is_empty() {
             let title = alert_msg.title.clone();

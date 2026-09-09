@@ -100,44 +100,26 @@ mod tests {
         .await
         .unwrap();
 
-        set_delivery_state(
-            &pool,
-            "device-001",
-            8,
-            delivery_state::PENDING,
-            None,
-        )
-        .await
-        .unwrap();
+        set_delivery_state(&pool, "device-001", 8, delivery_state::PENDING, None)
+            .await
+            .unwrap();
 
         let view = get_wifi_config_view(&pool, "device-001").await.unwrap();
         assert_eq!(view.config_version, 8);
         assert_eq!(view.state, delivery_state::PENDING);
         assert_eq!(view.ssids.len(), 1);
 
-        set_delivery_state(
-            &pool,
-            "device-001",
-            8,
-            delivery_state::APPLIED,
-            Some("ok"),
-        )
-        .await
-        .unwrap();
+        set_delivery_state(&pool, "device-001", 8, delivery_state::APPLIED, Some("ok"))
+            .await
+            .unwrap();
 
         let view = get_wifi_config_view(&pool, "device-001").await.unwrap();
         assert_eq!(view.state, delivery_state::APPLIED);
 
         // Stale delivery rows report pending until matching version applies.
-        set_delivery_state(
-            &pool,
-            "device-001",
-            7,
-            delivery_state::APPLIED,
-            None,
-        )
-        .await
-        .unwrap();
+        set_delivery_state(&pool, "device-001", 7, delivery_state::APPLIED, None)
+            .await
+            .unwrap();
 
         let view = get_wifi_config_view(&pool, "device-001").await.unwrap();
         assert_eq!(view.state, delivery_state::PENDING);
@@ -145,9 +127,7 @@ mod tests {
 
     #[test]
     fn metadata_from_provision_never_contains_passwords() {
-        use hydragrow_shared::{
-            WifiProvisionConfig, WifiProvisionEntry, WifiSecretAction,
-        };
+        use hydragrow_shared::{WifiProvisionConfig, WifiProvisionEntry, WifiSecretAction};
 
         let config = WifiProvisionConfig {
             config_version: 8,
@@ -169,9 +149,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn replace_device_wifi_config_inserts_entries_with_version_one(
-        pool: sqlx::PgPool,
-    ) {
+    async fn replace_device_wifi_config_inserts_entries_with_version_one(pool: sqlx::PgPool) {
         let entries = vec![
             WifiSsidEntry {
                 ssid: "HomeNet".into(),
@@ -192,9 +170,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn replace_device_wifi_config_bumps_version_on_second_call(
-        pool: sqlx::PgPool,
-    ) {
+    async fn replace_device_wifi_config_bumps_version_on_second_call(pool: sqlx::PgPool) {
         let first = vec![WifiSsidEntry {
             ssid: "HomeNet".into(),
             priority: 0,
@@ -219,9 +195,7 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn replace_device_wifi_config_does_not_affect_other_devices(
-        pool: sqlx::PgPool,
-    ) {
+    async fn replace_device_wifi_config_does_not_affect_other_devices(pool: sqlx::PgPool) {
         replace_device_wifi_config(
             &pool,
             "esp-a",
@@ -251,12 +225,8 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn get_device_wifi_config_returns_empty_for_unknown_device(
-        pool: sqlx::PgPool,
-    ) {
-        let rows = get_device_wifi_config(&pool, "never-seen")
-            .await
-            .unwrap();
+    async fn get_device_wifi_config_returns_empty_for_unknown_device(pool: sqlx::PgPool) {
+        let rows = get_device_wifi_config(&pool, "never-seen").await.unwrap();
 
         assert!(rows.is_empty());
     }
@@ -278,9 +248,7 @@ mod tests {
             .await
             .unwrap();
 
-        let rows = get_device_wifi_config(&pool, "esp-order")
-            .await
-            .unwrap();
+        let rows = get_device_wifi_config(&pool, "esp-order").await.unwrap();
 
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].ssid, "First");

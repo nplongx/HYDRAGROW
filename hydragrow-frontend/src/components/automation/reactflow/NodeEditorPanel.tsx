@@ -27,7 +27,6 @@ import {
   SafeNote,
   InputWithSuffix,
   InputWithButton,
-  PillsSelector,
   InspectorShell,
 } from "./ConfigPanelUI";
 

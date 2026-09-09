@@ -2,15 +2,22 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 pub async fn log_success(pool: &PgPool, script_id: Uuid, device_id: &str) -> anyhow::Result<()> {
-    sqlx::query("INSERT INTO flow_execution_log (script_id, device_id, status) VALUES ($1, $2, 'success')")
-        .bind(script_id)
-        .bind(device_id)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "INSERT INTO flow_execution_log (script_id, device_id, status) VALUES ($1, $2, 'success')",
+    )
+    .bind(script_id)
+    .bind(device_id)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
-pub async fn log_error(pool: &PgPool, script_id: Uuid, device_id: &str, message: &str) -> anyhow::Result<()> {
+pub async fn log_error(
+    pool: &PgPool,
+    script_id: Uuid,
+    device_id: &str,
+    message: &str,
+) -> anyhow::Result<()> {
     sqlx::query("INSERT INTO flow_execution_log (script_id, device_id, status, error_message) VALUES ($1, $2, 'error', $3)")
         .bind(script_id)
         .bind(device_id)
@@ -42,7 +49,10 @@ mod tests {
 
     #[sqlx::test(migrations = "./migrations")]
     async fn success_rate_percent_is_none_with_no_history(pool: sqlx::PgPool) {
-        assert_eq!(success_rate_percent(&pool, "dev-empty").await.unwrap(), None);
+        assert_eq!(
+            success_rate_percent(&pool, "dev-empty").await.unwrap(),
+            None
+        );
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -67,8 +77,13 @@ mod tests {
         log_success(&pool, script_id, "dev-rate").await.unwrap();
         log_success(&pool, script_id, "dev-rate").await.unwrap();
         log_success(&pool, script_id, "dev-rate").await.unwrap();
-        log_error(&pool, script_id, "dev-rate", "reconcile failed").await.unwrap();
-        let rate = success_rate_percent(&pool, "dev-rate").await.unwrap().unwrap();
+        log_error(&pool, script_id, "dev-rate", "reconcile failed")
+            .await
+            .unwrap();
+        let rate = success_rate_percent(&pool, "dev-rate")
+            .await
+            .unwrap()
+            .unwrap();
         assert!((rate - 75.0).abs() < 0.01, "expected 75%, got {rate}");
     }
 }

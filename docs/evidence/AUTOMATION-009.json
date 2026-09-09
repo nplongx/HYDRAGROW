@@ -1,0 +1,26 @@
+{
+  "requirement_id": "AUTOMATION-009",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test script_engine:: && npx vitest run src/lib/automation/compileToRhai.test.ts",
+      "verified_at": "2026-09-09",
+      "notes": "notifyFcm is compiled to Rhai map and parsed into AlertOutput.notify_fcm"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test script_eval::",
+      "verified_at": "2026-09-09",
+      "notes": "shared handle_fired_alert invoked in cron_scheduler.rs tick_once loop"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npx vitest run src/components/automation/reactflow/NodeEditorPanel.test.tsx src/components/automation/reactflow/NodePalette.test.tsx",
+      "verified_at": "2026-09-09",
+      "notes": "NodeEditorPanel shows real FCM override control and NodePalette has no Delay node"
+    }
+  ]
+}

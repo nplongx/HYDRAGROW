@@ -806,7 +806,14 @@ fn main(input) {
         let ast = engine
             .compile(r#"fn main(input) { #{"level": "info", "title": "t", "message": "m", "notify_fcm": true} }"#)
             .unwrap();
-        let input = ScriptSensorInput { ph: 6.0, ec: 1.5, temp: 24.0, water_level: 80.0, device_id: "d".into(), timestamp_ms: 0 };
+        let input = ScriptSensorInput {
+            ph: 6.0,
+            ec: 1.5,
+            temp: 24.0,
+            water_level: 80.0,
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
         let result = engine.eval_alert(&ast, &input).unwrap().unwrap();
         assert_eq!(result.notify_fcm, Some(true));
     }
@@ -817,7 +824,14 @@ fn main(input) {
         let ast = engine
             .compile(r#"fn main(input) { #{"level": "info", "title": "t", "message": "m"} }"#)
             .unwrap();
-        let input = ScriptSensorInput { ph: 6.0, ec: 1.5, temp: 24.0, water_level: 80.0, device_id: "d".into(), timestamp_ms: 0 };
+        let input = ScriptSensorInput {
+            ph: 6.0,
+            ec: 1.5,
+            temp: 24.0,
+            water_level: 80.0,
+            device_id: "d".into(),
+            timestamp_ms: 0,
+        };
         let result = engine.eval_alert(&ast, &input).unwrap().unwrap();
         assert_eq!(result.notify_fcm, None);
     }

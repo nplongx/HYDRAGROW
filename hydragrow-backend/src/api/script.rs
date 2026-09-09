@@ -571,8 +571,10 @@ pub async fn get_execution_success_rate(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
-    match crate::services::execution_log::success_rate_percent(&app_state.pg_pool, &device_id).await {
-        Ok(rate) => HttpResponse::Ok().json(json!({ "status": "success", "data": { "successRatePercent": rate } })),
+    match crate::services::execution_log::success_rate_percent(&app_state.pg_pool, &device_id).await
+    {
+        Ok(rate) => HttpResponse::Ok()
+            .json(json!({ "status": "success", "data": { "successRatePercent": rate } })),
         Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
     }
 }
@@ -582,7 +584,10 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route("", web::post().to(create_script))
         .route("/validate", web::post().to(validate_script))
         .route("/test", web::post().to(test_script))
-        .route("/execution-success-rate", web::get().to(get_execution_success_rate))
+        .route(
+            "/execution-success-rate",
+            web::get().to(get_execution_success_rate),
+        )
         .route("/config-overrides", web::get().to(list_config_overrides))
         .route(
             "/config-overrides/{override_id}/revert",
@@ -1034,7 +1039,7 @@ mod tests {
         pool: sqlx::PgPool,
     ) {
         use crate::services::config_override::{
-            reconcile_config_overwrite_group, ConfigOverwriteDirective, OverwriteContender,
+            ConfigOverwriteDirective, OverwriteContender, reconcile_config_overwrite_group,
         };
         crate::db::postgres::upsert_device_config(
             &pool,
@@ -1082,6 +1087,9 @@ mod tests {
         .unwrap();
         assert_eq!(row.0, "1.8");
         assert_eq!(row.1, "2.4");
-        assert_ne!(row.0, row.1, "override_value must no longer duplicate original_value");
+        assert_ne!(
+            row.0, row.1,
+            "override_value must no longer duplicate original_value"
+        );
     }
 }

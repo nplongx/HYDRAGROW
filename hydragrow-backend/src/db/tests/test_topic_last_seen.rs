@@ -29,7 +29,13 @@ mod tests {
         let topics = get_topics_for_device(&pool, "device-001").await.unwrap();
         assert_eq!(topics.len(), 1);
         // TIMESTAMPTZ stores microsecond precision; allow sub-millisecond truncation.
-        assert!((topics[0].last_seen_at - second).num_microseconds().unwrap().abs() < 1000);
+        assert!(
+            (topics[0].last_seen_at - second)
+                .num_microseconds()
+                .unwrap()
+                .abs()
+                < 1000
+        );
     }
 
     #[sqlx::test]

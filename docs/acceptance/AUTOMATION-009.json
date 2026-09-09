@@ -1,0 +1,24 @@
+{
+  "requirement_id": "AUTOMATION-009",
+  "objective": "Thread notifyFcm through compile -> eval -> AlertOutput, extract shared handle_fired_alert for sensor and cron triggers, replace fake Email/Webhook channel pills with real FCM dropdown, and remove unsupported Delay node.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "notifyFcm is compiled to Rhai map and parsed into AlertOutput.notify_fcm.",
+      "verification": "Unit tests in compileToRhai.test.ts and script_engine.rs verify notifyFcm emission and parsing.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "cron-triggered alerts execute handle_fired_alert, persisting system events and attempting FCM dispatch.",
+      "verification": "Unit tests in script_eval.rs verify shared handle_fired_alert behavior.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "NodeEditorPanel shows real FCM override control and no Email/Webhook pills; NodePalette has no Delay node.",
+      "verification": "Unit tests in NodeEditorPanel.test.tsx and NodePalette.test.tsx verify UI controls.",
+      "evidence_required": true
+    }
+  ]
+}

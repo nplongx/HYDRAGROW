@@ -217,12 +217,32 @@ mod tests {
             water_received_ms: None,
         };
         let payload = build_cron_payload(&latest, "dev-1");
-        assert_eq!(payload.get("ph").and_then(|v| v.as_f64()), Some(6.4f32 as f64));
-        assert_eq!(payload.get("ec").and_then(|v| v.as_f64()), Some(1.9f32 as f64));
-        assert_eq!(payload.get("temp").and_then(|v| v.as_f64()), Some(25.5f32 as f64));
-        assert_eq!(payload.get("water_level").and_then(|v| v.as_f64()), Some(80.0f32 as f64));
-        assert_eq!(payload.get("device_id").and_then(|v| v.as_str()), Some("dev-1"));
-        assert!(payload.get("timestamp_ms").and_then(|v| v.as_i64()).is_some());
+        assert_eq!(
+            payload.get("ph").and_then(|v| v.as_f64()),
+            Some(6.4f32 as f64)
+        );
+        assert_eq!(
+            payload.get("ec").and_then(|v| v.as_f64()),
+            Some(1.9f32 as f64)
+        );
+        assert_eq!(
+            payload.get("temp").and_then(|v| v.as_f64()),
+            Some(25.5f32 as f64)
+        );
+        assert_eq!(
+            payload.get("water_level").and_then(|v| v.as_f64()),
+            Some(80.0f32 as f64)
+        );
+        assert_eq!(
+            payload.get("device_id").and_then(|v| v.as_str()),
+            Some("dev-1")
+        );
+        assert!(
+            payload
+                .get("timestamp_ms")
+                .and_then(|v| v.as_i64())
+                .is_some()
+        );
     }
 
     #[test]

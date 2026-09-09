@@ -2,13 +2,15 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-/// Nguồn dữ liệu DUY NHẤT cho danh sách config key được phép Đọc/Ghi đè qua
-/// Flow — dùng chung bởi backend (module này) và frontend
-/// (hydragrow-frontend/src/lib/automation/ir.ts, import trực tiếp cùng file
-/// JSON qua Vite `resolveJsonModule`). Sửa danh sách key ở ĐÚNG MỘT NƠI: file
-/// JSON, không sửa Rust/TS riêng lẻ.
-const REGISTRY_JSON: &str =
-    include_str!("../../../hydragrow-frontend/src/lib/automation/device-config-keys.json");
+/// Bản sao CÓ CHỦ ĐÍCH của hydragrow-frontend/src/lib/automation/device-config-keys.json.
+/// KHÔNG include_str! trực tiếp vào thư mục hydragrow-frontend ở đây: Docker
+/// build của backend (./Dockerfile, hydragrow-backend/Dockerfile) chỉ COPY
+/// hydragrow-shared + hydragrow-backend vào build context — hydragrow-frontend
+/// không tồn tại ở đó, nên include_str! xuyên thư mục sẽ làm build release
+/// lỗi compile (CI không phát hiện được vì backend-ci.yml checkout toàn bộ
+/// repo). Test `sync_with_frontend` bên dưới đối chiếu 2 file để tránh lệch —
+/// sửa danh sách key thì phải sửa CẢ HAI file giống hệt nhau.
+const REGISTRY_JSON: &str = include_str!("../../config/device-config-keys.json");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -102,6 +104,25 @@ mod tests {
     #[test]
     fn clamp_is_a_no_op_for_a_key_outside_the_registry() {
         assert_eq!(clamp("control_mode", 42.0), (42.0, false));
+    }
+
+    /// Chỉ đọc thư mục frontend trong `cargo test` (CI checkout đầy đủ repo,
+    /// xem .github/workflows/backend-ci.yml) — KHÔNG dùng ngoài #[cfg(test)],
+    /// nếu không build release trong Docker sẽ lỗi vì hydragrow-frontend
+    /// không có trong build context của backend.
+    #[test]
+    fn backend_copy_matches_frontend_copy_byte_for_byte() {
+        const FRONTEND_COPY: &str = include_str!(
+            "../../../hydragrow-frontend/src/lib/automation/device-config-keys.json"
+        );
+        assert_eq!(
+            REGISTRY_JSON, FRONTEND_COPY,
+            "hydragrow-backend/config/device-config-keys.json đã lệch với \
+            hydragrow-frontend/src/lib/automation/device-config-keys.json — \
+            đây là 2 bản sao có chủ đích (không phải 1 file share qua include_str! \
+            xuyên thư mục), sửa danh sách config key thì phải sửa CẢ HAI file \
+            giống hệt nhau."
+        );
     }
 
     #[test]

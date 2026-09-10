@@ -79,13 +79,16 @@ jobs:
             PR_SECTION="**Pull Request:** none (failure on main)"
           fi
 
+          # Keep GitHub expressions out of the heredoc. Their rendered values
+          # can contain shell-significant characters, and an unquoted heredoc
+          # makes bash rescan the body for parameter/command substitutions.
           cat > /tmp/hotfix_body.md << BODY
           ## 🔴 CI failure — auto-filed
 
-          **Workflow:** \`${{ github.event.workflow_run.name }}\`
-          **Commit:** \`${{ github.event.workflow_run.head_sha }}\`
-          **Run:** ${{ github.event.workflow_run.html_url }}
-          **Context:** ${{ steps.ids.outputs.context }}
+          **Workflow:** \`${WORKFLOW_NAME}\`
+          **Commit:** \`${WORKFLOW_SHA}\`
+          **Run:** ${RUN_URL}
+          **Context:** ${CONTEXT}
           ${PR_SECTION}
 
           ### Task type: Hotfix (priority: high)
@@ -93,7 +96,7 @@ jobs:
           Jules thực hiện theo \`.agent/tasks/hotfix.md\` — 3-phase protocol
           (Discovery → Test → Fix), branch prefix \`hotfix/\`.
 
-          1. Checkout commit \`${{ github.event.workflow_run.head_sha }}\`,
+          1. Checkout commit \`${WORKFLOW_SHA}\`,
              mở run log ở trên để xem lỗi cụ thể.
           2. Reproduce lỗi bằng đúng lệnh verify của subsystem liên quan
              (xem \`.agent/jules.yml\` → \`commands`).
@@ -113,6 +116,11 @@ jobs:
           BODY
         env:
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONTEXT: ${{ steps.ids.outputs.context }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Create hotfix issue
         if: steps.dedup.outputs.existing == ''

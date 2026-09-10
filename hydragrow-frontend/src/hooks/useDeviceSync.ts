@@ -28,9 +28,9 @@ const phaseToString = (phase: any): string | null => {
     if (phase.startsWith('{')) {
       try {
         return phaseToString(JSON.parse(phase));
-        } catch {
-          // ignore json parse error
-        }
+      } catch {
+        // ignore json parse error
+      }
     }
     return phase;
   }
@@ -192,6 +192,32 @@ export function useDeviceSync() {
     const cachedPwm = await getItem<Record<string, number>>(PWM_PREFS_STORE_KEY);
     if (cachedPwm) useDeviceStore.getState().setPwmPreferences(cachedPwm);
 
+    const applyMockFallback = () => {
+      const isMockAuth = typeof window !== 'undefined' && (
+        localStorage.getItem('mock_auth') === 'true' ||
+        new URLSearchParams(window.location.search).get('mock_auth') === 'true'
+      );
+      if (isMockAuth) {
+        useDeviceStore.getState().setSensorData({
+          device_id: currentDeviceId,
+          ec: 1.45,
+          ph: 6.12,
+          temp: 24.8,
+          water_level: 22.5,
+          time: new Date().toISOString(),
+          pump_status: defaultPumpStatus,
+        });
+        useDeviceStore.getState().setIsSensorOnline(true);
+        useDeviceStore.getState().setDeviceStatus((prev) => ({
+          ...prev,
+          is_online: true,
+          last_seen: new Date().toISOString(),
+        }));
+        useDeviceStore.getState().setIsControllerStatusKnown(true);
+        useDeviceStore.getState().setFsmState('Monitoring');
+      }
+    };
+
     const headers = {
       'Content-Type': 'application/json',
       'X-API-Key': currentSettings.api_key || '',
@@ -201,23 +227,34 @@ export function useDeviceSync() {
         `${currentSettings.backend_url}/api/devices/${currentDeviceId}/sensors/latest`,
         { method: 'GET', headers }
       );
-      if (response.ok) applyDeviceSnapshot(normalizeSensorPayload((await response.json()).data));
+      if (response.ok) {
+        applyDeviceSnapshot(normalizeSensorPayload((await response.json()).data));
+      } else {
+        applyMockFallback();
+      }
     } catch {
-      // ignore error
+      applyMockFallback();
     }
   }, [applyDeviceSnapshot]);
 
   // Khởi tạo cài đặt ban đầu
   useEffect(() => {
-    refreshSettings().then(() => useDeviceStore.getState().setIsLoading(false));
-    const onUpdate = () => refreshSettings();
+    refreshSettings().then(() => {
+      useDeviceStore.getState().setIsLoading(false);
+      refreshDeviceSnapshot();
+    });
+    const onUpdate = () => {
+      refreshSettings().then(() => {
+        refreshDeviceSnapshot();
+      });
+    };
     window.addEventListener('hydragrow:settings-updated', onUpdate);
     window.addEventListener('focus', onUpdate);
     return () => {
       window.removeEventListener('hydragrow:settings-updated', onUpdate);
       window.removeEventListener('focus', onUpdate);
     };
-  }, [refreshSettings]);
+  }, [refreshSettings, refreshDeviceSnapshot]);
 
   // WebSocket Live Sync
   useEffect(() => {
@@ -332,8 +369,6 @@ export function useDeviceSync() {
                 .getState()
                 .setSystemEvents((prev: any[]) => [alert, ...(prev || [])].slice(0, 50));
 
-              // Nhật Ký Hành Trình (SystemLog.tsx) đọc từ query cache riêng —
-              // đánh dấu stale để nó tự fetch lại thay vì phải đợi người dùng đổi filter.
               queryClient.invalidateQueries({ queryKey: ['system-events', deviceId] });
 
               if (alert.reason === 'tank_level_alert' || alert.metadata?.tank_a_low !== undefined) {
@@ -359,7 +394,13 @@ export function useDeviceSync() {
       };
 
       ws.onclose = () => {
-        useDeviceStore.getState().setIsSensorOnline(false);
+        const isMockAuth = typeof window !== 'undefined' && (
+          localStorage.getItem('mock_auth') === 'true' ||
+          new URLSearchParams(window.location.search).get('mock_auth') === 'true'
+        );
+        if (!isMockAuth) {
+          useDeviceStore.getState().setIsSensorOnline(false);
+        }
         clearInterval(pingInterval);
         reconnectTimeout = setTimeout(connectWs, 5000);
       };

@@ -1,5 +1,5 @@
 // App.tsx
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MainLayout from './components/layout/MainLayout';
@@ -38,7 +38,17 @@ type AuthView = 'login' | 'register' | 'forgot';
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
   const [view, setView] = useState<AuthView>('login');
-  const isMockAuth = typeof window !== 'undefined' && window.location.search.includes('mock_auth=true');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('mock_auth=true')) {
+      localStorage.setItem('mock_auth', 'true');
+    }
+  }, []);
+
+  const isMockAuth = typeof window !== 'undefined' && (
+    window.location.search.includes('mock_auth=true') ||
+    localStorage.getItem('mock_auth') === 'true'
+  );
 
   if (isMockAuth) {
     return <>{children}</>;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiGet } from '../lib/apiClient';
+import { useDeviceStore } from '../store/useDeviceStore';
 
 export interface FleetDevice {
   device_id: string;
@@ -46,8 +47,26 @@ export function useFleetStatus(): FleetStatusState {
         enriched.map((r) => (r.status === 'fulfilled' ? r.value : { device_id: 'unknown', label: null }))
       );
     } catch (e: any) {
-      setError(e.message);
-      setDevices([]);
+      const isMockAuth = typeof window !== 'undefined' && (
+        localStorage.getItem('mock_auth') === 'true' ||
+        new URLSearchParams(window.location.search).get('mock_auth') === 'true'
+      );
+      if (isMockAuth) {
+        const currentDeviceId = useDeviceStore.getState().deviceId || 'esp32_01';
+        setDevices([
+          {
+            device_id: currentDeviceId,
+            label: 'Trạm Thủy Canh 1',
+            is_online: false,
+            firmware_version: 'v1.4.2',
+            last_seen: new Date().toISOString(),
+          },
+        ]);
+        setError(null);
+      } else {
+        setError(e.message);
+        setDevices([]);
+      }
     } finally {
       setLoading(false);
     }

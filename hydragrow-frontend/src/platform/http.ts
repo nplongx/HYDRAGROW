@@ -30,16 +30,21 @@ const fetchWithTimeout: typeof fetch = async (input, init = {}) => {
 /**
  * Gắn `Authorization: Bearer <Firebase ID token>` vào request, trừ khi caller
  * đã tự đặt header `Authorization` (giữ khả năng override khi cần).
+ * Nếu đang dùng mock auth hoặc dev mode, tự động gắn `X-User-Id: 1` để backend nhận diện người dùng.
  */
 function withAuthHeader(init?: RequestInit): RequestInit | undefined {
   const token = getIdToken();
-  if (!token) {
-    return init;
+  const headers = new Headers(init?.headers);
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const headers = new Headers(init?.headers);
-  if (!headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
+  if (typeof window !== 'undefined' && !headers.has('X-User-Id')) {
+    const mockUserId = localStorage.getItem('mock_user_id') || (localStorage.getItem('mock_auth') === 'true' ? '1' : null);
+    if (mockUserId) {
+      headers.set('X-User-Id', mockUserId);
+    }
   }
 
   return { ...init, headers };

@@ -1,0 +1,59 @@
+name: jules-bug-collector
+
+# Converts confirmed Jules detector findings into GitHub issues.
+# Jules only analyzes. GitHub Actions owns issue creation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      finding:
+        description: "Paste Jules_BUG_FINDING output"
+        required: true
+        type: string
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-issue:
+    name: "Create bug issue from Jules finding"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate finding
+        id: validate
+        env:
+          FINDING: ${{ inputs.finding }}
+        run: |
+          set -euo pipefail
+          echo "$FINDING" | grep -q "JULES_BUG_FINDING" || {
+            echo "::error::Invalid Jules finding format"
+            exit 1
+          }
+          echo "$FINDING" > finding.md
+
+      - name: Create labels
+        run: |
+          gh label create "jules-detected" \
+            --repo "${{ github.repository }}" \
+            --color "b60205" \
+            --description "Finding reported by Jules detector" \
+            2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create issue
+        run: |
+          set -euo pipefail
+          TITLE=$(grep '^title:' finding.md | sed 's/^title: *//' || true)
+          if [ -z "$TITLE" ]; then
+            TITLE="[Jules Detected Bug] Untitled finding"
+          fi
+
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "$TITLE" \
+            --body-file finding.md \
+            --label "bug,jules-detected"
+        env:
+          GH_TOKEN: ${{ github.token }}

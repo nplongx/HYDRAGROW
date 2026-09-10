@@ -1,38 +1,66 @@
 name: jules-bug-collector
 
-# Converts confirmed Jules detector findings into GitHub issues.
+# Converts Jules detector findings into GitHub issues.
 # Jules only analyzes. GitHub Actions owns issue creation.
 
 on:
+  workflow_run:
+    workflows:
+      - "jules-bug-detector"
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       finding:
-        description: "Paste Jules_BUG_FINDING output"
-        required: true
+        description: "Optional manual Jules_BUG_FINDING output"
+        required: false
         type: string
 
 permissions:
-  issues: write
+  actions: read
   contents: read
+  issues: write
 
 jobs:
-  create-issue:
-    name: "Create bug issue from Jules finding"
+  collect:
+    name: "Collect Jules bug finding"
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      - name: Download detector artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: jules-bug-finding
+          path: finding
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Load manual finding
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p finding
+          printf '%s\n' '${{ inputs.finding }}' > finding/jules-finding.md
+
       - name: Validate finding
-        id: validate
-        env:
-          FINDING: ${{ inputs.finding }}
         run: |
           set -euo pipefail
-          echo "$FINDING" | grep -q "JULES_BUG_FINDING" || {
-            echo "::error::Invalid Jules finding format"
-            exit 1
-          }
-          echo "$FINDING" > finding.md
+          test -f finding/jules-finding.md
+          grep -q "JULES_BUG_FINDING" finding/jules-finding.md
+
+      - name: Skip non-confirmed findings
+        id: gate
+        run: |
+          if grep -q '^status: confirmed' finding/jules-finding.md; then
+            echo "confirmed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "confirmed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Create labels
+        if: steps.gate.outputs.confirmed == 'true'
         run: |
           gh label create "jules-detected" \
             --repo "${{ github.repository }}" \
@@ -42,18 +70,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Create issue
+      - name: Check duplicates
+        if: steps.gate.outputs.confirmed == 'true'
+        id: duplicate
         run: |
-          set -euo pipefail
-          TITLE=$(grep '^title:' finding.md | sed 's/^title: *//' || true)
-          if [ -z "$TITLE" ]; then
-            TITLE="[Jules Detected Bug] Untitled finding"
-          fi
+          TITLE=$(grep '^title:' finding/jules-finding.md | sed 's/^title: *//' || true)
+          EXISTING=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --label "jules-detected" \
+            --search "in:title $TITLE" \
+            --json number \
+            --jq '.[0].number' || true)
+          echo "issue=$EXISTING" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
+      - name: Create bug issue
+        if: steps.gate.outputs.confirmed == 'true' && steps.duplicate.outputs.issue == ''
+        run: |
+          TITLE=$(grep '^title:' finding/jules-finding.md | sed 's/^title: *//' || true)
           gh issue create \
             --repo "${{ github.repository }}" \
-            --title "$TITLE" \
-            --body-file finding.md \
+            --title "[Jules Detected Bug] ${TITLE}" \
+            --body-file finding/jules-finding.md \
             --label "bug,jules-detected"
         env:
           GH_TOKEN: ${{ github.token }}

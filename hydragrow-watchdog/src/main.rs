@@ -21,7 +21,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let client = BackendClient::new(config.backend_url.clone(), config.api_key.clone());
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(config.poll_interval_secs));
+    let mut interval =
+        tokio::time::interval(std::time::Duration::from_secs(config.poll_interval_secs));
 
     loop {
         interval.tick().await;

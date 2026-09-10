@@ -1,0 +1,11 @@
+{
+  "requirement_id": "watchdog-envelope-unwrap",
+  "evidence": [
+    {
+      "id": "watchdog-envelope-unwrap-1-evidence",
+      "type": "unit-test",
+      "description": "Unit test `get_fleet_topics_parses_grouped_response` successfully parses the response",
+      "reproducibility": "cargo test --manifest-path hydragrow-watchdog/Cargo.toml test_get_fleet_topics"
+    }
+  ]
+}

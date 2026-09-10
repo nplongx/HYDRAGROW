@@ -8,8 +8,13 @@ use std::collections::HashMap;
 #[async_trait::async_trait]
 pub trait TickClient {
     async fn get_fleet_topics(&self) -> anyhow::Result<HashMap<String, Vec<TopicStatus>>>;
-    async fn recent_alert_exists(&self, device_id: &str, reason_code: &str) -> anyhow::Result<bool>;
-    async fn create_stale_controller_alert(&self, device_id: &str, seconds_stale: i64) -> anyhow::Result<()>;
+    async fn recent_alert_exists(&self, device_id: &str, reason_code: &str)
+    -> anyhow::Result<bool>;
+    async fn create_stale_controller_alert(
+        &self,
+        device_id: &str,
+        seconds_stale: i64,
+    ) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -17,10 +22,18 @@ impl TickClient for BackendClient {
     async fn get_fleet_topics(&self) -> anyhow::Result<HashMap<String, Vec<TopicStatus>>> {
         BackendClient::get_fleet_topics(self).await
     }
-    async fn recent_alert_exists(&self, device_id: &str, reason_code: &str) -> anyhow::Result<bool> {
+    async fn recent_alert_exists(
+        &self,
+        device_id: &str,
+        reason_code: &str,
+    ) -> anyhow::Result<bool> {
         BackendClient::recent_alert_exists(self, device_id, reason_code).await
     }
-    async fn create_stale_controller_alert(&self, device_id: &str, seconds_stale: i64) -> anyhow::Result<()> {
+    async fn create_stale_controller_alert(
+        &self,
+        device_id: &str,
+        seconds_stale: i64,
+    ) -> anyhow::Result<()> {
         BackendClient::create_stale_controller_alert(self, device_id, seconds_stale).await
     }
 }
@@ -118,7 +131,11 @@ mod tests {
             ]))
         }
 
-        async fn recent_alert_exists(&self, device_id: &str, _reason_code: &str) -> anyhow::Result<bool> {
+        async fn recent_alert_exists(
+            &self,
+            device_id: &str,
+            _reason_code: &str,
+        ) -> anyhow::Result<bool> {
             Ok(*self
                 .recent_alert_exists
                 .lock()
@@ -127,8 +144,15 @@ mod tests {
                 .unwrap_or(&false))
         }
 
-        async fn create_stale_controller_alert(&self, device_id: &str, _seconds_stale: i64) -> anyhow::Result<()> {
-            self.created_alerts.lock().unwrap().push(device_id.to_string());
+        async fn create_stale_controller_alert(
+            &self,
+            device_id: &str,
+            _seconds_stale: i64,
+        ) -> anyhow::Result<()> {
+            self.created_alerts
+                .lock()
+                .unwrap()
+                .push(device_id.to_string());
             Ok(())
         }
     }

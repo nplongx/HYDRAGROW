@@ -144,12 +144,10 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-
         sqlx::query(
-            "INSERT INTO device_config (device_id, owner_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            "INSERT INTO device_config (device_id) VALUES ($1) ON CONFLICT DO NOTHING",
         )
         .bind(&source.device_id)
-        .bind("test_owner_123")
         .execute(&pool).await.unwrap();
 
         sqlx::query(

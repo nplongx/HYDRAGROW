@@ -1,0 +1,50 @@
+Resolves high-severity vulnerabilities in frontend dependencies (fast-uri, nanoid, postcss, react-router, vite) by running `npm audit fix` in `hydragrow-frontend`.
+
+Fixes: #486
+
+## Requirement
+- Issue / Requirement ID: FRONTEND-VULNERABILITIES-001
+- Change class (`C0`-`C7`): C3
+
+## Objective
+Fix vulnerable packages reported by `npm audit` in the frontend application to prevent security issues like XSS, CSRF, arbitrary file read, and DoS.
+
+## Acceptance Contract
+- Acceptance contract: `docs/acceptance/FRONTEND-VULNERABILITIES-001.json`
+- Evidence contract: `docs/evidence/FRONTEND-VULNERABILITIES-001.json`
+
+## Acceptance Criteria
+
+| ID | Criterion | Target / Expected | Actual | Evidence |
+|---|---|---|---|---|
+| AC-1 | Running `npm audit` in `hydragrow-frontend` reports 0 vulnerabilities for the specified packages. | 0 vulnerabilities | 0 vulnerabilities | attached in `docs/evidence/FRONTEND-VULNERABILITIES-001.json` |
+
+## Verification
+- [x] Acceptance contract gate
+- [x] Evidence contract gate
+- [x] Delivery governance gate
+- [x] Unit / integration tests
+- [ ] E2E / scenario test
+- [ ] Benchmark / performance evidence (if applicable)
+- [ ] Hardware / staging / deployment verification (if applicable)
+
+## Documentation
+- [x] Required architecture/API/operations docs updated
+- [x] `docs/project-state/CURRENT-STATUS.md` updated if project state changed
+- [x] `docs/project-state/TRACEABILITY.md` updated for material requirements
+
+## Deployment
+- Environment: Frontend
+- Build / version: N/A
+- Evidence: npm audit output
+- Rollback plan: Revert `package-lock.json` and run `npm ci`
+
+## Risks / Known Gaps
+No direct code changes, only dependency bumps to backward-compatible versions as vetted by `npm audit fix`. Tests confirm no regressions.
+
+## Final Acceptance
+- [x] Code verification passed
+- [x] Acceptance criteria passed
+- [x] Required deployment/integration evidence attached
+- [x] Documentation synchronized
+- [x] Project state synchronized

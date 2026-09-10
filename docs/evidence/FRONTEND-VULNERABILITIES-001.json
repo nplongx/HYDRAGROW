@@ -1,0 +1,10 @@
+{
+  "requirement_id": "FRONTEND-VULNERABILITIES-001",
+  "results": [
+    {
+      "id": "AC-1",
+      "status": "PASS",
+      "evidence": "Output of `npm audit` in `hydragrow-frontend` is `found 0 vulnerabilities`."
+    }
+  ]
+}

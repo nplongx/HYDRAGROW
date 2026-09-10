@@ -124,17 +124,6 @@ mod tests {
     async fn apply_template_reapply_respects_the_current_requests_preserve_choice(
         pool: sqlx::PgPool,
     ) {
-        sqlx::query("INSERT INTO device_config (device_id, hardware_version, firmware_version) VALUES ($1, '1', '1')")
-            .bind("src-dev")
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("INSERT INTO device_config (device_id, hardware_version, firmware_version) VALUES ($1, '1', '1')")
-            .bind("dev-target")
-            .execute(&pool)
-            .await
-            .unwrap();
-
         use crate::models::script::UserScript;
         use chrono::Utc;
         let source = UserScript {

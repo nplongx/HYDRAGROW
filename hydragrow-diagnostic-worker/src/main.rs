@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
 
     let model: Arc<dyn diagnostic_model::DiagnosticModel> =
         Arc::new(OpenRouterDiagnosticModel::new(
-            "https://openrouter.ai/api".to_string(),
+            config.openrouter_base_url.clone(),
             config.openrouter_api_key.clone(),
             config.llm_model.clone(),
             query_backend,

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, SlidersHorizontal, Settings, Sprout,
-  AlignLeft, Leaf, Wifi, WifiOff
+  AlignLeft, Leaf
 } from 'lucide-react';
 import { useDeviceStore } from '../../store/useDeviceStore';
 import { useDeviceSync } from '../../hooks/useDeviceSync';
@@ -49,7 +49,7 @@ const MainLayout: React.FC = () => {
             <Settings size={28} className="text-amber-600" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-emerald-950">Chưa cấu hình API Key</h2>
+            <h2 className="text-xl font-bold text-primary-deep">Chưa cấu hình API Key</h2>
             <p className="text-sm text-emerald-800/70 leading-relaxed">
               Ứng dụng cần <span className="font-semibold text-emerald-800">API Key</span> để kết nối với máy chủ. Vui lòng nhập thông tin trong phần Cài đặt.
             </p>
@@ -63,36 +63,33 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-emerald-50/60 text-emerald-950 font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-page-bg text-primary-deep font-sans overflow-hidden">
       {/* ── Header (Mobile) ── */}
-      <header className="flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur-md border-b border-emerald-100 z-30 pt-[calc(env(safe-area-inset-top)+12px)] lg:hidden">
+      <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-line z-30 pt-[calc(env(safe-area-inset-top)+12px)] lg:hidden">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-sm shadow-emerald-500/30">
+          <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center">
             <Sprout size={16} className="text-white" strokeWidth={2.5} />
           </div>
           <div>
-            <div className="text-sm font-extrabold tracking-tight text-emerald-950 leading-none">HydraGrow</div>
-            <div className="text-[10px] text-emerald-700/60 font-semibold mt-0.5 tracking-wide">Khí canh thông minh</div>
+            <div className="text-sm font-extrabold tracking-tight text-primary-deep leading-none">HydraGrow</div>
+            <div className="text-[10px] text-faint font-semibold mt-0.5 tracking-wide">Khí canh thông minh</div>
           </div>
         </div>
-        <div className={`farm-status-pill ${isSensorOnline
-          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-          : 'bg-red-50 text-red-700 border-red-200'
+        <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+          isSensorOnline ? 'bg-pill text-status' : 'bg-[#FEE2E2] text-error'
         }`}>
-          {isSensorOnline
-            ? <><Wifi size={11} strokeWidth={2.5} /> Đang kết nối</>
-            : <><WifiOff size={11} strokeWidth={2.5} /> Mất tín hiệu</>
-          }
+          <span className={`w-1.5 h-1.5 rounded-full ${isSensorOnline ? 'bg-status' : 'bg-error'}`} />
+          {isSensorOnline ? 'Đang kết nối' : 'Mất tín hiệu'}
         </div>
       </header>
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col gap-7 border-r border-emerald-100 bg-white px-5 pb-6 pt-6 shadow-sm">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col gap-7 border-r border-line bg-white px-5 pb-6 pt-6 shadow-sm">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center">
             <Sprout size={16} className="text-white" strokeWidth={2.5} />
           </div>
-          <span className="text-[18px] font-extrabold tracking-tight text-emerald-950">HydraGrow</span>
+          <span className="text-[18px] font-extrabold tracking-tight text-primary-deep">HydraGrow</span>
         </div>
 
         <nav aria-label="Điều hướng chính" className="flex flex-col gap-1">
@@ -133,27 +130,23 @@ const MainLayout: React.FC = () => {
       </main>
 
       {/* ── Bottom Navigation ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 lg:hidden backdrop-blur-md border-t border-emerald-100 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(20,83,45,0.07)]">
-        <div className="flex items-center justify-around h-[60px] px-1">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+        <div className="flex items-center justify-between bg-line/80 backdrop-blur-md rounded-full px-3 py-2 border border-white/40 shadow-[0_-8px_24px_rgba(20,83,45,0.07)]">
           {navItems.map((item) => {
             const active = isActive(item.path);
             return (
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="relative flex flex-col items-center justify-center w-full h-full gap-1 group"
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex flex-col items-center justify-center w-full gap-1 py-1 rounded-full transition-colors ${active ? '' : 'group'}`}
               >
-                <div className={`relative flex items-center justify-center transition-all duration-200 ${active ? 'bg-emerald-100 rounded-xl px-2.5 py-1 -mt-1' : ''}`}>
-                  <item.icon
-                    size={active ? 20 : 22}
-                    strokeWidth={active ? 2.5 : 1.8}
-                    className={active ? 'text-emerald-700' : 'text-emerald-400 group-hover:text-emerald-600'}
-                  />
+                <span className={`relative flex items-center justify-center w-1.5 h-1.5 rounded-full transition-colors ${active ? 'bg-primary' : 'bg-faint group-hover:bg-primary/60'}`}>
                   {item.hasBadge && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+                    <span className="absolute -top-1 -right-1.5 w-2 h-2 bg-red-500 rounded-full" />
                   )}
-                </div>
-                <span className={`text-[10px] font-semibold tracking-wide transition-colors ${active ? 'text-emerald-800 font-bold' : 'text-emerald-700/55 group-hover:text-emerald-800'}`}>
+                </span>
+                <span className={`text-[9px] font-bold tracking-wide transition-colors ${active ? 'text-primary' : 'text-faint group-hover:text-primary/70'}`}>
                   {item.label}
                 </span>
               </button>

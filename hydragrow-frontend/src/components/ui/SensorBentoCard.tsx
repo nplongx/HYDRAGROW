@@ -24,23 +24,23 @@ const themeClasses: Record<string, string> = {
 };
 
 const statusClasses: Record<string, string> = {
-  good: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  warn: 'bg-amber-50 text-amber-700 border-amber-200',
-  danger: 'bg-red-50 text-red-600 border-red-200',
-  info: 'bg-sky-50 text-sky-700 border-sky-200',
+  good: 'bg-pill text-status border-transparent',
+  warn: 'bg-[#FFFBEB] text-warn-deep border-transparent',
+  danger: 'bg-[#FEE2E2] text-error border-transparent',
+  info: 'bg-sky-50 text-sky-700 border-transparent',
 };
 
 export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
   title, value, unit, icon: Icon, theme, statusLabel, statusTone = 'info',
   rangeLabel, description, compact = false,
 }) => (
-  <div className={`bg-white border rounded-[18px] flex flex-col justify-between transition-all hover:border-emerald-200 hover:shadow-md shadow-sm ${compact ? 'p-3.5 min-h-[140px]' : 'p-4 md:p-5 min-h-[176px]'} ${statusTone === 'danger' ? 'border-red-200 bg-red-50/30' : statusTone === 'warn' ? 'border-amber-200 bg-amber-50/20' : 'border-emerald-100'}`}>
+  <div className={`bg-white border rounded-[18px] flex flex-col justify-between transition-all hover:border-primary/40 hover:shadow-md shadow-sm ${compact ? 'p-3.5 min-h-[140px]' : 'p-4 md:p-5 min-h-[176px]'} ${statusTone === 'danger' ? 'border-red-200 bg-red-50/30' : statusTone === 'warn' ? 'border-amber-200 bg-amber-50/20' : 'border-line'}`}>
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2.5">
         <div className={`p-2 rounded-xl border ${themeClasses[theme]} shrink-0`}>
           <Icon size={compact ? 15 : 17} strokeWidth={2.5} />
         </div>
-        <span className={`font-semibold text-emerald-900 ${compact ? 'text-xs' : 'text-sm'}`}>{title}</span>
+        <span className={`font-semibold text-primary-deep ${compact ? 'text-xs' : 'text-sm'}`}>{title}</span>
       </div>
       {statusLabel && (
         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClasses[statusTone]}`}>
@@ -50,11 +50,11 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
     </div>
     <div className={`space-y-1 ${compact ? 'mt-3' : 'mt-4'}`}>
       <div className="flex items-baseline gap-1">
-        <span className={`font-black text-emerald-950 ${compact ? 'text-2xl' : 'text-3xl'}`}>{value ?? '--'}</span>
-        {unit && <span className={`font-semibold text-emerald-600/80 ${compact ? 'text-xs' : 'text-sm'}`}>{unit}</span>}
+        <span className={`font-black text-primary-deep ${compact ? 'text-2xl' : 'text-3xl'}`}>{value ?? '--'}</span>
+        {unit && <span className={`font-semibold text-primary/70 ${compact ? 'text-xs' : 'text-sm'}`}>{unit}</span>}
       </div>
-      {rangeLabel && <p className="text-[11px] font-medium text-emerald-700/60">{rangeLabel}</p>}
-      {description && <p className="text-xs text-emerald-700/50 leading-relaxed">{description}</p>}
+      {rangeLabel && <p className="text-[11px] font-medium text-faint">{rangeLabel}</p>}
+      {description && <p className="text-xs text-faint/80 leading-relaxed">{description}</p>}
     </div>
   </div>
 );

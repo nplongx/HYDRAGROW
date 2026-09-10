@@ -52,13 +52,13 @@ export function UserManagement() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="flex items-center gap-3 mb-6">
-        <Shield className="text-emerald-700" size={24} />
-        <h1 className="text-2xl font-bold">Quản Lý Người Dùng & Quyền</h1>
+        <Shield className="text-primary" size={24} />
+        <h1 className="text-2xl font-bold text-primary-deep">Quản Lý Người Dùng & Quyền</h1>
       </div>
 
       {message && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
-          message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          message.type === 'success' ? 'bg-pill text-status' : 'bg-red-50 text-red-700'
         }`}>
           {message.text}
         </div>
@@ -66,7 +66,7 @@ export function UserManagement() {
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Firebase UID *</label>
+          <label className="block text-sm font-medium text-primary-deep mb-1">Firebase UID *</label>
           <input
             value={firebaseUid}
             onChange={(e) => setFirebaseUid(e.target.value)}
@@ -75,7 +75,7 @@ export function UserManagement() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+          <label className="block text-sm font-medium text-primary-deep mb-1">Email *</label>
           <input
             type="email"
             value={email}
@@ -84,7 +84,7 @@ export function UserManagement() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tên hiển thị</label>
+          <label className="block text-sm font-medium text-primary-deep mb-1">Tên hiển thị</label>
           <input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -94,10 +94,10 @@ export function UserManagement() {
 
         {/* Scope selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Quyền truy cập</label>
+          <label className="block text-sm font-medium text-primary-deep mb-2">Quyền truy cập</label>
           <div className="space-y-2">
             {scopes.filter(s => s.scope !== '*').map((s) => (
-              <label key={s.scope} className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+              <label key={s.scope} className="flex items-start gap-3 p-3 border border-line rounded-lg cursor-pointer hover:bg-soft">
                 <input
                   type="checkbox"
                   checked={selectedScopes.includes(s.scope)}
@@ -105,8 +105,8 @@ export function UserManagement() {
                   className="mt-0.5"
                 />
                 <div>
-                  <p className="text-sm font-mono font-medium text-gray-800">{s.scope}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{s.description}</p>
+                  <p className="text-sm font-mono font-medium text-primary-deep">{s.scope}</p>
+                  <p className="text-xs text-text-muted mt-0.5">{s.description}</p>
                 </div>
               </label>
             ))}

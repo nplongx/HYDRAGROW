@@ -10,23 +10,38 @@
 
 ### 1.1 Màu sắc
 
-Định nghĩa tại `src/App.css` (`@theme` + biến CSS). **Không tự chọn mã hex hay lớp màu Tailwind ngoài bảng này.**
+Định nghĩa tại `src/App.css` (`@theme` + biến CSS). Mỗi token sinh ra sẵn các utility Tailwind v4 tương ứng (`bg-<tên>`, `text-<tên>`, `border-<tên>`, ...). **Không tự chọn mã hex hay lớp màu Tailwind ngoài bảng này.**
 
-| Vai trò | Token / biến | Lớp Tailwind tương ứng | Dùng khi nào |
-|---|---|---|---|
-| Primary | `--color-primary` `#15803d` | `emerald-700` | Hành động chính, trạng thái active, thương hiệu |
-| Success | `--color-success` `#16a34a` | `emerald-600` | Online, đạt ngưỡng, hoàn tất |
-| Warning | `--color-warning` `#d97706` | `amber-600` | Cần chú ý, gần ngưỡng, cảnh báo nhẹ |
-| Danger | `--color-error` `#dc2626` | `red-600` | Lỗi, mất kết nối, vượt ngưỡng nguy hiểm |
-| Info / Nước | `--color-water` `#0284c7` | `sky-600` | Dữ liệu liên quan tới nước/thông tin trung tính |
-| Surface | `--color-surface` `#ffffff` | `white` | Nền card |
-| Surface muted | `--color-surface-muted` `#ecfdf5` | `emerald-50` | Nền phụ, panel mờ |
-| Border | `--color-border` `#bbf7d0` | `emerald-100/200` | Viền card, chia khối |
-| Text | `--color-text` `#14532d` | `emerald-950` | Văn bản chính |
-| Text muted | `--color-text-muted` `#4b6354` | `emerald-800/75` | Mô tả phụ, caption |
+Chuẩn màu theo Figma **Hi-Fi — Full App (v1)** (`node 213-2`, file `UvfamFTHSrneof4eKOxozm`). Hệ xanh 3 tầng:
+- `primary-deep` **#14532D** — tiêu đề, CTA chính, pill tab active, nút "Áp dụng".
+- `primary` **#15803D** — toggle, chấm điều hướng, thanh tiến trình, link, CTA outline.
+- `status` **#047857** — văn bản trạng thái trên nền `pill`.
+
+| Vai trò | Token / biến | Dùng khi nào |
+|---|---|---|
+| Xanh đậm / CTA | `--color-primary-deep` `#14532d` | Tiêu đề, nút CTA chính (`ui-btn-primary`), pill tab active |
+| Primary | `--color-primary` `#15803d` | Toggle, chấm điều hướng, progress, link, CTA outline (`ui-btn-outline`) |
+| Status | `--color-status` `#047857` | Văn bản trạng thái trên nền `pill` |
+| Pill nền | `--color-pill` `#d1fae5` | Nền pill trạng thái, ô icon trạng thái |
+| Success | `--color-success` `#047857` | Online, đạt ngưỡng, hoàn tất |
+| Warning | `--color-warning` `#d97706` | Cần chú ý, gần ngưỡng, cảnh báo nhẹ |
+| Warning đậm | `--color-warn-deep` `#92400e` | Chữ cảnh báo trên nền `#FFFBEB` |
+| Danger | `--color-error` `#dc2626` | Lỗi, mất kết nối, vượt ngưỡng nguy hiểm, dừng khẩn cấp |
+| Info / Nước | `--color-water` `#0284c7` | Dữ liệu liên quan tới nước/thông tin trung tính |
+| Surface | `--color-surface` `#ffffff` | Nền card |
+| Surface muted | `--color-surface-muted` `#f1f6f2` | Nền phụ, well, vùng disabled (chi tiết: `#f1f6f2`) |
+| Border / Line | `--color-border` / `--color-line` `#e4efe6` | Viền card, chia khối, nền bottom-nav (mobile) |
+| Text | `--color-text` `#14532d` | Văn bản chính |
+| Text muted | `--color-text-muted` `#4b6354` | Mô tả phụ, caption |
+| Text faint | `--color-faint` `#7c9385` | Nhãn mờ, section title, chấm điều hướng inactive |
+| Nền trang | `--color-page-bg` `#dcf0dc` | Nền body / trang (toàn app) |
+| Toggle off | `--color-toggleoff` `#d9e5db` | Track toggle trạng thái OFF |
+| Config (Automation) | `--color-config` `#4338ca` / `--color-config-soft` `#eef2ff` | Chỉ dùng cho canvas automation / cấu hình / IR |
 
 **Quy tắc cứng:**
 - **Cấm** `bg-blue-*`, `text-blue-*`, `border-blue-*`, `indigo-*`, `slate-*` cho UI chính — đây là màu "lạc token" đang tồn tại rải rác trong `Settings.tsx`, `Dashboard.tsx`, `DevicePairing.tsx`, `RecipeBuilder.tsx`, v.v. Chỗ nào cần một màu "thông tin/trung tính khác primary" → dùng **Info/Nước (`sky`)**, không phải `blue`.
+- **Ngoại lệ duy nhất cho `indigo`:** giới hạn trong `src/components/automation/**` (canvas, bảng config, Test panel, IR status) dưới tên token `config`/`config-soft` để phân biệt "cấu hình logic" với "thao tác vận hành". Ngoài phạm vi đó, `indigo`/`blue`/`slate`/`violet` đều cấm trong UI. Test `Dashboard.test.tsx` (không được có `indigo` trong Dashboard) vẫn giữ nguyên.
+- Giao diện phải theo đúng hệ xanh 3 tầng ở trên: không dùng `emerald-900/950` để viết chữ chính (thay bằng `text-text` / `text-primary-deep`), không dùng `emerald-200` làm viền (dùng `border-line`).
 - Màu định danh loại bơm/thiết bị (ví dụ bảng `pumpColors` trong `Dashboard.tsx`) có thể dùng thêm `orange`, `fuchsia`, `rose`, `cyan`, `indigo` **nhưng chỉ cho mục đích phân biệt nhãn**, không dùng cho nút hành động hay trạng thái hệ thống.
 
 ### 1.2 Typography
@@ -67,13 +82,13 @@ Trước khi viết class Tailwind tay, **kiểm tra xem `App.css` đã có clas
 | `.ui-state` | Trạng thái rỗng / placeholder |
 | `.ui-input` | Input văn bản |
 | `.ui-btn-md` | Nút kích thước chuẩn — kết hợp với màu nền/viền theo bảng màu ở trên |
+| `.ui-btn-primary` | Nút CTA chính — nền `primary-deep`, chữ trắng |
+| `.ui-btn-outline` | Nút viền xanh — viền/chữ `primary`, nền trắng (hover `pill`) |
+| `.ui-btn-danger` | Nút nguy hiểm — nền `error`, chữ trắng (dừng khẩn cấp) |
+| `.ui-tabbar`, `.ui-tab`, `.ui-tab-active` | Dải tab pill (active: nền `primary-deep`, chữ trắng) |
 | `.farm-status-pill` | Pill trạng thái (online/offline, chế độ...) |
 | `.farm-section-title` | Nhãn nhóm caption in hoa |
 | `.farm-muted-panel` | Panel nền mờ phụ |
-
-**Nợ kỹ thuật cần xử lý ngay:**
-- `ui-btn-primary` được gọi trong `MainLayout.tsx` nhưng **chưa được định nghĩa** trong `App.css` → thêm định nghĩa (nền `--color-primary`, chữ trắng, hover đậm hơn) hoặc đổi nút đó sang `ui-btn-md` + class màu tường minh.
-- Không tạo thêm `ui-btn-*` mới mà không thêm vào `@layer components` của `App.css`.
 
 ---
 
@@ -107,7 +122,7 @@ Quy tắc: khi thêm trang mới, **luôn hỏi trang đó thuộc nhóm nào tr
 
 ## 5. Responsive / Desktop (quan trọng vì có bản Tauri desktop)
 
-- Dưới `lg`: giữ bottom tab bar hiện tại (đúng cho mobile/tablet dọc).
+- Dưới `lg`: giữ bottom tab bar dạng pill nổi (nền `line`, mỗi tab = chấm + nhãn, chấm active `primary`) — chuẩn Figma Hi-Fi.
 - Từ `lg` trở lên (bao gồm app desktop qua Tauri): **chuyển sang sidebar điều hướng cố định bên trái**, nội dung dùng phần còn lại của màn hình thay vì bị giới hạn `max-w-6xl` căn giữa với khoảng trắng hai bên.
 - Trang có canvas (automation flow) nên dùng bố cục 2 cột (danh sách + canvas) chỉ ở desktop; ở mobile hiển thị danh sách dạng thẻ, không nhúng canvas kéo-thả.
 
@@ -147,4 +162,4 @@ Hiện có 2 hệ thống song song: Blockly (kéo-thả khối) và React Flow 
 ## 9. Tham khảo
 
 Đề xuất trực quan (design tokens, IA mới, mockup Dashboard & Automation) đã được dựng trong Figma:
-`https://www.figma.com/design/jIkpIARzCtbvJ66UosPXoy`
+`https://www.figma.com/design/UvfamFTHSrneof4eKOxozm` — canvas **Hi-Fi — Full App (v1)** (`node-id=213-2`, màn hình D1–D17) là mục tiêu triển khai cho `AUTOMATION-REDESIGN-003`.

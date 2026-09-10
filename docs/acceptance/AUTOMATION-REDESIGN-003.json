@@ -1,0 +1,90 @@
+{
+  "requirement_id": "AUTOMATION-REDESIGN-003",
+  "objective": "Re-skin the hydragrow-frontend UI to pixel-align with the Figma Hi-Fi — Full App (v1) canvas (node-id=213-2, screens D1-D17) using the 3-tier green hierarchy and Figma design tokens. Markup/classes only - no behavior, IR, or API changes. Phase A (token layer + shared primitives + navigation) evidenced in this PR; later phases flip evidence_required and add evidence rows.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "App.css @theme defines the Figma token set with exact hex values (page-bg #DCF0DC, border/line #E4EFE6, primary #15803D, primary-deep #14532D, status/success #047857, pill #D1FAE5, faint #7C9385, toggleoff #D9E5DB, surface-muted #F1F6F2, warn-deep #92400E, config #4338CA, config-soft #EEF2FF).",
+      "verification": "grep App.css @theme block; production build emits utilities bg-page-bg, border-line, text-faint, bg-pill, text-status, bg-toggleoff, text-warn-deep, bg-primary-deep, text-primary-deep in dist CSS.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Shared component classes (.ui-card, .ui-input, .ui-state, .page-header-title/icon/subtitle, .farm-section-title, .farm-muted-panel, .ui-tabbar/.ui-tab/.ui-tab-active, .ui-btn-primary, .ui-btn-outline, .ui-btn-danger, .toggle-checkbox) use the Figma tokens (border-line, surface-muted #F1F6F2, primary-deep CTA/tab, error danger).",
+      "verification": "grep App.css @layer components; build emits the classes.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Primitives follow Figma sizes/colors: Switch is a 38x22 toggle (ON bg-primary #15803D, OFF bg-toggleoff #D9E5DB, 18x18 white thumb); StatusPill is borderless 10px semibold pill (sending #FFFBEB/#92400E, accepted #D1FAE5/#047857, error #FEE2E2/#DC2626); TabShell renders pill tabs with ui-tab-active primary-deep.",
+      "verification": "Vitest StatusPill.test.tsx, Switch.test.tsx (new className assertions), TabShell.test.tsx.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "MainLayout mobile header shows a dot-prefixed status pill (online bg-pill/text-status, offline #FEE2E2/error) and the bottom nav is the Figma dot+label pill (container bg-line/80, active dot/label primary, inactive faint); desktop sidebar keeps existing emerald active style.",
+      "verification": "Vitest MainLayout.test.tsx + new bottom-nav className assertion.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "CHUAN-GIAO-DIEN-FRONTEND.md documents the Figma Hi-Fi palette, the 3-tier green hierarchy, and the indigo automation-only exception; acceptance + evidence contracts for AUTOMATION-REDESIGN-003 exist and pass local validators; TRACEABILITY.md and CURRENT-STATUS.md carry the requirement.",
+      "verification": "python3 .github/scripts/validate_acceptance_contract.py + validate_evidence_contract.py; grep CHUAN-GIAO-DIEN-FRONTEND.md.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "D1 Dashboard (hero metrics, SensorBentoCard, QuickActionBar, ControlCard pump cards, pumpColors labels) aligns with Hi-Fi: #DCF0DC background, white cards with border-line, titles primary-deep, status text on pill.",
+      "verification": "Vitest Dashboard.test.tsx + grep audit of Dashboard.tsx & components.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "D2 Control & Operations (AdvancedDeviceControl pump cards, directional command buttons, PWM/frequency sliders, DosingPopup, StatusPill usage) matches Hi-Fi layout/colors.",
+      "verification": "Vitest AdvancedDeviceControl.test.tsx + grep audit.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-8",
+      "criterion": "D3 Automation (Automation.tsx flow overview cards, AutomationConflictBanner #FFFBEB/#92400E, AutomationMetricsBanner, FlowDetailDrawer, flow toggles) matches Hi-Fi; indigo/config tokens stay confined to automation config/IR surfaces.",
+      "verification": "Vitest Automation flow tests + grep; Dashboard.test no-indigo assertion stays green.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-9",
+      "criterion": "D4-D6 (CropSeasons, RecipeBuilder, DosingHistory) match Hi-Fi tiles, progress bars (primary/status), pill tabs, and anomaly/delay banners.",
+      "verification": "Vitest seasonProgress, ActiveSeasonCard, DosingHistory tests + grep audit.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-10",
+      "criterion": "D7-D8 (SystemLog, Analytics) match Hi-Fi: log card rows, level pills, empty states, analytics metric tiles and Grafana chart container (#111827 dark frame).",
+      "verification": "Vitest SystemLog.test.tsx + grep audit.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-11",
+      "criterion": "D9-D10 (Settings, FleetView) match Hi-Fi: pill tab bar (ui-tab-active primary-deep), section cards, danger zone red, fleet device rows with status dots.",
+      "verification": "Vitest Settings/thresholds tests + grep audit.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-12",
+      "criterion": "D11-D15 (Login, DevicePairing, Grafana frames) match Hi-Fi: logo + primary-deep CTA, pairing QR frame #0F1F14 with #9CCBA8 placeholder, Grafana dark frames.",
+      "verification": "Vitest DevicePairing.test.tsx + grep audit.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-13",
+      "criterion": "D16-D17 (EmergencyStopConfirmDialog, UserManagement roles) match Hi-Fi: danger confirm dialog red, role/permission rows with ui-tab pills.",
+      "verification": "Vitest EmergencyStopConfirmDialog.test.tsx + grep audit.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Phase E close-out: tsc --noEmit green, eslint 0 errors, vitest full suite green, production build green; grep audit shows no bg-blue-/indigo-/slate- outside automation, no emerald-950 titles / emerald-200 borders outside allowed areas.",
+      "verification": "npm run build, npx tsc --noEmit, npx eslint ., npx vitest run, grep audits.",
+      "evidence_required": true
+    }
+  ]
+}

@@ -40,11 +40,11 @@ export function FleetView() {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Tổng Quan Thiết Bị</h1>
+        <h1 className="text-2xl font-bold text-primary-deep">Tổng Quan Thiết Bị</h1>
         <button
           onClick={refresh}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+          className="flex items-center gap-2 px-3 py-1.5 border border-line rounded-lg text-sm text-primary-deep hover:bg-soft"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Làm mới
@@ -58,13 +58,13 @@ export function FleetView() {
       {loading && devices.length === 0 ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-20 bg-line rounded-xl animate-pulse" />
           ))}
         </div>
       ) : (
         <div className="space-y-3">
           {devices.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-faint">
               <Cpu className="mx-auto mb-3" size={40} />
               <p>Chưa có thiết bị nào được liên kết.</p>
               <p className="text-sm mt-1">Vào "Thiết Bị Của Tôi" để thêm thiết bị.</p>
@@ -74,15 +74,15 @@ export function FleetView() {
               <button
                 key={d.device_id}
                 onClick={() => selectDevice(d.device_id)}
-                className="w-full flex items-center gap-4 p-4 border rounded-xl hover:bg-gray-50 transition text-left"
+                className="w-full flex items-center gap-4 p-4 border border-line rounded-xl hover:bg-surface-muted transition text-left"
               >
                 {/* Online indicator */}
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  d.is_online ? 'bg-green-100' : 'bg-gray-100'
+                  d.is_online ? 'bg-pill' : 'bg-surface-muted'
                 }`}>
                   {d.is_online
-                    ? <Wifi size={18} className="text-green-600" />
-                    : <WifiOff size={18} className="text-gray-400" />
+                    ? <Wifi size={18} className="text-status" />
+                    : <WifiOff size={18} className="text-faint" />
                   }
                 </div>
 
@@ -91,14 +91,14 @@ export function FleetView() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium truncate">{d.label ?? d.device_id}</p>
                     {recipeStatuses[d.device_id] && (
-                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                      <span className="text-xs px-2 py-0.5 bg-pill text-status rounded-full">
                         🌱 {recipeStatuses[d.device_id]}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400">{d.device_id}</p>
+                  <p className="text-xs text-faint">{d.device_id}</p>
                   {d.firmware_version && (
-                    <p className="text-xs text-gray-400">FW: {d.firmware_version}</p>
+                    <p className="text-xs text-faint">FW: {d.firmware_version}</p>
                   )}
                 </div>
 
@@ -106,17 +106,17 @@ export function FleetView() {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                     d.is_online
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-gray-100 text-gray-500'
+                      ? 'bg-pill text-status'
+                      : 'bg-surface-muted text-faint'
                   }`}>
                     {d.is_online ? 'Online' : 'Offline'}
                   </span>
                   {d.last_seen && !d.is_online && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-faint">
                       {new Date(d.last_seen).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })}
                     </span>
                   )}
-                  <ChevronRight size={16} className="text-gray-300" />
+                  <ChevronRight size={16} className="text-line" />
                 </div>
               </button>
             ))

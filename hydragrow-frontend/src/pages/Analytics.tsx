@@ -16,7 +16,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SubCard title="Trung tâm Giám sát Grafana">
-          <div className="space-y-4 text-sm text-emerald-900">
+          <div className="space-y-4 text-sm text-primary-deep">
             <p className="leading-relaxed">
               Các biểu đồ chi tiết về biến động EC, pH, nhiệt độ, mực nước, hệ số tự học EMA Gain, ma trận tương tác MIMO và độ tin cậy Kalman hiện được giám sát trực tiếp trên hạ tầng Grafana/Prometheus chuyên dụng.
             </p>
@@ -24,7 +24,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
               href="http://localhost:3000"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-medium transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-primary hover:bg-primary-deep text-white rounded-xl font-medium transition-all shadow-sm"
             >
               <ExternalLink size={16} />
               <span>Mở Grafana Dashboard</span>
@@ -33,16 +33,16 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         </SubCard>
 
         <SubCard title="Các nhóm Metrics chính trên Grafana">
-          <div className="space-y-3 text-xs text-emerald-800">
-            <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
-              <Activity size={16} className="text-emerald-700 shrink-0" />
+          <div className="space-y-3 text-xs text-primary-deep">
+            <div className="flex items-center gap-2.5 p-2.5 bg-surface-muted rounded-lg border border-line">
+              <Activity size={16} className="text-primary shrink-0" />
               <span><b>Adaptive Learning:</b> Gain, Step Ratio, Tuner State & Tolerance.</span>
             </div>
-            <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
+            <div className="flex items-center gap-2.5 p-2.5 bg-surface-muted rounded-lg border border-line">
               <Server size={16} className="text-sky-700 shrink-0" />
               <span><b>MIMO Matrix & Kalman:</b> Độ tin cậy cơ cấu chấp hành & trạng thái ma trận.</span>
             </div>
-            <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100">
+            <div className="flex items-center gap-2.5 p-2.5 bg-surface-muted rounded-lg border border-line">
               <Cpu size={16} className="text-purple-700 shrink-0" />
               <span><b>ESP32 Telemetry:</b> Free Heap, WiFi RSSI, Uptime & Log Drop Count.</span>
             </div>

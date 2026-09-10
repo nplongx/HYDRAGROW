@@ -52,10 +52,10 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
       </div>
 
       {/* Thông tin châm tinh gọn */}
-      <div className="flex-1 bg-white border border-emerald-100 rounded-2xl p-4 hover:border-emerald-300 transition-colors shadow-sm">
+      <div className="flex-1 bg-white border border-line rounded-2xl p-4 hover:border-primary/40 transition-colors shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1">
-            <h4 className="text-emerald-950 font-bold text-sm tracking-wide">
+            <h4 className="text-primary-deep font-bold text-sm tracking-wide">
               {summaryTitle}
             </h4>
             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-semibold">
@@ -87,9 +87,9 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
             </div>
           </div>
 
-          <time className="text-[10px] text-emerald-700/75 font-mono text-right whitespace-nowrap shrink-0">
+          <time className="text-[10px] text-text-muted font-mono text-right whitespace-nowrap shrink-0">
             {date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-            <span className="block font-medium text-emerald-700/60 mt-0.5">
+            <span className="block font-medium text-faint mt-0.5">
               {date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
             </span>
           </time>

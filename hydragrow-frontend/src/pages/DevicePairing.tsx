@@ -74,7 +74,7 @@ export function DevicePairing() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Thiết Bị Của Tôi</h1>
+      <h1 className="text-2xl font-bold mb-6 text-primary-deep">Thiết Bị Của Tôi</h1>
 
       {(error || formError) && (
         <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
@@ -85,13 +85,13 @@ export function DevicePairing() {
       {/* Danh sách thiết bị */}
       <div className="mb-6 space-y-2">
         {devices.length === 0 && !loading && (
-          <p className="text-gray-500 text-sm">Chưa có thiết bị nào được liên kết.</p>
+          <p className="text-text-muted text-sm">Chưa có thiết bị nào được liên kết.</p>
         )}
         {devices.map((d) => (
           <div
             key={d.device_id}
             className={`flex items-center justify-between p-4 border rounded-xl transition ${
-              activeDeviceId === d.device_id ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'
+              activeDeviceId === d.device_id ? 'border-primary bg-pill' : 'border-line'
             }`}
           >
             <div className="flex-1 min-w-0">
@@ -104,10 +104,10 @@ export function DevicePairing() {
                     onKeyDown={(e) => e.key === 'Enter' && saveRename(d.device_id)}
                     autoFocus
                   />
-                  <button onClick={() => saveRename(d.device_id)} className="text-emerald-600">
+                  <button onClick={() => saveRename(d.device_id)} className="text-primary">
                     <Check size={16} />
                   </button>
-                  <button onClick={() => setRenamingId(null)} className="text-gray-400">
+                  <button onClick={() => setRenamingId(null)} className="text-faint">
                     <X size={16} />
                   </button>
                 </div>
@@ -115,11 +115,11 @@ export function DevicePairing() {
                 <div className="flex items-center gap-2">
                   <div>
                     <p className="font-medium truncate">{d.label ?? d.device_id}</p>
-                    <p className="text-xs text-gray-400">{d.device_id}</p>
+                    <p className="text-xs text-faint">{d.device_id}</p>
                   </div>
                   <button
                     onClick={() => startRename(d)}
-                    className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                    className="text-faint hover:text-primary flex-shrink-0"
                   >
                     <Pencil size={14} />
                   </button>
@@ -133,8 +133,8 @@ export function DevicePairing() {
                 disabled={activeDeviceId === d.device_id}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                   activeDeviceId === d.device_id
-                    ? 'bg-emerald-600 text-white cursor-default'
-                    : 'border border-emerald-500 text-emerald-600 hover:bg-emerald-50'
+                    ? 'bg-primary text-white cursor-default'
+                    : 'border border-primary text-primary hover:bg-soft'
                 }`}
               >
                 <CheckCircle size={14} />
@@ -181,12 +181,12 @@ export function DevicePairing() {
 
       {/* QR code */}
       {qrPayload && (
-        <div className="mt-4 p-4 bg-sky-50 rounded-lg text-center">
-          <p className="text-sm text-sky-700 font-medium mb-3">Quét mã QR trên app mobile:</p>
+        <div className="mt-4 p-4 bg-soft rounded-lg text-center">
+          <p className="text-sm text-primary-deep font-medium mb-3">Quét mã QR trên app mobile:</p>
           <div className="inline-block bg-white p-4 rounded-lg">
             <QRCode value={qrPayload} size={200} level="M" />
           </div>
-          <p className="mt-3 text-xs text-gray-500 break-all">{qrPayload}</p>
+          <p className="mt-3 text-xs text-faint break-all">{qrPayload}</p>
         </div>
       )}
     </div>

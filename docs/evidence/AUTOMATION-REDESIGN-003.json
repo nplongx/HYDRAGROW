@@ -1,0 +1,117 @@
+{
+  "requirement_id": "AUTOMATION-REDESIGN-003",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "grep src/App.css '@theme' block + npm run build + grep dist/assets/index-*.css for emitted token utilities",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T11:56:06+07:00",
+      "notes": "Token hexes match Figma Hi-Fi (page-bg #DCF0DC, border/line #E4EFE6, primary #15803D, primary-deep #14532D, status/success #047857, pill #D1FAE5, faint #7C9385, toggleoff #D9E5DB, surface-muted #F1F6F2, warn-deep #92400E, config #4338CA, config-soft #EEF2FF). Production build emits bg-page-bg, border-line, text-faint, bg-pill, text-status, bg-toggleoff, text-warn-deep, bg-primary-deep, text-primary-deep (count 1 each in dist CSS)."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "grep src/App.css '@layer components'",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T11:56:06+07:00",
+      "notes": ".ui-card/.ui-input/.ui-state use border-line #E4EFE6; .page-header-icon bg-page-bg text-primary border-line; .page-header-title text-primary-deep; .farm-section-title text-faint; .farm-muted-panel border-line bg-surface-muted #F1F6F2; .ui-tabbar/.ui-tab/.ui-tab-active = pill tabs (inactive text-text-muted, active bg-primary-deep text-white); .ui-btn-primary bg-primary-deep; .ui-btn-outline border-primary text-primary hover:bg-pill; .ui-btn-danger bg-error; .toggle-checkbox OFF #D9E5DB / ON #15803D / thumb 18x18."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npx vitest run src/components/ui/StatusPill.test.tsx src/components/ui/Switch.test.tsx src/components/ui/TabShell.test.tsx src/components/layout/MainLayout.test.tsx",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T11:56:06+07:00",
+      "notes": "18/18 tests green. Switch.test.tsx (new): 38x22 track, ON bg-primary #15803D, OFF bg-toggleoff #D9E5DB, 18x18 thumb translate-x-4. StatusPill.test.tsx className assertions: sending bg-[#FFFBEB] text-warn-deep rounded-full; accepted bg-pill text-status; error bg-[#FEE2E2] text-error. TabShell pill-tab classes resolve to ui-tabbar/ui-tab/ui-tab-active."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "npx vitest run src/components/layout/MainLayout.test.tsx",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T11:56:06+07:00",
+      "notes": "Header status pill renders 'Đang kết nối' with bg-pill text-status rounded-full; bottom nav is the Figma dot+label pill (container class contains bg-line/80 + rounded-full) with 5 tabs; desktop sidebar active item still bg-emerald-50; existing 'Trạm Online'/'ID: test-device-123' assertions green."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "python3 .github/scripts/validate_acceptance_contract.py docs/acceptance/AUTOMATION-REDESIGN-003.json && python3 .github/scripts/validate_evidence_contract.py docs/acceptance/AUTOMATION-REDESIGN-003.json docs/evidence/AUTOMATION-REDESIGN-003.json",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T11:56:06+07:00",
+      "notes": "Both validators PASS locally. CHUAN-GIAO-DIEN-FRONTEND.md updated: Figma Hi-Fi token table, 3-tier green hierarchy, indigo automation-only exception (#4338CA/#EEF2FF) bounded to src/components/automation/**, Dashboard.test no-indigo assertion untouched. TRACEABILITY.md row + CURRENT-STATUS.md line added."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Dashboard.test.tsx src/components/ui/SensorBentoCard.test.tsx src/components/ui/ControlCard.test.tsx src/components/ui/QuickActionBar.test.tsx + git diff grep audit",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T12:04:36+07:00",
+      "notes": "D1 dashboard re-skinned to tokens: Dashboard.tsx hero header (h1 text-primary-deep, subtitle text-text-muted), station/sensor tiles border-line bg-surface-muted with text-faint labels, farm-status-pill online bg-pill text-status border-pill / offline bg-[#FEE2E2] text-error, device-ID pill bg-white text-text-muted border-line, tank-empty banner #FFFBEB/amber-200/warn-deep, healthy action banner bg-pill border-line (fault state #FFFBEB/amber-200), pump-tag fallback bg-pill text-status border-pill, empty-state title primary-deep. SensorBentoCard: card border-line hover:border-primary/40, status pills good bg-pill text-status / warn #FFFBEB / danger #FEE2E2, value text-primary-deep, unit text-primary/70, range/desc text-faint; icon-box themeColors (sky/fuchsia/orange/cyan/rose/emerald) kept as sensor-type identity chips. QuickActionBar secondary buttons border-line text-primary-deep hover:bg-soft. ControlCard: OFF border-line hover:border-primary/40, icon box bg-soft text-primary/75, title text-primary-deep, status text-text-muted, locked pill bg-soft/border-line/text-faint, locked message #FEE2E2/error, slider accent-primary. DosingSummaryCard h4 text-primary-deep + body text-text-muted. pumpColors label identity colors (orange/fuchsia/sky/cyan) unchanged."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/ControlPanel.test.tsx src/components/control/AdvancedDeviceControl.test.tsx src/pages/Operations.test.tsx + git diff grep audit",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T12:04:36+07:00",
+      "notes": "D2 re-skinned: ControlPanel.tsx disconnected banner bg-[#FEE2E2] text-error, emergency banner #FFFBEB/amber-200/text-warn-deep, frosted auto-mode overlay bg-pill icon + text-primary-deep title + text-text-muted body, card container border-line, fault-guide chip bg-pill border-line, standalone header h1 text-primary-deep + sub text-text-muted + 'Khôi phục' button border-line text-primary-deep hover:bg-soft. AdvancedDeviceControl: card OFF border-line bg-white, icon box OFF bg-white text-primary/75 border-line, title text-primary-deep, status caption text-text-muted, lock/PWM hint panels bg-soft border-line, slider accent-primary, run button bg-primary hover:bg-primary-deep; Switch uses bg-primary when active (bg-fuchsia-600 for PH-inject pumps) and defaults to bg-toggleoff when off (emerald-200 override removed). ActiveRecipeStatus (embedded in Control page): title text-primary-deep, refresh button border-line, error box #FEE2E2/error, empty state border-line bg-surface-muted text-text-muted, values text-primary-deep/text-status, divider text-faint, border-line. Operations.tsx tab bar replaced with pill ui-tabbar/ui-tab/ui-tab-active (active bg-primary-deep text-white). ui-loading-spinner shared class: border-line bg-pill text-primary."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Automation.test.tsx src/components/automation (21 files, 102 tests) + git diff grep audit",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T12:04:36+07:00",
+      "notes": "D3 re-skinned: AutomationPageHeader h1 text-primary-deep + sub text-text-muted + Config Explorer button border-line text-primary-deep hover:bg-soft. AutomationMetricsBanner: all 4 cards border-line, numbers activeFlows text-primary-deep / alerts text-warning / configOverrides text-config / success text-sky-700, labels text-text-muted. AutomationConflictBanner: #FFFBEB bg + border-amber-200 + text-warn-deep. FlowOverviewCard: card border-line hover:border-primary/50, RECIPE badge bg-pill text-status, CONFIG badge bg-config-soft text-config (indigo removed from overview card), 'Đang bật' bg-pill text-status, 'Đã tắt' bg-surface-muted text-faint border-line (slate removed), title text-primary-deep, footer text-faint border-line, 'Chi tiết' text-primary. Automation.tsx: filter chips active bg-primary-deep / inactive bg-soft text-text-muted, view switcher active bg-pill text-primary-deep, search icon text-faint, container/canvas border-line, empty state bg-pill icon + title text-primary-deep, drawer overlay bg-[#0F1F14]/40, drawer card border-line. FlowDetailDrawer chrome (header/canvas/test-panel borders + titles) switched to slate-900/line/indigo-600 CTA — node editor internals (NodePalette, ConfigNodeInspector, nodeTypes badges, ConditionGroupEditor guides) intentionally KEEP the automation emerald-trigger + indigo-config theme (sanctioned zone, Figma 02-06 accurate). Confirmed indigo/slate nowhere outside src/components/automation; Dashboard.test.tsx:20 no-indigo assertion green."
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "npx vitest run src/lib/seasons/seasonProgress.test.ts src/components/seasons/*.test.tsx src/components/dosing/*.test.tsx src/pages/CropSeasons.test.tsx src/pages/DosingHistory.test.tsx src/pages/RecipeBuilder.test.tsx + rg audit of seasons/dosing/RecipeBuilder targets",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T12:55:00+07:00",
+      "notes": "D4-D6 re-skinned to tokens. seasons group: ActiveSeasonCard (card border-line, progress track bg-line + fill bg-primary, delay banner #FFFBEB/border-amber-200/text-warn-deep, header border-line + title text-primary-deep, edit buttons border-line text-primary-deep hover:bg-soft, active chip bg-pill text-status border-pill, save button bg-primary hover:bg-primary-deep, details grid bg-surface-muted border-line, labels text-faint, values text-primary-deep + text-status icons; destructive red end-season kept), CreateSeasonForm (card border-line, header text-primary-deep, select/textarea border-line text-primary-deep focus:border-primary, recipe preview border-line bg-surface-muted text-text-muted, stage chips bg-white border-line, submit bg-primary hover:bg-primary-deep), SeasonHistoryList (header bg-surface-muted border-line text-primary-deep, divide-line rows, hover:bg-surface-muted, active pill bg-pill text-status border-pill, completed pill bg-surface-muted text-faint border-line, meta text-text-muted, Leaf/Calendar icons text-primary/60), SeasonPhotoJournal (label text-faint, thumb border-line, day text-text-muted, dashed upload border-line text-primary hover:bg-soft). dosing group: DosingTotalCard (card border-line, bars bg-primary hover:bg-primary-deep, total text-primary-deep, labels text-faint, avg text-text-muted, delta text-error/text-status), DosingReportCard (border-line hover:border-primary/40, title text-primary-deep, timestamp text-text-muted/text-faint, nutrient orange + pH purple/red + water sky identity chips kept), DosingAnomalyBanner bg-[#FEE2E2] text-error. DosingHistory range tabs active bg-primary-deep / inactive bg-soft text-text-muted, export bg-pill border-line text-primary-deep, card border-line, divider divide-line, spinner border-line border-t-primary, values text-primary-deep. RecipeBuilder: template card selected bg-pill ring-primary / applied bg-soft / default border-line, name text-primary-deep, running chip bg-pill text-status, save-season chip bg-soft text-primary-deep border-line, stage cards bg-surface-muted border-line, stage title text-primary-deep, move buttons bg-white border-line hover:bg-pill, add-stage + save + bulk-apply buttons bg-primary hover:bg-primary-deep, timeline rows border-line + EC chip bg-surface-muted border-line, orange/sky water & A:B input tints kept (label identity). Confirmed zero emerald/blue classes across seasons/dosing/RecipeBuilder/DosingHistory tsx."
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/SystemLog.test.tsx src/components/logs/*.test.tsx + rg audit of SystemLog/Analytics/logs targets",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T12:55:30+07:00",
+      "notes": "D7-D8 re-skinned. SystemLog: filter bar/card border-line, category chips active bg-primary-deep text-white / inactive bg-white text-text-muted border-line hover:bg-pill, CSV export bg-soft border-line text-primary-deep hover:bg-pill, loading spinner border-line border-t-primary + label text-primary-deep, timeline gradient from-primary/30 via-primary/15, merged-row text text-text-muted, load-more + Grafana link text-primary hover:text-primary-deep, drawer frame border-line shadow-primary/10. Analytics: body text-primary-deep, metric tiles bg-surface-muted border-line with Activity icon text-primary (Server/Purple identity kept), Grafana CTA bg-primary hover:bg-primary-deep. logs components: EventLogCard green family consolidated to tokens (iconColor text-status / text-primary-deep/80, borders border-line, dots bg-status, card hover:border-primary/40, FSM Monitoring badge text-primary-deep bg-soft border-line), water(EventLogCard water case + WaterRefilling/Draining badges), dosing cyan, purple Mixing, red EmergencyStop identity colors kept; 'Xem JSON thô' link text-primary. CycleEventCard: card border-line (cyan dosing tint kept), step dots success/neutral bg-status, title text-primary-deep, meta/times text-text-muted, messages text-primary-deep/text-text-muted. EventDetailDrawer: titles text-primary-deep, meta text-text-muted, JSON block bg-surface-muted text-primary-deep. HealthSummaryBar: stat values text-primary-deep, search icon text-faint, ShieldAlert icon text-primary (cyan/purple/amber icons kept). MetadataRenderers: Dosing + Generic panels bg-surface-muted border-line, headers text-text-muted, labels text-text-muted, values text-primary-deep, event_type/cycle_id accent text-primary-deep. App.css ui-* helpers shadows shadow-emerald-950/5|/10 -> shadow-primary/5|/10 and focus rings -> focus:ring-primary/30 focus:border-primary."
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Settings.test.ts src/pages/settings src/components/ui/FsmStatusBadge.test.ts src/pages/Dashboard.test.tsx + rg audit of Settings/FleetView targets",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T13:02:00+07:00",
+      "notes": "D9-D10 re-skinned. Settings page: header caption + icon tokenized (text-faint / text-primary/75), pill tab bar (SETTINGS_TABS) already ui-tabbar/ui-tab/ui-tab-active. GeneralSection: login email text-text-muted, logout button border-line text-primary-deep, mode select pills active border-primary bg-primary text-white / inactive border-line text-primary-deep, Power icon text-primary, advanced-mode card bg-soft (OFF) / amber-50 (ON, kept), switch keeps amber-600 colorClass when advanced. ThresholdsSection: all borders/titles/rows tokenized (border-line, text-primary-deep, text-text-muted, text-faint), cron 'Hằng ngày' pill + day-of-week chips active bg-primary text-white / selected bg-pill border-primary text-primary, calibration wizard step label text-primary-deep, 'BẮT ĐẦU ĐO'/'XÁC NHẬN & LƯU' buttons bg-primary hover:bg-primary-deep (sky removed), 'TIẾP THEO' bg-primary text-white, cleanliness/reliability V7/V4/confidence boxes bg-surface-muted border-line + status/amber status color. ConnectivitySection: Node-RED + MQTT topic links/boxes tokenized (sky link -> text-primary underline, topic box bg-surface-muted border-line), API-key amber note kept, forget-key red danger kept, OTA buttons bg-primary hover:bg-primary-deep with amber secondary kept, wifi add-link text-primary. DangerZoneSection: red danger zone kept (#FEE2E2/border-red-200 family), cancel button border-line text-primary-deep. FleetView: header text-primary-deep, refresh button border-line text-primary-deep, device rows border-line hover:bg-surface-muted, online icon/chip bg-pill text-status, offline bg-surface-muted text-faint, crop chip bg-pill text-status, device_id/FW/last_seen text-faint, chevron text-line, skeleton bg-line, error banner red kept. FsmStatusBadge: success tone bg-pill border-line text-status, default tone bg-soft border-line text-primary-deep (info sky / mist cyan / warn amber / danger red identities kept)."
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/DevicePairing-related suites (Settings/connectivity store tests) + tsc + rg audit of LoginScreen/DevicePairing/Analytics",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T13:02:30+07:00",
+      "notes": "D11-D15 surfaces re-skinned. LoginScreen (components/auth/LoginScreen.tsx): audited - no banned/raw classes, neutral + token styling, no change required. DevicePairing: page title text-primary-deep, empty state text-text-muted, bound-device cards active border-primary bg-pill / inactive border-line, rename check icon text-primary + cancel X text-faint, device_id text-faint, pencil icon text-faint hover:text-primary, select button active bg-primary text-white / idle border-primary text-primary hover:bg-soft, unlink trash red kept, QR box bg-soft border (bg-sky-50 removed) with label text-primary-deep and payload text-faint. Analytics (Grafana page): CTA bg-primary hover:bg-primary-deep, body text-primary-deep, metric tiles bg-surface-muted border-line with Activity icon text-primary (Server/Purple identity kept); Grafana is opened as external link (no iframe component in code), dark-frame rendering covered by Figma asset. No DevicePairing/LoginScreen test file exists in the repo - coverage via settings/connectivity suites + grep audit + tsc."
+    },
+    {
+      "acceptance_id": "AC-13",
+      "status": "PASS",
+      "source": "npx vitest run src/components/safety/EmergencyStopConfirmDialog.test.tsx + tsc + rg audit of UserManagement / safety",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T13:03:00+07:00",
+      "notes": "D16-D17 re-skinned. EmergencyStopConfirmDialog: overlay dark bg-[#0F1F14]/40 backdrop-blur, title text-red-700 (danger dialog), body text-text-muted, running-pumps label text-faint + pumps as red-50/red-200 chips, cancel button border-line text-primary-deep hover:bg-soft, confirm button bg-red-600 hover:bg-red-700 (danger kept), red alert icon panel kept. UserManagement: header shield icon text-primary + title text-primary-deep, success message pill bg-pill text-status / error red-50 kept, form labels text-primary-deep, scope rows border-line hover:bg-soft with scope mono text-primary-deep + description text-text-muted, save button ui-btn-primary. Repo-wide banned-class audit (AC-14 prereq): rg for emerald-950 / emerald-200 / bg-blue-* / bg-indigo-* / bg-slate-* outside src/components/automation returns zero hits (Dashboard.test.tsx:20 no-indigo assertion intact)."
+    },
+    {
+      "acceptance_id": "AC-14",
+      "status": "PASS",
+      "source": "npx tsc --noEmit; npx eslint .; npx vitest run; npm run build; rg banned-class audits",
+      "environment": "linux-x86_64",
+      "verified_at": "2026-09-10T13:05:30+07:00",
+      "notes": "Phase E close-out green. TypeScript: npx tsc --noEmit exits 0, no diagnostics. ESLint: 170 problems, 0 errors (all warnings are pre-existing @typescript-eslint/no-explicit-any across the repo). Vitest: full suite 343/343 tests, 72/72 files green (one run hit the known SystemLog.test.tsx pagination timeout flake at 5277ms - passes in isolation 6/6 and on clean re-run). Build: npm run build succeeds ('built in 8.95s'); only pre-existing >500kB chunk-size warning. Banned-class regex audit (repo-wide, excluding src/components/automation sanctioned zone): rg 'emerald-200|emerald-950' -> 0 hits; rg 'bg-blue-|bg-indigo-|bg-slate-' -> 0 hits (only hit is the Dashboard.test.tsx:20 no-indigo assertion itself, which remains green). All 14 ACs (AC-1..AC-14) PASS - acceptance + evidence contracts validated."
+    }
+  ]
+}

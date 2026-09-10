@@ -15,15 +15,13 @@ export function Operations() {
 
   return (
     <div className="app-page h-[calc(100vh-4rem)] flex flex-col">
-      <div role="tablist" className="flex gap-2 border-b border-gray-200 px-2">
+      <div role="tablist" className="ui-tabbar px-2">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             role="tab"
             aria-selected={active === tab.id}
-            className={`px-4 py-2 text-sm font-semibold ${
-              active === tab.id ? 'border-b-2 border-emerald-700 text-emerald-900' : 'text-gray-500'
-            }`}
+            className={`ui-tab px-4 py-2 text-sm ${active === tab.id ? 'ui-tab-active' : ''}`}
             onClick={() => setActive(tab.id)}
           >
             {tab.label}

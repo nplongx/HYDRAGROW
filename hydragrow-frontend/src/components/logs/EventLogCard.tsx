@@ -37,20 +37,20 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
     case 'water': return { icon: Waves, iconColor: 'text-sky-700', borderColor: 'border-sky-200', bgColor: 'from-sky-500/5 to-transparent', dot: 'bg-sky-400' };
     case 'calibration': return { icon: Settings2, iconColor: 'text-purple-700', borderColor: 'border-purple-500/10', bgColor: 'from-purple-500/5 to-transparent', dot: 'bg-purple-400' };
     case 'sensor': return { icon: Radio, iconColor: 'text-amber-800', borderColor: 'border-amber-500/10', bgColor: 'from-amber-500/5 to-transparent', dot: 'bg-amber-400' };
-    case 'useraction': return { icon: UserCheck, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-500' };
+    case 'useraction': return { icon: UserCheck, iconColor: 'text-status', borderColor: 'border-line', bgColor: 'from-primary/5 to-transparent', dot: 'bg-status' };
     case 'system':
       if (title.includes('Offline') || title.includes('Mất')) {
-        return { icon: Power, iconColor: 'text-emerald-700/75', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-500' };
+        return { icon: Power, iconColor: 'text-primary/75', borderColor: 'border-line', bgColor: 'from-white to-transparent', dot: 'bg-status' };
       }
       if (title.includes('Trực tuyến') || title.includes('Online')) {
-        return { icon: Wifi, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-400' };
+        return { icon: Wifi, iconColor: 'text-status', borderColor: 'border-line', bgColor: 'from-primary/5 to-transparent', dot: 'bg-status' };
       }
-      return { icon: Cpu, iconColor: 'text-emerald-800/80', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-500' };
+      return { icon: Cpu, iconColor: 'text-primary-deep/80', borderColor: 'border-line', bgColor: 'from-white to-transparent', dot: 'bg-status' };
     default:
       if (level === 'success') {
-        return { icon: CheckCircle, iconColor: 'text-emerald-700', borderColor: 'border-emerald-500/10', bgColor: 'from-emerald-500/5 to-transparent', dot: 'bg-emerald-400' };
+        return { icon: CheckCircle, iconColor: 'text-status', borderColor: 'border-line', bgColor: 'from-primary/5 to-transparent', dot: 'bg-status' };
       }
-      return { icon: Info, iconColor: 'text-emerald-700', borderColor: 'border-emerald-100', bgColor: 'from-white to-transparent', dot: 'bg-emerald-600' };
+      return { icon: Info, iconColor: 'text-status', borderColor: 'border-line', bgColor: 'from-white to-transparent', dot: 'bg-status' };
   }
 };
 
@@ -60,7 +60,7 @@ const FsmBadge = ({ message }: { message: string }) => {
     'WaterDraining': { label: 'Đang xả nước', color: 'text-sky-700 bg-sky-50 border-sky-200' },
     'MimoDosing': { label: 'Đang châm MIMO', color: 'text-cyan-700 bg-cyan-50 border-cyan-200' },
     'ActiveMixing': { label: 'Trộn tuần hoàn', color: 'text-purple-700 bg-purple-50 border-purple-200' },
-    'Monitoring': { label: 'Giám sát', color: 'text-emerald-800 bg-emerald-100 border-emerald-200' },
+    'Monitoring': { label: 'Giám sát', color: 'text-primary-deep bg-soft border-line' },
     'EmergencyStop': { label: 'Dừng khẩn cấp', color: 'text-red-700 bg-red-50 border-red-200' },
   };
   const matched = stateMap[message];
@@ -100,7 +100,7 @@ export const EventLogCard = ({
         </div>
       </div>
 
-      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-emerald-950/5 to-transparent border-emerald-100 rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-emerald-200 ${style.bgColor}`}>
+      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-primary/5 to-transparent border-line rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-primary/40 ${style.bgColor}`}>
         <div className="flex items-start justify-between gap-4 mb-2">
           <div className="space-y-1 min-w-0">
             <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>
@@ -110,16 +110,16 @@ export const EventLogCard = ({
               <FsmBadge message={ev.message} />
             </div>
           </div>
-          <time className="text-[10px] text-emerald-700/75 font-mono text-right whitespace-nowrap shrink-0 leading-tight">
+          <time className="text-[10px] text-text-muted font-mono text-right whitespace-nowrap shrink-0 leading-tight">
             {date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            <span className="block font-semibold text-emerald-700/60 text-[9px] mt-0.5">
+            <span className="block font-semibold text-faint text-[9px] mt-0.5">
               {date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
             </span>
           </time>
         </div>
 
         {hasValidMsg && (
-          <p className="text-xs text-emerald-900 leading-relaxed font-medium opacity-95">
+          <p className="text-xs text-primary-deep leading-relaxed font-medium opacity-95">
             {ev.message}
           </p>
         )}
@@ -131,10 +131,10 @@ export const EventLogCard = ({
         )}
 
         {hasMetadata && (
-          <div className="mt-2.5 pt-2 border-t border-emerald-100 flex flex-wrap items-center gap-3">
+          <div className="mt-2.5 pt-2 border-t border-line flex flex-wrap items-center gap-3">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 text-[10px] font-bold text-emerald-700/75 hover:text-emerald-800 tracking-wide uppercase transition-colors"
+              className="flex items-center gap-1 text-[10px] font-bold text-primary/75 hover:text-primary-deep tracking-wide uppercase transition-colors"
             >
               <span>{isExpanded ? 'Thu nhỏ thông số' : 'Xem thông số kỹ thuật'}</span>
               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -142,7 +142,7 @@ export const EventLogCard = ({
             {onOpenDetail && (
               <button
                 onClick={() => onOpenDetail(ev)}
-                className="flex items-center gap-1 text-[10px] font-bold text-sky-700 hover:text-sky-800 tracking-wide uppercase transition-colors"
+                className="flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary-deep tracking-wide uppercase transition-colors"
               >
                 <span>Xem JSON thô</span>
               </button>

@@ -72,25 +72,25 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
       >
         <div className="space-y-4 p-1">
           <div className="space-y-1">
-            <label className="text-sm font-medium text-emerald-950">Node-RED Editor URL</label>
+            <label className="text-sm font-medium text-primary-deep">Node-RED Editor URL</label>
             <div className="flex items-center gap-2">
               <a
                 href={nodeRedEditorUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-mono text-sky-600 underline hover:text-sky-800 break-all"
+                className="text-sm font-mono text-primary underline hover:text-primary-deep break-all"
               >
                 {nodeRedEditorUrl}
               </a>
             </div>
-            <p className="text-xs text-emerald-700/75">
+            <p className="text-xs text-text-muted">
               Truy cập trình thiết kế luồng tự động hoá Node-RED để nhận alert và chuyển tiếp tới Telegram / Email / Home Assistant.
             </p>
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium text-emerald-950">MQTT Integration Topic (Outbound)</label>
+            <label className="text-sm font-medium text-primary-deep">MQTT Integration Topic (Outbound)</label>
             <div className="flex items-center gap-2">
-              <p className="flex-1 text-sm text-emerald-800 bg-emerald-50 px-3 py-2 rounded-lg font-mono break-all border border-emerald-100">
+              <p className="flex-1 text-sm text-primary-deep bg-surface-muted px-3 py-2 rounded-lg font-mono break-all border border-line">
                 {integrationTopic}
               </p>
               <button
@@ -99,12 +99,12 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
                   navigator.clipboard.writeText(integrationTopic);
                   toast.success('Đã sao chép topic MQTT tích hợp!');
                 }}
-                className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 flex-shrink-0"
+                className="rounded-xl border border-line bg-white px-3 py-2 text-xs font-semibold text-primary-deep transition-colors hover:bg-soft flex-shrink-0"
               >
                 Sao chép
               </button>
             </div>
-            <p className="text-xs text-emerald-700/75">
+            <p className="text-xs text-text-muted">
               Topic một chiều backend → Node-RED dùng để fan-out các cảnh báo hệ thống (SystemAlert).
             </p>
           </div>
@@ -121,9 +121,9 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
           <div className="space-y-1">
-            <label className="text-sm font-medium text-emerald-950">Device ID (đang hoạt động)</label>
-            <p className="text-sm text-emerald-800 bg-emerald-50 px-3 py-2 rounded-lg font-mono">
-              {ctxDeviceId ?? <span className="text-gray-400 italic">Chưa chọn thiết bị — vào "Thiết Bị Của Tôi"</span>}
+            <label className="text-sm font-medium text-primary-deep">Device ID (đang hoạt động)</label>
+            <p className="text-sm text-primary-deep bg-surface-muted px-3 py-2 rounded-lg font-mono">
+              {ctxDeviceId ?? <span className="text-faint italic">Chưa chọn thiết bị — vào "Thiết Bị Của Tôi"</span>}
             </p>
           </div>
           <div className="space-y-2">
@@ -158,10 +158,10 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
         <div className="space-y-3 p-1">
           {otaStatus ? (
             <>
-              <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-white/85 p-3">
+              <div className="flex items-center justify-between rounded-xl border border-line bg-white/85 p-3">
                 <div>
-                  <p className="text-xs text-emerald-700/75">Phiên bản hiện tại</p>
-                  <p className="text-sm font-semibold text-emerald-950">{otaStatus.current_version}</p>
+                  <p className="text-xs text-text-muted">Phiên bản hiện tại</p>
+                  <p className="text-sm font-semibold text-primary-deep">{otaStatus.current_version}</p>
                 </div>
                 {otaStatus.update_available && (
                   <div className="text-right">
@@ -174,7 +174,7 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
                 type="button"
                 disabled={!otaStatus.update_available || isProvisioningOta}
                 onClick={handleTriggerOtaWifi}
-                className="w-full rounded-xl border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-xl border border-primary bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-deep disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isProvisioningOta
                   ? 'Đang gửi OTA + WiFi...'
@@ -192,12 +192,12 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
                   ? 'Cập nhật firmware, giữ WiFi hiện tại'
                   : 'Đã ở phiên bản mới nhất'}
               </button>
-              <p className="text-xs text-emerald-700/75">
+              <p className="text-xs text-text-muted">
                 WiFi mới chỉ có hiệu lực sau khi OTA thành công và thiết bị khởi động lại; mật khẩu sai sẽ tự rollback về WiFi cũ.
               </p>
             </>
           ) : (
-            <p className="text-xs text-emerald-700/75">Đang tải thông tin firmware...</p>
+            <p className="text-xs text-text-muted">Đang tải thông tin firmware...</p>
           )}
         </div>
       </AccordionSection>
@@ -212,7 +212,7 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
       >
         <div className="space-y-3 p-1">
           {wifiConfig && (
-            <p className="text-xs font-medium text-emerald-800" data-testid="wifi-config-state">
+            <p className="text-xs font-medium text-primary-deep" data-testid="wifi-config-state">
               WiFi config v{wifiConfig.config_version} — {WIFI_STATE_LABEL[wifiConfig.state] ?? wifiConfig.state}
             </p>
           )}
@@ -253,7 +253,7 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
           <button
             type="button"
             onClick={() => setWifiCandidates((current) => [...current, { ssid: '', password: '', priority: current.length }])}
-            className="text-xs font-medium text-emerald-700"
+            className="text-xs font-medium text-primary"
           >
             + Thêm mạng WiFi
           </button>
@@ -261,11 +261,11 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
             type="button"
             disabled={isSavingWifi}
             onClick={handleSaveWifiList}
-            className="w-full rounded-xl border border-emerald-300 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="w-full rounded-xl border border-primary bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-deep disabled:opacity-50"
           >
             {isSavingWifi ? 'Đang gửi...' : 'Lưu WiFi (áp dụng sau khi khởi động lại)'}
           </button>
-          <p className="text-xs text-emerald-700/75">
+          <p className="text-xs text-text-muted">
             Mật khẩu chỉ tồn tại trong lúc gửi; hệ thống không bao giờ hiển thị lại mật khẩu đã lưu — để trống nghĩa là giữ nguyên.
           </p>
         </div>

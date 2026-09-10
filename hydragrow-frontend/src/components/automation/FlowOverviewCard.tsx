@@ -16,15 +16,15 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
         return "bg-amber-100 text-amber-800 border-amber-200";
       case "RECIPE":
       case "RECIPE_OVERRIDE":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200";
+        return "bg-pill text-status border-pill";
       case "CONFIG":
       case "CONFIG_OVERRIDE":
-        return "bg-indigo-100 text-indigo-800 border-indigo-200";
+        return "bg-config-soft text-config border-config-soft";
       case "ACTION":
       case "ACTION_COMMAND":
         return "bg-sky-100 text-sky-800 border-sky-200";
       default:
-        return "bg-emerald-100 text-emerald-800 border-emerald-200";
+        return "bg-pill text-status border-pill";
     }
   };
 
@@ -50,7 +50,7 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
   return (
     <div
       onClick={onClick}
-      className={`ui-card p-4 rounded-2xl bg-white border border-emerald-100/80 hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-36 group ${
+      className={`ui-card p-4 rounded-2xl bg-white border border-line hover:border-primary/50 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-36 group ${
         !script.enabled ? "opacity-75" : ""
       }`}
     >
@@ -77,14 +77,14 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
           {script.enabled ? (
             <span
               onClick={onToggleEnabled}
-              className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+              className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-pill text-status border border-pill"
             >
               Đang bật
             </span>
           ) : (
             <span
               onClick={onToggleEnabled}
-              className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200"
+              className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-surface-muted text-faint border border-line"
             >
               Đã tắt
             </span>
@@ -93,17 +93,17 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
       </div>
 
       <div className="my-auto">
-        <h4 className="font-semibold text-emerald-950 text-base group-hover:text-emerald-700 transition-colors line-clamp-1">
+        <h4 className="font-semibold text-primary-deep text-base group-hover:text-primary transition-colors line-clamp-1">
           {isConfig ? `★ ${script.name}` : script.name}
         </h4>
-        <p className="text-xs text-emerald-800/70 mt-1 line-clamp-1">
+        <p className="text-xs text-text-muted mt-1 line-clamp-1">
           {getSummary()}
         </p>
       </div>
 
-      <div className="text-[11px] text-emerald-800/50 flex items-center justify-between pt-1 border-t border-emerald-50">
+      <div className="text-[11px] text-faint flex items-center justify-between pt-1 border-t border-line">
         <span>Cập nhật gần đây</span>
-        <span className="group-hover:translate-x-0.5 transition-transform text-emerald-600 font-medium">Chi tiết &rarr;</span>
+        <span className="group-hover:translate-x-0.5 transition-transform text-primary font-medium">Chi tiết &rarr;</span>
       </div>
     </div>
   );

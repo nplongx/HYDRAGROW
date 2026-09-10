@@ -12,10 +12,10 @@ export const DosingAnomalyBanner = ({ anomalies }: { anomalies: DosingAnomaly[] 
     if (anomalies.length === 0) return null;
     const first = anomalies[0];
     return (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 text-red-900 shadow-sm">
-            <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={20} />
+        <div className="bg-[#FEE2E2] border border-transparent rounded-2xl p-4 flex items-start gap-3 text-error shadow-sm">
+            <AlertTriangle className="text-error shrink-0 mt-0.5" size={20} />
             <div>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full mr-2">
+                <span className="text-[10px] font-black uppercase tracking-wider bg-[#FEE2E2] text-error px-2 py-0.5 rounded-full mr-2">
                     Bất thường
                 </span>
                 <p className="text-sm font-semibold inline">

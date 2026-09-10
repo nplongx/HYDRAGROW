@@ -81,12 +81,12 @@ const Dashboard = () => {
   if (!deviceId) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-5 p-6 text-center">
-        <div className="p-6 bg-white rounded-3xl border border-emerald-100 shadow-xl shadow-emerald-950/10">
-          <Settings size={40} className="text-emerald-700" />
+        <div className="p-6 bg-white rounded-3xl border border-line shadow-xl shadow-primary/10">
+          <Settings size={40} className="text-primary" />
         </div>
         <div className="space-y-2 max-w-xs">
-          <h2 className="text-xl font-bold text-emerald-950">Chưa chọn thiết bị</h2>
-          <p className="text-sm text-emerald-800/75 leading-relaxed">
+          <h2 className="text-xl font-bold text-primary-deep">Chưa chọn thiết bị</h2>
+          <p className="text-sm text-text-muted leading-relaxed">
             Hệ thống cần Device ID. Vui lòng chuyển tới cài đặt.
           </p>
         </div>
@@ -123,36 +123,36 @@ const Dashboard = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-4 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`farm-status-pill ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+              <span className={`farm-status-pill ${isOnline ? 'bg-pill text-status border-pill' : 'bg-[#FEE2E2] text-error border-[#FEE2E2]'}`}>
                 <Wifi size={13} />
                 {isOnline ? 'Trạm Online' : 'Trạm Offline'}
               </span>
-              <span className="farm-status-pill bg-sky-50 text-sky-700 border-sky-200">
+              <span className="farm-status-pill bg-soft text-text-muted border-line">
                 <Cpu size={13} />
                 {modeLabel}
               </span>
-              <span className="farm-status-pill bg-white text-emerald-800 border-emerald-200">
+              <span className="farm-status-pill bg-white text-text-muted border-line">
                 ID: {deviceId}
               </span>
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-emerald-950">
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-primary-deep">
                 {friendlyState.label}
               </h1>
-              <p className="text-sm md:text-base text-emerald-800/80 leading-relaxed mt-2">
+              <p className="text-sm md:text-base text-text-muted leading-relaxed mt-2">
                 {friendlyState.description}
               </p>
             </div>
-            <div className={`rounded-2xl border p-4 flex gap-3 items-start ${faultCode || !isOnline || !isSensorOnline ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
-              <AlertTriangle className={`${faultCode || !isOnline || !isSensorOnline ? 'text-amber-700' : 'text-emerald-700'} shrink-0 mt-0.5`} size={18} />
+            <div className={`rounded-2xl border p-4 flex gap-3 items-start ${faultCode || !isOnline || !isSensorOnline ? 'bg-[#FFFBEB] border-amber-200' : 'bg-pill border-line'}`}>
+              <AlertTriangle className={`${faultCode || !isOnline || !isSensorOnline ? 'text-warn-deep' : 'text-status'} shrink-0 mt-0.5`} size={18} />
               <div>
-                <h2 className="text-sm font-bold text-emerald-950">Hành động tiếp theo</h2>
-                <p className="text-xs md:text-sm text-emerald-800/80 leading-relaxed mt-1">{nextAction}</p>
+                <h2 className="text-sm font-bold text-primary-deep">Hành động tiếp theo</h2>
+                <p className="text-xs md:text-sm text-text-muted leading-relaxed mt-1">{nextAction}</p>
 
                 {permission !== 'granted' && (
                   <button
                     onClick={enableNotifications}
-                    className="mt-2 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider"
+                    className="mt-2 px-3 py-1.5 bg-primary hover:bg-primary-deep text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider"
                   >
                     Bật quyền thông báo
                   </button>
@@ -162,19 +162,19 @@ const Dashboard = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-3 w-full lg:w-72">
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
-              <span className="text-[10px] text-emerald-800/70 font-bold uppercase tracking-wider">Sức khỏe trạm</span>
-              <div className={`text-4xl font-black font-mono tracking-tight mt-1 ${computedHealth.score >= 90 ? 'text-emerald-700' : computedHealth.score >= 60 ? 'text-amber-700' : 'text-red-700'}`}>
+            <div className="rounded-2xl border border-line bg-surface-muted p-4 text-center">
+              <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Sức khỏe trạm</span>
+              <div className={`text-4xl font-black font-mono tracking-tight mt-1 ${computedHealth.score >= 90 ? 'text-status' : computedHealth.score >= 60 ? 'text-warning' : 'text-error'}`}>
                 {computedHealth.score}%
               </div>
-              <p className="text-xs font-semibold text-emerald-900 mt-1">{computedHealth.label}</p>
+              <p className="text-xs font-semibold text-primary-deep mt-1">{computedHealth.label}</p>
             </div>
-            <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 text-center">
-              <span className="text-[10px] text-sky-800/70 font-bold uppercase tracking-wider">Cảm biến</span>
-              <div className={`text-2xl font-black mt-3 ${isSensorOnline ? 'text-emerald-700' : 'text-red-700'}`}>
+            <div className="rounded-2xl border border-line bg-surface-muted p-4 text-center">
+              <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Cảm biến</span>
+              <div className={`text-2xl font-black mt-3 ${isSensorOnline ? 'text-status' : 'text-error'}`}>
                 {isSensorOnline ? 'Tốt' : 'Mất'}
               </div>
-              <p className="text-xs font-semibold text-sky-900 mt-2">{isSensorOnline ? 'Đang đo' : 'Cần kiểm tra'}</p>
+              <p className="text-xs font-semibold text-primary-deep mt-2">{isSensorOnline ? 'Đang đo' : 'Cần kiểm tra'}</p>
             </div>
           </div>
         </div>
@@ -182,13 +182,13 @@ const Dashboard = () => {
 
       {/* Cảnh báo cạn bình dung dịch */}
       {hasTankAlert && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3 text-amber-900 shadow-sm animate-in fade-in">
-          <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
+        <div className="bg-[#FFFBEB] border border-amber-200 rounded-2xl p-4 flex items-start gap-3 text-warn-deep shadow-sm animate-in fade-in">
+          <AlertTriangle className="text-warn-deep shrink-0 mt-0.5" size={20} />
           <div className="space-y-1">
             <h4 className="font-bold text-sm">Cảnh báo: Bình dung dịch sắp cạn</h4>
             <div className="flex flex-wrap gap-2 pt-1">
-              {tankAlert?.tank_a_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">Cạn Dinh Dưỡng A</span>}
-              {tankAlert?.tank_b_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200/70 border border-amber-300 text-amber-950">Cạn Dinh Dưỡng B</span>}
+              {tankAlert?.tank_a_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 border border-amber-200 text-warn-deep">Cạn Dinh Dưỡng A</span>}
+              {tankAlert?.tank_b_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 border border-amber-200 text-warn-deep">Cạn Dinh Dưỡng B</span>}
               {tankAlert?.tank_ph_up_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 border border-purple-300 text-purple-900">Cạn pH Up</span>}
               {tankAlert?.tank_ph_down_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 border border-rose-300 text-rose-900">Cạn pH Down</span>}
             </div>
@@ -265,10 +265,10 @@ const Dashboard = () => {
           {Object.values(pumps).some(v => v === true) ? (
             Object.entries(pumps).map(([key, isRunning]) => {
               if (!isRunning) return null;
-              return <ActiveDeviceTag key={key} label={pumpLabels[key] || key} color={pumpColors[key] || 'bg-emerald-50 text-emerald-700 border-emerald-200'} />;
+              return <ActiveDeviceTag key={key} label={pumpLabels[key] || key} color={pumpColors[key] || 'bg-pill text-status border-pill'} />;
             })
           ) : (
-            <span className="farm-status-pill bg-emerald-50 text-emerald-700 border-emerald-200">
+            <span className="farm-status-pill bg-pill text-status border-pill">
               Không có bơm hoặc van nào đang chạy
             </span>
           )}

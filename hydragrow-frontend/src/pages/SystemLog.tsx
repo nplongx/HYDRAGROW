@@ -100,7 +100,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
       href="http://localhost:3000"
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 hover:text-sky-800"
+      className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-deep"
     >
       <ExternalLink size={13} />
       <span>Mở Grafana</span>
@@ -121,7 +121,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
       <HealthSummaryBar summary={healthSummary} mode={mode} onModeChange={setMode} search={search} onSearchChange={setSearch} />
 
       {/* Filter & CSV Export Bar */}
-      <div className="bg-white/90 border border-emerald-100 rounded-3xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">
+      <div className="bg-white/90 border border-line rounded-3xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">
         <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
           {FILTERS.map(btn => {
             const Icon = btn.icon;
@@ -131,7 +131,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                 key={btn.id}
                 onClick={() => setFilter(btn.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border whitespace-nowrap ${
-                  active ? 'bg-sky-600 text-white border-transparent shadow-md' : 'bg-white text-emerald-800 border-emerald-100 hover:bg-emerald-50'
+                  active ? 'bg-primary-deep text-white border-transparent shadow-md' : 'bg-white text-text-muted border-line hover:bg-pill'
                 }`}
               >
                 <Icon size={12} />
@@ -143,7 +143,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         <button
           onClick={handleExportCSV}
           disabled={systemEvents.length === 0}
-          className="flex items-center justify-center space-x-2 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-40 text-emerald-900 px-4 py-1.5 rounded-xl border border-emerald-200 text-xs font-bold shrink-0"
+          className="flex items-center justify-center space-x-2 bg-soft hover:bg-pill disabled:opacity-40 text-primary-deep px-4 py-1.5 rounded-xl border border-line text-xs font-bold shrink-0"
         >
           <Download size={13} />
           <span>Xuất CSV</span>
@@ -153,9 +153,9 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className={`flex-1 min-w-0 w-full ${selectedEvent ? 'lg:max-w-2xl' : ''}`}>
           {isLoading ? (
-            <div className="flex items-center justify-center gap-2.5 py-24 text-emerald-700/75">
-              <div className="w-4 h-4 border-2 border-emerald-100 border-t-blue-500 rounded-full animate-spin" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800">Đang đồng bộ dòng thời gian...</span>
+            <div className="flex items-center justify-center gap-2.5 py-24 text-text-muted">
+              <div className="w-4 h-4 border-2 border-line border-t-primary rounded-full animate-spin" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary-deep">Đang đồng bộ dòng thời gian...</span>
             </div>
           ) : visibleRows.length === 0 ? (
             <StateView
@@ -165,7 +165,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
             />
           ) : (
             <div className="relative pl-3">
-              <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-emerald-200 via-emerald-300 to-transparent pointer-events-none" />
+              <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-primary/30 via-primary/15 to-transparent pointer-events-none" />
               <div className="space-y-4">
                 {visibleRows.map((row, idx) => {
                   if (row.type === 'event') {
@@ -177,7 +177,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                   return (
                     <div key={`merged-${row.title}-${row.latestTimestamp}`} className="flex items-center gap-3 pl-10">
                       <span className="log-neutral-badge">×{row.count}</span>
-                      <span className="text-xs text-emerald-800/80 font-medium">{row.title} — gộp {row.count} sự kiện kỹ thuật lặp lại</span>
+                      <span className="text-xs text-text-muted font-medium">{row.title} — gộp {row.count} sự kiện kỹ thuật lặp lại</span>
                     </div>
                   );
                 })}
@@ -187,7 +187,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                   <button
                     onClick={() => fetchNextPage()}
                     disabled={isFetchingNextPage}
-                    className="text-xs font-semibold text-sky-700 hover:text-sky-800 disabled:opacity-50 px-4 py-2"
+                    className="text-xs font-semibold text-primary hover:text-primary-deep disabled:opacity-50 px-4 py-2"
                   >
                     {isFetchingNextPage ? 'Đang tải...' : 'Tải thêm sự kiện cũ hơn'}
                   </button>
@@ -198,7 +198,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         </div>
 
         {selectedEvent && (
-          <div className="relative z-20 w-full lg:w-[26rem] shrink-0 border border-emerald-100 rounded-2xl bg-white shadow-xl shadow-emerald-950/10">
+          <div className="relative z-20 w-full lg:w-[26rem] shrink-0 border border-line rounded-2xl bg-white shadow-xl shadow-primary/10">
             <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
           </div>
         )}

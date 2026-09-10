@@ -10,12 +10,19 @@ describe('StatusPill', () => {
 
   it('hiển thị "Đang gửi…" khi commandStatus là sending', () => {
     render(<StatusPill commandStatus="sending" />);
-    expect(screen.getByText('Đang gửi…')).toBeInTheDocument();
+    const pill = screen.getByText('Đang gửi…');
+    expect(pill).toBeInTheDocument();
+    expect(pill.className).toContain('bg-[#FFFBEB]');
+    expect(pill.className).toContain('text-warn-deep');
+    expect(pill.className).toContain('rounded-full');
   });
 
   it('hiển thị "✓ Xác nhận" khi commandStatus là accepted', () => {
     render(<StatusPill commandStatus="accepted" />);
-    expect(screen.getByText('✓ Xác nhận')).toBeInTheDocument();
+    const pill = screen.getByText('✓ Xác nhận');
+    expect(pill).toBeInTheDocument();
+    expect(pill.className).toContain('bg-pill');
+    expect(pill.className).toContain('text-status');
   });
 
   it.each(['network_error', 'rate_limited', 'HTTP 500', 'safety_blocked'])(

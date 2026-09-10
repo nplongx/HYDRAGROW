@@ -51,13 +51,13 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
       >
         <div className="flex items-center gap-2">
           {Icon && (
-            <div className={`p-1.5 rounded-lg bg-emerald-50 border border-emerald-100 ${color || 'text-emerald-600'}`}>
+            <div className={`p-1.5 rounded-lg bg-pill border border-line ${color || 'text-primary'}`}>
               <Icon size={16} strokeWidth={2} />
             </div>
           )}
           <span className="text-sm font-semibold text-emerald-900">{title}</span>
           {badge && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+            <span className="px-2 py-0.5 rounded-full bg-pill text-status text-[10px] font-bold">
               {badge}
             </span>
           )}
@@ -69,7 +69,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
         />
       </button>
       {open && (
-        <div className="border-t border-emerald-100 px-4 pb-4 pt-3">
+        <div className="border-t border-line px-4 pb-4 pt-3">
           {children}
         </div>
       )}

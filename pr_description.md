@@ -1,13 +1,13 @@
 ## Requirement
-- Requirement ID: HIFI-D1-D3-001
-- Change class (`C0`-`C7`): C2
+- Issue / Requirement ID: SEC-2025-0009
+- Change class (`C0`-`C7`): C1
 
 ## Objective
-Lấp 4 khoảng trống chức năng giữa Figma "Hi-Fi — Full App (v1)" (D1 Dashboard, D2 Điều khiển, D3 Tự động hóa) và code hiện tại: khoá chéo an toàn pH Up/Down, nút Dừng khẩn cấp toàn cục, banner xung đột lịch trình tự động hóa, và trạng thái gửi lệnh real-time + PWM inline.
+Update `rumqttc` from `0.22.0` to `0.24.0` in `hydragrow-simulator` crate, which transitively upgrades `ring` to `0.17.14`. This resolves the `ring` panic vulnerability (RUSTSEC-2025-0009).
 
 ## Acceptance Contract
-- Acceptance contract: `docs/acceptance/HIFI-D1-D3-001.json`
-- Evidence contract: `docs/evidence/HIFI-D1-D3-001.json`
+- Acceptance contract: `docs/acceptance/SEC-2025-0009.json`
+- Evidence contract: `docs/evidence/SEC-2025-0009.json`
 - For C1-C7 changes, commit both contracts in the same PR.
 - Schemas: `docs/schemas/acceptance-contract.schema.json`, `docs/schemas/evidence-contract.schema.json`
 
@@ -15,27 +15,34 @@ Lấp 4 khoảng trống chức năng giữa Figma "Hi-Fi — Full App (v1)" (D1
 
 | ID | Criterion | Target / Expected | Actual | Evidence |
 |---|---|---|---|---|
-| AC-1 | pH Up/Down interlock | Pass tests | PASS | docs/evidence/HIFI-D1-D3-001.json |
-| AC-2 | Emergency stop command | Pass tests | PASS | docs/evidence/HIFI-D1-D3-001.json |
-| AC-3 | Automation schedule conflict | Pass tests | PASS | docs/evidence/HIFI-D1-D3-001.json |
-| AC-4 | Command status pill and PWM | Pass tests | PASS | docs/evidence/HIFI-D1-D3-001.json |
+| AC-1 | ring is upgraded to >= 0.17.12 | PASS | PASS | docs/evidence/SEC-2025-0009.json |
 
 ## Verification
 - [x] Acceptance contract gate
 - [x] Evidence contract gate
 - [x] Delivery governance gate
 - [x] Unit / integration tests
+- [ ] E2E / scenario test
+- [ ] Benchmark / performance evidence (if applicable)
+- [ ] Hardware / staging / deployment verification (if applicable)
 
 ## Documentation
 - [x] Required architecture/API/operations docs updated
 - [x] `docs/project-state/CURRENT-STATUS.md` updated if project state changed
 - [x] `docs/project-state/TRACEABILITY.md` updated for material requirements
 
+## Deployment
+- Environment: Local testing & CI
+- Build / version: 0.1.0 (Simulator)
+- Evidence: CI tests passing
+- Rollback plan: Revert this PR
+
 ## Risks / Known Gaps
-None.
+None. Only affects `hydragrow-simulator` locally.
 
 ## Final Acceptance
 - [x] Code verification passed
 - [x] Acceptance criteria passed
+- [x] Required deployment/integration evidence attached
 - [x] Documentation synchronized
 - [x] Project state synchronized

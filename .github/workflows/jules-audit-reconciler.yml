@@ -39,6 +39,7 @@ jobs:
           gh label create "audit" --repo "${{ github.repository }}" --color "5319e7" --description "Nightly audit" 2>/dev/null || true
           gh label create "finding" --repo "${{ github.repository }}" --color "d73a4a" --description "Evidence-backed audit finding" 2>/dev/null || true
           gh label create "juleson-dispatched" --repo "${{ github.repository }}" --color "6f42c1" --description "Juleson has dispatched a session" 2>/dev/null || true
+          gh label create "audit-reconciled" --repo "${{ github.repository }}" --color "0e8a16" --description "Completed Jules audit was reconciled" 2>/dev/null || true
 
           issues_json=$(gh issue list \
             --repo "${{ github.repository }}" \
@@ -47,7 +48,7 @@ jobs:
             --limit 100 \
             --json number,title,body,labels)
 
-          echo "$issues_json" | jq -c '.[] | select(.body | contains("JULES_SESSION_ID="))' > /tmp/audit_issues.jsonl
+          echo "$issues_json" | jq -c '.[] | select(.body | contains("JULES_SESSION_ID=")) | select((.labels | map(.name) | index("audit-reconciled")) == null)' > /tmp/audit_issues.jsonl
 
           while IFS= read -r issue; do
             [ -n "$issue" ] || continue
@@ -55,10 +56,6 @@ jobs:
             issue_body=$(jq -r '.body // ""' <<<"$issue")
             session_id=$(printf '%s\n' "$issue_body" | sed -n 's/^JULES_SESSION_ID=//p' | head -n1 | tr -d '\r')
             [ -n "$session_id" ] || continue
-
-            if printf '%s\n' "$issue_body" | grep -q '^JULES_RECONCILED=1$'; then
-              continue
-            fi
 
             echo "Reconciling audit issue #$issue_number, session $session_id"
             details=$(juleson sessions get "$session_id" 2>&1 || true)
@@ -72,14 +69,14 @@ jobs:
             if [ -z "$(printf '%s' "$block" | tr -d '[:space:]')" ]; then
               echo "No structured finding block found in completed session $session_id."
               gh issue comment "$issue_number" --repo "${{ github.repository }}" --body "Jules session \`$session_id\` completed but returned no \`JULES_FINDINGS_JSON_BEGIN/END\` block. No finding issue was created. Manual review required."
-              gh issue comment "$issue_number" --repo "${{ github.repository }}" --body "JULES_RECONCILED=1"
+              gh issue edit "$issue_number" --repo "${{ github.repository }}" --add-label "audit-reconciled"
               continue
             fi
 
             if ! printf '%s\n' "$block" | jq -e 'type == "array"' >/dev/null 2>&1; then
               echo "Invalid JSON finding block from session $session_id"
               gh issue comment "$issue_number" --repo "${{ github.repository }}" --body "Jules session \`$session_id\` completed but its structured finding block was invalid JSON. No finding issue was created. Manual review required."
-              gh issue comment "$issue_number" --repo "${{ github.repository }}" --body "JULES_RECONCILED=1"
+              gh issue edit "$issue_number" --repo "${{ github.repository }}" --add-label "audit-reconciled"
               continue
             fi
 
@@ -194,5 +191,6 @@ jobs:
               fi
             done
 
-            gh issue comment "$issue_number" --repo "${{ github.repository }}" --body "JULES_RECONCILED=1"
+            gh issue comment "$issue_number" --repo "${{ github.repository }}" --body "Audit session reconciled: $finding_count finding(s) processed."
+            gh issue edit "$issue_number" --repo "${{ github.repository }}" --add-label "audit-reconciled"
           done < /tmp/audit_issues.jsonl

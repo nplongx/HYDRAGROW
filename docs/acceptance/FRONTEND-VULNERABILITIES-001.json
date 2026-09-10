@@ -1,0 +1,12 @@
+{
+  "requirement_id": "FRONTEND-VULNERABILITIES-001",
+  "issue": 486,
+  "description": "Resolve high-severity vulnerabilities in frontend dependencies (fast-uri, nanoid, postcss, react-router, vite)",
+  "criteria": [
+    {
+      "id": "AC-1",
+      "description": "Running `npm audit` in `hydragrow-frontend` reports 0 vulnerabilities for the specified packages.",
+      "type": "verification"
+    }
+  ]
+}

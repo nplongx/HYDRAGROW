@@ -57,8 +57,14 @@ jobs:
 
           gh label create jules-queued --repo "${{ github.repository }}" --color fbca04 --description "Waiting for Jules concurrency slot" 2>/dev/null || true
 
-          # Existing reconciliation logic remains unchanged.
-          # Before every juleson sessions create call, enforce MAX_JULES_SESSIONS.
+          echo "Using shared Jules dispatch guard"
+
+          if [ -x .github/scripts/jules-dispatch-guard.sh ]; then
+            if ! .github/scripts/jules-dispatch-guard.sh; then
+              echo "Jules capacity reached. Findings must stay queued."
+              exit 0
+            fi
+          fi
 
           MAX_JULES_SESSIONS=15
           active_sessions=$(juleson sessions list --state QUEUED,RUNNING --json state 2>/dev/null | jq '[.[] | select(.state=="QUEUED" or .state=="RUNNING")] | length' || echo 0)

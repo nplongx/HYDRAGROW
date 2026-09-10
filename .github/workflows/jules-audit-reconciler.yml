@@ -182,23 +182,35 @@ jobs:
               continue
             fi
 
-            jq -c '.[]' "$block" | while IFS= read -r finding; do
-              title=$(jq -r '.title // empty' <<< "$finding")
-              file=$(jq -r '.file // empty' <<< "$finding")
-              evidence=$(jq -r '.evidence // empty' <<< "$finding")
-              severity=$(jq -r '.severity // "warning"' <<< "$finding")
-              confidence=$(jq -r '.confidence // "medium"' <<< "$finding")
-              symbol=$(jq -r '.symbol // empty' <<< "$finding")
-              root=$(jq -r '.root_cause // empty' <<< "$finding")
-              impact=$(jq -r '.impact // empty' <<< "$finding")
-              verify=$(jq -r '.verification // empty' <<< "$finding")
-              scope=$(jq -r '.fix_scope // empty' <<< "$finding")
-              [ -n "$title" ] && [ -n "$file" ] && [ -n "$evidence"] || { echo "Skipping incomplete finding"; continue; }
+            processed=0
+            skipped=0
+            while IFS= read -r finding; do
+              [ -n "$finding" ] || continue
+              title=$(jq -r '.title // .summary // .name // empty' <<< "$finding")
+              file=$(jq -r '.file // .affected_file // .path // .location.file // empty' <<< "$finding")
+              evidence=$(jq -r '.evidence // .reproduction // .details // .description // empty' <<< "$finding")
+              severity=$(jq -r '.severity // .priority // "warning"' <<< "$finding")
+              confidence=$(jq -r '.confidence // .certainty // "medium"' <<< "$finding")
+              symbol=$(jq -r '.symbol // .function // .location.symbol // empty' <<< "$finding")
+              root=$(jq -r '.root_cause // .rootCause // .cause // empty' <<< "$finding")
+              impact=$(jq -r '.impact // .consequence // empty' <<< "$finding")
+              verify=$(jq -r '.verification // .recommended_verification // .recommendation // empty' <<< "$finding")
+              scope=$(jq -r '.fix_scope // .fixScope // .recommendation // empty' <<< "$finding")
+
+              if [ -z "$title" ] || [ -z "$evidence" ]; then
+                echo "Skipping malformed finding: title/evidence missing"
+                skipped=$((skipped + 1))
+                continue
+              fi
+              if [ -z "$file" ]; then
+                file="not specified by Jules"
+              fi
 
               existing=$(gh issue list --repo "${{ github.repository }}" --state open --label finding \
                 --search "in:title \"$title\"" --json number -q '.[0].number' || true)
               if [ -n "$existing" ]; then
                 echo "Finding already exists as #$existing"
+                processed=$((processed + 1))
                 continue
               fi
 
@@ -234,6 +246,7 @@ jobs:
                 --label audit --label finding)
               finding_number="${url##*/}"
               echo "Created finding #$finding_number"
+              processed=$((processed + 1))
 
               cat > /tmp/fix.md <<PROMPT
           Read AGENTS.md and .agent/rules/jules-protocol.md first.
@@ -249,19 +262,42 @@ jobs:
           Fix scope: $scope
           PROMPT
 
+              set +e
               output=$(juleson sessions create "sources/github/${{ github.repository }}" \
                 --prompt-file /tmp/fix.md --starting-branch main \
                 --automation-mode AUTO_CREATE_PR --title "[Jules] [Jules Finding] $title" 2>&1)
+              fix_rc=$?
+              set -e
               printf '%s\n' "$output"
+              if [ "$fix_rc" -ne 0 ]; then
+                echo "Juleson fix dispatch failed for finding #$finding_number (rc=$fix_rc)"
+                gh issue comment "$finding_number" --repo "${{ github.repository }}" \
+                  --body "Automatic Juleson fix dispatch failed with exit code $fix_rc. See reconciler run logs for details."
+                gh issue edit "$finding_number" --repo "${{ github.repository }}" --add-label audit-reconcile-error
+                continue
+              fi
+
               fix_id=$(printf '%s\n' "$output" | sed -n 's/^ID: //p' | head -n1)
               if [ -n "$fix_id" ]; then
                 gh issue edit "$finding_number" --repo "${{ github.repository }}" --add-label juleson-dispatched
                 gh issue comment "$finding_number" --repo "${{ github.repository }}" \
                   --body "Juleson fix session started: \`$fix_id\`"
+              else
+                echo "Juleson fix session created but no session ID was parsed for #$finding_number"
+                gh issue comment "$finding_number" --repo "${{ github.repository }}" \
+                  --body "Juleson fix dispatch returned successfully, but the session ID could not be parsed. See reconciler run logs."
+                gh issue edit "$finding_number" --repo "${{ github.repository }}" --add-label audit-reconcile-error
               fi
-            done
+            done < <(jq -c '.[]' "$block")
 
-            gh issue comment "$issue_number" --repo "${{ github.repository }}" \
-              --body "Audit session reconciled: $count finding(s) processed."
-            gh issue edit "$issue_number" --repo "${{ github.repository }}" --add-label audit-reconciled
+            echo "Processed $processed finding(s); skipped $skipped malformed finding(s)."
+            if [ "$skipped" -gt 0 ]; then
+              gh issue comment "$issue_number" --repo "${{ github.repository }}" \
+                --body "Audit session found $count finding(s); $processed processed and $skipped malformed finding(s) were skipped."
+              gh issue edit "$issue_number" --repo "${{ github.repository }}" --add-label audit-reconcile-error
+            else
+              gh issue comment "$issue_number" --repo "${{ github.repository }}" \
+                --body "Audit session reconciled: $count finding(s) processed."
+              gh issue edit "$issue_number" --repo "${{ github.repository }}" --add-label audit-reconciled
+            fi
           done < /tmp/audit_issues.jsonl

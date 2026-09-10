@@ -1,0 +1,54 @@
+{
+  "requirement_id": "DIAGNOSTIC-WORKER-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml config",
+      "verified_at": "2026-09-10",
+      "notes": "WorkerConfig loads env configuration and applies design spec defaults"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml trigger",
+      "verified_at": "2026-09-10",
+      "notes": "Pure trigger evaluator fires Hestia state and watchdog breach triggers"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml backend_client",
+      "verified_at": "2026-09-10",
+      "notes": "BackendClient implements DiagnosisBackend for fleet checks, breaches, dedup checks, crop targets, and alert writing"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml diagnostic_model",
+      "verified_at": "2026-09-10",
+      "notes": "DiagnosticModel trait and parse_diagnosis strictly validate reason codes and confidence bounds with unexplained_anomaly fallback"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml anthropic_model",
+      "verified_at": "2026-09-10",
+      "notes": "AnthropicDiagnosticModel executes tool calling with token, round trip, and time budgets, enforcing device scoping and query clamping"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml orchestrator",
+      "verified_at": "2026-09-10",
+      "notes": "Orchestrator run_diagnosis skips model on recent alert dedup and falls back to unexplained_anomaly on model errors"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml tick",
+      "verified_at": "2026-09-10",
+      "notes": "Fleet tick run_fleet_tick executes bounded-concurrency diagnoses across triggered fleet devices"
+    }
+  ]
+}

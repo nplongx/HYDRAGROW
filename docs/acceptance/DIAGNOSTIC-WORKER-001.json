@@ -1,0 +1,48 @@
+{
+  "requirement_id": "DIAGNOSTIC-WORKER-001",
+  "objective": "Implement hydragrow-diagnostic-worker binary crate polling Hestia states and watchdog breaches with bounded-concurrency LLM tool-calling loop, device scoping, query clamping, dedup pre-checks, and fallback alerts.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "WorkerConfig loads env configuration and applies design spec defaults.",
+      "verification": "Unit tests in config.rs verify loading required keys and applying defaults.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Pure trigger evaluator fires Hestia state and watchdog breach triggers.",
+      "verification": "Unit tests in trigger.rs verify Hestia state and watchdog breach evaluation.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Backend HTTP client implements DiagnosisBackend for fleet checks, breaches, dedup checks, crop targets, and alert writing.",
+      "verification": "Mock tests in backend_client.rs verify API endpoints.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "DiagnosticModel trait and parse_diagnosis strictly validate reason codes and confidence bounds with unexplained_anomaly fallback.",
+      "verification": "Unit tests in diagnostic_model.rs verify parsing validation and fallback.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "AnthropicDiagnosticModel executes tool calling with token, round trip, and time budgets, enforcing device scoping and query clamping.",
+      "verification": "Unit tests in anthropic_model.rs verify tool dispatch, device scope checking, and budget limits.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Orchestrator run_diagnosis skips model on recent alert dedup and falls back to unexplained_anomaly on model errors.",
+      "verification": "Unit tests in orchestrator.rs verify dedup pre-check and fallback behavior.",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Fleet tick run_fleet_tick executes bounded-concurrency diagnoses across triggered fleet devices.",
+      "verification": "Unit test in tick.rs verifies fleet tick execution.",
+      "evidence_required": true
+    }
+  ]
+}

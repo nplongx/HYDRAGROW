@@ -169,40 +169,40 @@ export const AdvancedDeviceControl = ({
   };
 
   return (
-    <div className={`border rounded-2xl overflow-hidden transition-all duration-300 shadow-sm shadow-emerald-950/5 ${currentStatus ? activeTheme.glow : 'border-emerald-100 bg-white'}`}>
+    <div className={`border rounded-2xl overflow-hidden transition-all duration-300 shadow-sm shadow-primary/5 ${currentStatus ? activeTheme.glow : 'border-line bg-white'}`}>
       <div className="p-4 flex flex-col gap-3.5">
         {/* Nút bật/tắt chính */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl transition-all duration-300 shadow-md ${currentStatus ? activeTheme.activeIcon : 'bg-white text-emerald-700/75 border border-emerald-100'}`}>
+            <div className={`p-2 rounded-xl transition-all duration-300 shadow-md ${currentStatus ? activeTheme.activeIcon : 'bg-white text-primary/75 border border-line'}`}>
               <Icon size={16} />
             </div>
             <div>
-              <h3 className={`text-xs font-bold ${currentStatus ? 'text-emerald-950' : 'text-emerald-900'}`}>{title}</h3>
-              <p className="text-[10px] text-emerald-700/75 font-semibold tracking-wide">{currentStatus ? 'Đang hoạt động' : disabledReason || 'Tắt'}</p>
+              <h3 className={`text-xs font-bold ${currentStatus ? 'text-primary-deep' : 'text-primary-deep'}`}>{title}</h3>
+              <p className="text-[10px] text-text-muted font-semibold tracking-wide">{currentStatus ? 'Đang hoạt động' : disabledReason || 'Tắt'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <StatusPill commandStatus={commandStatus[pumpId]} />
-            {isLocked && !currentStatus && <Lock size={12} className="text-emerald-700/60 mr-0.5" />}
+            {isLocked && !currentStatus && <Lock size={12} className="text-primary/60 mr-0.5" />}
             <Switch
               isOn={currentStatus}
               disabled={!canSendCommands || isToggling || isProcessing || isLocked}
               onClick={handleToggle}
-              colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-600' : 'bg-emerald-600') : 'bg-emerald-200'}
+              colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-600' : 'bg-primary') : undefined}
             />
           </div>
         </div>
 
         {lockedByPumpId && (
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700/80 bg-emerald-50/80 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-text-muted bg-soft border border-line rounded-lg px-2.5 py-1.5">
             <Lock size={11} className="shrink-0" />
             <span>Đã khoá vì {lockedByPumpLabel || 'thiết bị xung khắc'} đang chạy — tránh trung hoà lẫn nhau</span>
           </div>
         )}
 
         {allowPwm && currentStatus && (
-          <div className="flex items-center justify-between text-[10px] font-semibold text-emerald-800 bg-emerald-50/60 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+          <div className="flex items-center justify-between text-[10px] font-semibold text-primary-deep bg-soft border border-line rounded-lg px-2.5 py-1.5">
             <span>Công suất</span>
             <span className="font-mono">
               {pwmValue}% ≈ {((pwmValue * (PWM_TO_ML_PER_MIN[pumpId.toUpperCase()] ?? 0.12))).toFixed(1)} ml/phút
@@ -211,17 +211,17 @@ export const AdvancedDeviceControl = ({
         )}
 
         {/* Cài đặt kỹ thuật & Hẹn giờ */}
-        <div className="border-t border-emerald-100 pt-2.5">
+        <div className="border-t border-line pt-2.5">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700/75 hover:text-emerald-900 transition-colors cursor-pointer"
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-text-muted hover:text-primary-deep transition-colors cursor-pointer"
           >
             <ChevronDown size={12} className={`transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} />
             <span>{isEmergency ? 'Thiết lập khẩn cấp' : 'Tùy chỉnh kỹ thuật'}</span>
           </button>
 
           {showAdvanced && (
-            <div className="mt-3 bg-emerald-50/80 p-3 rounded-xl border border-emerald-100 space-y-3.5 animate-in slide-in-from-top-2">
+            <div className="mt-3 bg-soft p-3 rounded-xl border border-line space-y-3.5 animate-in slide-in-from-top-2">
               {isEmergency ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-red-700 text-[10px] font-bold uppercase tracking-wide">
@@ -230,9 +230,9 @@ export const AdvancedDeviceControl = ({
                   </div>
                   {allowPwm && (
                     <div className="space-y-1.5">
-                      <div className="flex justify-between text-[10px] text-emerald-800 font-bold uppercase">
+                      <div className="flex justify-between text-[10px] text-primary-deep font-bold uppercase">
                         <span>Công suất PWM</span>
-                        <span className="text-emerald-700 font-mono">{pwmValue}%</span>
+                        <span className="text-primary font-mono">{pwmValue}%</span>
                       </div>
                       <input
                         type="range" min="20" max="100" step="5"
@@ -247,7 +247,7 @@ export const AdvancedDeviceControl = ({
                       type="number" placeholder="Số giây ép chạy..."
                       value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
                       disabled={isProcessing || !canSendCommands}
-                      className="flex-1 bg-white border border-red-200 text-emerald-950 text-xs rounded-xl px-3 py-1.5 outline-none font-medium"
+                      className="flex-1 bg-white border border-red-200 text-primary-deep text-xs rounded-xl px-3 py-1.5 outline-none font-medium"
                     />
                     <button
                       onClick={handleEmergencyForceOn} disabled={isProcessing || !duration || !canSendCommands}
@@ -261,20 +261,20 @@ export const AdvancedDeviceControl = ({
                 <div className="space-y-3.5">
                   {allowPwm && (
                     <div className="space-y-1.5">
-                      <div className="flex justify-between text-[10px] text-emerald-800 font-bold uppercase">
+                      <div className="flex justify-between text-[10px] text-primary-deep font-bold uppercase">
                         <span>Công suất (PWM)</span>
-                        <span className="text-emerald-700 font-mono">{pwmValue}%</span>
+                        <span className="text-primary font-mono">{pwmValue}%</span>
                       </div>
                       <input
                         type="range" min="20" max="100" step="5"
                         value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
                         disabled={isProcessing || !canSendCommands}
-                        className="w-full h-1 bg-emerald-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                        className="w-full h-1 bg-line rounded-lg appearance-none cursor-pointer accent-primary"
                       />
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] text-emerald-800 font-bold uppercase">
+                    <div className="flex justify-between text-[10px] text-primary-deep font-bold uppercase">
                       <span>Thời gian hẹn giờ (Giây)</span>
                     </div>
                     <div className="flex gap-2">
@@ -283,13 +283,13 @@ export const AdvancedDeviceControl = ({
                           type="number" placeholder="Bắt đầu..."
                           value={duration} onChange={(e) => setDuration(e.target.value === '' ? '' : Number(e.target.value))}
                           disabled={isProcessing || !canSendCommands}
-                          className="w-full bg-white border border-emerald-100 text-emerald-950 text-xs rounded-xl pl-8 pr-3 py-1.5 outline-none font-medium"
+                          className="w-full bg-white border border-line text-primary-deep text-xs rounded-xl pl-8 pr-3 py-1.5 outline-none font-medium"
                         />
-                        <Timer size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-700/75" />
+                        <Timer size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-primary/75" />
                       </div>
                       <button
                         onClick={handleAdvancedRun} disabled={isProcessing || !canSendCommands}
-                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
+                        className="px-4 py-1.5 bg-primary hover:bg-primary-deep text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50"
                       >
                         Chạy
                       </button>

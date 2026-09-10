@@ -85,21 +85,21 @@ export const SeasonPhotoJournal = ({ seasonId, seasonStartTime }: SeasonPhotoJou
 
     return (
         <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/70">Nhật ký ảnh</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Nhật ký ảnh</p>
             <div className="flex gap-3 overflow-x-auto pb-1">
                 {photos.map((photo) => (
                     <div key={photo.id} className="shrink-0 w-20 text-center space-y-1">
                         <img
                             src={photo.cloudinary_url}
                             alt={`Ngày ${photo.day_offset}`}
-                            className="w-20 h-20 object-cover rounded-xl border border-emerald-100"
+                            className="w-20 h-20 object-cover rounded-xl border border-line"
                         />
-                        <p className="text-[10px] font-semibold text-emerald-800">Ngày {photo.day_offset}</p>
+                        <p className="text-[10px] font-semibold text-text-muted">Ngày {photo.day_offset}</p>
                     </div>
                 ))}
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="shrink-0 w-20 h-20 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    className="shrink-0 w-20 h-20 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-primary hover:bg-soft transition-colors"
                 >
                     <Plus size={18} />
                     <span className="text-[10px] font-bold">+ Thêm</span>

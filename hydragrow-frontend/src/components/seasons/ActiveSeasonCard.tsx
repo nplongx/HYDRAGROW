@@ -59,51 +59,51 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
 
   return (
     <div className="space-y-6 mb-6">
-      <div className="bg-white border border-emerald-100 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
         <div className="p-5 md:p-6 flex flex-col gap-5">
           {activeRecipe && totalDays !== null && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+              <div className="flex items-center justify-between text-xs font-bold text-primary-deep">
                 <span>Giai đoạn: {currentStage?.name || '—'} · Ngày {Math.floor(elapsed)}/{Math.round(totalDays)}</span>
               </div>
-              <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-line rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-600 rounded-full transition-all"
+                  className="h-full bg-primary rounded-full transition-all"
                   style={{ width: `${Math.min(100, (elapsed / totalDays) * 100)}%` }}
                 />
               </div>
               {delay > 0 && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-900">
+                <div className="flex items-start gap-2 bg-[#FFFBEB] border border-amber-200 rounded-xl px-3 py-2 text-xs text-warn-deep">
                   <span className="font-bold">⚠ Chậm hơn dự kiến {Math.ceil(delay)} ngày</span>
-                  <span className="text-amber-700/80">— So với "{activeRecipe.recipe_id}" đang áp dụng</span>
+                  <span className="text-warn-deep/80">— So với "{activeRecipe.recipe_id}" đang áp dụng</span>
                 </div>
               )}
             </div>
           )}
 
-          <div className="flex items-center justify-between border-b border-emerald-100 pb-4">
-            <div className="flex items-center gap-2 text-emerald-950">
-              <Play size={18} className="text-emerald-500 fill-emerald-500/20" />
+          <div className="flex items-center justify-between border-b border-line pb-4">
+            <div className="flex items-center gap-2 text-primary-deep">
+              <Play size={18} className="text-primary fill-primary/20" />
               <h2 className="text-base font-bold">Mùa vụ đang chạy</h2>
             </div>
             <div className="flex items-center gap-2">
               {isEditing ? (
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 transition-colors"
+                  className="p-1.5 bg-soft text-faint rounded-lg hover:bg-pill transition-colors"
                 >
                   <X size={16} />
                 </button>
               ) : (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-900 rounded-lg hover:bg-emerald-200 text-xs font-medium transition-colors border border-emerald-200"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-soft text-primary-deep rounded-lg hover:bg-pill text-xs font-medium transition-colors border border-line"
                 >
                   <Edit3 size={14} /> Sửa
                 </button>
               )}
-              <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="px-2.5 py-1 bg-pill text-status border border-pill rounded-lg text-xs font-bold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-status animate-pulse"></span>
                 Đang hoạt động
               </span>
             </div>
@@ -126,46 +126,46 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-emerald-900">Ghi chú</label>
+                <label className="text-sm font-medium text-primary-deep">Ghi chú</label>
                 <textarea
                   rows={3}
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  className="w-full bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-emerald-600 hover:border-emerald-300 resize-none transition-colors"
+                  className="w-full bg-white border border-line text-primary-deep text-sm rounded-lg px-3 py-2.5 outline-none focus:border-primary hover:border-line resize-none transition-colors"
                 />
               </div>
               <button
                 onClick={handleUpdate}
                 disabled={isLoading || !editName.trim()}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary hover:bg-primary-deep text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
               >
                 <Save size={16} /> {isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-emerald-50/80 p-4 rounded-xl border border-emerald-100">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-surface-muted p-4 rounded-xl border border-line">
               <div className="space-y-1">
-                <p className="text-xs font-medium text-emerald-700/75">Tên mùa vụ</p>
-                <p className="text-base font-bold text-emerald-950">{activeSeason.name}</p>
+                <p className="text-xs font-medium text-faint">Tên mùa vụ</p>
+                <p className="text-base font-bold text-primary-deep">{activeSeason.name}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-emerald-700/75">Giống cây trồng</p>
-                <p className="text-sm font-bold text-emerald-800 uppercase flex items-center gap-1.5">
-                  <Leaf size={14} className="text-emerald-700" />
+                <p className="text-xs font-medium text-faint">Giống cây trồng</p>
+                <p className="text-sm font-bold text-primary-deep uppercase flex items-center gap-1.5">
+                  <Leaf size={14} className="text-primary" />
                   {activeSeason.plant_type || 'Chưa cập nhật'}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-emerald-700/75">Thời gian bắt đầu</p>
-                <p className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5">
-                  <Calendar size={14} className="text-emerald-800/80" />
+                <p className="text-xs font-medium text-faint">Thời gian bắt đầu</p>
+                <p className="text-xs font-semibold text-primary-deep flex items-center gap-1.5">
+                  <Calendar size={14} className="text-primary/70" />
                   {new Date(activeSeason.start_time).toLocaleString('vi-VN')}
                 </p>
               </div>
               {activeSeason.description && (
-                <div className="space-y-1 md:col-span-3 pt-2 border-t border-emerald-100">
-                  <p className="text-xs font-medium text-emerald-700/75">Ghi chú</p>
-                  <p className="text-xs text-emerald-900 bg-white p-2.5 rounded-lg border border-emerald-100">
+                <div className="space-y-1 md:col-span-3 pt-2 border-t border-line">
+                  <p className="text-xs font-medium text-faint">Ghi chú</p>
+                  <p className="text-xs text-text-muted bg-white p-2.5 rounded-lg border border-line">
                     {activeSeason.description}
                   </p>
                 </div>

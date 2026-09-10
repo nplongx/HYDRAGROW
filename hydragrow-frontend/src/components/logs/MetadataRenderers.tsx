@@ -50,15 +50,15 @@ export const DosingMetadata = ({ meta }: { meta: any }) => {
 
   return (
     <div className="mt-3 text-xs">
-      <div className="bg-emerald-50/80 border border-emerald-100 rounded-xl px-3 py-2">
-        <div className="text-[9px] font-black text-emerald-700/75 mb-1.5 uppercase tracking-wider">
+      <div className="bg-surface-muted border border-line rounded-xl px-3 py-2">
+        <div className="text-[9px] font-black text-text-muted mb-1.5 uppercase tracking-wider">
           Khẩu phần châm thực tế
         </div>
         <div className="flex flex-col gap-1.5">
           {doseRows.map((r) => (
-            <div key={r.label} className="flex items-center justify-between border-b border-emerald-100/50 last:border-transparent pb-1 last:pb-0">
-              <span className="text-emerald-800/80 text-[11px] font-medium">{r.label}</span>
-              <span className={`${r.accent ?? 'text-emerald-900'} text-[11px]`}>{r.value}</span>
+            <div key={r.label} className="flex items-center justify-between border-b border-line last:border-transparent pb-1 last:pb-0">
+              <span className="text-text-muted text-[11px] font-medium">{r.label}</span>
+              <span className={`${r.accent ?? 'text-primary-deep'} text-[11px]`}>{r.value}</span>
             </div>
           ))}
         </div>
@@ -74,18 +74,18 @@ export const GenericMetadata = ({ meta, title = 'Thông số kỹ thuật' }: { 
     .map(([key, value]) => ({
       label: formatMetadataLabel(key),
       value: formatMetadataValue(value),
-      accent: key === 'event_type' || key === 'cycle_id' ? 'text-emerald-800 font-mono font-bold' : undefined,
+      accent: key === 'event_type' || key === 'cycle_id' ? 'text-primary-deep font-mono font-bold' : undefined,
     }));
 
   if (rows.length === 0) return null;
 
   return (
-    <div className="mt-3 flex flex-col gap-1.5 text-xs font-medium bg-emerald-50/80 border border-emerald-100 rounded-xl px-3 py-2.5">
-      <div className="text-[9px] font-black text-emerald-700/75 mb-0.5 uppercase tracking-wider">{title}</div>
+    <div className="mt-3 flex flex-col gap-1.5 text-xs font-medium bg-surface-muted border border-line rounded-xl px-3 py-2.5">
+      <div className="text-[9px] font-black text-text-muted mb-0.5 uppercase tracking-wider">{title}</div>
       {rows.map((r) => (
         <div key={r.label} className="flex items-center justify-between gap-3 border-b border-white/5 last:border-transparent pb-1 last:pb-0">
-          <span className="text-emerald-800/80 text-[11px] capitalize">{r.label}</span>
-          <span className={`${r.accent ?? 'text-emerald-900'} text-[11px] text-right break-all`}>{r.value}</span>
+          <span className="text-text-muted text-[11px] capitalize">{r.label}</span>
+          <span className={`${r.accent ?? 'text-primary-deep'} text-[11px] text-right break-all`}>{r.value}</span>
         </div>
       ))}
     </div>

@@ -63,7 +63,7 @@ export const DangerZoneSection: React.FC<DangerZoneSectionProps> = ({
           <button
             type="button"
             onClick={onCancelFactoryReset}
-            className="ui-btn-md border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
+            className="ui-btn-md border border-line bg-white text-primary-deep hover:bg-soft"
           >
             Huỷ
           </button>

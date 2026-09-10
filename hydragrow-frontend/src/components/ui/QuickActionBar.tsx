@@ -24,11 +24,11 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
         <Droplets size={15} />
         Châm dinh dưỡng
       </button>
-      <button type="button" onClick={onPausePumps} className="flex items-center justify-center gap-2 rounded-[14px] border border-emerald-100 bg-white px-[18px] py-[14px] text-[13px] font-semibold text-emerald-800 hover:bg-emerald-50 transition-colors">
+      <button type="button" onClick={onPausePumps} className="flex items-center justify-center gap-2 rounded-[14px] border border-line bg-white px-[18px] py-[14px] text-[13px] font-semibold text-primary-deep hover:bg-soft transition-colors">
         <Pause size={15} />
         {pumpsPaused ? 'Tiếp tục bơm' : 'Tạm dừng bơm'}
       </button>
-      <button type="button" onClick={onViewAlerts} className="flex items-center justify-center gap-2 rounded-[14px] border border-emerald-100 bg-white px-[18px] py-[14px] text-[13px] font-semibold text-emerald-800 hover:bg-emerald-50 transition-colors">
+      <button type="button" onClick={onViewAlerts} className="flex items-center justify-center gap-2 rounded-[14px] border border-line bg-white px-[18px] py-[14px] text-[13px] font-semibold text-primary-deep hover:bg-soft transition-colors">
         <Bell size={15} />
         Xem cảnh báo
       </button>

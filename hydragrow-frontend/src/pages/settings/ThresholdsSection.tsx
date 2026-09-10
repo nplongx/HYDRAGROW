@@ -42,20 +42,20 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
   ];
 
   return (
-    <div className="space-y-4 bg-white/85 border border-emerald-100 p-5 rounded-xl w-full">
+    <div className="space-y-4 bg-white/85 border border-line p-5 rounded-xl w-full">
       <div>
-        <label className="text-sm font-medium text-emerald-950 flex items-center gap-2">
-          <CalendarClock size={16} className="text-emerald-800/80" /> {label}
+        <label className="text-sm font-medium text-primary-deep flex items-center gap-2">
+          <CalendarClock size={16} className="text-primary" /> {label}
         </label>
-        {desc && <p className="text-xs text-emerald-700/75 mt-1">{desc}</p>}
+        {desc && <p className="text-xs text-faint mt-1">{desc}</p>}
       </div>
       <div className="flex flex-col md:flex-row md:items-center gap-6">
-        <div className="bg-white px-4 py-2 rounded-lg border border-emerald-100 flex-shrink-0">
+        <div className="bg-white px-4 py-2 rounded-lg border border-line flex-shrink-0">
           <input
             type="time"
             value={timeStr}
             onChange={handleTimeChange}
-            className="bg-transparent text-emerald-950 text-xl font-medium outline-none text-center cursor-pointer [color-scheme:dark]"
+            className="bg-transparent text-primary-deep text-xl font-medium outline-none text-center cursor-pointer [color-scheme:dark]"
           />
         </div>
         <div className="flex-1 space-y-3">
@@ -63,11 +63,11 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
             <button
               type="button"
               onClick={setEveryDay}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isEveryDay ? 'bg-sky-600 text-white' : 'bg-emerald-100 text-emerald-800/80 hover:bg-emerald-200'}`}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${isEveryDay ? 'bg-primary text-white' : 'bg-soft text-text-muted hover:bg-pill'}`}
             >
               Hằng ngày
             </button>
-            <span className="text-xs text-emerald-700/75">hoặc chọn ngày:</span>
+            <span className="text-xs text-faint">hoặc chọn ngày:</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {daysOfWeek.map(day => {
@@ -77,7 +77,7 @@ const VisualCronPicker = ({ value, onChange, label, desc }: {
                   key={day.val}
                   type="button"
                   onClick={() => toggleDay(day.val)}
-                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-sky-500/20 border-sky-500 text-sky-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800/80 hover:border-emerald-400 hover:text-emerald-950'}`}
+                  className={`w-9 h-9 rounded-full text-xs font-medium transition-colors flex items-center justify-center border ${isSelected ? 'bg-pill border-primary text-primary' : 'bg-soft border-line text-text-muted hover:border-primary hover:text-primary-deep'}`}
                 >
                   {day.label}
                 </button>
@@ -186,8 +186,8 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                 onChange={(e: InputEvent) => setConfig({ ...config, misting_temp_threshold: e.target.value })}
               />
             </div>
-            <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-emerald-100">
-              <span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Thời tiết bình thường</span>
+            <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-line">
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Thời tiết bình thường</span>
             </div>
             <InputGroup
               label="Phun sương (ms)"
@@ -202,8 +202,8 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
               onChange={(e: InputEvent) => setConfig({ ...config, misting_off_duration_ms: e.target.value })}
             />
             <div className="hidden lg:block lg:col-span-2"></div>
-            <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-emerald-100">
-              <span className="text-xs font-semibold text-emerald-800/80 uppercase tracking-wider">Nắng nóng</span>
+            <div className="sm:col-span-2 lg:col-span-4 pt-3 pb-1 border-t border-line">
+              <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Nắng nóng</span>
             </div>
             <InputGroup
               label="Phun sương (ms)"
@@ -243,18 +243,18 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
           <SubCard title="Bơm & Xả" className="h-full">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
-                  <span className="text-sm text-emerald-900 font-medium">Tự động cấp nước</span>
+                <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
+                  <span className="text-sm text-primary-deep font-medium">Tự động cấp nước</span>
                   <Switch isOn={config.auto_refill_enabled} onClick={(val) => setConfig({ ...config, auto_refill_enabled: val })} />
                 </div>
-                <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
-                  <span className="text-sm text-emerald-900 font-medium">Tự động xả tràn</span>
+                <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
+                  <span className="text-sm text-primary-deep font-medium">Tự động xả tràn</span>
                   <Switch isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} />
                 </div>
               </div>
-              <div className="pt-3 border-t border-emerald-100">
+              <div className="pt-3 border-t border-line">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-emerald-900 font-medium">Tự động pha loãng khi quá EC</span>
+                  <span className="text-sm text-primary-deep font-medium">Tự động pha loãng khi quá EC</span>
                   <Switch isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} />
                 </div>
                 {config.auto_dilute_enabled && (
@@ -262,7 +262,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-emerald-100">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-line">
                 <InputGroup label="T.Gian Bơm Max (s)" value={config.max_refill_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_refill_duration_sec: e.target.value })} />
                 <InputGroup label="T.Gian Xả Max (s)" value={config.max_drain_duration_sec} onChange={(e: InputEvent) => setConfig({ ...config, max_drain_duration_sec: e.target.value })} />
                 <InputGroup label="Nước Timeout (s)" value={config.water_ack_threshold} onChange={(e: InputEvent) => setConfig({ ...config, water_ack_threshold: e.target.value })} />
@@ -270,8 +270,8 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
             </div>
           </SubCard>
           <SubCard title="Thay nước định kỳ" className="h-full">
-            <div className="flex items-center justify-between mb-4 p-3 bg-white/80 rounded-lg border border-emerald-100">
-              <span className="text-sm text-emerald-900 font-medium">Bật lịch xả nước</span>
+            <div className="flex items-center justify-between mb-4 p-3 bg-white/80 rounded-lg border border-line">
+              <span className="text-sm text-primary-deep font-medium">Bật lịch xả nước</span>
               <Switch isOn={config.scheduled_water_change_enabled} onClick={(val) => setConfig({ ...config, scheduled_water_change_enabled: val })} />
             </div>
             {config.scheduled_water_change_enabled && (
@@ -284,20 +284,20 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
         </div>
         <SubCard title="Cảm biến hoạt động" className="mt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
-              <span className="text-sm text-emerald-900 font-medium">Cảm biến EC</span>
+            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
+              <span className="text-sm text-primary-deep font-medium">Cảm biến EC</span>
               <Switch isOn={config.enable_ec_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} />
             </div>
-            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
-              <span className="text-sm text-emerald-900 font-medium">Cảm biến pH</span>
+            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
+              <span className="text-sm text-primary-deep font-medium">Cảm biến pH</span>
               <Switch isOn={config.enable_ph_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} />
             </div>
-            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
-              <span className="text-sm text-emerald-900 font-medium">Cảm biến Mực nước</span>
+            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
+              <span className="text-sm text-primary-deep font-medium">Cảm biến Mực nước</span>
               <Switch isOn={config.enable_water_level_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} />
             </div>
-            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-emerald-100">
-              <span className="text-sm text-emerald-900 font-medium">Cảm biến Nhiệt độ</span>
+            <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
+              <span className="text-sm text-primary-deep font-medium">Cảm biến Nhiệt độ</span>
               <Switch isOn={config.enable_temp_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} />
             </div>
           </div>
@@ -346,8 +346,8 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                 <InputGroup label="Bơm trộn (%)" value={config.osaka_mixing_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_mixing_pwm_percent: e.target.value })} />
                 <InputGroup label="Bơm sương (%)" value={config.osaka_misting_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, osaka_misting_pwm_percent: e.target.value })} />
                 <InputGroup label="Khởi động mềm (ms)" value={config.soft_start_duration} onChange={(e: InputEvent) => setConfig({ ...config, soft_start_duration: e.target.value })} />
-                <div className="sm:col-span-2 pt-2 pb-1 border-t border-emerald-100">
-                  <span className="text-xs font-semibold text-emerald-700/75 uppercase">PWM Tối thiểu từng bơm (%)</span>
+                <div className="sm:col-span-2 pt-2 pb-1 border-t border-line">
+                  <span className="text-xs font-semibold text-faint uppercase">PWM Tối thiểu từng bơm (%)</span>
                 </div>
                 <InputGroup label="Min PWM Phân A (%)" value={config.pump_a_min_pwm_percent ?? config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_a_min_pwm_percent: e.target.value })} />
                 <InputGroup label="Min PWM Phân B (%)" value={config.pump_b_min_pwm_percent ?? config.dosing_min_pwm_percent} onChange={(e: InputEvent) => setConfig({ ...config, pump_b_min_pwm_percent: e.target.value })} />
@@ -427,24 +427,24 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                 </div>
               )}
               {wizardStep < calibrationPoints.length ? (
-                <div className="p-5 rounded-xl bg-white border border-emerald-100 shadow-inner">
-                  <p className="text-xs text-sky-700 font-bold tracking-wider mb-1">
+                <div className="p-5 rounded-xl bg-white border border-line shadow-inner">
+                  <p className="text-xs text-primary-deep font-bold tracking-wider mb-1">
                     BƯỚC {wizardStep + 1}/{calibrationPoints.length}
                   </p>
-                  <p className="text-sm text-emerald-950 mb-4">
-                    Nhúng vào dung dịch <span className="font-bold text-emerald-800">pH {activePoint}</span>
+                  <p className="text-sm text-primary-deep mb-4">
+                    Nhúng vào dung dịch <span className="font-bold text-primary-deep">pH {activePoint}</span>
                   </p>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={handleCapturePoint}
                       disabled={isCalibrationBlocked || isCapturingPoint}
-                      className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium disabled:opacity-50 transition-all"
+                      className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium disabled:opacity-50 transition-all"
                     >
                       {isCapturingPoint ? 'ĐANG ĐO...' : 'BẮT ĐẦU ĐO'}
                     </button>
                     {isCapturingPoint && (
-                      <span className="text-sm font-mono text-emerald-900 bg-white px-3 py-1.5 rounded-md">
+                      <span className="text-sm font-mono text-primary-deep bg-white px-3 py-1.5 rounded-md">
                         {countdown}s
                       </span>
                     )}
@@ -452,7 +452,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                       <button
                         type="button"
                         onClick={goToNextPoint}
-                        className="px-4 py-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-950 text-sm font-medium transition-all"
+                        className="px-4 py-2 rounded-lg bg-primary hover:bg-primary-deep text-white text-sm font-medium transition-all"
                       >
                         TIẾP THEO
                       </button>
@@ -460,19 +460,19 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="p-5 rounded-xl bg-white border border-emerald-100 shadow-inner space-y-4">
+                <div className="p-5 rounded-xl bg-white border border-line shadow-inner space-y-4">
                   <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="p-2 bg-white rounded-lg border border-emerald-100">
-                      <p className="text-[10px] text-emerald-700/75 mb-0.5">V7</p>
-                      <p className="text-sm font-mono text-emerald-950">{calibrationSummary.ph_v7}V</p>
+                    <div className="p-2 bg-white rounded-lg border border-line">
+                      <p className="text-[10px] text-faint mb-0.5">V7</p>
+                      <p className="text-sm font-mono text-primary-deep">{calibrationSummary.ph_v7}V</p>
                     </div>
-                    <div className="p-2 bg-white rounded-lg border border-emerald-100">
-                      <p className="text-[10px] text-emerald-700/75 mb-0.5">V4</p>
-                      <p className="text-sm font-mono text-emerald-950">{calibrationSummary.ph_v4}V</p>
+                    <div className="p-2 bg-white rounded-lg border border-line">
+                      <p className="text-[10px] text-faint mb-0.5">V4</p>
+                      <p className="text-sm font-mono text-primary-deep">{calibrationSummary.ph_v4}V</p>
                     </div>
-                    <div className="col-span-2 p-2 bg-white rounded-lg border border-emerald-100">
-                      <p className="text-[10px] text-emerald-700/75 mb-0.5">Độ tin cậy</p>
-                      <p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-green-600' : 'text-yellow-600'}`}>
+                    <div className="col-span-2 p-2 bg-white rounded-lg border border-line">
+                      <p className="text-[10px] text-faint mb-0.5">Độ tin cậy</p>
+                      <p className={`text-sm font-mono ${calibrationSummary.reliability >= 80 ? 'text-status' : 'text-amber-600'}`}>
                         {calibrationSummary.reliability}%
                       </p>
                     </div>
@@ -480,7 +480,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
                   <button
                     type="button"
                     onClick={handleFinishAndSaveCalibration}
-                    className="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-medium rounded-lg transition-all text-sm"
+                    className="w-full py-2.5 bg-primary hover:bg-primary-deep text-white font-medium rounded-lg transition-all text-sm"
                   >
                     XÁC NHẬN & LƯU HIỆU CHUẨN
                   </button>

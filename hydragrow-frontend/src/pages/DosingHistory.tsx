@@ -96,8 +96,8 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
                 onClick={() => setRange(id)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
                   range === id
-                    ? 'bg-emerald-700 text-white'
-                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                    ? 'bg-primary-deep text-white'
+                    : 'bg-soft text-text-muted hover:bg-pill'
                 }`}
               >
                 {label}
@@ -109,9 +109,9 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
         <button
           onClick={handleExportCSV}
           disabled={records.length === 0}
-          className="flex items-center justify-center gap-2 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-40 text-emerald-900 px-4 py-2 rounded-xl border border-emerald-200 transition-all font-bold text-xs uppercase tracking-wider shrink-0 shadow-sm active:scale-95"
+          className="flex items-center justify-center gap-2 bg-pill hover:bg-pill disabled:opacity-40 text-primary-deep px-4 py-2 rounded-xl border border-line transition-all font-bold text-xs uppercase tracking-wider shrink-0 shadow-sm active:scale-95"
         >
-          <Download size={14} className="text-emerald-700" />
+          <Download size={14} className="text-primary" />
           <span>Xuất Excel</span>
         </button>
       </div>
@@ -133,13 +133,13 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
         />
       )}
 
-      <div className="bg-white border border-emerald-100 rounded-2xl p-4 space-y-2 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/70">
+      <div className="bg-white border border-line rounded-2xl p-4 space-y-2 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-faint">
           Chu kỳ gần đây
         </p>
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-emerald-700/75">
-            <div className="w-5 h-5 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-text-muted">
+            <div className="w-5 h-5 border-2 border-line border-t-primary rounded-full animate-spin" />
             <span className="text-xs font-bold tracking-widest uppercase">Đang tải nhật ký châm...</span>
           </div>
         ) : records.length === 0 && !isError ? (
@@ -149,13 +149,13 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
             description="Hệ thống sẽ ghi nhận khi chu kỳ châm dinh dưỡng được kích hoạt."
           />
         ) : (
-          <div className="divide-y divide-emerald-50">
+          <div className="divide-y divide-line">
             {records.flatMap((r, i) =>
               (['pump_a_ml', 'pump_b_ml', 'ph_up_ml', 'ph_down_ml'] as const)
                 .filter((field) => r[field] > 0)
                 .map((field) => (
                   <div key={`${i}-${field}`} className="flex items-center justify-between py-3 text-sm">
-                    <span className="text-emerald-950">
+                    <span className="text-primary-deep">
                       {new Date(r.created_at).toLocaleTimeString('vi-VN', {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -170,7 +170,7 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
                         }[field]
                       }
                     </span>
-                    <span className="font-bold text-emerald-800">{r[field]} ml</span>
+                    <span className="font-bold text-primary-deep">{r[field]} ml</span>
                   </div>
                 )),
             )}
@@ -183,7 +183,7 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
   if (variant === 'embedded') return contentNode;
 
   return (
-    <div className="p-4 md:p-8 space-y-6 pb-28 max-w-4xl mx-auto text-emerald-950">
+    <div className="p-4 md:p-8 space-y-6 pb-28 max-w-4xl mx-auto text-primary-deep">
       <PageHeader
         icon={ShieldCheck}
         title="Lịch Sử Châm Phân"

@@ -295,7 +295,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
       {activeSeason && activeRecipe && (
         <button
           onClick={handleSaveSeasonAsRecipe}
-          className="w-full mb-4 flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-2xl font-bold text-sm transition-colors"
+          className="w-full mb-4 flex items-center justify-center gap-2 py-3 bg-soft hover:bg-pill text-primary-deep border border-line rounded-2xl font-bold text-sm transition-colors"
         >
           💾 Lưu mùa vụ hiện tại thành công thức mới
         </button>
@@ -304,17 +304,17 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Danh sách mẫu có sẵn & Nút Xóa */}
         <div className="ui-card space-y-4 h-fit">
-          <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
-            <h2 className="text-sm font-bold text-emerald-950 flex items-center gap-2">
-              <BookOpen size={16} className="text-emerald-700" />
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <h2 className="text-sm font-bold text-primary-deep flex items-center gap-2">
+              <BookOpen size={16} className="text-primary" />
               Mẫu đã lưu ({recipesList.length})
             </h2>
           </div>
 
           {isLoadingTemplates ? (
-            <p className="text-xs text-emerald-700/75 py-6 text-center">Đang tải danh sách...</p>
+            <p className="text-xs text-text-muted py-6 text-center">Đang tải danh sách...</p>
           ) : recipesList.length === 0 ? (
-            <p className="text-xs text-emerald-700/75 py-6 text-center">Chưa có công thức mẫu nào trong CSDL.</p>
+            <p className="text-xs text-text-muted py-6 text-center">Chưa có công thức mẫu nào trong CSDL.</p>
           ) : (
             <div className="space-y-2.5">
               {recipesList.map((tmpl) => {
@@ -326,35 +326,35 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     onClick={() => handleSelectTemplate(tmpl)}
                     className={`group relative w-full text-left p-3.5 rounded-xl border transition-all text-xs flex flex-col gap-1.5 cursor-pointer ${
                       isSelected
-                        ? 'bg-emerald-50 border-emerald-500 shadow-sm ring-1 ring-emerald-500'
+                        ? 'bg-pill border-primary shadow-sm ring-1 ring-primary'
                         : isApplied
-                        ? 'bg-emerald-50/60 border-emerald-300'
-                        : 'bg-white border-emerald-100 hover:border-emerald-300'
+                        ? 'bg-soft border-primary/40'
+                        : 'bg-white border-line hover:border-primary/40'
                     }`}
                   >
-                    <div className="flex items-center justify-between font-bold text-emerald-950 pr-16">
+                    <div className="flex items-center justify-between font-bold text-primary-deep pr-16">
                       
                       <div className="truncate flex items-center gap-1.5">
                         <span className="truncate">{tmpl.name}</span>
                         {isApplied && (
                           <span 
                             title="Đang được áp dụng trên thiết bị" 
-                            className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0"
+                            className="px-1.5 py-0.5 rounded bg-pill text-status text-[9px] uppercase tracking-wider flex items-center gap-1 shrink-0"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-status animate-pulse"></span>
                             Đang chạy
                           </span>
                         )}
                       </div>
                       
-                      <span className="px-2 py-0.5 rounded bg-emerald-100/80 text-emerald-800 text-[10px] uppercase shrink-0">
+                      <span className="px-2 py-0.5 rounded bg-soft text-text-muted text-[10px] uppercase shrink-0">
                         {tmpl.crop}
                       </span>
                     </div>
                     {tmpl.description && (
-                      <p className="text-emerald-700/80 line-clamp-1 text-[11px] pr-16">{tmpl.description}</p>
+                      <p className="text-text-muted line-clamp-1 text-[11px] pr-16">{tmpl.description}</p>
                     )}
-                    <span className="text-[10px] text-emerald-600 font-medium">
+                    <span className="text-[10px] text-faint font-medium">
                       {tmpl.stages.length} giai đoạn • {tmpl.stages.reduce((sum, s) => sum + Math.round(s.duration_sec / 86400), 0)} ngày
                     </span>
 
@@ -364,7 +364,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                         title="Áp dụng công thức này cho trạm"
                         onClick={(e) => handleApplyTemplate(e, tmpl)}
                         disabled={applyRecipeMutation.isPending}
-                        className="p-1.5 rounded-lg text-emerald-700 hover:text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-lg text-primary hover:text-white hover:bg-primary transition-colors disabled:opacity-50"
                       >
                         <Play size={14} />
                       </button>
@@ -380,7 +380,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     {/* Bulk apply panel — chỉ hiện khi có >1 thiết bị */}
                     {devices.length > 1 && (
                       <div className="mt-3 border-t pt-3" onClick={(e) => e.stopPropagation()}>
-                        <p className="text-xs font-medium text-gray-600 mb-2">Áp cho nhiều thiết bị:</p>
+                        <p className="text-xs font-medium text-text-muted mb-2">Áp cho nhiều thiết bị:</p>
                         <div className="flex flex-wrap gap-2 mb-2">
                           {devices.map((d) => (
                             <button
@@ -388,8 +388,8 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                               onClick={() => toggleDevice(d.device_id)}
                               className={`px-2 py-1 rounded text-xs border transition ${
                                 selectedDeviceIds.includes(d.device_id)
-                                  ? 'bg-emerald-600 text-white border-emerald-600'
-                                  : 'border-gray-300 text-gray-600 hover:border-emerald-400'
+                                  ? 'bg-primary text-white border-primary'
+                                  : 'border-line text-text-muted hover:border-primary'
                               }`}
                             >
                               {d.label ?? d.device_id}
@@ -400,7 +400,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                           <button
                             onClick={() => handleBulkApply(tmpl.id)}
                             disabled={bulkApplying}
-                            className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded disabled:opacity-50"
+                            className="text-xs px-3 py-1.5 bg-primary text-white rounded disabled:opacity-50"
                           >
                             {bulkApplying ? 'Đang áp...' : `Áp cho ${selectedDeviceIds.length} thiết bị`}
                           </button>
@@ -443,10 +443,10 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
           </section>
 
           <section className="ui-card space-y-4">
-            <div className="flex items-center justify-between gap-3 border-b border-emerald-100 pb-3">
-              <h2 className="text-sm font-bold text-emerald-950">Các giai đoạn sinh trưởng (Stages)</h2>
+            <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+              <h2 className="text-sm font-bold text-primary-deep">Các giai đoạn sinh trưởng (Stages)</h2>
               <button
-                className="ui-btn-md bg-emerald-700 text-white hover:bg-emerald-800 py-1.5 px-3 text-xs"
+                className="ui-btn-md bg-primary text-white hover:bg-primary-deep py-1.5 px-3 text-xs"
                 onClick={() => setStages((s) => [...s, createDefaultStage(s.length + 1)])}
               >
                 <Plus size={14} className="inline mr-1" /> Thêm giai đoạn
@@ -455,12 +455,12 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
 
             <div className="space-y-4">
               {stages.map((stage, index) => (
-                <div key={stage.id} className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-3.5 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2.5">
-                    <span className="font-bold text-emerald-950 text-xs">#{index + 1} • {stage.name}</span>
+                <div key={stage.id} className="rounded-2xl border border-line bg-surface-muted p-4 space-y-3.5 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-line pb-2.5">
+                    <span className="font-bold text-primary-deep text-xs">#{index + 1} • {stage.name}</span>
                     <div className="flex gap-1.5">
-                      <button className="p-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-900" onClick={() => moveStage(index, -1)} disabled={index === 0}><ArrowUp size={12} /></button>
-                      <button className="p-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-900" onClick={() => moveStage(index, 1)} disabled={index === stages.length - 1}><ArrowDown size={12} /></button>
+                      <button className="p-1.5 rounded-lg bg-white border border-line hover:bg-pill text-primary-deep" onClick={() => moveStage(index, -1)} disabled={index === 0}><ArrowUp size={12} /></button>
+                      <button className="p-1.5 rounded-lg bg-white border border-line hover:bg-pill text-primary-deep" onClick={() => moveStage(index, 1)} disabled={index === stages.length - 1}><ArrowDown size={12} /></button>
                       <button className="p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100" onClick={() => setStages((s) => s.filter((item) => item.id !== stage.id))} disabled={stages.length === 1}><Trash2 size={12} /></button>
                     </div>
                   </div>
@@ -476,7 +476,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     </label>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-emerald-100">
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-line">
                     <label className="ui-form-row">
                       <span className="ui-form-label">EC mục tiêu</span>
                       <input className="ui-input" type="number" step="0.1" value={stage.ec_target} onChange={(e) => updateStage(stage.id, { ec_target: toNumber(e.target.value, 1.4) })} />
@@ -495,7 +495,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     </label>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-emerald-100">
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-line">
                     <label className="ui-form-row">
                       <span className="ui-form-label">Tỷ lệ Phân A</span>
                       <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={stage.nutrient_a_ratio} onChange={(e) => updateStage(stage.id, { nutrient_a_ratio: toNumber(e.target.value, 1.0) })} />
@@ -521,8 +521,8 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
           <section className="ui-card space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-emerald-950">Xem trước Lộ trình</h3>
-                <p className="text-xs text-emerald-700/80 mt-0.5">Tổng thời gian chu kỳ: <b>{totalDays} ngày</b></p>
+                <h3 className="text-sm font-bold text-primary-deep">Xem trước Lộ trình</h3>
+                <p className="text-xs text-text-muted mt-0.5">Tổng thời gian chu kỳ: <b>{totalDays} ngày</b></p>
               </div>
               
               <div className="flex items-center gap-2">
@@ -533,7 +533,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                       setTemplateName(`${templateName} (Bản sao)`);
                       toast.success('Đã nhân bản! Hãy bấm Lưu để tạo mới.');
                     }}
-                    className="ui-btn-md bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-900 font-bold text-xs"
+                    className="ui-btn-md bg-white border border-line hover:bg-soft text-primary-deep font-bold text-xs"
                   >
                     Nhân bản
                   </button>
@@ -542,7 +542,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                 <button
                   onClick={() => saveRecipeMutation.mutate()}
                   disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
-                  className="ui-btn-md bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
+                  className="ui-btn-md bg-primary hover:bg-primary-deep text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
                 >
                   <Save size={15} />
                   {saveRecipeMutation.isPending 
@@ -555,14 +555,14 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
 
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-emerald-100">
+            <div className="space-y-2 pt-2 border-t border-line">
               {timeline.map((stage) => (
-                <div key={stage.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-emerald-100 bg-white px-3.5 py-2.5 text-xs gap-2">
+                <div key={stage.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border border-line bg-white px-3.5 py-2.5 text-xs gap-2">
                   <div>
-                    <span className="font-bold text-emerald-950">Ngày {stage.startDay} - {stage.endDay}:</span> {stage.name}
-                    <span className="block text-[11px] text-emerald-700 mt-0.5">Tỷ lệ A:B: <b>{stage.nutrient_a_ratio}:{stage.nutrient_b_ratio}</b> {stage.water_change_interval_days ? `| Thay nước mỗi ${stage.water_change_interval_days} ngày` : ''}</span>
+                    <span className="font-bold text-primary-deep">Ngày {stage.startDay} - {stage.endDay}:</span> {stage.name}
+                    <span className="block text-[11px] text-text-muted mt-0.5">Tỷ lệ A:B: <b>{stage.nutrient_a_ratio}:{stage.nutrient_b_ratio}</b> {stage.water_change_interval_days ? `| Thay nước mỗi ${stage.water_change_interval_days} ngày` : ''}</span>
                   </div>
-                  <span className="text-emerald-800 font-medium whitespace-nowrap bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                  <span className="text-text-muted font-medium whitespace-nowrap bg-surface-muted px-2.5 py-1 rounded-md border border-line">
                     EC {stage.ec_target} ± {stage.ec_tolerance} | pH {stage.ph_target}
                   </span>
                 </div>
@@ -590,7 +590,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
         </div>
         <button
           onClick={handleResetForm}
-          className="ui-btn-md bg-white border border-emerald-200 text-emerald-900 hover:bg-emerald-50 text-xs font-bold"
+          className="ui-btn-md bg-white border border-line text-primary-deep hover:bg-soft text-xs font-bold"
         >
           <Plus size={14} className="inline mr-1" /> Soạn công thức mới
         </button>

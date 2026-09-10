@@ -106,7 +106,7 @@ export function Automation() {
 
   if (!deviceId) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-emerald-800/70">
+      <div className="absolute inset-0 flex items-center justify-center text-text-muted">
         Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động.
       </div>
     );
@@ -152,9 +152,9 @@ export function Automation() {
       />
 
       {/* Search & Filter Bar */}
-      <div className="bg-white p-3 rounded-2xl border border-emerald-100 flex flex-col md:flex-row items-center justify-between gap-3 shadow-sm">
+      <div className="bg-white p-3 rounded-2xl border border-line flex flex-col md:flex-row items-center justify-between gap-3 shadow-sm">
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-emerald-700/50 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-faint absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Tìm Flow theo tên, cảm biến, config..."
@@ -178,8 +178,8 @@ export function Automation() {
               onClick={() => setFilterKind(chip.id as any)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                 filterKind === chip.id
-                  ? "bg-emerald-800 text-white shadow-2xs"
-                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100/70"
+                  ? "bg-primary-deep text-white shadow-2xs"
+                  : "bg-soft text-text-muted hover:bg-pill"
               }`}
             >
               {chip.label}
@@ -187,14 +187,14 @@ export function Automation() {
           ))}
 
           {/* View switcher: Grid vs Canvas */}
-          <div className="hidden sm:flex items-center ml-2 pl-2 border-l border-emerald-100 gap-1">
+          <div className="hidden sm:flex items-center ml-2 pl-2 border-l border-line gap-1">
             <button
               type="button"
               onClick={() => setViewMode("grid")}
               className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer ${
                 viewMode === "grid"
-                  ? "bg-emerald-100 text-emerald-900"
-                  : "text-emerald-700 hover:bg-emerald-50"
+                  ? "bg-pill text-primary-deep"
+                  : "text-primary/75 hover:bg-soft"
               }`}
               title="Chế độ lưới danh sách"
             >
@@ -205,8 +205,8 @@ export function Automation() {
               onClick={() => setViewMode("canvas")}
               className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer ${
                 viewMode === "canvas"
-                  ? "bg-emerald-100 text-emerald-900"
-                  : "text-emerald-700 hover:bg-emerald-50"
+                  ? "bg-pill text-primary-deep"
+                  : "text-primary/75 hover:bg-soft"
               }`}
               title="Chế độ sơ đồ React Flow"
             >
@@ -221,13 +221,13 @@ export function Automation() {
         {/* Left Side: Flows Display */}
         <div className="lg:col-span-8 space-y-6">
           {activeScripts.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-emerald-100 p-8 sm:p-12 text-center shadow-sm space-y-4">
-              <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <div className="bg-white rounded-3xl border border-line p-8 sm:p-12 text-center shadow-sm space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-pill text-primary flex items-center justify-center mx-auto">
                 <Network className="w-8 h-8" />
               </div>
               <div className="max-w-md mx-auto">
-                <h3 className="text-lg font-bold text-emerald-950">Chưa có Flow tự động hóa nào</h3>
-                <p className="text-xs text-emerald-800/70 mt-1">Chưa có kịch bản nào được kích hoạt trên thiết bị này. Hãy tạo Flow đầu tiên.</p>
+                <h3 className="text-lg font-bold text-primary-deep">Chưa có Flow tự động hóa nào</h3>
+                <p className="text-xs text-text-muted mt-1">Chưa có kịch bản nào được kích hoạt trên thiết bị này. Hãy tạo Flow đầu tiên.</p>
               </div>
               <button
                 type="button"
@@ -248,13 +248,13 @@ export function Automation() {
                 />
               ))}
               {filteredScripts.length === 0 && (
-                <div className="col-span-2 py-12 text-center text-xs text-emerald-800/60 bg-white rounded-2xl border border-emerald-100">
+                <div className="col-span-2 py-12 text-center text-xs text-faint bg-white rounded-2xl border border-line">
                   Không tìm thấy Flow nào phù hợp bộ lọc.
                 </div>
               )}
             </div>
           ) : (
-            <div className="ui-card h-[540px] rounded-3xl overflow-hidden relative border border-emerald-100">
+            <div className="ui-card h-[540px] rounded-3xl overflow-hidden relative border border-line">
               <ReactFlowProvider>
                 <ReactFlow
                   nodes={canvas.nodes}
@@ -297,9 +297,9 @@ export function Automation() {
           <div
             data-testid="drawer-backdrop"
             onClick={canvas.closeEditor}
-            className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-[#0F1F14]/40 backdrop-blur-sm transition-opacity"
           />
-          <div className="relative z-50 h-[92vh] max-h-[960px] w-full max-w-7xl rounded-3xl bg-white shadow-2xl border border-emerald-100/80 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative z-50 h-[92vh] max-h-[960px] w-full max-w-7xl rounded-3xl bg-white shadow-2xl border border-line overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <FlowDetailDrawer
               deviceId={deviceId}
               script={canvas.selectedScript}

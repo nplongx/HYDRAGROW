@@ -67,7 +67,7 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
       {/* Cảnh báo sự cố / Mất kết nối */}
       <div className="space-y-3 mt-3">
         {showDisconnected && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-700">
+          <div className="bg-[#FEE2E2] border border-transparent rounded-2xl p-4 flex gap-3 text-error">
             <AlertTriangle size={18} className="shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <h4 className="font-bold text-sm">Hệ thống Ngoại tuyến</h4>
@@ -76,12 +76,12 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
           </div>
         )}
         {isEmergency && isOnline && !isAutoMode && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-800">
+          <div className="bg-[#FFFBEB] border border-amber-200 rounded-2xl p-4 flex gap-3 text-warn-deep">
             <AlertTriangle size={18} className="shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h4 className="font-bold text-sm">Hệ thống đang ngắt khẩn cấp</h4>
               <p className="text-xs opacity-80 leading-relaxed">{faultGuide?.short || 'Phát hiện sự cố an toàn.'}</p>
-              {faultGuide && <p className="text-[11px] font-medium bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 mt-1 max-w-max">Khắc phục: {faultGuide.action}</p>}
+              {faultGuide && <p className="text-[11px] font-medium bg-pill px-2 py-1 rounded-lg border border-line mt-1 max-w-max text-text-muted">Khắc phục: {faultGuide.action}</p>}
             </div>
           </div>
         )}
@@ -90,15 +90,15 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
       <ActiveRecipeStatus />
 
       {/* Lưới điều khiển Bento Grid */}
-      <div className="relative border border-emerald-100 rounded-3xl p-5 md:p-6 bg-white/80 backdrop-blur-sm space-y-6 overflow-hidden shadow-sm shadow-emerald-950/5 mt-4">
+      <div className="relative border border-line rounded-3xl p-5 md:p-6 bg-white/80 backdrop-blur-sm space-y-6 overflow-hidden shadow-sm shadow-primary/5 mt-4">
         {/* Frosted Glass Overlay khi ở chế độ Tự Động */}
         {isAutoMode && isOnline && (
           <div className="absolute inset-0 z-40 bg-emerald-50/80 backdrop-blur-[4px] flex flex-col items-center justify-center p-6 text-center animate-fadeIn select-none">
-            <div className="p-4 bg-emerald-100 border border-emerald-200 rounded-2xl mb-3 shadow-xl shadow-emerald-950/10">
-              <Sparkles size={28} className="text-emerald-700 animate-pulse" />
+            <div className="p-4 bg-pill border border-pill rounded-2xl mb-3 shadow-xl shadow-primary/10">
+              <Sparkles size={28} className="text-primary animate-pulse" />
             </div>
-            <h4 className="text-base font-bold text-emerald-950 tracking-tight">Trạm đang chạy Tự Động</h4>
-            <p className="text-xs text-emerald-800/80 max-w-xs leading-relaxed mt-1">
+            <h4 className="text-base font-bold text-primary-deep tracking-tight">Trạm đang chạy Tự Động</h4>
+            <p className="text-xs text-text-muted max-w-xs leading-relaxed mt-1">
               Thuật toán MIMO đang quản lý dinh dưỡng và vi chất. Bật chế độ Thủ Công trong Cài Đặt nếu cần can thiệp.
             </p>
           </div>
@@ -172,20 +172,20 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
       {/* Header khu vực */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-emerald-950 flex items-center gap-2">
-            <Settings2 size={20} className="text-emerald-700/75" />
+          <h1 className="text-xl font-bold tracking-tight text-primary-deep flex items-center gap-2">
+            <Settings2 size={20} className="text-primary/75" />
             <span>Điều khiển thiết bị</span>
           </h1>
-          <p className="text-sm text-emerald-800/75">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
+          <p className="text-sm text-text-muted">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
         </div>
         <button
           disabled={!canSendCommands || isProcessing}
           onClick={async () => {
             if (window.confirm("Khôi phục trạng thái hoạt động của hệ thống?")) await resetFault();
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-900 border border-emerald-100 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-primary-deep border border-line rounded-xl text-xs font-bold hover:bg-soft transition-all disabled:opacity-50"
         >
-          <RefreshCw size={12} className={isProcessing ? "animate-spin" : "text-emerald-700"} />
+          <RefreshCw size={12} className={isProcessing ? "animate-spin" : "text-primary"} />
           <span>Khôi phục</span>
         </button>
       </div>

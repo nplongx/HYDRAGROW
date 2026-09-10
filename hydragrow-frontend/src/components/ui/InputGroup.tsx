@@ -28,7 +28,7 @@ export const InputGroup: React.FC<InputGroupProps> = ({
 
   return (
     <div className="ui-form-row flex flex-col gap-1">
-      <label className="ui-form-label text-sm font-semibold text-emerald-950">
+      <label className="ui-form-label text-sm font-semibold text-primary-deep">
         {label}
         {unit && <span className="ml-1 font-normal text-emerald-700/50">({unit})</span>}
       </label>
@@ -42,10 +42,10 @@ export const InputGroup: React.FC<InputGroupProps> = ({
           onChange={onChange}
           disabled={disabled}
           placeholder={placeholder}
-          className={`w-full bg-white text-emerald-950 text-sm rounded-lg p-2.5 outline-none transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${
+          className={`w-full bg-white text-primary-deep text-sm rounded-lg p-2.5 outline-none transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${
             displayError
               ? 'border-red-300 focus:border-red-600 focus:ring-2 focus:ring-red-500/20'
-              : 'border-emerald-200 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 hover:border-emerald-400'
+              : 'border-line focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-primary/40'
           }`}
         />
       )}

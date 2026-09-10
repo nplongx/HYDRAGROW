@@ -1,9 +1,9 @@
 type StatusPillKind = 'sending' | 'accepted' | 'error';
 
 const STYLES: Record<StatusPillKind, string> = {
-  sending: 'bg-amber-50 text-amber-700 border-amber-200',
-  accepted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  error: 'bg-red-50 text-red-700 border-red-200',
+  sending: 'bg-[#FFFBEB] text-warn-deep',
+  accepted: 'bg-pill text-status',
+  error: 'bg-[#FEE2E2] text-error',
 };
 
 const LABELS: Record<StatusPillKind, string> = {
@@ -29,7 +29,7 @@ export const StatusPill = ({ commandStatus }: StatusPillProps) => {
   return (
     <span
       title={commandStatus}
-      className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-bold ${STYLES[kind]}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${STYLES[kind]}`}
     >
       {LABELS[kind]}
     </span>

@@ -169,27 +169,27 @@ export function FlowDetailDrawer({
   return (
     <div data-testid="flow-detail-drawer" className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40">
       {/* Top Header matching Reference 02 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-2 border-b border-emerald-100 bg-white p-3 rounded-2xl shadow-2xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-2 border-b border-line bg-white p-3 rounded-2xl shadow-2xs">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-emerald-950">
+          <h2 className="text-lg font-semibold text-slate-900">
             {isNew ? "Flow mới" : `Sửa: ${script.name}`}
           </h2>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="ui-input font-bold text-base text-emerald-950 px-2.5 py-1 w-52"
+            className="ui-input font-bold text-base text-slate-900 px-2.5 py-1 w-52"
             placeholder="Tên Flow..."
           />
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200">
             {builder.kind.toUpperCase()}
           </span>
-          <label className="flex items-center gap-1.5 text-xs text-emerald-900 cursor-pointer ml-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer ml-2">
             <input
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="rounded text-emerald-600 focus:ring-emerald-500"
+              className="rounded accent-indigo-600"
             />
             <span>Đang bật</span>
           </label>
@@ -216,7 +216,7 @@ export function FlowDetailDrawer({
             type="button"
             onClick={handleSave}
             disabled={createScript.isPending || updateScript.isPending}
-            className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer"
           >
             Lưu Flow
           </button>
@@ -232,7 +232,7 @@ export function FlowDetailDrawer({
 
       <NodePalette onAddNode={builder.addNode} onUpdateTrigger={builder.updateTrigger} />
 
-      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden rounded-2xl border border-emerald-100 bg-white relative my-2 min-h-[420px]">
+      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden rounded-2xl border border-slate-200 bg-white relative my-2 min-h-[420px]">
         <div className="h-full w-full flex-1 relative">
           <ReactFlow
             nodes={builder.nodes}
@@ -250,7 +250,7 @@ export function FlowDetailDrawer({
           </ReactFlow>
 
           {showTestPanel && (
-            <div className="absolute right-0 top-0 h-full w-96 shadow-2xl z-30 flex flex-col border-l border-emerald-100 bg-white">
+            <div className="absolute right-0 top-0 h-full w-96 shadow-2xl z-30 flex flex-col border-l border-slate-200 bg-white">
               <div className="flex items-center justify-between p-2 border-b">
                 <span className="text-xs font-bold text-slate-500 uppercase px-2">Dry Run Simulator</span>
                 <button

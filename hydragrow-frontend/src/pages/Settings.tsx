@@ -609,9 +609,9 @@ const Settings = () => {
   <div className="app-page pb-36">
   <header className="page-header">
     <div>
-  <p className="mb-1 text-xs font-medium text-emerald-700/60">Settings / Desktop-1440</p>
+  <p className="mb-1 text-xs font-medium text-faint">Settings / Desktop-1440</p>
   <h1 className="page-header-title flex items-center gap-2">
-        Cài đặt hệ thống <Settings2 size={22} className="text-emerald-700/75" />
+        Cài đặt hệ thống <Settings2 size={22} className="text-primary/75" />
       </h1>
   <p className="page-header-subtitle">Thiết bị, ngưỡng vận hành, hiệu chuẩn cảm biến và quản trị trạm</p>
     </div>

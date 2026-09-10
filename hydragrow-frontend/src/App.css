@@ -1,44 +1,62 @@
 @import "tailwindcss";
 
 @theme {
+  /* HydraGrow Hi-Fi palette (Figma "Automation Redesign" / Hi-Fi Full App v1)
+     3-tier green hierarchy:
+     - primary-deep #14532D: titles, primary CTAs, active pill tabs
+     - primary      #15803D: toggles, nav dots, progress, links, outline CTAs
+     - status       #047857: status text on pill backgrounds */
   --color-primary: #15803d;
+  --color-primary-deep: #14532d;
   --color-accent: #ca8a04;
-  --color-success: #16a34a;
+  --color-success: #047857;
   --color-warning: #d97706;
+  --color-warn-deep: #92400e;
   --color-error: #dc2626;
   --color-water: #0284c7;
   --color-surface: #ffffff;
-  --color-surface-muted: #ecfdf5;
-  --color-border: #bbf7d0;
+  --color-surface-muted: #f1f6f2;
+  --color-border: #e4efe6;
+  --color-line: #e4efe6;
   --color-text: #14532d;
   --color-text-muted: #4b6354;
+  --color-faint: #7c9385;
+  --color-page-bg: #dcf0dc;
+  --color-status: #047857;
+  --color-pill: #d1fae5;
+  --color-toggleoff: #d9e5db;
+  --color-config: #4338ca;
+  --color-config-soft: #eef2ff;
 }
 
 :root {
   color: var(--color-text);
-  background-color: #f0fdf4;
+  background-color: #dcf0dc;
 }
 
 body {
   margin: 0;
   color: var(--color-text);
-  background: linear-gradient(180deg, #f0fdf4 0%, #f7fee7 48%, #ecfdf5 100%);
+  background: #dcf0dc;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
 h1 {
   font-size: 1.75rem;
   line-height: 2.2rem;
+  color: var(--color-primary-deep);
 }
 
 h2 {
   font-size: 1.375rem;
   line-height: 1.9rem;
+  color: var(--color-primary-deep);
 }
 
 h3 {
   font-size: 1.125rem;
   line-height: 1.6rem;
+  color: var(--color-primary-deep);
 }
 
 p {
@@ -48,7 +66,7 @@ p {
 
 @layer components {
   .app-page {
-    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto text-emerald-950 lg:max-w-none;
+    @apply p-4 md:p-6 space-y-6 pb-28 min-h-screen max-w-6xl mx-auto lg:max-w-none;
   }
 
   .page-header {
@@ -60,19 +78,19 @@ p {
   }
 
   .page-header-icon {
-    @apply p-2.5 rounded-xl bg-emerald-100 text-emerald-700 border border-emerald-200;
+    @apply p-2.5 rounded-xl bg-page-bg text-primary border border-line;
   }
 
   .page-header-title {
-    @apply text-2xl md:text-3xl font-bold tracking-tight text-emerald-950;
+    @apply text-2xl md:text-3xl font-bold tracking-tight text-primary-deep;
   }
 
   .page-header-subtitle {
-    @apply text-xs md:text-sm text-emerald-800/80 mt-1 max-w-2xl;
+    @apply text-xs md:text-sm text-text-muted mt-1 max-w-2xl;
   }
 
   .ui-card {
-    @apply bg-white border border-emerald-100 rounded-2xl p-4 md:p-5 shadow-sm shadow-emerald-950/5;
+    @apply bg-white border border-line rounded-2xl p-4 md:p-5 shadow-sm shadow-primary/5;
   }
 
   .ui-form-row {
@@ -80,35 +98,43 @@ p {
   }
 
   .ui-form-label {
-    @apply text-[10px] font-bold uppercase tracking-wider text-emerald-800/75 pl-1;
+    @apply text-[10px] font-bold uppercase tracking-wider text-text-muted pl-1;
   }
 
   .ui-helper-text {
-    @apply text-[11px] text-emerald-700/75 pl-1 leading-tight;
+    @apply text-[11px] text-text-muted pl-1 leading-tight;
   }
 
   .ui-state {
-    @apply bg-white border border-emerald-200 border-dashed rounded-2xl p-4 md:p-5 text-center py-10 md:py-12 shadow-sm shadow-emerald-950/5;
+    @apply bg-white border border-line border-dashed rounded-2xl p-4 md:p-5 text-center py-10 md:py-12 shadow-sm shadow-primary/5;
   }
 
   .ui-state-title {
-    @apply text-sm md:text-base font-semibold text-emerald-950 mt-3;
+    @apply text-sm md:text-base font-semibold text-primary-deep mt-3;
   }
 
   .ui-state-desc {
-    @apply text-xs md:text-sm text-emerald-800/75 mt-1 max-w-md mx-auto;
+    @apply text-xs md:text-sm text-text-muted mt-1 max-w-md mx-auto;
   }
 
   .ui-input {
-    @apply w-full min-h-11 bg-white border border-emerald-200 text-emerald-950 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-emerald-800/40;
+    @apply w-full min-h-11 bg-white border border-line text-primary-deep text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-faint;
   }
 
   .ui-btn-md {
-    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .ui-btn-primary {
-    @apply min-h-11 px-4 py-2.5 rounded-lg text-white bg-emerald-700 hover:bg-emerald-800 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-white bg-primary-deep hover:bg-primary-deep/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .ui-btn-outline {
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-primary bg-white border border-primary hover:bg-pill transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .ui-btn-danger {
+    @apply min-h-11 px-4 py-2.5 rounded-lg text-white bg-error hover:bg-error/90 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .ui-loading {
@@ -120,15 +146,15 @@ p {
   }
 
   .ui-loading-card {
-    @apply flex items-center gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3 shadow-lg shadow-emerald-950/10;
+    @apply flex items-center gap-3 rounded-xl border border-line bg-white px-4 py-3 shadow-lg shadow-primary/10;
   }
 
   .ui-loading-spinner {
-    @apply inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 p-2 text-emerald-700;
+    @apply inline-flex items-center justify-center rounded-full border border-line bg-pill text-primary;
   }
 
   .ui-loading-message {
-    @apply text-sm font-medium text-emerald-900;
+    @apply text-sm font-medium text-primary-deep;
   }
 
   .farm-status-pill {
@@ -136,42 +162,42 @@ p {
   }
 
   .farm-section-title {
-    @apply flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-800/80;
+    @apply flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-faint;
   }
 
   .farm-muted-panel {
-    @apply rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4;
+    @apply rounded-2xl border border-line bg-surface-muted p-4;
   }
 
   .ui-tabbar {
-    @apply flex items-center gap-1 rounded-xl bg-emerald-50/70 border border-emerald-100 p-1 overflow-x-auto;
+    @apply flex items-center gap-1.5 overflow-x-auto;
   }
 
   .ui-tab {
-    @apply flex-1 min-w-fit whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold text-emerald-800/70 transition-colors hover:text-emerald-900;
+    @apply min-w-fit whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold text-text-muted transition-colors hover:text-primary-deep;
   }
 
   .ui-tab-active {
-    @apply bg-white text-emerald-800 shadow-sm shadow-emerald-950/5;
+    @apply bg-primary-deep text-white;
   }
 }
 
 .toggle-checkbox {
-  @apply appearance-none w-12 h-7 rounded-full relative cursor-pointer outline-none transition-colors duration-300;
-  background-color: #334155;
+  @apply appearance-none w-[38px] h-[22px] rounded-full relative cursor-pointer outline-none transition-colors duration-300;
+  background-color: #d9e5db;
 }
 
 .toggle-checkbox::before {
   content: '';
-  @apply absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-sm;
+  @apply absolute top-0.5 left-0.5 w-[18px] h-[18px] bg-white rounded-full transition-transform duration-300 shadow-sm;
 }
 
 .toggle-checkbox:checked {
-  background-color: #64748b;
+  background-color: #15803d;
 }
 
 .toggle-checkbox:checked::before {
-  @apply transform translate-x-5;
+  @apply transform translate-x-4;
 }
 
 @media (prefers-reduced-motion: reduce) {

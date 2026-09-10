@@ -1,0 +1,62 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -u \"$${MQTT_HEALTH_USER}\" -P \"$${MQTT_HEALTH_PASSWORD}\" -t '$SYS/broker/version' -C 1 -W 3 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    environment:
+      MQTT_HEALTH_USER: ${MQTT_USER}
+      MQTT_HEALTH_PASSWORD: ${MQTT_PASSWORD}
+
+  influxdb:
+    image: influxdb:2
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_INIT_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_INIT_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+    volumes:
+      - influx_data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8086/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  diagnostic-worker:
+    build:
+      context: ../..
+      dockerfile: hydragrow-diagnostic-worker/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -x /usr/local/bin/hydragrow-diagnostic-worker"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  influx_data:

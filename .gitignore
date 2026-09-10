@@ -11,6 +11,9 @@ hydragrow-frontend/public/config.local.json
 hydragrow-frontend/src-tauri/gen/android/app/google-services.local.json
 hydragrow-backend/firebase-service-account.json
 hydragrow-backend/.env
+deploy/oracle/.env
+deploy/oracle/mosquitto/passwd
+deploy/oracle/mosquitto/certs/
 
 # Jules Orchestrator runtime state & credentials
 .env

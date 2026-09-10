@@ -39,6 +39,7 @@ impl CloudinaryConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn test_config() -> CloudinaryConfig {
         CloudinaryConfig {
@@ -85,6 +86,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_env_returns_none_when_unset() {
         unsafe {
             std::env::remove_var("CLOUDINARY_CLOUD_NAME");
@@ -95,6 +97,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_env_returns_some_when_all_three_set() {
         unsafe {
             std::env::set_var("CLOUDINARY_CLOUD_NAME", "demo");

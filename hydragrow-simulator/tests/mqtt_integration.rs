@@ -48,7 +48,7 @@ fn test_mqtt_publish_and_receive() {
     // 1. Subscribe to broker
     let mut mqttoptions = MqttOptions::new("test-subscriber", "127.0.0.1", port);
     mqttoptions.set_keep_alive(Duration::from_secs(5)); // Short keep-alive so connection.iter() unblocks quickly if idle
-    let (mut client, mut connection) = Client::new(mqttoptions, 10);
+    let (client, mut connection) = Client::new(mqttoptions, 10);
     client
         .subscribe("AGITECH/sim-test/sensors", QoS::AtMostOnce)
         .unwrap();

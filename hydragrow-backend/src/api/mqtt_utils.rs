@@ -14,19 +14,26 @@ use crate::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
 
-fn command_secret(device_id: &str) -> Result<String> {
+fn resolve_secret<F, E>(device_id: &str, env_var: F) -> Result<String>
+where
+    F: Fn(&str) -> std::result::Result<String, E>,
+{
     let device_key = format!(
         "MQTT_COMMAND_SECRET_{}",
         device_id.to_ascii_uppercase().replace('-', "_")
     );
-    std::env::var(&device_key)
-        .or_else(|_| std::env::var("MQTT_COMMAND_SECRET"))
+    env_var(&device_key)
+        .or_else(|_| env_var("MQTT_COMMAND_SECRET"))
         .map_err(|_| {
             anyhow!(
                 "missing MQTT command signing secret for device {}",
                 device_id
             )
         })
+}
+
+fn command_secret(device_id: &str) -> Result<String> {
+    resolve_secret(device_id, |k| std::env::var(k))
 }
 
 fn canonical_payload(value: &Value) -> Result<Vec<u8>> {
@@ -37,7 +44,7 @@ fn canonical_payload(value: &Value) -> Result<Vec<u8>> {
     Ok(serde_json::to_vec(&unsigned)?)
 }
 
-pub fn sign_command_value(device_id: &str, mut value: Value) -> Result<Value> {
+fn sign_command_value_with_secret(mut value: Value, secret: &str) -> Result<Value> {
     let object = value
         .as_object_mut()
         .ok_or_else(|| anyhow!("MQTT command payload must be a JSON object"))?;
@@ -45,7 +52,6 @@ pub fn sign_command_value(device_id: &str, mut value: Value) -> Result<Value> {
     object.insert("nonce".to_string(), Value::from(Uuid::new_v4().to_string()));
     object.remove("signature");
 
-    let secret = command_secret(device_id)?;
     let canonical = canonical_payload(&value)?;
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
     mac.update(&canonical);
@@ -54,6 +60,14 @@ pub fn sign_command_value(device_id: &str, mut value: Value) -> Result<Value> {
         obj.insert("signature".to_string(), Value::from(signature));
     }
     Ok(value)
+}
+
+pub fn sign_command_value(device_id: &str, value: Value) -> Result<Value> {
+    if !value.is_object() {
+        return Err(anyhow!("MQTT command payload must be a JSON object"));
+    }
+    let secret = command_secret(device_id)?;
+    sign_command_value_with_secret(value, &secret)
 }
 
 pub fn sign_command<T: Serialize>(device_id: &str, payload: &T) -> Result<Value> {
@@ -120,8 +134,6 @@ pub async fn publish_sensor_command(
 mod tests {
     use super::*;
     use serde_json::json;
-    use serial_test::serial;
-    use std::env;
 
     #[test]
     fn test_canonical_payload_removes_signature() {
@@ -140,35 +152,38 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_command_secret_resolution() {
         // Test with specific device secret
-        unsafe {
-            env::set_var(
-                "MQTT_COMMAND_SECRET_TEST_DEVICE_1",
-                "device_specific_secret",
-            );
-        }
+        let mock_env_var_specific = |key: &str| -> std::result::Result<String, std::env::VarError> {
+            if key == "MQTT_COMMAND_SECRET_TEST_DEVICE_1" {
+                Ok("device_specific_secret".to_string())
+            } else {
+                Err(std::env::VarError::NotPresent)
+            }
+        };
         assert_eq!(
-            command_secret("test-device-1").unwrap(),
+            resolve_secret("test-device-1", mock_env_var_specific).unwrap(),
             "device_specific_secret"
         );
-        unsafe {
-            env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE_1");
-        }
 
         // Test with fallback secret
-        unsafe {
-            env::set_var("MQTT_COMMAND_SECRET", "fallback_secret");
-        }
-        assert_eq!(command_secret("test-device-2").unwrap(), "fallback_secret");
-        unsafe {
-            env::remove_var("MQTT_COMMAND_SECRET");
-            env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE");
-        }
+        let mock_env_var_fallback = |key: &str| -> std::result::Result<String, std::env::VarError> {
+            if key == "MQTT_COMMAND_SECRET" {
+                Ok("fallback_secret".to_string())
+            } else {
+                Err(std::env::VarError::NotPresent)
+            }
+        };
+        assert_eq!(
+            resolve_secret("test-device-2", mock_env_var_fallback).unwrap(),
+            "fallback_secret"
+        );
 
         // Test missing secret
-        assert!(command_secret("test-device-3").is_err());
+        let mock_env_var_missing = |_key: &str| -> std::result::Result<String, std::env::VarError> {
+            Err(std::env::VarError::NotPresent)
+        };
+        assert!(resolve_secret("test-device-3", mock_env_var_missing).is_err());
     }
 
     #[test]
@@ -183,18 +198,12 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_sign_command_value_adds_fields_and_valid_signature() {
-        unsafe {
-            env::set_var("MQTT_COMMAND_SECRET", "test_secret");
-            env::set_var("MQTT_COMMAND_SECRET_TEST_DEVICE", "test_secret");
-        }
-
         let value = json!({
             "action": "turn_on"
         });
 
-        let signed = sign_command_value("test-device", value).unwrap();
+        let signed = sign_command_value_with_secret(value, "test_secret").unwrap();
         let obj = signed.as_object().unwrap();
 
         assert!(obj.contains_key("ts"));
@@ -211,10 +220,5 @@ mod tests {
         let expected_signature = hex::encode(mac.finalize().into_bytes());
 
         assert_eq!(signature, expected_signature);
-
-        unsafe {
-            env::remove_var("MQTT_COMMAND_SECRET");
-            env::remove_var("MQTT_COMMAND_SECRET_TEST_DEVICE");
-        }
     }
 }

@@ -1,0 +1,15 @@
+{
+  "requirement_id": "backend-unsafe-removal",
+  "evidence": [
+    {
+      "acceptance_id": "unsafe_removed",
+      "status": "PASS",
+      "source": "grep -rn 'unsafe' hydragrow-backend/src/api/mqtt_utils.rs returns no results"
+    },
+    {
+      "acceptance_id": "tests_pass",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::mqtt_utils::tests passes successfully"
+    }
+  ]
+}

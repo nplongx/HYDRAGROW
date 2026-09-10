@@ -1,0 +1,16 @@
+{
+  "requirement_id": "backend-unsafe-removal",
+  "acceptance": [
+    {
+      "id": "unsafe_removed",
+      "description": "All unsafe blocks related to environment variable manipulation are removed from mqtt_utils.rs tests",
+      "status": "PASS"
+    },
+    {
+      "id": "tests_pass",
+      "description": "All tests in mqtt_utils.rs pass without relying on global environment state",
+      "status": "PASS"
+    }
+  ],
+  "class": "C1"
+}

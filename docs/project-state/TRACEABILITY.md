@@ -18,3 +18,9 @@
 | SUPERVISOR-QUERY-001 | AC-1..AC-6 | hydragrow-supervisor-query/src/{lib,query,backend,testing}.rs | Cargo test (hydragrow-supervisor-query: 14 tests) | Cargo test |
 | DIAGNOSTIC-WORKER-001 | AC-1..AC-7 | hydragrow-diagnostic-worker/src/{main,config,trigger,backend_client,diagnostic_model,anthropic_model,orchestrator,tick}.rs | Cargo test (hydragrow-diagnostic-worker: 28 tests) | Cargo test |
 | AUTOMATION-009 | AC-1..AC-3 | hydragrow-frontend/src/lib/automation/compileToRhai.ts, hydragrow-backend/src/models/script.rs, hydragrow-backend/src/services/script_engine.rs, hydragrow-backend/src/mqtt/handlers/script_eval.rs, hydragrow-backend/src/mqtt/handlers/sensors.rs, hydragrow-backend/src/services/cron_scheduler.rs, hydragrow-frontend/src/components/automation/reactflow/NodeEditorPanel.tsx, hydragrow-frontend/src/components/automation/reactflow/NodePalette.tsx | docs/evidence/AUTOMATION-009.json | Vitest & Cargo test |
+- **Requirement**: backend-unsafe-removal
+- **Acceptance Criteria**: All unsafe blocks removed from mqtt_utils tests, tests pass.
+- **Implementation**: `hydragrow-backend/src/api/mqtt_utils.rs` refactored.
+- **Test/Evidence**: `cargo test` passes.
+- **Deployment**: Local test/CI.
+- **Documentation**: Updated `docs/acceptance/backend-unsafe-removal.json` and `docs/evidence/backend-unsafe-removal.json`.

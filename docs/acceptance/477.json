@@ -1,0 +1,16 @@
+{
+  "requirement_id": "477",
+  "change_class": "C3",
+  "objective": "Resolve unsafe environment variable manipulation in cloudinary tests",
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Tests `from_env_returns_none_when_unset` and `from_env_returns_some_when_all_three_set` run serially to avoid data races.",
+      "target": "Tests pass and use `#[serial]` macro.",
+      "type": "binary"
+    }
+  ],
+  "verification_required": [
+    "unit_test"
+  ]
+}

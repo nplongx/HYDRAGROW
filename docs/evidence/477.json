@@ -1,0 +1,22 @@
+{
+  "requirement_id": "477",
+  "environment": "CI",
+  "build_version": "0.1.0",
+  "evidence": [
+    {
+      "ac_id": "AC-1",
+      "result": "PASS",
+      "actual_value": "true",
+      "reproducible_source": "cargo test --manifest-path hydragrow-backend/Cargo.toml -- services::cloudinary",
+      "notes": "All tests pass locally and in CI."
+    }
+  ],
+  "risks_known_gaps": "None",
+  "final_acceptance": {
+    "code_verified": true,
+    "criteria_passed": true,
+    "evidence_attached": true,
+    "docs_synced": true,
+    "state_synced": true
+  }
+}

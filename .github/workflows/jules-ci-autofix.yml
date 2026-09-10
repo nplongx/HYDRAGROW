@@ -79,41 +79,71 @@ jobs:
             PR_SECTION="**Pull Request:** none (failure on main)"
           fi
 
-          # Keep GitHub expressions out of the heredoc. Their rendered values
-          # can contain shell-significant characters, and an unquoted heredoc
-          # makes bash rescan the body for parameter/command substitutions.
-          cat > /tmp/hotfix_body.md << BODY
-          ## 🔴 CI failure — auto-filed
+          # Generate the Markdown with Python so shell parsing never touches
+          # Markdown backticks or parameter-like text inside the body.
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
 
-          **Workflow:** \`${WORKFLOW_NAME}\`
-          **Commit:** \`${WORKFLOW_SHA}\`
-          **Run:** ${RUN_URL}
-          **Context:** ${CONTEXT}
-          ${PR_SECTION}
+          pr_number = os.environ.get("PR_NUMBER", "")
+          repository = os.environ["GITHUB_REPOSITORY"]
+          workflow_name = os.environ["WORKFLOW_NAME"]
+          workflow_sha = os.environ["WORKFLOW_SHA"]
+          run_url = os.environ["RUN_URL"]
+          context = os.environ["CONTEXT"]
+
+          if pr_number:
+              pr_section = f"**Pull Request:** https://github.com/{repository}/pull/{pr_number}"
+          else:
+              pr_section = "**Pull Request:** none (failure on main)"
+
+          body = """## 🔴 CI failure — auto-filed
+
+          **Workflow:** `{workflow_name}`
+          **Commit:** `{workflow_sha}`
+          **Run:** {run_url}
+          **Context:** {context}
+          {pr_section}
 
           ### Task type: Hotfix (priority: high)
 
-          Jules thực hiện theo \`.agent/tasks/hotfix.md\` — 3-phase protocol
-          (Discovery → Test → Fix), branch prefix \`hotfix/\`.
+          Jules thực hiện theo `.agent/tasks/hotfix.md` — 3-phase protocol
+          (Discovery → Test → Fix), branch prefix `hotfix/`.
 
-          1. Checkout commit \`${WORKFLOW_SHA}\`,
+          1. Checkout commit `{workflow_sha}`,
              mở run log ở trên để xem lỗi cụ thể.
           2. Reproduce lỗi bằng đúng lệnh verify của subsystem liên quan
-             (xem \`.agent/jules.yml\` → \`commands`).
+             (xem `.agent/jules.yml` → `commands`).
           3. Viết/khôi phục test tái hiện lỗi trước khi fix.
           4. Fix tối thiểu, chạy lại toàn bộ verify commands, đảm bảo
              exit code 0.
           5. Nếu lỗi đến từ PR, giữ fix trong đúng phạm vi PR và mở/update
              PR để CI chạy lại.
-          6. Nếu lỗi đến từ main, mở PR mới base \`main\` và paste output verify
+          6. Nếu lỗi đến từ main, mở PR mới base `main` và paste output verify
              vào PR description.
 
           **Abort condition:** > 4 lần fix không qua test → comment
-          \`ABORT_UNRESOLVABLE\` và dừng.
+          `ABORT_UNRESOLVABLE` và dừng.
 
           ---
-          *Auto-filed bởi \`.github/workflows/jules-ci-autofix.yml\`*
-          BODY
+          *Auto-filed bởi `.github/workflows/jules-ci-autofix.yml`*
+          """.format(
+              workflow_name=workflow_name,
+              workflow_sha=workflow_sha,
+              run_url=run_url,
+              context=context,
+              pr_section=pr_section,
+          )
+
+          # Remove the fixed YAML indentation introduced by the source file.
+          lines = body.splitlines()
+          nonempty = [line for line in lines if line.strip()]
+          if nonempty:
+              indent = min(len(line) - len(line.lstrip()) for line in nonempty)
+              body = "\n".join(line[indent:] if line.strip() else "" for line in lines) + "\n"
+
+          Path("/tmp/hotfix_body.md").write_text(body, encoding="utf-8")
+          PY
         env:
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}

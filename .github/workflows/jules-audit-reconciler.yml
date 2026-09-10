@@ -1,9 +1,7 @@
 name: jules-audit-reconciler
 
-# Polls completed Jules audit sessions, extracts the required structured finding
-# block from agent messages, creates GitHub issues with the workflow token, and
-# immediately dispatches each finding to Juleson. This avoids depending on
-# Jules VM GitHub CLI authentication and avoids GITHUB_TOKEN issue-event chaining.
+# Poll completed Jules audit sessions, extract the structured finding block,
+# create GitHub issues with the workflow token, and immediately dispatch fixes.
 
 on:
   schedule:
@@ -51,20 +49,75 @@ jobs:
           ]
           pattern = re.compile(r"JULES_FINDINGS_JSON_BEGIN\s*(.*?)\s*JULES_FINDINGS_JSON_END", re.DOTALL)
           for text in cases:
-              matches = list(pattern.finditer(text))
-              assert matches, text
-              payload = matches[-1].group(1).strip().strip('`').strip()
-              value = json.loads(payload)
-              assert isinstance(value, list), value
+              match = list(pattern.finditer(text))[-1]
+              value = json.loads(match.group(1).strip().strip('`').strip())
+              assert isinstance(value, list)
           print("parser contract: OK")
+          PY
+
+      - name: Collect audit issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_ISSUE_NUMBER:-}" ]; then
+            gh issue view "$INPUT_ISSUE_NUMBER" \
+              --repo "${{ github.repository }}" \
+              --json number,title,body,labels > /tmp/audit_source.json
+          else
+            gh issue list \
+              --repo "${{ github.repository }}" \
+              --state open \
+              --label audit \
+              --limit 100 \
+              --json number,title,body,labels > /tmp/audit_source.json
+          fi
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          raw = json.loads(Path('/tmp/audit_source.json').read_text())
+          if isinstance(raw, dict):
+              items = [raw]
+          elif isinstance(raw, list):
+              items = raw
+          else:
+              raise SystemExit(f'Unexpected gh issue JSON type: {type(raw).__name__}')
+
+          out = []
+          for item in items:
+              if not isinstance(item, dict):
+                  print(f'Skipping non-object issue payload: {type(item).__name__}')
+                  continue
+              labels = item.get('labels') or []
+              label_names = {
+                  (x.get('name') if isinstance(x, dict) else str(x))
+                  for x in labels
+              }
+              body = item.get('body') or ''
+              if 'JULES_SESSION_ID=' not in body:
+                  continue
+              if 'audit-reconciled' in label_names:
+                  continue
+              out.append(item)
+
+          Path('/tmp/audit_issues.jsonl').write_text(
+              ''.join(json.dumps(x, ensure_ascii=False) + '\n' for x in out)
+          )
+          print(f'Eligible audit issues: {len(out)}')
+          for item in out:
+              print(f"  #{item.get('number')} {item.get('title','')}")
           PY
 
       - name: Reconcile audit sessions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
-          INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
           INPUT_SESSION_ID: ${{ inputs.session_id }}
+          INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
         shell: bash
         run: |
           set -euo pipefail
@@ -76,47 +129,31 @@ jobs:
           gh label create "audit-reconciled" --repo "${{ github.repository }}" --color "0e8a16" --description "Completed Jules audit was reconciled" 2>/dev/null || true
           gh label create "audit-reconcile-error" --repo "${{ github.repository }}" --color "b60205" --description "Audit result could not be reconciled yet" 2>/dev/null || true
 
-          if [ -n "${INPUT_ISSUE_NUMBER:-}" ]; then
-            gh issue view "$INPUT_ISSUE_NUMBER" \
-              --repo "${{ github.repository }}" \
-              --json number,title,body,labels > /tmp/audit_issues.json
-          else
-            gh issue list \
-              --repo "${{ github.repository }}" \
-              --state open \
-              --label audit \
-              --limit 100 \
-              --json number,title,body,labels > /tmp/audit_issues.json
-          fi
-
-          if [ -s /tmp/audit_issues.json ] && [ "$(jq 'type' /tmp/audit_issues.json)" = "object" ]; then
-            jq -c '.' /tmp/audit_issues.json > /tmp/audit_issues.jsonl
-          else
-            jq -c '.[] | select((.labels | map(.name) | index("audit-reconciled")) == null)' /tmp/audit_issues.json > /tmp/audit_issues.jsonl
-          fi
-
           while IFS= read -r issue; do
             [ -n "$issue" ] || continue
-            issue_number=$(jq -r '.number' <<<"$issue")
-            issue_body=$(jq -r '.body // ""' <<<"$issue")
-            labels_json=$(jq -c '.labels' <<<"$issue")
+            issue_number=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["number"])' <<<"$issue")
+            issue_body=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("body") or "")' <<<"$issue")
 
-            if jq -e 'map(.name) | index("audit-reconciled") != null' <<<"$labels_json" >/dev/null 2>&1; then
-              continue
-            fi
-
-            if [ -n "${INPUT_SESSION_ID:-}" ]; then
+            if [ -n "${INPUT_SESSION_ID:-}" ] && [ -n "${INPUT_ISSUE_NUMBER:-}" ]; then
+              if [ "$issue_number" != "$INPUT_ISSUE_NUMBER" ]; then
+                continue
+              fi
               session_id="$INPUT_SESSION_ID"
             else
               session_id=$(printf '%s\n' "$issue_body" | grep -oE 'JULES_SESSION_ID=[0-9]+' | head -n1 | cut -d= -f2 || true)
             fi
-            [ -n "$session_id" ] || continue
+            [ -n "$session_id" ] || { echo "No session ID for #$issue_number"; continue; }
 
             echo "Reconciling audit issue #$issue_number, session $session_id"
             details_file="/tmp/jules_session_${issue_number}.txt"
-            juleson sessions get "$session_id" >"$details_file" 2>&1 || true
+            set +e
+            juleson sessions get "$session_id" >"$details_file" 2>&1
+            get_rc=$?
+            set -e
+            echo "juleson sessions get exit code: $get_rc"
+            echo "Session detail size: $(wc -c < "$details_file") bytes"
 
-            if ! grep -Eq '(^|[[:space:]])State: COMPLETED([[:space:]]|$)|Session Completed' "$details_file"; then
+            if ! grep -Eq 'State: COMPLETED|Session Completed|COMPLETED' "$details_file"; then
               echo "Session $session_id is not completed yet."
               continue
             fi
@@ -127,20 +164,18 @@ jobs:
           import sys
 
           source_path, output_path = sys.argv[1:]
-          text = open(source_path, encoding="utf-8", errors="replace").read()
+          text = open(source_path, encoding='utf-8', errors='replace').read()
           matches = list(re.finditer(
-              r"JULES_FINDINGS_JSON_BEGIN\s*(.*?)\s*JULES_FINDINGS_JSON_END",
+              r'JULES_FINDINGS_JSON_BEGIN\s*(.*?)\s*JULES_FINDINGS_JSON_END',
               text,
               re.DOTALL,
           ))
           if not matches:
               raise SystemExit(2)
-          payload = matches[-1].group(1).strip()
-          payload = payload.strip('`').strip()
+          payload = matches[-1].group(1).strip().strip('`').strip()
           if not payload:
               raise SystemExit(3)
-          with open(output_path, "w", encoding="utf-8") as out:
-              out.write(payload)
+          open(output_path, 'w', encoding='utf-8').write(payload)
           PY
             then
               echo "No structured finding block found in completed session $session_id."
@@ -157,7 +192,6 @@ jobs:
             fi
 
             gh issue edit "$issue_number" --repo "${{ github.repository }}" --remove-label "audit-reconcile-error" 2>/dev/null || true
-
             finding_count=$(jq 'length' "$block_file")
             echo "Found $finding_count finding(s)."
 

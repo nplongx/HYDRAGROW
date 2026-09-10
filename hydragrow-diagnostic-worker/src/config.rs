@@ -4,6 +4,7 @@ pub struct WorkerConfig {
     pub backend_url: String,
     pub api_key: String,
     pub openrouter_api_key: String,
+    pub openrouter_base_url: String,
     pub llm_provider: String,
     pub llm_model: String,
     pub poll_interval_secs: u64,
@@ -41,6 +42,7 @@ impl WorkerConfig {
             backend_url,
             api_key,
             openrouter_api_key,
+            openrouter_base_url: get_or("OPENROUTER_BASE_URL", "https://openrouter.ai/api"),
             llm_provider: get_or("DIAGNOSTIC_LLM_PROVIDER", "openrouter"),
             llm_model: get_or("DIAGNOSTIC_LLM_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
             poll_interval_secs: get_num("DIAGNOSTIC_POLL_INTERVAL_SECS", 120)?,
@@ -60,6 +62,7 @@ impl WorkerConfig {
             "DIAGNOSTIC_BACKEND_URL",
             "DIAGNOSTIC_API_KEY",
             "OPENROUTER_API_KEY",
+            "OPENROUTER_BASE_URL",
             "DIAGNOSTIC_LLM_PROVIDER",
             "DIAGNOSTIC_LLM_MODEL",
             "DIAGNOSTIC_POLL_INTERVAL_SECS",
@@ -94,6 +97,7 @@ mod tests {
         ];
         let config = WorkerConfig::from_pairs(&vars).unwrap();
         assert_eq!(config.backend_url, "https://api.example.com");
+        assert_eq!(config.openrouter_base_url, "https://openrouter.ai/api");
         assert_eq!(config.poll_interval_secs, 120);
         assert_eq!(config.max_concurrent_diagnoses, 5);
         assert_eq!(config.dedup_cooldown_minutes, 20);

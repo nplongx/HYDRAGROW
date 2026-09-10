@@ -10,7 +10,12 @@ impl WatchdogConfig {
     /// Testable independent of real process env vars — `from_env` (below)
     /// is a thin wrapper over this that reads `std::env::var` for each key.
     pub fn from_pairs(pairs: &[(&str, &str)]) -> anyhow::Result<Self> {
-        let get = |key: &str| pairs.iter().find(|(k, _)| *k == key).map(|(_, v)| v.to_string());
+        let get = |key: &str| {
+            pairs
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| v.to_string())
+        };
 
         let backend_url = get("WATCHDOG_BACKEND_URL")
             .ok_or_else(|| anyhow::anyhow!("WATCHDOG_BACKEND_URL is required"))?;
@@ -44,8 +49,10 @@ impl WatchdogConfig {
             .iter()
             .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v)))
             .collect();
-        let pairs: Vec<(&str, &str)> =
-            owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        let pairs: Vec<(&str, &str)> = owned
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
         Self::from_pairs(&pairs)
     }
 }

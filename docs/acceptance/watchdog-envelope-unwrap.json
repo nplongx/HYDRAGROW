@@ -1,0 +1,11 @@
+{
+  "requirement_id": "watchdog-envelope-unwrap",
+  "criteria": [
+    {
+      "id": "watchdog-envelope-unwrap-1",
+      "description": "The hydragrow-watchdog successfully unwraps the /api/health/topics response envelope",
+      "status": "PASS",
+      "evidence_ref": "watchdog-envelope-unwrap-1-evidence"
+    }
+  ]
+}

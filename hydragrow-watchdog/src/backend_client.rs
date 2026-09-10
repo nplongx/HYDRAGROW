@@ -13,6 +13,11 @@ pub struct TopicStatus {
 }
 
 #[derive(Deserialize)]
+struct FleetTopicsResponse {
+    data: HashMap<String, Vec<TopicStatus>>,
+}
+
+#[derive(Deserialize)]
 struct DedupCheckResponse {
     recent_alert_exists: bool,
 }
@@ -56,12 +61,17 @@ impl BackendClient {
             anyhow::bail!("GET /api/health/topics returned {}", resp.status());
         }
 
-        Ok(resp.json().await?)
+        let parsed: FleetTopicsResponse = resp.json().await?;
+        Ok(parsed.data)
     }
 
     /// Design spec §5: called before creating an alert so a still-cooling-
     /// down breach doesn't produce a second row for the same condition.
-    pub async fn recent_alert_exists(&self, device_id: &str, reason_code: &str) -> anyhow::Result<bool> {
+    pub async fn recent_alert_exists(
+        &self,
+        device_id: &str,
+        reason_code: &str,
+    ) -> anyhow::Result<bool> {
         let url = format!(
             "{}/api/devices/{}/events/recent-check",
             self.base_url, device_id
@@ -88,17 +98,16 @@ impl BackendClient {
         seconds_stale: i64,
     ) -> anyhow::Result<()> {
         let url = format!("{}/api/devices/{}/events", self.base_url, device_id);
-        let reason_code = hydragrow_shared::supervisor::SupervisorReasonCode::TopicStaleControllerStatus
-            .as_str()
-            .to_string();
+        let reason_code =
+            hydragrow_shared::supervisor::SupervisorReasonCode::TopicStaleControllerStatus
+                .as_str()
+                .to_string();
 
         let body = CreateEventRequest {
             level: "warning".to_string(),
             category: "alert".to_string(),
             title: "Controller status feed is stale".to_string(),
-            message: format!(
-                "No controller/status message received in {seconds_stale} seconds"
-            ),
+            message: format!("No controller/status message received in {seconds_stale} seconds"),
             reason_codes: vec![reason_code],
         };
 
@@ -130,10 +139,10 @@ mod tests {
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(
-                r#"{
+                r#"{"status": "success", "data": {
 "dev-1": [{"topic_category": "controller/status", "last_seen_at": "2026-09-08T10:00:00Z"}],
 "dev-2": [{"topic_category": "controller/status", "last_seen_at": "2026-09-08T09:58:00Z"}]
-}"#,
+}}"#,
             )
             .create_async()
             .await;

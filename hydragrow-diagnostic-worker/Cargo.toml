@@ -1,0 +1,22 @@
+[package]
+name = "hydragrow-diagnostic-worker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hydragrow-shared = { path = "../hydragrow-shared" }
+hydragrow-supervisor-query = { path = "../hydragrow-supervisor-query" }
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+thiserror = "1.0"
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+
+[dev-dependencies]
+mockito = "1.4"

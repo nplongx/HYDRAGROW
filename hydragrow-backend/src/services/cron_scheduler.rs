@@ -98,6 +98,8 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
             for (_id, res) in results {
                 match res {
                     crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
+                        crate::db::postgres::touch_script_last_run(&app_state.pg_pool, &script.id)
+                            .await;
                         crate::mqtt::handlers::script_eval::handle_fired_alert(
                             app_state,
                             alert,

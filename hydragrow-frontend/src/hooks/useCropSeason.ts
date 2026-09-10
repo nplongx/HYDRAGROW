@@ -85,6 +85,19 @@ export const useCropSeason = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (seasonId: string) => {
+      const res = await httpFetch(`${baseUrl}/${seasonId}`, { method: 'DELETE', headers });
+      if (!res.ok) throw new Error('Không thể xoá mùa vụ');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Đã xoá mùa vụ.');
+      queryClient.invalidateQueries({ queryKey: ['seasons', deviceId] });
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   return {
     activeSeason: activeSeasonQuery.data || null,
     history: seasonHistoryQuery.data || [],
@@ -94,5 +107,6 @@ export const useCropSeason = () => {
     updateSeason: (name: string, plantType: string, description: string) =>
       updateMutation.mutateAsync({ name, plant_type: plantType, description }),
     endSeason: () => endMutation.mutateAsync(),
+    deleteSeason: (seasonId: string) => deleteMutation.mutateAsync(seasonId),
   };
 };

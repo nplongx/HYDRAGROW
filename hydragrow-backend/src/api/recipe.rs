@@ -128,6 +128,8 @@ where
             .try_get::<Option<f32>, _>("max_dose_per_cycle_ml")
             .ok()
             .flatten(),
+
+        light_hours: r.try_get::<Option<i32>, _>("light_hours").ok().flatten(),
     }
 }
 
@@ -156,6 +158,7 @@ pub(crate) async fn fetch_stages_for_recipe(
             misting_on_duration_ms: r.misting_on_duration_ms,
             misting_off_duration_ms: r.misting_off_duration_ms,
             max_dose_per_cycle_ml: None,
+            light_hours: r.light_hours,
         })
         .collect()
 }
@@ -241,7 +244,8 @@ pub async fn update_recipe(
                 auto_dilute_ec_trigger,
                 misting_on_duration_ms,
                 misting_off_duration_ms,
-                max_dose_per_cycle_ml
+                max_dose_per_cycle_ml,
+                light_hours
             )
             "#,
         );
@@ -267,7 +271,8 @@ pub async fn update_recipe(
                 .push_bind(stage.auto_dilute_ec_trigger)
                 .push_bind(stage.misting_on_duration_ms)
                 .push_bind(stage.misting_off_duration_ms)
-                .push_bind(stage.max_dose_per_cycle_ml);
+                .push_bind(stage.max_dose_per_cycle_ml)
+                .push_bind(stage.light_hours);
         });
 
         if let Err(e) = query_builder.build().execute(&mut *tx).await {
@@ -445,7 +450,8 @@ pub async fn create_recipe(
                 auto_dilute_ec_trigger,
                 misting_on_duration_ms,
                 misting_off_duration_ms,
-                max_dose_per_cycle_ml
+                max_dose_per_cycle_ml,
+                light_hours
             )
             "#,
         );
@@ -471,7 +477,8 @@ pub async fn create_recipe(
                 .push_bind(stage.auto_dilute_ec_trigger)
                 .push_bind(stage.misting_on_duration_ms)
                 .push_bind(stage.misting_off_duration_ms)
-                .push_bind(stage.max_dose_per_cycle_ml);
+                .push_bind(stage.max_dose_per_cycle_ml)
+                .push_bind(stage.light_hours);
         });
 
         if let Err(e) = query_builder.build().execute(&mut *tx).await {

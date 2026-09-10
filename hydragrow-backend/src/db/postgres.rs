@@ -61,6 +61,29 @@ pub struct SystemEventRecord {
     pub timestamp: i64,
     pub source: String,
     pub primary_reason_code: Option<String>,
+    pub resolved_at: Option<DateTime<Utc>>,
+}
+
+/// Đánh dấu đã xử lý (hoặc mở lại) một sự kiện hệ thống.
+pub async fn resolve_system_event(
+    pool: &PgPool,
+    device_id: &str,
+    event_id: i32,
+    resolved: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE system_events
+        SET resolved_at = CASE WHEN $3 THEN CURRENT_TIMESTAMP ELSE NULL END
+        WHERE id = $1 AND device_id = $2
+        "#,
+    )
+    .bind(event_id)
+    .bind(device_id)
+    .bind(resolved)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 // Device Config
@@ -291,6 +314,15 @@ pub async fn get_last_dose_at(pool: &PgPool, device_id: &str) -> Result<Option<u
     Ok(ts.map(|v| v as u64))
 }
 
+/// Ghi nhận script vừa thực thi thành công (fire) — cập nhật `last_run_at`.
+/// Fail im lặng: last_run_at chỉ là thông tin hiển thị, không đáng log ồn.
+pub async fn touch_script_last_run(pool: &PgPool, script_id: &uuid::Uuid) {
+    let _ = sqlx::query("UPDATE user_scripts SET last_run_at = now() WHERE id = $1")
+        .bind(script_id)
+        .execute(pool)
+        .await;
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_dosing_report(
     pool: &PgPool,
@@ -483,6 +515,46 @@ pub async fn list_crop_season_photos(
     .await
 }
 
+/// Xoá một mùa vụ (kèm mọi ảnh liên quan) — giới hạn theo device_id.
+pub async fn delete_crop_season(
+    pool: &PgPool,
+    device_id: &str,
+    season_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM crop_season_photos WHERE season_id = $1")
+        .bind(season_id)
+        .execute(&mut *tx)
+        .await?;
+    let affected = sqlx::query("DELETE FROM crop_seasons WHERE id = $1 AND device_id = $2")
+        .bind(season_id)
+        .bind(device_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    tx.commit().await?;
+    Ok(affected)
+}
+
+/// Xoá một ảnh khỏi nhật ký mùa vụ — giới hạn theo season + device.
+pub async fn delete_crop_season_photo(
+    pool: &PgPool,
+    device_id: &str,
+    season_id: &str,
+    photo_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let affected = sqlx::query(
+        "DELETE FROM crop_season_photos WHERE id = $1 AND season_id = $2 AND device_id = $3",
+    )
+    .bind(photo_id)
+    .bind(season_id)
+    .bind(device_id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    Ok(affected)
+}
+
 pub async fn end_active_crop_season(pool: &PgPool, device_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE crop_seasons SET status = 'completed', end_time = CURRENT_TIMESTAMP WHERE device_id = $1 AND status = 'active'",
@@ -583,7 +655,7 @@ pub async fn get_system_events(
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
         r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at
         FROM system_events
         WHERE device_id = $1
           AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
@@ -612,7 +684,7 @@ pub async fn get_events_by_cycle_id(
     cycle_id: &str,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     let query = r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at
         FROM system_events
         WHERE device_id = $1
           AND (

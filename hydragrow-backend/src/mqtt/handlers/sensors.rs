@@ -213,6 +213,7 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             };
 
             for (script_id, res) in results {
+                crate::db::postgres::touch_script_last_run(&app_state.pg_pool, &script_id).await;
                 match res {
                     crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
                         crate::mqtt::handlers::script_eval::handle_fired_alert(
@@ -321,7 +322,7 @@ mod tests {
             notify_fcm: None,
         };
         let msg = alert_output_to_system_alert(alert, "device_001", 1234567890);
-        assert_eq!(msg.category, "script_alert");
+        assert_eq!(msg.category, "automation");
         assert_eq!(msg.device_id, "device_001");
         assert_eq!(msg.level, "warning");
     }

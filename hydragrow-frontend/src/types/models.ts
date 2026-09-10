@@ -71,6 +71,7 @@ export interface CropStage {
   misting_on_duration_ms: number;
   misting_off_duration_ms: number;
   max_dose_per_cycle_ml?: number;
+  light_hours?: number;
 }
 
 export interface CropRecipe {

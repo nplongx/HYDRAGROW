@@ -8,6 +8,7 @@ export interface UserScript {
   source: string;
   enabled: boolean;
   ir_json: AutomationIr | null;
+  last_run_at?: string | null;
   created_at: string;
   updated_at: string;
 }

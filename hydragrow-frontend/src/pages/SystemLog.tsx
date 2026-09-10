@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Clock, Filter, AlertTriangle, FlaskConical, Waves, UserCheck, Cpu, Download, Zap, ExternalLink } from 'lucide-react';
+import { Clock, Filter, AlertTriangle, FlaskConical, Waves, UserCheck, Cpu, CheckCircle, Workflow, Download, Zap, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -21,9 +21,12 @@ const PAGE_SIZE = 200;
 
 const FILTERS = [
   { id: 'all', label: 'Tất cả', icon: Filter },
+  { id: 'unresolved', label: 'Chưa xử lý', icon: CheckCircle },
   { id: 'alert', label: 'Cảnh báo', icon: AlertTriangle },
   { id: 'dosing', label: 'Châm vi chất', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
+  { id: 'device', label: 'Thiết bị', icon: Cpu },
+  { id: 'automation', label: 'Tự động hóa', icon: Workflow },
   { id: 'user_action', label: 'Người dùng', icon: UserCheck },
   { id: 'system', label: 'Hệ thống', icon: Cpu },
 ];
@@ -41,13 +44,13 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
   // TanStack Query tự động caching & cancellation. Mỗi trang tối đa PAGE_SIZE sự
   // kiện; trang tiếp theo dùng before_timestamp = timestamp của event cũ nhất
   // trong trang trước (API đã hỗ trợ cursor này, xem hydragrow-backend/src/api/alert.rs).
-  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useInfiniteQuery({
     queryKey: ['system-events', deviceId, filter],
     initialPageParam: undefined as number | undefined,
     queryFn: async ({ pageParam }) => {
       if (!deviceId || !settings?.backend_url) return [];
       let url = `${settings.backend_url}/api/devices/${deviceId}/events?limit=${PAGE_SIZE}`;
-      if (filter !== 'all') {
+      if (filter !== 'all' && filter !== 'unresolved') {
         const category = filter === 'user_action' ? 'user_action,alert' : filter;
         url += `&category=${encodeURIComponent(category)}`;
       }
@@ -67,9 +70,68 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
   const systemEvents = useMemo(() => (data?.pages ?? []).flat(), [data]);
 
   const visibleRows = useMemo(() => {
-    const filtered = filterEventsBySearch(systemEvents as SystemEvent[], search);
+    let filtered = filterEventsBySearch(systemEvents as SystemEvent[], search);
+    if (filter === 'unresolved') {
+      filtered = filtered.filter((ev) => !ev.resolved_at);
+    }
     return buildLogRows(filtered, mode);
-  }, [systemEvents, search, mode]);
+  }, [systemEvents, search, mode, filter]);
+
+  const handleAcknowledge = async (ev: SystemEvent) => {
+    if (!deviceId || !settings?.backend_url) return;
+    try {
+      const res = await httpFetch(
+        `${settings.backend_url}/api/devices/${deviceId}/events/${ev.id}/acknowledge`,
+        {
+          method: 'PUT',
+          headers: { 'X-API-Key': settings.api_key || '', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolved: !ev.resolved_at }),
+        },
+      );
+      if (res.ok) {
+        toast.success(ev.resolved_at ? 'Đã mở lại sự kiện.' : 'Đã đánh dấu xử lý xong.');
+        refetch();
+      } else {
+        toast.error('Không thể cập nhật trạng thái sự kiện.');
+      }
+    } catch {
+      toast.error('Lỗi mạng khi cập nhật trạng thái sự kiện.');
+    }
+  };
+
+  const toMs = (ts: number) => (ts > 1e12 ? ts : ts * 1000);
+
+  const dayGroups = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today.getTime() - 86400000);
+    const groups: { key: string; label: string; rows: typeof visibleRows }[] = [];
+
+    visibleRows.forEach((row) => {
+      const ts = row.type === 'event'
+        ? row.event.timestamp
+        : row.type === 'cycle'
+          ? (row.events[0]?.timestamp ?? Date.now())
+          : row.latestTimestamp;
+      const date = new Date(toMs(Number(ts ?? 0)));
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      let label: string;
+      if (date.toDateString() === today.toDateString()) {
+        label = 'HÔM NAY';
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        label = 'HÔM QUA';
+      } else {
+        label = date.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+      const last = groups[groups.length - 1];
+      if (last && last.key === key) {
+        last.rows.push(row);
+      } else {
+        groups.push({ key, label, rows: [row] });
+      }
+    });
+    return groups;
+  }, [visibleRows]);
 
   // Xuất file CSV thông qua Module Gleam csv.mjs
   const handleExportCSV = async () => {
@@ -166,21 +228,32 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
           ) : (
             <div className="relative pl-3">
               <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-primary/30 via-primary/15 to-transparent pointer-events-none" />
-              <div className="space-y-4">
-                {visibleRows.map((row, idx) => {
-                  if (row.type === 'event') {
-                    return <EventLogCard key={row.event.id} ev={row.event} idx={idx} onOpenDetail={setSelectedEvent} />;
-                  }
-                  if (row.type === 'cycle') {
-                    return <CycleEventCard key={row.cycleId} cycleId={row.cycleId} events={row.events} onOpenDetail={setSelectedEvent} />;
-                  }
-                  return (
-                    <div key={`merged-${row.title}-${row.latestTimestamp}`} className="flex items-center gap-3 pl-10">
-                      <span className="log-neutral-badge">×{row.count}</span>
-                      <span className="text-xs text-text-muted font-medium">{row.title} — gộp {row.count} sự kiện kỹ thuật lặp lại</span>
+              <div className="space-y-5">
+                {dayGroups.map((group, groupIdx) => (
+                  <div key={group.key} className="space-y-4">
+                    <div className="flex items-center gap-2.5 pt-2">
+                      <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-primary-deep">{group.label}</span>
+                      <span className="text-[10px] text-faint font-medium">{group.rows.length} sự kiện</span>
+                      <div className="flex-1 h-px bg-line last:hidden" />
                     </div>
-                  );
-                })}
+                    {group.rows.map((row, idx) => {
+                      const globalIdx = groupIdx * 1000 + idx;
+                      if (row.type === 'event') {
+                        return <EventLogCard key={row.event.id} ev={row.event} idx={globalIdx} onOpenDetail={setSelectedEvent} onAcknowledge={handleAcknowledge} />;
+                      }
+                      if (row.type === 'cycle') {
+                        return <CycleEventCard key={row.cycleId} cycleId={row.cycleId} events={row.events} onOpenDetail={setSelectedEvent} />;
+                      }
+                      return (
+                        <div key={`merged-${row.title}-${row.latestTimestamp}`} className="flex items-center gap-3 pl-10">
+                          <span className="log-neutral-badge">×{row.count}</span>
+                          <span className="text-xs text-text-muted font-medium">{row.title} — gộp {row.count} sự kiện kỹ thuật lặp lại</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
               {hasNextPage && (
                 <div className="flex justify-center pt-4">

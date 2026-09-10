@@ -5,6 +5,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { httpFetch } from '../platform/http';
 import { forgetStoredApiKey, loadAppSettings, saveAppSettings } from '../platform/settings';
 import { useAuth } from '../contexts/AuthContext';
+import { useWhoami } from '../hooks/useWhoami';
 
 // --- IMPORT LOGIC ĐÃ BIÊN DỊCH TỪ GLEAM ---
 import { validate_dosing_config } from '../../gleam_core/build/dev/javascript/gleam_core/settings/validation.mjs';
@@ -30,6 +31,15 @@ type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
   const { user, logout } = useAuth();
+  const { data: whoami } = useWhoami();
+  const roleLabel =
+    whoami?.role === 'admin'
+      ? 'Quản trị viên'
+      : whoami?.role === 'operator'
+      ? 'Vận hành viên'
+      : whoami?.role === 'viewer'
+      ? 'Người xem'
+      : undefined;
   const sensorData = useDeviceStore((s) => s.sensorData);
   const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
   const runtimeSettings = useDeviceStore((s) => s.settings);
@@ -631,6 +641,7 @@ const Settings = () => {
   <div className="space-y-6">
         {openSection === 'general' && <GeneralSection
           userEmail={user?.email}
+          userRole={roleLabel}
           onLogout={() => logout()}
           onGoToPairing={() => { window.location.href = '/pairing'; }}
           isAdvancedMode={isAdvancedMode}

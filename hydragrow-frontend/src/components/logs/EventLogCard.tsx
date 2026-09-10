@@ -14,6 +14,7 @@ export interface SystemEvent {
   reason?: string;
   metadata?: Record<string, unknown>;
   timestamp: number;
+  resolved_at?: string | null;
 }
 
 interface EventStyle {
@@ -76,15 +77,18 @@ export const EventLogCard = ({
   ev,
   idx,
   onOpenDetail,
+  onAcknowledge,
 }: {
   ev: SystemEvent;
   idx: number;
   onOpenDetail?: (ev: SystemEvent) => void;
+  onAcknowledge?: (ev: SystemEvent) => void;
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const style = getEventStyle(ev);
   const Icon = style.icon;
   const date = new Date(ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000);
+  const isResolved = Boolean(ev.resolved_at);
 
   const hasValidMsg = ev.message && ev.message !== ev.title && !ev.message.startsWith('Monitoring') && ev.level !== 'FSM_UPDATE';
   const hasMetadata = ev.metadata && Object.keys(ev.metadata).length > 0;
@@ -100,12 +104,19 @@ export const EventLogCard = ({
         </div>
       </div>
 
-      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-primary/5 to-transparent border-line rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-primary/40 ${style.bgColor}`}>
+      <div className={`flex-1 min-w-0 border bg-gradient-to-r via-primary/5 to-transparent border-line rounded-2xl p-4 shadow-sm transition-all duration-300 hover:border-primary/40 ${style.bgColor} ${isResolved ? 'opacity-60' : ''}`}>
         <div className="flex items-start justify-between gap-4 mb-2">
           <div className="space-y-1 min-w-0">
-            <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>
-              {ev.title}
-            </h4>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>
+                {ev.title}
+              </h4>
+              {isResolved && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-status/30 bg-pill text-status">
+                  ✓ Đã xử lý
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 pt-0.5">
               <FsmBadge message={ev.message} />
             </div>
@@ -145,6 +156,16 @@ export const EventLogCard = ({
                 className="flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary-deep tracking-wide uppercase transition-colors"
               >
                 <span>Xem JSON thô</span>
+              </button>
+            )}
+            {onAcknowledge && (
+              <button
+                onClick={() => onAcknowledge(ev)}
+                className="flex items-center gap-1 text-[10px] font-bold text-status hover:text-primary-deep tracking-wide uppercase transition-colors"
+                title={isResolved ? 'Đánh dấu là chưa xử lý' : 'Đánh dấu là đã xử lý'}
+              >
+                <CheckCircle size={12} />
+                <span>{isResolved ? 'Mở lại' : 'Đánh dấu đã xử lý'}</span>
               </button>
             )}
             {isExpanded && <MetadataRenderer metadata={ev.metadata} />}

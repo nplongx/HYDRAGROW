@@ -4,6 +4,7 @@ use crate::{
     api::middleware::auth::AuthContext,
     db::postgres::{
         NewSystemEventRecord, get_events_by_cycle_id, get_system_events, insert_system_event,
+        resolve_system_event,
     },
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
@@ -235,6 +236,44 @@ pub async fn get_cycle_timeline(
     }
 }
 
+#[derive(serde::Deserialize)]
+pub struct ResolveEventRequest {
+    #[serde(default)]
+    pub resolved: bool,
+}
+
+/// Đánh dấu đã xử lý / mở lại một sự kiện hệ thống.
+pub async fn resolve_event(
+    path: web::Path<(String, i32)>,
+    req: HttpRequest,
+    body: web::Json<ResolveEventRequest>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "read:telemetry"
+        }));
+    }
+
+    let (device_id, event_id) = path.into_inner();
+    match resolve_system_event(&app_state.pg_pool, &device_id, event_id, body.resolved).await {
+        Ok(()) => HttpResponse::Ok().json(json!({
+            "status": "success",
+            "data": { "id": event_id, "resolved": body.resolved }
+        })),
+        Err(e) => {
+            tracing::error!("Lỗi resolve system_event {}: {:?}", event_id, e);
+            HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
+        }
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     // Expose API cho Frontend
     cfg.route("/events", web::get().to(fetch_events));
@@ -246,6 +285,11 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         web::get().to(get_cycle_timeline),
     );
     cfg.route("/events", web::post().to(create_event));
+    // 4. Đánh dấu đã xử lý
+    cfg.route(
+        "/events/{event_id}/acknowledge",
+        web::put().to(resolve_event),
+    );
 }
 
 #[cfg(test)]

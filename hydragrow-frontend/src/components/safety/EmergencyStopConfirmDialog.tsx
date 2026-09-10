@@ -4,6 +4,7 @@ import { pumpLabels } from '../../lib/pumpLabels';
 interface EmergencyStopConfirmDialogProps {
   open: boolean;
   runningPumps: Record<string, boolean>;
+  runningPwm?: Record<string, number>;
   onCancel: () => void;
   onConfirm: () => void;
   isSubmitting: boolean;
@@ -12,6 +13,7 @@ interface EmergencyStopConfirmDialogProps {
 export const EmergencyStopConfirmDialog = ({
   open,
   runningPumps,
+  runningPwm = {},
   onCancel,
   onConfirm,
   isSubmitting,
@@ -30,7 +32,7 @@ export const EmergencyStopConfirmDialog = ({
             <AlertOctagon size={22} />
           </div>
           <div>
-            <h3 className="text-base font-bold text-red-700">Dừng khẩn cấp toàn hệ thống</h3>
+            <h3 className="text-base font-bold text-red-700">SẼ DỪNG NGAY toàn hệ thống</h3>
             <p className="text-xs text-text-muted mt-1">
               Toàn bộ bơm và van đang chạy sẽ tắt ngay lập tức. Bạn cần bấm "Khôi phục" ở màn Vận hành để chạy lại sau đó.
             </p>
@@ -43,11 +45,14 @@ export const EmergencyStopConfirmDialog = ({
             <p className="text-xs text-text-muted italic">Không có thiết bị nào đang chạy.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {runningKeys.map((key) => (
-                <span key={key} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-                  {pumpLabels[key] || key}
-                </span>
-              ))}
+              {runningKeys.map((key) => {
+                const pwm = runningPwm[key];
+                return (
+                  <span key={key} className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
+                    {pumpLabels[key] || key}{typeof pwm === 'number' ? ` · ${pwm}%` : ''}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

@@ -31,4 +31,22 @@ describe('EventLogCard', () => {
     fireEvent.click(screen.getByText('Xem JSON thô'));
     expect(onOpenDetail).toHaveBeenCalledWith(technicalEvent);
   });
+
+  it('hiển thị badge "Đã xử lý" khi có resolved_at', () => {
+    render(
+      <EventLogCard
+        ev={{ ...technicalEvent, resolved_at: '2026-09-10T01:00:00Z' }}
+        idx={0}
+        onAcknowledge={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Đã xử lý/)).toBeInTheDocument();
+  });
+
+  it('bấm "Đánh dấu đã xử lý" gọi onAcknowledge với đúng event', () => {
+    const onAcknowledge = vi.fn();
+    render(<EventLogCard ev={technicalEvent} idx={0} onAcknowledge={onAcknowledge} />);
+    fireEvent.click(screen.getByText('Đánh dấu đã xử lý'));
+    expect(onAcknowledge).toHaveBeenCalledWith(technicalEvent);
+  });
 });

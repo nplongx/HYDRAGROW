@@ -1,0 +1,1 @@
+ALTER TABLE user_scripts ADD COLUMN IF NOT EXISTS last_run_at TIMESTAMPTZ;

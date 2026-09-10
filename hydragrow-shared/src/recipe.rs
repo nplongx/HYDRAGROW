@@ -35,6 +35,10 @@ pub struct CropStage {
     // --- 5. Ràng buộc an toàn & Nhiệt độ (Đề xuất thêm) ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_dose_per_cycle_ml: Option<f32>,
+
+    // --- 6. Ánh sáng bổ sung theo giai đoạn ---
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub light_hours: Option<i32>,
 }
 
 /// Versioned recipe snapshot shared by firmware, backend, and frontend.

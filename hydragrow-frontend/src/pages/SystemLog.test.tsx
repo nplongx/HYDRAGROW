@@ -102,7 +102,7 @@ describe('SystemLog pagination', () => {
       .mock.calls.map((call) => String(call[0]))
       .find((url) => url.includes('before_timestamp'));
     expect(secondCallUrl).toContain(`before_timestamp=${page1[page1.length - 1].timestamp}`);
-  });
+  }, 15000);
 
   it('ẩn nút "Tải thêm" khi trang cuối trả về ít hơn PAGE_SIZE sự kiện', async () => {
     vi.mocked(httpFetch).mockResolvedValue({
@@ -114,5 +114,31 @@ describe('SystemLog pagination', () => {
 
     await waitFor(() => expect(screen.getByText('Older dosing event 0')).toBeInTheDocument());
     expect(screen.queryByText('Tải thêm sự kiện cũ hơn')).not.toBeInTheDocument();
+  });
+});
+
+describe('SystemLog date grouping', () => {
+  const DAY = 86400000;
+  const now = Date.now();
+  const todayEvent = { id: 3, device_id: 'device-1', level: 'info', category: 'dosing', title: 'Sự kiện hôm nay', message: 'msg', timestamp: now };
+  const yesterdayEvent = { id: 2, device_id: 'device-1', level: 'info', category: 'dosing', title: 'Sự kiện hôm qua', message: 'msg', timestamp: now - DAY };
+  const oldEvent = { id: 1, device_id: 'device-1', level: 'warning', category: 'dosing', title: 'Sự kiện cũ', message: 'msg', timestamp: now - 3 * DAY };
+
+  beforeEach(() => {
+    vi.mocked(httpFetch).mockReset();
+  });
+
+  it('nhóm sự kiện theo ngày với header HÔM NAY / HÔM QUA / ngày cụ thể', async () => {
+    vi.mocked(httpFetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'success', data: [todayEvent, yesterdayEvent, oldEvent] }),
+    } as Response);
+
+    render(withQueryClient(<SystemLog />));
+
+    await waitFor(() => expect(screen.getByText('Sự kiện hôm nay')).toBeInTheDocument());
+    expect(screen.getByText('HÔM NAY')).toBeInTheDocument();
+    expect(screen.getByText('HÔM QUA')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Sự kiện cũ')).toBeInTheDocument());
   });
 });

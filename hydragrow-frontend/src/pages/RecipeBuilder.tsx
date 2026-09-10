@@ -40,7 +40,15 @@ const createDefaultStage = (index: number): EditableStage => ({
   water_change_drain_cm: 5.0,
   misting_on_duration_ms: 10000,
   misting_off_duration_ms: 180000,
+  light_hours: 16,
 });
+
+const GROWTH_STAGE_PRESETS = [
+  { name: 'Ươm mầm', light_hours: 14, duration_days: 7 },
+  { name: 'Sinh trưởng', light_hours: 16, duration_days: 14 },
+  { name: 'Ra hoa', light_hours: 12, duration_days: 14 },
+  { name: 'Thu hoạch', light_hours: 12, duration_days: 7 },
+];
 
 const toNumber = (value: string, fallback = 0) => {
   const parsed = Number(value);
@@ -476,7 +484,25 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     </label>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-line">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] uppercase tracking-wider text-faint font-bold mr-1">Mặc định:</span>
+                    {GROWTH_STAGE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => updateStage(stage.id, {
+                          name: preset.name,
+                          duration_days: preset.duration_days,
+                          light_hours: preset.light_hours,
+                        })}
+                        className="px-2.5 py-1 rounded-full border border-line bg-white hover:bg-pill text-[11px] font-semibold text-primary-deep transition-colors"
+                      >
+                        {preset.name} {preset.light_hours}h
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5 pt-2 border-t border-line">
                     <label className="ui-form-row">
                       <span className="ui-form-label">EC mục tiêu</span>
                       <input className="ui-input" type="number" step="0.1" value={stage.ec_target} onChange={(e) => updateStage(stage.id, { ec_target: toNumber(e.target.value, 1.4) })} />
@@ -492,6 +518,10 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     <label className="ui-form-row">
                       <span className="ui-form-label">Sai số pH (±)</span>
                       <input className="ui-input" type="number" step="0.05" value={stage.ph_tolerance} onChange={(e) => updateStage(stage.id, { ph_tolerance: toNumber(e.target.value, 0.2) })} />
+                    </label>
+                    <label className="ui-form-row">
+                      <span className="ui-form-label">Ánh sáng (giờ/ngày)</span>
+                      <input className="ui-input" type="number" min={0} max={24} step={1} value={stage.light_hours ?? ''} placeholder="16" onChange={(e) => updateStage(stage.id, { light_hours: e.target.value === '' ? undefined : toNumber(e.target.value) })} />
                     </label>
                   </div>
 

@@ -141,6 +141,7 @@ mod tests {
             cron_next_run_at: None,
             template_source_id: None,
             template_overrides: None,
+            last_run_at: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };

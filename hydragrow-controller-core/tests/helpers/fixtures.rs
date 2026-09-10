@@ -189,6 +189,7 @@ pub fn sample_recipe() -> hydragrow_shared::recipe::CropRecipe {
             misting_on_duration_ms: 5000,
             misting_off_duration_ms: 30000,
             max_dose_per_cycle_ml: Some(10.0),
+            light_hours: None,
         }],
     }
 }

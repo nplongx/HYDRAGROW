@@ -18,6 +18,7 @@ mod tests {
             water_level_target: 20.0,
             misting_on_duration_ms: 10000,
             misting_off_duration_ms: 180000,
+            light_hours: None,
         }
     }
 

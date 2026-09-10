@@ -1,0 +1,1 @@
+ALTER TABLE system_events ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;

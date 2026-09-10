@@ -1,19 +1,21 @@
 import { useMemo } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
-  Wifi, AlertTriangle, LineChart
+  Wifi, AlertTriangle, LineChart, ArrowRight
 } from 'lucide-react';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { QuickActionBar } from '../components/ui/QuickActionBar';
 import { DosingSummaryCard } from '../components/ui/DosingSummaryCard';
 import { LoadingState } from '../components/ui/LoadingState';
 import { useFCM } from '../hooks/useFCM';
 import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
+import { useDeviceControl } from '../hooks/useDeviceControl';
+import { useAuth } from '../contexts/AuthContext';
 import { pumpLabels, pumpColors } from '../lib/pumpLabels';
 import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
 
@@ -54,9 +56,14 @@ const Dashboard = () => {
   const tankAlert = useDeviceStore((s) => s.tankAlert);
 
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { forceOn } = useDeviceControl(deviceId ?? '');
   const { permission, enableNotifications } = useFCM();
   const { data: healthSummary } = useSystemHealthSummary(deviceId ?? '');
   const dosingTotalCount = (healthSummary?.ec_dosing_count ?? 0) + (healthSummary?.ph_dosing_count ?? 0);
+
+  const displayName = user?.displayName?.trim() || user?.email?.split('@')[0] || undefined;
+  const greetingName = displayName ? (displayName[0].toUpperCase() + displayName.slice(1)) : '';
 
   const friendlyState = useMemo(() => {
     const res = friendly_state(fsmState || 'Monitoring', isOnline);
@@ -116,6 +123,9 @@ const Dashboard = () => {
     tankAlert && (tankAlert.tank_a_low || tankAlert.tank_b_low || tankAlert.tank_ph_down_low || tankAlert.tank_ph_up_low)
   );
 
+  const hasActionableIssue = Boolean(faultCode) || !isOnline || !isSensorOnline;
+  const isCritical = !isOnline || !isSensorOnline;
+
   return (
     <div className="app-page">
       {/* Header Bento Box */}
@@ -131,23 +141,44 @@ const Dashboard = () => {
                 <Cpu size={13} />
                 {modeLabel}
               </span>
-              <span className="farm-status-pill bg-white text-text-muted border-line">
+              <Link
+                to="/fleet"
+                title="Quản lý các thiết bị đã liên kết"
+                className="farm-status-pill bg-white text-text-muted border-line hover:bg-soft transition-colors"
+              >
                 ID: {deviceId}
-              </span>
+              </Link>
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-primary-deep">
-                {friendlyState.label}
+                {greetingName ? `Xin chào, ${greetingName} 👋` : friendlyState.label}
               </h1>
               <p className="text-sm md:text-base text-text-muted leading-relaxed mt-2">
-                {friendlyState.description}
+                {greetingName ? friendlyState.description : friendlyState.description}
               </p>
             </div>
-            <div className={`rounded-2xl border p-4 flex gap-3 items-start ${faultCode || !isOnline || !isSensorOnline ? 'bg-[#FFFBEB] border-amber-200' : 'bg-pill border-line'}`}>
-              <AlertTriangle className={`${faultCode || !isOnline || !isSensorOnline ? 'text-warn-deep' : 'text-status'} shrink-0 mt-0.5`} size={18} />
+            <div className={`rounded-2xl border p-4 flex gap-3 items-start ${
+              isCritical
+                ? 'bg-[#FEE2E2] border-red-200'
+                : hasActionableIssue
+                  ? 'bg-[#FFFBEB] border-amber-200'
+                  : 'bg-pill border-line'
+            }`}>
+              <AlertTriangle className={`${isCritical ? 'text-error' : hasActionableIssue ? 'text-warn-deep' : 'text-status'} shrink-0 mt-0.5`} size={18} />
               <div>
-                <h2 className="text-sm font-bold text-primary-deep">Hành động tiếp theo</h2>
+                <h2 className={`text-sm font-bold ${isCritical ? 'text-error' : 'text-primary-deep'}`}>
+                  {isCritical ? 'KHẨN CẤP' : 'Hành động tiếp theo'}
+                </h2>
                 <p className="text-xs md:text-sm text-text-muted leading-relaxed mt-1">{nextAction}</p>
+
+                {hasActionableIssue && (
+                  <button
+                    onClick={() => navigate('/operations')}
+                    className="mt-2 px-3 py-1.5 bg-primary hover:bg-primary-deep text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider inline-flex items-center gap-1"
+                  >
+                    Mở Vận hành để xử lý <ArrowRight size={12} />
+                  </button>
+                )}
 
                 {permission !== 'granted' && (
                   <button
@@ -197,6 +228,7 @@ const Dashboard = () => {
       )}
 
       <QuickActionBar
+        onWaterNow={() => forceOn('WATER_PUMP_IN', 30)}
         onDose={() => navigate('/operations')}
         onPausePumps={() => navigate('/operations')}
         onViewAlerts={() => navigate('/journal')}

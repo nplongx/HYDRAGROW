@@ -523,6 +523,7 @@ async fn main() -> anyhow::Result<()> {
                     .configure(api::admin_users::init_routes)
                     .configure(api::device_pairing::init_routes)
                     .configure(api::health_topics::init_fleet_routes)
+                    .configure(api::fleet::init_fleet_routes)
                     .service(
                         web::scope("/devices/{device_id}")
                             .configure(api::control::init_routes)

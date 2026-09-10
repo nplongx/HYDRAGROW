@@ -40,7 +40,7 @@ describe('GeneralSection', () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByText('Ghép thiết bị mới'));
+    fireEvent.click(screen.getByRole('button', { name: 'Ghép thiết bị mới' }));
     expect(screen.getByText('Pairing page')).toBeInTheDocument();
   });
 
@@ -61,5 +61,33 @@ describe('GeneralSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Thủ công' }));
     expect(onControlModeChange).toHaveBeenCalledWith('manual');
+  });
+
+  it('hiển thị vai trò của người dùng và nút quản lý vai trò', () => {
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Routes>
+          <Route
+            path="/settings"
+            element={
+              <GeneralSection
+                userEmail="test@hydragrow.dev"
+                userRole="Vận hành viên"
+                onLogout={vi.fn()}
+                isAdvancedMode={false}
+                onToggleAdvancedMode={() => {}}
+              />
+            }
+          />
+          <Route path="/roles" element={<div>Roles page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Vai trò của bạn')).toBeInTheDocument();
+    expect(screen.getByText('Vận hành viên')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Quản lý thành viên & vai trò/i }));
+    expect(screen.getByText('Roles page')).toBeInTheDocument();
   });
 });

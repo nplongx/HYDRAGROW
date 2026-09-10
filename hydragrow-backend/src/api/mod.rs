@@ -11,6 +11,7 @@ pub mod crop_season;
 pub mod crop_season_photo;
 pub mod device_admin;
 pub mod device_pairing;
+pub mod fleet;
 pub mod health_topics;
 pub mod metrics;
 pub mod middleware;

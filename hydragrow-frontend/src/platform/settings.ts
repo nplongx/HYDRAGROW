@@ -32,8 +32,9 @@ const normalizeSettings = (raw: any): AppSettings | null => {
   const backend_url = typeof raw.backend_url === 'string' ? raw.backend_url.trim() : '';
   const api_key = typeof raw.api_key === 'string' ? raw.api_key.trim() : '';
   const device_id = typeof raw.device_id === 'string' ? raw.device_id.trim() : '';
+  const grafana_url = typeof raw.grafana_url === 'string' ? raw.grafana_url.trim() : '';
 
-  return { backend_url, api_key, device_id };
+  return { backend_url, api_key, device_id, grafana_url };
 };
 
 const loadWebSettings = async (): Promise<AppSettings | null> => {
@@ -58,7 +59,7 @@ const loadWebSettings = async (): Promise<AppSettings | null> => {
     }
   }
 
-  return sessionApiKey ? { backend_url: '', api_key: sessionApiKey, device_id: '' } : null
+  return sessionApiKey ? { backend_url: '', api_key: sessionApiKey, device_id: '' } : null;
 };
 
 export const loadAppSettings = async (): Promise<AppSettings | null> => {

@@ -27,6 +27,8 @@ pub struct RecipeStageRow {
     pub water_level_target: f32,
     pub misting_on_duration_ms: i32,
     pub misting_off_duration_ms: i32,
+    #[sqlx(default)]
+    pub light_hours: Option<i32>,
 }
 
 pub async fn list_recipes(pool: &PgPool) -> Result<Vec<RecipeRow>, sqlx::Error> {
@@ -126,7 +128,7 @@ pub async fn advance_active_recipe_stage(
         r#"
         SELECT id, recipe_id, stage_order, name, duration_days, ec_target, ec_tolerance,
                ph_target, ph_tolerance, nutrient_a_ratio, nutrient_b_ratio,
-               water_level_target, misting_on_duration_ms, misting_off_duration_ms
+               water_level_target, misting_on_duration_ms, misting_off_duration_ms, light_hours
         FROM crop_recipe_stages
         WHERE recipe_id = $1 AND stage_order = $2
         "#,
@@ -167,7 +169,7 @@ pub async fn list_stages_for_recipe(
         SELECT id, recipe_id, stage_order, name, duration_days,
                ec_target, ec_tolerance, ph_target, ph_tolerance,
                nutrient_a_ratio, nutrient_b_ratio, water_level_target,
-               misting_on_duration_ms, misting_off_duration_ms
+               misting_on_duration_ms, misting_off_duration_ms, light_hours
         FROM crop_recipe_stages
         WHERE recipe_id = $1
         ORDER BY stage_order

@@ -1,5 +1,5 @@
 // App.tsx
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MainLayout from './components/layout/MainLayout';
@@ -7,6 +7,8 @@ import { Toaster } from 'react-hot-toast';
 import { LoadingState } from './components/ui/LoadingState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { RegisterScreen } from './components/auth/RegisterScreen';
+import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
 import './App.css';
 
 // Khởi tạo QueryClient
@@ -27,9 +29,15 @@ import Cultivation from './pages/Cultivation';
 import Journal from './pages/Journal';
 const Settings = React.lazy(() => import('./pages/Settings'));
 import { DevicePairing } from './pages/DevicePairing';
+import { FleetView } from './pages/FleetView';
+import { ConfigBackup } from './pages/ConfigBackup';
+import { Roles } from './pages/Roles';
+
+type AuthView = 'login' | 'register' | 'forgot';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
+  const [view, setView] = useState<AuthView>('login');
   const isMockAuth = typeof window !== 'undefined' && window.location.search.includes('mock_auth=true');
 
   if (isMockAuth) {
@@ -41,7 +49,20 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'unauthenticated') {
-    return <LoginScreen />;
+    switch (view) {
+      case 'register':
+        return <RegisterScreen key="register" onShowLogin={() => setView('login')} />;
+      case 'forgot':
+        return <ForgotPasswordScreen key="forgot" onShowLogin={() => setView('login')} />;
+      default:
+        return (
+          <LoginScreen
+            key="login"
+            onShowRegister={() => setView('register')}
+            onShowForgot={() => setView('forgot')}
+          />
+        );
+    }
   }
 
   return <>{children}</>;
@@ -61,6 +82,10 @@ function AppRoutes() {
             <Route path="journal" element={<Journal />} />
             <Route path="settings" element={<Settings />} />
             <Route path="pairing" element={<DevicePairing />} />
+            <Route path="fleet" element={<FleetView />} />
+            <Route path="config-backup" element={<ConfigBackup />} />
+            <Route path="user-management" element={<Roles />} />
+            <Route path="roles" element={<Roles />} />
             {/* legacy deep links redirect into the merged tab pages */}
             <Route path="control" element={<Navigate to="/operations" replace />} />
             <Route path="automation" element={<Navigate to="/operations" replace />} />

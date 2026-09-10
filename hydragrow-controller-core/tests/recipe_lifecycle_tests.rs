@@ -32,6 +32,7 @@ fn test_recipe() -> CropRecipe {
                 misting_on_duration_ms: 8000,
                 misting_off_duration_ms: 120000,
                 max_dose_per_cycle_ml: Some(15.0),
+                light_hours: None,
             },
             CropStage {
                 name: "Stage 2".to_string(),
@@ -49,6 +50,7 @@ fn test_recipe() -> CropRecipe {
                 misting_on_duration_ms: 10000,
                 misting_off_duration_ms: 90000,
                 max_dose_per_cycle_ml: Some(20.0),
+                light_hours: None,
             },
         ],
     }

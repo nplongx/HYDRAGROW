@@ -63,6 +63,9 @@ pub struct UserScript {
     pub template_source_id: Option<Uuid>,
     #[sqlx(default)]
     pub template_overrides: Option<serde_json::Value>,
+    /// Lần gần nhất script thực thi thành công (fire). NULL = chưa từng chạy.
+    #[sqlx(default)]
+    pub last_run_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

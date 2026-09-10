@@ -13,8 +13,8 @@ export interface ConnectivitySectionProps {
   nodeRedEditorUrl: string;
   integrationTopic: string;
   ctxDeviceId: string | null | undefined;
-  appSettings: { api_key: string; backend_url: string };
-  setAppSettings: React.Dispatch<React.SetStateAction<{ api_key: string; backend_url: string }>>;
+  appSettings: { api_key: string; backend_url: string; grafana_url?: string };
+  setAppSettings: React.Dispatch<React.SetStateAction<{ api_key: string; backend_url: string; grafana_url?: string }>>;
   handleForgetApiKey: () => void;
   otaStatus: OtaStatus | null;
   isTriggeringOta: boolean;
@@ -88,6 +88,18 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
             </p>
           </div>
           <div className="space-y-1">
+            <InputGroup
+              label="Grafana Dashboard URL"
+              type="text"
+              placeholder="http://localhost:3000 hoặc URL Grafana của bạn"
+              value={appSettings.grafana_url || ''}
+              onChange={(e: InputEvent) => setAppSettings((prev) => ({ ...prev, grafana_url: e.target.value }))}
+            />
+            <p className="text-xs text-text-muted">
+              URL hiển thị trực tiếp bảng điều khiển phân tích số liệu trên trang Analytics.
+            </p>
+          </div>
+          <div className="space-y-1">
             <label className="text-sm font-medium text-primary-deep">MQTT Integration Topic (Outbound)</label>
             <div className="flex items-center gap-2">
               <p className="flex-1 text-sm text-primary-deep bg-surface-muted px-3 py-2 rounded-lg font-mono break-all border border-line">
@@ -131,7 +143,7 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
               label="API Key"
               type="password"
               value={appSettings.api_key}
-              onChange={(e: InputEvent) => setAppSettings({ ...appSettings, api_key: e.target.value })}
+              onChange={(e: InputEvent) => setAppSettings((prev) => ({ ...prev, api_key: e.target.value }))}
             />
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
               Web build chỉ lưu API key trong phiên hiện tại; Tauri lưu khoá trong OS credential vault.

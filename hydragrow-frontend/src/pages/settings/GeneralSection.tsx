@@ -5,6 +5,7 @@ import { Switch } from '../../components/ui/Switch';
 
 interface GeneralSectionProps {
   userEmail: string | null | undefined;
+  userRole?: string;
   onLogout: () => void;
   onGoToPairing?: () => void;
   isAdvancedMode: boolean;
@@ -15,7 +16,9 @@ interface GeneralSectionProps {
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
   userEmail,
+  userRole,
   onLogout,
+  onGoToPairing,
   isAdvancedMode,
   onToggleAdvancedMode,
   controlMode = 'auto',
@@ -40,6 +43,25 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
       </div>
 
       <div className="ui-card space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="farm-section-title">Vai trò của bạn</h3>
+            <p className="text-xs text-text-muted mt-0.5">Quyền hạn tài khoản trong hệ thống</p>
+          </div>
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-pill text-status">
+            {userRole ?? 'Quản trị viên'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/roles')}
+          className="ui-btn-md w-full border border-line text-primary-deep bg-white hover:bg-soft flex items-center justify-center gap-2 text-xs"
+        >
+          Quản lý thành viên &amp; vai trò
+        </button>
+      </div>
+
+      <div className="ui-card space-y-3">
         <div className="flex items-center gap-2">
           <Power size={17} className="text-primary" />
           <h3 className="farm-section-title">Chế độ hoạt động</h3>
@@ -58,8 +80,8 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
                 onClick={() => onControlModeChange?.(mode)}
                 className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
                   selected
-                    ? 'border-primary bg-primary text-white'
-                    : 'border-line bg-white text-primary-deep hover:bg-soft'
+                    ? 'border-primary bg-primary text-white shadow-sm'
+                    : 'border-line bg-white/80 text-primary-deep hover:bg-soft'
                 }`}
               >
                 {mode === 'auto' ? 'Tự động' : 'Thủ công'}
@@ -70,13 +92,30 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
       </div>
 
       <div className="ui-card space-y-3">
-        <h3 className="farm-section-title">Ghép nối thiết bị</h3>
+        <h3 className="farm-section-title">Ghép thiết bị mới</h3>
+        <p className="text-xs text-text-muted">
+          Quét QR hoặc nhập mã thiết bị để liên kết vào tài khoản.
+        </p>
         <button
           type="button"
-          onClick={() => navigate('/pairing')}
-          className="ui-btn-primary w-full flex items-center justify-center gap-2"
+          onClick={onGoToPairing ?? (() => navigate('/pairing'))}
+          className="ui-btn-md w-full border border-primary text-primary hover:bg-soft flex items-center justify-center gap-2"
         >
           Ghép thiết bị mới
+        </button>
+      </div>
+
+      <div className="ui-card space-y-3">
+        <h3 className="farm-section-title">Backup &amp; Restore Cấu Hình</h3>
+        <p className="text-xs text-text-muted">
+          Sao lưu toàn bộ ngưỡng an toàn, chu kỳ châm dinh dưỡng và kịch bản ra file JSON hoặc khôi phục cấu hình trước đó.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/config-backup')}
+          className="ui-btn-md w-full border border-line text-primary-deep bg-white hover:bg-soft flex items-center justify-center gap-2"
+        >
+          Mở Backup &amp; Restore
         </button>
       </div>
 

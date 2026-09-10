@@ -16,6 +16,16 @@ vi.mock('../hooks/useSystemHealthSummary', () => ({
   }),
 }));
 
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    status: 'authenticated',
+    user: { displayName: 'Nam', email: 'nam@hydragrow.dev' },
+    error: null,
+    login: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
+
 describe('Dashboard pumpColors token', () => {
   it('không dùng bg-indigo-* / text-indigo-* (vi phạm CHUAN-GIAO-DIEN mục 1.1)', () => {
     const filePath = path.resolve(process.cwd(), 'src/pages/Dashboard.tsx');

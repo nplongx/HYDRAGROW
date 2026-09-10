@@ -58,6 +58,27 @@ export async function apiPost<T, B = Record<string, unknown>>(
     return res.json() as Promise<T>;
 }
 
+export async function apiPatch<T, B = Record<string, unknown>>(
+    url: string,
+    body: B,
+    headers?: Record<string, string>
+): Promise<T> {
+    const settings = useDeviceStore.getState().settings;
+    const res = await httpFetch(`${settings?.backend_url}/api${url}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': settings?.api_key || '',
+            ...headers
+        },
+        body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+        throw new Error(`PATCH ${url} failed with status ${res.status}`);
+    }
+    return res.json() as Promise<T>;
+}
+
 export async function apiDelete<T>(url: string): Promise<T> {
     const settings = useDeviceStore.getState().settings;
     const res = await httpFetch(`${settings?.backend_url}/api${url}`, {

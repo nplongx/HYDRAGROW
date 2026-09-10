@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertOctagon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDeviceControl } from '../../hooks/useDeviceControl';
@@ -13,8 +13,19 @@ interface EmergencyStopButtonProps {
 export const EmergencyStopButton = ({ deviceId, variant }: EmergencyStopButtonProps) => {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const pumps = useDeviceStore((s) => s.sensorData?.pump_status) as Record<string, boolean> | undefined;
+  const pumpStatus = useDeviceStore((s) => s.sensorData?.pump_status);
+  const pumps = (pumpStatus ?? {}) as Record<string, boolean>;
   const { emergencyStop } = useDeviceControl(deviceId || '');
+
+  const runningPwm = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!pumpStatus) return map;
+    (['pump_a', 'pump_b', 'ph_up', 'ph_down', 'osaka_pump'] as const).forEach((pumpId) => {
+      const pwm = (pumpStatus as unknown as Record<string, unknown>)[`${pumpId}_pwm`];
+      if (typeof pwm === 'number') map[pumpId] = pwm;
+    });
+    return map;
+  }, [pumpStatus]);
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
@@ -50,7 +61,8 @@ export const EmergencyStopButton = ({ deviceId, variant }: EmergencyStopButtonPr
 
       <EmergencyStopConfirmDialog
         open={open}
-        runningPumps={pumps || {}}
+        runningPumps={pumps}
+        runningPwm={runningPwm}
         onCancel={() => setOpen(false)}
         onConfirm={handleConfirm}
         isSubmitting={isSubmitting}

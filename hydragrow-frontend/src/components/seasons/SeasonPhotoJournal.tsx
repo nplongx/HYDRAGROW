@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { httpFetch } from '../../platform/http';
 import { useDeviceStore } from '../../store/useDeviceStore';
@@ -83,17 +83,39 @@ export const SeasonPhotoJournal = ({ seasonId, seasonStartTime }: SeasonPhotoJou
         }
     };
 
+    const handleDeletePhoto = async (photo: SeasonPhoto) => {
+        if (!window.confirm(`Xoá ảnh "Ngày ${photo.day_offset}" khỏi nhật ký?`)) return;
+        try {
+            const res = await httpFetch(`${baseUrl}/${photo.id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Không xoá được ảnh');
+            toast.success('Đã xoá ảnh.');
+            queryClient.invalidateQueries({ queryKey: ['season-photos', deviceId, seasonId] });
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Lỗi khi xoá ảnh');
+        }
+    };
+
     return (
         <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Nhật ký ảnh</p>
             <div className="flex gap-3 overflow-x-auto pb-1">
                 {photos.map((photo) => (
-                    <div key={photo.id} className="shrink-0 w-20 text-center space-y-1">
-                        <img
-                            src={photo.cloudinary_url}
-                            alt={`Ngày ${photo.day_offset}`}
-                            className="w-20 h-20 object-cover rounded-xl border border-line"
-                        />
+                    <div key={photo.id} className="shrink-0 w-20 text-center space-y-1 group">
+                        <div className="relative">
+                            <img
+                                src={photo.cloudinary_url}
+                                alt={`Ngày ${photo.day_offset}`}
+                                className="w-20 h-20 object-cover rounded-xl border border-line"
+                            />
+                            <button
+                                type="button"
+                                aria-label={`Xoá ảnh ngày ${photo.day_offset}`}
+                                onClick={() => handleDeletePhoto(photo)}
+                                className="absolute -top-1.5 -right-1.5 p-1 bg-white border border-line rounded-full text-faint hover:text-red-600 hover:border-red-200 hidden group-hover:flex items-center justify-center shadow-sm"
+                            >
+                                <Trash2 size={12} />
+                            </button>
+                        </div>
                         <p className="text-[10px] font-semibold text-text-muted">Ngày {photo.day_offset}</p>
                     </div>
                 ))}

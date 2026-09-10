@@ -85,10 +85,27 @@ async fn end_season(path: web::Path<String>, app_state: web::Data<AppState>) -> 
     }
 }
 
+async fn delete_season(
+    path: web::Path<(String, String)>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let (device_id, season_id) = path.into_inner();
+    match postgres::delete_crop_season(&app_state.pg_pool, &device_id, &season_id).await {
+        Ok(0) => HttpResponse::NotFound()
+            .json(json!({ "status": "error", "message": "Không tìm thấy mùa vụ" })),
+        Ok(_) => {
+            HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã xoá mùa vụ" }))
+        }
+        Err(e) => HttpResponse::InternalServerError()
+            .json(json!({ "status": "error", "message": e.to_string() })),
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/seasons", web::get().to(get_seasons_history))
         .route("/seasons", web::post().to(create_season))
         .route("/seasons/active", web::get().to(get_active_season))
         .route("/seasons/active", web::put().to(update_season))
-        .route("/seasons/active/end", web::put().to(end_season));
+        .route("/seasons/active/end", web::put().to(end_season))
+        .route("/seasons/{season_id}", web::delete().to(delete_season));
 }

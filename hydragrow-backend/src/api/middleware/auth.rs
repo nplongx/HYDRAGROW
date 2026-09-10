@@ -6,7 +6,7 @@ use actix_web::{
 };
 use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::rc::Rc;
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Clone, Debug, Default)]
 pub struct AuthContext {
@@ -134,13 +134,40 @@ where
                         Ok(res.map_into_left_body())
                     }
                     Ok(None) => {
-                        let response = HttpResponse::Forbidden()
-                            .json(serde_json::json!({
-                                "error": "Tài khoản chưa được cấp quyền truy cập"
-                            }))
-                            .map_into_right_body();
-                        let (http_req, _payload) = req.into_parts();
-                        Ok(ServiceResponse::new(http_req, response))
+                        // Self-registration: user Firebase hợp lệ nhưng chưa có trong
+                        // bảng users -> tự tạo với scope đọc mặc định (read:telemetry).
+                        // Không ghi đè scope của tài khoản đã tồn tại.
+                        let email = claims.email.clone().unwrap_or_default();
+                        match crate::db::users::provision_default_user(
+                            &app_state.pg_pool,
+                            &claims.sub,
+                            &email,
+                        )
+                        .await
+                        {
+                            Ok(user) => {
+                                debug!(firebase_uid = %user.firebase_uid, "Tự cấp tài khoản mới sau đăng ký");
+                                let auth_context = AuthContext {
+                                    scopes: user.scopes,
+                                    user_id: Some(user.id.to_string()),
+                                    session_id: Some(claims.sub),
+                                    service_key_label: None,
+                                };
+                                req.extensions_mut().insert(auth_context);
+                                let res = srv.call(req).await?;
+                                Ok(res.map_into_left_body())
+                            }
+                            Err(e) => {
+                                error!(?e, "Không thể tự cấp tài khoản mới sau đăng ký");
+                                let response = HttpResponse::InternalServerError()
+                                    .json(serde_json::json!({
+                                        "error": "Lỗi hệ thống khi tự cấp tài khoản"
+                                    }))
+                                    .map_into_right_body();
+                                let (http_req, _payload) = req.into_parts();
+                                Ok(ServiceResponse::new(http_req, response))
+                            }
+                        }
                     }
                     Err(e) => {
                         error!(?e, "Lỗi truy vấn user theo firebase_uid");

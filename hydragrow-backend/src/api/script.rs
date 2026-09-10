@@ -686,6 +686,44 @@ pub async fn test_script(body: web::Json<TestScriptRequest>) -> impl Responder {
 #[cfg(test)]
 mod tests {
 
+    #[sqlx::test(migrations = "./migrations")]
+    #[allow(clippy::unwrap_used)]
+    async fn touch_script_last_run_persists_and_list_returns_it(pool: sqlx::PgPool) {
+        let id = uuid::Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO device_config (device_id, ec_target, ec_tolerance, ph_target, ph_tolerance, \
+             control_mode) VALUES ('dev-t1', 2.4, 0.2, 6.0, 0.3, 'auto')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json, next_flow_ids) \
+             VALUES ($1, 'dev-t1', 'alert', 'tpl', 'fn main(input) {}', TRUE, NULL, '[]'::jsonb)",
+        )
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let rows: Vec<crate::models::script::UserScript> =
+            sqlx::query_as("SELECT * FROM user_scripts WHERE device_id = 'dev-t1'")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].last_run_at.is_none());
+
+        crate::db::postgres::touch_script_last_run(&pool, &id).await;
+
+        let rows: Vec<crate::models::script::UserScript> =
+            sqlx::query_as("SELECT * FROM user_scripts WHERE device_id = 'dev-t1'")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert!(rows[0].last_run_at.is_some());
+    }
+
     #[actix_web::test]
     async fn test_endpoint_returns_will_fire_true_and_trace_when_condition_met() {
         use crate::api::script::init_routes;

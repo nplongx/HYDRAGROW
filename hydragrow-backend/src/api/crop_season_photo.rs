@@ -71,11 +71,31 @@ async fn list_photos(
     }
 }
 
+async fn delete_photo(
+    path: web::Path<(String, String, String)>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let (device_id, season_id, photo_id) = path.into_inner();
+    match postgres::delete_crop_season_photo(&app_state.pg_pool, &device_id, &season_id, &photo_id)
+        .await
+    {
+        Ok(0) => HttpResponse::NotFound()
+            .json(json!({ "status": "error", "message": "Không tìm thấy ảnh" })),
+        Ok(_) => HttpResponse::Ok().json(json!({ "status": "success", "message": "Đã xoá ảnh" })),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(json!({ "status": "error", "message": e.to_string() })),
+    }
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route(
         "/seasons/{season_id}/photos/sign",
         web::post().to(sign_photo_upload),
     )
     .route("/seasons/{season_id}/photos", web::post().to(create_photo))
-    .route("/seasons/{season_id}/photos", web::get().to(list_photos));
+    .route("/seasons/{season_id}/photos", web::get().to(list_photos))
+    .route(
+        "/seasons/{season_id}/photos/{photo_id}",
+        web::delete().to(delete_photo),
+    );
 }

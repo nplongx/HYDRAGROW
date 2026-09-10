@@ -8,7 +8,7 @@ import { CreateSeasonForm } from '../components/seasons/CreateSeasonForm';
 import { SeasonHistoryList } from '../components/seasons/SeasonHistoryList';
 
 export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
-  const { activeSeason, history, isLoading, createSeason, endSeason, updateSeason } = useCropSeason();
+  const { activeSeason, history, isLoading, createSeason, endSeason, updateSeason, deleteSeason } = useCropSeason();
 
   if (isLoading && !activeSeason && history.length === 0) {
     return <LoadingState message="Đang tải danh sách mùa vụ..." />;
@@ -35,7 +35,7 @@ export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone'
       )}
 
       {/* Lịch sử các mùa vụ trước */}
-      <SeasonHistoryList seasons={filteredHistory} />
+      <SeasonHistoryList seasons={filteredHistory} onDelete={(season) => deleteSeason(season.id)} />
     </>
   );
 

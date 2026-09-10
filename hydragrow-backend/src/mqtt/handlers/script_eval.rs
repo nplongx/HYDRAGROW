@@ -721,7 +721,7 @@ pub fn alert_output_to_system_alert(
 ) -> crate::models::alert::AlertMessage {
     crate::models::alert::AlertMessage {
         level: alert.level,
-        category: "script_alert".to_string(),
+        category: "automation".to_string(),
         title: alert.title,
         message: alert.message,
         device_id: device_id.to_string(),

@@ -62,3 +62,9 @@ README.md
 *.sqlite
 *.sqlite3
 *.db
+
+.codegraph/
+.git/
+node_modules/
+target/
+.env

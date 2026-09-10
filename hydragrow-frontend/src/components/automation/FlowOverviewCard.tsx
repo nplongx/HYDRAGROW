@@ -1,5 +1,42 @@
 import type { UserScript } from "../../types/automation";
 
+const DOW_NAMES = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+function cronToVietnamese(expr: string): string | null {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 6) return null;
+  const [, minuteRaw, hourRaw, , , dowRaw] = parts;
+  const minute = minuteRaw === '*' ? 0 : parseInt(minuteRaw, 10);
+  const hour = hourRaw === '*' ? 0 : parseInt(hourRaw, 10);
+  if (Number.isNaN(minute) || Number.isNaN(hour)) return null;
+  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  if (dowRaw === '*' || dowRaw === '?') return `${time} hằng ngày`;
+  if (/^\d+$/.test(dowRaw)) return `${time} ${DOW_NAMES[parseInt(dowRaw, 10) % 7]}`;
+  if (/^\d+-\d+$/.test(dowRaw)) {
+    const [a, b] = dowRaw.split('-').map((d) => DOW_NAMES[parseInt(d, 10) % 7]);
+    return `${time} từ ${a} đến ${b}`;
+  }
+  if (/^[\d,]+$/.test(dowRaw)) {
+    const days = dowRaw.split(',').map((d) => DOW_NAMES[parseInt(d, 10) % 7]).join(', ');
+    return `${time} ${days}`;
+  }
+  return `${time} định kỳ`;
+}
+
+const DOW_SHORT = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+function lastRunLabel(lastRunAt?: string | null): string {
+  if (!lastRunAt) return 'Chưa từng chạy';
+  const run = new Date(lastRunAt);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startRunDay = new Date(run.getFullYear(), run.getMonth(), run.getDate()).getTime();
+  if (startRunDay >= startToday) return 'lần cuối: hôm nay';
+  const days = Math.floor((startToday - startRunDay) / 86400000);
+  if (days < 7) return `lần cuối: ${DOW_SHORT[run.getDay()]}`;
+  return `lần cuối: ${run.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
+}
+
 interface Props {
   script: UserScript;
   onClick: () => void;
@@ -34,7 +71,14 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
       return `Đọc ${target} · Ghi đè khi điều kiện đúng`;
     }
     const trigger = script.ir_json?.trigger?.type ?? "sensor";
-    if (trigger === "cron") return "Trigger: Cron biểu thức lịch định kỳ";
+    if (trigger === "cron") {
+      const cronExpr = (script.ir_json?.trigger as { cronExpression?: string } | null)?.cronExpression;
+      if (cronExpr) {
+        const readable = cronToVietnamese(cronExpr);
+        if (readable) return `Trigger: ${readable}`;
+      }
+      return "Trigger: Cron biểu thức lịch định kỳ";
+    }
     if (trigger === "webhook") return "Trigger: Webhook nhận dữ liệu bên ngoài";
     if (trigger === "fsm") return "Trigger: FSM giai đoạn canh tác";
     return "Trigger: Cảm biến thời gian thực";
@@ -102,7 +146,7 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
       </div>
 
       <div className="text-[11px] text-faint flex items-center justify-between pt-1 border-t border-line">
-        <span>Cập nhật gần đây</span>
+        <span>{lastRunLabel(script.last_run_at)}</span>
         <span className="group-hover:translate-x-0.5 transition-transform text-primary font-medium">Chi tiết &rarr;</span>
       </div>
     </div>

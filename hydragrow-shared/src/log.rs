@@ -21,6 +21,8 @@ pub enum LogCategory {
     Sensor,      // Tín hiệu cảm biến (nhiễu, lỗi)
     Alert,       // Cảnh báo an toàn (rate limit, emergency)
     UserAction,  // Can thiệp thủ công từ App/Web
+    Device,      // Sự kiện thiết bị (kết nối, nguồn, OTA, cảm biến phần cứng)
+    Automation,  // Sự kiện từ script tự động hoá (script alert / action)
 }
 
 impl LogLevel {
@@ -33,7 +35,7 @@ impl LogLevel {
         }
     }
 
-    fn from_field(value: &str) -> Option<Self> {
+    pub fn from_field(value: &str) -> Option<Self> {
         match value.trim_matches('"').to_ascii_lowercase().as_str() {
             "info" => Some(Self::Info),
             "success" => Some(Self::Success),
@@ -54,10 +56,12 @@ impl LogCategory {
             Self::Sensor => "sensor",
             Self::Alert => "alert",
             Self::UserAction => "user_action",
+            Self::Device => "device",
+            Self::Automation => "automation",
         }
     }
 
-    fn from_field(value: &str) -> Option<Self> {
+    pub fn from_field(value: &str) -> Option<Self> {
         match value.trim_matches('"').to_ascii_lowercase().as_str() {
             "system" => Some(Self::System),
             "dosing" => Some(Self::Dosing),
@@ -66,6 +70,8 @@ impl LogCategory {
             "sensor" => Some(Self::Sensor),
             "alert" => Some(Self::Alert),
             "user_action" => Some(Self::UserAction),
+            "device" => Some(Self::Device),
+            "automation" => Some(Self::Automation),
             _ => None,
         }
     }

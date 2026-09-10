@@ -4,25 +4,29 @@ import { QuickActionBar } from './QuickActionBar';
 
 describe('QuickActionBar', () => {
   it('gọi đúng callback khi bấm từng nút', () => {
+    const onWaterNow = vi.fn();
     const onDose = vi.fn();
     const onPausePumps = vi.fn();
     const onViewAlerts = vi.fn();
-    render(<QuickActionBar onDose={onDose} onPausePumps={onPausePumps} onViewAlerts={onViewAlerts} />);
+    render(<QuickActionBar onWaterNow={onWaterNow} onDose={onDose} onPausePumps={onPausePumps} onViewAlerts={onViewAlerts} />);
 
+    fireEvent.click(screen.getByText('Tưới ngay'));
     fireEvent.click(screen.getByText('Châm dinh dưỡng'));
     fireEvent.click(screen.getByText('Tạm dừng bơm'));
     fireEvent.click(screen.getByText('Xem cảnh báo'));
 
+    expect(onWaterNow).toHaveBeenCalledOnce();
     expect(onDose).toHaveBeenCalledOnce();
     expect(onPausePumps).toHaveBeenCalledOnce();
     expect(onViewAlerts).toHaveBeenCalledOnce();
   });
 
   it('hiển thị Tiếp tục bơm khi pumpsPaused là true', () => {
+    const onWaterNow = vi.fn();
     const onDose = vi.fn();
     const onPausePumps = vi.fn();
     const onViewAlerts = vi.fn();
-    render(<QuickActionBar onDose={onDose} onPausePumps={onPausePumps} onViewAlerts={onViewAlerts} pumpsPaused={true} />);
+    render(<QuickActionBar onWaterNow={onWaterNow} onDose={onDose} onPausePumps={onPausePumps} onViewAlerts={onViewAlerts} pumpsPaused={true} />);
 
     expect(screen.getByText('Tiếp tục bơm')).toBeInTheDocument();
   });

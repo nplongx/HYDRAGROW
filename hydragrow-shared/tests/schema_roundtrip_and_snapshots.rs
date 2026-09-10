@@ -35,6 +35,7 @@ fn sample_crop_recipe() -> CropRecipe {
                 misting_on_duration_ms: 10_000,
                 misting_off_duration_ms: 180_000,
                 max_dose_per_cycle_ml: None,
+                light_hours: None,
             },
             CropStage {
                 name: "vegetative".into(),
@@ -52,6 +53,7 @@ fn sample_crop_recipe() -> CropRecipe {
                 misting_on_duration_ms: 10_000,
                 misting_off_duration_ms: 180_000,
                 max_dose_per_cycle_ml: None,
+                light_hours: None,
             },
         ],
     }

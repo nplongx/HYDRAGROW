@@ -146,6 +146,12 @@ mod tests {
             updated_at: Utc::now(),
         };
         sqlx::query(
+            "INSERT INTO device_config (device_id) VALUES ($1) ON CONFLICT DO NOTHING",
+        )
+        .bind(&source.device_id)
+        .execute(&pool).await.unwrap();
+
+        sqlx::query(
             "INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json, next_flow_ids, template_source_id, template_overrides) \
              VALUES ($1,$2,$3,$4,$5,TRUE,$6,'[]'::jsonb,$7,$8)",
         )

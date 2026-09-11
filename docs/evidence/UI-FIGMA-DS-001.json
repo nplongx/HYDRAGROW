@@ -1,0 +1,61 @@
+{
+  "requirement_id": "UI-FIGMA-DS-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "grep audit of App.css + changed components; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "App.css @theme now contains --color-warn-deep #78350f, --color-success-bg #d1fae5, --color-danger-bg #fee2e2, --color-warning-bg #fffbeb, --color-info-bg #eef2ff, --color-info-fg #4338ca, --font-sans Inter, plus .app-slider ::-webkit-slider-thumb / ::-moz-range-thumb styles. The new/changed surfaces (ui/*, W1-W3) use only design tokens; no new hard-coded emerald hexes were introduced. Banner warning tone maps to --color-warning-bg/--color-warn-deep (the #FFFBEB/#92400E combat pair from redesign-003 is now the Figma amber pair)."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "npx vitest run src/components/ui/*.test.tsx",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "6 ui test files pass for Button, Badge, Slider, HealthScore, DeviceStatePill, Banner. AppToaster (react-hot-toast wrapper) is new and App.tsx renders <AppToaster/> instead of the raw <Toaster position=\"top-center\"/>. Input/Select/Modal are written and green on the branch but intentionally deferred (unused by W1-W3) to keep the diff payload under the dispatch cap; they land with the W4-W8 / automation follow-ups."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npx vitest run (automation/dosing/control suites)",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "AutomationConflictBanner and DosingAnomalyBanner render via ui/Banner with the same copy and tones (warning/danger); ControlPanel offline ('Hệ thống Ngoại tuyến') and emergency-fault banners now use Banner danger/warning. All dependent suites pass (Automation.integration.test.tsx, DosingAnomalyBanner tests, AdvancedDeviceControl.test.tsx, Operations.test.tsx)."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Dashboard.test.tsx src/components/ui/SensorBentoCard.test.tsx; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "Dashboard renders DeviceStatePill (Trạm Online/Offline), next-action Banner+Badge+Button (KHẨN CẤP/ƯU TIÊN), HealthScore panel, tank-low alert Banners, and 4 metric cards with sparklines via SensorBentoCard's new optional sparkline prop (tone color map). Removed unused Wifi/AlertTriangle imports. tsc clean."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "npx vitest run src/components/control/AdvancedDeviceControl.test.tsx src/pages/Operations.test.tsx; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "AdvancedDeviceControl now renders an inline ui/Slider under the 'Công suất' row when allowPwm && running (showing '72% ≈ 8.6 ml/phút'), committing on release via setPwm + savePwmPreference with a toast; the emergency 'Công suất PWM' and technical 'Công suất (PWM)' raw range inputs are replaced by ui/Slider (20-100 step 5, gradient fill). Lock row, StatusPill, Switch and 'Chạy/Kích hoạt' flows preserved — the existing AdvancedDeviceControl tests (lock banner, StatusPill 'Đang gửi…', '72%' on card) pass unchanged. ControlPanel: offline/fault banners -> Banner, Khôi phục -> Button secondary."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "npx vitest run src/components/seasons/*.test.tsx; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "ActiveSeasonCard progress bar + 'Giai đoạn … Ngày N/M' + delay Banner ('Chậm hơn dự kiến N ngày — So với …') + Sửa (Button secondary) + Kết thúc mùa vụ (Button danger fullWidth) + ActiveRecipeStatus/SeasonPhotoJournal remain. ActiveSeasonCard/SeasonPhotoJournal tests pass; tsc clean."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "npx tsc --noEmit; npx eslint .; npx vitest run; npm run build",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "tsc --noEmit clean. eslint: 0 errors (183 warnings, all pre-existing). vitest: committed PR suite 85 files / 424 tests passed (the 3 untracked, deferred Input/Select/Modal test files push the local working tree to 88/437 but are not part of this PR). npm run build: green (pre-existing chunk-size >500kB warning only). prettier --check on the touched files is clean; the repo-wide `npx prettier --check .` reports 931 pre-existing-dirty files because prettier is not pinned in package.json and npx resolves the latest version (nondeterministic formatting drift) — same situation as AUTOMATION-CRON-001 (which documented 4 dirty files under an older resolved version)."
+    }
+  ]
+}

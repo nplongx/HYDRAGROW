@@ -1,0 +1,41 @@
+{
+  "requirement_id": "UI-FIGMA-DS-001",
+  "objective": "Align the HydraGrow frontend with the Figma file 'HydraGrow – Automation Redesign (Config Override Proposal)' (fileKey UvfamFTHSrneof4eKOxozm): implement the Design System (node 268-82) as Tailwind v4 CSS tokens plus shared src/components/ui/ primitives with unit tests, then restyle the first three Hi-Fi screens (W1 Tổng quan/Dashboard, W2 Vận hành·Điều khiển/Operations-Control, W3 Canh tác·Mùa vụ/Cultivation) onto those primitives, leaving navigation/layout structure intact.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Design token parity: App.css @theme defines the Figma token set (Inter --font-sans; surface/status colors including --color-warn-deep #78350f and the soft backgrounds --color-success-bg/-danger-bg/-warning-bg/-info-bg with --color-info-fg) and the .app-slider thumb/track styles; no hard-coded emerald hex or non-token ad-hoc backgrounds are introduced in the new UI surfaces.",
+      "verification": "grep/class audit of App.css and the new/changed components; tsc --noEmit"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Shared primitives exist under src/components/ui/ with unit tests: Button (variants primary/secondary/danger/ghost/icon, sizes sm/md/lg, loading, fullWidth), Badge, Slider (onChange + onCommit, .app-slider track/thumb), HealthScore, DeviceStatePill, Banner, AppToaster; App.tsx renders <AppToaster/> instead of a raw <Toaster>. Input/Select/Modal are implemented on the branch but deferred (unused until the W4-W8 / automation follow-up PRs).",
+      "verification": "npx vitest run src/components/ui/*.test.tsx (6 files)"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Bespoke alert surfaces are refactored onto ui/Banner with identical copy/behavior: AutomationConflictBanner, DosingAnomalyBanner, and the ControlPanel offline + emergency-fault banners; their existing tests still pass.",
+      "verification": "npx vitest run (Automation.integration.test.tsx, DosingAnomalyBanner.test.tsx, ControlPanel banner assertions)"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "W1 Dashboard matches the Figma overview screen: DeviceStatePill station status, next-action Banner + Badge + Button, HealthScore in 'Sức khỏe trạm', tank-low alert Banners, and tone-colored sparklines (SensorBentoCard sparkline prop) on the 4 metric cards; unused icon imports removed.",
+      "verification": "npx vitest run src/pages/Dashboard.test.tsx src/components/ui/SensorBentoCard.test.tsx + tsc"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "W2 Điều khiển matches the Figma device-control screen: AdvancedDeviceControl shows the PWM surface with 'X% ≈ Y ml/phút' on the running card with an interactive ui/Slider (20-100 step 5) committing via setPwm + savePwmPreference, lock row, StatusPill command status, E-stop bar and section grouping retained in ControlPanel; raw <input type=range> instances in the technical/emergency panels replaced by ui/Slider.",
+      "verification": "npx vitest run src/components/control/AdvancedDeviceControl.test.tsx src/pages/Operations.test.tsx + tsc"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "W3 Mùa vụ matches the Figma cultivation screen: ActiveSeasonCard keeps stage progress bar + 'Ngày N/M' + growth clock, shows the 'Chậm hơn dự kiến N ngày' warning via Banner, uses Button primitives for Sửa / Kết thúc mùa vụ, and keeps the embedded ActiveRecipeStatus + SeasonPhotoJournal below it.",
+      "verification": "npx vitest run src/components/seasons/*.test.tsx + tsc"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Full verification gates stay green: frontend tsc, eslint (0 errors), vitest full suite, build; prettier clean on the touched files (repo-wide prettier check is pre-existing-dirty / version-unpinned).",
+      "verification": "npx tsc --noEmit && npx eslint . && npx vitest run (88 files / 437 tests) && npm run build"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { Settings2, RefreshCw, Sparkles, AlertTriangle, FlaskConical, Activity, Droplets, Power, Wind } from 'lucide-react';
+import { Settings2, RefreshCw, Sparkles, FlaskConical, Activity, Droplets, Power, Wind } from 'lucide-react';
 
 // --- ZUSTAND, GLEAM & HOOKS ---
 import { useDeviceStore } from '../store/useDeviceStore';
@@ -10,6 +10,8 @@ import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_cor
 import { AdvancedDeviceControl } from '../components/control/AdvancedDeviceControl';
 import { ActiveRecipeStatus } from '../components/recipes/ActiveRecipeStatus';
 import { LoadingState } from '../components/ui/LoadingState';
+import { Banner } from '../components/ui/Banner';
+import { Button } from '../components/ui/Button';
 import { PumpStatus } from '../types/models';
 
 const PUMP_DISPLAY_LABEL: Record<string, string> = {
@@ -67,23 +69,19 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
       {/* Cảnh báo sự cố / Mất kết nối */}
       <div className="space-y-3 mt-3">
         {showDisconnected && (
-          <div className="bg-[#FEE2E2] border border-transparent rounded-2xl p-4 flex gap-3 text-error">
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
-              <h4 className="font-bold text-sm">Hệ thống Ngoại tuyến</h4>
-              <p className="text-xs opacity-80 leading-relaxed">Không thể truyền lệnh do mất kết nối Wi-Fi.</p>
-            </div>
-          </div>
+          <Banner tone="danger" title="Hệ thống Ngoại tuyến">
+            Không thể truyền lệnh do mất kết nối Wi-Fi.
+          </Banner>
         )}
         {isEmergency && isOnline && !isAutoMode && (
-          <div className="bg-[#FFFBEB] border border-amber-200 rounded-2xl p-4 flex gap-3 text-warn-deep">
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="font-bold text-sm">Hệ thống đang ngắt khẩn cấp</h4>
-              <p className="text-xs opacity-80 leading-relaxed">{faultGuide?.short || 'Phát hiện sự cố an toàn.'}</p>
-              {faultGuide && <p className="text-[11px] font-medium bg-pill px-2 py-1 rounded-lg border border-line mt-1 max-w-max text-text-muted">Khắc phục: {faultGuide.action}</p>}
-            </div>
-          </div>
+          <Banner tone="warning" title="Hệ thống đang ngắt khẩn cấp">
+            {faultGuide?.short || 'Phát hiện sự cố an toàn.'}
+            {faultGuide && (
+              <span className="inline-block mt-1 bg-pill px-2 py-1 rounded-lg border border-line max-w-max text-[11px] font-medium text-text-muted">
+                Khắc phục: {faultGuide.action}
+              </span>
+            )}
+          </Banner>
         )}
       </div>
 
@@ -178,16 +176,17 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
           </h1>
           <p className="text-sm text-text-muted">Bơm, van và hệ thống phun sương khi cần thao tác bằng tay.</p>
         </div>
-        <button
+        <Button
+          size="sm"
+          variant="secondary"
           disabled={!canSendCommands || isProcessing}
           onClick={async () => {
             if (window.confirm("Khôi phục trạng thái hoạt động của hệ thống?")) await resetFault();
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-primary-deep border border-line rounded-xl text-xs font-bold hover:bg-soft transition-all disabled:opacity-50"
         >
           <RefreshCw size={12} className={isProcessing ? "animate-spin" : "text-primary"} />
           <span>Khôi phục</span>
-        </button>
+        </Button>
       </div>
 
       {content}

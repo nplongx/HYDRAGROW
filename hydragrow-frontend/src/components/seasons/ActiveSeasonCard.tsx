@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { CropSeason } from '../../types/models';
 import { InputGroup } from '../ui/InputGroup';
 import { ActiveRecipeStatus } from '../recipes/ActiveRecipeStatus';
+import { Banner } from '../ui/Banner';
+import { Button } from '../ui/Button';
 import { useActiveRecipeStatus } from '../../hooks/useActiveRecipeStatus';
 import { totalPlannedDays, elapsedDays, delayDays } from '../../lib/seasons/seasonProgress';
 
@@ -73,10 +75,9 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
                 />
               </div>
               {delay > 0 && (
-                <div className="flex items-start gap-2 bg-[#FFFBEB] border border-amber-200 rounded-xl px-3 py-2 text-xs text-warn-deep">
-                  <span className="font-bold">⚠ Chậm hơn dự kiến {Math.ceil(delay)} ngày</span>
-                  <span className="text-warn-deep/80">— So với "{activeRecipe.recipe_id}" đang áp dụng</span>
-                </div>
+                <Banner tone="warning" title={`Chậm hơn dự kiến ${Math.ceil(delay)} ngày`}>
+                  So với "{activeRecipe.recipe_id}" đang áp dụng
+                </Banner>
               )}
             </div>
           )}
@@ -90,17 +91,15 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
               {isEditing ? (
                 <button
                   onClick={() => setIsEditing(false)}
+                  aria-label="Đóng chỉnh sửa"
                   className="p-1.5 bg-soft text-faint rounded-lg hover:bg-pill transition-colors"
                 >
                   <X size={16} />
                 </button>
               ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-soft text-primary-deep rounded-lg hover:bg-pill text-xs font-medium transition-colors border border-line"
-                >
+                <Button size="sm" variant="secondary" onClick={() => setIsEditing(true)}>
                   <Edit3 size={14} /> Sửa
-                </button>
+                </Button>
               )}
               <span className="px-2.5 py-1 bg-pill text-status border border-pill rounded-lg text-xs font-bold flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-status animate-pulse"></span>
@@ -175,13 +174,14 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
 
           {!isEditing && (
             <div>
-              <button
-                onClick={handleEnd}
+              <Button
+                variant="danger"
+                fullWidth
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-600 hover:text-white transition-colors font-bold text-xs uppercase tracking-wider disabled:opacity-50"
+                onClick={handleEnd}
               >
                 <StopCircle size={15} /> Kết thúc mùa vụ
-              </button>
+              </Button>
             </div>
           )}
         </div>

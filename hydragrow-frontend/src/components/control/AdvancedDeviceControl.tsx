@@ -6,6 +6,7 @@ import { useDeviceStore } from '../../store/useDeviceStore';
 import { useDeviceControl } from '../../hooks/useDeviceControl';
 import { Switch } from '../ui/Switch';
 import { StatusPill } from '../ui/StatusPill';
+import { Slider } from '../ui/Slider';
 
 // Hệ thống quy đổi PWM(%) -> ml/phút, tạm thời tuyến tính cho hiển thị nhanh trên card.
 // TODO(sau khi có dữ liệu hiệu chuẩn DosingCalibration thật): thay bằng giá trị đo thực tế theo từng bơm.
@@ -124,6 +125,20 @@ export const AdvancedDeviceControl = ({
     }
   };
 
+  const applyPwm = async () => {
+    if (isProcessing || !canSendCommands || isLocked) return;
+    setIsProcessing(true);
+    try {
+      await setPwm(pumpId, pwmValue);
+      savePwmPreference(pumpId, pwmValue);
+      toast.success(`Đã đồng bộ công suất ${pwmValue}%`);
+    } catch {
+      toast.error("Không thể đồng bộ công suất.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleAdvancedRun = async () => {
     setIsProcessing(true);
     const time = Number(duration);
@@ -202,11 +217,23 @@ export const AdvancedDeviceControl = ({
         )}
 
         {allowPwm && currentStatus && (
-          <div className="flex items-center justify-between text-[10px] font-semibold text-primary-deep bg-soft border border-line rounded-lg px-2.5 py-1.5">
-            <span>Công suất</span>
-            <span className="font-mono">
-              {pwmValue}% ≈ {((pwmValue * (PWM_TO_ML_PER_MIN[pumpId.toUpperCase()] ?? 0.12))).toFixed(1)} ml/phút
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-semibold text-primary-deep bg-soft border border-line rounded-lg px-2.5 py-1.5">
+              <span>Công suất</span>
+              <span className="font-mono">
+                {pwmValue}% ≈ {((pwmValue * (PWM_TO_ML_PER_MIN[pumpId.toUpperCase()] ?? 0.12))).toFixed(1)} ml/phút
+              </span>
+            </div>
+            <Slider
+              min={20}
+              max={100}
+              step={5}
+              value={pwmValue}
+              onChange={setPwmValue}
+              onCommit={() => void applyPwm()}
+              disabled={isProcessing || !canSendCommands}
+              ariaLabel={`Công suất ${title}`}
+            />
           </div>
         )}
 
@@ -234,11 +261,14 @@ export const AdvancedDeviceControl = ({
                         <span>Công suất PWM</span>
                         <span className="text-primary font-mono">{pwmValue}%</span>
                       </div>
-                      <input
-                        type="range" min="20" max="100" step="5"
-                        value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
+                      <Slider
+                        min={20}
+                        max={100}
+                        step={5}
+                        value={pwmValue}
+                        onChange={setPwmValue}
                         disabled={isProcessing || !canSendCommands}
-                        className="w-full h-1 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-600"
+                        ariaLabel="Công suất PWM khẩn cấp"
                       />
                     </div>
                   )}
@@ -265,11 +295,14 @@ export const AdvancedDeviceControl = ({
                         <span>Công suất (PWM)</span>
                         <span className="text-primary font-mono">{pwmValue}%</span>
                       </div>
-                      <input
-                        type="range" min="20" max="100" step="5"
-                        value={pwmValue} onChange={(e) => setPwmValue(parseInt(e.target.value))}
+                      <Slider
+                        min={20}
+                        max={100}
+                        step={5}
+                        value={pwmValue}
+                        onChange={setPwmValue}
                         disabled={isProcessing || !canSendCommands}
-                        className="w-full h-1 bg-line rounded-lg appearance-none cursor-pointer accent-primary"
+                        ariaLabel="Công suất PWM"
                       />
                     </div>
                   )}

@@ -1,0 +1,41 @@
+{
+  "requirement_id": "FIREBASE-AUTO-AUTH-001",
+  "objective": "Remove the requirement for users to manually enter a backend API key in the web frontend. A signed-in Firebase user must be able to load the app, auto-select a device they own, fetch remote config, and open a live WebSocket — all authenticated via the Firebase ID token (HTTP Bearer + WS token handshake). The legacy static API key path stays functional for compatibility, and the dev server gains a same-origin /api proxy so no manual backend-URL/API-key entry is needed in local development.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Web settings auto-default so no API key is required: getDefaultBackendUrl() returns window.location.origin in the browser (https://hydragrow.onrender.com fallback outside it); loadWebSettings returns a populated default { backend_url, api_key: '', device_id: '', grafana_url: '' } instead of null; hasRequiredRemoteConfig depends only on backend_url, no longer on api_key",
+      "verification": "npx vitest run src/platform/settings.test.ts src/hooks/useDeviceSync.test.tsx + npx tsc --noEmit"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Auto device selection on web: when web mode + no device_id, refreshSettings calls GET /api/devices (Firebase Bearer via httpFetch) and persists the first owned device so the user never has to type a device id",
+      "verification": "npx vitest run src/hooks/useDeviceSync.test.tsx (web default/auto-config path)"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Remote config and device APIs no longer gated on a stored API key: unified config fetch, OTA status, WiFi config, and FCM registration all run with the Firebase Bearer token; X-API-Key gate conditions removed from Settings and useFCM",
+      "verification": "npx vitest run (full suite) + npx tsc --noEmit"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "WebSocket accepts a Firebase ID token with ownership check: backend ws_handler parses WsQuery.token (?token=) and WsAuthMessage.token (auth frame), verifies the token signature + active user + device ownership via ws_token_authorized; legacy api_key (query or frame) remains accepted",
+      "verification": "cargo test ws:: (6 tests) + cargo clippy --all-targets -- -D warnings"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "UI copy reflects the new model: the config gate in MainLayout says 'Chưa kết nối máy chủ' (no API-key wording), the API Key field in ConnectivitySection is marked 'không bắt buộc với Firebase', and its default backend URL is the auto-detected origin",
+      "verification": "grep audit of MainLayout.tsx, ConnectivitySection.tsx, Settings.tsx + npx tsc --noEmit"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Vite dev proxy: server.proxy routes /api (http + ws) to http://localhost:8080 so dev runs same-origin without manual backend entry",
+      "verification": "grep vite.config.ts + npm run build"
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Full verification gates stay green: frontend tsc, eslint 0 errors (183 pre-existing warnings unchanged), vitest full suite, build; backend cargo test, clippy -D warnings, fmt",
+      "verification": "npx tsc --noEmit && npx eslint . && npx vitest run (88 files / 440 tests) && npm run build && cargo test (313 tests) && cargo clippy && cargo fmt --check"
+    }
+  ]
+}

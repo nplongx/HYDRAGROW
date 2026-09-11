@@ -1,4 +1,5 @@
 import { httpFetch } from '../platform/http';
+import { getDefaultBackendUrl } from '../platform/settings';
 import { useDeviceStore } from '../store/useDeviceStore';
 
 function getBackendUrl(): string {
@@ -13,7 +14,7 @@ function getBackendUrl(): string {
   } catch {
     // window/localStorage unavailable or corrupt JSON — fall through to default
   }
-  return 'http://localhost:8080';
+  return getDefaultBackendUrl();
 }
 
 function getApiKey(): string {

@@ -16,12 +16,14 @@ use crate::metrics::ACTIVE_WS_CONNECTIONS;
 struct WsAuthMessage {
     #[serde(rename = "type")]
     message_type: String,
-    api_key: String,
+    api_key: Option<String>,
+    token: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct WsQuery {
     api_key: Option<String>,
+    token: Option<String>,
 }
 
 /// RAII guard để đảm bảo active WebSocket luôn được giảm
@@ -65,31 +67,52 @@ pub async fn ws_handler(
 
     let expected_api_key = app_state.api_key.clone();
     let event_bus = app_state.event_bus.clone();
+    let app_state_clone = app_state.clone();
 
-    // Kiểm tra API key nếu client truyền trên URL (?api_key=...)
-    let query_api_key = web::Query::<WsQuery>::from_query(req.query_string())
-        .ok()
-        .and_then(|q| q.api_key.clone());
-
-    let pre_authorized = query_api_key.as_deref() == Some(&expected_api_key);
+    // Query params (?api_key=..., ?token=...)
+    let query = web::Query::<WsQuery>::from_query(req.query_string()).ok();
+    let query_api_key = query.as_ref().and_then(|q| q.api_key.clone());
+    let query_token = query.and_then(|q| q.token.clone());
 
     actix_web::rt::spawn(async move {
-        let is_authorized = if pre_authorized {
+        let is_authorized = if query_api_key.as_deref() == Some(&expected_api_key) {
+            // Legacy service key — pre-authenticated.
             true
         } else {
-            let auth_result = timeout(Duration::from_secs(10), msg_stream.next()).await;
-
-            match auth_result {
-                Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<WsAuthMessage>(&text)
-                    .map(|auth| auth.message_type == "auth" && auth.api_key == expected_api_key)
-                    .unwrap_or(false),
-
-                Ok(Some(Ok(Message::Close(reason)))) => {
-                    let _ = session.close(reason).await;
-                    return;
+            // Firebase ID token trong query string.
+            let mut token_ok = false;
+            if let Some(tok) = query_token.filter(|t| !t.is_empty()) {
+                token_ok = ws_token_authorized(&app_state_clone, &tok, &scoped_device_id)
+                    .await
+                    .unwrap_or(false);
+            }
+            if token_ok {
+                true
+            } else {
+                // Fallback: frame auth 10s timeout.
+                match timeout(Duration::from_secs(10), msg_stream.next()).await {
+                    Ok(Some(Ok(Message::Text(text)))) => {
+                        match serde_json::from_str::<WsAuthMessage>(&text) {
+                            Ok(auth) if auth.message_type == "auth" => {
+                                if auth.api_key.as_deref() == Some(&expected_api_key) {
+                                    true
+                                } else if let Some(tok) = auth.token.filter(|t| !t.is_empty()) {
+                                    ws_token_authorized(&app_state_clone, &tok, &scoped_device_id)
+                                        .await
+                                        .unwrap_or(false)
+                                } else {
+                                    false
+                                }
+                            }
+                            _ => false,
+                        }
+                    }
+                    Ok(Some(Ok(Message::Close(reason)))) => {
+                        let _ = session.close(reason).await;
+                        return;
+                    }
+                    _ => false,
                 }
-
-                _ => false,
             }
         };
 
@@ -268,6 +291,28 @@ pub async fn ws_handler(
     Ok(response)
 }
 
+/// Xác thực Firebase ID token cho WebSocket: verify chữ ký + kiểm tra user tồn tại + sở hữu thiết bị.
+async fn ws_token_authorized(
+    app_state: &crate::AppState,
+    token: &str,
+    device_id: &str,
+) -> Result<bool, ()> {
+    let claims = app_state
+        .firebase_auth
+        .verify(token)
+        .await
+        .map_err(|_| ())?;
+
+    let user = crate::db::users::find_active_by_firebase_uid(&app_state.pg_pool, &claims.sub)
+        .await
+        .map_err(|_| ())?
+        .ok_or(())?;
+
+    crate::db::device_ownership::is_owner(&app_state.pg_pool, user.id, device_id)
+        .await
+        .map_err(|_| ())
+}
+
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/ws", web::get().to(ws_handler));
 }
@@ -325,5 +370,50 @@ mod tests {
         let scoped = "device_A";
         let event_did = event_device_id_for_filter(&event);
         assert_eq!(event_did, Some(scoped));
+    }
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn query_supports_token_param() {
+        let q: WsQuery = serde_json::from_value(serde_json::json!({
+            "token": "firebase-id-token",
+            "api_key": "legacy-key"
+        }))
+        .unwrap();
+        assert_eq!(q.token.as_deref(), Some("firebase-id-token"));
+        assert_eq!(q.api_key.as_deref(), Some("legacy-key"));
+    }
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn query_without_token_params_are_all_optional() {
+        let q: WsQuery = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(q.token, None);
+        assert_eq!(q.api_key, None);
+    }
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn auth_frame_can_carry_firebase_token_without_api_key() {
+        let msg: WsAuthMessage = serde_json::from_value(serde_json::json!({
+            "type": "auth",
+            "token": "firebase-id-token"
+        }))
+        .unwrap();
+        assert_eq!(msg.message_type, "auth");
+        assert_eq!(msg.api_key, None);
+        assert_eq!(msg.token.as_deref(), Some("firebase-id-token"));
+    }
+
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn legacy_auth_frame_still_accepted_without_token() {
+        let msg: WsAuthMessage = serde_json::from_value(serde_json::json!({
+            "type": "auth",
+            "api_key": "legacy-key"
+        }))
+        .unwrap();
+        assert_eq!(msg.api_key.as_deref(), Some("legacy-key"));
+        assert_eq!(msg.token, None);
     }
 }

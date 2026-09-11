@@ -12,6 +12,7 @@ vi.mock('../platform/settings', () => ({
   isTauriRuntime: () => false,
   hasRequiredRemoteConfig: () => true,
   loadAppSettings: () => Promise.resolve(null),
+  saveWebSettings: vi.fn(),
 }));
 
 class FakeWebSocket {

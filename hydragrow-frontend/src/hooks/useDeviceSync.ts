@@ -3,7 +3,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { httpFetch } from '../platform/http';
 import { getItem, setItem } from '../platform/storage';
-import { hasRequiredRemoteConfig, isTauriRuntime, loadAppSettings } from '../platform/settings';
+import {
+  hasRequiredRemoteConfig,
+  isTauriRuntime,
+  loadAppSettings,
+  saveWebSettings,
+} from '../platform/settings';
+import { getIdToken } from '../lib/authToken';
 import toast from 'react-hot-toast';
 import { PumpStatus, SensorData } from '../types/models';
 
@@ -104,39 +110,55 @@ export function useDeviceSync() {
   }, []);
 
   const refreshSettings = useCallback(async () => {
-    const s: any = await loadAppSettings();
+    let s: any = await loadAppSettings();
+    const isWebMode = !isTauriRuntime();
+
+    // Web: chưa chọn thiết bị thì tự chọn thiết bị đầu tiên tài khoản sở hữu,
+    // không yêu cầu người dùng nhập tay.
+    if (s && s.backend_url && !s.device_id && isWebMode) {
+      try {
+        const res = await httpFetch(`${s.backend_url}/api/devices`, { method: 'GET' });
+        if (res.ok) {
+          const body = await res.json();
+          const devices = Array.isArray(body) ? body : body?.data ?? [];
+          const first = devices?.[0];
+          if (first?.device_id) {
+            s = { ...s, device_id: first.device_id };
+            saveWebSettings(s);
+          }
+        }
+      } catch {
+        // ignore — người dùng có thể chọn thiết bị thủ công trong Cài đặt
+      }
+    }
+
     if (s && s.device_id !== undefined && s.backend_url !== undefined) {
       let mergedSettings = s;
-      if (s.api_key) {
-        try {
-          const configRes = await httpFetch(
-            `${s.backend_url}/api/devices/${s.device_id}/config/unified`,
-            {
-              method: 'GET',
-              headers: { 'X-API-Key': s.api_key || '' },
-            }
-          );
-          if (configRes.ok) {
-            const unifiedConfig = await configRes.json();
-            mergedSettings = {
-              ...s,
-              ...(unifiedConfig.device_config || {}),
-              ...(unifiedConfig.water_config || {}),
-              ...(unifiedConfig.safety_config || {}),
-              ...(unifiedConfig.sensor_calibration || {}),
-              ...(unifiedConfig.dosing_calibration || {}),
-            };
-          }
-        } catch {
-          // ignore fetch error
+      // Fetch unified config bằng Firebase Bearer (httpFetch tự gắn Authorization);
+      // API key không còn là điều kiện bắt buộc.
+      try {
+        const configRes = await httpFetch(
+          `${s.backend_url}/api/devices/${s.device_id}/config/unified`,
+          { method: 'GET' }
+        );
+        if (configRes.ok) {
+          const unifiedConfig = await configRes.json();
+          mergedSettings = {
+            ...s,
+            ...(unifiedConfig.device_config || {}),
+            ...(unifiedConfig.water_config || {}),
+            ...(unifiedConfig.safety_config || {}),
+            ...(unifiedConfig.sensor_calibration || {}),
+            ...(unifiedConfig.dosing_calibration || {}),
+          };
         }
+      } catch {
+        // ignore fetch error
       }
       useDeviceStore.getState().setSettings(mergedSettings);
       useDeviceStore.getState().setDeviceId(s.device_id || null);
-      useDeviceStore
-        .getState()
-        .setIsMissingConfig(!isTauriRuntime() && !hasRequiredRemoteConfig(s));
-    } else if (!isTauriRuntime()) {
+      useDeviceStore.getState().setIsMissingConfig(isWebMode && !hasRequiredRemoteConfig(s));
+    } else if (isWebMode) {
       useDeviceStore.getState().setIsMissingConfig(true);
     }
   }, []);
@@ -264,7 +286,10 @@ export function useDeviceSync() {
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     const connectWs = () => {
-      const path = `/api/devices/${deviceId}/ws?api_key=${encodeURIComponent(settings.api_key || '')}`;
+      const accessToken = getIdToken() || '';
+      const path = `/api/devices/${deviceId}/ws?api_key=${encodeURIComponent(
+        settings.api_key || ''
+      )}${accessToken ? `&token=${encodeURIComponent(accessToken)}` : ''}`;
       let wsUrl: string;
       if (!settings?.backend_url) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -277,7 +302,7 @@ export function useDeviceSync() {
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth', api_key: settings.api_key }));
+        ws.send(JSON.stringify({ type: 'auth', api_key: settings.api_key, token: getIdToken() }));
         useDeviceStore.getState().setIsControllerStatusKnown(false);
         resetSensorTimeout();
         refreshDeviceSnapshot();

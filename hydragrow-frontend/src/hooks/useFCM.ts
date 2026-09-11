@@ -13,7 +13,7 @@ export function useFCM() {
 
   const enableNotifications = async () => {
     try {
-      if (!settings?.backend_url || !settings?.api_key) return;
+      if (!settings?.backend_url) return;
       const deviceId = useDeviceStore.getState().deviceId;
       if (!deviceId) return;
       const isWeb = !('__TAURI__' in window);
@@ -59,7 +59,7 @@ export function useFCM() {
     const isWeb = !('__TAURI__' in window);
     if (!isWeb) return;
 
-    if (Notification.permission === 'granted' && settings?.backend_url && settings?.api_key) {
+    if (Notification.permission === 'granted' && settings?.backend_url) {
       enableNotifications();
     }
 
@@ -67,7 +67,7 @@ export function useFCM() {
       debugLog('Foreground message:', payload);
     });
     return unsubscribe;
-  }, [settings?.backend_url, settings?.api_key]);
+  }, [settings?.backend_url]);
 
   return {
     fcmToken,

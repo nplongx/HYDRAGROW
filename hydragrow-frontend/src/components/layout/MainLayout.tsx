@@ -49,9 +49,9 @@ const MainLayout: React.FC = () => {
             <Settings size={28} className="text-amber-600" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-xl font-bold text-primary-deep">Chưa cấu hình API Key</h2>
+            <h2 className="text-xl font-bold text-primary-deep">Chưa kết nối máy chủ</h2>
             <p className="text-sm text-emerald-800/70 leading-relaxed">
-              Ứng dụng cần <span className="font-semibold text-emerald-800">API Key</span> để kết nối với máy chủ. Vui lòng nhập thông tin trong phần Cài đặt.
+              Ứng dụng cần cấu hình backend để nhận dữ liệu trực tiếp. Vui lòng kiểm tra lại trong phần Cài đặt.
             </p>
           </div>
           <button onClick={() => navigate('/settings')} className="ui-btn-primary w-full">

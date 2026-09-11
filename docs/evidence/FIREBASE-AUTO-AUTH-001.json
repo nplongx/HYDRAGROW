@@ -1,0 +1,61 @@
+{
+  "requirement_id": "FIREBASE-AUTO-AUTH-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "npx vitest run src/platform/settings.test.ts src/hooks/useDeviceSync.test.tsx; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "settings.test.ts gains web-default cases: loadAppSettings resolves to { backend_url: window.location.origin, api_key: '', device_id: '', grafana_url: '' } when no stored settings (window.location.origin on the test host is overridden via Object.defineProperty), stored settings still win, and hasRequiredRemoteConfig({backend_url}) is true while a stored api_key alone is no longer sufficient. Both suites pass with the updated useDeviceSync mock (saveWebSettings added). tsc clean."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "npx vitest run src/hooks/useDeviceSync.test.tsx",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "refreshSettings web path: when s.backend_url is set and device_id is empty in web mode it GETs {backend}/api/devices (httpFetch stamps Authorization: Bearer), accepts both {data:[]} and bare-array bodies, picks devices[0].device_id, persists via saveWebSettings, and continues to the config-fetch branch. Full 440-test suite green."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "npx vitest run; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "useDeviceSync.ts fetches {backend}/api/devices/{id}/config/unified unconditionally (no api_key guard, no X-API-Key header; httpFetch supplies Bearer). Settings.tsx OTA (:196) and WiFi (:230) guards reduced to !deviceId || !settings?.backend_url. useFCM.ts register gate reduced to settings?.backend_url and drops the X-API-Key requirement; httpFetch still sends X-API-Key when a key exists, which the backend only uses on its non-Bearer branch. 88 files / 440 tests pass; tsc clean."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test ws::; cargo clippy --all-targets -- -D warnings",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "ws.rs: WsQuery gains optional token, WsAuthMessage.api_key/token are Option<String>. Handler accepts query ?token= (ownership-checked) or auth-frame token, falls back to 10s frame auth otherwise; legacy api_key (query or frame) still pre-authenticates. ws_token_authorized verifies via firebase_auth, resolves find_active_by_firebase_uid, then device_ownership::is_owner. 4 new serde-parsing tests: ws:: 6/6; full cargo test 313/313; clippy -D warnings clean (tests carry the repo's existing #[allow(clippy::unwrap_used)]); fmt clean."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "grep audit of MainLayout.tsx, ConnectivitySection.tsx, Settings.tsx; npx tsc --noEmit",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "MainLayout gate reworded to 'Chưa kết nối máy chủ' (no API-key wording). ConnectivitySection API Key label 'API Key (không bắt buộc với Firebase)', placeholder 'Không bắt buộc — Firebase tự xác thực', amber note replaced by an emerald box explaining the key is not required for Firebase. Settings initial backend_url = getDefaultBackendUrl(). tsc clean."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "grep vite.config.ts; npm run build",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "server.proxy { '/api': { target: 'http://localhost:8080', changeOrigin: true, ws: true } } added. Vite dev now same-origin for API + WebSocket. npm run build green (pre-existing >500kB chunk warning only)."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "npx tsc --noEmit; npx eslint .; npx vitest run; npm run build; cargo test; cargo clippy; cargo fmt --check",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "Frontend: tsc clean; eslint 0 errors / 183 warnings (baseline unchanged); vitest 88 files / 440 tests passed; build green. Backend: cargo test 313/313 (ws:: 6/6), clippy --all-targets -- -D warnings clean, cargo fmt --check clean."
+    }
+  ]
+}

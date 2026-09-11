@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { forgetStoredApiKey } from './settings';
+import { forgetStoredApiKey, hasRequiredRemoteConfig, loadAppSettings } from './settings';
 import { invoke } from '@tauri-apps/api/core';
 
 // Mock the invoke function
@@ -86,5 +86,45 @@ describe('forgetStoredApiKey', () => {
       expect(spyLocalSet).not.toHaveBeenCalled();
       expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).toBe('invalid-json');
     });
+  });
+});
+
+describe('loadAppSettings (web — không yêu cầu nhập API key tay)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+  });
+
+  it('trả về backend_url = window.location.origin khi chưa có cấu hình', async () => {
+    const s = await loadAppSettings();
+    expect(s).not.toBeNull();
+    expect(s?.backend_url).toBe(window.location.origin);
+    expect(s?.api_key).toBe('');
+    expect(s?.device_id).toBe('');
+  });
+
+  it('vẫn đọc cấu hình đã lưu trong localStorage', async () => {
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ backend_url: 'http://localhost:8080', device_id: 'dev-x', api_key: '' })
+    );
+
+    const s = await loadAppSettings();
+
+    expect(s?.backend_url).toBe('http://localhost:8080');
+    expect(s?.device_id).toBe('dev-x');
+  });
+});
+
+describe('hasRequiredRemoteConfig', () => {
+  it('chỉ cần backend_url — không còn bắt buộc api_key', () => {
+    expect(
+      hasRequiredRemoteConfig({ backend_url: 'http://localhost:8080', api_key: '', device_id: '', grafana_url: '' })
+    ).toBe(true);
+    expect(
+      hasRequiredRemoteConfig({ backend_url: '', api_key: 'secret', device_id: '', grafana_url: '' })
+    ).toBe(false);
+    expect(hasRequiredRemoteConfig(null)).toBe(false);
   });
 });

@@ -140,13 +140,14 @@ export const ConnectivitySection: React.FC<ConnectivitySectionProps> = ({
           </div>
           <div className="space-y-2">
             <InputGroup
-              label="API Key"
+              label="API Key (không bắt buộc với Firebase)"
               type="password"
+              placeholder="Không bắt buộc — Firebase tự xác thực"
               value={appSettings.api_key}
               onChange={(e: InputEvent) => setAppSettings((prev) => ({ ...prev, api_key: e.target.value }))}
             />
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              Web build chỉ lưu API key trong phiên hiện tại; Tauri lưu khoá trong OS credential vault.
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+              Không bắt buộc khi đăng nhập bằng Firebase — hệ thống tự xác thực qua tài khoản. Chỉ cần nhập khi muốn dùng trực tiếp bằng API Key (Tauri lưu trong OS credential vault).
             </div>
             <button
               type="button"

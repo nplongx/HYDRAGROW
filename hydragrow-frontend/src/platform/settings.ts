@@ -9,6 +9,12 @@ const isBrowser = typeof window !== 'undefined';
 
 export const isTauriRuntime = () => isBrowser && '__TAURI_INTERNALS__' in window;
 
+/// Máy chủ mặc định cho web: cùng origin (reverse-proxy) để không phải nhập tay.
+export const getDefaultBackendUrl = (): string => {
+  if (isBrowser && window.location.origin) return window.location.origin;
+  return 'https://hydragrow.onrender.com';
+};
+
 let cachedLocalRaw: string | null = null;
 let cachedParsedLocal: any = null;
 
@@ -59,7 +65,12 @@ const loadWebSettings = async (): Promise<AppSettings | null> => {
     }
   }
 
-  return sessionApiKey ? { backend_url: '', api_key: sessionApiKey, device_id: '' } : null;
+  return {
+    backend_url: getDefaultBackendUrl(),
+    api_key: sessionApiKey || '',
+    device_id: '',
+    grafana_url: '',
+  };
 };
 
 export const loadAppSettings = async (): Promise<AppSettings | null> => {
@@ -103,7 +114,7 @@ export const forgetStoredApiKey = async (): Promise<void> => {
 };
 
 export const hasRequiredRemoteConfig = (settings: AppSettings | null) => {
-  return Boolean(settings?.api_key);
+  return Boolean(settings?.backend_url);
 };
 
 export const saveAppSettings = async (settings: AppSettings): Promise<void> => {

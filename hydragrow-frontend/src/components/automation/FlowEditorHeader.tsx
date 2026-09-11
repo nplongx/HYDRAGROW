@@ -38,7 +38,6 @@ export function FlowEditorHeader({
           <option value="alert">Alert</option>
           <option value="action_command">Action Command</option>
           <option value="recipe_override">Recipe Override</option>
-          <option value="config_override">Config Override</option>
         </select>
       </div>
       <label className="flex items-center gap-2">

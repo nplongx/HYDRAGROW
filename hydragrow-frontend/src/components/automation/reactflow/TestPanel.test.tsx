@@ -29,8 +29,8 @@ beforeEach(() => {
 
 function irWithConfigOverwrite(value: string) {
   return {
-    kind: "config_override",
-    trigger: { type: "manual" },
+    kind: "alert",
+    trigger: { type: "sensor" },
     conditions: [{ sensor: "ph", operator: ">", value: 7.5 }],
     actions: [{ type: "config_override", key: "ec_target", value }],
     nodes: [],

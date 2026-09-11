@@ -10,7 +10,9 @@ function getBackendUrl(): string {
       const parsed = JSON.parse(raw);
       if (parsed.backend_url) return parsed.backend_url;
     }
-  } catch {}
+  } catch {
+    // window/localStorage unavailable or corrupt JSON — fall through to default
+  }
   return 'http://localhost:8080';
 }
 
@@ -23,7 +25,9 @@ function getApiKey(): string {
       const parsed = JSON.parse(raw);
       if (parsed.api_key) return parsed.api_key;
     }
-  } catch {}
+  } catch {
+    // window/localStorage unavailable or corrupt JSON — fall through to empty key
+  }
   return '';
 }
 

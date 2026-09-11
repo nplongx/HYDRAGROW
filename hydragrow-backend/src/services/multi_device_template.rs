@@ -145,11 +145,16 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
-        sqlx::query("INSERT INTO device_config (device_id) VALUES ($1) ON CONFLICT DO NOTHING")
-            .bind(&source.device_id)
+        for device in ["src-dev", "dev-target"] {
+            sqlx::query(
+                "INSERT INTO device_config (device_id, ec_target, ec_tolerance, ph_target, ph_tolerance, control_mode) \
+                 VALUES ($1, 1.5, 0.05, 5.8, 0.2, 'auto') ON CONFLICT DO NOTHING",
+            )
+            .bind(device)
             .execute(&pool)
             .await
             .unwrap();
+        }
 
         sqlx::query(
             "INSERT INTO user_scripts (id, device_id, kind, name, source, enabled, ir_json, next_flow_ids, template_source_id, template_overrides) \

@@ -47,7 +47,7 @@
       "source": "cargo build/test/clippy/fmt + npx tsc/vitest/eslint/prettier/build",
       "environment": "linux-ubuntu-host",
       "verified_at": "2026-09-11",
-      "notes": "Backend: build OK, cargo test 308 passed / 1 pre-existing failure (multi_device_template::apply_template_reapply_respects_the_current_requests_preserve_choice — DB NOT NULL ec_target, reproduced identical on clean base HEAD), clippy -D warnings clean, fmt clean for changed files (multi_device_template.rs:145 pre-existing). Frontend: npx tsc --noEmit clean, vitest 79 files / 390 tests pass, eslint 0 new errors (2 pre-existing in apiClient.ts), prettier clean on touched files (4 files pre-existing-dirty), npm run build OK."
+      "notes": "Backend: build OK, cargo test 309 passed / 0 failed (the previously-failing multi_device_template:apply_template_reapply… test was broken at base — its device_config seed INSERT omitted required NOT NULL columns — repaired in this PR as a de-scoped drive-by; validated by [sqlx::test(migrations=./migrations)]), clippy -D warnings clean, cargo fmt clean (multi_device_template.rs:148 drift also fixed). Frontend: npx tsc --noEmit clean, vitest 79 files / 390 tests pass, eslint 0 errors (the two src/lib/apiClient.ts no-empty blocks were pre-existing base breakage and are fixed in this PR; remaining warnings pre-existing), prettier clean on touched files (4 files pre-existing-dirty), npm run build OK."
     }
   ]
 }

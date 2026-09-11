@@ -29,8 +29,8 @@
     },
     {
       "id": "AC-6",
-      "criterion": "Full verification gates stay green: backend build/test/clippy(-D warnings)/fmt and frontend tsc/vitest/eslint/prettier/build pass, with only pre-existing failures documented (multi_device_template ec_target NOT NULL env failure reproduced at base HEAD; apiClient.ts eslint errors; ir.ts/test bare-markdown prettier pre-existing).",
-      "verification": "cargo build, cargo test (308 passed / 1 pre-existing env failure), cargo clippy -D warnings, cargo fmt; npx tsc --noEmit, npx vitest run (79 files / 390 tests), npx eslint ., npm run build"
+      "criterion": "Full verification gates stay green: backend build/test/clippy(-D warnings)/fmt and frontend tsc/vitest/eslint/prettier/build pass (remaining pre-existing items documented: apiClient.ts eslint warnings only, 4 prettier-dirty files beyond the touched set).",
+      "verification": "cargo build, cargo test (309 passed / 0 failed), cargo clippy -D warnings, cargo fmt; npx tsc --noEmit, npx vitest run (79 files / 390 tests), npx eslint ., npm run build"
     }
   ]
 }

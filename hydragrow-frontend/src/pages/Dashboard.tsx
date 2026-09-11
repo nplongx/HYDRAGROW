@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
-  Wifi, AlertTriangle, LineChart, ArrowRight
+  LineChart, ArrowRight
 } from 'lucide-react';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
@@ -12,6 +12,11 @@ import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { QuickActionBar } from '../components/ui/QuickActionBar';
 import { DosingSummaryCard } from '../components/ui/DosingSummaryCard';
 import { LoadingState } from '../components/ui/LoadingState';
+import { Banner } from '../components/ui/Banner';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { DeviceStatePill } from '../components/ui/DeviceStatePill';
+import { HealthScore } from '../components/ui/HealthScore';
 import { useFCM } from '../hooks/useFCM';
 import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -133,10 +138,10 @@ const Dashboard = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-4 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`farm-status-pill ${isOnline ? 'bg-pill text-status border-pill' : 'bg-[#FEE2E2] text-error border-[#FEE2E2]'}`}>
-                <Wifi size={13} />
-                {isOnline ? 'Trạm Online' : 'Trạm Offline'}
-              </span>
+              <DeviceStatePill
+                state={isOnline ? 'online' : 'offline'}
+                label={isOnline ? 'Trạm Online' : 'Trạm Offline'}
+              />
               <span className="farm-status-pill bg-soft text-text-muted border-line">
                 <Cpu size={13} />
                 {modeLabel}
@@ -157,48 +162,43 @@ const Dashboard = () => {
                 {greetingName ? friendlyState.description : friendlyState.description}
               </p>
             </div>
-            <div className={`rounded-2xl border p-4 flex gap-3 items-start ${
-              isCritical
-                ? 'bg-[#FEE2E2] border-red-200'
-                : hasActionableIssue
-                  ? 'bg-[#FFFBEB] border-amber-200'
-                  : 'bg-pill border-line'
-            }`}>
-              <AlertTriangle className={`${isCritical ? 'text-error' : hasActionableIssue ? 'text-warn-deep' : 'text-status'} shrink-0 mt-0.5`} size={18} />
-              <div>
-                <h2 className={`text-sm font-bold ${isCritical ? 'text-error' : 'text-primary-deep'}`}>
+            <Banner
+              tone={isCritical ? 'danger' : hasActionableIssue ? 'warning' : 'info'}
+              title={
+                <span className="inline-flex items-center gap-2">
                   {isCritical ? 'KHẨN CẤP' : 'Hành động tiếp theo'}
-                </h2>
-                <p className="text-xs md:text-sm text-text-muted leading-relaxed mt-1">{nextAction}</p>
-
-                {hasActionableIssue && (
-                  <button
-                    onClick={() => navigate('/operations')}
-                    className="mt-2 px-3 py-1.5 bg-primary hover:bg-primary-deep text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider inline-flex items-center gap-1"
-                  >
-                    Mở Vận hành để xử lý <ArrowRight size={12} />
-                  </button>
-                )}
-
-                {permission !== 'granted' && (
-                  <button
-                    onClick={enableNotifications}
-                    className="mt-2 px-3 py-1.5 bg-primary hover:bg-primary-deep text-white text-[11px] font-bold rounded-lg shadow-sm transition-all uppercase tracking-wider"
-                  >
-                    Bật quyền thông báo
-                  </button>
-                )}
-              </div>
-            </div>
+                  <Badge tone={isCritical ? 'danger' : hasActionableIssue ? 'warning' : 'success'}>
+                    {isCritical ? 'Sự cố hoạt động' : hasActionableIssue ? 'Ưu tiên' : 'Ổn định'}
+                  </Badge>
+                </span>
+              }
+              action={
+                hasActionableIssue || permission !== 'granted' ? (
+                  <div className="flex flex-col items-stretch gap-2">
+                    {hasActionableIssue && (
+                      <Button size="sm" onClick={() => navigate('/operations')}>
+                        Mở Vận hành <ArrowRight size={12} />
+                      </Button>
+                    )}
+                    {permission !== 'granted' && (
+                      <Button size="sm" variant="secondary" onClick={enableNotifications}>
+                        Bật quyền thông báo
+                      </Button>
+                    )}
+                  </div>
+                ) : undefined
+              }
+            >
+              {nextAction}
+            </Banner>
           </div>
 
           <div className="grid grid-cols-2 gap-3 w-full lg:w-72">
-            <div className="rounded-2xl border border-line bg-surface-muted p-4 text-center">
+            <div className="rounded-2xl border border-line bg-surface-muted p-4">
               <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Sức khỏe trạm</span>
-              <div className={`text-4xl font-black font-mono tracking-tight mt-1 ${computedHealth.score >= 90 ? 'text-status' : computedHealth.score >= 60 ? 'text-warning' : 'text-error'}`}>
-                {computedHealth.score}%
+              <div className="mt-2 flex justify-center">
+                <HealthScore score={computedHealth.score} label={computedHealth.label} />
               </div>
-              <p className="text-xs font-semibold text-primary-deep mt-1">{computedHealth.label}</p>
             </div>
             <div className="rounded-2xl border border-line bg-surface-muted p-4 text-center">
               <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Cảm biến</span>
@@ -213,18 +213,14 @@ const Dashboard = () => {
 
       {/* Cảnh báo cạn bình dung dịch */}
       {hasTankAlert && (
-        <div className="bg-[#FFFBEB] border border-amber-200 rounded-2xl p-4 flex items-start gap-3 text-warn-deep shadow-sm animate-in fade-in">
-          <AlertTriangle className="text-warn-deep shrink-0 mt-0.5" size={20} />
-          <div className="space-y-1">
-            <h4 className="font-bold text-sm">Cảnh báo: Bình dung dịch sắp cạn</h4>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {tankAlert?.tank_a_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 border border-amber-200 text-warn-deep">Cạn Dinh Dưỡng A</span>}
-              {tankAlert?.tank_b_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 border border-amber-200 text-warn-deep">Cạn Dinh Dưỡng B</span>}
-              {tankAlert?.tank_ph_up_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 border border-purple-300 text-purple-900">Cạn pH Up</span>}
-              {tankAlert?.tank_ph_down_low && <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 border border-rose-300 text-rose-900">Cạn pH Down</span>}
-            </div>
+        <Banner tone="warning" title="Cảnh báo: Bình dung dịch sắp cạn" className="animate-in fade-in">
+          <div className="flex flex-wrap gap-2 pt-0.5">
+            {tankAlert?.tank_a_low && <Badge tone="warning">Cạn Dinh Dưỡng A</Badge>}
+            {tankAlert?.tank_b_low && <Badge tone="warning">Cạn Dinh Dưỡng B</Badge>}
+            {tankAlert?.tank_ph_up_low && <Badge tone="info">Cạn pH Up</Badge>}
+            {tankAlert?.tank_ph_down_low && <Badge tone="danger">Cạn pH Down</Badge>}
           </div>
-        </div>
+        </Banner>
       )}
 
       <QuickActionBar
@@ -253,6 +249,7 @@ const Dashboard = () => {
             statusTone={ecStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber(getTdsSetting(settings, 'ec_target', 'ec_target'), 2)} ± ${formatNumber(getTdsSetting(settings, 'ec_tolerance', 'ec_tolerance'), 2)}`}
             description={sensorData?.err_ec === true ? 'Lỗi cảm biến EC.' : 'Nồng độ dinh dưỡng bồn chứa.'}
+            sparkline={sensorData?.err_ec === true ? 0 : Math.max(0, Math.min(100, (Number(sensorData?.ec ?? 0) / (Number(getTdsSetting(settings, 'ec_max_limit', 'ec_max_limit')) || 1)) * 100))}
           />
           <SensorBentoCard
             title="Độ pH"
@@ -264,6 +261,7 @@ const Dashboard = () => {
             statusTone={phStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber((settings as any)?.ph_target, 2)} ± ${formatNumber((settings as any)?.ph_tolerance, 2)}`}
             description={sensorData?.err_ph === true ? 'Cần hiệu chuẩn pH.' : 'Độ cân bằng axit/kiềm.'}
+            sparkline={sensorData?.err_ph === true ? 0 : Math.max(0, Math.min(100, (Number(sensorData?.ph ?? 14) / 14) * 100))}
           />
           <SensorBentoCard
             title="Nhiệt độ"
@@ -275,6 +273,7 @@ const Dashboard = () => {
             statusTone={tempStatus.tone}
             rangeLabel={`An toàn ${formatNumber((settings as any)?.min_temp_limit, 0)}-${formatNumber((settings as any)?.max_temp_limit, 0)}°C`}
             description="Nhiệt độ dung dịch bồn chứa."
+            sparkline={sensorData?.err_temp === true ? 0 : Math.max(0, Math.min(100, (Number(sensorData?.temp ?? 0) / 50) * 100))}
           />
           <SensorBentoCard
             title="Mực nước"
@@ -286,6 +285,7 @@ const Dashboard = () => {
             statusTone={waterStatus.tone}
             rangeLabel={`Giữ quanh ${formatNumber((settings as any)?.water_level_target, 0)}%`}
             description={sensorData?.err_water === true ? 'Kiểm tra phao siêu âm.' : 'Đảm bảo bơm không chạy khô.'}
+            sparkline={sensorData?.err_water === true ? 0 : Math.max(0, Math.min(100, Number(sensorData?.water_level ?? 0)))}
           />
         </div>
       </div>

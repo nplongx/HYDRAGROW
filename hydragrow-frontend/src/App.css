@@ -11,7 +11,7 @@
   --color-accent: #ca8a04;
   --color-success: #047857;
   --color-warning: #d97706;
-  --color-warn-deep: #92400e;
+  --color-warn-deep: #78350f;
   --color-error: #dc2626;
   --color-water: #0284c7;
   --color-surface: #ffffff;
@@ -27,6 +27,12 @@
   --color-toggleoff: #d9e5db;
   --color-config: #4338ca;
   --color-config-soft: #eef2ff;
+  --color-success-bg: #d1fae5;
+  --color-danger-bg: #fee2e2;
+  --color-warning-bg: #fffbeb;
+  --color-info-bg: #eef2ff;
+  --color-info-fg: #4338ca;
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 :root {
@@ -198,6 +204,23 @@ p {
 
 .toggle-checkbox:checked::before {
   @apply transform translate-x-4;
+}
+
+.app-slider {
+  @apply block w-full h-1.5 rounded-full appearance-none cursor-pointer outline-none disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.app-slider::-webkit-slider-thumb {
+  @apply appearance-none h-[18px] w-[18px] rounded-full bg-white border-2 border-primary shadow-sm cursor-pointer;
+  -webkit-appearance: none;
+}
+
+.app-slider::-moz-range-thumb {
+  @apply h-[18px] w-[18px] rounded-full bg-white border-2 border-primary shadow-sm cursor-pointer;
+}
+
+.app-slider:focus-visible {
+  @apply ring-2 ring-primary/30;
 }
 
 @media (prefers-reduced-motion: reduce) {

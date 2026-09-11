@@ -3,7 +3,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MainLayout from './components/layout/MainLayout';
-import { Toaster } from 'react-hot-toast';
+import { AppToaster } from './components/ui/AppToaster';
 import { LoadingState } from './components/ui/LoadingState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -81,7 +81,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Router>
-      <Toaster position="top-center" />
+      <AppToaster />
       <Suspense fallback={<LoadingState message="Đang tải trang..." />}>
         <Routes>
           <Route path="/" element={<MainLayout />}>

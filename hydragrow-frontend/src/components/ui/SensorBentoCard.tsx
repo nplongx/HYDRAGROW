@@ -12,6 +12,7 @@ interface SensorBentoCardProps {
   rangeLabel?: string;
   description?: string;
   compact?: boolean;
+  sparkline?: number;
 }
 
 const themeClasses: Record<string, string> = {
@@ -30,9 +31,18 @@ const statusClasses: Record<string, string> = {
   info: 'bg-sky-50 text-sky-700 border-transparent',
 };
 
+const sparkColor: Record<string, string> = {
+  good: 'bg-status',
+  warn: 'bg-warn-deep',
+  danger: 'bg-error',
+  info: 'bg-primary/50',
+};
+
+const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
+
 export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
   title, value, unit, icon: Icon, theme, statusLabel, statusTone = 'info',
-  rangeLabel, description, compact = false,
+  rangeLabel, description, compact = false, sparkline,
 }) => (
   <div className={`bg-white border rounded-[18px] flex flex-col justify-between transition-all hover:border-primary/40 hover:shadow-md shadow-sm ${compact ? 'p-3.5 min-h-[140px]' : 'p-4 md:p-5 min-h-[176px]'} ${statusTone === 'danger' ? 'border-red-200 bg-red-50/30' : statusTone === 'warn' ? 'border-amber-200 bg-amber-50/20' : 'border-line'}`}>
     <div className="flex items-start justify-between gap-2">
@@ -56,5 +66,15 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
       {rangeLabel && <p className="text-[11px] font-medium text-faint">{rangeLabel}</p>}
       {description && <p className="text-xs text-faint/80 leading-relaxed">{description}</p>}
     </div>
+    {sparkline != null && (
+      <div className="mt-3">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${sparkColor[statusTone] ?? sparkColor.info}`}
+            style={{ width: `${clampPercent(sparkline)}%` }}
+          />
+        </div>
+      </div>
+    )}
   </div>
 );

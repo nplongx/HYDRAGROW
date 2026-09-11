@@ -29,6 +29,19 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: isTauriTarget ? "dist-tauri" : "dist",
       sourcemap: isTauriTarget ? true : enableSourceMap,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@xyflow')) return 'vendor-flow';
+              if (id.includes('html5-qrcode') || id.includes('react-qr-code')) return 'vendor-qr';
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('lucide-react')) return 'vendor-icons';
+              if (id.includes('@tanstack') || id.includes('react-router-dom') || id.includes('zustand')) return 'vendor-framework';
+            }
+          },
+        },
+      },
     },
 
     server: {

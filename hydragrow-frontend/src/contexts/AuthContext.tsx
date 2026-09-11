@@ -22,6 +22,7 @@ interface AuthContextValue {
   error: string | null;
   errorCode: string | null;
   errorField: 0 | 1 | 2;
+  clearError: () => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   googleLogin: () => Promise<void>;
@@ -82,6 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return runWithError(() => sendPasswordReset(email));
   }, [runWithError]);
 
+  const clearError = useCallback(() => {
+    setError(null);
+    setErrorCode(null);
+  }, []);
+
   const logout = useCallback(async () => {
     await firebaseLogout();
   }, []);
@@ -89,8 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const errorField = errorCode ? authErrorField(errorCode) : 0;
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, error, errorCode, errorField, login, register, googleLogin, resetPassword, logout }),
-    [status, user, error, errorCode, errorField, login, register, googleLogin, resetPassword, logout]
+    () => ({ status, user, error, errorCode, errorField, clearError, login, register, googleLogin, resetPassword, logout }),
+    [status, user, error, errorCode, errorField, clearError, login, register, googleLogin, resetPassword, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

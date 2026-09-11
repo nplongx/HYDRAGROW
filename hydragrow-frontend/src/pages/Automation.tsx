@@ -36,9 +36,10 @@ const nodeTypes = {
 
 export function Automation() {
   const deviceId = useDeviceStore((s) => s.deviceId) ?? "";
-  const { data: scripts, isLoading, isError } = useAutomationScripts(deviceId, {
+  const { data: scripts, isLoading, isError, refetch } = useAutomationScripts(deviceId, {
     enabled: !!deviceId,
   });
+  const [errorDismissed, setErrorDismissed] = useState(false);
   const { data: configOverridesData } = useConfigOverrides(deviceId, {
     enabled: !!deviceId,
   });
@@ -106,14 +107,63 @@ export function Automation() {
 
   if (!deviceId) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-text-muted">
-        Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động.
+      <div className="app-page flex flex-col items-center justify-center min-h-[60vh] text-center p-6">
+        <div className="ui-card max-w-md w-full p-8 flex flex-col items-center text-center space-y-4 shadow-sm">
+          <div className="p-4 bg-pill text-primary rounded-2xl">
+            <Network size={36} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-primary-deep">Chưa chọn trạm điều khiển</h2>
+            <p className="text-sm text-text-muted leading-relaxed">
+              Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
+            <a
+              href="/pairing"
+              className="ui-btn-primary flex-1 flex items-center justify-center text-xs cursor-pointer"
+            >
+              Ghép nối trạm mới
+            </a>
+            <a
+              href="/settings"
+              className="ui-btn-outline flex-1 flex items-center justify-center text-xs cursor-pointer"
+            >
+              Vào Cài đặt
+            </a>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (isLoading) return <LoadingState />;
-  if (isError) return <FaultExplanation code="FETCH_ERROR" onClose={() => {}} />;
+  if (isError && !errorDismissed) {
+    return (
+      <div className="app-page flex flex-col items-center justify-center min-h-[50vh] text-center p-6">
+        <div className="ui-card max-w-lg w-full p-6 space-y-4">
+          <FaultExplanation code="FETCH_ERROR" onClose={() => setErrorDismissed(true)} />
+          <div className="flex gap-3 justify-center pt-2">
+            <button
+              onClick={() => {
+                setErrorDismissed(false);
+                refetch();
+              }}
+              className="ui-btn-primary ui-btn-md cursor-pointer"
+            >
+              Thử lại
+            </button>
+            <button
+              onClick={() => setErrorDismissed(true)}
+              className="ui-btn-outline ui-btn-md cursor-pointer"
+            >
+              Đóng thông báo
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (currentView === "config_explorer") {
     return (

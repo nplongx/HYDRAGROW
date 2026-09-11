@@ -23,21 +23,26 @@ const queryClient = new QueryClient({
   },
 });
 
-import Dashboard from './pages/Dashboard';
-import { Operations } from './pages/Operations';
-import Cultivation from './pages/Cultivation';
-import Journal from './pages/Journal';
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Operations = React.lazy(() => import('./pages/Operations').then((m) => ({ default: m.Operations })));
+const Cultivation = React.lazy(() => import('./pages/Cultivation'));
+const Journal = React.lazy(() => import('./pages/Journal'));
 const Settings = React.lazy(() => import('./pages/Settings'));
-import { DevicePairing } from './pages/DevicePairing';
-import { FleetView } from './pages/FleetView';
-import { ConfigBackup } from './pages/ConfigBackup';
-import { Roles } from './pages/Roles';
+const DevicePairing = React.lazy(() => import('./pages/DevicePairing').then((m) => ({ default: m.DevicePairing })));
+const FleetView = React.lazy(() => import('./pages/FleetView').then((m) => ({ default: m.FleetView })));
+const ConfigBackup = React.lazy(() => import('./pages/ConfigBackup').then((m) => ({ default: m.ConfigBackup })));
+const Roles = React.lazy(() => import('./pages/Roles').then((m) => ({ default: m.Roles })));
 
 type AuthView = 'login' | 'register' | 'forgot';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { status } = useAuth();
+  const { status, clearError } = useAuth();
   const [view, setView] = useState<AuthView>('login');
+
+  const switchView = (nextView: AuthView) => {
+    clearError();
+    setView(nextView);
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.search.includes('mock_auth=true')) {
@@ -61,15 +66,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   if (status === 'unauthenticated') {
     switch (view) {
       case 'register':
-        return <RegisterScreen key="register" onShowLogin={() => setView('login')} />;
+        return <RegisterScreen key="register" onShowLogin={() => switchView('login')} />;
       case 'forgot':
-        return <ForgotPasswordScreen key="forgot" onShowLogin={() => setView('login')} />;
+        return <ForgotPasswordScreen key="forgot" onShowLogin={() => switchView('login')} />;
       default:
         return (
           <LoginScreen
             key="login"
-            onShowRegister={() => setView('register')}
-            onShowForgot={() => setView('forgot')}
+            onShowRegister={() => switchView('register')}
+            onShowForgot={() => switchView('forgot')}
           />
         );
     }

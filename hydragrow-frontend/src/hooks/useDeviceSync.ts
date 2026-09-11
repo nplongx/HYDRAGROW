@@ -132,13 +132,13 @@ export function useDeviceSync() {
       }
     }
 
-    if (s && s.device_id !== undefined && s.backend_url !== undefined) {
+    if (s && s.device_id?.trim() && s.backend_url?.trim()) {
       let mergedSettings = s;
       // Fetch unified config bằng Firebase Bearer (httpFetch tự gắn Authorization);
       // API key không còn là điều kiện bắt buộc.
       try {
         const configRes = await httpFetch(
-          `${s.backend_url}/api/devices/${s.device_id}/config/unified`,
+          `${s.backend_url}/api/devices/${s.device_id.trim()}/config/unified`,
           { method: 'GET' }
         );
         if (configRes.ok) {

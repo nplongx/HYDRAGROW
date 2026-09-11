@@ -55,6 +55,11 @@ const toNumber = (value: string, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const cleanNum = (val: number | undefined | null, decimals = 2): number | '' => {
+  if (val === undefined || val === null || !Number.isFinite(val)) return '';
+  return Number(val.toFixed(decimals));
+};
+
 const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ variant = 'standalone' }) => {
   const queryClient = useQueryClient();
   const settings = useDeviceStore((s) => s.settings);
@@ -369,17 +374,19 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     {/* KHU VỰC NÚT BẤM (ÁP DỤNG & XÓA) */}
                     <div className="absolute right-2.5 top-2.5 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                       <button
-                        title="Áp dụng công thức này cho trạm"
+                        title="Áp dụng công thức mẫu"
+                        aria-label={`Áp dụng công thức ${tmpl.name}`}
                         onClick={(e) => handleApplyTemplate(e, tmpl)}
                         disabled={applyRecipeMutation.isPending}
-                        className="p-1.5 rounded-lg text-primary hover:text-white hover:bg-primary transition-colors disabled:opacity-50"
+                        className="p-2 min-h-8 min-w-8 rounded-lg text-primary hover:text-white hover:bg-primary transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center"
                       >
                         <Play size={14} />
                       </button>
                       <button
                         title="Xóa công thức mẫu này"
+                        aria-label={`Xóa công thức ${tmpl.name}`}
                         onClick={(e) => handleDeleteTemplate(e, tmpl)}
-                        className="p-1.5 rounded-lg text-red-500 hover:text-white hover:bg-red-500 transition-colors"
+                        className="p-2 min-h-8 min-w-8 rounded-lg text-error hover:text-white hover:bg-error transition-colors cursor-pointer flex items-center justify-center"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -467,9 +474,33 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                   <div className="flex items-center justify-between border-b border-line pb-2.5">
                     <span className="font-bold text-primary-deep text-xs">#{index + 1} • {stage.name}</span>
                     <div className="flex gap-1.5">
-                      <button className="p-1.5 rounded-lg bg-white border border-line hover:bg-pill text-primary-deep" onClick={() => moveStage(index, -1)} disabled={index === 0}><ArrowUp size={12} /></button>
-                      <button className="p-1.5 rounded-lg bg-white border border-line hover:bg-pill text-primary-deep" onClick={() => moveStage(index, 1)} disabled={index === stages.length - 1}><ArrowDown size={12} /></button>
-                      <button className="p-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100" onClick={() => setStages((s) => s.filter((item) => item.id !== stage.id))} disabled={stages.length === 1}><Trash2 size={12} /></button>
+                      <button
+                        type="button"
+                        aria-label={`Di chuyển giai đoạn ${stage.name} lên`}
+                        className="p-1.5 min-h-8 min-w-8 rounded-lg bg-white border border-line hover:bg-pill text-primary-deep disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center transition-colors"
+                        onClick={() => moveStage(index, -1)}
+                        disabled={index === 0}
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Di chuyển giai đoạn ${stage.name} xuống`}
+                        className="p-1.5 min-h-8 min-w-8 rounded-lg bg-white border border-line hover:bg-pill text-primary-deep disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center transition-colors"
+                        onClick={() => moveStage(index, 1)}
+                        disabled={index === stages.length - 1}
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Xóa giai đoạn ${stage.name}`}
+                        className="p-1.5 min-h-8 min-w-8 rounded-lg bg-red-50 border border-red-200 text-error hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center transition-colors"
+                        onClick={() => setStages((s) => s.filter((item) => item.id !== stage.id))}
+                        disabled={stages.length === 1}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
 
@@ -505,19 +536,19 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                   <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5 pt-2 border-t border-line">
                     <label className="ui-form-row">
                       <span className="ui-form-label">EC mục tiêu</span>
-                      <input className="ui-input" type="number" step="0.1" value={stage.ec_target} onChange={(e) => updateStage(stage.id, { ec_target: toNumber(e.target.value, 1.4) })} />
+                      <input className="ui-input" type="number" step="0.1" value={cleanNum(stage.ec_target, 2)} onChange={(e) => updateStage(stage.id, { ec_target: toNumber(e.target.value, 1.4) })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Sai số EC (±)</span>
-                      <input className="ui-input" type="number" step="0.05" value={stage.ec_tolerance} onChange={(e) => updateStage(stage.id, { ec_tolerance: toNumber(e.target.value, 0.1) })} />
+                      <input className="ui-input" type="number" step="0.05" value={cleanNum(stage.ec_tolerance, 2)} onChange={(e) => updateStage(stage.id, { ec_tolerance: toNumber(e.target.value, 0.1) })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">pH mục tiêu</span>
-                      <input className="ui-input" type="number" step="0.1" value={stage.ph_target} onChange={(e) => updateStage(stage.id, { ph_target: toNumber(e.target.value, 6.0) })} />
+                      <input className="ui-input" type="number" step="0.1" value={cleanNum(stage.ph_target, 2)} onChange={(e) => updateStage(stage.id, { ph_target: toNumber(e.target.value, 6.0) })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Sai số pH (±)</span>
-                      <input className="ui-input" type="number" step="0.05" value={stage.ph_tolerance} onChange={(e) => updateStage(stage.id, { ph_tolerance: toNumber(e.target.value, 0.2) })} />
+                      <input className="ui-input" type="number" step="0.05" value={cleanNum(stage.ph_tolerance, 2)} onChange={(e) => updateStage(stage.id, { ph_tolerance: toNumber(e.target.value, 0.2) })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Ánh sáng (giờ/ngày)</span>
@@ -528,11 +559,11 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                   <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 pt-2 border-t border-line">
                     <label className="ui-form-row">
                       <span className="ui-form-label">Tỷ lệ Phân A</span>
-                      <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={stage.nutrient_a_ratio} onChange={(e) => updateStage(stage.id, { nutrient_a_ratio: toNumber(e.target.value, 1.0) })} />
+                      <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={cleanNum(stage.nutrient_a_ratio, 2)} onChange={(e) => updateStage(stage.id, { nutrient_a_ratio: toNumber(e.target.value, 1.0) })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Tỷ lệ Phân B</span>
-                      <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={stage.nutrient_b_ratio} onChange={(e) => updateStage(stage.id, { nutrient_b_ratio: toNumber(e.target.value, 1.0) })} />
+                      <input className="ui-input bg-orange-50/50 border-orange-200 font-bold" type="number" step="0.1" min={0.1} value={cleanNum(stage.nutrient_b_ratio, 2)} onChange={(e) => updateStage(stage.id, { nutrient_b_ratio: toNumber(e.target.value, 1.0) })} />
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Chu kỳ thay nước (ngày)</span>
@@ -540,7 +571,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                     </label>
                     <label className="ui-form-row">
                       <span className="ui-form-label">Mực nước mục tiêu (cm)</span>
-                      <input className="ui-input bg-sky-50/50 border-sky-200" type="number" step="0.5" value={stage.water_level_target} onChange={(e) => updateStage(stage.id, { water_level_target: toNumber(e.target.value, 20) })} />
+                      <input className="ui-input bg-sky-50/50 border-sky-200" type="number" step="0.5" value={cleanNum(stage.water_level_target, 1)} onChange={(e) => updateStage(stage.id, { water_level_target: toNumber(e.target.value, 20) })} />
                     </label>
                   </div>
                 </div>

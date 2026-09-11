@@ -245,17 +245,17 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
                   <span className="text-sm text-primary-deep font-medium">Tự động cấp nước</span>
-                  <Switch isOn={config.auto_refill_enabled} onClick={(val) => setConfig({ ...config, auto_refill_enabled: val })} />
+                  <Switch ariaLabel="Tự động cấp nước" isOn={config.auto_refill_enabled} onClick={(val) => setConfig({ ...config, auto_refill_enabled: val })} />
                 </div>
                 <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
                   <span className="text-sm text-primary-deep font-medium">Tự động xả tràn</span>
-                  <Switch isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} />
+                  <Switch ariaLabel="Tự động xả tràn" isOn={config.auto_drain_overflow} onClick={(val) => setConfig({ ...config, auto_drain_overflow: val })} />
                 </div>
               </div>
               <div className="pt-3 border-t border-line">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm text-primary-deep font-medium">Tự động pha loãng khi quá EC</span>
-                  <Switch isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} />
+                  <Switch ariaLabel="Tự động pha loãng khi quá EC" isOn={config.auto_dilute_enabled} onClick={(val) => setConfig({ ...config, auto_dilute_enabled: val })} />
                 </div>
                 {config.auto_dilute_enabled && (
                   <InputGroup label="Lượng xả pha loãng (cm)" step="0.5" value={config.dilute_drain_amount_cm} onChange={(e: InputEvent) => setConfig({ ...config, dilute_drain_amount_cm: e.target.value })} />
@@ -272,7 +272,7 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
           <SubCard title="Thay nước định kỳ" className="h-full">
             <div className="flex items-center justify-between mb-4 p-3 bg-white/80 rounded-lg border border-line">
               <span className="text-sm text-primary-deep font-medium">Bật lịch xả nước</span>
-              <Switch isOn={config.scheduled_water_change_enabled} onClick={(val) => setConfig({ ...config, scheduled_water_change_enabled: val })} />
+              <Switch ariaLabel="Bật lịch xả nước" isOn={config.scheduled_water_change_enabled} onClick={(val) => setConfig({ ...config, scheduled_water_change_enabled: val })} />
             </div>
             {config.scheduled_water_change_enabled && (
               <div className="space-y-4">
@@ -286,19 +286,19 @@ export const ThresholdsSection: React.FC<ThresholdsSectionProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
               <span className="text-sm text-primary-deep font-medium">Cảm biến EC</span>
-              <Switch isOn={config.enable_ec_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} />
+              <Switch ariaLabel="Cảm biến EC" isOn={config.enable_ec_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ec_sensor: val })} />
             </div>
             <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
               <span className="text-sm text-primary-deep font-medium">Cảm biến pH</span>
-              <Switch isOn={config.enable_ph_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} />
+              <Switch ariaLabel="Cảm biến pH" isOn={config.enable_ph_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_ph_sensor: val })} />
             </div>
             <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
               <span className="text-sm text-primary-deep font-medium">Cảm biến Mực nước</span>
-              <Switch isOn={config.enable_water_level_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} />
+              <Switch ariaLabel="Cảm biến Mực nước" isOn={config.enable_water_level_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_water_level_sensor: val })} />
             </div>
             <div className="flex items-center justify-between p-3 bg-white/80 rounded-lg border border-line">
               <span className="text-sm text-primary-deep font-medium">Cảm biến Nhiệt độ</span>
-              <Switch isOn={config.enable_temp_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} />
+              <Switch ariaLabel="Cảm biến Nhiệt độ" isOn={config.enable_temp_sensor ?? true} onClick={(val) => setConfig({ ...config, enable_temp_sensor: val })} />
             </div>
           </div>
         </SubCard>

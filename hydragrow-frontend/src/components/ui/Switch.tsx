@@ -7,6 +7,8 @@ interface SwitchProps {
   onClick?: (checked: boolean) => void;
   disabled?: boolean;
   label?: string;
+  ariaLabel?: string;
+  'aria-label'?: string;
   size?: 'sm' | 'md';
   colorClass?: string;
 }
@@ -18,6 +20,8 @@ export const Switch: React.FC<SwitchProps> = ({
   onClick,
   disabled = false,
   label,
+  ariaLabel,
+  'aria-label': ariaLabelProp,
   size = 'md',
   colorClass,
 }) => {
@@ -35,6 +39,7 @@ export const Switch: React.FC<SwitchProps> = ({
   const translate = size === 'sm' ? 'translate-x-3.5' : 'translate-x-4';
 
   const activeColor = colorClass || 'bg-primary';
+  const resolvedAriaLabel = ariaLabel || ariaLabelProp || label;
 
   return (
     <label className={`inline-flex items-center gap-2.5 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
@@ -42,9 +47,10 @@ export const Switch: React.FC<SwitchProps> = ({
         type="button"
         role="switch"
         aria-checked={isChecked}
+        aria-label={resolvedAriaLabel}
         disabled={disabled}
         onClick={() => handleToggle(!isChecked)}
-        className={`relative inline-flex items-center ${trackW} ${trackH} rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-1 ${isChecked ? activeColor : 'bg-toggleoff'}`}
+        className={`relative inline-flex items-center ${trackW} ${trackH} rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-1 ${isChecked ? activeColor : 'bg-toggleoff'}`}
       >
         <span className={`absolute left-0.5 inline-block ${thumbS} bg-white rounded-full shadow-sm transition-transform duration-200 ${isChecked ? translate : 'translate-x-0'}`} />
       </button>

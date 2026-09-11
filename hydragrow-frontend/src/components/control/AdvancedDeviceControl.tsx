@@ -202,6 +202,7 @@ export const AdvancedDeviceControl = ({
             {isLocked && !currentStatus && <Lock size={12} className="text-primary/60 mr-0.5" />}
             <Switch
               isOn={currentStatus}
+              ariaLabel={`Bật hoặc tắt ${title}`}
               disabled={!canSendCommands || isToggling || isProcessing || isLocked}
               onClick={handleToggle}
               colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-600' : 'bg-primary') : undefined}
@@ -241,6 +242,7 @@ export const AdvancedDeviceControl = ({
         <div className="border-t border-line pt-2.5">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
+            aria-label={`${isEmergency ? 'Thiết lập khẩn cấp' : 'Tùy chỉnh kỹ thuật'} cho ${title}`}
             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-text-muted hover:text-primary-deep transition-colors cursor-pointer"
           >
             <ChevronDown size={12} className={`transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} />

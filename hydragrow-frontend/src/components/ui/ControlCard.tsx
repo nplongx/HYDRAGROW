@@ -68,7 +68,11 @@ export const ControlCard: React.FC<ControlCardProps> = ({
               <Lock size={12} className="text-faint" />
             </div>
           ) : (
-            <Switch isOn={isOn} disabled={isProcessing || !isOnline} />
+            <Switch
+              isOn={isOn}
+              ariaLabel={`Bật hoặc tắt ${title}`}
+              disabled={isProcessing || !isOnline}
+            />
           )}
         </div>
       </div>
@@ -84,6 +88,7 @@ export const ControlCard: React.FC<ControlCardProps> = ({
           <div className="px-1">
             <input
               type="range" min="10" max="100" step="5"
+              aria-label={`Công suất ${title}`}
               value={currentPwm}
               onChange={(e) => onPwmChange(pumpId, parseInt(e.target.value))}
               onMouseUp={() => onPwmCommit(pumpId, currentPwm, title)}

@@ -85,6 +85,17 @@ export function Roles() {
   const [inviteDisplayName, setInviteDisplayName] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('operator');
 
+  useEffect(() => {
+    if (!showInviteModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowInviteModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showInviteModal]);
+
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
@@ -198,16 +209,21 @@ export function Roles() {
 
       {/* Invite Modal / Inline Form */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-modal-title"
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        >
           <div className="ui-card max-w-md w-full p-6 space-y-4 shadow-xl border border-line animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between">
-              <h2 className="farm-section-title flex items-center gap-2">
+              <h2 id="invite-modal-title" className="farm-section-title flex items-center gap-2">
                 <UserPlus size={20} className="text-primary" /> Thêm thành viên mới
               </h2>
               <button
                 type="button"
                 onClick={() => setShowInviteModal(false)}
-                className="text-text-muted hover:text-primary-deep p-1"
+                className="text-text-muted hover:text-primary-deep p-1 cursor-pointer"
                 aria-label="Đóng"
               >
                 <X size={20} />
@@ -216,10 +232,12 @@ export function Roles() {
 
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-primary-deep mb-1">
+                <label htmlFor="invite-email" className="block text-xs font-semibold text-primary-deep mb-1">
                   Email tài khoản *
                 </label>
                 <input
+                  id="invite-email"
+                  name="inviteEmail"
                   type="email"
                   required
                   value={inviteEmail}
@@ -230,10 +248,12 @@ export function Roles() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-primary-deep mb-1">
+                <label htmlFor="invite-uid" className="block text-xs font-semibold text-primary-deep mb-1">
                   Firebase UID *
                 </label>
                 <input
+                  id="invite-uid"
+                  name="inviteUid"
                   type="text"
                   required
                   value={inviteUid}
@@ -244,10 +264,12 @@ export function Roles() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-primary-deep mb-1">
+                <label htmlFor="invite-name" className="block text-xs font-semibold text-primary-deep mb-1">
                   Tên hiển thị
                 </label>
                 <input
+                  id="invite-name"
+                  name="inviteDisplayName"
                   type="text"
                   value={inviteDisplayName}
                   onChange={(e) => setInviteDisplayName(e.target.value)}
@@ -257,10 +279,12 @@ export function Roles() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-primary-deep mb-1">
+                <label htmlFor="invite-role" className="block text-xs font-semibold text-primary-deep mb-1">
                   Vai trò phân bổ *
                 </label>
                 <select
+                  id="invite-role"
+                  name="inviteRole"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as UserRole)}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-line bg-white focus:outline-none focus:border-primary font-medium"

@@ -19,6 +19,7 @@ import toast from 'react-hot-toast';
 import { apiPost, apiDelete, apiPut, apiGet } from '../lib/apiClient';
 import { useOwnedDevices } from '../hooks/useOwnedDevices';
 import { useDeviceStore } from '../store/useDeviceStore';
+import { saveAppSettings } from '../platform/settings';
 import type { OwnedDevice, StatusPayload } from '../types/models';
 import {
   ScanConfirmOverlay,
@@ -378,7 +379,14 @@ export function DevicePairing() {
 
                 <div className="flex items-center gap-2.5 self-end sm:self-center flex-shrink-0">
                   <button
-                    onClick={() => setDeviceId(d.device_id)}
+                    onClick={() => {
+                      setDeviceId(d.device_id);
+                      const curSettings = useDeviceStore.getState().settings || { backend_url: '', api_key: '', device_id: d.device_id };
+                      const nextSettings = { ...curSettings, device_id: d.device_id };
+                      useDeviceStore.getState().setSettings(nextSettings);
+                      saveAppSettings(nextSettings).catch(() => {});
+                      toast.success(`Đã kích hoạt trạm ${d.device_id}`);
+                    }}
                     disabled={isActive}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                       isActive

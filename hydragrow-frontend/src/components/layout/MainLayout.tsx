@@ -43,18 +43,18 @@ const MainLayout: React.FC = () => {
 
   if (isMissingConfig && location.pathname !== '/settings') {
     return (
-      <div className="min-h-screen bg-emerald-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full ui-card text-center space-y-5 p-8">
-          <div className="mx-auto w-16 h-16 bg-amber-50 border border-amber-100 rounded-2xl flex items-center justify-center">
+      <div className="min-h-screen bg-page-bg flex items-center justify-center p-6">
+        <div className="max-w-md w-full ui-card text-center space-y-5 p-8 shadow-sm">
+          <div className="mx-auto w-16 h-16 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center">
             <Settings size={28} className="text-amber-600" />
           </div>
           <div className="space-y-2">
             <h2 className="text-xl font-bold text-primary-deep">Chưa kết nối máy chủ</h2>
-            <p className="text-sm text-emerald-800/70 leading-relaxed">
+            <p className="text-sm text-text-muted leading-relaxed">
               Ứng dụng cần cấu hình backend để nhận dữ liệu trực tiếp. Vui lòng kiểm tra lại trong phần Cài đặt.
             </p>
           </div>
-          <button onClick={() => navigate('/settings')} className="ui-btn-primary w-full">
+          <button onClick={() => navigate('/settings')} className="ui-btn-primary ui-btn-md w-full">
             Đi tới Cài đặt
           </button>
         </div>
@@ -76,7 +76,7 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
         <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-          isSensorOnline ? 'bg-pill text-status' : 'bg-[#FEE2E2] text-error'
+          isSensorOnline ? 'bg-pill text-status' : 'bg-red-50 text-error'
         }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${isSensorOnline ? 'bg-status' : 'bg-error'}`} />
           {isSensorOnline ? 'Đang kết nối' : 'Mất tín hiệu'}
@@ -86,41 +86,42 @@ const MainLayout: React.FC = () => {
       {/* ── Desktop Sidebar ── */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col gap-7 border-r border-line bg-white px-5 pb-6 pt-6 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center">
-            <Sprout size={16} className="text-white" strokeWidth={2.5} />
+          <div className="w-9 h-9 bg-primary-deep rounded-full flex items-center justify-center shadow-sm">
+            <Sprout size={18} className="text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[18px] font-extrabold tracking-tight text-primary-deep">HydraGrow</span>
         </div>
 
-        <nav aria-label="Điều hướng chính" className="flex flex-col gap-1">
+        <nav aria-label="Điều hướng chính" className="flex flex-col gap-1.5">
           {navItems.map((item) => {
             const active = isActive(item.path);
             return (
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`relative flex w-full items-center gap-2.5 rounded-[10px] px-3.5 py-2.5 text-sm transition-colors ${
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm transition-colors cursor-pointer ${
                   active
-                    ? 'bg-emerald-50 font-semibold text-emerald-800'
-                    : 'font-normal text-emerald-800/70 hover:bg-emerald-50/70 hover:text-emerald-900'
+                    ? 'bg-emerald-50 bg-pill font-bold text-primary-deep shadow-sm'
+                    : 'font-medium text-primary-deep/80 hover:bg-pill/60 hover:text-primary-deep'
                 }`}
               >
-                <item.icon size={16} className={active ? 'text-emerald-700' : 'text-emerald-500'} />
+                <item.icon size={16} className={active ? 'text-primary' : 'text-primary-deep/70'} />
                 <span>{item.label}</span>
                 {item.hasBadge && (
-                  <span className="ml-auto h-2 w-2 rounded-full bg-red-600" aria-label="Có cảnh báo mới" />
+                  <span className="ml-auto h-2 w-2 rounded-full bg-error" aria-label="Có cảnh báo mới" />
                 )}
               </button>
             );
           })}
         </nav>
 
-        <div className="mt-auto rounded-xl bg-emerald-50 px-3.5 py-3 space-y-1.5">
+        <div className="mt-auto rounded-xl bg-surface-muted border border-line px-3.5 py-3 space-y-1.5">
           <div className="flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-full ${isSensorOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <span className="text-xs font-bold text-emerald-800">{isSensorOnline ? 'Trạm Online' : 'Trạm Offline'}</span>
+            <span className={`h-2 w-2 rounded-full ${isSensorOnline ? 'bg-status' : 'bg-error'}`} />
+            <span className="text-xs font-bold text-primary-deep">{isSensorOnline ? 'Trạm Online' : 'Trạm Offline'}</span>
           </div>
-          <p className="text-[11px] text-emerald-700/75">ID: {deviceId ?? '—'}</p>
+          <p className="text-[11px] text-text-muted">ID: {deviceId ?? '—'}</p>
         </div>
       </aside>
 

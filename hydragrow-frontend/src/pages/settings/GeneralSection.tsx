@@ -137,7 +137,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             <p className="text-[11px] text-text-muted">Mở rộng thông số an toàn & hiệu chuẩn</p>
           </div>
         </div>
-        <Switch isOn={isAdvancedMode} onClick={onToggleAdvancedMode} colorClass="bg-amber-600" />
+        <Switch isOn={isAdvancedMode} onClick={onToggleAdvancedMode} colorClass="bg-amber-600" ariaLabel="Chế độ kỹ thuật" />
       </div>
     </div>
   );

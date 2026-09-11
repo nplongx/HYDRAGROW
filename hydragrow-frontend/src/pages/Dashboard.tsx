@@ -86,21 +86,48 @@ const Dashboard = () => {
     return <LoadingState message="Đang tải dữ liệu trạm thông minh..." />;
   }
 
-  if (!sensorData) {
-    return <LoadingState message="Không có tín hiệu cảm biến!" />;
-  }
-
   if (!deviceId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-5 p-6 text-center">
-        <div className="p-6 bg-white rounded-3xl border border-line shadow-xl shadow-primary/10">
-          <Settings size={40} className="text-primary" />
+      <div className="app-page flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div className="ui-card max-w-md w-full p-8 flex flex-col items-center text-center space-y-4 shadow-sm">
+          <div className="p-4 bg-pill text-primary rounded-2xl">
+            <Settings size={36} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-primary-deep">Chưa chọn thiết bị</h2>
+            <p className="text-sm text-text-muted leading-relaxed">
+              Hệ thống cần liên kết với một trạm điều khiển để bắt đầu hiển thị số liệu và điều khiển.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
+            <Button onClick={() => navigate('/pairing')} className="w-full justify-center">
+              Ghép nối trạm mới
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/settings')} className="w-full justify-center">
+              Vào Cài đặt
+            </Button>
+          </div>
         </div>
-        <div className="space-y-2 max-w-xs">
-          <h2 className="text-xl font-bold text-primary-deep">Chưa chọn thiết bị</h2>
-          <p className="text-sm text-text-muted leading-relaxed">
-            Hệ thống cần Device ID. Vui lòng chuyển tới cài đặt.
-          </p>
+      </div>
+    );
+  }
+
+  if (!sensorData) {
+    return (
+      <div className="app-page flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div className="ui-card max-w-md w-full p-8 flex flex-col items-center text-center space-y-4 shadow-sm">
+          <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl">
+            <Activity size={36} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-primary-deep">Chưa có tín hiệu cảm biến</h2>
+            <p className="text-sm text-text-muted leading-relaxed">
+              Trạm <span className="font-semibold text-primary">{deviceId}</span> hiện chưa gửi dữ liệu telemetry. Vui lòng kiểm tra kết nối nguồn và WiFi của trạm.
+            </p>
+          </div>
+          <Button variant="secondary" onClick={() => window.location.reload()} className="justify-center">
+            Tải lại dữ liệu
+          </Button>
         </div>
       </div>
     );
@@ -242,7 +269,7 @@ const Dashboard = () => {
           <SensorBentoCard
             title="Dinh dưỡng EC"
             value={sensorData?.err_ec === true ? "Bảo trì" : formatNumber(sensorData?.ec, 2)}
-            unit={sensorData?.err_ec === true ? "" : "ppm"}
+            unit={sensorData?.err_ec === true ? "" : "mS/cm"}
             icon={Activity}
             theme={sensorData?.err_ec === true ? "rose" : "blue"}
             statusLabel={ecStatus.label}

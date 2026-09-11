@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutomationIrSchema, AutomationNodeSchema, ConditionSchema, DEVICE_CONFIG_BOUNDS, clampConfigValue } from "./ir";
+import { AutomationIrSchema, AutomationNodeSchema, ConditionSchema, DEVICE_CONFIG_BOUNDS, clampConfigValue, normalizeLegacyIr } from "./ir";
 
 describe("ConditionSchema range mode and windowSec", () => {
   it('condition instant (mặc định) không cần field mode/windowSec', () => {
@@ -393,6 +393,101 @@ describe('contextReads + configOverwrite + chainConfig.iterationLimit', () => {
       contextReads: [{ configKey: 'ph_target', saveToVariable: '' }],
     };
     expect(AutomationIrSchema.safeParse(ir).success).toBe(false);
+  });
+});
+
+describe('normalizeLegacyIr', () => {
+  it('returns null for non-legacy IR', () => {
+    expect(normalizeLegacyIr({ kind: 'alert', trigger: { type: 'sensor' } })).toBeNull();
+    expect(normalizeLegacyIr(null)).toBeNull();
+    expect(normalizeLegacyIr('config_override')).toBeNull();
+  });
+
+  it('maps a legacy config_override IR to a parseable alert IR, keeping the existing configOverwrite block', () => {
+    const legacy = {
+      kind: 'config_override',
+      trigger: { type: 'cron', cronExpression: '0 0 7 * * *', timezone: 'Asia/Ho_Chi_Minh' },
+      conditions: [{ sensor: 'ec', operator: '>', value: 2.4 }],
+      actions: [{ type: 'config_override', key: 'ec_target', value: 1.8, restoreOnExit: true }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: ['abc'],
+      configOverwrite: {
+        configKey: 'ec_target',
+        value: '1.8',
+        readOriginalBeforeWrite: true,
+        restoreMode: 'on_condition_false',
+        priority: 0,
+      },
+    };
+    const result = normalizeLegacyIr(legacy);
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe('alert');
+    expect(AutomationIrSchema.safeParse(result).success).toBe(true);
+    expect(result!.configOverwrite?.configKey).toBe('ec_target');
+    expect(result!.configOverwrite?.value).toBe('1.8');
+    expect(result!.actions).toEqual([
+      { type: 'alert', level: 'info', message: 'Đã ghi đè ec_target → 1.8' },
+    ]);
+    expect(result!.trigger).toEqual({
+      type: 'cron',
+      cronExpression: '0 0 7 * * *',
+      timezone: 'Asia/Ho_Chi_Minh',
+    });
+    expect(result!.next_flow_ids).toEqual(['abc']);
+  });
+
+  it('derives configOverwrite from the config_override action when the block is absent', () => {
+    const result = normalizeLegacyIr({
+      kind: 'config_override',
+      trigger: { type: 'manual' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
+      actions: [{ type: 'config_override', key: 'ec_target', value: 1.5, restoreOnExit: false, priority: 3 }],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.kind).toBe('alert');
+    expect(result!.trigger).toEqual({ type: 'sensor' });
+    expect(result!.configOverwrite).toEqual({
+      configKey: 'ec_target',
+      value: '1.5',
+      readOriginalBeforeWrite: false,
+      restoreMode: 'on_condition_false',
+      priority: 3,
+    });
+    expect(AutomationIrSchema.safeParse(result).success).toBe(true);
+  });
+
+  it('keeps non-legacy alert actions instead of synthesizing one', () => {
+    const result = normalizeLegacyIr({
+      kind: 'config_override',
+      trigger: { type: 'sensor' },
+      conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
+      actions: [
+        { type: 'alert', level: 'warning', message: 'giữ lại' },
+        { type: 'config_override', key: 'ec_target', value: 1.8 },
+      ],
+      nodes: [],
+      edges: [],
+      next_flow_ids: [],
+    });
+    expect(result!.actions).toEqual([{ type: 'alert', level: 'warning', message: 'giữ lại' }]);
+    expect(AutomationIrSchema.safeParse(result).success).toBe(true);
+  });
+
+  it('Rejects config_override kind entirely after the schema change', () => {
+    expect(
+      AutomationIrSchema.safeParse({
+        kind: 'config_override',
+        trigger: { type: 'sensor' },
+        conditions: [{ sensor: 'ph', operator: '>', value: 7.5 }],
+        actions: [{ type: 'config_override', key: 'ec_target', value: 1.8 }],
+        nodes: [],
+        edges: [],
+      }).success,
+    ).toBe(false);
   });
 });
 

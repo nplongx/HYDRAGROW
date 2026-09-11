@@ -2,7 +2,7 @@
 //! Không blocking: eval là CPU-bound nhưng nhẹ (< 1ms per script với giới hạn 50k ops).
 //! Fire-and-forget: lỗi trong script được log nhưng không làm drop sensor message.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
@@ -23,6 +23,68 @@ pub struct ChainNode {
     pub next_flow_ids: Vec<String>,
     pub ast: rhai::AST,
     pub ir_json: Option<serde_json::Value>,
+}
+
+/// Trigger type mà Flow khai báo trong `ir_json.trigger.type`. `None` khi
+/// script viết tay hoặc IR không có trigger (back-compat: coi như sensor).
+fn flow_trigger_type(ir: &serde_json::Value) -> Option<&str> {
+    ir.pointer("/trigger/type").and_then(|v| v.as_str())
+}
+
+/// Flow có thuộc ĐƯỜNG SENSOR hay không. `None` / `sensor` = có (>script cũ
+/// không khai trigger, mặc định chạy theo sensor tick); `cron`/`webhook`/`fsm`
+/// = chạy ở đường riêng của chúng, không được sensor-tick đánh thức.
+pub fn has_sensor_trigger(ir_json: Option<&serde_json::Value>) -> bool {
+    match ir_json {
+        None => true,
+        Some(ir) => matches!(flow_trigger_type(ir), None | Some("sensor")),
+    }
+}
+
+/// Cắt các Flow không thuộc đường sensor ra khỏi đồ thị chain TRƯỚC khi eval
+/// (F4). Chỉ ROOT (node không bị node khác trỏ tới) tự quyết theo trigger của
+/// mình; node con kế thừa qua cạnh chain — việc nó khai trigger webhook/fsm/
+/// cron chỉ áp dụng khi nó là root của đường riêng nó. Subchain của root bị
+/// drop cũng rơi khỏi đường sensor (không còn gì dẫn tới nó). Các đảo cô lập
+/// chỉ chứa flow cron/webhook/fsm không còn bị sensor-tick chạy nhầm.
+pub fn filter_chain_nodes_for_sensor_path(all: Vec<ChainNode>) -> Vec<ChainNode> {
+    if all.is_empty() {
+        return all;
+    }
+    let referenced: HashSet<&str> = all
+        .iter()
+        .flat_map(|n| n.next_flow_ids.iter().map(|id| id.as_str()))
+        .collect();
+    let roots: Vec<&ChainNode> = all
+        .iter()
+        .filter(|n| !referenced.contains(n.id.to_string().as_str()))
+        .collect();
+    if roots.is_empty() {
+        // Đồ thị vòng hoặc mọi node đều là con — không có root rõ ràng để căn
+        // cứ trigger; giữ nguyên như hành vi cũ (eval vẫn an toàn nhờ seen).
+        return all;
+    }
+
+    let mut keep: HashSet<Uuid> = HashSet::new();
+    let mut stack: Vec<Uuid> = roots
+        .iter()
+        .filter(|n| has_sensor_trigger(n.ir_json.as_ref()))
+        .map(|n| n.id)
+        .collect();
+    while let Some(id) = stack.pop() {
+        if !keep.insert(id) {
+            continue;
+        }
+        if let Some(node) = all.iter().find(|n| n.id == id) {
+            for next in &node.next_flow_ids {
+                if let Ok(next_id) = Uuid::parse_str(next) {
+                    stack.push(next_id);
+                }
+            }
+        }
+    }
+
+    all.into_iter().filter(|n| keep.contains(&n.id)).collect()
 }
 
 #[derive(Clone)]
@@ -790,6 +852,111 @@ fn main(input) {
                 .expect("Failed to compile test Rhai action command script source"),
             ir_json: None,
         }
+    }
+
+    fn make_chain_node(
+        ir_json: Option<serde_json::Value>,
+        next_flow_ids: Vec<String>,
+    ) -> ChainNode {
+        let engine = ScriptEngine::new();
+        ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids,
+            ast: engine.compile("fn main(i){ () }").expect("compile"),
+            ir_json,
+        }
+    }
+
+    #[test]
+    fn has_sensor_trigger_default_true_for_missing_ir_or_sensor() {
+        assert!(has_sensor_trigger(None));
+        assert!(has_sensor_trigger(Some(
+            &serde_json::json!({ "trigger": { "type": "sensor" } })
+        )));
+        assert!(!has_sensor_trigger(Some(
+            &serde_json::json!({ "trigger": { "type": "cron" } })
+        )));
+        assert!(!has_sensor_trigger(Some(
+            &serde_json::json!({ "trigger": { "type": "webhook" } })
+        )));
+        assert!(!has_sensor_trigger(Some(
+            &serde_json::json!({ "trigger": { "type": "fsm" } })
+        )));
+    }
+
+    #[test]
+    fn filter_sensor_path_keeps_sensor_root_and_reachable_children() {
+        let engine = ScriptEngine::new();
+        let ast = engine.compile("fn main(i){ () }").expect("compile");
+        let cron_child = ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast: ast.clone(),
+            ir_json: Some(serde_json::json!({ "trigger": { "type": "cron" } })),
+        };
+        let sensor_root = ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![cron_child.id.to_string()],
+            ast: ast.clone(),
+            ir_json: Some(serde_json::json!({ "trigger": { "type": "sensor" } })),
+        };
+        let isolated_cron = ChainNode {
+            id: uuid::Uuid::new_v4(),
+            kind: ScriptKind::Alert,
+            next_flow_ids: vec![],
+            ast,
+            ir_json: Some(serde_json::json!({ "trigger": { "type": "cron" } })),
+        };
+
+        let filtered = filter_chain_nodes_for_sensor_path(vec![
+            sensor_root.clone(),
+            cron_child.clone(),
+            isolated_cron.clone(),
+        ]);
+        let ids: HashSet<Uuid> = filtered.iter().map(|n| n.id).collect();
+        assert!(ids.contains(&sensor_root.id));
+        // Con kế thừa từ root sensor dù tự khai cron.
+        assert!(ids.contains(&cron_child.id));
+        // Đảo cron cô lập không còn bị sensor-tick đánh thức.
+        assert!(!ids.contains(&isolated_cron.id));
+    }
+
+    #[test]
+    fn filter_sensor_path_drops_cron_webhook_and_fsm_islands() {
+        let mut nodes = Vec::new();
+        for trigger in ["cron", "webhook", "fsm", "sensor"] {
+            nodes.push(make_chain_node(
+                Some(serde_json::json!({ "kind": "alert", "trigger": { "type": trigger } })),
+                vec![],
+            ));
+        }
+        let filtered = filter_chain_nodes_for_sensor_path(nodes);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered[0]
+                .ir_json
+                .as_ref()
+                .expect("filtered node keeps ir_json")
+                .pointer("/trigger/type"),
+            Some(&serde_json::Value::String("sensor".to_string()))
+        );
+    }
+
+    #[test]
+    fn filter_sensor_path_keeps_all_when_graph_is_a_cycle() {
+        let mut a = make_chain_node(None, vec![]);
+        let mut b = make_chain_node(None, vec![]);
+        let mut c = make_chain_node(None, vec![]);
+        a.next_flow_ids = vec![b.id.to_string()];
+        b.next_flow_ids = vec![c.id.to_string()];
+        c.next_flow_ids = vec![a.id.to_string()];
+        // Mọi node đều bị node khác trỏ tới → không có root → giữ nguyên.
+        let all = vec![a, b, c];
+        let filtered = filter_chain_nodes_for_sensor_path(all.clone());
+        assert_eq!(filtered.len(), all.len());
     }
 
     fn make_snapshot() -> SensorSnapshot {

@@ -163,7 +163,7 @@ export const AutomationEdgeSchema = z.object({
   target: z.string(),
 });
 
-export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command', 'config_override']);
+export const AutomationKindSchema = z.enum(['alert', 'recipe_override', 'action_command']);
 
 export const ContextReadSchema = z.object({
   configKey: z.string().min(1),
@@ -216,15 +216,103 @@ export const AutomationIrSchema = z
       if (ir.kind === 'recipe_override') {
         return ir.actions.every((a) => a.type === 'advance_stage' || a.type === 'end_season');
       }
-      if (ir.kind === 'config_override') {
-        return ir.actions.every((a) => a.type === 'config_override');
-      }
       return ir.actions.every((a) => ['dose', 'water_on', 'water_off', 'emergency_stop'].includes(a.type));
     },
     { message: 'actions must match kind' },
   );
 
 export type AutomationIr = z.infer<typeof AutomationIrSchema>;
+
+/** Dạng IR cũ (loại `config_override`, action-based) chỉ còn tồn tại trong
+ * dữ liệu Flow lưu từ trước bản redesign canvas. Không parse được bằng
+ * AutomationIrSchema nữa — phải qua normalizeLegacyIr trước. */
+export interface LegacyAutomationIr {
+  kind: 'config_override';
+  trigger?: unknown;
+  conditions?: unknown;
+  actions?: unknown;
+  nodes?: unknown;
+  edges?: unknown;
+  next_flow_ids?: unknown;
+  chainConfig?: unknown;
+  contextReads?: unknown;
+  configOverwrite?: unknown;
+}
+
+/**
+ * F5: di chuyển IR `config_override` cũ sang dạng mới hợp lệ (kind 'alert' +
+ * block `configOverwrite` riêng). Với IR không phải legacy trả về null — caller
+ * dùng nguyên giá trị. Trigger cron/fsm/webhook/sensor hợp lệ được giữ nguyên
+ * để lịch chạy không mất; trigger 'manual' kiểu cũ bị ép về sensor. Block
+ * configOverwrite có sẵn được ưu tiên; nếu thiếu thì suy ra từ action
+ * config_override đầu tiên (restoreOnExit=false ⇒ không phục hồi giá trị gốc).
+ */
+export function normalizeLegacyIr(ir: unknown): AutomationIr | null {
+  if (typeof ir !== 'object' || ir === null) return null;
+  const candidate = ir as Record<string, unknown>;
+  if (candidate.kind !== 'config_override') return null;
+
+  const rawActions = Array.isArray(candidate.actions) ? candidate.actions : [];
+  const legacyAction = rawActions.find(
+    (a) => (a as { type?: unknown })?.type === 'config_override',
+  ) as { key?: string; value?: number; restoreOnExit?: boolean; priority?: number } | undefined;
+
+  const existingOverwrite = candidate.configOverwrite as
+    | { configKey?: string; value?: string; readOriginalBeforeWrite?: boolean; restoreMode?: string; priority?: number }
+    | undefined;
+
+  const configOverwrite = existingOverwrite?.configKey
+    ? existingOverwrite
+    : legacyAction?.key
+      ? {
+          configKey: legacyAction.key,
+          value: String(legacyAction.value ?? ''),
+          readOriginalBeforeWrite: legacyAction.restoreOnExit ?? true,
+          restoreMode: 'on_condition_false' as const,
+          priority: legacyAction.priority ?? 0,
+        }
+      : undefined;
+
+  const nonLegacyActions = rawActions.filter(
+    (a) => (a as { type?: unknown })?.type !== 'config_override',
+  );
+  const actions = (nonLegacyActions.length > 0
+    ? nonLegacyActions
+    : configOverwrite
+      ? [
+          {
+            type: 'alert',
+            level: 'info',
+            message: `Đã ghi đè ${configOverwrite.configKey} → ${configOverwrite.value}`,
+          },
+        ]
+      : [
+          {
+            type: 'alert',
+            level: 'info',
+            message: 'Config Override',
+          },
+        ]) as AutomationIr['actions'];
+
+  const rawTrigger = candidate.trigger as { type?: unknown } | undefined;
+  const triggerType = rawTrigger?.type;
+  const isKnownTrigger =
+    triggerType === 'sensor' || triggerType === 'fsm' || triggerType === 'cron' || triggerType === 'webhook';
+  const trigger = (isKnownTrigger ? candidate.trigger : { type: 'sensor' }) as AutomationIr['trigger'];
+
+  return {
+    kind: 'alert',
+    trigger,
+    conditions: Array.isArray(candidate.conditions) ? (candidate.conditions as AutomationIr['conditions']) : [],
+    actions,
+    nodes: Array.isArray(candidate.nodes) ? (candidate.nodes as AutomationIr['nodes']) : [],
+    edges: Array.isArray(candidate.edges) ? (candidate.edges as AutomationIr['edges']) : [],
+    next_flow_ids: Array.isArray(candidate.next_flow_ids) ? (candidate.next_flow_ids as string[]) : [],
+    chainConfig: (candidate.chainConfig as AutomationIr['chainConfig']) ?? { passContextVariables: false, iterationLimit: 5 },
+    contextReads: Array.isArray(candidate.contextReads) ? (candidate.contextReads as AutomationIr['contextReads']) : [],
+    configOverwrite: configOverwrite as AutomationIr['configOverwrite'],
+  } as AutomationIr;
+}
 
 import deviceConfigKeys from './device-config-keys.json';
 

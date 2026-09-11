@@ -12,6 +12,8 @@ import {
   type Action,
   type AutomationIr,
   type ConditionOrGroup,
+  type LegacyAutomationIr,
+  normalizeLegacyIr,
 } from "../lib/automation/ir";
 import { summarizeConditionTree } from "../lib/automation/conditionTree";
 
@@ -202,13 +204,16 @@ export function useAutomationBuilder() {
     [setNodes],
   );
 
-  /** Restore a previously-saved IR into the builder. Ensure trigger node always exists. */
+  /** Restore a previously-saved IR into the builder. Ensure trigger node always exists.
+   * Legacy `config_override` IR (pre-canvas) is normalized to a modern alert-kind IR first. */
   const loadFromIr = useCallback(
-    (ir: AutomationIr) => {
-      setKindState(ir.kind);
+    (ir: AutomationIr | LegacyAutomationIr) => {
+      const normalized: AutomationIr =
+        normalizeLegacyIr(ir) ?? (ir as AutomationIr);
+      setKindState(normalized.kind);
       setSelectedNodeId(null);
-      if (ir.nodes.length > 0) {
-        let loadedNodes = ir.nodes as Node[];
+      if (normalized.nodes.length > 0) {
+        let loadedNodes = normalized.nodes as Node[];
         if (
           !loadedNodes.some((n) => n.id === "trigger" || n.type === "trigger")
         ) {
@@ -223,10 +228,10 @@ export function useAutomationBuilder() {
           ];
         }
         setNodes(loadedNodes);
-        setEdges(ir.edges);
+        setEdges(normalized.edges);
       } else {
         const { nodes: synthesized, edges: synthesizedEdges } =
-          synthesizeGraphFromFlatIr(ir.conditions, ir.actions);
+          synthesizeGraphFromFlatIr(normalized.conditions, normalized.actions);
         setNodes(synthesized);
         setEdges(synthesizedEdges);
       }

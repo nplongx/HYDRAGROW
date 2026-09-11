@@ -152,6 +152,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             });
         }
 
+        let chain_nodes =
+            crate::mqtt::handlers::script_eval::filter_chain_nodes_for_sensor_path(chain_nodes);
+        if chain_nodes.is_empty() {
+            // Không còn Flow nào thuộc đường sensor trên thiết bị này (toàn bộ
+            // là cron/webhook/fsm) — chúng chạy từ đường riêng của chúng.
+            return;
+        }
+
         let engine = std::sync::Arc::new(crate::services::script_engine::ScriptEngine::new());
         let results = crate::mqtt::handlers::script_eval::eval_flow_chain(
             &engine,

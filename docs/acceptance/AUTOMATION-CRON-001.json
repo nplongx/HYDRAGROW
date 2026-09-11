@@ -1,0 +1,36 @@
+{
+  "requirement_id": "AUTOMATION-CRON-001",
+  "objective": "Fix cron-trigger scheduler correctness end-to-end: bootstrap cron_next_run_at on write, keep the schedule strictly advancing with max(now, prev) on every tick, log success/failure for cron-firing scripts, validate cron expressions at write time (400), stop non-sensor triggers from being woken by the sensor tick (filters roots by their own trigger type only), keep Config·Overwrite reconcile alive on the cron path, and retire the legacy 'config_override' kind (frontend normalization + backend write rejection + DB CHECK restore).",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Cron schedule derivation is correct: trigger.type cron parses expression+timezone; sensor/fsm/webhook/missing trigger is NotCron; empty expression, invalid expression or invalid timezone is an error.",
+      "verification": "cargo test services::cron_scheduler (8 tests incl. 5 new: cron_schedule_from_ir_* and validate_cron_trigger_*)"
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Write-path cron validation rejects invalid triggers (create_script/update_script/validate_script 400) and sync_script_cron_next_run bootstraps cron_next_run_at after create/update/template apply, keeping a future prev_next and clearing NULL for non-cron or errored schedules (disable on error).",
+      "verification": "cargo test services::cron_scheduler (validate_cron_trigger_rejects_invalid_expression, validate_cron_trigger_accepts_none_or_non_cron_ir) + cargo build of hydragrow-backend/src/api/script.rs write path"
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Sensor-path chain filtering computes roots as unreferenced-by-next_flow_ids nodes and keeps only sensor-effective roots plus reachable descendants; cron/webhook/fsm islands are dropped; cycles (no roots) fall back to keeping all nodes.",
+      "verification": "cargo test mqtt::handlers::script_eval (26 tests incl. 4 new: has_sensor_trigger and filter_sensor_path_*) + sensors.rs wiring"
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Cron-triggered flows execute Config·Overwrite apply/restore at fire time via reconcile_cron_config_overwrite, mirroring eval_flow_chain's contender build (parse_config_overwrite + context reads + eval_condition_tree + reconcile_config_overwrite_group), so overrides are not frozen after trigger-path separation.",
+      "verification": "cargo build + cargo clippy -D warnings clean; code review of reconcile_cron_config_overwrite vs config_override.rs::reconcile_config_overwrite_group"
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Legacy 'config_override' kind is retired coherently: frontend AutomationKindSchema only admits alert/recipe_override/action_command AND normalizeLegacyIr migrates legacy IR (kind->alert, configOverwrite block preserved/derived, valid trigger kept); backend validate_kind rejects it with a 400; DB CHECK user_scripts_kind_check restores the 3-kind allowlist with a defensive UPDATE.",
+      "verification": "vitest src/lib/automation/ir.test.ts (5 new normalizeLegacyIr tests + reject-legacy-kind), tsc --noEmit, eslint, cargo build, migration 20260911000000_restore_action_command_script_kind.sql"
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Full verification gates stay green: backend build/test/clippy(-D warnings)/fmt and frontend tsc/vitest/eslint/prettier/build pass, with only pre-existing failures documented (multi_device_template ec_target NOT NULL env failure reproduced at base HEAD; apiClient.ts eslint errors; ir.ts/test bare-markdown prettier pre-existing).",
+      "verification": "cargo build, cargo test (308 passed / 1 pre-existing env failure), cargo clippy -D warnings, cargo fmt; npx tsc --noEmit, npx vitest run (79 files / 390 tests), npx eslint ., npm run build"
+    }
+  ]
+}

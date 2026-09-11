@@ -14,9 +14,14 @@ use crate::models::script::{
 
 pub fn validate_kind(kind: &str) -> Result<(), String> {
     match kind {
-        "alert" | "recipe_override" | "action_command" | "config_override" => Ok(()),
+        "alert" | "recipe_override" | "action_command" => Ok(()),
+        "config_override" => Err(
+            "kind 'config_override' đã bị loại khỏi hệ thống. Flow Config·Overwrite giờ là kind 'alert' \
+             kèm khối configOverwrite trong IR — tạo lại flow trong Flow Editor để lấy định dạng mới"
+                .to_string(),
+        ),
         other => Err(format!(
-            "kind phải là 'alert', 'recipe_override', 'action_command' hoặc 'config_override', nhận: '{}'",
+            "kind phải là 'alert', 'recipe_override' hoặc 'action_command', nhận: '{}'",
             other
         )),
     }
@@ -104,6 +109,9 @@ pub async fn create_script(
     if let Err(e) = validate_script_source(&body.kind, &body.source) {
         return HttpResponse::BadRequest().json(json!({"error": e, "valid": false}));
     }
+    if let Err(e) = crate::services::cron_scheduler::validate_cron_trigger(body.ir_json.as_ref()) {
+        return HttpResponse::BadRequest().json(json!({"error": e, "valid": false}));
+    }
 
     let id = Uuid::new_v4();
     let enabled = body.enabled.unwrap_or(true);
@@ -151,6 +159,19 @@ RETURNING *"#,
     match result {
         Ok(script) => {
             info!(device_id, script_id = %script.id, kind = %script.kind, "Script created");
+            crate::services::cron_scheduler::sync_script_cron_next_run(
+                &app_state.pg_pool,
+                script.id,
+                script.ir_json.as_ref(),
+                None,
+            )
+            .await;
+            let refreshed =
+                sqlx::query_as::<_, UserScript>("SELECT * FROM user_scripts WHERE id = $1")
+                    .bind(script.id)
+                    .fetch_optional(&app_state.pg_pool)
+                    .await
+                    .unwrap_or(None);
             if let Err(e) = app_state
                 .script_cache
                 .reload_device(&app_state.pg_pool, &device_id)
@@ -158,7 +179,8 @@ RETURNING *"#,
             {
                 warn!(device_id, error = %e, "Failed to reload script cache after create");
             }
-            HttpResponse::Created().json(json!({"status": "created", "data": script}))
+            HttpResponse::Created()
+                .json(json!({"status": "created", "data": refreshed.unwrap_or(script)}))
         }
         Err(e) => {
             warn!(device_id, error = %e, "Failed to insert script");
@@ -188,6 +210,9 @@ pub async fn update_script(
         return HttpResponse::BadRequest().json(json!({"error": e}));
     }
     if let Err(e) = validate_script_source(&body.kind, &body.source) {
+        return HttpResponse::BadRequest().json(json!({"error": e, "valid": false}));
+    }
+    if let Err(e) = crate::services::cron_scheduler::validate_cron_trigger(body.ir_json.as_ref()) {
         return HttpResponse::BadRequest().json(json!({"error": e, "valid": false}));
     }
 
@@ -239,6 +264,19 @@ RETURNING *"#,
 
     match result {
         Ok(Some(script)) => {
+            crate::services::cron_scheduler::sync_script_cron_next_run(
+                &app_state.pg_pool,
+                script.id,
+                script.ir_json.as_ref(),
+                script.cron_next_run_at,
+            )
+            .await;
+            let refreshed =
+                sqlx::query_as::<_, UserScript>("SELECT * FROM user_scripts WHERE id = $1")
+                    .bind(script.id)
+                    .fetch_optional(&app_state.pg_pool)
+                    .await
+                    .unwrap_or(None);
             if let Err(e) = app_state
                 .script_cache
                 .reload_device(&app_state.pg_pool, &device_id)
@@ -246,7 +284,8 @@ RETURNING *"#,
             {
                 warn!(device_id, error = %e, "Failed to reload script cache after update");
             }
-            HttpResponse::Ok().json(json!({"status": "updated", "data": script}))
+            HttpResponse::Ok()
+                .json(json!({"status": "updated", "data": refreshed.unwrap_or(script)}))
         }
         Ok(None) => HttpResponse::NotFound().json(json!({"error": "Script not found"})),
         Err(e) => {
@@ -319,6 +358,13 @@ pub async fn validate_script(
         });
     }
 
+    if let Err(e) = crate::services::cron_scheduler::validate_cron_trigger(body.ir_json.as_ref()) {
+        return HttpResponse::Ok().json(ScriptValidateResponse {
+            valid: false,
+            error: Some(e),
+        });
+    }
+
     if let Some(ref next_ids) = body.next_flow_ids
         && !next_ids.is_empty()
     {
@@ -380,8 +426,19 @@ pub async fn apply_template(
     )
     .await
     {
-        Ok(ids) => HttpResponse::Ok()
-            .json(serde_json::json!({"status": "success", "applied_script_ids": ids})),
+        Ok(ids) => {
+            for id in &ids {
+                crate::services::cron_scheduler::sync_script_cron_next_run(
+                    &app_state.pg_pool,
+                    *id,
+                    source.ir_json.as_ref(),
+                    None,
+                )
+                .await;
+            }
+            HttpResponse::Ok()
+                .json(serde_json::json!({"status": "success", "applied_script_ids": ids}))
+        }
         Err(e) => {
             HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()}))
         }

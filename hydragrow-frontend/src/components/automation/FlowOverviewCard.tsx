@@ -44,7 +44,7 @@ interface Props {
 }
 
 export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
-  const isConfig = script.kind === "config_override" || script.ir_json?.kind === "config_override" || script.name.toLowerCase().includes("config") || script.name.toLowerCase().includes("ngưỡng ec");
+  const isConfig = script.kind === "config_override" || (script.ir_json as { kind?: string } | null)?.kind === "config_override" || script.name.toLowerCase().includes("config") || script.name.toLowerCase().includes("ngưỡng ec");
   const kind = isConfig ? "CONFIG" : (script.kind ? script.kind.toUpperCase() : "ALERT");
 
   const getKindBadgeClass = () => {

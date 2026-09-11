@@ -1,0 +1,53 @@
+{
+  "requirement_id": "AUTOMATION-CRON-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test services::cron_scheduler",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "8/8 passed: cron_schedule_from_ir_parses_valid_cron_trigger, cron_schedule_from_ir_is_not_cron_for_other_triggers_or_missing_trigger, cron_schedule_from_ir_rejects_bad_expression_or_timezone, validate_cron_trigger_accepts_none_or_non_cron_ir, validate_cron_trigger_rejects_invalid_expression (+ 3 existing build_cron_payload/compute_next_run tests)."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test services::cron_scheduler; cargo build",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "validate_cron_trigger tests pass; write path (api/script.rs create_script/update_script/validate_script/apply_template) calls validate_cron_trigger and sync_script_cron_next_run and compiles clean. sync_script_cron_next_run keeps future prev_next via base=max(now, prev) in the trigger timezone and clears/NULLs on NotCron or error (disable)."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test mqtt::handlers::script_eval",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "26/26 passed incl. has_sensor_trigger_default_true_for_missing_ir_or_sensor, filter_sensor_path_keeps_sensor_root_and_reachable_children (cron-declaring child kept via sensor root), filter_sensor_path_drops_cron_webhook_and_fsm_islands, filter_sensor_path_keeps_all_when_graph_is_a_cycle; sensors.rs returns early when the filtered chain is empty."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo build; cargo clippy -D warnings; code review",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "reconcile_cron_config_overwrite (cron_scheduler.rs) uses the same building blocks as eval_flow_chain reconcile: config_context::parse_config_overwrite/parse_context_reads/resolve_context_reads, api::script::eval_condition_tree, config_override::reconcile_config_overwrite_group with an OverwriteContender. Clippy -D warnings clean. No DB-bound integration test exists for the cron reconcile path (would need a live Postgres); tracked as a follow-up."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "vitest ir.test.ts; tsc --noEmit; eslint; cargo build; migration file",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "5 new normalizeLegacyIr tests + a 'rejects config_override kind' test pass in ir.test.ts; AutomationKindSchema trimmed to 3 kinds; normalizeLegacyIr wired into useAutomationBuilder.loadFromIr; FlowEditorHeader config_override option removed; backend validate_kind returns 400 for config_override; migration 20260911000000_restore_action_command_script_kind.sql restores user_scripts_kind_check with a defensive UPDATE. tsc/eslint clean (eslint only pre-existing apiClient.ts errors)."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cargo build/test/clippy/fmt + npx tsc/vitest/eslint/prettier/build",
+      "environment": "linux-ubuntu-host",
+      "verified_at": "2026-09-11",
+      "notes": "Backend: build OK, cargo test 308 passed / 1 pre-existing failure (multi_device_template::apply_template_reapply_respects_the_current_requests_preserve_choice — DB NOT NULL ec_target, reproduced identical on clean base HEAD), clippy -D warnings clean, fmt clean for changed files (multi_device_template.rs:145 pre-existing). Frontend: npx tsc --noEmit clean, vitest 79 files / 390 tests pass, eslint 0 new errors (2 pre-existing in apiClient.ts), prettier clean on touched files (4 files pre-existing-dirty), npm run build OK."
+    }
+  ]
+}

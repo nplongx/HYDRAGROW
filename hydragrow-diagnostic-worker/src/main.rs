@@ -1,6 +1,7 @@
 mod backend_client;
 mod config;
 mod diagnostic_model;
+mod local_model;
 mod openrouter_model;
 mod orchestrator;
 mod tick;
@@ -9,6 +10,7 @@ mod trigger;
 use backend_client::BackendClient;
 use config::WorkerConfig;
 use hydragrow_supervisor_query::HttpQueryBackend;
+use local_model::LocalLlamaDiagnosticModel;
 use openrouter_model::OpenRouterDiagnosticModel;
 use std::sync::Arc;
 
@@ -30,8 +32,18 @@ async fn main() -> anyhow::Result<()> {
         HttpQueryBackend::new(config.backend_url.clone(), config.api_key.clone()),
     );
 
-    let model: Arc<dyn diagnostic_model::DiagnosticModel> =
-        Arc::new(OpenRouterDiagnosticModel::new(
+    let model: Arc<dyn diagnostic_model::DiagnosticModel> = match config.llm_provider.as_str() {
+        "local" | "llama" | "llama.cpp" => Arc::new(LocalLlamaDiagnosticModel::new(
+            config.local_llm_base_url.clone(),
+            config.llm_model.clone(),
+            query_backend.clone(),
+            config.max_tool_round_trips,
+            config.max_input_tokens,
+            config.max_output_tokens,
+            config.per_call_timeout_secs,
+            config.diagnosis_wall_clock_budget_secs,
+        )),
+        "openrouter" => Arc::new(OpenRouterDiagnosticModel::new(
             config.openrouter_base_url.clone(),
             config.openrouter_api_key.clone(),
             config.llm_model.clone(),
@@ -41,7 +53,9 @@ async fn main() -> anyhow::Result<()> {
             config.max_output_tokens,
             config.per_call_timeout_secs,
             config.diagnosis_wall_clock_budget_secs,
-        ));
+        )),
+        other => anyhow::bail!("unsupported DIAGNOSTIC_LLM_PROVIDER: {other}"),
+    };
 
     let backend: Arc<dyn backend_client::DiagnosisBackend> = Arc::new(BackendClient::new(
         config.backend_url.clone(),

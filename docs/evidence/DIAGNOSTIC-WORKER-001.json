@@ -1,0 +1,10 @@
+{
+  "requirement_id": "DIAGNOSTIC-WORKER-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml"
+    }
+  ]
+}

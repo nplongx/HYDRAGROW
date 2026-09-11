@@ -1,0 +1,12 @@
+{
+  "requirement_id": "DIAGNOSTIC-WORKER-001",
+  "change_class": "C1",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "description": "hydragrow-diagnostic-worker unit and integration tests pass",
+      "target": "27 passed",
+      "status": "PASS"
+    }
+  ]
+}

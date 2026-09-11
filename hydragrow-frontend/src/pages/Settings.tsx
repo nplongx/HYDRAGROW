@@ -3,7 +3,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 
 // --- IMPORT PLATFORM & UTILS ---
 import { httpFetch } from '../platform/http';
-import { forgetStoredApiKey, loadAppSettings, saveAppSettings } from '../platform/settings';
+import { forgetStoredApiKey, getDefaultBackendUrl, loadAppSettings, saveAppSettings } from '../platform/settings';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhoami } from '../hooks/useWhoami';
 
@@ -133,7 +133,7 @@ const Settings = () => {
     enable_ph_sensor: true, enable_ec_sensor: true, enable_temp_sensor: true, enable_water_level_sensor: true,
   });
 
-  const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: 'https://hydragrow.onrender.com' });
+  const [appSettings, setAppSettings] = useState({ api_key: '', backend_url: getDefaultBackendUrl() });
 
   const nodeRedEditorUrl = useMemo(() => {
     try {
@@ -193,7 +193,7 @@ const Settings = () => {
   useEffect(() => {
     const deviceId = ctxDeviceId;
     const settings = runtimeSettings || appSettings;
-    if (!deviceId || !settings?.backend_url || !settings?.api_key) { setOtaStatus(null); return; }
+    if (!deviceId || !settings?.backend_url) { setOtaStatus(null); return; }
     callApi(`/api/devices/${deviceId}/ota/status`, 'GET', null, settings)
       .then((status) => setOtaStatus(status as OtaStatus))
       .catch(() => setOtaStatus(null));
@@ -227,7 +227,7 @@ const Settings = () => {
   useEffect(() => {
     const deviceId = ctxDeviceId;
     const settings = runtimeSettings || appSettings;
-    if (!deviceId || !settings?.backend_url || !settings?.api_key) { setWifiConfig(null); return; }
+    if (!deviceId || !settings?.backend_url) { setWifiConfig(null); return; }
     callApi(`/api/devices/${deviceId}/wifi`, 'GET', null, settings)
       .then((config) => {
         const view = config as WifiConfigStatus;

@@ -36,6 +36,7 @@ export default defineConfig(({ mode }) => {
       port: 1420,
       strictPort: true,
       host: true,
+      proxy: { '/api': { target: 'http://localhost:8080', changeOrigin: true, ws: true } },
       hmr: isTauriDevRuntime
         ? {
           protocol: "ws",

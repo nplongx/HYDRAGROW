@@ -1,0 +1,53 @@
+{
+  "requirement_id": "DISC-2026-09-12-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#2-design-brief",
+      "notes": "Section 2 provides project overview, problem statement, evidence-supported groups (admin, operator, viewer) with schema citations, and assumption-based groups."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#3-database-telemetry--user-distribution-query-methodology",
+      "notes": "Section 3 provides 4 SQL queries and authoritative determination of INSUFFICIENT DATA."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#4-jobs-to-be-done-jtbd-hypotheses",
+      "notes": "Section 4 provides 3 competing JTBD tracks (A: Peace of Mind, B: Commercial Scale, C: Agronomic R&D) across functional, emotional, and social dimensions."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#5-user-personas-hypotheses--unverified",
+      "notes": "Section 5 creates Minh and Anh Thắng personas, both prominently labeled HYPOTHESIS — unverified."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#6-end-to-end-crop-cycle-journey-map--ia-audit",
+      "notes": "Section 6 maps a 6-stage crop cycle and audits 4 specific IA grouping/flow mismatches in MainLayout.tsx."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#7-targeted-user-interview-script-5-archetypes",
+      "notes": "Section 7 details a 45-minute non-leading interview guide across 5 archetypes directly probing the 3 open questions."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#8-quantitative-sensor-metrics-definition-via-influxdb",
+      "notes": "Section 8 specifies statistical models with constants labeled as ASSUMPTION and provides Section 8.3 actionable calibration queries."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "docs/discovery/2026-09-12-user-discovery.md#9-authoritative-decisions--status-table",
+      "notes": "Section 9 table includes Immediate Actionability column noting verified security bugs, and CURRENT-STATUS.md contains DISC-2026-09-12-001 status line."
+    }
+  ]
+}

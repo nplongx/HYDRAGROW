@@ -1,0 +1,54 @@
+{
+  "requirement_id": "DISC-2026-09-12-001",
+  "objective": "Deliver HYDRAGROW User Discovery & Strategic Research Report clarifying user personas, JTBD, IA alignment, and unresolved governance questions without modifying implementation code.",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Design brief outlines the problem space, code/schema-supported user groups, and assumption-based user groups with source citations.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 2",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Database query methodology provides SQL for user/device topology, multi-station distribution, and season cadence with explicit finding on Open Question 1.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 3",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Two to three distinct JTBD hypotheses are defined across functional, emotional, and social dimensions without pre-selecting defaults.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 4",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Personas corresponding to top JTBD tracks are explicitly labeled as HYPOTHESIS — unverified.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 5",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "End-to-end crop cycle journey is mapped and cross-referenced against the current 5-tab IA identifying cognitive and sequence mismatches.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 6",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "A structured, non-leading interview script targeting 5 user archetypes directly probes the 3 open questions.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 7",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Quantitative sensor metrics methodology is defined with uncalibrated constants labeled as assumptions and an actionable post-access calibration procedure provided.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 8",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Authoritative Decisions & Status Table is completed with immediate actionability indicated for security bugs, and CURRENT-STATUS.md is updated.",
+      "verification": "Manual review of docs/discovery/2026-09-12-user-discovery.md Section 9 and docs/project-state/CURRENT-STATUS.md",
+      "evidence_required": true
+    }
+  ]
+}

@@ -18,9 +18,15 @@ pub mod middleware;
 pub mod mqtt_utils;
 pub mod notification;
 pub mod recipe;
+pub mod scope_definitions;
 pub mod script;
 pub mod sensor;
 pub mod solana;
 pub mod webhook;
 pub mod webhook_tokens;
 pub mod ws;
+
+#[cfg(test)]
+pub(crate) mod test_support;
+#[cfg(test)]
+mod tests;

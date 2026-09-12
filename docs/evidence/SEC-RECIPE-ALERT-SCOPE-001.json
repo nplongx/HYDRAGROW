@@ -1,0 +1,65 @@
+{
+  "requirement_id": "SEC-RECIPE-ALERT-SCOPE-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "actual": 403,
+      "unit": "http_status",
+      "source": "cargo test api::alert (resolve_event_rejects_read_only_scope asserts 403 + required_scope events:write; resolve_event_with_events_write_reaches_db_layer asserts gate passage)",
+      "environment": "Host Rust stable x86_64, hydragrow-backend unit/integration tests, no live DB",
+      "verified_at": "2026-09-12T09:32:27Z",
+      "notes": "read:telemetry-only caller -> 403 before any DB access; events:write caller proceeds into resolve_system_event (surfaces 500 Database Error offline, never 403)."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "actual": 403,
+      "unit": "http_status",
+      "source": "cargo test api::recipe (create_recipe_rejects_missing_scope, update_recipe_rejects_missing_scope, delete_recipe_rejects_missing_scope + *_with_scope_reaches_db_layer gate-passage tests)",
+      "environment": "Host Rust stable x86_64, hydragrow-backend unit/integration tests, no live DB",
+      "verified_at": "2026-09-12T09:32:27Z",
+      "notes": "Scope check runs before field validation in all three handlers; 403 body carries required_scope recipe:write."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "actual": 403,
+      "unit": "http_status",
+      "source": "cargo test api::recipe (apply_recipe_rejects_missing_scope_even_for_owner_candidate, apply_recipe_rejects_api_key_without_linked_user asserts recipe_apply_requires_user, apply_recipe_rejects_device_not_owned_by_caller)",
+      "environment": "Host Rust stable x86_64, hydragrow-backend unit/integration tests, no live DB",
+      "verified_at": "2026-09-12T09:32:27Z",
+      "notes": "Scope checked before ownership; user_id None (service API key) is rejected instead of bypassing ownership as before."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "actual": 403,
+      "unit": "http_status",
+      "source": "cargo test api::recipe (bulk_apply_rejects_missing_scope, bulk_apply_rejects_devices_not_owned_by_caller, bulk_apply_still_rejects_missing_user_with_401)",
+      "environment": "Host Rust stable x86_64, hydragrow-backend unit/integration tests, no live DB",
+      "verified_at": "2026-09-12T09:32:27Z",
+      "notes": "Existing own-all-devices check and 401-for-missing-user behavior preserved; recipe:write gate added after user extraction."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "actual": 403,
+      "unit": "http_status",
+      "source": "cargo test api::recipe (clear_recipe_rejects_missing_scope, clear_recipe_rejects_api_key_without_linked_user, clear_recipe_rejects_device_not_owned_by_caller with an arbitrary device_id)",
+      "environment": "Host Rust stable x86_64, hydragrow-backend unit/integration tests, no live DB",
+      "verified_at": "2026-09-12T09:32:27Z",
+      "notes": "Highest-priority fix: previously zero checks on path device_id; now scope + ownership both enforced before any MQTT publish."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "actual": 403,
+      "unit": "http_status",
+      "source": "cargo test api::tests::test_scope_definitions (events_write_scope_is_declared_and_described, recipe_write_scope_is_declared_and_described, all_standard_scopes_are_valid)",
+      "environment": "Host Rust stable x86_64, hydragrow-backend unit/integration tests, no live DB",
+      "verified_at": "2026-09-12T09:32:27Z",
+      "notes": "Both scopes declared in KNOWN_SCOPES with scope_description() entries; is_valid_scope true. The newly-wired api::tests module (previously orphaned, never compiled) now runs: 5/5 green."
+    }
+  ]
+}

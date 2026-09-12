@@ -1,0 +1,66 @@
+{
+  "requirement_id": "SEC-RECIPE-ALERT-SCOPE-001",
+  "objective": "Close authorization gaps on alert resolve and all recipe mutating routes: declare the missing events:write and recipe:write scopes and enforce scope + device-ownership checks (no silent bypass for API-key callers without a linked user).",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "PUT /events/{id}/acknowledge (resolve_event) rejects callers with only read:telemetry and requires events:write",
+      "metric": "unauthorized request rejected",
+      "operator": "=",
+      "target": 403,
+      "unit": "http_status",
+      "verification": "integration test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Recipe template CRUD (create_recipe, update_recipe, delete_recipe) rejects callers missing recipe:write",
+      "metric": "unauthorized request rejected",
+      "operator": "=",
+      "target": 403,
+      "unit": "http_status",
+      "verification": "integration test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "apply_recipe requires BOTH recipe:write scope and device ownership, and rejects API-key callers with no linked user instead of silently bypassing ownership",
+      "metric": "unauthorized request rejected",
+      "operator": "=",
+      "target": 403,
+      "unit": "http_status",
+      "verification": "integration test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "bulk_apply_recipe requires recipe:write in addition to the existing own-all-devices check",
+      "metric": "unauthorized request rejected",
+      "operator": "=",
+      "target": 403,
+      "unit": "http_status",
+      "verification": "integration test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "clear_recipe requires BOTH recipe:write scope and ownership of the path device_id (arbitrary device_ids can no longer be cleared by any logged-in user)",
+      "metric": "unauthorized request rejected",
+      "operator": "=",
+      "target": 403,
+      "unit": "http_status",
+      "verification": "integration test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "events:write and recipe:write are declared in KNOWN_SCOPES with descriptions, so role scopes referencing them validate and callers without them are rejected",
+      "metric": "unauthorized request rejected",
+      "operator": "=",
+      "target": 403,
+      "unit": "http_status",
+      "verification": "integration test",
+      "evidence_required": true
+    }
+  ]
+}

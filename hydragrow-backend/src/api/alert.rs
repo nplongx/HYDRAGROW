@@ -254,10 +254,10 @@ pub async fn resolve_event(
         .get::<AuthContext>()
         .cloned()
         .unwrap_or_default();
-    if !auth.has_scope("read:telemetry") {
+    if !auth.has_scope("events:write") {
         return HttpResponse::Forbidden().json(json!({
             "error": "Missing required scope",
-            "required_scope": "read:telemetry"
+            "required_scope": "events:write"
         }));
     }
 
@@ -362,5 +362,64 @@ mod tests {
     async fn accepts_known_reason_code() {
         assert!(validate_reason_codes(&["leak_suspected".to_string()]).is_ok());
         assert!(validate_reason_codes(&[]).is_ok());
+    }
+
+    /// SEC-RECIPE-ALERT-SCOPE-001 / AC-1: resolving an event is a write and
+    /// must require `events:write` — a read-only caller gets 403, before any
+    /// DB access happens.
+    #[actix_web::test]
+    async fn resolve_event_rejects_read_only_scope() {
+        use actix_web::Responder;
+
+        let state = web::Data::new(crate::api::test_support::test_app_state());
+        let req = crate::api::test_support::authed_request(&["read:telemetry"], Some("1"));
+        let resp = resolve_event(
+            web::Path::from(("dev-01".to_string(), 7)),
+            req.clone(),
+            web::Json(ResolveEventRequest { resolved: true }),
+            state,
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_eq!(resp.status(), actix_web::http::StatusCode::FORBIDDEN);
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"], "Missing required scope");
+        assert_eq!(v["required_scope"], "events:write");
+    }
+
+    /// SEC-RECIPE-ALERT-SCOPE-001 / AC-1: a caller WITH `events:write` passes
+    /// the scope gate into the DB layer (offline this surfaces as a database
+    /// error, never as 403 — the assertion is gate-passage, which holds with
+    /// or without a live database).
+    #[actix_web::test]
+    async fn resolve_event_with_events_write_reaches_db_layer() {
+        use actix_web::Responder;
+
+        let state = web::Data::new(crate::api::test_support::test_app_state());
+        let req = crate::api::test_support::authed_request(&["events:write"], Some("1"));
+        let resp = resolve_event(
+            web::Path::from(("dev-01".to_string(), 7)),
+            req.clone(),
+            web::Json(ResolveEventRequest { resolved: true }),
+            state,
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_ne!(
+            resp.status(),
+            actix_web::http::StatusCode::FORBIDDEN,
+            "events:write must pass the scope gate"
+        );
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(
+            v.get("required_scope").is_none(),
+            "must not be a scope rejection, got: {v}"
+        );
     }
 }

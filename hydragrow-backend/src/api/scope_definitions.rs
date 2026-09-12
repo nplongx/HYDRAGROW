@@ -5,22 +5,22 @@
 /// `*` = full access (chỉ dùng cho server internal hoặc root admin).
 pub const KNOWN_SCOPES: &[&str] = &[
     // Đọc dữ liệu
-    "read:telemetry",        // Đọc dữ liệu cảm biến, metrics
-
+    "read:telemetry", // Đọc dữ liệu cảm biến, metrics
     // Ghi / điều khiển cơ bản
-    "write:config",          // Cập nhật cấu hình thiết bị (recipe, cài đặt)
-    "control:pump",          // Điều khiển bơm thủ công (force_on/off)
-    "control:emergency",     // Lệnh khẩn cấp (reset_fault, enter_calibration)
-
+    "write:config",      // Cập nhật cấu hình thiết bị (recipe, cài đặt)
+    "control:pump",      // Điều khiển bơm thủ công (force_on/off)
+    "control:emergency", // Lệnh khẩn cấp (reset_fault, enter_calibration)
     // Quản lý thiết bị (Device Admin)
-    "device:ota",            // Trigger OTA firmware update
-    "device:network",        // Cập nhật WiFi priority list
-    "device:admin",          // Reboot, factory reset — quyền cao nhất cho thiết bị
-
+    "device:ota",     // Trigger OTA firmware update
+    "device:network", // Cập nhật WiFi priority list
+    "device:admin",   // Reboot, factory reset — quyền cao nhất cho thiết bị
     // User script APIs
-    "script:read",           // Đọc / validate user scripts
-    "script:write",          // Tạo, cập nhật, xóa user scripts
-
+    "script:read",  // Đọc / validate user scripts
+    "script:write", // Tạo, cập nhật, xóa user scripts
+    // Recipe APIs (công thức mùa vụ)
+    "recipe:write", // Tạo, cập nhật, xóa, áp dụng / gỡ recipe
+    // System event / alert APIs
+    "events:write", // Tạo và acknowledge (resolve) system events
     // Wildcard (root only)
     "*",
 ];
@@ -33,16 +33,18 @@ pub fn is_valid_scope(scope: &str) -> bool {
 /// Mô tả cho từng scope (hiển thị trong UI quản lý).
 pub fn scope_description(scope: &str) -> &'static str {
     match scope {
-        "read:telemetry"     => "Đọc dữ liệu cảm biến và metrics theo thời gian thực",
-        "write:config"       => "Cập nhật cấu hình thiết bị, recipe, lịch tưới",
-        "control:pump"       => "Điều khiển bơm thủ công (bật/tắt từng bơm)",
-        "control:emergency"  => "Lệnh khẩn cấp: dừng khẩn cấp, reset lỗi, hiệu chuẩn",
-        "device:ota"         => "Cập nhật firmware thiết bị qua OTA",
-        "device:network"     => "Cập nhật danh sách WiFi trên thiết bị",
-        "device:admin"       => "Reboot và factory reset thiết bị (toàn quyền quản trị)",
-        "script:read"        => "Đọc và kiểm tra (validate) các user scripts",
-        "script:write"       => "Tạo, cập nhật và xóa các user scripts",
-        "*"                  => "Toàn quyền truy cập (chỉ dành cho admin hệ thống)",
-        _                    => "Scope không xác định",
+        "read:telemetry" => "Đọc dữ liệu cảm biến và metrics theo thời gian thực",
+        "write:config" => "Cập nhật cấu hình thiết bị, recipe, lịch tưới",
+        "control:pump" => "Điều khiển bơm thủ công (bật/tắt từng bơm)",
+        "control:emergency" => "Lệnh khẩn cấp: dừng khẩn cấp, reset lỗi, hiệu chuẩn",
+        "device:ota" => "Cập nhật firmware thiết bị qua OTA",
+        "device:network" => "Cập nhật danh sách WiFi trên thiết bị",
+        "device:admin" => "Reboot và factory reset thiết bị (toàn quyền quản trị)",
+        "script:read" => "Đọc và kiểm tra (validate) các user scripts",
+        "script:write" => "Tạo, cập nhật và xóa các user scripts",
+        "recipe:write" => "Tạo, cập nhật, xóa và áp dụng công thức mùa vụ (recipe)",
+        "events:write" => "Tạo và xác nhận đã xử lý (acknowledge) các sự kiện hệ thống",
+        "*" => "Toàn quyền truy cập (chỉ dành cho admin hệ thống)",
+        _ => "Scope không xác định",
     }
 }

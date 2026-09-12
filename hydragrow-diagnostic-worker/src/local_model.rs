@@ -1,6 +1,10 @@
-use crate::diagnostic_model::{parse_diagnosis, Diagnosis, DiagnosticContext, DiagnosticModel, DiagnosticModelError};
+use crate::diagnostic_model::{
+    Diagnosis, DiagnosticContext, DiagnosticModel, DiagnosticModelError, parse_diagnosis,
+};
 use async_trait::async_trait;
-use hydragrow_supervisor_query::{validate_and_clamp, validate_device_scope, QueryBackend, SupervisorQuery};
+use hydragrow_supervisor_query::{
+    QueryBackend, SupervisorQuery, validate_and_clamp, validate_device_scope,
+};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,10 +66,16 @@ Use only canonical reason codes supplied in the task. Never invent a reason code
 Do not return Markdown or code fences."#
     }
 
-    async fn call_llama(&self, messages: &[serde_json::Value]) -> Result<serde_json::Value, DiagnosticModelError> {
+    async fn call_llama(
+        &self,
+        messages: &[serde_json::Value],
+    ) -> Result<serde_json::Value, DiagnosticModelError> {
         let resp = self
             .http
-            .post(format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/')))
+            .post(format!(
+                "{}/v1/chat/completions",
+                self.base_url.trim_end_matches('/')
+            ))
             .header("content-type", "application/json")
             .json(&serde_json::json!({
                 "model": self.model,
@@ -77,14 +87,25 @@ Do not return Markdown or code fences."#
             }))
             .send()
             .await
-            .map_err(|e| if e.is_timeout() { DiagnosticModelError::Timeout } else { DiagnosticModelError::ProviderError(e.to_string()) })?;
+            .map_err(|e| {
+                if e.is_timeout() {
+                    DiagnosticModelError::Timeout
+                } else {
+                    DiagnosticModelError::ProviderError(e.to_string())
+                }
+            })?;
 
         let status = resp.status();
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(DiagnosticModelError::ProviderError(format!("Local llama HTTP {}: {}", status, body)));
+            return Err(DiagnosticModelError::ProviderError(format!(
+                "Local llama HTTP {}: {}",
+                status, body
+            )));
         }
-        resp.json().await.map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))
+        resp.json()
+            .await
+            .map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))
     }
 
     fn tool_call_to_query(name: &str, arguments: &str) -> Option<SupervisorQuery> {
@@ -100,7 +121,10 @@ Do not return Markdown or code fences."#
 
 #[async_trait]
 impl DiagnosticModel for LocalLlamaDiagnosticModel {
-    async fn diagnose(&self, context: DiagnosticContext) -> Result<Diagnosis, DiagnosticModelError> {
+    async fn diagnose(
+        &self,
+        context: DiagnosticContext,
+    ) -> Result<Diagnosis, DiagnosticModelError> {
         let started = std::time::Instant::now();
         let mut messages = vec![
             serde_json::json!({"role":"system","content":Self::system_prompt()}),
@@ -113,35 +137,64 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
 
         for _round in 0..self.max_tool_round_trips {
             if started.elapsed().as_secs() >= self.wall_clock_budget_secs {
-                return Err(DiagnosticModelError::BudgetExceeded("wall_clock".to_string()));
+                return Err(DiagnosticModelError::BudgetExceeded(
+                    "wall_clock".to_string(),
+                ));
             }
-            let estimated_tokens = serde_json::to_string(&messages).map(|s| s.len() / 4).unwrap_or(0) as u32;
+            let estimated_tokens = serde_json::to_string(&messages)
+                .map(|s| s.len() / 4)
+                .unwrap_or(0) as u32;
             if estimated_tokens > self.max_input_tokens {
-                return Err(DiagnosticModelError::BudgetExceeded("max_input_tokens".to_string()));
+                return Err(DiagnosticModelError::BudgetExceeded(
+                    "max_input_tokens".to_string(),
+                ));
             }
 
             let response = self.call_llama(&messages).await?;
-            let message = response.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("message"))
-                .ok_or_else(|| DiagnosticModelError::InvalidOutput("missing choices[0].message".to_string()))?;
-            let tool_calls = message.get("tool_calls").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let message = response
+                .get("choices")
+                .and_then(|c| c.get(0))
+                .and_then(|c| c.get("message"))
+                .ok_or_else(|| {
+                    DiagnosticModelError::InvalidOutput("missing choices[0].message".to_string())
+                })?;
+            let tool_calls = message
+                .get("tool_calls")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
 
             if tool_calls.is_empty() {
-                let text = message.get("content").and_then(|v| v.as_str()).ok_or_else(|| DiagnosticModelError::InvalidOutput("missing assistant content".to_string()))?;
-                let parsed: serde_json::Value = serde_json::from_str(text.trim()).map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))?;
+                let text = message
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        DiagnosticModelError::InvalidOutput("missing assistant content".to_string())
+                    })?;
+                let parsed: serde_json::Value = serde_json::from_str(text.trim())
+                    .map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))?;
                 return parse_diagnosis(&parsed);
             }
 
             messages.push(message.clone());
             for tool_call in tool_calls {
                 let id = tool_call.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                let function = tool_call.get("function").cloned().unwrap_or_else(|| serde_json::json!({}));
+                let function = tool_call
+                    .get("function")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({}));
                 let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                let arguments = function.get("arguments").and_then(|v| v.as_str()).unwrap_or("{}");
+                let arguments = function
+                    .get("arguments")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("{}");
                 let result_text = match Self::tool_call_to_query(name, arguments) {
                     Some(query) => match validate_device_scope(&query, &context.device_id) {
                         Ok(()) => match validate_and_clamp(query) {
                             Ok(clamped) => match self.query_backend.execute(clamped).await {
-                                Ok(result) => serde_json::to_string(&result).unwrap_or_else(Self::error_json),
+                                Ok(result) => {
+                                    serde_json::to_string(&result).unwrap_or_else(Self::error_json)
+                                }
                                 Err(e) => Self::error_json(e),
                             },
                             Err(e) => Self::error_json(e),
@@ -150,11 +203,15 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
                     },
                     None => Self::error_json(format!("unknown or malformed tool call: {name}")),
                 };
-                messages.push(serde_json::json!({"role":"tool","tool_call_id":id,"content":result_text}));
+                messages.push(
+                    serde_json::json!({"role":"tool","tool_call_id":id,"content":result_text}),
+                );
             }
         }
 
-        Err(DiagnosticModelError::BudgetExceeded("max_tool_round_trips".to_string()))
+        Err(DiagnosticModelError::BudgetExceeded(
+            "max_tool_round_trips".to_string(),
+        ))
     }
 }
 

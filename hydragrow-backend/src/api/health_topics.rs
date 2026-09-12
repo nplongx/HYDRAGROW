@@ -122,10 +122,7 @@ pub async fn get_device_health_topics(
     }
 }
 
-pub async fn get_all_hestia(
-    req: HttpRequest,
-    app_state: web::Data<AppState>,
-) -> impl Responder {
+pub async fn get_all_hestia(req: HttpRequest, app_state: web::Data<AppState>) -> impl Responder {
     if let Err(resp) = auth_or_forbidden(&req) {
         return resp;
     }

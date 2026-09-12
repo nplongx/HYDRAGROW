@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::Utc;
 use hydragrow_shared::{
     recipe::{CropRecipe, CropStage},
@@ -12,8 +12,34 @@ use sqlx::{FromRow, Row};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::{AppState, api::mqtt_utils::sign_command, db::postgres, db::recipes as db_recipes};
+use crate::{
+    AppState,
+    api::{middleware::auth::AuthContext, mqtt_utils::sign_command},
+    db::postgres,
+    db::recipes as db_recipes,
+};
 use anyhow::Context;
+
+/// Parse the calling user id from the auth context.
+///
+/// Service API keys that are not linked to a user yield `None`.
+pub(crate) fn auth_user_id(auth: &AuthContext) -> Option<i64> {
+    auth.user_id.as_ref().and_then(|id| id.parse().ok())
+}
+
+/// Require the `recipe:write` scope (viewer roles are rejected).
+///
+/// Follows the `has_scope("script:write")` pattern used in `script.rs`.
+pub(crate) fn require_recipe_write(auth: &AuthContext) -> Result<(), HttpResponse> {
+    if auth.has_scope("recipe:write") {
+        Ok(())
+    } else {
+        Err(HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "recipe:write"
+        })))
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct RecipeTemplate {
@@ -168,7 +194,17 @@ pub async fn update_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
     req: web::Json<CreateRecipeRequest>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if let Err(resp) = require_recipe_write(&auth) {
+        return resp;
+    }
+
     let recipe_id = path.into_inner();
 
     if req.name.trim().is_empty() || req.crop.trim().is_empty() || req.stages.is_empty() {
@@ -378,7 +414,17 @@ pub async fn list_recipes(app_state: web::Data<AppState>) -> impl Responder {
 pub async fn create_recipe(
     app_state: web::Data<AppState>,
     req: web::Json<CreateRecipeRequest>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if let Err(resp) = require_recipe_write(&auth) {
+        return resp;
+    }
+
     if req.name.trim().is_empty() || req.crop.trim().is_empty() || req.stages.is_empty() {
         return HttpResponse::BadRequest().json(json!({
             "error": "invalid_recipe",
@@ -519,7 +565,17 @@ pub async fn create_recipe(
 pub async fn delete_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if let Err(resp) = require_recipe_write(&auth) {
+        return resp;
+    }
+
     let recipe_id = path.into_inner();
 
     let res = db_recipes::delete_recipe(&app_state.pg_pool, &recipe_id).await;
@@ -547,25 +603,35 @@ pub async fn apply_recipe(
     req: web::Json<ApplyRecipeRequest>,
     http_req: actix_web::HttpRequest,
 ) -> impl Responder {
-    use actix_web::HttpMessage;
     let device_id = path.into_inner();
 
-    // Lấy user_id từ AuthContext để kiểm tra quyền
-    let user_id: Option<i64> = http_req
+    // Scope trước, ownership sau: viewer (thiếu recipe:write) bị từ chối
+    // ngay cả khi sở hữu thiết bị.
+    let auth = http_req
         .extensions()
-        .get::<crate::api::middleware::auth::AuthContext>()
-        .and_then(|ctx| ctx.user_id.as_ref())
-        .and_then(|id| id.parse().ok());
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if let Err(resp) = require_recipe_write(&auth) {
+        return resp;
+    }
 
-    if let Some(uid) = user_id {
-        let owned = crate::db::device_ownership::is_owner(&app_state.pg_pool, uid, &device_id)
-            .await
-            .unwrap_or(false);
-        if !owned {
-            return HttpResponse::Forbidden().json(json!({
-                "error": "Bạn không có quyền áp dụng recipe cho thiết bị này"
-            }));
-        }
+    // API key không gắn với user nào thì bị từ chối thay vì lặng lẽ
+    // bỏ qua kiểm tra ownership như trước đây.
+    let Some(uid) = auth_user_id(&auth) else {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "recipe_apply_requires_user",
+            "message": "Áp dụng recipe yêu cầu đăng nhập bằng tài khoản người dùng"
+        }));
+    };
+
+    let owned = crate::db::device_ownership::is_owner(&app_state.pg_pool, uid, &device_id)
+        .await
+        .unwrap_or(false);
+    if !owned {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Bạn không có quyền áp dụng recipe cho thiết bị này"
+        }));
     }
 
     let recipe_template = if let Some(recipe_id) = &req.recipe_id {
@@ -716,8 +782,37 @@ pub async fn apply_recipe(
 pub async fn clear_recipe(
     path: web::Path<String>,
     app_state: web::Data<AppState>,
+    http_req: HttpRequest,
 ) -> impl Responder {
     let device_id = path.into_inner();
+
+    // Thiết bị phải thuộc về caller VÀ caller phải có recipe:write.
+    // Đây là hàm nhạy cảm nhất (gửi lệnh xóa recipe tới device_id bất kỳ),
+    // nên cả hai điều kiện đều bắt buộc.
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if let Err(resp) = require_recipe_write(&auth) {
+        return resp;
+    }
+
+    let Some(uid) = auth_user_id(&auth) else {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "recipe_clear_requires_user",
+            "message": "Gỡ recipe yêu cầu đăng nhập bằng tài khoản người dùng"
+        }));
+    };
+
+    let owned = crate::db::device_ownership::is_owner(&app_state.pg_pool, uid, &device_id)
+        .await
+        .unwrap_or(false);
+    if !owned {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Bạn không có quyền gỡ recipe của thiết bị này"
+        }));
+    }
 
     let payload = ClearRecipeMqttPayload {
         action: "clear",
@@ -852,18 +947,23 @@ pub async fn bulk_apply_recipe(
 ) -> impl Responder {
     use crate::api::middleware::auth::AuthContext;
     use crate::db::device_ownership;
-    use actix_web::HttpMessage;
 
-    // Lấy user_id
-    let user_id: Option<i64> = req
+    // Lấy auth context đầy đủ (scope + user).
+    let auth = req
         .extensions()
         .get::<AuthContext>()
-        .and_then(|ctx| ctx.user_id.as_ref())
-        .and_then(|id| id.parse().ok());
+        .cloned()
+        .unwrap_or_default();
 
-    let Some(user_id) = user_id else {
+    let Some(user_id) = auth_user_id(&auth) else {
         return HttpResponse::Unauthorized().json(json!({"error": "Chưa đăng nhập"}));
     };
+
+    // Ownership không đủ: viewer sở hữu thiết bị vẫn bị từ chối khi
+    // thiếu recipe:write.
+    if let Err(resp) = require_recipe_write(&auth) {
+        return resp;
+    }
 
     if body.device_ids.is_empty() {
         return HttpResponse::BadRequest().json(json!({"error": "device_ids không được rỗng"}));
@@ -1082,4 +1182,366 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
             "/devices/{device_id}/recipe/status",
             web::get().to(recipe_status),
         );
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use crate::api::test_support::{authed_request, test_app_state};
+    use actix_web::http::StatusCode;
+
+    fn recipe_body() -> CreateRecipeRequest {
+        CreateRecipeRequest {
+            name: "Rau muống".to_string(),
+            crop: "leafy".to_string(),
+            description: None,
+            stages: Vec::new(),
+        }
+    }
+
+    async fn body_json(resp: HttpResponse) -> serde_json::Value {
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    // ── pure helper unit tests ────────────────────────────────────────────
+
+    #[test]
+    fn auth_user_id_parses_numeric_id() {
+        let auth = AuthContext {
+            scopes: vec!["recipe:write".to_string()],
+            user_id: Some("42".to_string()),
+            session_id: None,
+            service_key_label: None,
+        };
+        assert_eq!(auth_user_id(&auth), Some(42));
+    }
+
+    #[test]
+    fn auth_user_id_rejects_missing_or_garbage_id() {
+        let no_user = AuthContext {
+            scopes: vec!["recipe:write".to_string()],
+            user_id: None,
+            session_id: None,
+            service_key_label: None,
+        };
+        assert_eq!(auth_user_id(&no_user), None);
+
+        let garbage = AuthContext {
+            user_id: Some("not-a-number".to_string()),
+            ..no_user.clone()
+        };
+        assert_eq!(auth_user_id(&garbage), None);
+    }
+
+    #[test]
+    fn require_recipe_write_allows_scope_and_wildcard() {
+        let writer = AuthContext {
+            scopes: vec!["read:telemetry".to_string(), "recipe:write".to_string()],
+            user_id: Some("1".to_string()),
+            session_id: None,
+            service_key_label: None,
+        };
+        assert!(require_recipe_write(&writer).is_ok());
+
+        let admin = AuthContext {
+            scopes: vec!["*".to_string()],
+            ..writer.clone()
+        };
+        assert!(require_recipe_write(&admin).is_ok());
+    }
+
+    #[test]
+    fn require_recipe_write_rejects_viewer_with_403() {
+        let viewer = AuthContext {
+            scopes: vec!["read:telemetry".to_string()],
+            user_id: Some("1".to_string()),
+            session_id: None,
+            service_key_label: None,
+        };
+        let err = require_recipe_write(&viewer).unwrap_err();
+        assert_eq!(err.status(), StatusCode::FORBIDDEN);
+    }
+
+    // ── create / update / delete: scope gate ──────────────────────────────
+
+    #[actix_web::test]
+    async fn create_recipe_rejects_missing_scope() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["read:telemetry"], Some("1"));
+        let resp = create_recipe(state, web::Json(recipe_body()), req.clone())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["error"], "Missing required scope");
+        assert_eq!(v["required_scope"], "recipe:write");
+    }
+
+    #[actix_web::test]
+    async fn create_recipe_with_scope_reaches_db_layer() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], Some("1"));
+        let resp = create_recipe(state, web::Json(recipe_body()), req.clone())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_ne!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "recipe:write must pass the scope gate"
+        );
+        let v = body_json(resp).await;
+        assert!(
+            v.get("required_scope").is_none(),
+            "must not be a scope rejection, got: {v}"
+        );
+    }
+
+    #[actix_web::test]
+    async fn update_recipe_rejects_missing_scope() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["read:telemetry"], Some("1"));
+        let resp = update_recipe(
+            web::Path::from("recipe-1".to_string()),
+            state,
+            web::Json(recipe_body()),
+            req.clone(),
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["required_scope"], "recipe:write");
+    }
+
+    #[actix_web::test]
+    async fn update_recipe_with_scope_reaches_db_layer() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], Some("1"));
+        let resp = update_recipe(
+            web::Path::from("recipe-1".to_string()),
+            state,
+            web::Json(recipe_body()),
+            req.clone(),
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_ne!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "recipe:write must pass the scope gate"
+        );
+    }
+
+    #[actix_web::test]
+    async fn delete_recipe_rejects_missing_scope() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["read:telemetry"], Some("1"));
+        let resp = delete_recipe(web::Path::from("recipe-1".to_string()), state, req.clone())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["required_scope"], "recipe:write");
+    }
+
+    #[actix_web::test]
+    async fn delete_recipe_with_scope_reaches_db_layer() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], Some("1"));
+        let resp = delete_recipe(web::Path::from("recipe-1".to_string()), state, req.clone())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_ne!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "recipe:write must pass the scope gate"
+        );
+    }
+
+    // ── apply: scope AND ownership, no silent bypass ──────────────────────
+
+    fn empty_apply() -> web::Json<ApplyRecipeRequest> {
+        web::Json(ApplyRecipeRequest {
+            recipe_id: None,
+            recipe: None,
+        })
+    }
+
+    #[actix_web::test]
+    async fn apply_recipe_rejects_missing_scope_even_for_owner_candidate() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["read:telemetry"], Some("1"));
+        let resp = apply_recipe(
+            web::Path::from("dev-01".to_string()),
+            state,
+            empty_apply(),
+            req.clone(),
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["required_scope"], "recipe:write");
+    }
+
+    #[actix_web::test]
+    async fn apply_recipe_rejects_api_key_without_linked_user() {
+        // Trước fix này, user_id=None lặng lẽ bỏ qua kiểm tra ownership.
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], None);
+        let resp = apply_recipe(
+            web::Path::from("dev-01".to_string()),
+            state,
+            empty_apply(),
+            req.clone(),
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["error"], "recipe_apply_requires_user");
+    }
+
+    #[actix_web::test]
+    async fn apply_recipe_rejects_device_not_owned_by_caller() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], Some("1"));
+        let resp = apply_recipe(
+            web::Path::from("someone-elses-device".to_string()),
+            state,
+            empty_apply(),
+            req.clone(),
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(
+            v["error"],
+            "Bạn không có quyền áp dụng recipe cho thiết bị này"
+        );
+    }
+
+    // ── clear: scope AND ownership on arbitrary device_id ─────────────────
+
+    #[actix_web::test]
+    async fn clear_recipe_rejects_missing_scope() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["read:telemetry"], Some("1"));
+        let resp = clear_recipe(web::Path::from("dev-01".to_string()), state, req.clone())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["required_scope"], "recipe:write");
+    }
+
+    #[actix_web::test]
+    async fn clear_recipe_rejects_api_key_without_linked_user() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], None);
+        let resp = clear_recipe(web::Path::from("dev-01".to_string()), state, req.clone())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["error"], "recipe_clear_requires_user");
+    }
+
+    #[actix_web::test]
+    async fn clear_recipe_rejects_device_not_owned_by_caller() {
+        // Trường hợp ưu tiên cao nhất: device_id tùy ý trước đây không bị
+        // chặn gì cả; giờ phải 403 khi caller không sở hữu thiết bị.
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], Some("1"));
+        let resp = clear_recipe(
+            web::Path::from("someone-elses-device".to_string()),
+            state,
+            req.clone(),
+        )
+        .await
+        .respond_to(&req)
+        .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["error"], "Bạn không có quyền gỡ recipe của thiết bị này");
+    }
+
+    // ── bulk apply: scope AND ownership-of-all ────────────────────────────
+
+    fn bulk_body() -> web::Json<BulkApplyRecipeRequest> {
+        web::Json(BulkApplyRecipeRequest {
+            device_ids: vec!["dev-01".to_string()],
+            recipe_id: None,
+            recipe: None,
+        })
+    }
+
+    #[actix_web::test]
+    async fn bulk_apply_rejects_missing_scope() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["read:telemetry"], Some("1"));
+        let resp = bulk_apply_recipe(req.clone(), state, bulk_body())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(v["required_scope"], "recipe:write");
+    }
+
+    #[actix_web::test]
+    async fn bulk_apply_rejects_devices_not_owned_by_caller() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], Some("1"));
+        let resp = bulk_apply_recipe(req.clone(), state, bulk_body())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let v = body_json(resp).await;
+        assert_eq!(
+            v["error"],
+            "Bạn không sở hữu một hoặc nhiều thiết bị trong danh sách"
+        );
+    }
+
+    #[actix_web::test]
+    async fn bulk_apply_still_rejects_missing_user_with_401() {
+        let state = web::Data::new(test_app_state());
+        let req = authed_request(&["recipe:write"], None);
+        let resp = bulk_apply_recipe(req.clone(), state, bulk_body())
+            .await
+            .respond_to(&req)
+            .map_into_boxed_body();
+
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
 }

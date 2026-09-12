@@ -1,9 +1,9 @@
 use crate::diagnostic_model::{
-    parse_diagnosis, Diagnosis, DiagnosticContext, DiagnosticModel, DiagnosticModelError,
+    Diagnosis, DiagnosticContext, DiagnosticModel, DiagnosticModelError, parse_diagnosis,
 };
 use async_trait::async_trait;
 use hydragrow_supervisor_query::{
-    validate_and_clamp, validate_device_scope, QueryBackend, SupervisorQuery,
+    QueryBackend, SupervisorQuery, validate_and_clamp, validate_device_scope,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -82,7 +82,10 @@ Do not return Markdown or code fences."#
     ) -> Result<serde_json::Value, DiagnosticModelError> {
         let resp = self
             .http
-            .post(format!("{}/v1/messages", self.base_url.trim_end_matches('/')))
+            .post(format!(
+                "{}/v1/messages",
+                self.base_url.trim_end_matches('/')
+            ))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
@@ -97,10 +100,12 @@ Do not return Markdown or code fences."#
             }))
             .send()
             .await
-            .map_err(|e| if e.is_timeout() {
-                DiagnosticModelError::Timeout
-            } else {
-                DiagnosticModelError::ProviderError(e.to_string())
+            .map_err(|e| {
+                if e.is_timeout() {
+                    DiagnosticModelError::Timeout
+                } else {
+                    DiagnosticModelError::ProviderError(e.to_string())
+                }
             })?;
 
         let status = resp.status();
@@ -117,10 +122,30 @@ Do not return Markdown or code fences."#
             .map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))
     }
 
-    fn tool_call_to_query(name: &str, input: &serde_json::Value) -> Option<SupervisorQuery> {
-        let mut tagged = input.clone();
-        tagged["query_type"] = serde_json::Value::String(name.to_string());
-        serde_json::from_value(tagged).ok()
+    fn tool_call_to_query(
+        name: &str,
+        input: &serde_json::Value,
+        fallback_device_id: &str,
+    ) -> Result<SupervisorQuery, String> {
+        let mut obj = input.as_object().cloned().unwrap_or_default();
+        let need_device_id = match obj.get("device_id") {
+            None => true,
+            Some(serde_json::Value::Null) => true,
+            Some(serde_json::Value::String(s)) => s.trim().is_empty(),
+            _ => false,
+        };
+        if need_device_id {
+            obj.insert(
+                "device_id".to_string(),
+                serde_json::Value::String(fallback_device_id.to_string()),
+            );
+        }
+        obj.insert(
+            "query_type".to_string(),
+            serde_json::Value::String(name.to_string()),
+        );
+        serde_json::from_value(serde_json::Value::Object(obj))
+            .map_err(|e| format!("malformed tool arguments: {e}"))
     }
 
     fn error_json(error: impl std::fmt::Display) -> String {
@@ -150,7 +175,9 @@ impl DiagnosticModel for OpenRouterDiagnosticModel {
 
         for _round in 0..self.max_tool_round_trips {
             if started.elapsed().as_secs() >= self.wall_clock_budget_secs {
-                return Err(DiagnosticModelError::BudgetExceeded("wall_clock".to_string()));
+                return Err(DiagnosticModelError::BudgetExceeded(
+                    "wall_clock".to_string(),
+                ));
             }
 
             let estimated_tokens = serde_json::to_string(&messages)
@@ -187,8 +214,7 @@ impl DiagnosticModel for OpenRouterDiagnosticModel {
                             "no text or tool_use in OpenRouter response".to_string(),
                         )
                     })?;
-                let parsed: serde_json::Value = serde_json::from_str(text)
-                    .map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))?;
+                let parsed = crate::diagnostic_model::extract_json(text)?;
                 return parse_diagnosis(&parsed);
             }
 
@@ -198,20 +224,25 @@ impl DiagnosticModel for OpenRouterDiagnosticModel {
             for tool_use in tool_uses {
                 let id = tool_use.get("id").and_then(|i| i.as_str()).unwrap_or("");
                 let name = tool_use.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                let input = tool_use.get("input").cloned().unwrap_or_else(|| serde_json::json!({}));
+                let input = tool_use
+                    .get("input")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({}));
 
-                let result_text = match Self::tool_call_to_query(name, &input) {
-                    Some(query) => match validate_device_scope(&query, &context.device_id) {
+                let result_text = match Self::tool_call_to_query(name, &input, &context.device_id) {
+                    Ok(query) => match validate_device_scope(&query, &context.device_id) {
                         Ok(()) => match validate_and_clamp(query) {
                             Ok(clamped) => match self.query_backend.execute(clamped).await {
-                                Ok(result) => serde_json::to_string(&result).unwrap_or_else(Self::error_json),
+                                Ok(result) => {
+                                    serde_json::to_string(&result).unwrap_or_else(Self::error_json)
+                                }
                                 Err(e) => Self::error_json(e),
                             },
                             Err(e) => Self::error_json(e),
                         },
                         Err(e) => Self::error_json(e),
                     },
-                    None => Self::error_json(format!("unknown or malformed tool call: {name}")),
+                    Err(e) => Self::error_json(e),
                 };
 
                 tool_results.push(serde_json::json!({

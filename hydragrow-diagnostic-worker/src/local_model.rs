@@ -157,3 +157,55 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
         Err(DiagnosticModelError::BudgetExceeded("max_tool_round_trips".to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_model_tool_definitions_are_strictly_read_only() {
+        let tools = LocalLlamaDiagnosticModel::tool_definitions();
+        let tools_array = tools
+            .as_array()
+            .expect("tool_definitions must return a JSON array");
+
+        let expected = [
+            "sensor_history",
+            "dosing_history",
+            "fsm_events",
+            "health_topics",
+        ];
+
+        let actual_names: Vec<String> = tools_array
+            .iter()
+            .map(|t| {
+                t.get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .expect("each tool must have function.name")
+                    .to_string()
+            })
+            .collect();
+
+        let mut sorted_actual = actual_names.clone();
+        sorted_actual.sort();
+        let mut sorted_expected = expected.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        sorted_expected.sort();
+        assert_eq!(sorted_actual, sorted_expected);
+
+        let forbidden = [
+            "pump", "dose", "refill", "drain", "misting", "mix", "control", "command", "actuator",
+        ];
+
+        for name in &actual_names {
+            for word in forbidden {
+                assert!(
+                    !name.to_lowercase().contains(word),
+                    "tool name '{}' contains forbidden actuator/control substring '{}'",
+                    name,
+                    word
+                );
+            }
+        }
+    }
+}

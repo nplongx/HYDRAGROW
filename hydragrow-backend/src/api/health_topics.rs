@@ -122,8 +122,26 @@ pub async fn get_device_health_topics(
     }
 }
 
+pub async fn get_all_hestia(
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    if let Err(resp) = auth_or_forbidden(&req) {
+        return resp;
+    }
+
+    let states = app_state.device_states.read().await;
+    let data = extract_hestia_by_device(&states);
+
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "data": data,
+    }))
+}
+
 pub fn init_fleet_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/health/topics", web::get().to(get_all_health_topics));
+    cfg.route("/health/hestia", web::get().to(get_all_hestia));
 }
 
 pub fn init_device_routes(cfg: &mut web::ServiceConfig) {
@@ -246,5 +264,152 @@ mod tests {
             serde_json::json!({"device_id": "broken"}).to_string(),
         )]);
         assert!(extract_hestia_by_device(&states).is_empty());
+    }
+
+    #[test]
+    fn hestia_response_uses_existing_success_envelope() {
+        let data = HashMap::<String, HestiaAssessment>::new();
+        let body = serde_json::json!({"status": "success", "data": data});
+        assert_eq!(body["status"], "success");
+        assert!(body["data"].is_object());
+    }
+
+    fn test_app_state() -> crate::AppState {
+        use rumqttc::{AsyncClient, MqttOptions};
+        use std::sync::{Arc, Mutex};
+        use tokio::sync::broadcast;
+
+        let (mqtt_client, _eventloop) =
+            AsyncClient::new(MqttOptions::new("test-client", "localhost", 1883), 10);
+        let (event_bus, _rx) = broadcast::channel(16);
+        crate::AppState {
+            pg_pool: sqlx::PgPool::connect_lazy("postgres://localhost/hydragrow_test").unwrap(),
+            influx_client: influxdb2::Client::new(
+                "http://localhost:8086".to_string(),
+                "test-org".to_string(),
+                "test-token".to_string(),
+            ),
+            influx_bucket: "test-bucket".to_string(),
+            mqtt_client,
+            api_key: "test-api-key".to_string(),
+            firebase_auth: std::sync::Arc::new(
+                crate::services::firebase_auth::FirebaseAuthVerifier::new(
+                    "test-project".to_string(),
+                ),
+            ),
+            event_bus,
+            device_states: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            device_firmware: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            solana_traceability: crate::services::solana::SolanaTraceability::new(
+                "https://api.devnet.solana.com",
+                None,
+            ),
+            fcm_tokens: Arc::new(Mutex::new(HashMap::new())),
+            ph_calibration_sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            ph_voltage_samples: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            dosing_dynamic_states: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            command_rate_limits: Arc::new(Mutex::new(HashMap::new())),
+            script_cache: crate::services::script_engine::ScriptCache::new(std::sync::Arc::new(
+                crate::services::script_engine::ScriptEngine::new(),
+            )),
+            cloudinary: None,
+        }
+    }
+
+    fn hestia_snapshot_json(device_id: &str) -> serde_json::Value {
+        serde_json::json!({
+            "device_id": device_id,
+            "free_heap": 100,
+            "uptime_sec": 10,
+            "rssi": -40,
+            "health_score_percent": 70,
+            "fsm_state_display": "Running",
+            "log_drop_count": 0,
+            "firmware_version": "v1",
+            "kalman_confidence": null,
+            "matrix_update_count": 1,
+            "matrix_is_warm": true,
+            "hestia": {
+                "score": 65.0,
+                "state": "WARNING",
+                "confidence": 0.8,
+                "axes": {
+                    "ec": {"comfort": 0.5, "weight": 0.35, "trend": "degrading", "trend_factor": 1.1, "action_factor": 1.0},
+                    "ph": {"comfort": 1.0, "weight": 0.3, "trend": "stable", "trend_factor": 1.0, "action_factor": 1.0},
+                    "water_level": {"comfort": 1.0, "weight": 0.2, "trend": "stable", "trend_factor": 1.0, "action_factor": 1.0},
+                    "temp": {"comfort": 1.0, "weight": 0.15, "trend": "stable", "trend_factor": 1.0, "action_factor": 1.0}
+                },
+                "reasons": ["ec_out_of_range"]
+            },
+            "timestamp_ms": 1234
+        })
+    }
+
+    #[actix_web::test]
+    async fn hestia_fleet_route_returns_success_envelope_with_health_read_scope() {
+        use actix_web::body::MessageBody;
+        use actix_web::dev::{ServiceRequest, ServiceResponse};
+        use actix_web::middleware::{Next, from_fn};
+        use actix_web::{App, HttpMessage, test};
+
+        // Inject the real AuthContext through request extensions, exactly as
+        // ApiKeyAuthMiddleware does — no fake auth mechanism.
+        async fn inject_health_read_auth<B: MessageBody + 'static>(
+            req: ServiceRequest,
+            next: Next<B>,
+        ) -> Result<ServiceResponse<B>, actix_web::Error> {
+            req.extensions_mut().insert(AuthContext {
+                scopes: vec!["health:read".to_string()],
+                user_id: None,
+                session_id: None,
+                service_key_label: None,
+            });
+            next.call(req).await
+        }
+
+        let state = web::Data::new(test_app_state());
+        {
+            let mut states = state.device_states.write().await;
+            states.insert(
+                "dev-1".to_string(),
+                hestia_snapshot_json("dev-1").to_string(),
+            );
+            states.insert(
+                "dev-2".to_string(),
+                serde_json::json!({
+                    "device_id": "dev-2",
+                    "free_heap": 100,
+                    "uptime_sec": 10,
+                    "rssi": -40,
+                    "health_score_percent": 100,
+                    "fsm_state_display": "Running",
+                    "log_drop_count": 0,
+                    "firmware_version": "v1",
+                    "kalman_confidence": null,
+                    "matrix_update_count": 1,
+                    "matrix_is_warm": false,
+                    "hestia": null,
+                    "timestamp_ms": 1234
+                })
+                .to_string(),
+            );
+        }
+
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .wrap(from_fn(inject_health_read_auth))
+                .configure(init_fleet_routes),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/health/hestia").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), actix_web::http::StatusCode::OK);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["status"], "success");
+        assert!(body["data"].is_object());
+        assert!(body["data"].get("dev-1").is_some());
+        assert!(body["data"].get("dev-2").is_none());
     }
 }

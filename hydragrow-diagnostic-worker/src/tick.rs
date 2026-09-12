@@ -25,12 +25,18 @@ pub async fn run_fleet_tick(
     let mut handles = Vec::new();
 
     for (device_id, hestia) in fleet {
-        let has_breach = backend
-            .has_recent_watchdog_breach(&device_id, watchdog_breach_lookback_minutes)
-            .await
-            .unwrap_or(false);
+        let trigger = match evaluate_triggers(Some(&hestia), false) {
+            Some(t) => Some(t),
+            None => {
+                let has_breach = backend
+                    .has_recent_watchdog_breach(&device_id, watchdog_breach_lookback_minutes)
+                    .await
+                    .unwrap_or(false);
+                evaluate_triggers(Some(&hestia), has_breach)
+            }
+        };
 
-        let Some(trigger) = evaluate_triggers(Some(&hestia), has_breach) else {
+        let Some(trigger) = trigger else {
             continue;
         };
 
@@ -42,13 +48,13 @@ pub async fn run_fleet_tick(
         let model = model.clone();
         let backend = backend.clone();
         let device_id = device_id.clone();
-        let crop_target = backend
-            .get_crop_target(&device_id)
-            .await
-            .unwrap_or(serde_json::json!({}));
 
         handles.push(tokio::spawn(async move {
             let _permit = permit; // held for the task's lifetime
+            let crop_target = backend
+                .get_crop_target(&device_id)
+                .await
+                .unwrap_or(serde_json::json!({}));
             if let Err(e) = run_diagnosis(
                 &device_id,
                 trigger,
@@ -110,13 +116,22 @@ mod tests {
     #[derive(Default)]
     struct FakeBackend {
         fleet: HashMap<String, serde_json::Value>,
+        watchdog_checks: Arc<Mutex<Vec<String>>>,
     }
     #[async_trait]
     impl DiagnosisBackend for FakeBackend {
         async fn get_fleet_hestia(&self) -> anyhow::Result<HashMap<String, serde_json::Value>> {
             Ok(self.fleet.clone())
         }
-        async fn has_recent_watchdog_breach(&self, _: &str, _: i64) -> anyhow::Result<bool> {
+        async fn has_recent_watchdog_breach(
+            &self,
+            device_id: &str,
+            _: i64,
+        ) -> anyhow::Result<bool> {
+            self.watchdog_checks
+                .lock()
+                .unwrap()
+                .push(device_id.to_string());
             Ok(false)
         }
         async fn recent_alert_exists(&self, _: &str, _: &str) -> anyhow::Result<bool> {
@@ -159,7 +174,11 @@ mod tests {
             serde_json::json!({"state": "COMFORTABLE", "reasons": []}),
         );
 
-        let backend = FakeBackend { fleet };
+        let watchdog_checks = Arc::new(Mutex::new(vec![]));
+        let backend = FakeBackend {
+            fleet,
+            watchdog_checks: watchdog_checks.clone(),
+        };
         let calls = Arc::new(Mutex::new(vec![]));
         let model = FakeModel {
             calls: calls.clone(),
@@ -173,5 +192,34 @@ mod tests {
             called,
             vec!["critical-dev".to_string(), "triggered-dev".to_string()]
         );
+    }
+
+    #[tokio::test]
+    async fn run_fleet_tick_skips_watchdog_breach_check_when_hestia_already_triggered() {
+        let mut fleet = HashMap::new();
+        fleet.insert(
+            "warning-dev".to_string(),
+            serde_json::json!({"state": "WARNING", "reasons": ["ec_out_of_range"]}),
+        );
+        fleet.insert(
+            "comfortable-dev".to_string(),
+            serde_json::json!({"state": "COMFORTABLE", "reasons": []}),
+        );
+
+        let watchdog_checks = Arc::new(Mutex::new(vec![]));
+        let backend = FakeBackend {
+            fleet,
+            watchdog_checks: watchdog_checks.clone(),
+        };
+        let calls = Arc::new(Mutex::new(vec![]));
+        let model = FakeModel {
+            calls: calls.clone(),
+        };
+
+        run_fleet_tick(Arc::new(model), Arc::new(backend), 5, 10).await;
+
+        let checked = watchdog_checks.lock().unwrap().clone();
+        // Only the comfortable device needed a watchdog breach check; warning-dev already fired.
+        assert_eq!(checked, vec!["comfortable-dev".to_string()]);
     }
 }

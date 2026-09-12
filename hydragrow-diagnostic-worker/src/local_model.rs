@@ -59,16 +59,16 @@ impl LocalLlamaDiagnosticModel {
     fn system_prompt() -> &'static str {
         r#"You are a supervising diagnostic assistant for a hydroponic controller.
 You can only read data through the tools provided. You cannot control anything.
-Prioritize current device state, Hestia reasons, recent dosing/FSM events, then longer sensor history.
-When enough information is available, respond with ONLY a JSON object matching:
-{"reason_codes":[...],"confidence":0.0,"narrative":"...","observations":{"current_value":...,"target_value":...,"delta":...,"window_minutes":...,"corroborating_evidence":[...]}}
-Use only canonical reason codes supplied in the task. Never invent a reason code.
+First use a query tool (such as sensor_history) to retrieve data for the device. Once tool results are received, respond with ONLY a JSON object matching:
+{"reason_codes":["canonical_reason_code"],"confidence":0.8,"narrative":"summary of finding","observations":{"current_value":2.4,"target_value":1.8,"delta":0.6,"window_minutes":10,"corroborating_evidence":["evidence 1"]}}
+reason_codes must contain at least one canonical reason code from the task (never leave empty).
 Do not return Markdown or code fences."#
     }
 
     async fn call_llama(
         &self,
         messages: &[serde_json::Value],
+        tool_choice: &str,
     ) -> Result<serde_json::Value, DiagnosticModelError> {
         let resp = self
             .http
@@ -81,9 +81,12 @@ Do not return Markdown or code fences."#
                 "model": self.model,
                 "messages": messages,
                 "tools": Self::tool_definitions(),
-                "tool_choice": "auto",
+                "tool_choice": tool_choice,
                 "max_tokens": self.max_output_tokens,
-                "temperature": 0.1
+                "temperature": 0.1,
+                "chat_template_kwargs": {
+                    "enable_thinking": false
+                }
             }))
             .send()
             .await
@@ -108,10 +111,43 @@ Do not return Markdown or code fences."#
             .map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))
     }
 
-    fn tool_call_to_query(name: &str, arguments: &str) -> Option<SupervisorQuery> {
-        let mut input: serde_json::Value = serde_json::from_str(arguments).ok()?;
-        input["query_type"] = serde_json::Value::String(name.to_string());
-        serde_json::from_value(input).ok()
+    fn tool_call_to_query(
+        name: &str,
+        arguments: Option<&serde_json::Value>,
+        fallback_device_id: &str,
+    ) -> Result<SupervisorQuery, String> {
+        let mut input = match arguments {
+            None => serde_json::json!({}),
+            Some(serde_json::Value::String(s)) => serde_json::from_str(s)
+                .map_err(|e| format!("malformed JSON in tool arguments: {e}"))?,
+            Some(serde_json::Value::Object(map)) => serde_json::Value::Object(map.clone()),
+            Some(other) => return Err(format!("unexpected tool arguments type: {other}")),
+        };
+
+        if !input.is_object() {
+            return Err(format!("tool arguments for '{name}' must be a JSON object"));
+        }
+
+        let obj = input.as_object_mut().unwrap();
+        let need_device_id = match obj.get("device_id") {
+            None => true,
+            Some(serde_json::Value::Null) => true,
+            Some(serde_json::Value::String(s)) => s.trim().is_empty(),
+            _ => false,
+        };
+        if need_device_id {
+            obj.insert(
+                "device_id".to_string(),
+                serde_json::Value::String(fallback_device_id.to_string()),
+            );
+        }
+        obj.insert(
+            "query_type".to_string(),
+            serde_json::Value::String(name.to_string()),
+        );
+
+        serde_json::from_value(serde_json::Value::Object(obj.clone()))
+            .map_err(|e| format!("malformed tool arguments: {e}"))
     }
 
     fn error_json(error: impl std::fmt::Display) -> String {
@@ -129,7 +165,7 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
         let mut messages = vec![
             serde_json::json!({"role":"system","content":Self::system_prompt()}),
             serde_json::json!({"role":"user","content":format!(
-                "Device: {}\nTrigger: {:?}\nHestia snapshot: {}\nCrop target: {}\nCanonical reason codes: {:?}",
+                "Device: {}\nTrigger: {:?}\nHestia snapshot: {}\nCrop target: {}\nInvestigate using query tools (such as sensor_history) to gather corroborating evidence before diagnosing.\nCanonical reason codes: {:?}",
                 context.device_id, context.trigger, context.hestia_snapshot, context.crop_target,
                 hydragrow_shared::supervisor::SupervisorReasonCode::all_as_str()
             )}),
@@ -150,7 +186,8 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
                 ));
             }
 
-            let response = self.call_llama(&messages).await?;
+            let tool_choice = if _round == 0 { "required" } else { "auto" };
+            let response = self.call_llama(&messages, tool_choice).await?;
             let message = response
                 .get("choices")
                 .and_then(|c| c.get(0))
@@ -163,6 +200,10 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
                 .and_then(|v| v.as_array())
                 .cloned()
                 .unwrap_or_default();
+            tracing::info!(
+                tool_calls_count = tool_calls.len(),
+                "llama response message received"
+            );
 
             if tool_calls.is_empty() {
                 let text = message
@@ -171,40 +212,43 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
                     .ok_or_else(|| {
                         DiagnosticModelError::InvalidOutput("missing assistant content".to_string())
                     })?;
-                let parsed: serde_json::Value = serde_json::from_str(text.trim())
-                    .map_err(|e| DiagnosticModelError::InvalidOutput(e.to_string()))?;
+                tracing::info!(text = %text, "assistant content received from llama");
+                let parsed = crate::diagnostic_model::extract_json(text)?;
                 return parse_diagnosis(&parsed);
             }
 
             messages.push(message.clone());
-            for tool_call in tool_calls {
+            for (idx, tool_call) in tool_calls.iter().enumerate() {
                 let id = tool_call.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                let tool_call_id = if id.is_empty() {
+                    format!("call_{idx}")
+                } else {
+                    id.to_string()
+                };
                 let function = tool_call
                     .get("function")
                     .cloned()
                     .unwrap_or_else(|| serde_json::json!({}));
                 let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                let arguments = function
-                    .get("arguments")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("{}");
-                let result_text = match Self::tool_call_to_query(name, arguments) {
-                    Some(query) => match validate_device_scope(&query, &context.device_id) {
-                        Ok(()) => match validate_and_clamp(query) {
-                            Ok(clamped) => match self.query_backend.execute(clamped).await {
-                                Ok(result) => {
-                                    serde_json::to_string(&result).unwrap_or_else(Self::error_json)
-                                }
+                let arguments = function.get("arguments");
+
+                let result_text =
+                    match Self::tool_call_to_query(name, arguments, &context.device_id) {
+                        Ok(query) => match validate_device_scope(&query, &context.device_id) {
+                            Ok(()) => match validate_and_clamp(query) {
+                                Ok(clamped) => match self.query_backend.execute(clamped).await {
+                                    Ok(result) => serde_json::to_string(&result)
+                                        .unwrap_or_else(Self::error_json),
+                                    Err(e) => Self::error_json(e),
+                                },
                                 Err(e) => Self::error_json(e),
                             },
                             Err(e) => Self::error_json(e),
                         },
                         Err(e) => Self::error_json(e),
-                    },
-                    None => Self::error_json(format!("unknown or malformed tool call: {name}")),
-                };
+                    };
                 messages.push(
-                    serde_json::json!({"role":"tool","tool_call_id":id,"content":result_text}),
+                    serde_json::json!({"role":"tool","tool_call_id":tool_call_id,"content":result_text}),
                 );
             }
         }
@@ -221,6 +265,7 @@ mod tests {
     use crate::trigger::SupervisorTrigger;
     use hydragrow_shared::supervisor::SupervisorReasonCode;
     use hydragrow_supervisor_query::testing::FakeQueryBackend;
+    use hydragrow_supervisor_query::{QueryError, QueryResult};
     use std::collections::HashMap;
     use std::sync::Mutex;
 
@@ -415,7 +460,7 @@ mod tests {
         assert_eq!(diagnosis.confidence, 0.8);
         assert_eq!(diagnosis.narrative, "EC is outside the target range.");
 
-        let calls = backend.calls.lock().unwrap();
+        let calls = backend.calls.lock().unwrap().clone();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].tag(), "sensor_history");
         assert_eq!(calls[0].device_id(), "dev-1");
@@ -477,5 +522,380 @@ mod tests {
             Err(DiagnosticModelError::BudgetExceeded(_))
         ));
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_markdown_code_fences_in_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let fenced_final = format!("```json\n{}\n```", final_diagnosis_body());
+        let mock = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                serde_json::json!({
+                    "choices": [{"message": {"content": fenced_final}}]
+                })
+                .to_string(),
+            )
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(
+            diagnosis.reason_codes,
+            vec![SupervisorReasonCode::EcOutOfRange]
+        );
+        assert_eq!(diagnosis.confidence, 0.8);
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_tool_arguments_as_json_object() {
+        let mut server = mockito::Server::new_async().await;
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-obj-1",
+                        "type": "function",
+                        "function": {
+                            "name": "sensor_history",
+                            "arguments": {"device_id": "dev-1", "minutes": 10}
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex("call-obj-1".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend {
+            responses: Mutex::new(HashMap::from([(
+                "sensor_history".to_string(),
+                serde_json::json!({"readings": [{"ec": 2.4, "minutes_ago": 1}]}),
+            )])),
+            calls: Mutex::new(vec![]),
+        });
+
+        let model = test_model(server.url(), backend.clone(), 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(diagnosis.confidence, 0.8);
+        let calls = backend.calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].device_id(), "dev-1");
+
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_tool_arguments_missing_device_id_by_using_context_device_id() {
+        let mut server = mockito::Server::new_async().await;
+        // The LLM called sensor_history with minutes only, omitting device_id
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-no-dev",
+                        "type": "function",
+                        "function": {
+                            "name": "sensor_history",
+                            "arguments": "{\"minutes\":15}"
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex("call-no-dev".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend {
+            responses: Mutex::new(HashMap::from([(
+                "sensor_history".to_string(),
+                serde_json::json!({"readings": [{"ec": 2.4, "minutes_ago": 1}]}),
+            )])),
+            calls: Mutex::new(vec![]),
+        });
+
+        let model = test_model(server.url(), backend.clone(), 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(diagnosis.confidence, 0.8);
+        let calls = backend.calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].device_id(), "dev-1");
+
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_empty_sensor_history_then_returns_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-empty",
+                        "type": "function",
+                        "function": {
+                            "name": "sensor_history",
+                            "arguments": "{\"device_id\":\"dev-1\",\"minutes\":10}"
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex("call-empty".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend {
+            responses: Mutex::new(HashMap::from([(
+                "sensor_history".to_string(),
+                serde_json::json!({"readings": []}),
+            )])),
+            calls: Mutex::new(vec![]),
+        });
+
+        let model = test_model(server.url(), backend.clone(), 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(diagnosis.confidence, 0.8);
+        let calls = backend.calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
+    }
+
+    struct ErrorQueryBackend;
+    #[async_trait]
+    impl QueryBackend for ErrorQueryBackend {
+        async fn execute(&self, _: SupervisorQuery) -> Result<QueryResult, QueryError> {
+            Err(QueryError::Backend(
+                "simulated backend query failure".to_string(),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_tool_failure_then_returns_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-err",
+                        "type": "function",
+                        "function": {
+                            "name": "sensor_history",
+                            "arguments": "{\"device_id\":\"dev-1\",\"minutes\":10}"
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex("call-err".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(ErrorQueryBackend);
+        let model = test_model(server.url(), backend, 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(diagnosis.confidence, 0.8);
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_malformed_tool_arguments_then_returns_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-bad-arg",
+                        "type": "function",
+                        "function": {
+                            "name": "sensor_history",
+                            "arguments": "{not_valid_json"
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex(
+                "malformed JSON in tool arguments".into(),
+            ))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(diagnosis.confidence, 0.8);
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_handles_unknown_tool_call_then_returns_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-unknown",
+                        "type": "function",
+                        "function": {
+                            "name": "non_existent_tool",
+                            "arguments": "{}"
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex("malformed tool arguments".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(diagnosis.confidence, 0.8);
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
     }
 }

@@ -51,10 +51,14 @@ struct ApiEnvelope<T> {
 
 impl BackendClient {
     pub fn new(base_url: String, api_key: String) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         Self {
-            base_url,
+            base_url: base_url.trim_end_matches('/').to_string(),
             api_key,
-            http: reqwest::Client::new(),
+            http,
         }
     }
 }

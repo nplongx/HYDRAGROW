@@ -19,3 +19,9 @@ Xem bảng ánh xạ workflow → subsystem trong [README.md](README.md#ci). M�
 
 - `server_wallet.json` — Solana wallet key, không commit.
 - `hydragrow-backend/migrations/` — cần migration plan riêng, xem [module-rules/backend.md](docs/superpowers/specs/module-rules/backend.md#-migrations-checklist-run-before-every-pr).
+
+## Agent-assisted changes
+
+Agents must follow `AGENTS.md` and the module rules under
+`docs/superpowers/specs/module-rules/`. Agent-generated PRs follow the same
+review and verification requirements as human-authored PRs.

@@ -127,8 +127,10 @@ pub async fn get_all_hestia(req: HttpRequest, app_state: web::Data<AppState>) ->
         return resp;
     }
 
-    let states = app_state.device_states.read().await;
-    let data = extract_hestia_by_device(&states);
+    let data = {
+        let states = app_state.device_states.read().await;
+        extract_hestia_by_device(&states)
+    };
 
     HttpResponse::Ok().json(json!({
         "status": "success",
@@ -271,6 +273,7 @@ mod tests {
         assert!(body["data"].is_object());
     }
 
+    // test_app_state hand-builds AppState; keep its fields in sync when AppState gains fields.
     fn test_app_state() -> crate::AppState {
         use rumqttc::{AsyncClient, MqttOptions};
         use std::sync::{Arc, Mutex};

@@ -161,6 +161,11 @@ impl DiagnosticModel for LocalLlamaDiagnosticModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::trigger::SupervisorTrigger;
+    use hydragrow_shared::supervisor::SupervisorReasonCode;
+    use hydragrow_supervisor_query::testing::FakeQueryBackend;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
 
     #[test]
     fn local_model_tool_definitions_are_strictly_read_only() {
@@ -207,5 +212,213 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn test_context() -> DiagnosticContext {
+        DiagnosticContext {
+            device_id: "dev-1".to_string(),
+            trigger: SupervisorTrigger::HestiaState {
+                state: "WARNING".to_string(),
+                reasons: vec!["ec_out_of_range".to_string()],
+            },
+            hestia_snapshot: serde_json::json!({"state": "WARNING", "reasons": ["ec_out_of_range"]}),
+            crop_target: serde_json::json!({"ec_target": 1.8}),
+        }
+    }
+
+    fn test_model(
+        base_url: String,
+        query_backend: Arc<dyn QueryBackend>,
+        max_tool_round_trips: u32,
+        max_input_tokens: u32,
+        wall_clock_budget_secs: u64,
+    ) -> LocalLlamaDiagnosticModel {
+        LocalLlamaDiagnosticModel::new(
+            base_url,
+            "qwen3-0.6b".to_string(),
+            query_backend,
+            max_tool_round_trips,
+            max_input_tokens,
+            1024,
+            25,
+            wall_clock_budget_secs,
+        )
+    }
+
+    fn final_diagnosis_body() -> serde_json::Value {
+        serde_json::json!({
+            "reason_codes": ["ec_out_of_range"],
+            "confidence": 0.8,
+            "narrative": "EC is outside the target range.",
+            "observations": {
+                "current_value": 2.4,
+                "target_value": 1.8,
+                "delta": 0.6,
+                "window_minutes": 10,
+                "corroborating_evidence": ["recent sensor history"]
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn diagnose_returns_mocked_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(
+                serde_json::json!({
+                    "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+                })
+                .to_string(),
+            )
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(
+            diagnosis.reason_codes,
+            vec![SupervisorReasonCode::EcOutOfRange]
+        );
+        assert_eq!(diagnosis.confidence, 0.8);
+        assert_eq!(diagnosis.narrative, "EC is outside the target range.");
+        assert_eq!(diagnosis.observations.current_value, 2.4);
+        assert_eq!(diagnosis.observations.target_value, 1.8);
+        assert_eq!(diagnosis.observations.delta, 0.6);
+        assert_eq!(diagnosis.observations.window_minutes, 10);
+        assert_eq!(
+            diagnosis.observations.corroborating_evidence,
+            vec!["recent sensor history".to_string()]
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_executes_sensor_history_tool_call_then_returns_final_answer() {
+        let mut server = mockito::Server::new_async().await;
+        let tool_call_response = serde_json::json!({
+            "choices": [{
+                "message": {
+                    "content": null,
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "sensor_history",
+                            "arguments": "{\"device_id\":\"dev-1\",\"minutes\":10}"
+                        }
+                    }]
+                }
+            }]
+        });
+        let final_response = serde_json::json!({
+            "choices": [{"message": {"content": final_diagnosis_body().to_string()}}]
+        });
+
+        // Created first so it wins for the follow-up request carrying the tool result.
+        let mock_final = server
+            .mock("POST", "/v1/chat/completions")
+            .match_body(mockito::Matcher::Regex("tool_call_id".into()))
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(final_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let mock_tool_call = server
+            .mock("POST", "/v1/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(tool_call_response.to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend {
+            responses: Mutex::new(HashMap::from([(
+                "sensor_history".to_string(),
+                serde_json::json!({"readings": [{"ec": 2.4, "minutes_ago": 1}]}),
+            )])),
+            calls: Mutex::new(vec![]),
+        });
+
+        let model = test_model(server.url(), backend.clone(), 5, 8000, 60);
+        let diagnosis = model.diagnose(test_context()).await.unwrap();
+
+        assert_eq!(
+            diagnosis.reason_codes,
+            vec![SupervisorReasonCode::EcOutOfRange]
+        );
+        assert_eq!(diagnosis.confidence, 0.8);
+        assert_eq!(diagnosis.narrative, "EC is outside the target range.");
+
+        let calls = backend.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].tag(), "sensor_history");
+        assert_eq!(calls[0].device_id(), "dev-1");
+
+        mock_tool_call.assert_async().await;
+        mock_final.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_returns_budget_exceeded_on_zero_wall_clock_budget() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/v1/chat/completions")
+            .expect(0)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 5, 8000, 0);
+        assert!(matches!(
+            model.diagnose(test_context()).await,
+            Err(DiagnosticModelError::BudgetExceeded(_))
+        ));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_returns_budget_exceeded_when_tool_round_trips_exhausted() {
+        let mut server = mockito::Server::new_async().await;
+        let mock = server
+            .mock("POST", "/v1/chat/completions")
+            .expect(0)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 0, 8000, 60);
+        assert!(matches!(
+            model.diagnose(test_context()).await,
+            Err(DiagnosticModelError::BudgetExceeded(_))
+        ));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn diagnose_returns_budget_exceeded_when_input_token_budget_too_small() {
+        let mut server = mockito::Server::new_async().await;
+        // Never reached: the task message alone already exceeds one token.
+        let mock = server
+            .mock("POST", "/v1/chat/completions")
+            .expect(0)
+            .create_async()
+            .await;
+
+        let backend = Arc::new(FakeQueryBackend::default());
+        let model = test_model(server.url(), backend, 5, 1, 60);
+        assert!(matches!(
+            model.diagnose(test_context()).await,
+            Err(DiagnosticModelError::BudgetExceeded(_))
+        ));
+        mock.assert_async().await;
     }
 }

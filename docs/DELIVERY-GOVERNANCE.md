@@ -50,9 +50,9 @@ The canonical project-level view is `docs/project-state/TRACEABILITY.md`.
 
 Changes that affect behavior, contracts, architecture, operations, deployment, or project status MUST update the corresponding documentation in the same PR. A passing CI build does not waive this rule.
 
-## Jules Review Rule
+## Delivery Review Rule
 
-Jules must perform two separate assessments:
+Every reviewer — human or agent — must perform two separate assessments:
 
 - **Code review:** correctness, architecture, security, tests, regressions.
 - **Delivery review:** requirement coverage, measurable outcome, integration/deployment evidence, and documentation synchronization.

@@ -89,3 +89,8 @@ Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy trình PR và [docs/superpowers/s
 
 - `server_wallet.json` — Solana wallet key, không commit, không sửa trong quá trình dọn dẹp code
 - `hydragrow-backend/migrations/` — schema DB production, thay đổi cần migration plan riêng
+
+## Agent instructions
+
+Repository-wide invariants and verification commands for any coding agent: `AGENTS.md`.
+Reusable multi-step techniques (plans, debugging, parallel sessions): `.agents/skills/`.

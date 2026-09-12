@@ -15,15 +15,9 @@ deploy/oracle/.env
 deploy/oracle/mosquitto/passwd
 deploy/oracle/mosquitto/certs/
 
-# Jules Orchestrator runtime state & credentials
+# Agent runtime state & local secrets
 .env
 .agent/history/
 .agent/state/
 .agent/evidence/
 .agent/handovers/
-.agent/jules-queue/.state/
-.agent/jules-queue/failed/
-.agent/jules-queue/.processing/
-.agent/jules-queue/completed/
-.agent/jules-queue/*.md
-!.agent/jules-queue/README.md

@@ -27,3 +27,6 @@ deploy/oracle/mosquitto/certs/
 .agent/jules-queue/completed/
 .agent/jules-queue/*.md
 !.agent/jules-queue/README.md
+
+# Isolated git worktrees (implementation scratch, never commit contents)
+.worktrees/

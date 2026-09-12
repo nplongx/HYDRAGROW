@@ -43,6 +43,12 @@ struct CreateEventBody {
     observations: serde_json::Value,
 }
 
+#[derive(serde::Deserialize)]
+struct ApiEnvelope<T> {
+    status: String,
+    data: T,
+}
+
 impl BackendClient {
     pub fn new(base_url: String, api_key: String) -> Self {
         Self {
@@ -66,7 +72,14 @@ impl DiagnosisBackend for BackendClient {
         if !resp.status().is_success() {
             anyhow::bail!("GET /api/health/hestia returned {}", resp.status());
         }
-        Ok(resp.json().await?)
+        let envelope: ApiEnvelope<HashMap<String, serde_json::Value>> = resp.json().await?;
+        if envelope.status != "success" {
+            anyhow::bail!(
+                "GET /api/health/hestia returned API status {}",
+                envelope.status
+            );
+        }
+        Ok(envelope.data)
     }
 
     /// Design spec §4.1's WatchdogBreach trigger. `/events` has no
@@ -192,13 +205,41 @@ mod tests {
             .mock("GET", "/api/health/hestia")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(r#"{"dev-1": {"state": "WARNING", "reasons": ["ec_out_of_range"]}}"#)
+            .with_body(
+                r#"{
+        "status":"success",
+        "data":{
+            "dev-1":{
+                "score":65.0,
+                "state":"WARNING",
+                "confidence":0.8,
+                "axes":{},
+                "reasons":["ec_out_of_range"]
+            }
+        }
+    }"#,
+            )
             .create_async()
             .await;
 
         let client = BackendClient::new(server.url(), "svc_test".to_string());
         let fleet = client.get_fleet_hestia().await.unwrap();
         assert_eq!(fleet["dev-1"]["state"], "WARNING");
+    }
+
+    #[tokio::test]
+    async fn get_fleet_hestia_rejects_api_error_envelope() {
+        let mut server = mockito::Server::new_async().await;
+        let _m = server
+            .mock("GET", "/api/health/hestia")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"status":"error","data":{}}"#)
+            .create_async()
+            .await;
+
+        let client = BackendClient::new(server.url(), "svc_test".to_string());
+        assert!(client.get_fleet_hestia().await.is_err());
     }
 
     #[tokio::test]

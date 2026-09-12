@@ -147,6 +147,14 @@ mod tests {
             serde_json::json!({"state": "WARNING", "reasons": ["ec_out_of_range"]}),
         );
         fleet.insert(
+            "critical-dev".to_string(),
+            serde_json::json!({"state": "CRITICAL", "reasons": ["water_level_critical"]}),
+        );
+        fleet.insert(
+            "recovery-dev".to_string(),
+            serde_json::json!({"state": "RECOVERY", "reasons": ["recent_intervention_recovery"]}),
+        );
+        fleet.insert(
             "comfortable-dev".to_string(),
             serde_json::json!({"state": "COMFORTABLE", "reasons": []}),
         );
@@ -159,6 +167,11 @@ mod tests {
 
         run_fleet_tick(Arc::new(model), Arc::new(backend), 5, 10).await;
 
-        assert_eq!(*calls.lock().unwrap(), vec!["triggered-dev".to_string()]);
+        let mut called = calls.lock().unwrap().clone();
+        called.sort();
+        assert_eq!(
+            called,
+            vec!["critical-dev".to_string(), "triggered-dev".to_string()]
+        );
     }
 }

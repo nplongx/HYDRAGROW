@@ -21,3 +21,12 @@ deploy/oracle/mosquitto/certs/
 .agent/state/
 .agent/evidence/
 .agent/handovers/
+.agent/jules-queue/.state/
+.agent/jules-queue/failed/
+.agent/jules-queue/.processing/
+.agent/jules-queue/completed/
+.agent/jules-queue/*.md
+!.agent/jules-queue/README.md
+
+# Isolated git worktrees (implementation scratch, never commit contents)
+.worktrees/

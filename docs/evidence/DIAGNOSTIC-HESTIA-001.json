@@ -1,0 +1,15 @@
+{
+  "requirement_id": "DIAGNOSTIC-HESTIA-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-backend api::health_topics::tests"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cargo test -p hydragrow-diagnostic-worker"
+    }
+  ]
+}

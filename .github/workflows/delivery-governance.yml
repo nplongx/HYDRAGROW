@@ -66,5 +66,5 @@ jobs:
       - name: Report gate
         run: |
           echo "Delivery governance gate passed."
-          echo "Code correctness remains the responsibility of the existing CI/Jules review."
+          echo "Code correctness remains the responsibility of the existing CI and code review."
           echo "This gate verifies the delivery contract and project knowledge artifacts."

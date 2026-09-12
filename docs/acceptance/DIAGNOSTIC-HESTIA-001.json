@@ -1,0 +1,18 @@
+{
+  "requirement_id": "DIAGNOSTIC-HESTIA-001",
+  "change_class": "C1",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "description": "GET /api/health/hestia returns status success with cached Hestia assessments",
+      "target": "HTTP 200 and success envelope",
+      "status": "PASS"
+    },
+    {
+      "id": "AC-2",
+      "description": "Diagnostic worker BackendClient successfully parses GET /api/health/hestia status/data envelope",
+      "target": "29 passed tests in worker",
+      "status": "PASS"
+    }
+  ]
+}

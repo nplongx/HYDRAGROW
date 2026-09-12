@@ -1,0 +1,30 @@
+name: protected-paths-check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard:
+    name: Protected paths guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List changed files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "$BASE_SHA"..."$HEAD_SHA" > /tmp/changed-files.txt
+          cat /tmp/changed-files.txt
+
+      - name: Check against restricted_files
+        run: python3 .github/scripts/check_protected_paths.py .agent/verify.yml /tmp/changed-files.txt

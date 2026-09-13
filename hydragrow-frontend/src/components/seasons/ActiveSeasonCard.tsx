@@ -15,6 +15,7 @@ interface ActiveSeasonCardProps {
   isLoading: boolean;
   onEndSeason: () => Promise<any>;
   onUpdateSeason?: (name: string, plantType: string, description: string) => Promise<any>;
+  onEnded?: (season: CropSeason, elapsedDaysGrown: number) => void;
 }
 
 export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
@@ -22,6 +23,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   isLoading,
   onEndSeason,
   onUpdateSeason,
+  onEnded,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(activeSeason.name || '');
@@ -59,6 +61,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   const handleEnd = async () => {
     if (window.confirm('Xác nhận kết thúc mùa vụ? Sau khi kết thúc, quy trình nuôi trồng trên trạm sẽ được hoàn tất và chuyển vào lịch sử.')) {
       await onEndSeason();
+      onEnded?.(activeSeason, Math.floor(elapsed));
     }
   };
 

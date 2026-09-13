@@ -1,0 +1,53 @@
+{
+  "requirement_id": "LAYER3-DESIGN-UX-ROLLOUT-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/roles/ src/pages/Roles.test.tsx src/pages/Roles.capabilities.test.ts (15 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T07:30:00Z",
+      "notes": "PERMISSION-MODEL-SPEC.md authored; PermissionMatrix (role='grid', keyboard navigation, responsive collapse), RoleBadge, and RoleSelector extracted; Roles.tsx refactored with all 15 tests passing."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/roles/InviteForm.test.tsx src/pages/Roles.test.tsx (9 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T07:35:00Z",
+      "notes": "InviteForm implemented with 3 visual groups, UID and Email validation with ARIA attributes, radio role selector, and summary preview panel; wired into Roles.tsx."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/fleet/ (7 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T07:25:00Z",
+      "notes": "FLEET-VIEW-SPEC.md authored; FleetStationCard implemented with >= 48px touch targets, telemetry chips, warning badge, relative time; FleetView refactored with responsive grid, warning-first sorting, and crop grouping."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/onboarding/ src/hooks/useOnboardingState.test.ts (18 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T07:28:00Z",
+      "notes": "ONBOARDING-SPEC.md authored; useOnboardingState hook implemented with localStorage persistence; OnboardingWizard and OnboardingStep implemented with 4-step progressive funnel and celebration banner; 18 tests passing."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "test -f docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md && grep -q 'PermissionMatrix' docs/design-system/PATTERN-LIBRARY.md && grep -q 'LAYER3' docs/project-state/TRACEABILITY.md",
+      "environment": "hydragrow documentation",
+      "verified_at": "2026-09-13T07:40:00Z",
+      "notes": "Q1-DECISION-FRAMEWORK.md created; PATTERN-LIBRARY.md updated with sections 11-15; GOVERNANCE.md updated with section (d); TRACEABILITY.md and CURRENT-STATUS.md updated."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run && npx tsc --noEmit && npx eslint . && npx vitest run src/lib/design-lint/",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T07:45:00Z",
+      "notes": "OnboardingWizard wired into Dashboard.tsx; 108/108 test files passed (541 tests passed); tsc clean (0 errors); eslint clean (0 errors); design-lint clean (0 new hardcoded colors)."
+    }
+  ]
+}

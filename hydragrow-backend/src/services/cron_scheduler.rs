@@ -277,6 +277,7 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
         if let Ok(ast) = engine.compile(&script.source) {
             let node = crate::mqtt::handlers::script_eval::WebhookChainNode {
                 id: script.id,
+                name: script.name.clone(),
                 kind: match script.kind.as_str() {
                     "alert" => crate::models::script::ScriptKind::Alert,
                     "action_command" => crate::models::script::ScriptKind::ActionCommand,
@@ -300,10 +301,14 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
                             &app_state.pg_pool,
                             script.id,
                             &script.device_id,
+                            Some("cron_trigger"),
+                            None,
                         )
                         .await;
                         crate::mqtt::handlers::script_eval::handle_fired_alert(
                             app_state,
+                            &script.id,
+                            &script.name,
                             alert,
                             &script.device_id,
                             chrono::Utc::now().timestamp_millis(),
@@ -360,6 +365,8 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
                             &app_state.pg_pool,
                             script.id,
                             &script.device_id,
+                            Some("cron_trigger"),
+                            None,
                         )
                         .await;
                     }
@@ -372,6 +379,8 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
                 script.id,
                 &script.device_id,
                 "compile thất bại khi chạy cron trigger",
+                Some("cron_trigger"),
+                None,
             )
             .await;
         }

@@ -162,9 +162,19 @@ pub async fn dispatch_action_command(
     if output.action == "dose"
         && let (Some(pump), Some(dose_ml)) = (&output.pump, output.dose_ml)
     {
-        let _ =
-            crate::db::postgres::insert_dosing_action(&app_state.pg_pool, device_id, pump, dose_ml)
-                .await;
+        let _ = crate::db::postgres::insert_dosing_action(
+            &app_state.pg_pool,
+            device_id,
+            pump,
+            dose_ml,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("script_flow"),
+        )
+        .await;
     }
 
     Ok(())

@@ -275,14 +275,33 @@ pub async fn insert_dosing_action(
     device_id: &str,
     pump: &str,
     dose_ml: f32,
+    ec_before: Option<f32>,
+    ec_after: Option<f32>,
+    ph_before: Option<f32>,
+    ph_after: Option<f32>,
+    cycle_id: Option<&str>,
+    triggered_by: Option<&str>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO dosing_action_log (device_id, pump, dose_ml) VALUES ($1, $2, $3)")
-        .bind(device_id)
-        .bind(pump)
-        .bind(dose_ml)
-        .execute(pool)
-        .await
-        .map(|_| ())
+    sqlx::query(
+        r#"
+        INSERT INTO dosing_action_log (
+            device_id, pump, dose_ml, ec_before, ec_after, ph_before, ph_after, cycle_id, triggered_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'fsm_auto'))
+        "#,
+    )
+    .bind(device_id)
+    .bind(pump)
+    .bind(dose_ml)
+    .bind(ec_before)
+    .bind(ec_after)
+    .bind(ph_before)
+    .bind(ph_after)
+    .bind(cycle_id)
+    .bind(triggered_by)
+    .execute(pool)
+    .await
+    .map(|_| ())
 }
 
 pub async fn get_dosing_history_last_hour(

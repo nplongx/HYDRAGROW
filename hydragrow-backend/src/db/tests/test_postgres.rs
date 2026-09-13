@@ -370,12 +370,34 @@ mod tests {
         };
         upsert_device_config(&pool, &cfg).await.unwrap();
 
-        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 3.0)
-            .await
-            .unwrap();
-        insert_dosing_action(&pool, "dev-log-1", "PH_DOWN", 2.0)
-            .await
-            .unwrap();
+        insert_dosing_action(
+            &pool,
+            "dev-log-1",
+            "PH_DOWN",
+            3.0,
+            Some(1.2),
+            Some(1.4),
+            Some(6.5),
+            Some(6.2),
+            Some("cycle-1"),
+            Some("fsm_auto"),
+        )
+        .await
+        .unwrap();
+        insert_dosing_action(
+            &pool,
+            "dev-log-1",
+            "PH_DOWN",
+            2.0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         let history = get_dosing_history_last_hour(&pool, "dev-log-1")
             .await
@@ -383,6 +405,34 @@ mod tests {
         assert_eq!(history.len(), 2);
         let total: f32 = history.iter().map(|(_, ml)| ml).sum();
         assert!((total - 5.0).abs() < 1e-4);
+
+        // Verify enriched efficacy fields are persisted
+        type EnrichedDosingRow = (
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<String>,
+            Option<String>,
+        );
+        let row: EnrichedDosingRow = sqlx::query_as(
+            r#"
+            SELECT ec_before, ec_after, ph_before, ph_after, cycle_id, triggered_by
+            FROM dosing_action_log
+            WHERE device_id = $1 AND cycle_id = 'cycle-1'
+            "#,
+        )
+        .bind("dev-log-1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(row.0, Some(1.2));
+        assert_eq!(row.1, Some(1.4));
+        assert_eq!(row.2, Some(6.5));
+        assert_eq!(row.3, Some(6.2));
+        assert_eq!(row.4.as_deref(), Some("cycle-1"));
+        assert_eq!(row.5.as_deref(), Some("fsm_auto"));
     }
 
     #[sqlx::test(migrations = "./migrations")]

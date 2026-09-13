@@ -1,12 +1,23 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-pub async fn log_success(pool: &PgPool, script_id: Uuid, device_id: &str) -> anyhow::Result<()> {
+pub async fn log_success(
+    pool: &PgPool,
+    script_id: Uuid,
+    device_id: &str,
+    trigger_source: Option<&str>,
+    duration_ms: Option<i32>,
+) -> anyhow::Result<()> {
     sqlx::query(
-        "INSERT INTO flow_execution_log (script_id, device_id, status) VALUES ($1, $2, 'success')",
+        r#"
+        INSERT INTO flow_execution_log (script_id, device_id, status, trigger_source, duration_ms)
+        VALUES ($1, $2, 'success', COALESCE($3, 'sensor_data'), $4)
+        "#,
     )
     .bind(script_id)
     .bind(device_id)
+    .bind(trigger_source)
+    .bind(duration_ms)
     .execute(pool)
     .await?;
     Ok(())
@@ -17,13 +28,22 @@ pub async fn log_error(
     script_id: Uuid,
     device_id: &str,
     message: &str,
+    trigger_source: Option<&str>,
+    duration_ms: Option<i32>,
 ) -> anyhow::Result<()> {
-    sqlx::query("INSERT INTO flow_execution_log (script_id, device_id, status, error_message) VALUES ($1, $2, 'error', $3)")
-        .bind(script_id)
-        .bind(device_id)
-        .bind(message)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO flow_execution_log (script_id, device_id, status, error_message, trigger_source, duration_ms)
+        VALUES ($1, $2, 'error', $3, COALESCE($4, 'sensor_data'), $5)
+        "#,
+    )
+    .bind(script_id)
+    .bind(device_id)
+    .bind(message)
+    .bind(trigger_source)
+    .bind(duration_ms)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -74,10 +94,16 @@ mod tests {
         )
         .await
         .unwrap();
-        log_success(&pool, script_id, "dev-rate").await.unwrap();
-        log_success(&pool, script_id, "dev-rate").await.unwrap();
-        log_success(&pool, script_id, "dev-rate").await.unwrap();
-        log_error(&pool, script_id, "dev-rate", "reconcile failed")
+        log_success(&pool, script_id, "dev-rate", None, None)
+            .await
+            .unwrap();
+        log_success(&pool, script_id, "dev-rate", None, None)
+            .await
+            .unwrap();
+        log_success(&pool, script_id, "dev-rate", None, None)
+            .await
+            .unwrap();
+        log_error(&pool, script_id, "dev-rate", "reconcile failed", None, None)
             .await
             .unwrap();
         let rate = success_rate_percent(&pool, "dev-rate")

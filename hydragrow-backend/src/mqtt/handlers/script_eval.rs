@@ -19,6 +19,7 @@ const MAX_CHAIN_DEPTH: usize = 5;
 #[derive(Clone)]
 pub struct ChainNode {
     pub id: Uuid,
+    pub name: String,
     pub kind: ScriptKind,
     pub next_flow_ids: Vec<String>,
     pub ast: rhai::AST,
@@ -90,6 +91,7 @@ pub fn filter_chain_nodes_for_sensor_path(all: Vec<ChainNode>) -> Vec<ChainNode>
 #[derive(Clone)]
 pub struct WebhookChainNode {
     pub id: Uuid,
+    pub name: String,
     pub kind: ScriptKind,
     pub next_flow_ids: Vec<String>,
     pub ast: rhai::AST,
@@ -468,6 +470,8 @@ pub async fn eval_flow_chain(
                     c.script_id,
                     device_id,
                     &format!("config overwrite reconcile failed: {e}"),
+                    Some("sensor_data"),
+                    None,
                 )
                 .await;
             }
@@ -475,8 +479,14 @@ pub async fn eval_flow_chain(
     }
 
     for (script_id, _result) in &fired {
-        if let Err(e) =
-            crate::services::execution_log::log_success(pool, *script_id, device_id).await
+        if let Err(e) = crate::services::execution_log::log_success(
+            pool,
+            *script_id,
+            device_id,
+            Some("sensor_data"),
+            None,
+        )
+        .await
         {
             warn!(device_id, script_id = %script_id, error = %e, "failed to write execution log");
         }
@@ -683,6 +693,7 @@ pub fn eval_alert_scripts_chained(
         .iter()
         .map(|s| ChainNode {
             id: s.id,
+            name: s.name.clone(),
             kind: match s.kind.as_str() {
                 "action_command" => ScriptKind::ActionCommand,
                 "recipe_override" => ScriptKind::RecipeOverride,
@@ -702,6 +713,10 @@ pub fn eval_alert_scripts_chained(
         phase: "Monitoring".to_string(),
         device_id: input.device_id.clone(),
         timestamp_ms: input.timestamp_ms,
+        err_ph: None,
+        err_tds: None,
+        err_temperature: None,
+        err_water_level: None,
     };
 
     let fetcher = |_dev_id: &str, _key: &RangeStatKey| -> f64 { 0.0 };
@@ -725,12 +740,15 @@ pub fn eval_alert_scripts_chained(
 /// hề tạo system_event hay gửi FCM.
 pub async fn handle_fired_alert(
     app_state: &crate::AppState,
+    script_id: &Uuid,
+    script_name: &str,
     alert: AlertOutput,
     device_id: &str,
     timestamp_ms: i64,
 ) {
     let notify_fcm_override = alert.notify_fcm;
-    let alert_msg = alert_output_to_system_alert(alert, device_id, timestamp_ms);
+    let alert_msg =
+        alert_output_to_system_alert(alert, script_id, script_name, device_id, timestamp_ms);
 
     let db_record = crate::db::postgres::NewSystemEventRecord {
         device_id: device_id.to_string(),
@@ -778,9 +796,16 @@ pub async fn handle_fired_alert(
 /// Convert AlertOutput thành AlertMessage để gửi vào event bus.
 pub fn alert_output_to_system_alert(
     alert: AlertOutput,
+    script_id: &Uuid,
+    script_name: &str,
     device_id: &str,
     timestamp_ms: i64,
 ) -> crate::models::alert::AlertMessage {
+    let metadata = serde_json::json!({
+        "script_id": script_id.to_string(),
+        "script_name": script_name,
+    });
+
     crate::models::alert::AlertMessage {
         level: alert.level,
         category: "automation".to_string(),
@@ -788,7 +813,7 @@ pub fn alert_output_to_system_alert(
         message: alert.message,
         device_id: device_id.to_string(),
         reason: Some("Rhai user script".to_string()),
-        metadata: None,
+        metadata: Some(metadata),
         timestamp: timestamp_ms as u64,
     }
 }
@@ -841,10 +866,27 @@ fn main(input) {
 }
 "#;
 
+    #[test]
+    fn alert_output_includes_script_id_and_name_in_metadata() {
+        let alert = AlertOutput {
+            level: "warning".to_string(),
+            title: "Low Water".to_string(),
+            message: "Water below 20%".to_string(),
+            notify_fcm: None,
+        };
+        let script_id = uuid::Uuid::new_v4();
+        let msg = alert_output_to_system_alert(alert, &script_id, "water_check", "dev_1", 1000);
+        assert!(msg.metadata.is_some());
+        let meta = msg.metadata.expect("metadata should be present");
+        assert_eq!(meta["script_id"], script_id.to_string());
+        assert_eq!(meta["script_name"], "water_check");
+    }
+
     fn make_action_command_script(source: &str) -> ChainNode {
         let engine = ScriptEngine::new();
         ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "action_script".to_string(),
             kind: ScriptKind::ActionCommand,
             next_flow_ids: vec![],
             ast: engine
@@ -861,6 +903,7 @@ fn main(input) {
         let engine = ScriptEngine::new();
         ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "chain_node".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids,
             ast: engine.compile("fn main(i){ () }").expect("compile"),
@@ -891,6 +934,7 @@ fn main(input) {
         let ast = engine.compile("fn main(i){ () }").expect("compile");
         let cron_child = ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "cron_child".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast: ast.clone(),
@@ -898,6 +942,7 @@ fn main(input) {
         };
         let sensor_root = ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "sensor_root".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![cron_child.id.to_string()],
             ast: ast.clone(),
@@ -905,6 +950,7 @@ fn main(input) {
         };
         let isolated_cron = ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "isolated_cron".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast,
@@ -968,6 +1014,10 @@ fn main(input) {
             phase: "Monitoring".into(),
             device_id: "d1".into(),
             timestamp_ms: 0,
+            err_ph: None,
+            err_tds: None,
+            err_temperature: None,
+            err_water_level: None,
         }
     }
 
@@ -978,6 +1028,7 @@ fn main(input) {
         let ast = engine.compile(source).expect("compile succeeds");
         let node = WebhookChainNode {
             id: Uuid::new_v4(),
+            name: "wh_alert".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast,
@@ -995,6 +1046,7 @@ fn main(input) {
         let ast = engine.compile(source).expect("compile succeeds");
         let node = WebhookChainNode {
             id: Uuid::new_v4(),
+            name: "wh_alert".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast,
@@ -1013,6 +1065,7 @@ fn main(input) {
         let action_ast = engine.compile(action_source).expect("compile succeeds");
         let action_node = WebhookChainNode {
             id: Uuid::new_v4(),
+            name: "wh_action".to_string(),
             kind: ScriptKind::ActionCommand,
             next_flow_ids: vec![],
             ast: action_ast,
@@ -1022,6 +1075,7 @@ fn main(input) {
         let alert_ast = engine.compile(alert_source).expect("compile succeeds");
         let alert_node = WebhookChainNode {
             id: Uuid::new_v4(),
+            name: "wh_alert".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![action_node.id.to_string()],
             ast: alert_ast,
@@ -1156,6 +1210,7 @@ fn main(input) {
         let alert_root_ast = engine.compile(FIRING_SCRIPT).expect("compiles");
         let alert_root = ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "alert_root".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![action_child.id.to_string()],
             ast: alert_root_ast,
@@ -1187,6 +1242,7 @@ fn main(input) {
         let alert_root_ast = engine.compile(NON_FIRING_SCRIPT).expect("compiles");
         let alert_root = ChainNode {
             id: uuid::Uuid::new_v4(),
+            name: "alert_root".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![action_child.id.to_string()],
             ast: alert_root_ast,
@@ -1213,6 +1269,7 @@ fn main(input) {
 
         let a = ChainNode {
             id: a_id,
+            name: "node_a".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![b_id.to_string()],
             ast: engine.compile(FIRING_SCRIPT).expect("compiles"),
@@ -1220,6 +1277,7 @@ fn main(input) {
         };
         let b = ChainNode {
             id: b_id,
+            name: "node_b".to_string(),
             kind: ScriptKind::ActionCommand,
             next_flow_ids: vec![a_id.to_string()],
             ast: engine.compile(DOSE_SCRIPT).expect("compiles"),
@@ -1291,6 +1349,7 @@ fn main(input) {
         });
         let node = ChainNode {
             id: Uuid::new_v4(),
+            name: "action_node".to_string(),
             kind: ScriptKind::ActionCommand,
             next_flow_ids: vec![],
             ast: engine.compile(source).expect("compiles"),
@@ -1314,6 +1373,7 @@ fn main(input) {
             .expect("compiles");
         let node = ChainNode {
             id: Uuid::new_v4(),
+            name: "alert_node".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast,
@@ -1327,6 +1387,10 @@ fn main(input) {
             phase: "Monitoring".into(),
             device_id: "d".into(),
             timestamp_ms: 0,
+            err_ph: None,
+            err_tds: None,
+            err_temperature: None,
+            err_water_level: None,
         };
 
         let mut ctx_by_node = std::collections::HashMap::new();
@@ -1359,6 +1423,7 @@ fn main(input) {
         let a_id = Uuid::new_v4();
         let c = ChainNode {
             id: c_id,
+            name: "c".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast: ast.clone(),
@@ -1366,6 +1431,7 @@ fn main(input) {
         };
         let b = ChainNode {
             id: b_id,
+            name: "b".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![c_id.to_string()],
             ast: ast.clone(),
@@ -1373,6 +1439,7 @@ fn main(input) {
         };
         let a = ChainNode {
             id: a_id,
+            name: "a".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![b_id.to_string()],
             ast,
@@ -1386,6 +1453,10 @@ fn main(input) {
             phase: "Monitoring".into(),
             device_id: "d".into(),
             timestamp_ms: 0,
+            err_ph: None,
+            err_tds: None,
+            err_temperature: None,
+            err_water_level: None,
         };
 
         let fired = eval_flow_chain_with_fetcher(&engine, &[a, b, c], &snapshot, "d", |_, _| 0.0);
@@ -1406,6 +1477,7 @@ fn main(input) {
             .expect("compiles");
         let node = ChainNode {
             id: Uuid::new_v4(),
+            name: "test_node".to_string(),
             kind: ScriptKind::Alert,
             next_flow_ids: vec![],
             ast,
@@ -1419,6 +1491,10 @@ fn main(input) {
             phase: "Monitoring".into(),
             device_id: "d".into(),
             timestamp_ms: 0,
+            err_ph: None,
+            err_tds: None,
+            err_temperature: None,
+            err_water_level: None,
         };
         let fired = eval_flow_chain_with_fetcher(&engine, &[node], &snapshot, "d", |_, _| 0.0);
         assert_eq!(fired.len(), 1);

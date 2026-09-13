@@ -30,7 +30,7 @@ describe('AdvancedDeviceControl', () => {
         canSendCommands={true}
         isEmergency={false}
         isAutoMode={false}
-        colorTheme="fuchsia"
+        colorTheme="phDown"
         lockedByPumpId="PH_UP"
         lockedByPumpLabel="Bơm pH Up"
       />,
@@ -49,7 +49,7 @@ describe('AdvancedDeviceControl', () => {
         canSendCommands={true}
         isEmergency={false}
         isAutoMode={false}
-        colorTheme="fuchsia"
+        colorTheme="phUp"
       />,
     );
     expect(screen.getByText('Đang gửi…')).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('AdvancedDeviceControl', () => {
         canSendCommands={true}
         isEmergency={false}
         isAutoMode={false}
-        colorTheme="orange"
+        colorTheme="nutrient"
       />,
     );
     expect(screen.getByText(/72%/)).toBeInTheDocument();

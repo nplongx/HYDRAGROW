@@ -8,7 +8,7 @@ import { Switch } from '../ui/Switch';
 import { StatusPill } from '../ui/StatusPill';
 import { Slider } from '../ui/Slider';
 
-// Hệ thống quy đổi PWM(%) -> ml/phút, tạm thời tuyến tính cho hiển thị nhanh trên card.
+import { PUMP_VISUAL_THEME, type PumpThemeKey } from '../../lib/dosing/pumpVisualTheme';
 // TODO(sau khi có dữ liệu hiệu chuẩn DosingCalibration thật): thay bằng giá trị đo thực tế theo từng bơm.
 const PWM_TO_ML_PER_MIN: Record<string, number> = {
   PUMP_A: 0.12,
@@ -28,7 +28,7 @@ interface AdvancedDeviceControlProps {
   canSendCommands: boolean;
   isEmergency: boolean;
   isAutoMode: boolean;
-  colorTheme: 'orange' | 'fuchsia' | 'water' | 'sky' | string;
+  colorTheme: PumpThemeKey;
   lockedByPumpId?: string;
   lockedByPumpLabel?: string;
 }
@@ -60,13 +60,7 @@ export const AdvancedDeviceControl = ({
 
   const isLocked = isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId);
 
-  const themeClasses: Record<string, { activeIcon: string; glow: string; border: string }> = {
-    orange: { activeIcon: 'bg-orange-600 text-white', glow: 'border-orange-200 bg-orange-50', border: 'border-orange-300' },
-    fuchsia: { activeIcon: 'bg-fuchsia-600 text-white', glow: 'border-fuchsia-200 bg-fuchsia-50', border: 'border-fuchsia-300' },
-    water: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
-    sky: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
-  };
-  const activeTheme = themeClasses[colorTheme] || themeClasses.water;
+  const activeTheme = PUMP_VISUAL_THEME[colorTheme];
 
   const disabledReason = !canSendCommands
     ? 'Chưa kết nối máy chủ'

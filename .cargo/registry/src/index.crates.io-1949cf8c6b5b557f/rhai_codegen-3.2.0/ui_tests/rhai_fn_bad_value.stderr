@@ -1,0 +1,5 @@
+error: expecting string literal
+  --> ui_tests/rhai_fn_bad_value.rs:11:18
+   |
+11 | #[rhai_fn(name = true)]
+   |                  ^^^^

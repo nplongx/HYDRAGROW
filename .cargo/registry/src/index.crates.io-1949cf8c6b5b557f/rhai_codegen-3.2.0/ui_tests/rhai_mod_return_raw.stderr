@@ -1,0 +1,5 @@
+error: unknown attribute 'return_raw'
+  --> ui_tests/rhai_mod_return_raw.rs:11:12
+   |
+11 | #[rhai_mod(return_raw = "yes")]
+   |            ^^^^^^^^^^

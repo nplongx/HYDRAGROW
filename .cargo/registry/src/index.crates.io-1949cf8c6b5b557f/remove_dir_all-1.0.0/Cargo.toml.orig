@@ -1,0 +1,59 @@
+[package]
+authors = [
+    "Erin P. <xampprocky@gmail.com>",
+    "Robert C. <robertc@robertcollins.net>",
+]
+categories = ["filesystem"]
+description = "A safe, reliable implementation of remove_dir_all for Windows"
+edition = "2021"
+include = [
+    "Cargo.toml",
+    "LICENCE-APACHE",
+    "LICENCE-MIT",
+    "README.md",
+    "src/**/*",
+]
+keywords = ["filesystem", "remove_dir", "utility", "windows"]
+license = "MIT OR Apache-2.0"
+name = "remove_dir_all"
+readme = "README.md"
+repository = "https://github.com/XAMPPRocky/remove_dir_all.git"
+version = "1.0.0"
+
+[features]
+cli = ["dep:clap", "dep:env_logger", "log", "parallel"]
+default = []
+log = ["dep:log"]
+parallel = ["dep:rayon"]
+
+[[bin]]
+name = "remove-dir-all"
+required-features = ["cli"]
+
+[dependencies]
+cfg-if = "1.0.0"
+clap = { version = "4.1.11", optional = true, features = ["derive"] }
+env_logger = { version = "0.11.0", optional = true }
+fs_at = { version = "0.2.1" }
+log = { version = "0.4.11", optional = true }
+normpath = "1.0.1"
+rayon = { version = "1.4", optional = true }
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+]
+version = "0.59.0"
+
+[target.'cfg(not(windows))'.dependencies]
+cvt = "0.1.1"
+libc = "0.2"
+
+[dev-dependencies]
+doc-comment = "0.3"
+env_logger = "0.11.0"
+log = "0.4.11"
+tempfile = "3.1"
+test-log = "0.2"

@@ -1,0 +1,68 @@
+task:
+  name: FreeBSD $FREEBSD_VERSION ($TOOLCHAIN)
+
+  freebsd_instance:
+    cpu: 1
+    image_family: $FREEBSD_IMAGE
+
+  matrix:
+    - env:
+        FREEBSD_VERSION: 12.1
+        FREEBSD_IMAGE: freebsd-12-1
+    - env:
+        FREEBSD_VERSION: 12.2
+        FREEBSD_IMAGE: freebsd-12-2
+    - env:
+        FREEBSD_VERSION: 12.2 STABLE
+        FREEBSD_IMAGE: freebsd-12-2-snap
+    # - env:
+    #     FREEBSD_VERSION: 13.0
+    #     FREEBSD_IMAGE: freebsd-13-0-snap
+
+  matrix:
+    - env:
+        TOOLCHAIN: stable
+    - env:
+        TOOLCHAIN: beta
+    - env:
+        TOOLCHAIN: nightly
+
+  allow_failures: $TOOLCHAIN == 'nightly'
+
+  env:
+    CODECOV_TOKEN: ENCRYPTED[d63ddb4bf9c049623ccbacc93fec2d356473ad31202cfa83ded904b6720b8c3e59167a4a0fe88e423e66cc7ac21797f6]
+
+  install_script:
+    - pkg install -y curl kcov bash
+    - curl -sSf https://sh.rustup.rs -o rustup.sh
+    - sh rustup.sh -y --profile default --default-toolchain $TOOLCHAIN
+  build_script:
+    - . $HOME/.cargo/env
+    - cargo build
+  unmount_fdescfs_script:
+    - umount /dev/fd || true
+  no_fdescfs_test_script:
+    - . $HOME/.cargo/env
+    - cargo test
+    - |
+      mkdir -p coverage-no-fdescfs
+      for f in target/debug/deps/*; do
+        if [ -x "$f" ]; then
+          kcov --exclude-pattern=/.cargo,/.rustup,/usr/lib --include-path=$(pwd) --verify coverage-no-fdescfs "$f"
+        fi
+      done
+  mount_fdescfs_script:
+    - mount -t fdescfs fdescfs /dev/fd
+  fdescfs_test_script:
+    - . $HOME/.cargo/env
+    - cargo test
+    - |
+      mkdir -p coverage-fdescfs
+      for f in target/debug/deps/*; do
+        if [ -x "$f" ]; then
+          kcov --exclude-pattern=/.cargo,/.rustup,/usr/lib --include-path=$(pwd) --verify coverage-fdescfs "$f"
+        fi
+      done
+  coverage_collect_upload_script:
+    - kcov --merge coverage-merged/ coverage-no-fdescfs/ coverage-fdescfs/
+    - OS="$FREEBSD_IMAGE" bash <(curl -s https://codecov.io/bash) -e OS,TOOLCHAIN -n "$FREEBSD_IMAGE-$TOOLCHAIN" -Z -f coverage-merged/kcov-merged/cobertura.xml

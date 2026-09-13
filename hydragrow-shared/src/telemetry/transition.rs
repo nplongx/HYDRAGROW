@@ -65,6 +65,9 @@ pub enum TransitionReason {
     /// Thoát chế độ Calibration
     ExitCalibration,
 
+    /// Hard timeout watchdog — phase vượt quá timeout tối đa, ép chuyển phase
+    HardTimeout { phase_name: String, timeout_ms: u64 },
+
     /// Lý do khác (emergency stop, force từ user,...)
     Manual { description: String },
 }
@@ -160,5 +163,29 @@ impl FsmTransitionEventBuilder {
             timestamp_ms: self.timestamp_ms.ok_or("timestamp_ms is required")?,
             phase_duration_ms: self.phase_duration_ms,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hard_timeout_reason_serialization_roundtrip() {
+        let reason = TransitionReason::HardTimeout {
+            phase_name: "ActiveMixing".to_string(),
+            timeout_ms: 300_000,
+        };
+        let json = serde_json::to_string(&reason).expect("serialize HardTimeout");
+        assert!(
+            json.contains("HardTimeout"),
+            "serialized type tag missing: {json}"
+        );
+        assert!(json.contains("ActiveMixing"), "phase_name missing: {json}");
+        assert!(json.contains("300000"), "timeout_ms missing: {json}");
+
+        let decoded: TransitionReason =
+            serde_json::from_str(&json).expect("deserialize HardTimeout");
+        assert_eq!(decoded, reason);
     }
 }

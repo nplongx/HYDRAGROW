@@ -1,0 +1,28 @@
+use hashbrown::HashMap;
+use mlua::{IntoLua, Lua, Value};
+use serde::{Deserialize, Serialize};
+use yazi_shared::{Id, SStr};
+
+use super::{Ember, EmberHi};
+use crate::Peer;
+
+/// Server handshake
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct EmberHey {
+	pub peers:   HashMap<Id, Peer>,
+	pub version: SStr,
+}
+
+impl EmberHey {
+	pub fn owned(peers: HashMap<Id, Peer>) -> Ember<'static> {
+		Self { peers, version: EmberHi::version().into() }.into()
+	}
+}
+
+impl From<EmberHey> for Ember<'_> {
+	fn from(value: EmberHey) -> Self { Self::Hey(value) }
+}
+
+impl IntoLua for EmberHey {
+	fn into_lua(self, lua: &Lua) -> mlua::Result<Value> { lua.create_table()?.into_lua(lua) }
+}

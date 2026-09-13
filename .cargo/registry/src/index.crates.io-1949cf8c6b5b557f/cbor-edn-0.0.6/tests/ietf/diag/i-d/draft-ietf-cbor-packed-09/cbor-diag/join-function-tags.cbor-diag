@@ -1,0 +1,3 @@
+["https://packed.example/foo.html",
+ "coap:://packed.example/bar.cbor",
+ "mailto:support@packed.example"]

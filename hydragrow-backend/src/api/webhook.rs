@@ -179,6 +179,7 @@ async fn receive_webhook_flow_event(
         .iter()
         .map(|s| crate::mqtt::handlers::script_eval::WebhookChainNode {
             id: s.id,
+            name: s.name.clone(),
             kind: match s.kind.as_str() {
                 "alert" => crate::models::script::ScriptKind::Alert,
                 "action_command" => crate::models::script::ScriptKind::ActionCommand,
@@ -244,7 +245,7 @@ async fn receive_webhook_flow_event(
         );
         fired_total += results.len();
 
-        for (_id, res) in results {
+        for (fired_script_id, res) in results {
             match res {
                 crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) => {
                     let safety_config =
@@ -289,9 +290,16 @@ async fn receive_webhook_flow_event(
                     }
                 }
                 crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
+                    let script_name = all_chain_nodes
+                        .iter()
+                        .find(|n| n.id == fired_script_id)
+                        .map(|n| n.name.as_str())
+                        .unwrap_or("webhook");
                     let alert_msg =
                         crate::mqtt::handlers::script_eval::alert_output_to_system_alert(
                             alert,
+                            &fired_script_id,
+                            script_name,
                             &device_id,
                             chrono::Utc::now().timestamp_millis(),
                         );

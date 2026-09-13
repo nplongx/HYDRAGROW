@@ -1,0 +1,19 @@
+[package]
+name = "daemonix"
+description = "Spawn daemon processes on Unix-like systems"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.56"
+
+license = "MIT OR Apache-2.0"
+authors = [
+    "Fedor Gogolev <knsd@knsd.net>",
+    "Fabio Valentini <decathorpe@gmail.com>",
+]
+readme = "README.md"
+categories = ["os::unix-apis"]
+keywords = ["daemon", "daemonize", "unix"]
+repository = "https://codeberg.org/commons-rs/daemonix"
+
+[dependencies]
+libc = "0.2.98"

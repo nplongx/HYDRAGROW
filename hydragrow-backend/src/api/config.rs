@@ -488,6 +488,27 @@ pub async fn update_unified_config(
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Dosing"}));
     }
 
+    let audit_event = NewSystemEventRecord {
+        device_id: device_id.clone(),
+        level: "info".to_string(),
+        category: "user_action".to_string(),
+        title: "Cập nhật cấu hình trạm".to_string(),
+        message: format!("Người dùng đã cập nhật cấu hình cho trạm {device_id}."),
+        reason: Some("config_update".to_string()),
+        metadata: Some(serde_json::json!({
+            "event_type": "config_change",
+            "scope": "unified",
+            "ec_target": payload.device_config.ec_target,
+            "ph_target": payload.device_config.ph_target,
+            "control_mode": payload.device_config.control_mode,
+            "is_enabled": payload.device_config.is_enabled,
+        })),
+        timestamp: now.timestamp_millis(),
+        source: "rule".to_string(),
+        primary_reason_code: None,
+    };
+    let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
+
     if let Err(e) = sync_config_to_esp32(&app_state, &device_id).await {
         error!("Lưu DB thành công nhưng lỗi MQTT: {}", e);
         return HttpResponse::Accepted().json(json!({
@@ -633,6 +654,28 @@ pub async fn update_config(
         return HttpResponse::InternalServerError()
             .json(json!({"error": "Failed to save configuration"}));
     }
+
+    let audit_event = NewSystemEventRecord {
+        device_id: device_id.clone(),
+        level: "info".to_string(),
+        category: "user_action".to_string(),
+        title: "Cập nhật cấu hình cơ bản".to_string(),
+        message: format!("Người dùng đã cập nhật cấu hình cơ bản cho trạm {device_id}."),
+        reason: Some("config_update".to_string()),
+        metadata: Some(serde_json::json!({
+            "event_type": "config_change",
+            "scope": "device",
+            "ec_target": config.ec_target,
+            "ph_target": config.ph_target,
+            "control_mode": config.control_mode,
+            "is_enabled": config.is_enabled,
+        })),
+        timestamp: config.last_updated.timestamp_millis(),
+        source: "rule".to_string(),
+        primary_reason_code: None,
+    };
+    let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
+
     let _ = sync_config_to_esp32(&app_state, &device_id).await;
     HttpResponse::Ok().json(json!({"status": "success"}))
 }
@@ -726,6 +769,29 @@ pub async fn update_safety_config(
     {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
+
+    let audit_event = NewSystemEventRecord {
+        device_id: device_id.clone(),
+        level: "info".to_string(),
+        category: "user_action".to_string(),
+        title: "Cập nhật cấu hình an toàn".to_string(),
+        message: format!("Người dùng đã cập nhật cấu hình an toàn cho trạm {device_id}."),
+        reason: Some("config_update".to_string()),
+        metadata: Some(serde_json::json!({
+            "event_type": "config_change",
+            "scope": "safety",
+            "min_ec_limit": config.min_ec_limit,
+            "max_ec_limit": config.max_ec_limit,
+            "min_ph_limit": config.min_ph_limit,
+            "max_ph_limit": config.max_ph_limit,
+            "emergency_shutdown": config.emergency_shutdown,
+        })),
+        timestamp: config.last_updated.timestamp_millis(),
+        source: "rule".to_string(),
+        primary_reason_code: None,
+    };
+    let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
+
     let _ = sync_config_to_esp32(&app_state, &device_id).await;
     HttpResponse::Ok().json(json!({"status": "success"}))
 }
@@ -1078,5 +1144,39 @@ mod tests {
             result,
             Err("dosing_min_pwm_percent must be <= dosing_pwm_percent".to_string())
         );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn audit_config_records_have_expected_metadata() {
+        let device_id = "test_dev_01".to_string();
+        let audit_event = NewSystemEventRecord {
+            device_id: device_id.clone(),
+            level: "info".to_string(),
+            category: "user_action".to_string(),
+            title: "Cập nhật cấu hình trạm".to_string(),
+            message: format!("Người dùng đã cập nhật cấu hình cho trạm {device_id}."),
+            reason: Some("config_update".to_string()),
+            metadata: Some(serde_json::json!({
+                "event_type": "config_change",
+                "scope": "unified",
+                "ec_target": 1.8,
+                "ph_target": 6.2,
+                "control_mode": "auto",
+                "is_enabled": true,
+            })),
+            timestamp: 1700000000000,
+            source: "rule".to_string(),
+            primary_reason_code: None,
+        };
+
+        assert_eq!(audit_event.category, "user_action");
+        assert_eq!(audit_event.level, "info");
+        assert_eq!(audit_event.reason.as_deref(), Some("config_update"));
+        let meta = audit_event.metadata.unwrap();
+        assert_eq!(meta["event_type"], "config_change");
+        assert_eq!(meta["scope"], "unified");
+        assert_eq!(meta["ec_target"], 1.8);
+        assert_eq!(meta["ph_target"], 6.2);
     }
 }

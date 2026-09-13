@@ -1,0 +1,18 @@
+[0, 2],         / Security Targets                             /
+1,              / Security Context ID    - BIB-HMAC-SHA2       /
+1,              / Security Context Flags - Parameters Present  /
+[2,[3, 0]],     / Security Source        - ipn:3.0             /
+[               / Security Parameters    - 2 Parameters        /
+   [1, 5],      / SHA Variant            - HMAC 256            /
+   [3, 0]       / Scope Flags            - No Additional Scope /
+],
+[               / Security Results: 2 Results                  /
+   [            / Primary Block Results                        /
+       [1, h'cac6ce8e4c5dae57988b757e49a6dd14
+             31dc04763541b2845098265bc817241b']       / MAC    /
+    ],
+    [           / Bundle Age Block Results                     /
+       [1, h'3ed614c0d97f49b3633627779aa18a33
+             8d212bf3c92b97759d9739cd50725596']       / MAC    /
+    ]
+]

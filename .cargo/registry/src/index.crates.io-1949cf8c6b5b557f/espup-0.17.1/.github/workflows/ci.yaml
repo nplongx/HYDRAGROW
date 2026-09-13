@@ -1,0 +1,68 @@
+---
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+      - "**/CHANGELOG.md"
+      - "**/audit.yaml"
+      - "**/cd.yaml"
+  pull_request:
+    paths-ignore:
+      - "**/README.md"
+      - "**/CHANGELOG.md"
+      - "**/audit.yaml"
+      - "**/cd.yaml"
+
+env:
+  CARGO_TERM_COLOR: always
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  cargo-checks:
+    name: cargo ${{ matrix.action.command }} | ${{ matrix.job.os }}
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - os: macos-latest
+            os-name: macos
+          - os: ubuntu-22.04
+            os-name: linux
+          - os: windows-latest
+            os-name: windows
+        action:
+          - command: check
+          - command: test
+            args: --all-features --workspace
+          - command: fmt
+            args: --all -- --check
+          - command: clippy
+            args: --all-targets --all-features --workspace -- -D warnings
+          - command: doc
+            args: --no-deps --document-private-items --all-features --workspace --examples
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,clippy
+      - name: Cargo command
+        run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
+  msrv:
+    name: MSRV check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.88.0
+      - name: Cargo check
+        run: cargo check

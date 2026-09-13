@@ -1,0 +1,44 @@
+[package]
+name = "multiversion"
+version = "0.9.0"
+authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Easy function multiversioning"
+repository = "https://github.com/calebzulawski/multiversion"
+categories = ["hardware-support", "no-std"]
+readme = "README.md"
+include = [
+    "/Cargo.toml",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+    "/README.md",
+    "/src/**",
+    "/tests/**",
+    "/benches/**",
+]
+edition = "2021"
+rust-version = "1.86"
+
+[package.metadata.docs.rs]
+features = ["target-features"]
+
+[features]
+default = ["std"]
+std = ["multiversion-macros/std"]
+nightly = ["multiversion-macros/nightly"]
+target-features = ["dep:target-features"]
+
+[dependencies]
+multiversion-macros = { version = "0.9.0", path = "../multiversion-macros", default-features = false }
+target-features = { version = "0.2", optional = true }
+
+[dev-dependencies]
+rustversion = "1"
+criterion = "0.4"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(docsrs)"] }
+
+[[bench]]
+name = "benchmark"
+harness = false

@@ -1,0 +1,25 @@
+{
+  / audience / 5 : "tempSensorInLivingRoom",
+  / client_id / 24 : "myclient",
+  / req_cnf / 4 : {
+  / COSE_Key / 1 : {
+      / kid / 2 : b64'1Bg8vub9tLe1gHMzV76e',
+      / kty / 1 : 2 / EC2 /,
+      / crv / -1 : 1 / P-256 /,
+      / x / -2 : b64'f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU',
+      / y / -3 : b64'x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0'
+    }
+  }
+},
+{
+  / access_token / 1 : b64'0INDoQEKoQVNKkXfb7xaWqMT'/ .../,
+  / rs_cnf / 41 : {
+    / COSE_Key / 1 : {
+      / kid / 2 : b64'c29tZSBwdWJsaWMga2V5IGlk',
+      / kty / 1 : 2 / EC2 /,
+      / crv / -1 : 1 / P-256 /,
+      / x / -2   : b64'MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4',
+      / y / -3   : b64'4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM'
+    }
+  }
+}

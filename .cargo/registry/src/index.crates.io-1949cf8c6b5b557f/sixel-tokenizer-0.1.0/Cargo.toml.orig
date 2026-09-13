@@ -1,0 +1,15 @@
+[package]
+name = "sixel-tokenizer"
+description = "A tokenizer for serialized Sixel bytes"
+authors = ["Aram Drevekenin <aram@poor.dev>"]
+license = "MIT"
+repository = "https://github.com/zellij-org/sixel-tokenizer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+arrayvec = "0.7.2"
+thiserror = "1.0.30"
+
+[dev-dependencies]
+insta = "1.14.0"

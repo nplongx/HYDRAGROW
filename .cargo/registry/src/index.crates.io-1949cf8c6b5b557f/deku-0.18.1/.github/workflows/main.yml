@@ -1,0 +1,79 @@
+on: [push, pull_request]
+
+name: CI
+
+jobs:
+  build-test-run:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      # build
+      - run: cargo build --all
+      # test
+      - run: cargo test --all
+      # run examples
+      - run: cargo run --example 2>&1 | grep -P '   ' | awk '{print $1}' | xargs -i cargo run --example {}
+      # test with no bits feature (don't test docs)
+      - run: cargo test --lib --examples --tests --features std --no-default-features
+
+  # Only build on MSRV, since trybuild will fail on older version
+  build-msrv:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+            # msrv
+          - 1.71
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      # build
+      - run: cargo build --all
+
+  fmt-clippy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - run: cargo clippy -- -D warnings
+      - run: cargo fmt --all -- --check
+
+  ensure_no_std:
+    name: Ensure no_std
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: thumbv7em-none-eabihf
+      - run: cd ensure_no_std && cargo build --release --target thumbv7em-none-eabihf
+
+  ensure_wasm:
+    name: Ensure wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+      - uses: jetli/wasm-pack-action@v0.3.0
+        with:
+          version: 'latest'
+      - run: cd ensure_wasm && wasm-pack build --target web && wasm-pack test --node

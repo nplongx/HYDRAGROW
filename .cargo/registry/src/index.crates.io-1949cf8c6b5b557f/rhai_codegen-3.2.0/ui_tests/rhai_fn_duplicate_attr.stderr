@@ -1,0 +1,5 @@
+error: duplicated attribute 'rhai_fn'
+ --> ui_tests/rhai_fn_duplicate_attr.rs:6:5
+  |
+6 |     #[rhai_fn(pure)]
+  |     ^

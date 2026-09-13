@@ -1,0 +1,30 @@
+# Built artifacts
+target/
+
+# Project and editor files
+.vscode/
+.idea/
+*.vim
+*.vi
+
+# Environment
+.env
+
+# Shared-memory and WAL files created by SQLite.
+*-shm
+*-wal
+
+# Integration testing extension library for SQLite.
+ipaddr.dylib
+ipaddr.so
+
+# Temporary files from running the tests locally like they would be run from CI
+.sqlx
+
+# Checking-in a `Cargo.lock` is not that helpful for a published package:
+# * Requires manual `cargo update` frequently to test with new versions
+# * `cargo install sqlx-cli` uses latest deps anyways unless `--locked` is passed
+# * Libraries don't really need reproducible builds
+# * Should also check with `-Z direct-minimal-versions` (which our CI does)
+# * PRs which add/remove/update deps cause churn which results in annyoing merge conflicts
+Cargo.lock

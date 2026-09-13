@@ -1,0 +1,208 @@
+[submodule "syntaxes/ada"]
+	path = syntaxes/ada
+	url = https://github.com/wiremoons/ada-sublime-syntax.git
+[submodule "syntaxes/apache"]
+	path = syntaxes/apache
+	url = https://github.com/colinta/ApacheConf.tmLanguage.git
+[submodule "syntaxes/asciidoc"]
+	path = syntaxes/asciidoc
+	url = https://github.com/asciidoctor/sublimetext-asciidoc.git
+[submodule "syntaxes/assembly-arm"]
+	path = syntaxes/assembly-arm
+	url = https://github.com/tvi/Sublime-ARM-Assembly.git
+[submodule "syntaxes/awk"]
+	path = syntaxes/awk
+	url = https://github.com/JohnNilsson/awk-sublime.git
+[submodule "syntaxes/cmake"]
+	path = syntaxes/cmake
+	url = https://github.com/zyxar/Sublime-CMakeLists.git
+[submodule "syntaxes/cmd-help"]
+	path = syntaxes/cmd-help
+	url = https://github.com/victor-gp/cmd-help-sublime-syntax.git
+[submodule "syntaxes/coffeescript"]
+	path = syntaxes/coffeescript
+	url = https://github.com/sustained/CoffeeScript-Sublime-Plugin.git
+[submodule "syntaxes/crontab"]
+	path = syntaxes/crontab
+	url = https://github.com/michaelblyons/SublimeSyntax-Crontab.git
+[submodule "syntaxes/crystal"]
+	path = syntaxes/crystal
+	url = https://github.com/crystal-lang-tools/sublime-crystal.git
+[submodule "syntaxes/dart"]
+	path = syntaxes/dart
+	url = https://github.com/elMuso/Dartlight.git
+[submodule "syntaxes/docker"]
+	path = syntaxes/docker
+	url = https://github.com/asbjornenge/Docker.tmbundle.git
+[submodule "syntaxes/dotenv"]
+	path = syntaxes/dotenv
+	url = https://github.com/zaynali53/DotENV.git
+[submodule "syntaxes/elixir"]
+	path = syntaxes/elixir
+	url = https://github.com/elixir-editors/elixir-sublime-syntax.git
+[submodule "syntaxes/elm"]
+	path = syntaxes/elm
+	url = https://github.com/elm-community/SublimeElmLanguageSupport.git
+[submodule "syntaxes/email"]
+	path = syntaxes/email
+	url = https://github.com/mariozaizar/email.sublime-syntax.git
+[submodule "syntaxes/ethereum"]
+	path = syntaxes/ethereum
+	url = https://github.com/davidhq/SublimeEthereum.git
+[submodule "syntaxes/fish"]
+	path = syntaxes/fish
+	url = https://github.com/Phidica/sublime-fish.git
+[submodule "syntaxes/fortran"]
+	path = syntaxes/fortran
+	url = https://github.com/315234/SublimeFortran.git
+[submodule "syntaxes/fsharp"]
+	path = syntaxes/fsharp
+	url = https://github.com/hoest/sublimetext-fsharp.git
+[submodule "syntaxes/glsl"]
+	path = syntaxes/glsl
+	url = https://github.com/euler0/sublime-glsl.git
+[submodule "syntaxes/gnuplot"]
+	path = syntaxes/gnuplot
+	url = https://github.com/hesstobi/sublime_gnuplot.git
+[submodule "syntaxes/graphql"]
+	path = syntaxes/graphql
+	url = https://github.com/dncrews/GraphQL-SublimeText3.git
+[submodule "syntaxes/groff"]
+	path = syntaxes/groff
+	url = https://github.com/carsonoid/sublime_man_page_support.git
+[submodule "syntaxes/hosts"]
+	path = syntaxes/hosts
+	url = https://github.com/brandonwamboldt/sublime-hosts.git
+[submodule "syntaxes/http-request-response"]
+	path = syntaxes/http-request-response
+	url = https://github.com/keith-hall/http-request-response-syntax.git
+[submodule "syntaxes/ini"]
+	path = syntaxes/ini
+	url = https://github.com/clintberry/sublime-text-2-ini.git
+[submodule "syntaxes/javascript"]
+	path = syntaxes/javascript
+	url = https://github.com/babel/babel-sublime.git
+[submodule "syntaxes/jinja2"]
+	path = syntaxes/jinja2
+	url = https://github.com/Martin819/sublime-jinja2.git
+[submodule "syntaxes/jq"]
+	path = syntaxes/jq
+	url = https://github.com/zogwarg/SublimeJQ.git
+[submodule "syntaxes/jsonnet"]
+	path = syntaxes/jsonnet
+	url = https://github.com/gburiola/sublime-jsonnet-syntax.git
+[submodule "syntaxes/julia"]
+	path = syntaxes/julia
+	url = https://github.com/JuliaEditorSupport/Julia-sublime.git
+[submodule "syntaxes/kotlin"]
+	path = syntaxes/kotlin
+	url = https://github.com/vkostyukov/kotlin-sublime-package.git
+[submodule "syntaxes/lean"]
+	path = syntaxes/lean
+	url = https://github.com/leanprover/vscode-lean.git
+[submodule "syntaxes/less"]
+	path = syntaxes/less
+	url = https://github.com/danro/LESS-sublime.git
+[submodule "syntaxes/livescript"]
+	path = syntaxes/livescript
+	url = https://github.com/paulmillr/LiveScript.tmbundle.git
+[submodule "syntaxes/llvm"]
+	path = syntaxes/llvm
+	url = https://github.com/ioncodes/LLVM.tmBundle.git
+[submodule "syntaxes/media-Wiki"]
+	path = syntaxes/media-Wiki
+	url = https://github.com/tosher/Mediawiker.git
+[submodule "syntaxes/nginx"]
+	path = syntaxes/nginx
+	url = https://github.com/brandonwamboldt/sublime-nginx.git
+[submodule "syntaxes/ninja"]
+	path = syntaxes/ninja
+	url = https://github.com/pope/SublimeNinja.git
+[submodule "syntaxes/nix"]
+	path = syntaxes/nix
+	url = https://github.com/wmertens/sublime-nix.git
+[submodule "syntaxes/official"]
+	path = syntaxes/official
+	url = https://github.com/sublimehq/Packages.git
+[submodule "syntaxes/org-mode"]
+	path = syntaxes/org-mode
+	url = https://github.com/jezcope/Org.tmbundle.git
+[submodule "syntaxes/powershell"]
+	path = syntaxes/powershell
+	url = https://github.com/PowerShell/EditorSyntax.git
+[submodule "syntaxes/protobuf"]
+	path = syntaxes/protobuf
+	url = https://github.com/VcamX/protobuf-syntax-highlighting.git
+[submodule "syntaxes/puppet"]
+	path = syntaxes/puppet
+	url = https://github.com/russCloak/SublimePuppet.git
+[submodule "syntaxes/purescript"]
+	path = syntaxes/purescript
+	url = https://github.com/tellnobody1/sublime-purescript-syntax.git
+[submodule "syntaxes/qml"]
+	path = syntaxes/qml
+	url = https://github.com/skozlovf/Sublime-QML.git
+[submodule "syntaxes/racket"]
+	path = syntaxes/racket
+	url = https://github.com/follesoe/sublime-racket.git
+[submodule "syntaxes/robot"]
+	path = syntaxes/robot
+	url = https://github.com/andriyko/sublime-robot-framework-assistant.git
+[submodule "syntaxes/sass"]
+	path = syntaxes/sass
+	url = https://github.com/braver/SublimeSass.git
+[submodule "syntaxes/slim"]
+	path = syntaxes/slim
+	url = https://github.com/slim-template/ruby-slim.tmbundle.git
+[submodule "syntaxes/sls"]
+	path = syntaxes/sls
+	url = https://github.com/saltstack/sublime-text.git
+[submodule "syntaxes/ssh-config"]
+	path = syntaxes/ssh-config
+	url = https://github.com/robballou/sublimetext-sshconfig.git
+[submodule "syntaxes/strace"]
+	path = syntaxes/strace
+	url = https://github.com/djuretic/SublimeStrace.git
+[submodule "syntaxes/stylus"]
+	path = syntaxes/stylus
+	url = https://github.com/billymoon/Stylus.git
+[submodule "syntaxes/svelte"]
+	path = syntaxes/svelte
+	url = https://github.com/corneliusio/svelte-sublime.git
+[submodule "syntaxes/swift"]
+	path = syntaxes/swift
+	url = https://github.com/quiqueg/Swift-Sublime-Package.git
+[submodule "syntaxes/systemveri-log"]
+	path = syntaxes/systemveri-log
+	url = https://github.com/TheClams/SystemVerilog.git
+[submodule "syntaxes/terraform"]
+	path = syntaxes/terraform
+	url = https://github.com/alexlouden/Terraform.tmLanguage.git
+[submodule "syntaxes/todo-txt"]
+	path = syntaxes/todo-txt
+	url = https://github.com/dertuxmalwieder/SublimeTodoTxt.git
+[submodule "syntaxes/toml"]
+	path = syntaxes/toml
+	url = https://github.com/jasonwilliams/sublime_toml_highlighting.git
+[submodule "syntaxes/twig"]
+	path = syntaxes/twig
+	url = https://github.com/Anomareh/PHP-Twig.tmbundle.git
+[submodule "syntaxes/typescript"]
+	path = syntaxes/typescript
+	url = https://github.com/Microsoft/TypeScript-Sublime-Plugin.git
+[submodule "syntaxes/varlink"]
+	path = syntaxes/varlink
+	url = https://github.com/varlink/syntax-highlight-varlink.git
+[submodule "syntaxes/verilog"]
+	path = syntaxes/verilog
+	url = https://github.com/pro711/sublime-verilog.git
+[submodule "syntaxes/viml"]
+	path = syntaxes/viml
+	url = https://github.com/SalGnt/Sublime-VimL.git
+[submodule "syntaxes/vue"]
+	path = syntaxes/vue
+	url = https://github.com/vuejs/vue-syntax-highlight.git
+	branch = new
+[submodule "syntaxes/zig"]
+	path = syntaxes/zig
+	url = https://github.com/ziglang/sublime-zig-language.git

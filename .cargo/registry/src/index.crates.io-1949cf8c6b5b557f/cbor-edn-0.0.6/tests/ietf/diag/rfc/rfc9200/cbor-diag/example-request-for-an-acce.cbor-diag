@@ -1,0 +1,4 @@
+{
+  / client_id / 24 : "myclient",
+  / audience /  5  : "tempSensor4711"
+}

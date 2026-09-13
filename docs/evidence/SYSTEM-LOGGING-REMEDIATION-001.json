@@ -1,0 +1,61 @@
+{
+  "requirement_id": "SYSTEM-LOGGING-REMEDIATION-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml (72 tests)",
+      "environment": "hydragrow-controller-core, Rust 1.85+, Linux x86_64",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "ESP32 firmware emits PublishFsmTransition on fault transitions and uses TransitionReason::HardTimeout."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "ESP32-C3-SENSOR-NODE/src/mqtt/MqttManager.cpp reconnect() inspection",
+      "environment": "ESP32-C3-SENSOR-NODE, PubSubClient",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "MqttManager::reconnect configured with LWT on TOPIC_STATUS with will message, retain=true, qos=1."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-watchdog/Cargo.toml (17 tests)",
+      "environment": "hydragrow-watchdog, Rust 1.85+, Linux x86_64",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "Watchdog monitors sensor node topic staleness in addition to controller status topic."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml (356 tests)",
+      "environment": "hydragrow-backend, Rust 1.85+, Linux x86_64",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "Backend persists operational FSM transitions, OTA lifecycle updates, and user config updates to system_events."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-backend/Cargo.toml services::retention (5 tests)",
+      "environment": "hydragrow-backend, PostgreSQL / sqlx, Linux x86_64",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "Migration enriches dosing_action_log and flow_execution_log, and retention service cleans up rows older than 90 days."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cargo test --manifest-path hydragrow-shared/Cargo.toml (47 tests) && cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml (49 tests)",
+      "environment": "hydragrow-shared & hydragrow-diagnostic-worker, Rust 1.85+, Linux x86_64",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "Shared types provide DosingEvent/SensorEvent metadata, and diagnostic worker handles sensor staleness and dosing anomaly triggers."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/pages/SystemLog.test.tsx (7 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T20:50:00Z",
+      "notes": "Frontend SystemLog provides filter awareness and dedicated guidance for sensor logs."
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+use tokio::sync::mpsc;
+use yazi_config::popup::InputCfg;
+use yazi_macro::{emit, relay};
+use yazi_widgets::input::InputEvent;
+
+pub struct InputProxy;
+
+impl InputProxy {
+	pub fn show(cfg: InputCfg) -> mpsc::UnboundedReceiver<InputEvent> {
+		let (tx, rx) = mpsc::unbounded_channel();
+		emit!(Call(relay!(input:show).with_any("tx", tx).with_any("cfg", cfg)));
+		rx
+	}
+}

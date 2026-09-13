@@ -1,0 +1,41 @@
+[package]
+name                   = "yazi-config"
+description            = "Yazi configuration file parser"
+version.workspace      = true
+edition.workspace      = true
+license.workspace      = true
+authors.workspace      = true
+homepage.workspace     = true
+repository.workspace   = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+yazi-codegen = { path = "../yazi-codegen", version = "26.5.6" }
+yazi-fs      = { path = "../yazi-fs", version = "26.5.6" }
+yazi-macro   = { path = "../yazi-macro", version = "26.5.6" }
+yazi-shared  = { path = "../yazi-shared", version = "26.5.6" }
+yazi-shim    = { path = "../yazi-shim", version = "26.5.6" }
+yazi-tty     = { path = "../yazi-tty", version = "26.5.6" }
+
+# External dependencies
+anyhow     = { workspace = true }
+arc-swap   = { workspace = true }
+bitflags   = { workspace = true }
+crossterm  = { workspace = true }
+globset    = { workspace = true }
+hashbrown  = { workspace = true }
+indexmap   = { workspace = true }
+ratatui    = { workspace = true }
+regex      = { workspace = true }
+serde      = { workspace = true }
+serde_with = { workspace = true }
+strum      = { workspace = true }
+tokio      = { workspace = true }
+toml       = { workspace = true }
+tracing    = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+crossterm = { workspace = true, features = [ "use-dev-tty", "libc" ] }

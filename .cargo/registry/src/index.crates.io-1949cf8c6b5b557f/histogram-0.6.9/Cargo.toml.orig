@@ -1,0 +1,18 @@
+[package]
+name = "histogram"
+version = "0.6.9"
+authors = ["Brian Martin <brayniac@gmail.com>"]
+
+license = "MIT/Apache-2.0"
+
+description = "histogram storage and percentile metrics with precision guarentees"
+
+homepage = "https://github.com/brayniac/histogram"
+documentation = "https://docs.rs/histogram"
+repository = "https://github.com/brayniac/histogram"
+
+readme = "README.md"
+
+keywords = [ "histogram", "percentile", "statistics", "stats" ]
+
+categories = [ "data-structures" ]

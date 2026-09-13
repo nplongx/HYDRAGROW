@@ -32,6 +32,34 @@ fn compute_cutoff_ms() -> i64 {
     (now - chrono::Duration::days(RETENTION_DAYS)).timestamp_millis()
 }
 
+fn compute_cutoff_date() -> chrono::DateTime<chrono::Utc> {
+    chrono::Utc::now() - chrono::Duration::days(RETENTION_DAYS)
+}
+
+/// Xóa các bản ghi `dosing_action_log` cũ hơn cutoff_date.
+pub async fn delete_expired_dosing_actions(
+    pool: &PgPool,
+    cutoff_date: chrono::DateTime<chrono::Utc>,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM dosing_action_log WHERE dosed_at < $1")
+        .bind(cutoff_date)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+/// Xóa các bản ghi `flow_execution_log` cũ hơn cutoff_date.
+pub async fn delete_expired_flow_executions(
+    pool: &PgPool,
+    cutoff_date: chrono::DateTime<chrono::Utc>,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM flow_execution_log WHERE created_at < $1")
+        .bind(cutoff_date)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
 /// Xóa tối đa `batch_size` dòng có `timestamp < cutoff_ms`, trả về số dòng đã xóa.
 async fn delete_one_batch(
     pool: &PgPool,
@@ -100,6 +128,33 @@ async fn run_once(pool: &PgPool) {
             "🗑️ [Retention] Đã xóa {} system_events cũ hơn {} ngày.",
             total_deleted, RETENTION_DAYS
         );
+    }
+
+    let cutoff_date = compute_cutoff_date();
+    match delete_expired_dosing_actions(pool, cutoff_date).await {
+        Ok(deleted) if deleted > 0 => {
+            info!(
+                "🗑️ [Retention] Đã xóa {} dosing_action_log cũ hơn {} ngày.",
+                deleted, RETENTION_DAYS
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            error!("❌ [Retention] Lỗi xóa dosing_action_log cũ: {:?}", e);
+        }
+    }
+
+    match delete_expired_flow_executions(pool, cutoff_date).await {
+        Ok(deleted) if deleted > 0 => {
+            info!(
+                "🗑️ [Retention] Đã xóa {} flow_execution_log cũ hơn {} ngày.",
+                deleted, RETENTION_DAYS
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            error!("❌ [Retention] Lỗi xóa flow_execution_log cũ: {:?}", e);
+        }
     }
 }
 
@@ -182,5 +237,92 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(remaining, 2);
+    }
+
+    #[sqlx::test]
+    async fn delete_expired_dosing_actions_deletes_only_expired_records(pool: sqlx::PgPool) {
+        // Create dummy device
+        sqlx::query(
+            "INSERT INTO device_config (device_id, ec_target, ec_tolerance, ph_target, ph_tolerance, control_mode, is_enabled, delay_between_a_and_b_sec) VALUES ('dev-ret-dose', 1.5, 0.1, 6.0, 0.2, 'auto', true, 10) ON CONFLICT DO NOTHING"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let old_time = chrono::Utc::now() - chrono::Duration::days(100);
+        let recent_time = chrono::Utc::now() - chrono::Duration::days(10);
+
+        sqlx::query(
+            "INSERT INTO dosing_action_log (device_id, pump, dose_ml, dosed_at) VALUES ('dev-ret-dose', 'PUMP_A', 5.0, $1)"
+        )
+        .bind(old_time)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO dosing_action_log (device_id, pump, dose_ml, dosed_at) VALUES ('dev-ret-dose', 'PUMP_B', 5.0, $1)"
+        )
+        .bind(recent_time)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let cutoff = compute_cutoff_date();
+        let deleted = delete_expired_dosing_actions(&pool, cutoff).await.unwrap();
+        assert_eq!(deleted, 1);
+
+        let remaining: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM dosing_action_log WHERE device_id = 'dev-ret-dose'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(remaining, 1);
+    }
+
+    #[sqlx::test]
+    async fn delete_expired_flow_executions_deletes_only_expired_records(pool: sqlx::PgPool) {
+        // Create dummy device
+        sqlx::query(
+            "INSERT INTO device_config (device_id, ec_target, ec_tolerance, ph_target, ph_tolerance, control_mode, is_enabled, delay_between_a_and_b_sec) VALUES ('dev-ret-flow', 1.5, 0.1, 6.0, 0.2, 'auto', true, 10) ON CONFLICT DO NOTHING"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let script_id = uuid::Uuid::new_v4();
+        let old_time = chrono::Utc::now() - chrono::Duration::days(100);
+        let recent_time = chrono::Utc::now() - chrono::Duration::days(10);
+
+        sqlx::query(
+            "INSERT INTO flow_execution_log (script_id, device_id, status, created_at) VALUES ($1, 'dev-ret-flow', 'success', $2)"
+        )
+        .bind(script_id)
+        .bind(old_time)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO flow_execution_log (script_id, device_id, status, created_at) VALUES ($1, 'dev-ret-flow', 'success', $2)"
+        )
+        .bind(script_id)
+        .bind(recent_time)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let cutoff = compute_cutoff_date();
+        let deleted = delete_expired_flow_executions(&pool, cutoff).await.unwrap();
+        assert_eq!(deleted, 1);
+
+        let remaining: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM flow_execution_log WHERE device_id = 'dev-ret-flow'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(remaining, 1);
     }
 }

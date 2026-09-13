@@ -1,0 +1,8 @@
+{
+  "event-log:last-event" : {
+    "example-port:example-port-fault" : {
+      "port-name" : "0/4/21",
+      "port-fault" : "Open pin 2"
+    }
+  }
+}

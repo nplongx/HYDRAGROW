@@ -1,0 +1,10 @@
+[package]
+name = "percentage"
+description = "A crate to calculate percentages" 
+version = "0.1.0"
+authors = ["<maxlegend69@gmail.com>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+num="0.2.0"

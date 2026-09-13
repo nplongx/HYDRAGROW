@@ -1,0 +1,5 @@
+error: conflicting index_set
+  --> ui_tests/rhai_fn_index_setter_multiple.rs:12:40
+   |
+12 |     #[rhai_fn(name = "foo", index_set, index_set)]
+   |                                        ^^^^^^^^^

@@ -1,0 +1,144 @@
+use std::iter::Iterator;
+
+use tokio::time::Duration;
+
+/// A retry strategy driven by exponential back-off.
+///
+/// The power corresponds to the number of past attempts.
+#[derive(Debug, Clone)]
+pub struct ExponentialBackoff {
+    current: u64,
+    base: u64,
+    factor: u64,
+    max_delay: Option<Duration>,
+}
+
+impl ExponentialBackoff {
+    /// Constructs a new exponential back-off strategy,
+    /// given a base duration in milliseconds.
+    ///
+    /// The resulting duration is calculated by taking the base to the `n`-th power,
+    /// where `n` denotes the number of past attempts.
+    #[must_use]
+    pub const fn from_millis(base: u64) -> Self {
+        Self {
+            current: base,
+            base,
+            factor: 1u64,
+            max_delay: None,
+        }
+    }
+
+    /// A multiplicative factor that will be applied to the retry delay.
+    ///
+    /// For example, using a factor of `1000` will make each delay in units of seconds.
+    ///
+    /// Default factor is `1`.
+    #[must_use]
+    pub const fn factor(mut self, factor: u64) -> Self {
+        self.factor = factor;
+        self
+    }
+
+    /// Apply a maximum delay. No single retry delay will be longer than this `Duration`.
+    #[must_use]
+    pub const fn max_delay(mut self, duration: Duration) -> Self {
+        self.max_delay = Some(duration);
+        self
+    }
+
+    /// Apply a maximum delay. No single retry delay will be longer than this `Duration::from_millis`.
+    #[must_use]
+    pub const fn max_delay_millis(mut self, duration: u64) -> Self {
+        self.max_delay = Some(Duration::from_millis(duration));
+        self
+    }
+}
+
+impl Iterator for ExponentialBackoff {
+    type Item = Duration;
+
+    fn next(&mut self) -> Option<Duration> {
+        // set delay duration by applying factor
+        let duration = self
+            .current
+            .checked_mul(self.factor)
+            .map_or_else(|| Duration::from_millis(u64::MAX), Duration::from_millis);
+
+        // check if we reached max delay
+        if let Some(ref max_delay) = self.max_delay
+            && duration > *max_delay
+        {
+            #[cfg(feature = "tracing")]
+            tracing::warn!("`max_delay` for strategy reached");
+            return Some(*max_delay);
+        }
+
+        if let Some(next) = self.current.checked_mul(self.base) {
+            self.current = next;
+        } else {
+            self.current = u64::MAX;
+        }
+
+        Some(duration)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn returns_some_exponential_base_10() {
+        let mut s = ExponentialBackoff::from_millis(10);
+
+        assert_eq!(s.next(), Some(Duration::from_millis(10)));
+        assert_eq!(s.next(), Some(Duration::from_millis(100)));
+        assert_eq!(s.next(), Some(Duration::from_millis(1000)));
+    }
+
+    #[test]
+    fn returns_some_exponential_base_2() {
+        let mut s = ExponentialBackoff::from_millis(2);
+
+        assert_eq!(s.next(), Some(Duration::from_millis(2)));
+        assert_eq!(s.next(), Some(Duration::from_millis(4)));
+        assert_eq!(s.next(), Some(Duration::from_millis(8)));
+    }
+
+    #[test]
+    fn saturates_at_maximum_value() {
+        let mut s = ExponentialBackoff::from_millis(u64::MAX - 1);
+
+        assert_eq!(s.next(), Some(Duration::from_millis(u64::MAX - 1)));
+        assert_eq!(s.next(), Some(Duration::from_millis(u64::MAX)));
+        assert_eq!(s.next(), Some(Duration::from_millis(u64::MAX)));
+    }
+
+    #[test]
+    fn can_use_factor_to_get_seconds() {
+        let factor = 1000;
+        let mut s = ExponentialBackoff::from_millis(2).factor(factor);
+
+        assert_eq!(s.next(), Some(Duration::from_secs(2)));
+        assert_eq!(s.next(), Some(Duration::from_secs(4)));
+        assert_eq!(s.next(), Some(Duration::from_secs(8)));
+    }
+
+    #[test]
+    fn stops_increasing_at_max_delay() {
+        let mut s = ExponentialBackoff::from_millis(2).max_delay(Duration::from_millis(4));
+
+        assert_eq!(s.next(), Some(Duration::from_millis(2)));
+        assert_eq!(s.next(), Some(Duration::from_millis(4)));
+        assert_eq!(s.next(), Some(Duration::from_millis(4)));
+    }
+
+    #[test]
+    fn returns_max_when_max_less_than_base() {
+        let mut s = ExponentialBackoff::from_millis(20).max_delay(Duration::from_millis(10));
+
+        assert_eq!(s.next(), Some(Duration::from_millis(10)));
+        assert_eq!(s.next(), Some(Duration::from_millis(10)));
+    }
+}

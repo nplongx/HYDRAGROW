@@ -1,0 +1,75 @@
+# AI
+.agent
+.codex
+!apps/decodex-app/.codex/
+!apps/decodex-app/.codex/environments/
+!apps/decodex-app/.codex/environments/environment.toml
+
+# Decodex Local Runtime
+.decodex
+.decodex-run-activity
+.decodex-run-control
+
+# Editor
+.vscode
+.zed
+
+# General Ignores
+*.bak
+*.log
+.env*
+.turbo
+model
+!apps/decodex/src/autonomy_signal/model/
+!apps/decodex/src/autonomy_signal/model/*.rs
+tmp
+
+# Kubernetes
+.kube
+
+# Language Specifics
+
+## JavaScript/TypeScript
+*.tsbuildinfo
+.next
+.pnp
+.pnp.*
+.pnpm-debug.log*
+.vercel
+.vite
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+build
+coverage
+dist
+next-env.d.ts
+node_modules
+npm-debug.log*
+out/
+site/.astro/
+site/dist/
+yarn-debug.log*
+yarn-error.log*
+
+## Python
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+
+## Rust
+target
+
+# Swift
+.build
+xcuserdata
+
+# System
+.DS_Store
+
+# Work Dirs
+.workspaces
+.worktrees

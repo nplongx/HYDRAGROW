@@ -1,0 +1,14 @@
+   {
+      / access_token /  1 : h'd08343a1/...
+        (remainder of CWT omitted for brevity)/',
+      / token_type /   34 : / PoP / 2,
+      / expires_in /    2 : 86400,
+      / ace_profile /  38 : / coap_dtls / 1,
+      / cnf /           8 : {
+        / COSE_Key / 1 : {
+          / kty / 1 : / symmetric / 4,
+          / kid / 2 : h'3d027833fc6267ce',
+          / k /  -1 : h'73657373696f6e6b6579'
+        }
+      }
+   }

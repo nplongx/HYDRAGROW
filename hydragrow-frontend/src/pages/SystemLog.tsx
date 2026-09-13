@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Clock, Filter, AlertTriangle, FlaskConical, Waves, UserCheck, Cpu, CheckCircle, Workflow, Download, Zap, ExternalLink } from 'lucide-react';
+import { Clock, Filter, AlertTriangle, FlaskConical, Waves, UserCheck, Cpu, CheckCircle, Workflow, Download, Zap, ExternalLink, Radio } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -26,6 +26,7 @@ const FILTERS = [
   { id: 'dosing', label: 'Châm vi chất', icon: FlaskConical },
   { id: 'water', label: 'Nước', icon: Waves },
   { id: 'device', label: 'Thiết bị', icon: Cpu },
+  { id: 'sensor', label: 'Cảm biến', icon: Radio },
   { id: 'automation', label: 'Tự động hóa', icon: Workflow },
   { id: 'user_action', label: 'Người dùng', icon: UserCheck },
   { id: 'system', label: 'Hệ thống', icon: Cpu },
@@ -228,12 +229,20 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
             </div>
           ) : visibleRows.length === 0 ? (
             <StateView
-              icon={Zap}
-              title={search ? `Không tìm thấy kết quả cho "${search}"` : 'Dòng thời gian trống'}
+              icon={filter === 'sensor' && !search ? Radio : Zap}
+              title={
+                search
+                  ? `Không tìm thấy kết quả cho "${search}"`
+                  : filter === 'sensor'
+                    ? 'Không có cảnh báo cảm biến — hệ thống ổn định'
+                    : 'Dòng thời gian trống'
+              }
               description={
                 search
                   ? 'Thử từ khoá ngắn hơn, kiểm tra chính tả, hoặc đổi bộ lọc danh mục đang chọn.'
-                  : 'Chưa ghi nhận khoảnh khắc nào khớp bộ lọc hiện tại.'
+                  : filter === 'sensor'
+                    ? 'Không ghi nhận sự kiện cảm biến nào trong khoảng thời gian này. Cảm biến EC/pH/nhiệt độ/mực nước vẫn hoạt động bình thường nếu không có cảnh báo. Để xem bản đọc info chi tiết, chuyển sang chế độ "Toàn bộ kỹ thuật" hoặc kiểm tra hiệu chuẩn và kết nối cảm biến.'
+                    : 'Chưa ghi nhận khoảnh khắc nào khớp bộ lọc hiện tại.'
               }
               action={
                 search ? (
@@ -244,6 +253,23 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                   >
                     Xoá tìm kiếm
                   </button>
+                ) : filter === 'sensor' ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMode('all_technical')}
+                      className="text-xs font-semibold text-primary hover:text-primary-deep"
+                    >
+                      Xem bản đọc chi tiết
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFilter('all')}
+                      className="text-xs font-semibold text-primary hover:text-primary-deep"
+                    >
+                      Xem tất cả danh mục
+                    </button>
+                  </div>
                 ) : filter !== 'all' ? (
                   <button
                     type="button"

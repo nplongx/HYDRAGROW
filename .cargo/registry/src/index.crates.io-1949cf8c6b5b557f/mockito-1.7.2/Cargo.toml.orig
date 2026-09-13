@@ -1,0 +1,50 @@
+[package]
+name = "mockito"
+version = "1.7.2"
+authors = ["Florin Lipan <florinlipan@gmail.com>"]
+license = "MIT"
+homepage = "https://github.com/lipanski/mockito"
+repository = "https://github.com/lipanski/mockito"
+documentation = "https://docs.rs/mockito"
+description = "HTTP mocking for Rust."
+keywords = ["mock", "mocks", "http", "webmock", "webmocks"]
+categories = ["development-tools::testing", "web-programming"]
+exclude = ["/.appveyor.yml", "/.travis.yml", "/benchmarks.txt", "/docs/", "/slides.pdf"]
+edition = "2021"
+rust-version = "1.70"
+
+[badges]
+travis-ci = { repository = "lipanski/mockito", branch = "master" }
+appveyor = { repository = "lipanski/mockito", branch = "master", service = "github" }
+
+[dependencies]
+assert-json-diff = "2.0"
+bytes = "1"
+colored = { version = ">=2.0, <=3", optional = true }
+futures-core = "0.3"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+hyper = "1"
+hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
+log = "0.4"
+pin-project-lite = "0.2"
+rand = "0.9"
+regex = "1.7"
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+similar = "2.2"
+tokio = { version = "1.25", features = ["net", "rt", "sync"] }
+
+[dev-dependencies]
+env_logger = "0.8"
+testing_logger = "0.1"
+futures = { version = "0.3", default-features = false, features = ["alloc", "async-await"] }
+reqwest = { version = "0.13", default-features = false, features = ["http2"] }
+tokio = { version = "1.25", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = ["color", "parking_lot"]
+color = ["colored"]
+
+parking_lot = ["tokio/parking_lot"]

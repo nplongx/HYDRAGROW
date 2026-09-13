@@ -1,0 +1,23 @@
+17(
+  [
+    / protected h'A10105' / << {
+      / alg / 1:5 / HS256 /
+    } >>,
+    / unprotected / {
+      / countersign / 11: [
+        / protected h'A10127' / << {
+          / alg / 1:-8 / EdDSA /
+        } >>,
+        / unprotected / {
+          / kid / 4: '11'
+        },
+        / signature / h'968A315DF6B4F26362E11F4CFD2F2F4E76232F39657B
+F1598837FF9332CDDD7581E248116549451F81EF823DA5974F885B681D3D6E38FC41
+42D8F8E9E7DC8F0D'
+      ]
+    },
+    / payload / 'This is the content.',
+    / tag / h'A1A848D3471F9D61EE49018D244C824772F223AD4F935293F1789F
+C3A08D8C58'
+  ]
+)

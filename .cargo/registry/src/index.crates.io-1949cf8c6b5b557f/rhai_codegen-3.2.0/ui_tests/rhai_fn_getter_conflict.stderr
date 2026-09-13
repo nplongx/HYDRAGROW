@@ -1,0 +1,5 @@
+error: conflicting setter
+  --> ui_tests/rhai_fn_getter_conflict.rs:12:42
+   |
+12 |     #[rhai_fn(name = "foo", get = "foo", set = "bar")]
+   |                                          ^^^

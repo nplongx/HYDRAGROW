@@ -1,0 +1,440 @@
+use crate::{target::Target, util};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, ToTokens};
+use std::collections::BTreeMap;
+use syn::{
+    parse_quote, Attribute, Block, Error, Expr, Ident, ItemFn, Result, Safety, Signature,
+    Visibility,
+};
+
+pub(crate) fn feature_fn_name(ident: &Ident, target: Option<&Target>) -> Ident {
+    if let Some(target) = target {
+        if target.has_features_specified() {
+            return format_ident!("{}_{}_version", ident, target.features_string());
+        }
+    }
+
+    // If this is a default fn, it doesn't have a dedicated static dispatcher
+    format_ident!("{}_default_version", ident)
+}
+
+pub(crate) enum DispatchMethod {
+    Default,
+    Static,
+    Direct,
+    Indirect,
+}
+
+pub(crate) struct Dispatcher {
+    pub dispatcher: DispatchMethod,
+    pub inner_attrs: Vec<Attribute>,
+    pub targets: Vec<Target>,
+    pub func: ItemFn,
+}
+
+impl Dispatcher {
+    // Create functions for each target
+    fn feature_fns(&self) -> Result<Vec<ItemFn>> {
+        let make_block = |target: Option<&Target>| {
+            let block = &self.func.block;
+            let features = target.map(|t| t.features()).unwrap_or(&[]);
+            let selected_target = quote! {
+                multiversion::target_features::TargetFeatures::enabled_for_target()
+                    .with(multiversion::target_features::target_features!(#(#features),*))
+            };
+            let feature_attrs = if let Some(target) = target {
+                target.target_feature()
+            } else {
+                Vec::new()
+            };
+            let features = if let Some(target) = target {
+                let s = target
+                    .features()
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                s.join(",")
+            } else {
+                String::new()
+            };
+            parse_quote! {
+                {
+                    #[doc(hidden)] // https://github.com/rust-lang/rust/issues/111415
+                    #[allow(unused)]
+                    pub mod __multiversion {
+                        macro_rules! selected_target {
+                            {} => { #selected_target }
+                        }
+
+                        macro_rules! inherit_target {
+                            { $f:item } => { #(#feature_attrs)* $f }
+                        }
+
+                        macro_rules! target_cfg {
+                            { [$cfg:meta] $($attached:tt)* } => { #[multiversion::target::target_cfg_impl(target_features = #features, $cfg)] $($attached)* };
+                        }
+
+                        macro_rules! target_cfg_attr {
+                            { [$cfg:meta, $attr:meta] $($attached:tt)* } => { #[multiversion::target::target_cfg_attr_impl(target_features = #features, $cfg, $attr)] $($attached)* };
+                        }
+
+                        macro_rules! target_cfg_f {
+                            { $cfg:meta } => { multiversion::target::target_cfg_f_impl!(target_features = #features, $cfg) };
+                        }
+
+                        macro_rules! match_target {
+                            { $($arms:tt)* } => { multiversion::target::match_target_impl!{ #features $($arms)* } }
+                        }
+
+                        pub(crate) use inherit_target;
+                        pub(crate) use selected_target;
+                        pub(crate) use target_cfg;
+                        pub(crate) use target_cfg_attr;
+                        pub(crate) use target_cfg_f;
+                        pub(crate) use match_target;
+                    }
+                    #block
+                }
+            }
+        };
+
+        let mut fns = Vec::new();
+        for target in &self.targets {
+            // target_feature 1.1 lets clones preserve the original function's safety.
+            // The dispatcher uses unsafe calls after checking the required features.
+            let mut f = ItemFn {
+                attrs: self.inner_attrs.clone(),
+                vis: Visibility::Inherited,
+                modifiers: Default::default(),
+                sig: Signature {
+                    ident: feature_fn_name(&self.func.sig.ident, Some(target)),
+                    ..self.func.sig.clone()
+                },
+                block: make_block(Some(target)),
+            };
+            f.attrs.extend(target.fn_attrs());
+            fns.push(f);
+        }
+
+        // Create default fn
+        let mut attrs = self.inner_attrs.clone();
+        attrs.push(parse_quote! { #[inline(always)] });
+        let block = make_block(None);
+        fns.push(ItemFn {
+            attrs,
+            vis: self.func.vis.clone(),
+            modifiers: Default::default(),
+            sig: Signature {
+                ident: feature_fn_name(&self.func.sig.ident, None),
+                ..self.func.sig.clone()
+            },
+            block,
+        });
+
+        Ok(fns)
+    }
+
+    fn call_target_fn(&self, target: Option<&Target>) -> Expr {
+        let function = feature_fn_name(&self.func.sig.ident, target);
+        let fn_params = util::fn_params(&self.func.sig);
+        let (_, argument_names) = util::normalize_signature(&self.func.sig);
+        let maybe_await = self.func.sig.asyncness.map(|_| util::await_tokens());
+        parse_quote! {
+            unsafe { #function::<#(#fn_params),*>(#(#argument_names),*)#maybe_await }
+        }
+    }
+
+    fn static_dispatcher_fn(&self) -> Block {
+        let return_if_detected = self.targets.iter().filter_map(|target| {
+            if target.has_features_specified() {
+                let target_arch = target.target_arch();
+                let features_enabled = target.features_enabled();
+                let call = self.call_target_fn(Some(target));
+                Some(quote! {
+                    #target_arch
+                    {
+                        if #features_enabled {
+                            return #call
+                        }
+                    }
+                })
+            } else {
+                None
+            }
+        });
+        let call_default = self.call_target_fn(None);
+        parse_quote! {
+            {
+                #(#return_if_detected)*
+                #call_default
+            }
+        }
+    }
+
+    fn indirect_dispatcher_fn(&self) -> Result<Block> {
+        if !cfg!(feature = "std") {
+            return Err(Error::new(
+                Span::call_site(),
+                "indirect function dispatch only available with the `std` cargo feature",
+            ));
+        }
+        if !util::fn_params(&self.func.sig).is_empty() {
+            return Err(Error::new(
+                Span::call_site(),
+                "indirect function dispatch does not support type generic or const generic parameters",
+            ));
+        }
+        if self.func.sig.asyncness.is_some() {
+            return Err(Error::new(
+                Span::call_site(),
+                "indirect function dispatch does not support async functions",
+            ));
+        }
+        if util::impl_trait_present(&self.func.sig) {
+            return Err(Error::new(
+                Span::call_site(),
+                "indirect function dispatch does not support impl trait",
+            ));
+        }
+        if util::lifetime_bounds_present(&self.func.sig) {
+            return Err(Error::new(
+                self.func.sig.ident.span(),
+                "indirect function dispatch does not support bounded lifetimes",
+            ));
+        }
+
+        let fn_ty = util::fn_type_from_signature(&Signature {
+            safety: Safety::Unsafe(Default::default()),
+            ..self.func.sig.clone()
+        })?;
+        let (normalized_signature, argument_names) = util::normalize_signature(&self.func.sig);
+        // Keep dispatcher locals distinct from user parameters with the same names.
+        let current_fn = Ident::new("current_fn", Span::mixed_site());
+        let current_ptr = Ident::new("current_ptr", Span::mixed_site());
+
+        let feature_detection = {
+            let return_if_detected = self.targets.iter().filter_map(|target| {
+                if target.has_features_specified() {
+                    let target_arch = target.target_arch();
+                    let features_detected = target.features_detected();
+                    let function = feature_fn_name(&self.func.sig.ident, Some(target));
+                    Some(quote! {
+                       #target_arch
+                       {
+                           if #features_detected {
+                               return #function
+                           }
+                       }
+                    })
+                } else {
+                    None
+                }
+            });
+            let default_fn = feature_fn_name(&self.func.sig.ident, None);
+            quote! {
+                fn __get_fn() -> #fn_ty {
+                    #(#return_if_detected)*
+                    #default_fn
+                };
+            }
+        };
+        let resolver_signature = Signature {
+            ident: Ident::new("__resolver_fn", Span::call_site()),
+            ..normalized_signature
+        };
+        Ok(parse_quote! {
+            {
+                #[cold]
+                #resolver_signature {
+                    #feature_detection
+                    let #current_fn = __get_fn();
+                    __DISPATCHED_FN.store(#current_fn as *mut (), ::core::sync::atomic::Ordering::Relaxed);
+                    unsafe { #current_fn(#(#argument_names),*) }
+                }
+                static __DISPATCHED_FN: ::core::sync::atomic::AtomicPtr<()> =
+                    ::core::sync::atomic::AtomicPtr::new(__resolver_fn as *mut ());
+                let #current_ptr = __DISPATCHED_FN.load(::core::sync::atomic::Ordering::Relaxed);
+                // Safety: the pointer is a fn pointer, so we can transmute it back to its original
+                // representation.
+                #[allow(clippy::undocumented_unsafe_blocks)]
+                unsafe {
+                    let #current_fn = ::core::mem::transmute::<*mut (), #fn_ty>(#current_ptr);
+                    #current_fn(#(#argument_names),*)
+                }
+            }
+        })
+    }
+
+    fn direct_dispatcher_fn(&self) -> Result<Block> {
+        if !cfg!(feature = "std") {
+            return Err(Error::new(
+                Span::call_site(),
+                "direct function dispatch only available with the `std` cargo feature",
+            ));
+        }
+
+        let ordered_targets = self
+            .targets
+            .iter()
+            .filter(|target| target.has_features_specified())
+            .collect::<Vec<_>>();
+
+        let detect_index = {
+            let detect_feature = ordered_targets.iter().enumerate().map(|(index, target)| {
+                let index = index + 1; // 0 is default features
+                let target_arch = target.target_arch();
+                let features_detected = target.features_detected();
+                quote! {
+                    #target_arch
+                    {
+                        if #features_detected {
+                            return #index
+                        }
+                    }
+                }
+            });
+            quote! {
+                fn __detect_index() -> usize {
+                    #[cold]
+                    fn __detect() -> usize {
+                        #(#detect_feature)*
+                        0
+                    }
+
+                    static SELECTED: ::core::sync::atomic::AtomicUsize =
+                        ::core::sync::atomic::AtomicUsize::new(usize::MAX);
+                    let selected = SELECTED.load(::core::sync::atomic::Ordering::Relaxed);
+                    if selected == usize::MAX {
+                        let selected = __detect();
+                        SELECTED.store(selected, ::core::sync::atomic::Ordering::Relaxed);
+                        selected
+                    } else {
+                        selected
+                    }
+                }
+            }
+        };
+
+        let match_arm = ordered_targets.iter().enumerate().map(|(index, target)| {
+            let index = index + 1; // 0 is default features
+            let target_arch = target.target_arch();
+            let arm = self.call_target_fn(Some(target));
+            quote! {
+                #target_arch
+                #index => #arm,
+            }
+        });
+        let call_default = self.call_target_fn(None);
+        Ok(parse_quote! {
+            {
+                #detect_index
+                match __detect_index() {
+                    #(#match_arm)*
+                    0 => #call_default,
+                    _ => unsafe { ::core::hint::unreachable_unchecked() },
+                }
+            }
+        })
+    }
+
+    fn create_fn(&self) -> Result<ItemFn> {
+        //
+        // First, we determine which dispatcher to use.
+        //
+        // If the dispatcher is unspecified, decide on the following criteria:
+        // * If the std feature is not enabled, dispatch statically, since we can't do CPU feature
+        //   detection.
+        // * If the function has type/const generics, bounded lifetimes, async, or impl Trait,
+        //   use direct dispatch, since we can't take a suitable function pointer.
+        // * If any retpoline features are enabled use direct dispatch, since retpolines hurt
+        //   performance of indirect dispatch significantly.
+        // * Otherwise, prefer indirect dispatch, since it appears to have better performance on
+        //   average.  On machines with worse branch prediction, it may be significantly better.
+        //
+        let block = match self.dispatcher {
+            DispatchMethod::Default => {
+                if cfg!(feature = "std") {
+                    if !crate::util::fn_params(&self.func.sig).is_empty()
+                        || self.func.sig.asyncness.is_some()
+                        || util::impl_trait_present(&self.func.sig)
+                        || util::lifetime_bounds_present(&self.func.sig)
+                        || cfg!(retpoline)
+                    {
+                        self.direct_dispatcher_fn()?
+                    } else {
+                        self.indirect_dispatcher_fn()?
+                    }
+                } else {
+                    self.static_dispatcher_fn()
+                }
+            }
+            DispatchMethod::Static => self.static_dispatcher_fn(),
+            DispatchMethod::Direct => self.direct_dispatcher_fn()?,
+            DispatchMethod::Indirect => self.indirect_dispatcher_fn()?,
+        };
+
+        // If we already know that the current build target supports the best function choice, we
+        // can skip dispatching entirely.
+        //
+        // Here we check for one of two possibilities:
+        // * If the globally enabled features (the target-feature or target-cpu codegen options)
+        //   already support the highest priority function, skip dispatch entirely and call that
+        //   function.
+        // * If the current target isn't specified in the multiversioned list at all, we can skip
+        //   dispatch entirely and call the default function.
+        //
+        // In these cases, the default function is called instead.
+        // BTreeMap (not HashMap): iteration and `.keys()` order below are spliced into
+        // `#[cfg(...)]` tokens, so the order must be deterministic across proc-macro
+        // invocations or the generated crate's Svh varies build-to-build (rust#89904).
+        let best_targets = self
+            .targets
+            .iter()
+            .rev()
+            .map(|t| (t.arch(), t))
+            .collect::<BTreeMap<_, _>>();
+        let mut skips = Vec::new();
+        for (arch, target) in best_targets.iter() {
+            let feature = target.features();
+            skips.push(quote! {
+                all(target_arch = #arch, #(target_feature = #feature),*)
+            });
+        }
+        let specified_arches = best_targets.keys().collect::<Vec<_>>();
+        let call_default = self.call_target_fn(None);
+        let (normalized_signature, _) = util::normalize_signature(&self.func.sig);
+        let feature_fns = self.feature_fns()?;
+        Ok(ItemFn {
+            attrs: self.func.attrs.clone(),
+            vis: self.func.vis.clone(),
+            modifiers: Default::default(),
+            sig: normalized_signature,
+            block: Box::new(parse_quote! {
+                {
+                    #(#feature_fns)*
+
+                    #[cfg(any(
+                        not(any(#(target_arch = #specified_arches),*)),
+                        #(#skips),*
+                    ))]
+                    { return #call_default }
+
+                    #[cfg(not(any(
+                        not(any(#(target_arch = #specified_arches),*)),
+                        #(#skips),*
+                    )))]
+                    #block
+                }
+            }),
+        })
+    }
+}
+
+impl ToTokens for Dispatcher {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self.create_fn() {
+            Ok(val) => val.into_token_stream(),
+            Err(err) => err.to_compile_error(),
+        })
+    }
+}

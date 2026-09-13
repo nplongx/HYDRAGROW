@@ -1,0 +1,5 @@
+error: conflicting setter
+  --> ui_tests/rhai_fn_setter_multiple.rs:12:42
+   |
+12 |     #[rhai_fn(name = "foo", set = "foo", set = "bar")]
+   |                                          ^^^

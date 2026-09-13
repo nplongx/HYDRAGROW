@@ -1,0 +1,5 @@
+error: requires value
+  --> ui_tests/rhai_mod_missing_value.rs:11:12
+   |
+11 | #[rhai_mod(name)]
+   |            ^^^^

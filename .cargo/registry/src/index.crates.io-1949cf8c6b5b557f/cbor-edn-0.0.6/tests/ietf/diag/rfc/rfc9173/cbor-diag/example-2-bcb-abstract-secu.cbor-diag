@@ -1,0 +1,16 @@
+[1],               / Security Target        - Payload block       /
+2,                 / Security Context ID    - BCB-AES-GCM         /
+1,                 / Security Context Flags - Parameters Present  /
+[2,[2, 1]],        / Security Source        - ipn:2.1             /
+[                  / Security Parameters    - 4 Parameters        /
+  [1, h'5477656c7665313231323132'], / Initialization Vector       /
+  [2, 1],                           / AES Variant - A128GCM       /
+  [3, h'69c411276fecddc4780df42c8a  / AES wrapped key             /
+        2af89296fabf34d7fae700'],
+  [4, 0x00]                         / Scope Flags - No extra scope/
+],
+[                                   /  Security Results: 1 Result /
+  [                                 /  Target 1 Results           /
+    [1, h'efa4b5ac0108e3816c5606479801bc04']  / Payload Auth. Tag /
+  ]
+]

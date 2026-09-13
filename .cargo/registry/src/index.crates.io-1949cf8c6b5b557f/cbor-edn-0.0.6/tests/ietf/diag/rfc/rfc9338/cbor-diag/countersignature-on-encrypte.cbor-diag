@@ -1,0 +1,23 @@
+16(
+  [
+    / protected h'A10101' / << {
+      / alg / 1:1 / AES-GCM 128 /
+    } >>,
+    / unprotected / {
+      / iv / 5: h'02D1F7E6F26C43D4868D87CE',
+      / countersign / 11: [
+        / protected h'A10127' / << {
+          / alg / 1:-8 / EdDSA with Ed25519 /
+        } >>,
+        / unprotected / {
+          / kid / 4: '11'
+        },
+        / signature / h'E10439154CC75C7A3A5391491F88651E0292FD0FE0E0
+2CF740547EAF6677B4A4040B8ECA16DB592881262F77B14C1A086C02268B17171CA1
+6BE4B8595F8C0A08'
+      ]
+    },
+    / ciphertext / h'60973A94BB2898009EE52ECFD9AB1DD25867374B162E2C0
+3568B41F57C3CC16F9166250A'
+  ]
+)

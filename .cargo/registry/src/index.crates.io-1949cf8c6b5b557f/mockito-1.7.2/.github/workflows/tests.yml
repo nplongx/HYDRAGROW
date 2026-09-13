@@ -1,0 +1,86 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  test-default:
+    name: Test the minimum supported toolchain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Resolve MSRV aware dependencies
+        run: cargo update
+        env:
+          CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.70.0
+          profile: minimal
+          override: true
+      - name: Check
+        run: cargo check
+      - name: Test
+        run: cargo test --no-default-features
+
+  test-latest:
+    name: Test on latest stable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Check
+        run: cargo check
+      - name: Test
+        run: cargo test --no-default-features
+
+  test-nightly:
+    name: Test on nightly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          override: true
+      - name: Check
+        run: cargo check
+      - name: Test
+        run: cargo test --no-default-features
+
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    steps:
+    # The Windows runners have autocrlf enabled by default
+    # which causes failures for some of the line-ending sensitive tests
+    - name: disable git eol translation
+      run: git config --global core.autocrlf false
+    - uses: actions/checkout@v3
+    - name: Install Rustup using win.rustup.rs
+      run: |
+        # Disable the download progress bar which can cause perf issues
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest https://win.rustup.rs/ -OutFile rustup-init.exe
+        .\rustup-init.exe -y --default-host=x86_64-pc-windows-msvc --default-toolchain=none
+        del rustup-init.exe
+        rustup target add x86_64-pc-windows-msvc
+      shell: powershell
+    - name: Test
+      shell: cmd
+      run: cargo test --no-default-features

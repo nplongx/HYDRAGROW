@@ -1,0 +1,9 @@
+[                                   / Inclusion proof 1             /
+  8,                                / Tree size                     /
+  7,                                / Leaf index                    /
+  [                                 / Inclusion hashes (3)          /
+     h'2a8d7dfc...15d10b22' +       / Intermediate hash 1           /
+     h'75f177fd...2e73a8ab' +       / Intermediate hash 2           /
+     h'0bdaaed3...32568964'         / Intermediate hash 3           /
+  ]
+]

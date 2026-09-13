@@ -103,7 +103,12 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         SystemLogEvent::DosingEvent(meta) => {
             format!(
                 "Châm phân {}: {:.1}ml (EC: {:?} -> {:?}, pH: {:?} -> {:?})",
-                meta.pump, meta.dose_ml, meta.ec_before, meta.ec_after, meta.ph_before, meta.ph_after
+                meta.pump,
+                meta.dose_ml,
+                meta.ec_before,
+                meta.ec_after,
+                meta.ph_before,
+                meta.ph_after
             )
         }
         SystemLogEvent::SensorEvent(meta) => {

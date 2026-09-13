@@ -399,6 +399,16 @@ pub fn decide_wifi_delivery_update(
     }
 }
 
+/// Maps an OTA lifecycle status string to a system_events level.
+/// `success`/`done` → `success`, `failed`/`error` → `critical`, anything else → `info`.
+fn map_ota_status_to_level(status: &str) -> &'static str {
+    match status {
+        "success" | "done" => "success",
+        "failed" | "error" => "critical",
+        _ => "info",
+    }
+}
+
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_ota_status(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let value: serde_json::Value = match serde_json::from_slice(payload) {
@@ -408,12 +418,41 @@ pub async fn handle_ota_status(device_id: String, payload: &[u8], app_state: web
             return;
         }
     };
+    let title = value
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Cập nhật OTA");
+    let message = value.get("message").and_then(|v| v.as_str()).unwrap_or("");
+    let status_str = value
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("in_progress");
+    let level = map_ota_status_to_level(status_str);
+
     info!(
         device_id = %device_id,
-        title = value.get("title").and_then(|v| v.as_str()).unwrap_or("ota"),
-        message = value.get("message").and_then(|v| v.as_str()).unwrap_or(""),
+        title = %title,
+        message = %message,
+        status = %status_str,
         "Nhận OTA lifecycle event",
     );
+
+    let record = crate::db::postgres::NewSystemEventRecord {
+        device_id: device_id.clone(),
+        level: level.to_string(),
+        category: "device".to_string(),
+        title: title.to_string(),
+        message: message.to_string(),
+        reason: Some(format!("ota_{status_str}")),
+        metadata: Some(value.clone()),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        source: "rule".to_string(),
+        primary_reason_code: None,
+    };
+    if let Err(e) = crate::db::postgres::insert_system_event(&app_state.pg_pool, &record).await {
+        error!(error = ?e, device_id = %device_id, "Không thể lưu OTA system_event");
+    }
+
     let _ = app_state.event_bus.send(AppEvent::ControllerStatus(value));
 }
 
@@ -716,5 +755,34 @@ mod tests {
         assert_eq!(record.level, "warning");
         assert_eq!(record.reason.as_deref(), Some("error"));
         assert_eq!(record.title, "Thông điệp Mạch Cảm Biến");
+    }
+
+    #[test]
+    fn ota_lifecycle_maps_status_to_appropriate_level() {
+        use super::map_ota_status_to_level;
+        assert_eq!(map_ota_status_to_level("success"), "success");
+        assert_eq!(map_ota_status_to_level("done"), "success");
+        assert_eq!(map_ota_status_to_level("failed"), "critical");
+        assert_eq!(map_ota_status_to_level("error"), "critical");
+        assert_eq!(map_ota_status_to_level("downloading"), "info");
+        assert_eq!(map_ota_status_to_level("in_progress"), "info");
+        assert_eq!(map_ota_status_to_level(""), "info");
+
+        // Record shape used by handle_ota_status: category device, reason ota_<status>.
+        let record = crate::db::postgres::NewSystemEventRecord {
+            device_id: "controller_001".to_string(),
+            level: map_ota_status_to_level("done").to_string(),
+            category: "device".to_string(),
+            title: "Cập nhật OTA".to_string(),
+            message: "OTA hoàn tất".to_string(),
+            reason: Some("ota_done".to_string()),
+            metadata: Some(serde_json::json!({"status": "done"})),
+            timestamp: 1700000000000,
+            source: "rule".to_string(),
+            primary_reason_code: None,
+        };
+        assert_eq!(record.category, "device");
+        assert_eq!(record.level, "success");
+        assert_eq!(record.reason.as_deref(), Some("ota_done"));
     }
 }

@@ -1,0 +1,6 @@
+{
+  "example-foomod:top": {
+    "foo": 54,
+    "example-barmod:bar": true
+  }
+}

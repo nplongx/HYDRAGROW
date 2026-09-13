@@ -1,0 +1,12 @@
+   {
+     / grant_type / 33 : / client_credentials / 2,
+     / audience /    5 : "tempSensor4711",
+     / req_cnf /     4 : {
+       / COSE_Key / 1 : {
+         / kty /  1 : / EC2 /   2,
+         / crv / -1 : / P-256 / 1,
+         / x /   -2 : h'e866c35f4c3c81bb96a1/.../',
+         / y /   -3 : h'2e25556be097c8778a20/.../'
+       }
+     }
+   }

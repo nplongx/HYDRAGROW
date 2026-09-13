@@ -1,0 +1,23 @@
+[package]
+name = "alterable_logger"
+version = "1.0.1"
+edition = "2021"
+authors = ["Simon Brummer <simon.brummer@posteo.de>"]
+description = "A thin wrapper for \"log\" allowing to replace the actual logger implementation at run time"
+license = "MPL-2.0"
+readme = "README.md"
+repository = "https://codeberg.org/black-cat-engineering/alterable_logger.git"
+keywords = ["logging", "log"]
+categories = ["development-tools::debugging"]
+
+[dependencies]
+log = {version = "0.4.20", features = ["std"]}
+arc-swap = "1.6.0"
+once_cell = "1.18.0"
+
+[workspace]
+members = [
+    "examples/usage",
+    "examples/profile_logger",
+    "examples/profile_alterable_logger",
+]

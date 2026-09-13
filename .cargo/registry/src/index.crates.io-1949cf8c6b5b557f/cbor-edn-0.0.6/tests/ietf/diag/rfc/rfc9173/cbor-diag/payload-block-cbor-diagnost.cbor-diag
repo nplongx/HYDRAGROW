@@ -1,0 +1,9 @@
+[
+  1,                       / type code: Payload block       /
+  1,                       / block number                   /
+  0,                       / block processing control flags /
+  0,                       / CRC type                       /
+  h'526561647920746f206765 / type-specific-data: payload    /
+  6e657261746520612033322d
+  62797465207061796c6f6164'
+]

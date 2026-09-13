@@ -1,0 +1,48 @@
+{
+  "requirement_id": "SYSTEM-LOGGING-REMEDIATION-001",
+  "objective": "Remediate system logging gaps across firmware, backend MQTT handlers, database schemas, watchdog, and frontend (Proposals C1–C20).",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "ESP32 firmware emits PublishFsmTransition on all fault/lockout transitions and provides TransitionReason::HardTimeout",
+      "verification": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "ESP32 sensor node connects to MQTT with Last Will and Testament (LWT) configured on TOPIC_STATUS",
+      "verification": "source inspection in ESP32-C3-SENSOR-NODE/src/mqtt/MqttManager.cpp",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Watchdog monitors sensor node topic staleness in addition to controller status topic",
+      "verification": "cargo test --manifest-path hydragrow-watchdog/Cargo.toml",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Backend persists operational FSM transitions, OTA lifecycle updates, and user config updates to system_events",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Database schema migration enriches dosing_action_log and flow_execution_log, and retention cleanup prunes logs older than 90 days",
+      "verification": "cargo test --manifest-path hydragrow-backend/Cargo.toml services::retention",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Shared types provide dedicated DosingEvent and SensorEvent metadata variants, and diagnostic worker triggers on sensor staleness and dosing anomalies",
+      "verification": "cargo test --manifest-path hydragrow-shared/Cargo.toml && cargo test --manifest-path hydragrow-diagnostic-worker/Cargo.toml",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Frontend SystemLog provides filter awareness and dedicated guidance for sensor logs",
+      "verification": "cd hydragrow-frontend && npx vitest run src/pages/SystemLog.test.tsx",
+      "evidence_required": true
+    }
+  ]
+}

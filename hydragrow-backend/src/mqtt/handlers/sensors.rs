@@ -130,12 +130,20 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             phase: current_phase,
             device_id: device_id.clone(),
             timestamp_ms,
+            err_ph: incoming.err_ph,
+            err_tds: incoming.err_ec,
+            err_temperature: incoming.err_temp,
+            err_water_level: incoming.err_water,
         };
 
         let mut chain_nodes: Vec<crate::mqtt::handlers::script_eval::ChainNode> = Vec::new();
+        let mut script_names: std::collections::HashMap<uuid::Uuid, String> =
+            std::collections::HashMap::new();
         for s in alert_scripts {
+            script_names.insert(s.id, s.name.clone());
             chain_nodes.push(crate::mqtt::handlers::script_eval::ChainNode {
                 id: s.id,
+                name: s.name,
                 kind: crate::models::script::ScriptKind::Alert,
                 next_flow_ids: s.next_flow_ids,
                 ast: s.ast,
@@ -143,8 +151,10 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             });
         }
         for s in action_scripts {
+            script_names.insert(s.id, s.name.clone());
             chain_nodes.push(crate::mqtt::handlers::script_eval::ChainNode {
                 id: s.id,
+                name: s.name,
                 kind: crate::models::script::ScriptKind::ActionCommand,
                 next_flow_ids: s.next_flow_ids,
                 ast: s.ast,
@@ -224,8 +234,14 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
                 crate::db::postgres::touch_script_last_run(&app_state.pg_pool, &script_id).await;
                 match res {
                     crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
+                        let script_name = script_names
+                            .get(&script_id)
+                            .map(|s| s.as_str())
+                            .unwrap_or("unknown");
                         crate::mqtt::handlers::script_eval::handle_fired_alert(
                             &app_state,
+                            &script_id,
+                            script_name,
                             alert,
                             &device_id,
                             timestamp_ms,
@@ -329,10 +345,36 @@ mod tests {
             message: "pH = 8.5".to_string(),
             notify_fcm: None,
         };
-        let msg = alert_output_to_system_alert(alert, "device_001", 1234567890);
+        let script_id = uuid::Uuid::new_v4();
+        let msg =
+            alert_output_to_system_alert(alert, &script_id, "ph_rule", "device_001", 1234567890);
         assert_eq!(msg.category, "automation");
         assert_eq!(msg.device_id, "device_001");
         assert_eq!(msg.level, "warning");
+        let meta = msg.metadata.expect("metadata should be populated");
+        assert_eq!(meta["script_id"], script_id.to_string());
+        assert_eq!(meta["script_name"], "ph_rule");
+    }
+
+    #[test]
+    fn sensor_snapshot_carries_err_flags_when_set() {
+        let snapshot = crate::models::script::SensorSnapshot {
+            ph: 7.0,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".to_string(),
+            device_id: "test".to_string(),
+            timestamp_ms: 0,
+            err_ph: Some(true),
+            err_tds: None,
+            err_temperature: Some(false),
+            err_water_level: Some(true),
+        };
+        assert_eq!(snapshot.err_ph, Some(true));
+        assert!(snapshot.err_tds.is_none());
+        assert_eq!(snapshot.err_temperature, Some(false));
+        assert_eq!(snapshot.err_water_level, Some(true));
     }
 
     #[test]

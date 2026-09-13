@@ -1,0 +1,4 @@
+{
+   10: "integer ten",
+   10.0: "floating ten"
+}

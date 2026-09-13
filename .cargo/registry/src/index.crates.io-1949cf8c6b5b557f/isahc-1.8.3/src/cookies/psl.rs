@@ -1,0 +1,203 @@
+//! This module provides access to the [Public Suffix
+//! List](https://publicsuffix.org), a community-supported database of domain
+//! "public suffixes". This list is commonly used by web browsers and HTTP
+//! clients to prevent cookies from being set for a high-level domain name
+//! suffix, which could be exploited maliciously.
+//!
+//! Ideally, clients should use a recent copy of the list in cookie validation.
+//! Applications such as web browsers tend to be on a frequent update cycle, and
+//! so they usually download a local copy of the list at compile time and use
+//! that until the next build. Since HTTP clients tend to be used in a much
+//! different way and are often embedded into long-lived software without
+//! frequent (or any) updates, it is better for us to download a fresh copy from
+//! the Internet every once in a while to make sure the list isn't too stale.
+//!
+//! Despite being in an HTTP client, we can't always assume that the Internet is
+//! available (we might be behind a firewall or offline), we _also_ include an
+//! offline copy of the list (provided at compile time by another crate). If the
+//! embedded list is stale, then we attempt to download a newer copy of the
+//! list. If we can't, then we log a warning and use the stale list anyway,
+//! since a stale list is better than no list at all.
+
+use crate::{ReadResponseExt, request::RequestExt};
+use publicsuffix::Psl as _;
+use std::{
+    error::Error,
+    sync::{
+        LazyLock, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::{Duration, SystemTime},
+};
+
+/// How long should we use a cached list before refreshing?
+static TTL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Global in-memory PSL cache.
+static CACHE: LazyLock<RwLock<ListCache>> = LazyLock::new(Default::default);
+
+struct ListCache {
+    list: Option<publicsuffix::List>,
+    last_refreshed: Option<SystemTime>,
+    last_updated: Option<SystemTime>,
+}
+
+impl Default for ListCache {
+    fn default() -> Self {
+        Self {
+            list: None,
+            // Refresh the list right away.
+            last_refreshed: None,
+            // Assume the bundled list is always out of date.
+            last_updated: None,
+        }
+    }
+}
+
+impl ListCache {
+    fn is_public_suffix(&self, domain: &[u8]) -> Option<bool> {
+        Some(
+            self.list
+                .as_ref()?
+                .suffix(domain)
+                // We don't want to block unknown hosts like `localhost`
+                .filter(publicsuffix::Suffix::is_known)
+                .filter(|suffix| suffix == &domain)
+                .is_some(),
+        )
+    }
+
+    fn needs_refreshed(&self) -> bool {
+        match self.last_refreshed {
+            Some(last_refreshed) => match last_refreshed.elapsed() {
+                Ok(elapsed) => elapsed > TTL,
+                Err(_) => false,
+            },
+            None => true,
+        }
+    }
+
+    fn refresh(&mut self) -> Result<(), Box<dyn Error>> {
+        let result = self.try_refresh();
+        self.last_refreshed = Some(SystemTime::now());
+        result
+    }
+
+    fn try_refresh(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut request = http::Request::get(publicsuffix::LIST_URL);
+
+        if let Some(last_updated) = self.last_updated {
+            request = request.header(
+                http::header::IF_MODIFIED_SINCE,
+                httpdate::fmt_http_date(last_updated),
+            );
+        }
+
+        let mut response = request.body(())?.send()?;
+
+        match response.status() {
+            http::StatusCode::OK => {
+                // Parse the suffix list.
+                self.list = Some(response.text()?.parse()?);
+                self.last_updated = Some(SystemTime::now());
+                tracing::debug!("public suffix list updated");
+            }
+
+            http::StatusCode::NOT_MODIFIED => {
+                // List hasn't changed and is still new.
+                self.last_updated = Some(SystemTime::now());
+            }
+
+            status => tracing::warn!(
+                "could not update public suffix list, got status code {}",
+                status,
+            ),
+        }
+
+        Ok(())
+    }
+}
+
+/// Determine if the given domain is a public suffix.
+///
+/// If the current list information is stale, a background refresh will be
+/// triggered. The current data will be used to respond to this query.
+pub(crate) fn is_public_suffix(domain: impl AsRef<str>) -> bool {
+    let domain = domain.as_ref().as_bytes();
+    let cache = CACHE.read().unwrap();
+
+    // Check if the list needs to be refreshed.
+    if cache.needs_refreshed() {
+        refresh_in_background();
+    }
+
+    // Check using the runtime cache if present.
+    if let Some(v) = cache.is_public_suffix(domain) {
+        return v;
+    }
+
+    drop(cache);
+
+    // Fall back to compile-time list.
+    psl::suffix(domain)
+        // We don't want to block unknown hosts like `localhost`
+        .filter(psl::Suffix::is_known)
+        .filter(|suffix| suffix == &domain)
+        .is_some()
+}
+
+fn refresh_in_background() {
+    static IS_REFRESHING: AtomicBool = AtomicBool::new(false);
+
+    // Only spawn a refresh thread if one isn't already running.
+    if IS_REFRESHING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+    {
+        thread::spawn(|| {
+            let mut cache = CACHE.write().unwrap();
+
+            if let Err(error) = cache.refresh() {
+                tracing::warn!(?error, "could not refresh public suffix list");
+            }
+
+            IS_REFRESHING.store(false, Ordering::SeqCst);
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic_is_public_suffix() {
+        assert!(is_public_suffix("co.jp"));
+        assert!(!is_public_suffix("google.com"));
+    }
+
+    #[test]
+    fn refresh_cache() {
+        // Reset cache.
+        let mut cache = ListCache::default();
+
+        assert!(cache.last_refreshed.is_none());
+        assert!(cache.last_updated.is_none());
+        assert!(cache.needs_refreshed());
+
+        cache.refresh().unwrap();
+
+        assert!(cache.last_refreshed.is_some());
+        assert!(cache.last_updated.is_some());
+        assert!(!cache.needs_refreshed());
+
+        let last_refreshed = cache.last_refreshed.unwrap();
+        let last_updated = cache.last_updated.unwrap();
+
+        cache.refresh().unwrap();
+
+        assert!(cache.last_refreshed.unwrap() > last_refreshed);
+        assert!(cache.last_updated.unwrap() > last_updated);
+    }
+}

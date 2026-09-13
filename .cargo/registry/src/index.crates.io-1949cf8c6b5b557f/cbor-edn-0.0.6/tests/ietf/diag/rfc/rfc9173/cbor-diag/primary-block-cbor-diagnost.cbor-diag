@@ -1,0 +1,10 @@
+[
+  7,           / BP version            /
+  0,           / flags                 /
+  0,           / CRC type              /
+  [2, [1,2]],  / destination (ipn:1.2) /
+  [2, [2,1]],  / source      (ipn:2.1) /
+  [2, [2,1]],  / report-to   (ipn:2.1) /
+  [0, 40],     / timestamp             /
+  1000000      / lifetime              /
+]

@@ -1,0 +1,16 @@
+{
+  / active / 10 : true,
+  / scope / 9 : "read",
+  / aud / 3 : "tempSensor4711",
+  / cnf / 8 : {
+    / COSE_Key / 1 : {
+      / kty /  1 : 2 /EC2/,
+      / kid /  2 : h'11',
+      / crv / -1 : 1 /P-256/,
+      / x /   -2 : h'BAC5B11CAD8F99F9C72B05CF4B9E26D24
+                   4DC189F745228255A219A86D6A09EFF',
+      / y /   -3 : h'20138BF82DC1B6D562BE0FA54AB7804A3
+                   A64B6D72CCFED6B6FB6ED28BBFC117E'
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  / access_token / 1 : h'4A5015DF686428/...
+   (remainder of CWT omitted for brevity;
+   CWT contains COSE_Key in the "cnf" claim)/',
+  / cnf / 8 : {
+   / COSE_Key / 1 : {
+      / kty / 1 : 4 / Symmetric /,
+      / kid / 2 : h'DFD1AA97',
+      / k /  -1 : h'849B5786457C1491BE3A76DCEA6C427108'
+    }
+  }
+}

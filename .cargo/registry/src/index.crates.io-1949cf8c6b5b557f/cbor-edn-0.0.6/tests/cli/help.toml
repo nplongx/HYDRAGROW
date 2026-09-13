@@ -1,0 +1,2 @@
+bin.name = "cbor-edn"
+args = ["--help"]

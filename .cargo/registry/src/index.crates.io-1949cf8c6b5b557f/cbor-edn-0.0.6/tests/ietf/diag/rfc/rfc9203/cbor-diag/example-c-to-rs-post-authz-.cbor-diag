@@ -1,0 +1,6 @@
+        {
+                     / access_token / 1 : h'8343a1010aa2044c53/...
+       (remainder of access token (CWT) omitted for brevity)/',
+                          / nonce1 / 40 : h'018a278f7faab55a',
+          / ace_client_recipientid / 43 : h'1645'
+        }

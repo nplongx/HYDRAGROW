@@ -1,0 +1,8 @@
+{
+  / client_id / 24 : "myclient",
+  / audience /   5 : "valve424",
+  / scope /      9 : "read",
+  / req_cnf /    4 : {
+     / kid /        3 : b64'6kg0dXJM13U'
+  }
+}

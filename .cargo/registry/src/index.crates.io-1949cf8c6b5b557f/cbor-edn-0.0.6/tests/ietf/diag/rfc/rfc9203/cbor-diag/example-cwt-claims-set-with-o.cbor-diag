@@ -1,0 +1,9 @@
+  {
+      / aud / 3 : "tempSensorInLivingRoom",
+      / iat / 6 : 1360189224,
+      / exp / 4 : 1360289224,
+    / scope / 9 :  "temperature_h",
+      / cnf / 8 : {
+        / kid / 3 : h'01'
+    }
+  }

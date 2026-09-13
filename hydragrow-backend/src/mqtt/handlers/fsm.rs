@@ -5,7 +5,11 @@ use tracing::{error, info, warn};
 use crate::AppState;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::metrics::*;
-use hydragrow_shared::{events::AppEvent, fsm::FsmSnapshot, telemetry::FsmTransitionEvent};
+use hydragrow_shared::{
+    events::AppEvent,
+    fsm::FsmSnapshot,
+    telemetry::{FsmTransitionEvent, transition::TransitionReason},
+};
 
 pub async fn handle_state(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
     let snapshot: FsmSnapshot = match serde_json::from_slice(payload) {
@@ -674,7 +678,180 @@ fn transition_system_event_record(event: &FsmTransitionEvent) -> Option<NewSyste
             source: "rule".to_string(),
             primary_reason_code: None,
         }),
-        _ => None,
+        _ => match &event.reason {
+            TransitionReason::DosingComplete {
+                dose_a_ml,
+                dose_b_ml,
+                ph_up_ml,
+                ph_down_ml,
+            } => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: "info".to_string(),
+                category: "dosing".to_string(),
+                title: "Hoàn tất châm dinh dưỡng".to_string(),
+                message: format!(
+                    "Châm phân thành công: A={:.1}ml, B={:.1}ml, pH Up={:.1}ml, pH Down={:.1}ml.",
+                    dose_a_ml, dose_b_ml, ph_up_ml, ph_down_ml
+                ),
+                reason: Some("dosing_complete".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            TransitionReason::StabilizingComplete {
+                final_ec,
+                final_ph,
+                actual_stabilize_ms,
+            } => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: "info".to_string(),
+                category: "dosing".to_string(),
+                title: "Hoàn tất ổn định dung dịch".to_string(),
+                message: format!(
+                    "Ổn định hoàn tất trong {}ms. EC cuối={:.2}, pH cuối={:.2}.",
+                    actual_stabilize_ms, final_ec, final_ph
+                ),
+                reason: Some("stabilizing_complete".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            TransitionReason::MixingComplete { actual_mixing_ms } => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: "info".to_string(),
+                category: "dosing".to_string(),
+                title: "Hoàn tất khuấy trộn".to_string(),
+                message: format!("Khuấy trộn kết thúc trong {}ms.", actual_mixing_ms),
+                reason: Some("mixing_complete".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            TransitionReason::WaterRefillComplete {
+                success,
+                duration_sec,
+                final_level,
+            } => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: if *success { "info" } else { "warning" }.to_string(),
+                category: "water".to_string(),
+                title: if *success {
+                    "Hoàn tất cấp nước"
+                } else {
+                    "Cấp nước không hoàn tất"
+                }
+                .to_string(),
+                message: format!(
+                    "Cấp nước (thành công={}) trong {}s, mức nước cuối={:.1}cm.",
+                    success, duration_sec, final_level
+                ),
+                reason: Some("water_refill_complete".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            TransitionReason::WaterDrainComplete {
+                success,
+                duration_sec,
+                final_level,
+            } => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: if *success { "info" } else { "warning" }.to_string(),
+                category: "water".to_string(),
+                title: if *success {
+                    "Hoàn tất xả nước"
+                } else {
+                    "Xả nước không hoàn tất"
+                }
+                .to_string(),
+                message: format!(
+                    "Xả nước (thành công={}) trong {}s, mức nước cuối={:.1}cm.",
+                    success, duration_sec, final_level
+                ),
+                reason: Some("water_drain_complete".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            TransitionReason::FaultReset => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: "info".to_string(),
+                category: "system".to_string(),
+                title: "Đặt lại trạng thái lỗi".to_string(),
+                message: "Người dùng hoặc hệ thống đã reset lỗi FSM.".to_string(),
+                reason: Some("fault_reset".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            TransitionReason::HardTimeout {
+                phase_name,
+                timeout_ms,
+            } => Some(NewSystemEventRecord {
+                device_id: event.device_id.clone(),
+                level: "warning".to_string(),
+                category: "system".to_string(),
+                title: format!("Quá thời gian tối đa: {}", phase_name),
+                message: format!(
+                    "Phase {} vượt quá thời gian tối đa ({}ms), kích hoạt chuyển phase bảo vệ.",
+                    phase_name, timeout_ms
+                ),
+                reason: Some("hard_timeout".to_string()),
+                metadata: Some(serde_json::json!({
+                    "event_type": "fsm_operational_transition",
+                    "from_phase": event.from_phase.as_ref().map(ToString::to_string),
+                    "to_phase": event.to_phase.to_string(),
+                    "reason": event.reason,
+                    "phase_duration_ms": event.phase_duration_ms,
+                })),
+                timestamp: event.timestamp_ms as i64,
+                source: "rule".to_string(),
+                primary_reason_code: None,
+            }),
+            _ => None,
+        },
     }
 }
 
@@ -800,5 +977,123 @@ mod tests {
         };
 
         assert!(transition_system_event_record(&event).is_none());
+    }
+
+    #[test]
+    fn operational_transitions_create_system_event_records() {
+        // DosingComplete
+        let dosing_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::MimoDosing),
+            to_phase: SystemPhase::ActiveMixing,
+            reason: TransitionReason::DosingComplete {
+                dose_a_ml: 5.0,
+                dose_b_ml: 5.0,
+                ph_up_ml: 0.0,
+                ph_down_ml: 1.0,
+            },
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: Some(15000),
+        };
+        let r = transition_system_event_record(&dosing_event).expect("dosing_complete should log");
+        assert_eq!(r.level, "info");
+        assert_eq!(r.category, "dosing");
+        assert_eq!(r.reason.as_deref(), Some("dosing_complete"));
+
+        // StabilizingComplete
+        let stab_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::Stabilizing),
+            to_phase: SystemPhase::Cooldown,
+            reason: TransitionReason::StabilizingComplete {
+                final_ec: 1.5,
+                final_ph: 6.0,
+                actual_stabilize_ms: 45000,
+            },
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: Some(45000),
+        };
+        let r =
+            transition_system_event_record(&stab_event).expect("stabilizing_complete should log");
+        assert_eq!(r.level, "info");
+        assert_eq!(r.category, "dosing");
+
+        // MixingComplete
+        let mix_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::ActiveMixing),
+            to_phase: SystemPhase::Stabilizing,
+            reason: TransitionReason::MixingComplete {
+                actual_mixing_ms: 30000,
+            },
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: Some(30000),
+        };
+        let r = transition_system_event_record(&mix_event).expect("mixing_complete should log");
+        assert_eq!(r.level, "info");
+        assert_eq!(r.category, "dosing");
+
+        // WaterRefillComplete
+        let refill_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::WaterRefilling),
+            to_phase: SystemPhase::Monitoring,
+            reason: TransitionReason::WaterRefillComplete {
+                success: true,
+                duration_sec: 40,
+                final_level: 85.0,
+            },
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: Some(40000),
+        };
+        let r = transition_system_event_record(&refill_event).expect("water_refill should log");
+        assert_eq!(r.level, "info");
+        assert_eq!(r.category, "water");
+
+        // WaterDrainComplete (failure scenario)
+        let drain_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::WaterDraining),
+            to_phase: SystemPhase::Monitoring,
+            reason: TransitionReason::WaterDrainComplete {
+                success: false,
+                duration_sec: 120,
+                final_level: 50.0,
+            },
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: Some(120000),
+        };
+        let r = transition_system_event_record(&drain_event).expect("water_drain should log");
+        assert_eq!(r.level, "warning");
+        assert_eq!(r.category, "water");
+
+        // FaultReset
+        let reset_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::Fault(FaultCode::EcDosingFailed)),
+            to_phase: SystemPhase::Monitoring,
+            reason: TransitionReason::FaultReset,
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: None,
+        };
+        let r = transition_system_event_record(&reset_event).expect("fault_reset should log");
+        assert_eq!(r.level, "info");
+        assert_eq!(r.category, "system");
+
+        // HardTimeout
+        let timeout_event = FsmTransitionEvent {
+            device_id: "dev-01".to_string(),
+            from_phase: Some(SystemPhase::MimoDosing),
+            to_phase: SystemPhase::ActiveMixing,
+            reason: TransitionReason::HardTimeout {
+                phase_name: "MimoDosing".to_string(),
+                timeout_ms: 60000,
+            },
+            timestamp_ms: 1700000000000,
+            phase_duration_ms: Some(60000),
+        };
+        let r = transition_system_event_record(&timeout_event).expect("hard_timeout should log");
+        assert_eq!(r.level, "warning");
+        assert_eq!(r.category, "system");
     }
 }

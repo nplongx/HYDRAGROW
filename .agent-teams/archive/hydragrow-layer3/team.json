@@ -1,0 +1,744 @@
+{
+  "name": "hydragrow-layer3",
+  "id": "hydragrow-layer3",
+  "description": "Layer 3 Design/UX Rollout — component-spec for D17 Roles (permission matrix), form-design for Role invitation form, Fleet View UX redesign, onboarding-design first-run experience, and Q1 decision framework documentation. All items previously gated on Q1 (household vs commercial) — designed defensively with explicit extension points since interviews cannot be conducted.",
+  "captainSessionId": "session-dfa61cda-0814-450c-8b5c-bb09fbc5096a",
+  "createdAt": 1789282195716,
+  "members": [
+    {
+      "id": "3a6f2531-f5c8-4fa2-9cb5-67506444bb45",
+      "name": "roles-component-lead",
+      "role": "Track A: component-spec for D17 Roles permission matrix + implementation",
+      "provider": "cliproxy",
+      "model": "gemini-3.8-flash-high",
+      "executionPrompt": "You are implementing Track A of the Layer 3 Design/UX Rollout for the HYDRAGROW aeroponics frontend.\n\n## Designer Skills Context\nApply the `component-spec` skill: create complete component specs covering anatomy, behavior, variants, states, accessibility, and usage. Apply `hicks-law` (reduce role selection complexity) and `accessibility-audit` (ARIA for permission matrix table).\n\n## Your Scope\n**File perimeter (ONLY modify these):**\n- `hydragrow-frontend/src/pages/Roles.tsx` (modify — extract components)\n- `hydragrow-frontend/src/pages/Roles.test.tsx` (modify — update for extracted components)\n- `hydragrow-frontend/src/pages/Roles.capabilities.test.ts` (read-only reference)\n- `hydragrow-frontend/src/components/roles/` (CREATE new directory and components)\n- `docs/design-system/layer3/PERMISSION-MODEL-SPEC.md` (CREATE)\n\n## Tasks\n1. **Read and audit** `Roles.tsx` (467 lines), `Roles.test.tsx`, `Roles.capabilities.test.ts`, and the backend API at `hydragrow-backend/src/api/admin_users.rs` to understand current state. Note: Discrepancy 3 was already fixed — CAPABILITIES[device].operator is now `true`.\n\n2. **Write component spec** `docs/design-system/layer3/PERMISSION-MODEL-SPEC.md` covering:\n   - `PermissionMatrix` — the 5-capability × 3-role table with check/cross indicators. Props: `capabilities: Capability[]`, `roles: UserRole[]`, `compact?: boolean`. States: default, responsive-collapsed. ARIA: `role=\"grid\"`, `aria-label` per cell, keyboard navigation with arrow keys.\n   - `RoleBadge` — role display pill (admin=amber, operator=green/pill, viewer=muted). Props: `role: UserRole`, `size?: 'sm' | 'md'`. Replace the inline badge in the member list (lines 346-356).\n   - `RoleSelector` — role selection dropdown with scope preview tooltip. Props: `value: UserRole`, `onChange: (role: UserRole) => void`, `showScopePreview?: boolean`.\n   - **Q1 Extension Points section:** document how the 3-role model extends to N-role (e.g., \"Contract Technician\" for commercial, per-station scoped permissions, multi-org site sharing from Priva's model).\n\n3. **Extract `PermissionMatrix`** into `src/components/roles/PermissionMatrix.tsx`:\n   - Accept `capabilities` and `roles` as props (don't hardcode CAPABILITIES)\n   - Add `role=\"grid\"` to the table, `role=\"gridcell\"` to each capability cell\n   - Add `aria-label` like \"Vận hành viên: Có quyền OTA & Mạng thiết bị\" per check/cross cell\n   - Add keyboard navigation: arrow keys move focus between cells\n   - Mobile responsive: on < 640px, collapse to stacked cards instead of table\n   - Export from `src/components/roles/index.ts`\n\n4. **Extract `RoleBadge`** into `src/components/roles/RoleBadge.tsx`:\n   - Replace inline badge JSX in Roles.tsx lines 346-356\n   - Props: `role: UserRole`, `size?: 'sm' | 'md'`\n   - Color mapping: admin → `bg-amber-100 text-amber-800`, operator → `bg-pill text-status`, viewer → `bg-surface-muted text-text-muted`\n\n5. **Write tests**: `src/components/roles/PermissionMatrix.test.tsx` (renders all capabilities, ARIA attributes present, keyboard navigation), `src/components/roles/RoleBadge.test.tsx` (renders correct role name and styling)\n\n6. **Update `Roles.tsx`** to import and use the extracted components. Update `Roles.test.tsx` to match.\n\n## Verification\nRun: `cd hydragrow-frontend && npx vitest run src/pages/Roles && npx vitest run src/components/roles/`\nAll tests must pass. Then run `npx tsc --noEmit` for type safety.\n\n## Global Constraints\n- React 19 + TypeScript (strict), Tailwind v4 tokens (src/App.css), Vitest + Testing Library\n- No new runtime dependencies\n- Follow existing token naming from App.css (--color-primary, --color-pill, etc.)\n- Vietnamese UI copy (existing strings in Roles.tsx)\n- Read AGENTS.md §3: stay strictly inside the task's declared file bounds",
+      "joinedAt": 1789282282290,
+      "status": "removed",
+      "reasoningEffort": "high"
+    },
+    {
+      "id": "2f0044dc-499e-4c2e-bece-3157702e4911",
+      "name": "roles-form-lead",
+      "role": "Track B: form-design for Role invitation form redesign",
+      "provider": "cliproxy",
+      "model": "gemini-3.8-flash-high",
+      "executionPrompt": "You are implementing Track B of the Layer 3 Design/UX Rollout for the HYDRAGROW aeroponics frontend.\n\n## Designer Skills Context\nApply the `form-design` skill: single column layout, top-aligned labels, inline on-blur validation, error messages directly below each field explaining how to fix the issue. Apply `error-handling-ux` (error prevention + recovery) and `millers-law` (chunk form into logical groups).\n\n## Your Scope\n**File perimeter (ONLY modify these):**\n- `hydragrow-frontend/src/pages/Roles.tsx` (modify — replace inline invite modal with InviteForm component)\n- `hydragrow-frontend/src/pages/Roles.test.tsx` (modify — update invite modal tests)\n- `hydragrow-frontend/src/components/roles/InviteForm.tsx` (CREATE)\n- `hydragrow-frontend/src/components/roles/InviteForm.test.tsx` (CREATE)\n\n## Context\nThe current invite modal in Roles.tsx (lines 209-302) has:\n- Raw Firebase UID text input with no format validation\n- Email field with only HTML `required` + `type=\"email\"`\n- Role dropdown with no scope preview — user picks a role blindly\n- No inline validation, no on-blur validation\n- Submit directly calls apiPost without confirmation step\n- The backend requires firebase_uid (28-char alphanumeric) and email for provisioning\n\nThe existing `ROLE_DEFAULT_SCOPES` and `ROLE_DISPLAY_NAMES` exports from Roles.tsx are available for import.\n\nLayer 2 established the validation pattern in DevicePairing.tsx: `validateDeviceId` with `aria-invalid`/`aria-describedby`, inline error below the field.\n\n## Tasks\n1. **Read** the current invite modal in `Roles.tsx` (lines 209-302), the backend API in `hydragrow-backend/src/api/admin_users.rs` (POST /admin/users requires firebase_uid, email, scopes), and the Layer 2 form-design pattern in `DevicePairing.tsx`.\n\n2. **Create `InviteForm.tsx`** with the following design:\n   - **Group 1: Identity** (Firebase UID + Email + Display Name)\n     - Firebase UID: on-blur validation — must be non-empty, alphanumeric, 1-128 chars. Helper text: \"Lấy từ Firebase Console > Authentication\". Error: \"UID phải chứa ký tự chữ-số, 1-128 ký tự\" with `aria-invalid=\"true\"` and `aria-describedby=\"uid-error\"`\n     - Email: on-blur validation — must be valid email format. Error: \"Email không hợp lệ\"\n     - Display Name: optional, no validation needed\n   - **Group 2: Role Assignment**\n     - Role selector (radio buttons since ≤5 options per form-design skill: admin/operator/viewer — 3 options = radio buttons visible)\n     - Below each radio: brief scope description (e.g., \"Toàn quyền truy cập\" for admin, \"Điều khiển bơm, kịch bản, OTA\" for operator, \"Chỉ xem số liệu\" for viewer)\n   - **Group 3: Confirmation**\n     - Summary panel showing: email, role name, scope list\n     - Submit button: \"Xác nhận cấp quyền\"\n     - Cancel button\n   - **Error recovery:** if apiPost fails, show inline error banner (reuse existing Banner pattern from `src/components/ui/Banner.tsx` if available), keep form filled\n   - Props: `onSubmit: (data: { firebase_uid: string; email: string; display_name: string | null; role: UserRole }) => Promise<void>`, `onCancel: () => void`, `isSubmitting: boolean`\n\n3. **Write tests** in `InviteForm.test.tsx`:\n   - Renders all 3 groups\n   - Firebase UID validation fires on blur with correct error message\n   - Email validation fires on blur\n   - Role radio buttons show scope descriptions\n   - Submit calls onSubmit with correct data\n   - Submitting with invalid fields shows errors, does not call onSubmit\n   - Cancel calls onCancel\n\n4. **Update `Roles.tsx`** to replace the inline invite modal (lines 209-302) with `<InviteForm>`. Keep the modal wrapper (overlay + close button) in Roles.tsx, but delegate form content to InviteForm.\n\n5. **Update `Roles.test.tsx`** to work with the new InviteForm component.\n\n## Verification\nRun: `cd hydragrow-frontend && npx vitest run src/pages/Roles && npx vitest run src/components/roles/InviteForm`\nThen: `npx tsc --noEmit`\n\n## Global Constraints\n- React 19 + TypeScript (strict), Tailwind v4 tokens, Vitest + Testing Library\n- No new runtime dependencies\n- Vietnamese UI copy\n- Follow the Layer 2 validation pattern: `aria-invalid`, `aria-describedby`, error below field",
+      "joinedAt": 1789282282304,
+      "status": "removed",
+      "reasoningEffort": "medium"
+    },
+    {
+      "id": "bdac3947-1bec-425e-abe2-6874e0f4f9a6",
+      "name": "fleet-ux-lead",
+      "role": "Track C: Fleet View UX redesign with information-architecture and responsive-design skills",
+      "provider": "cliproxy",
+      "model": "gemini-3.8-flash-high",
+      "executionPrompt": "You are implementing Track C of the Layer 3 Design/UX Rollout for the HYDRAGROW aeroponics frontend.\n\n## Designer Skills Context\nApply `information-architecture` (station grouping, warning-first sort), `data-visualization` (EC/pH trend display on cards), `responsive-design` (multi-column fleet grid), and `hicks-law` (reduce station selection complexity with grouping).\n\n## Your Scope\n**File perimeter (ONLY modify these):**\n- `hydragrow-frontend/src/pages/FleetView.tsx` (modify — redesign)\n- `hydragrow-frontend/src/components/fleet/FleetStationCard.tsx` (CREATE)\n- `hydragrow-frontend/src/components/fleet/FleetStationCard.test.tsx` (CREATE)\n- `hydragrow-frontend/src/components/fleet/index.ts` (CREATE)\n- `docs/design-system/layer3/FLEET-VIEW-SPEC.md` (CREATE)\n\n## Context\nCurrent FleetView.tsx (212 lines):\n- Flat list of devices with online/offline indicator\n- Warning filter (all vs warning)\n- Per-device: device_id, label, crop badge, warning count badge, EC/pH chips, firmware version\n- Uses `useFleetStatus()` hook for device list and `apiGet('/fleet/summary')` for summary data\n- Orphaned at `/fleet` route (only accessible from Settings > General)\n- No grouping, no sorting beyond filter, no responsive grid\n\nBackend FleetSummaryEntry provides: device_id, crop (nullable), ec_latest (nullable), ph_latest (nullable), warning_count.\nThe device list from useFleetStatus provides: device_id, label, is_online, last_seen, firmware_version.\n\n## Tasks\n1. **Read and audit** `FleetView.tsx` (all 212 lines), `src/hooks/useFleetStatus.ts`, and the fleet summary API response.\n\n2. **Write design spec** `docs/design-system/layer3/FLEET-VIEW-SPEC.md`:\n   - Current state analysis (orphaned route, flat list)\n   - Redesigned card layout: larger touch targets (min 48px tap area), prominent EC/pH with color-coded status (green for in-range, amber for warning, red for critical), crop stage pill, last-seen relative time\n   - Warning-first sort: stations with `warning_count > 0` always surface to top\n   - Crop grouping: group stations by `crop` field when there are 4+ devices; show group headers \"🌱 Xà lách (3 trạm)\"\n   - Responsive grid: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`\n   - Empty states: for no devices (\"Chưa có trạm nào\"), for filtered no results (\"Không có trạm nào đang cảnh báo\")\n   - Q1 Extension Points: map view (P2), multi-org grouping, batch recipe button, station comparison panel\n\n3. **Create `FleetStationCard.tsx`** component:\n   - Props: `device: { device_id: string; label?: string; is_online: boolean; last_seen?: string; firmware_version?: string }`, `summary?: { crop?: string | null; ec_latest?: number | null; ph_latest?: number | null; warning_count: number }`, `onSelect: (deviceId: string) => void`\n   - Layout: card with online indicator dot (top-left), device name (prominent), crop badge, EC/pH values with color coding (using existing tokens: --color-status for normal, --color-warning for drift, --color-error for critical), warning count badge, last-seen timestamp (relative, e.g., \"5 phút trước\"), firmware version (subtle)\n   - Touch target: entire card is tappable (button element for a11y)\n   - ARIA: `aria-label=\"Trạm {label}: {status}\"` with status details\n\n4. **Refactor `FleetView.tsx`**:\n   - Replace inline device rendering with `<FleetStationCard>`\n   - Add warning-first sort: `filteredDevices.sort((a, b) => (summaries[b.device_id]?.warning_count ?? 0) - (summaries[a.device_id]?.warning_count ?? 0))`\n   - Add crop grouping (when 4+ devices): group by crop value, render group headers\n   - Use responsive grid: `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3`\n   - Improve empty states with illustration-style messaging\n\n5. **Write tests** in `FleetStationCard.test.tsx`:\n   - Renders device name and status\n   - Shows warning badge when warning_count > 0\n   - Shows EC/pH values from summary\n   - Calls onSelect with device_id on click\n   - Accessible: has aria-label\n\n6. **Add `FleetView.test.tsx`** if it doesn't exist — test sorting, grouping, filtering.\n\n## Verification\nRun: `cd hydragrow-frontend && npx vitest run src/components/fleet/ && npx vitest run src/pages/FleetView`\nThen: `npx tsc --noEmit`\n\n## Global Constraints\n- React 19 + TypeScript (strict), Tailwind v4 tokens, Vitest + Testing Library\n- No new runtime dependencies\n- Vietnamese UI copy\n- Use existing design tokens from App.css",
+      "joinedAt": 1789282282316,
+      "status": "removed",
+      "reasoningEffort": "medium"
+    },
+    {
+      "id": "c7479ef9-cef7-4fa4-af77-156c54c2ce9e",
+      "name": "onboarding-lead",
+      "role": "Track D: onboarding-design for first-run experience with progressive wizard",
+      "provider": "cliproxy",
+      "model": "gemini-3.8-flash-high",
+      "executionPrompt": "You are implementing Track D of the Layer 3 Design/UX Rollout for the HYDRAGROW aeroponics frontend.\n\n## Designer Skills Context\nApply `onboarding-design` skill: get to value fast (first sensor data = aha moment), orient don't educate, build confidence with early wins, reduce setup friction. Apply `peak-end-rule` (celebrate first telemetry arrival) and `form-design` (for any setup steps).\n\n## Your Scope\n**File perimeter (ONLY modify these):**\n- `hydragrow-frontend/src/components/onboarding/OnboardingWizard.tsx` (CREATE)\n- `hydragrow-frontend/src/components/onboarding/OnboardingWizard.test.tsx` (CREATE)\n- `hydragrow-frontend/src/components/onboarding/OnboardingStep.tsx` (CREATE)\n- `hydragrow-frontend/src/components/onboarding/index.ts` (CREATE)\n- `hydragrow-frontend/src/hooks/useOnboardingState.ts` (CREATE)\n- `hydragrow-frontend/src/hooks/useOnboardingState.test.ts` (CREATE)\n- `docs/design-system/layer3/ONBOARDING-SPEC.md` (CREATE)\n\nDo NOT modify Dashboard.tsx, FleetView.tsx, or other existing pages — only create new files in this track. The integration track will wire the onboarding into existing pages.\n\n## Context\nCurrent state: ZERO onboarding. A new user who signs up via Firebase Auth lands on Dashboard.tsx which shows sensor cards with no data, an empty quick action bar, and no guidance. The typical first-run journey should be:\n1. Sign up (already handled by Firebase Auth flow in App.tsx)\n2. Pair a device (existing flow at /pairing via DevicePairing.tsx)\n3. See first sensor data (Dashboard shows live EC/pH/temp/water level)\n4. Create first crop season (CropSeasons.tsx)\n\nThe product is an aeroponics/hydroponics monitoring + control system. The \"aha moment\" is seeing live sensor data from your own plant grow station.\n\nExisting UI components available:\n- `Banner` from `src/components/ui/Banner.tsx`\n- `Button` (ui-btn-primary, ui-btn-md classes)\n- `DeviceStatePill` from `src/components/ui/DeviceStatePill.tsx`\n- Navigation: `useNavigate` from react-router-dom\n- Device store: `useDeviceStore` from `src/store/useDeviceStore.ts`\n\n## Tasks\n1. **Write onboarding design spec** `docs/design-system/layer3/ONBOARDING-SPEC.md`:\n   - Define the \"aha moment\": first live sensor reading appears on dashboard\n   - 4-step progressive onboarding: Welcome → Pair Device → First Data → Create Season\n   - Each step: title, description, illustration placeholder, primary CTA, skip option\n   - Empty state improvements: what Dashboard/FleetView should show for users who haven't paired a device\n   - Metrics: activation rate (paired device), time to activation, day-7 retention signal\n   - Q1 Extension Points: persona-specific paths (hobbyist \"Vườn đầu tiên của bạn\" vs commercial \"Thiết lập trang trại\"), admin-only station provisioning wizard\n\n2. **Create `useOnboardingState.ts`** hook:\n   - Tracks completion state in localStorage key `hydragrow_onboarding`\n   - State shape: `{ completedSteps: string[]; dismissed: boolean; firstDevicePaired: boolean; firstDataReceived: boolean; firstSeasonCreated: boolean }`\n   - Functions: `completeStep(step: string)`, `dismiss()`, `reset()`, `isStepComplete(step: string): boolean`, `shouldShowOnboarding: boolean` (true when dismissed=false and not all steps complete)\n   - Export type `OnboardingState`\n\n3. **Create `OnboardingStep.tsx`** component:\n   - Props: `title: string`, `description: string`, `icon?: ReactNode`, `primaryAction?: { label: string; onClick: () => void }`, `secondaryAction?: { label: string; onClick: () => void }`, `isComplete?: boolean`, `isActive?: boolean`\n   - Layout: icon/illustration area, title (font-semibold), description (text-sm text-text-muted), action buttons\n   - Complete state: green checkmark, muted styling\n   - Active state: highlighted border, prominent CTA\n\n4. **Create `OnboardingWizard.tsx`** component:\n   - Uses `useOnboardingState` to track progress\n   - Shows as a dismissible overlay card on the dashboard (not a full-screen modal — it sits inside the page layout)\n   - 4 steps rendered as a vertical checklist:\n     - Step 1: \"Chào mừng đến HydraGrow\" — brief value prop, CTA \"Bắt đầu\"\n     - Step 2: \"Kết nối thiết bị\" — \"Ghép nối trạm cảm biến đầu tiên\", CTA navigates to /pairing\n     - Step 3: \"Dữ liệu thời gian thực\" — \"Khi trạm online, bạn sẽ thấy EC, pH, nhiệt độ ở đây\", auto-completes when `useDeviceStore.sensorData` has data\n     - Step 4: \"Bắt đầu mùa vụ\" — \"Tạo công thức mùa vụ đầu tiên\", CTA navigates to /seasons\n   - Dismiss button: \"Bỏ qua hướng dẫn\" (sets dismissed=true in localStorage)\n   - Peak-end rule: when all 4 steps complete, show a brief celebration: \"🎉 Hệ thống đã sẵn sàng! Chúc vụ mùa bội thu.\" with confetti-like styling (just a green banner, no actual confetti library)\n   - Props: `className?: string`\n\n5. **Write tests**:\n   - `useOnboardingState.test.ts`: localStorage read/write, step completion, dismiss, reset, shouldShowOnboarding logic\n   - `OnboardingWizard.test.tsx`: renders 4 steps, dismiss hides wizard, step completion updates progress, celebration shown when all complete\n\n## Verification\nRun: `cd hydragrow-frontend && npx vitest run src/components/onboarding/ && npx vitest run src/hooks/useOnboardingState`\nThen: `npx tsc --noEmit`\n\n## Global Constraints\n- React 19 + TypeScript (strict), Tailwind v4 tokens, Vitest + Testing Library\n- No new runtime dependencies (no confetti library, no wizard library)\n- Vietnamese UI copy\n- localStorage-based state only (no backend changes)",
+      "joinedAt": 1789282363233,
+      "status": "removed",
+      "reasoningEffort": "medium"
+    },
+    {
+      "id": "2dfa5e7f-1784-4334-93d8-19b7534f9202",
+      "name": "docs-lead",
+      "role": "Track E: design documentation, Q1 decision framework, and delivery governance docs",
+      "provider": "cliproxy",
+      "model": "gemini-3.8-flash-high",
+      "executionPrompt": "You are implementing Track E of the Layer 3 Design/UX Rollout for the HYDRAGROW aeroponics frontend.\n\n## Designer Skills Context\nApply `design-rationale` (connect decisions to user needs and evidence), `design-principles` (actionable principles for Q1 trade-offs), and `stakeholder-alignment` (decision framework for the household vs commercial question).\n\n## Your Scope\n**File perimeter (ONLY modify these):**\n- `docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md` (CREATE)\n- `docs/design-system/PATTERN-LIBRARY.md` (MODIFY — add new Layer 3 components)\n- `docs/design-system/GOVERNANCE.md` (MODIFY — add Layer 3 governance notes)\n- `docs/project-state/TRACEABILITY.md` (MODIFY — add Layer 3 entries)\n- `docs/project-state/CURRENT-STATUS.md` (MODIFY — add Layer 3 status)\n\n## Context\n**Q1 (Open Question 1):** \"Is the product priority a single-station household setup or a multi-station commercial setup?\" This is BLOCKED because interviews cannot be conducted. However, the discovery document (docs/discovery/2026-09-12-user-discovery.md §11.4) reframes Q1: instead of binary \"household OR commercial\", it should be \"should HYDRAGROW adopt a tiered product structure?\"\n\n**Evidence from discovery doc §11.4:**\n- No reviewed competitor serves both hobbyist and commercial with one undifferentiated product\n- Growlink is the only vendor spanning both segments — via explicit tiering ($0-$25/mo hobby vs $1,000/mo commercial)\n- HYDRAGROW's backend already supports multi-station (device_ownership, /fleet/summary)\n- Frontend IA is strictly 1-station scoped (MainLayout, useDeviceStore)\n- Current 3-role model (admin/operator/viewer) is adequate for hobbyist but insufficient for commercial (Priva has per-app per-site permissions)\n\n**Layer 3 Tracks A-D created these extension points:**\n- Track A: PermissionMatrix accepts arbitrary capabilities/roles arrays (not hardcoded 3)\n- Track B: InviteForm has Q1 extension for email-only invite and per-station role assignment\n- Track C: FleetStationCard has Q1 extension for map view, multi-org grouping\n- Track D: OnboardingWizard has Q1 extension for persona-specific paths\n\n## Tasks\n1. **Read all source evidence:**\n   - `docs/discovery/2026-09-12-user-discovery.md` — especially §9 (status table), §11.4 (competitive synthesis), §7 (interview script)\n   - `docs/hydragrow-hifi-spec.md` — line 117-118 (open questions)\n   - Current `docs/design-system/GOVERNANCE.md`, `PATTERN-LIBRARY.md`\n   - Current `docs/project-state/TRACEABILITY.md`, `CURRENT-STATUS.md`\n\n2. **Create `Q1-DECISION-FRAMEWORK.md`** with these sections:\n   - **Executive Summary**: Q1 status, why it's blocked, the tiered-product reframing from §11.4\n   - **Evidence Inventory**: list all evidence for/against each option (hobbyist-first, commercial-first, tiered), citing specific source locations\n   - **Decision Matrix**: for each Q1-dependent design area (Roles permission model, Fleet View layout, Onboarding flow, Notification strategy), describe Option A (hobbyist) and Option B (commercial) and what changes\n   - **Minimum Viable Signal to Unblock**: what production DB queries (§3 SQL) or minimum interviews (3 out of 5 archetypes) would provide sufficient signal\n   - **Extension Points Created in Layer 3**: catalog all extension points from Tracks A-D with code locations\n   - **Tiered Product Architecture Proposal**: sketch what a tiered approach looks like (free hobbyist tier with 1-user/1-station, commercial tier with N-user/N-station/granular permissions) — as a design proposal, not a decision\n   - **Risk Assessment**: what happens if Q1 stays blocked for 3 more months (technical debt accumulation, competitive risk from §11)\n\n3. **Update `PATTERN-LIBRARY.md`** with new Layer 3 components:\n   - Section 11: PermissionMatrix (from Track A)\n   - Section 12: RoleBadge (from Track A)\n   - Section 13: InviteForm (from Track B)\n   - Section 14: FleetStationCard (from Track C)\n   - Section 15: OnboardingWizard / OnboardingStep (from Track D)\n   For each: file path, when to use, key props, related patterns\n\n4. **Update `GOVERNANCE.md`** with:\n   - Section (d): Layer 3 tracked decisions — \"Q1 Extension Points are design debt until Q1 resolves\"\n   - Document the rule: \"No Q1-dependent feature may ship without updating Q1-DECISION-FRAMEWORK.md to record which branch was taken\"\n\n5. **Update `TRACEABILITY.md`** with Layer 3 entries:\n   - LAYER3-ROLES-COMPONENT-001 (Track A)\n   - LAYER3-ROLES-FORM-002 (Track B)\n   - LAYER3-FLEET-UX-003 (Track C)\n   - LAYER3-ONBOARDING-004 (Track D)\n   - LAYER3-DOCS-005 (Track E)\n\n6. **Update `CURRENT-STATUS.md`** with Layer 3 status line:\n   - Layer 3 Design/UX Rollout (LAYER3-DESIGN-UX-ROLLOUT-001): status and summary\n\n## Verification\nAll files must be valid Markdown with no broken links to files that exist in the repo.\nRun: `cd hydragrow-frontend && npx tsc --noEmit` (confirm no type errors from any Track's changes)\n\n## Global Constraints\n- Documentation must cite specific file paths and line numbers for evidence\n- Use Vietnamese for any user-facing text examples\n- Follow existing documentation conventions in PATTERN-LIBRARY.md and GOVERNANCE.md",
+      "joinedAt": 1789282363272,
+      "status": "removed",
+      "reasoningEffort": "low"
+    },
+    {
+      "id": "878cf030-7eaf-4713-bf27-878d08361eba",
+      "name": "integrator",
+      "role": "Track F: integration verification, cross-track review, onboarding wire-up, and final commit",
+      "provider": "cliproxy",
+      "model": "gemini-3.8-flash-high",
+      "executionPrompt": "You are the integrator for the Layer 3 Design/UX Rollout of the HYDRAGROW aeroponics frontend.\n\n## Your Scope\nYou run AFTER all 5 tracks (A-E) are complete. Your job:\n\n1. **Full verification suite:**\n   ```bash\n   cd hydragrow-frontend && npx tsc --noEmit && npx eslint . && npx vitest run\n   ```\n   All must pass. If any fail, identify the track responsible and report to captain.\n\n2. **Design lint check:**\n   ```bash\n   cd hydragrow-frontend && npx vitest run src/lib/design-lint/\n   ```\n   Must remain green — no new hardcoded color violations.\n\n3. **Cross-track scope review:**\n   - Verify Track A only modified files in its declared perimeter (Roles.tsx, Roles.test.tsx, components/roles/)\n   - Verify Track B only modified files in its declared perimeter (Roles.tsx, components/roles/InviteForm*)\n   - Verify Track C only modified files in its declared perimeter (FleetView.tsx, components/fleet/)\n   - Verify Track D only modified files in its declared perimeter (components/onboarding/, hooks/useOnboardingState*)\n   - Verify Track E only modified docs/\n\n4. **Wire OnboardingWizard into Dashboard.tsx:**\n   - Import OnboardingWizard from components/onboarding\n   - Import useOnboardingState from hooks/useOnboardingState\n   - Render `{shouldShowOnboarding && <OnboardingWizard className=\"mb-6\" />}` at the top of the dashboard content, before the sensor cards\n   - This is the ONE place where Track D's output connects to an existing page\n\n5. **Final commit:**\n   - Stage all changed files\n   - Commit message format: `feat(frontend): Layer 3 Design/UX Rollout — Roles component-spec, invitation form, Fleet View, onboarding wizard (LAYER3-DESIGN-UX-ROLLOUT-001)`\n   - Do NOT push (leave for the user to review and push)\n\n## Verification\nMust achieve:\n- `npx tsc --noEmit` exit 0\n- `npx eslint .` 0 errors (pre-existing warnings OK)\n- `npx vitest run` all test files pass\n- `npx vitest run src/lib/design-lint/` all pass\n- `git diff --stat` shows only files within declared perimeters + Dashboard.tsx (for onboarding wire-up)\n\n## Global Constraints\n- Do NOT add new dependencies\n- Do NOT modify backend code\n- Do NOT touch .github/ or migrations/",
+      "joinedAt": 1789282363298,
+      "status": "removed",
+      "reasoningEffort": "high"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t4",
+      "subject": "Track A-1 — Write PermissionMatrix component spec document",
+      "description": "Read and audit Roles.tsx (467 lines — read-only, do NOT modify), Roles.test.tsx, Roles.capabilities.test.ts, and backend admin_users.rs. Write full component specification document at docs/design-system/layer3/PERMISSION-MODEL-SPEC.md covering PermissionMatrix, RoleBadge, RoleSelector, and Q1 Extension Points.",
+      "status": "completed",
+      "assignee": "roles-component-lead",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1789282484622,
+      "updatedAt": 1789283999021,
+      "kind": "implementation",
+      "objective": "Create comprehensive component specification for the Roles permission matrix system",
+      "inScope": [
+        "docs/design-system/layer3/PERMISSION-MODEL-SPEC.md"
+      ],
+      "acceptance": [
+        "PERMISSION-MODEL-SPEC.md exists with Overview, Anatomy, Variants, Props/API, States, Behavior, Accessibility, and Usage Guidelines sections for PermissionMatrix, RoleBadge, and RoleSelector components",
+        "Q1 Extension Points section documents at least 3 commercial-tier additions with rationale"
+      ],
+      "verify": [
+        "test -f docs/design-system/layer3/PERMISSION-MODEL-SPEC.md"
+      ],
+      "deliverables": [
+        "docs/design-system/layer3/PERMISSION-MODEL-SPEC.md"
+      ],
+      "attemptId": "fb586662-a355-4211-9a53-b30ef11fa5f5",
+      "reassigning": false,
+      "output": "Completed Track A-1: Wrote comprehensive PERMISSION-MODEL-SPEC.md containing all required sections for PermissionMatrix, RoleBadge, RoleSelector, and 4 Q1 commercial extension points with technical rationale.",
+      "changedPaths": [
+        "docs/design-system/layer3/PERMISSION-MODEL-SPEC.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "PERMISSION-MODEL-SPEC.md exists with Overview, Anatomy, Variants, Props/API, States, Behavior, Accessibility, and Usage Guidelines sections for PermissionMatrix, RoleBadge, and RoleSelector components",
+          "status": "passed",
+          "evidence": "Verified docs/design-system/layer3/PERMISSION-MODEL-SPEC.md contains full sections (Overview, Anatomy, Variants, Props/API, States, Behavior, Accessibility, Usage Guidelines) for all 3 components: PermissionMatrix, RoleBadge, and RoleSelector."
+        },
+        {
+          "criterion": "Q1 Extension Points section documents at least 3 commercial-tier additions with rationale",
+          "status": "passed",
+          "evidence": "Section 6 documents 4 commercial extensions: Specialized Commercial Roles (Contract Technician, Agronomist Consultant), Per-Station & Zone Scoped Permissions, Priva-Inspired Multi-Tenant Site Sharing, and Granular Custom Scope Override Matrix with architectural rationale."
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "test -f docs/design-system/layer3/PERMISSION-MODEL-SPEC.md",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "File exists and verified via bash test command."
+        }
+      ]
+    },
+    {
+      "id": "t5",
+      "subject": "Track A-2 — Extract PermissionMatrix and RoleBadge from Roles.tsx",
+      "description": "Extract PermissionMatrix from Roles.tsx lines 398-461 into src/components/roles/PermissionMatrix.tsx. Extract inline role badge from lines 346-356 into RoleBadge.tsx. Add ARIA attributes, keyboard navigation, responsive collapse. Write tests. Update Roles.tsx and Roles.test.tsx to use extracted components.",
+      "status": "completed",
+      "assignee": "roles-component-lead",
+      "dependencies": [
+        "t4"
+      ],
+      "attempt": 1,
+      "createdAt": 1789282492515,
+      "updatedAt": 1789284243334,
+      "kind": "implementation",
+      "objective": "Extract reusable PermissionMatrix and RoleBadge components with accessibility and tests",
+      "inScope": [
+        "hydragrow-frontend/src/components/roles/",
+        "hydragrow-frontend/src/pages/Roles.tsx",
+        "hydragrow-frontend/src/pages/Roles.test.tsx"
+      ],
+      "acceptance": [
+        "PermissionMatrix renders all capabilities and roles passed as props",
+        "PermissionMatrix has role='grid' and aria-label on capability cells",
+        "RoleBadge renders correct Vietnamese role name and semantic color for each role",
+        "All existing Roles.test.tsx tests still pass after refactor",
+        "New component tests pass: vitest run src/components/roles/",
+        "tsc --noEmit reports 0 errors"
+      ],
+      "verify": [
+        "cd hydragrow-frontend && npx vitest run src/pages/Roles && npx vitest run src/components/roles/",
+        "cd hydragrow-frontend && npx tsc --noEmit"
+      ],
+      "deliverables": [
+        "hydragrow-frontend/src/components/roles/PermissionMatrix.tsx",
+        "hydragrow-frontend/src/components/roles/RoleBadge.tsx",
+        "hydragrow-frontend/src/components/roles/PermissionMatrix.test.tsx",
+        "hydragrow-frontend/src/components/roles/RoleBadge.test.tsx",
+        "hydragrow-frontend/src/components/roles/index.ts"
+      ],
+      "attemptId": "426dead9-a484-47b5-9105-bbd6c76919c3",
+      "reassigning": false,
+      "output": "Extracted PermissionMatrix and RoleBadge into hydragrow-frontend/src/components/roles/ with ARIA grid semantics, arrow-key navigation, responsive layout, and comprehensive Vitest tests. Refactored Roles.tsx to use extracted components, verified all existing and new tests pass, and ensured 0 TypeScript errors.",
+      "changedPaths": [
+        "hydragrow-frontend/src/components/roles/RoleBadge.tsx",
+        "hydragrow-frontend/src/components/roles/RoleBadge.test.tsx",
+        "hydragrow-frontend/src/components/roles/PermissionMatrix.tsx",
+        "hydragrow-frontend/src/components/roles/PermissionMatrix.test.tsx",
+        "hydragrow-frontend/src/components/roles/index.ts",
+        "hydragrow-frontend/src/pages/Roles.tsx",
+        "hydragrow-frontend/src/pages/Roles.test.tsx"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "PermissionMatrix renders all capabilities and roles passed as props",
+          "status": "passed",
+          "evidence": "Verified with default CAPABILITIES & roles, as well as custom capabilities & roles in PermissionMatrix.test.tsx."
+        },
+        {
+          "criterion": "PermissionMatrix has role='grid' and aria-label on capability cells",
+          "status": "passed",
+          "evidence": "Verified role='grid' on table and explicit localized aria-labels on every capability gridcell."
+        },
+        {
+          "criterion": "RoleBadge renders correct Vietnamese role name and semantic color for each role",
+          "status": "passed",
+          "evidence": "Verified Quản trị viên (amber-100), Vận hành viên (pill/status), Người xem (surface-muted/text-muted) in RoleBadge.test.tsx."
+        },
+        {
+          "criterion": "All existing Roles.test.tsx tests still pass after refactor",
+          "status": "passed",
+          "evidence": "Ran vitest src/pages/Roles: 2 test files, 5 tests passed without regressions."
+        },
+        {
+          "criterion": "New component tests pass: vitest run src/components/roles/",
+          "status": "passed",
+          "evidence": "Ran vitest src/components/roles/: 2 test files, 10 tests passed (RoleBadge.test.tsx and PermissionMatrix.test.tsx)."
+        },
+        {
+          "criterion": "tsc --noEmit reports 0 errors",
+          "status": "passed",
+          "evidence": "npx tsc --noEmit exited with status 0 and 0 diagnostics."
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "cd hydragrow-frontend && npx vitest run src/pages/Roles && npx vitest run src/components/roles/",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "All 15 tests passed across 4 test suites."
+        },
+        {
+          "command": "cd hydragrow-frontend && npx tsc --noEmit",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "Clean exit with 0 errors."
+        }
+      ]
+    },
+    {
+      "id": "t6",
+      "subject": "Track B — InviteForm with validation, scope preview, and wire into Roles.tsx",
+      "description": "Create InviteForm.tsx in the roles components directory (created by Track A). 3 groups: Identity (Firebase UID on-blur validation, email validation, display name), Role Assignment (radio buttons with scope descriptions), Confirmation (summary + submit/cancel). Wire into Roles.tsx replacing inline invite form. Update Roles.test.tsx invite tests. Follow Layer 2 validation pattern (aria-invalid, aria-describedby, error below field).",
+      "status": "completed",
+      "assignee": "roles-form-lead",
+      "dependencies": [
+        "t5"
+      ],
+      "attempt": 1,
+      "createdAt": 1789282506963,
+      "updatedAt": 1789284556105,
+      "kind": "implementation",
+      "objective": "Redesign role invitation form with proper validation, scope preview, and error recovery",
+      "inScope": [
+        "hydragrow-frontend/src/components/roles/InviteForm.tsx",
+        "hydragrow-frontend/src/components/roles/InviteForm.test.tsx",
+        "hydragrow-frontend/src/pages/Roles.tsx",
+        "hydragrow-frontend/src/pages/Roles.test.tsx"
+      ],
+      "acceptance": [
+        "InviteForm renders 3 groups: Identity, Role Assignment, Confirmation",
+        "Firebase UID validates on blur with correct error message and aria-invalid/aria-describedby",
+        "Email validates on blur with correct error message",
+        "Role selection uses radio buttons with scope descriptions",
+        "Submit calls onSubmit with correct data structure",
+        "Submitting with invalid fields shows errors and does not call onSubmit",
+        "Cancel calls onCancel",
+        "Roles.tsx invite modal uses InviteForm component",
+        "All Roles tests pass",
+        "tsc --noEmit reports 0 errors"
+      ],
+      "verify": [
+        "cd hydragrow-frontend && npx vitest run src/pages/Roles && npx vitest run src/components/roles/InviteForm",
+        "cd hydragrow-frontend && npx tsc --noEmit"
+      ],
+      "deliverables": [
+        "hydragrow-frontend/src/components/roles/InviteForm.tsx",
+        "hydragrow-frontend/src/components/roles/InviteForm.test.tsx"
+      ],
+      "attemptId": "a31d6ccb-c676-422d-87c9-749271ccd66a",
+      "reassigning": false,
+      "output": "Implemented Track B InviteForm with 3-group chunking (Identity, Role Assignment, Confirmation), on-blur inline validation for Firebase UID and Email with ARIA attributes, radio button role selector with scope previews, summary preview panel, and error recovery banner. Replaced inline modal form in Roles.tsx and updated test suites. All 15 tests pass and TypeScript check is clean.",
+      "changedPaths": [
+        "hydragrow-frontend/src/components/roles/InviteForm.tsx",
+        "hydragrow-frontend/src/components/roles/InviteForm.test.tsx",
+        "hydragrow-frontend/src/pages/Roles.tsx",
+        "hydragrow-frontend/src/pages/Roles.test.tsx"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "InviteForm renders 3 groups: Identity, Role Assignment, Confirmation",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx and Roles.test.tsx; renders fieldsets group-identity, group-role, group-confirmation with legends and Miller's law chunking"
+        },
+        {
+          "criterion": "Firebase UID validates on blur with correct error message and aria-invalid/aria-describedby",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx; empty and non-alphanumeric values trigger error 'UID phải chứa ký tự chữ-số, 1-128 ký tự' with aria-invalid and aria-describedby='uid-error'"
+        },
+        {
+          "criterion": "Email validates on blur with correct error message",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx; empty and invalid formats trigger error 'Email không hợp lệ' with aria-invalid and aria-describedby='email-error'"
+        },
+        {
+          "criterion": "Role selection uses radio buttons with scope descriptions",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx; renders radio inputs for admin, operator, and viewer displaying respective descriptions 'Toàn quyền truy cập', 'Điều khiển bơm, kịch bản, OTA', 'Chỉ xem số liệu'"
+        },
+        {
+          "criterion": "Submit calls onSubmit with correct data structure",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx and Roles.test.tsx; onSubmit called with { firebase_uid, email, display_name, role }"
+        },
+        {
+          "criterion": "Submitting with invalid fields shows errors and does not call onSubmit",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx; clicking submit with empty/invalid inputs sets inline errors and prevents onSubmit invocation"
+        },
+        {
+          "criterion": "Cancel calls onCancel",
+          "status": "passed",
+          "evidence": "Verified in InviteForm.test.tsx and Roles.test.tsx; cancel button fires onCancel callback and closes modal dialog"
+        },
+        {
+          "criterion": "Roles.tsx invite modal uses InviteForm component",
+          "status": "passed",
+          "evidence": "Verified in Roles.tsx; replaced 90+ lines of raw form markup with <InviteForm onSubmit={handleCreateUser} onCancel={() => setShowInviteModal(false)} isSubmitting={isSubmitting} />"
+        },
+        {
+          "criterion": "All Roles tests pass",
+          "status": "passed",
+          "evidence": "Verified via vitest run src/pages/Roles (6/6 tests passing across 2 test files)"
+        },
+        {
+          "criterion": "tsc --noEmit reports 0 errors",
+          "status": "passed",
+          "evidence": "Verified via npx tsc --noEmit exiting cleanly with code 0 and 0 errors"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "cd hydragrow-frontend && npx vitest run src/pages/Roles && npx vitest run src/components/roles/InviteForm",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "6 tests passed in Roles suites, 9 tests passed in InviteForm suite (15 total tests passed)"
+        },
+        {
+          "command": "cd hydragrow-frontend && npx tsc --noEmit",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "Clean TypeScript build, 0 errors"
+        }
+      ]
+    },
+    {
+      "id": "t7",
+      "subject": "Track C — Fleet View UX redesign with FleetStationCard and responsive grid",
+      "description": "Write design spec at docs/design-system/layer3/FLEET-VIEW-SPEC.md with card redesign, sorting, grouping, and Q1 extensions. Create FleetStationCard.tsx with larger touch targets, prominent EC/pH, crop badge, warning count, last-seen relative time, and aria-label. Refactor FleetView.tsx to use FleetStationCard, add warning-first sort, crop grouping when 4+ devices, and responsive grid (grid-cols-1 sm:grid-cols-2 lg:grid-cols-3). Write FleetStationCard.test.tsx.",
+      "status": "completed",
+      "assignee": "fleet-ux-lead",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1789282520115,
+      "updatedAt": 1789283620282,
+      "kind": "implementation",
+      "objective": "Redesign Fleet View with extracted station cards, warning-first sort, crop grouping, and responsive grid",
+      "inScope": [
+        "docs/design-system/layer3/FLEET-VIEW-SPEC.md",
+        "hydragrow-frontend/src/components/fleet/",
+        "hydragrow-frontend/src/pages/FleetView.tsx"
+      ],
+      "acceptance": [
+        "FLEET-VIEW-SPEC.md exists with current state analysis, redesigned card layout, sorting strategy, grouping strategy, responsive grid, and Q1 extension points",
+        "FleetStationCard renders device name, status indicator, EC/pH values, warning badge, and crop badge",
+        "FleetStationCard has aria-label with station status",
+        "FleetStationCard calls onSelect with device_id on click",
+        "FleetView renders responsive grid with warning-first sort",
+        "FleetView groups by crop when 4+ devices",
+        "FleetStationCard tests pass",
+        "tsc --noEmit reports 0 errors"
+      ],
+      "verify": [
+        "cd hydragrow-frontend && npx vitest run src/components/fleet/",
+        "cd hydragrow-frontend && npx tsc --noEmit"
+      ],
+      "deliverables": [
+        "docs/design-system/layer3/FLEET-VIEW-SPEC.md",
+        "hydragrow-frontend/src/components/fleet/FleetStationCard.tsx",
+        "hydragrow-frontend/src/components/fleet/FleetStationCard.test.tsx",
+        "hydragrow-frontend/src/components/fleet/index.ts"
+      ],
+      "attemptId": "14477424-a9d2-46cf-8394-890bea8eb8f4",
+      "reassigning": false,
+      "output": "Track C (Fleet View UX redesign) completed: Created docs/design-system/layer3/FLEET-VIEW-SPEC.md, FleetStationCard component with responsive layout and telemetry chips, refactored FleetView with warning-first sorting, Hick's Law crop grouping (>= 4 stations), responsive grid (1/2/3 cols), and passed all unit tests and TypeScript validation.",
+      "changedPaths": [
+        "docs/design-system/layer3/FLEET-VIEW-SPEC.md",
+        "hydragrow-frontend/src/components/fleet/FleetStationCard.tsx",
+        "hydragrow-frontend/src/components/fleet/FleetStationCard.test.tsx",
+        "hydragrow-frontend/src/components/fleet/index.ts",
+        "hydragrow-frontend/src/pages/FleetView.tsx"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "FLEET-VIEW-SPEC.md exists with current state analysis, redesigned card layout, sorting strategy, grouping strategy, responsive grid, and Q1 extension points",
+          "status": "passed",
+          "evidence": "docs/design-system/layer3/FLEET-VIEW-SPEC.md exists with all required sections"
+        },
+        {
+          "criterion": "FleetStationCard renders device name, status indicator, EC/pH values, warning badge, and crop badge",
+          "status": "passed",
+          "evidence": "FleetStationCard renders all required elements, verified by unit tests"
+        },
+        {
+          "criterion": "FleetStationCard has aria-label with station status",
+          "status": "passed",
+          "evidence": "FleetStationCard has comprehensive aria-label describing station status, warnings, and telemetry"
+        },
+        {
+          "criterion": "FleetStationCard calls onSelect with device_id on click",
+          "status": "passed",
+          "evidence": "FleetStationCard onSelect callback fires with device_id on click, verified in unit test"
+        },
+        {
+          "criterion": "FleetView renders responsive grid with warning-first sort",
+          "status": "passed",
+          "evidence": "FleetView implements responsive grid (grid-cols-1 sm:grid-cols-2 lg:grid-cols-3) and warning-first sort"
+        },
+        {
+          "criterion": "FleetView groups by crop when 4+ devices",
+          "status": "passed",
+          "evidence": "FleetView partitions into crop groups when devices count >= 4 and shows headers"
+        },
+        {
+          "criterion": "FleetStationCard tests pass",
+          "status": "passed",
+          "evidence": "vitest run src/components/fleet/ passes 7/7 tests cleanly"
+        },
+        {
+          "criterion": "tsc --noEmit reports 0 errors",
+          "status": "passed",
+          "evidence": "tsc --noEmit exited cleanly with 0 errors"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "cd hydragrow-frontend && npx vitest run src/components/fleet/",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "7 passed in 1 test file"
+        },
+        {
+          "command": "cd hydragrow-frontend && npx tsc --noEmit",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "0 errors, clean exit"
+        }
+      ]
+    },
+    {
+      "id": "t8",
+      "subject": "Track D — OnboardingWizard with progressive steps and localStorage state",
+      "description": "Write onboarding design spec at docs/design-system/layer3/ONBOARDING-SPEC.md. Create useOnboardingState hook with localStorage persistence tracking completedSteps, dismissed, firstDevicePaired, firstDataReceived, firstSeasonCreated. Create OnboardingStep component for individual step display. Create OnboardingWizard with 4 steps: Welcome, Pair Device, First Data, Create Season — each with Vietnamese copy, dismiss option, and celebration on completion. Do NOT modify Dashboard.tsx (integration track will handle wiring).",
+      "status": "completed",
+      "assignee": "onboarding-lead",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1789282533638,
+      "updatedAt": 1789283649945,
+      "kind": "implementation",
+      "objective": "Create onboarding wizard and state management for first-run experience",
+      "inScope": [
+        "docs/design-system/layer3/ONBOARDING-SPEC.md",
+        "hydragrow-frontend/src/components/onboarding/",
+        "hydragrow-frontend/src/hooks/useOnboardingState.ts",
+        "hydragrow-frontend/src/hooks/useOnboardingState.test.ts"
+      ],
+      "acceptance": [
+        "ONBOARDING-SPEC.md exists with aha moment definition, 4-step flow, empty state improvements, metrics, and Q1 extension points",
+        "useOnboardingState hook tracks step completion in localStorage",
+        "useOnboardingState.shouldShowOnboarding returns true when not dismissed and not all steps complete",
+        "OnboardingWizard renders 4 steps with correct Vietnamese titles and descriptions",
+        "OnboardingWizard dismiss button sets dismissed=true in localStorage",
+        "OnboardingWizard shows celebration banner when all steps complete",
+        "All tests pass: vitest run src/components/onboarding/ && vitest run src/hooks/useOnboardingState",
+        "tsc --noEmit reports 0 errors"
+      ],
+      "verify": [
+        "cd hydragrow-frontend && npx vitest run src/components/onboarding/ && npx vitest run src/hooks/useOnboardingState",
+        "cd hydragrow-frontend && npx tsc --noEmit"
+      ],
+      "deliverables": [
+        "docs/design-system/layer3/ONBOARDING-SPEC.md",
+        "hydragrow-frontend/src/components/onboarding/OnboardingWizard.tsx",
+        "hydragrow-frontend/src/components/onboarding/OnboardingWizard.test.tsx",
+        "hydragrow-frontend/src/components/onboarding/OnboardingStep.tsx",
+        "hydragrow-frontend/src/components/onboarding/index.ts",
+        "hydragrow-frontend/src/hooks/useOnboardingState.ts",
+        "hydragrow-frontend/src/hooks/useOnboardingState.test.ts"
+      ],
+      "attemptId": "3f2ac551-1081-448d-88de-972a653ba081",
+      "reassigning": false,
+      "output": "Track D (Onboarding Experience) completed: Created ONBOARDING-SPEC.md, useOnboardingState hook, OnboardingStep, OnboardingWizard, and all unit/integration tests. All 18 vitest tests pass, tsc --noEmit clean with 0 errors.",
+      "changedPaths": [
+        "docs/design-system/layer3/ONBOARDING-SPEC.md",
+        "hydragrow-frontend/src/hooks/useOnboardingState.ts",
+        "hydragrow-frontend/src/hooks/useOnboardingState.test.ts",
+        "hydragrow-frontend/src/components/onboarding/OnboardingStep.tsx",
+        "hydragrow-frontend/src/components/onboarding/OnboardingStep.test.tsx",
+        "hydragrow-frontend/src/components/onboarding/OnboardingWizard.tsx",
+        "hydragrow-frontend/src/components/onboarding/OnboardingWizard.test.tsx",
+        "hydragrow-frontend/src/components/onboarding/index.ts"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "ONBOARDING-SPEC.md exists with aha moment definition, 4-step flow, empty state improvements, metrics, and Q1 extension points",
+          "status": "passed",
+          "evidence": "docs/design-system/layer3/ONBOARDING-SPEC.md exists with all required sections"
+        },
+        {
+          "criterion": "useOnboardingState hook tracks step completion in localStorage",
+          "status": "passed",
+          "evidence": "useOnboardingState.ts implements completeStep, persistState, and is verified by 8 unit tests in useOnboardingState.test.ts"
+        },
+        {
+          "criterion": "useOnboardingState.shouldShowOnboarding returns true when not dismissed and not all steps complete",
+          "status": "passed",
+          "evidence": "useOnboardingState calculates shouldShowOnboarding = !dismissed && completedSteps.length < 4, verified in tests"
+        },
+        {
+          "criterion": "OnboardingWizard renders 4 steps with correct Vietnamese titles and descriptions",
+          "status": "passed",
+          "evidence": "OnboardingWizard renders Chào mừng đến HydraGrow, Kết nối thiết bị, Dữ liệu thời gian thực, Bắt đầu mùa vụ, verified by unit test"
+        },
+        {
+          "criterion": "OnboardingWizard dismiss button sets dismissed=true in localStorage",
+          "status": "passed",
+          "evidence": "Dismiss buttons call dismiss() updating localStorage, verified by unit test"
+        },
+        {
+          "criterion": "OnboardingWizard shows celebration banner when all steps complete",
+          "status": "passed",
+          "evidence": "When all 4 steps are complete, displays celebratory trophy banner with 100% completion badge, verified by test"
+        },
+        {
+          "criterion": "All tests pass: vitest run src/components/onboarding/ && vitest run src/hooks/useOnboardingState",
+          "status": "passed",
+          "evidence": "All 18 tests in src/components/onboarding and src/hooks/useOnboardingState pass cleanly"
+        },
+        {
+          "criterion": "tsc --noEmit reports 0 errors",
+          "status": "passed",
+          "evidence": "npx tsc --noEmit reports 0 errors"
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "cd hydragrow-frontend && npx vitest run src/components/onboarding/ && npx vitest run src/hooks/useOnboardingState",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "18 tests passed across 3 test files"
+        },
+        {
+          "command": "cd hydragrow-frontend && npx tsc --noEmit",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "TypeScript check passed with 0 errors"
+        }
+      ]
+    },
+    {
+      "id": "t9",
+      "subject": "Track E — Q1 Decision Framework and design-system docs update",
+      "description": "Create Q1-DECISION-FRAMEWORK.md documenting the tiered-product hypothesis, evidence inventory, decision matrix for each Q1-dependent area, minimum viable signal to unblock, extension points catalog from Tracks A-D, and risk assessment. Update PATTERN-LIBRARY.md with Layer 3 components (PermissionMatrix, RoleBadge, InviteForm, FleetStationCard, OnboardingWizard). Update GOVERNANCE.md with Section (d). Update TRACEABILITY.md and CURRENT-STATUS.md.",
+      "status": "completed",
+      "assignee": "docs-lead",
+      "dependencies": [
+        "t6",
+        "t7",
+        "t8"
+      ],
+      "attempt": 1,
+      "createdAt": 1789282545958,
+      "updatedAt": 1789284672790,
+      "kind": "implementation",
+      "objective": "Create Q1 decision framework and update all design-system and project-state documentation for Layer 3",
+      "inScope": [
+        "docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md",
+        "docs/design-system/PATTERN-LIBRARY.md",
+        "docs/design-system/GOVERNANCE.md",
+        "docs/project-state/TRACEABILITY.md",
+        "docs/project-state/CURRENT-STATUS.md"
+      ],
+      "acceptance": [
+        "Q1-DECISION-FRAMEWORK.md has Executive Summary, Evidence Inventory, Decision Matrix, Minimum Viable Signal, Extension Points, Tiered Product Proposal, and Risk Assessment sections",
+        "PATTERN-LIBRARY.md has new entries for PermissionMatrix, RoleBadge, InviteForm, FleetStationCard, and OnboardingWizard",
+        "GOVERNANCE.md has Section (d) for Layer 3 tracked decisions",
+        "TRACEABILITY.md has entries for LAYER3-ROLES-COMPONENT-001 through LAYER3-DOCS-005",
+        "CURRENT-STATUS.md has Layer 3 status line"
+      ],
+      "verify": [
+        "test -f docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md",
+        "grep -q 'PermissionMatrix' docs/design-system/PATTERN-LIBRARY.md",
+        "grep -q 'LAYER3' docs/project-state/TRACEABILITY.md"
+      ],
+      "deliverables": [
+        "docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md"
+      ],
+      "attemptId": "b0331b8a-a264-40aa-adf5-a9201c8dab88",
+      "reassigning": false,
+      "output": "Track E completed successfully: Created docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md, added Layer 3 components (PermissionMatrix, RoleBadge, InviteForm, FleetStationCard, OnboardingWizard) to PATTERN-LIBRARY.md, added Section (d) governance rule to GOVERNANCE.md, and updated TRACEABILITY.md and CURRENT-STATUS.md. All verification checks passed and tsc --noEmit is 100% clean.",
+      "changedPaths": [
+        "docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md",
+        "docs/design-system/PATTERN-LIBRARY.md",
+        "docs/design-system/GOVERNANCE.md",
+        "docs/project-state/TRACEABILITY.md",
+        "docs/project-state/CURRENT-STATUS.md"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "Q1-DECISION-FRAMEWORK.md has Executive Summary, Evidence Inventory, Decision Matrix, Minimum Viable Signal, Extension Points, Tiered Product Proposal, and Risk Assessment sections",
+          "status": "passed",
+          "evidence": "docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md contains all 8 required sections: Tóm Tắt Điều Hành (Executive Summary), Kiểm Kê Bằng Chứng (Evidence Inventory), Ma Trận Quyết Định Theo Lĩnh Vực Thiết Kế (Decision Matrix), Tín Hiệu Tối Thiểu Khả Thi Để Gỡ Chặn (Minimum Viable Signal), Danh Mục Các Điểm Mở Rộng (Extension Points Catalog), Đề Xuất Kiến Trúc Sản Phẩm Đa Tầng (Tiered Product Architecture Proposal), Đánh Giá Rủi Ro (Risk Assessment), and Quy Tắc Quản Trị Bắt Buộc."
+        },
+        {
+          "criterion": "PATTERN-LIBRARY.md has new entries for PermissionMatrix, RoleBadge, InviteForm, FleetStationCard, and OnboardingWizard",
+          "status": "passed",
+          "evidence": "docs/design-system/PATTERN-LIBRARY.md updated with sections 11 (PermissionMatrix), 12 (RoleBadge), 13 (InviteForm), 14 (FleetStationCard), and 15 (OnboardingWizard & OnboardingStep) with usage guidelines, file paths, key props, and related patterns."
+        },
+        {
+          "criterion": "GOVERNANCE.md has Section (d) for Layer 3 tracked decisions",
+          "status": "passed",
+          "evidence": "docs/design-system/GOVERNANCE.md updated with Section (d) Layer 3 tracked decisions & Q1 extension points governance, establishing the rule that Q1 Extension Points are design debt until Q1 resolves and no Q1-dependent feature may ship without updating Q1-DECISION-FRAMEWORK.md."
+        },
+        {
+          "criterion": "TRACEABILITY.md has entries for LAYER3-ROLES-COMPONENT-001 through LAYER3-DOCS-005",
+          "status": "passed",
+          "evidence": "docs/project-state/TRACEABILITY.md has 5 new rows: LAYER3-ROLES-COMPONENT-001 (Track A), LAYER3-ROLES-FORM-002 (Track B), LAYER3-FLEET-UX-003 (Track C), LAYER3-ONBOARDING-004 (Track D), and LAYER3-DOCS-005 (Track E)."
+        },
+        {
+          "criterion": "CURRENT-STATUS.md has Layer 3 status line",
+          "status": "passed",
+          "evidence": "docs/project-state/CURRENT-STATUS.md updated with Layer 3 Design/UX Rollout (LAYER3-DESIGN-UX-ROLLOUT-001) status line summarizing all 5 tracks."
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "test -f docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "Q1-DECISION-FRAMEWORK.md exists on disk"
+        },
+        {
+          "command": "grep -q 'PermissionMatrix' docs/design-system/PATTERN-LIBRARY.md",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "Found 'PermissionMatrix' in PATTERN-LIBRARY.md"
+        },
+        {
+          "command": "grep -q 'LAYER3' docs/project-state/TRACEABILITY.md",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "Found 'LAYER3' in TRACEABILITY.md"
+        }
+      ]
+    },
+    {
+      "id": "t10",
+      "subject": "Track F — Full verification, onboarding wire-up, and final commit",
+      "description": "Run full verification suite (tsc, eslint, vitest, design-lint). Verify cross-track file perimeter compliance. Wire OnboardingWizard into Dashboard.tsx (import and render when shouldShowOnboarding is true, at top of dashboard content before sensor cards). Create final commit with message: feat(frontend): Layer 3 Design/UX Rollout — Roles component-spec, invitation form, Fleet View, onboarding wizard (LAYER3-DESIGN-UX-ROLLOUT-001). Do NOT push.",
+      "status": "completed",
+      "assignee": "integrator",
+      "dependencies": [
+        "t9"
+      ],
+      "attempt": 1,
+      "createdAt": 1789282560034,
+      "updatedAt": 1789285178394,
+      "kind": "integration",
+      "objective": "Verify all tracks, wire onboarding into Dashboard, and create final commit",
+      "inScope": [
+        "hydragrow-frontend/src/pages/Dashboard.tsx"
+      ],
+      "acceptance": [
+        "npx tsc --noEmit exit 0",
+        "npx eslint . has 0 errors",
+        "npx vitest run — all test files pass",
+        "npx vitest run src/lib/design-lint/ — all pass (no new hardcoded color violations)",
+        "Dashboard.tsx renders OnboardingWizard when shouldShowOnboarding is true",
+        "git diff --stat shows only files within declared perimeters plus Dashboard.tsx",
+        "Commit created with correct message format"
+      ],
+      "verify": [
+        "cd hydragrow-frontend && npx tsc --noEmit && npx eslint . && npx vitest run",
+        "cd hydragrow-frontend && npx vitest run src/lib/design-lint/"
+      ],
+      "attemptId": "adb03b74-b4e3-4b1e-8656-b64a01651c68",
+      "reassigning": false,
+      "output": "Track F completed: Full verification suite passed (tsc 0 errors, eslint 0 errors, vitest 108/108 test files passed, design-lint clean). Cross-track perimeters verified. OnboardingWizard wired into Dashboard.tsx. Final commit created: feat(frontend): Layer 3 Design/UX Rollout — Roles component-spec, invitation form, Fleet View, onboarding wizard (LAYER3-DESIGN-UX-ROLLOUT-001).",
+      "changedPaths": [
+        "hydragrow-frontend/src/pages/Dashboard.tsx"
+      ],
+      "acceptanceResults": [
+        {
+          "criterion": "npx tsc --noEmit exit 0",
+          "status": "passed",
+          "evidence": "Executed `cd hydragrow-frontend && npx tsc --noEmit` which exited with code 0 and 0 errors."
+        },
+        {
+          "criterion": "npx eslint . has 0 errors",
+          "status": "passed",
+          "evidence": "Executed `cd hydragrow-frontend && npx eslint .` which reported 0 errors (193 pre-existing warnings)."
+        },
+        {
+          "criterion": "npx vitest run — all test files pass",
+          "status": "passed",
+          "evidence": "Executed `cd hydragrow-frontend && npx vitest run`: 108 test files passed (108), 541 tests passed (541)."
+        },
+        {
+          "criterion": "npx vitest run src/lib/design-lint/ — all pass (no new hardcoded color violations)",
+          "status": "passed",
+          "evidence": "Executed `cd hydragrow-frontend && npx vitest run src/lib/design-lint/`: 3 test files passed (3), 6 tests passed (6). No new hardcoded colors."
+        },
+        {
+          "criterion": "Dashboard.tsx renders OnboardingWizard when shouldShowOnboarding is true",
+          "status": "passed",
+          "evidence": "Dashboard.tsx imports OnboardingWizard and useOnboardingState, rendering `{shouldShowOnboarding && <OnboardingWizard className=\"mb-6\" />}` before sensor cards."
+        },
+        {
+          "criterion": "git diff --stat shows only files within declared perimeters plus Dashboard.tsx",
+          "status": "passed",
+          "evidence": "Git commit diff touches only 29 files strictly within perimeters of Tracks A-E + Dashboard.tsx."
+        },
+        {
+          "criterion": "Commit created with correct message format",
+          "status": "passed",
+          "evidence": "Commit 0790169c created with message: feat(frontend): Layer 3 Design/UX Rollout — Roles component-spec, invitation form, Fleet View, onboarding wizard (LAYER3-DESIGN-UX-ROLLOUT-001). No push."
+        }
+      ],
+      "commandsRun": [
+        {
+          "command": "cd hydragrow-frontend && npx tsc --noEmit && npx eslint . && npx vitest run",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "tsc passed with 0 errors, eslint reported 0 errors, vitest ran 108 test files (541 tests) all passed."
+        },
+        {
+          "command": "cd hydragrow-frontend && npx vitest run src/lib/design-lint/",
+          "status": "passed",
+          "exitCode": 0,
+          "evidence": "All 3 design-lint test suites passed with 0 violations."
+        }
+      ]
+    }
+  ],
+  "taskSeq": 10,
+  "phase": "running",
+  "approvedAt": 1789283394947
+}

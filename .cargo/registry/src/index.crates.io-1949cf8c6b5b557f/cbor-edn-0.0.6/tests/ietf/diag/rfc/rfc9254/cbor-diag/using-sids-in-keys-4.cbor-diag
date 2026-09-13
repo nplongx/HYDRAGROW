@@ -1,0 +1,20 @@
+{
+  1756 : [                      / server (SID 1756) /
+    {
+      3 : "NRC TIC server",     / name (SID 1759) /
+      5 : {                     / udp (SID 1761) /
+        1 : "tic.nrc.ca",       / address (SID 1762) /
+        2 : 123                 / port (SID 1763) /
+      },
+      1 : 0,                    / association-type (SID 1757) /
+      2 : false,                / iburst (SID 1758) /
+      4 : true                  / prefer (SID 1760) /
+    },
+    {
+      3 : "NRC TAC server",     / name (SID 1759) /
+      5 : {                     / udp (SID 1761) /
+        1 : "tac.nrc.ca"        / address (SID 1762) /
+      }
+    }
+  ]
+}

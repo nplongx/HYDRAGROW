@@ -1,0 +1,79 @@
+local M = {}
+
+function M:peek(job)
+	local start, cache = os.clock(), ya.file_cache(job)
+	if not cache then
+		return
+	end
+
+	local ok, err = self:preload(job)
+	if not ok or err then
+		return ya.preview_widget(job, err)
+	end
+
+	ya.sleep(math.max(0, rt.preview.image_delay / 1000 + start - os.clock()))
+
+	local _, err = ya.image_show(cache, job.area)
+	ya.preview_widget(job, err)
+end
+
+function M:seek() end
+
+function M:preload(job)
+	local cache = ya.file_cache(job)
+	if not cache or fs.cha(cache) then
+		return true
+	end
+
+	-- stylua: ignore
+	local cmd = Command("resvg"):arg {
+		"-w", rt.preview.max_width, "-h", rt.preview.max_height,
+		"--image-rendering", "optimizeSpeed",
+	}
+	if job.args.bg then
+		cmd = cmd:arg { "--background", job.args.bg }
+	end
+	if rt.tasks.image_alloc > 0 then
+		cmd = cmd:memory(rt.tasks.image_alloc)
+	end
+
+	local child, err = cmd:arg({ tostring(job.file.path), tostring(cache) }):spawn()
+	if not child then
+		return true, Err("Failed to start `resvg`, error: %s", err)
+	end
+
+	local status, err
+	if rt.tasks.image_alloc == 0 then
+		status, err = child:wait()
+	end
+
+	while not status and not err do
+		ya.sleep(0.2)
+
+		status, err = child:try_wait()
+		if status or err then
+			break
+		end
+
+		local id, mem = child:id(), nil
+		if id then
+			mem = ya.proc_info(id).mem_resident
+		end
+		if mem and mem > rt.tasks.image_alloc then
+			child:start_kill()
+			err = Err("memory limit exceeded, pid: %s, memory: %s", id, mem)
+		end
+	end
+
+	if not status then
+		return true, Err("Error while running `resvg`: %s", err)
+	elseif not status.success then
+		return false, Err("`resvg` exited with error code: %s", status.code)
+	else
+		return true
+	end
+end
+
+function M:spot(job) require("file"):spot(job) end
+
+return M

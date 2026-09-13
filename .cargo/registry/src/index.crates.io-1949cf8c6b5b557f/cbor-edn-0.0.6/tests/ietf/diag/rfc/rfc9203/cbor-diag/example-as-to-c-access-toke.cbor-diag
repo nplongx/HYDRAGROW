@@ -1,0 +1,12 @@
+    {
+      / access_token / 1 : h'8343a1010aa2044c53/...
+       (remainder of access token (CWT) omitted for brevity)/',
+      / ace_profile / 38 : / coap_oscore / 2,
+        / expires_in / 2 : 3600,
+               / cnf / 8 : {
+                 / osc / 4 : {
+                    / id / 0 : h'01',
+                    / ms / 2 : h'f9af838368e353e78888e1426bd94e6f'
+        }
+      }
+    }

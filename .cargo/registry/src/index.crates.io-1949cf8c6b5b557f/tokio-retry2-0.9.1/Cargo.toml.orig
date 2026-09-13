@@ -1,0 +1,38 @@
+[package]
+name = "tokio-retry2"
+version = "0.9.1"
+authors = ["Julia Naomi <jnboeira@outlook.com>","Sam Rijs <srijs@airpost.net>"]
+description = "Extensible, asynchronous retry behaviors for futures/tokio"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/naomijub/tokio-retry"
+documentation = "https://docs.rs/tokio-retry2"
+keywords = ["tokio", "retry", "backoff"]
+edition = "2024"
+rust-version = "1.88"
+
+[features]
+jitter = ["rand"]
+tracing = ["dep:tracing"]
+implicit_results = []
+
+[dependencies]
+rand = { version = "0.9", optional = true }
+tokio = { version = "1.40", features = ["time"] }
+tracing = { version = "0.1.40", optional = true }
+pin-project = "1.1.5"
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full"] }
+
+[lints.clippy]
+all = "deny"
+pedantic = "deny"
+nursery = "deny"
+redundant_clone = "deny"
+manual_while_let_some = "deny"
+needless_borrow = "deny"
+manual_ok_or = "deny"
+needless_collect = "deny"
+or_fun_call = "deny"
+type_complexity = {level = "allow", priority = 1 }

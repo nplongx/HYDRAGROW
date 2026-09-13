@@ -1,0 +1,7 @@
+    {
+      / audience / 5 : "tempSensor4711",
+         / scope / 9 : "write",
+       / req_cnf / 4 : {
+             / kid / 3 : h'01'
+      }
+    }

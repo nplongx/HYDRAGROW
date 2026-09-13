@@ -1,0 +1,5 @@
+error: unknown attribute 'unknown'
+  --> ui_tests/rhai_mod_bad_attr.rs:11:12
+   |
+11 | #[rhai_mod(unknown = "thing")]
+   |            ^^^^^^^

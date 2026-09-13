@@ -1,0 +1,88 @@
+use mlua::{AnyUserData, ExternalError, IntoLua, Lua, MetaMethod, Table, UserData, UserDataMethods, Value};
+use ratatui::widgets::Widget;
+
+use super::{Area, Span};
+use crate::Style;
+
+#[derive(Clone, Debug, Default)]
+pub struct Gauge {
+	pub(super) area: Area,
+
+	ratio:       f64,
+	label:       Option<ratatui::text::Span<'static>>,
+	style:       ratatui::style::Style,
+	gauge_style: ratatui::style::Style,
+}
+
+impl Gauge {
+	pub fn compose(lua: &Lua) -> mlua::Result<Value> {
+		let new = lua.create_function(|_, _: Table| Ok(Self::default()))?;
+
+		let gauge = lua.create_table()?;
+		gauge.set_metatable(Some(lua.create_table_from([(MetaMethod::Call.name(), new)])?))?;
+
+		gauge.into_lua(lua)
+	}
+}
+
+impl Widget for Gauge {
+	fn render(self, rect: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer)
+	where
+		Self: Sized,
+	{
+		let mut gauge = ratatui::widgets::Gauge::default()
+			.ratio(self.ratio)
+			.style(self.style)
+			.gauge_style(self.gauge_style);
+
+		if let Some(s) = self.label {
+			gauge = gauge.label(s)
+		}
+
+		gauge.render(rect, buf);
+	}
+}
+
+impl Widget for &Gauge {
+	fn render(self, rect: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer)
+	where
+		Self: Sized,
+	{
+		self.clone().render(rect, buf);
+	}
+}
+
+impl UserData for Gauge {
+	fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+		crate::impl_area_method!(methods);
+		crate::impl_style_method!(methods, style);
+
+		methods.add_function("percent", |_, (ud, percent): (AnyUserData, u8)| {
+			if percent > 100 {
+				return Err("percent must be between 0 and 100".into_lua_err());
+			}
+
+			ud.borrow_mut::<Self>()?.ratio = percent as f64 / 100.0;
+			Ok(ud)
+		});
+
+		methods.add_function("ratio", |_, (ud, ratio): (AnyUserData, f64)| {
+			if !(0.0..1.0).contains(&ratio) {
+				return Err("ratio must be between 0 and 1".into_lua_err());
+			}
+
+			ud.borrow_mut::<Self>()?.ratio = ratio;
+			Ok(ud)
+		});
+
+		methods.add_function("label", |_, (ud, label): (AnyUserData, Span)| {
+			ud.borrow_mut::<Self>()?.label = Some(label.0);
+			Ok(ud)
+		});
+
+		methods.add_function("gauge_style", |_, (ud, style): (AnyUserData, Style)| {
+			ud.borrow_mut::<Self>()?.gauge_style = style.0;
+			Ok(ud)
+		});
+	}
+}

@@ -1,0 +1,38 @@
+bin.name = "cbor-edn"
+args = ["diag2diag", "--remove-comments", "--annotate", "ccs"]
+
+stdin = """
+# from https://datatracker.ietf.org/doc/html/rfc9203
+# with algortihm added
+{
+    / aud / 3 : "tempSensorInLivingRoom",
+    / iat / 6 : 1360189224,
+    / exp / 4 : 1360289224,
+  / scope / 9 :  "temperature_g firmware_p",
+    / cnf / 8 : {
+      / osc / 4 : {
+         / id / 0 : h'01',
+         / ms / 2 : h'f9af838368e353e78888e1426bd94e6f',
+         4: 10
+    }
+  }
+}
+"""
+# Spacing, especially around the last item (because it is the last item and
+# because it falls back to '#' comments) is a shipwreck, but comment positions
+# are not guaranteed yet anyway.
+stdout = '''
+{
+    3/ aud /:"tempSensorInLivingRoom",
+    6/ iat /:dt'2013-02-06T22:20:24+00:00',
+    4/ exp /:dt'2013-02-08T02:07:04+00:00',
+    9/ scope /:"temperature_g firmware_p",
+    8/ cnf /:{
+        4/ osc /:{
+            0/ id /:h'01',
+            2/ ms /:h'f9af838368e353e78888e1426bd94e6f',
+            4/ alg /:10
+        / AES-CCM-16-64-128 /}
+    }
+}
+'''

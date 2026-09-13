@@ -140,6 +140,10 @@ pub struct SensorSnapshot {
     pub phase: String,
     pub device_id: String,
     pub timestamp_ms: i64,
+    pub err_ph: Option<bool>,
+    pub err_tds: Option<bool>,
+    pub err_temperature: Option<bool>,
+    pub err_water_level: Option<bool>,
 }
 
 /// Input truyền vào recipe_override script

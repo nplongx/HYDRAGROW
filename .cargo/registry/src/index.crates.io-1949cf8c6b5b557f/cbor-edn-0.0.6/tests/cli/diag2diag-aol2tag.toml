@@ -1,0 +1,11 @@
+bin.name = "cbor-edn"
+args = ["diag2diag", "--aol-to-item", "--apply-999"]
+
+stdin = "[ip'fe80::1', IP'fe80::1', hello'world']"
+stdout = '''
+[
+    h'fe800000000000000000000000000001',
+    54(h'fe800000000000000000000000000001'),
+    999(["hello", "world"])
+]'''
+stderr = ""

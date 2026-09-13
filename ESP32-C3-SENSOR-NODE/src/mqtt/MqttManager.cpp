@@ -211,7 +211,16 @@ void MqttManager::reconnect() {
     if (WiFi.status() != WL_CONNECTED) return;
 
     Logger::debugPrintln("Dang ket noi MQTT...");
-    bool connected = mqttClient.connect(MQTT_CLIENT_ID, MQTT_USERNAME, MQTT_PASSWORD);
+    const char* willPayload = "{\"online\": false, \"status\": \"disconnected\"}";
+    bool connected = mqttClient.connect(
+        MQTT_CLIENT_ID,
+        MQTT_USERNAME,
+        MQTT_PASSWORD,
+        TOPIC_STATUS.c_str(),
+        1,
+        true,
+        willPayload
+    );
 
     if (!connected) {
         Logger::debugPrintf("Ket noi MQTT that bai, rc=%d\n", mqttClient.state());

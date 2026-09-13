@@ -1,0 +1,28 @@
+[package]
+name = "peg-macros"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Procedural macros for rust-peg. To use rust-peg, see the `peg` crate."
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0.24"
+peg-runtime.workspace = true
+
+[features]
+trace = []
+
+[lib]
+proc-macro = true
+name = "peg_macros"
+path = "lib.rs"
+
+[[bin]]
+name = "rust-peg"
+path = "bin.rs"
+test = false
+bench = false

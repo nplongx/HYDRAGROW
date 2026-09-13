@@ -1,0 +1,24 @@
+[package]
+name = "guess_host_triple"
+version = "0.1.5"
+authors = ["Tim Allen <screwtape@froup.com>"]
+description = "Guess which Rust-supported platform is running the current code"
+license = "MIT/Apache-2.0"
+repository = "https://gitlab.com/Screwtapello/guess_host_triple/"
+readme = "README.md"
+keywords = ["host", "target", "triple", "install"]
+categories = ["os"]
+
+[dependencies]
+log = "0.4.1"
+errno = "0.2.4"
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.0"
+
+[target."cfg(windows)".dependencies]
+winapi = { version = "0.3", features = ["sysinfoapi", "winnt"] }
+
+[dev-dependencies]
+env_logger = "0.5.6"
+version-sync = "0.9.3"

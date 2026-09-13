@@ -285,3 +285,34 @@ mùa vụ (lưu lại ấn tượng tích cực ở thời điểm hoàn thành 
 phần trăm tĩnh. **Dùng `SeasonStageChecklist` để duy trì sự chú ý trong suốt mùa vụ, và
 `SeasonCompletionSummary` để tạo điểm nhấn hoàn thành có ý nghĩa.**
 
+---
+
+## 9. `validateDeviceId` — xác thực mã thiết bị ghép nối (form-design)
+
+**Files:** `hydragrow-frontend/src/lib/pairing/deviceIdValidation.ts`,
+`hydragrow-frontend/src/pages/DevicePairing.tsx`.
+
+Hàm xác thực thuần `validateDeviceId(raw)` kiểm tra mã thiết bị theo quy tắc:
+không rỗng, chỉ gồm ký tự chữ, số, dấu gạch dưới `_`, dấu gạch ngang `-`, và độ dài 3-64 ký tự.
+Được gọi `onBlur` để kích hoạt validation nội tuyến (inline error) kèm thuộc tính `aria-invalid` và `aria-describedby`,
+đồng thời chặn submit khi mã không hợp lệ.
+
+**Don't:** chỉ kiểm tra mã thiết bị khi bấm nút "Ghép nối" hoặc để backend trả lỗi về mới báo người dùng.
+**Dùng `validateDeviceId` khi blur và trước khi submit** để người dùng phát hiện lỗi ngay tại trường nhập.
+
+---
+
+## 10. `EVENT_CATEGORY_THEME` & `splitByMatch` — tìm kiếm và phân loại nhật ký (search-ux)
+
+**Files:** `hydragrow-frontend/src/lib/logs/eventCategoryTheme.ts`,
+`hydragrow-frontend/src/lib/logs/highlightMatch.ts`,
+`hydragrow-frontend/src/components/logs/HealthSummaryBar.tsx`,
+`hydragrow-frontend/src/components/logs/EventLogCard.tsx`.
+
+`EVENT_CATEGORY_THEME` chuẩn hoá bảng màu tokenized cho từng nhóm sự kiện hệ thống (`ecDosing`, `phDosing`, `water`, `warning`, `device`),
+thay thế các mã màu Tailwind hardcode (`text-indigo-*`, `text-purple-*`, `text-amber-*`).
+`splitByMatch(text, query)` phân đoạn chuỗi văn bản thành mảng các đoạn khớp / không khớp để hiển thị highlight từ khoá tìm kiếm an toàn (tránh XSS, không dùng `dangerouslySetInnerHTML`).
+
+**Don't:** dùng `dangerouslySetInnerHTML` với thẻ `<mark>` hoặc hardcode màu riêng lẻ trong từng card nhật ký.
+**Dùng `splitByMatch` cho highlight tìm kiếm và `EVENT_CATEGORY_THEME` cho nhãn danh mục sự kiện.**
+

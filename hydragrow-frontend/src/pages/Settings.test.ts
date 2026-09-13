@@ -28,8 +28,20 @@ describe('buildHeaders', () => {
 describe('settings page design contract', () => {
   it('uses the Vietnamese system settings labels from the reference layout', () => {
     expect(SETTINGS_TABS.map((tab) => tab.label)).toEqual([
-      'Tổng quan', 'Ngưỡng & Nước', 'Máy châm phân', 'Cảm biến', 'Kết nối',
+      'Tổng quan', 'Ngưỡng, Nước & Cảm biến', 'Máy châm phân', 'Kết nối',
     ]);
+  });
+});
+
+describe('Settings tabs — Hick\'s Law reduction', () => {
+  it('has 4 tabs, not 5 (sensor merged into growth)', () => {
+    expect(SETTINGS_TABS).toHaveLength(4);
+    expect(SETTINGS_TABS.find((t) => (t.id as string) === 'sensor')).toBeUndefined();
+  });
+
+  it('growth tab label reflects the merge', () => {
+    const growthTab = SETTINGS_TABS.find((t) => t.id === 'growth');
+    expect(growthTab?.label).toBe('Ngưỡng, Nước & Cảm biến');
   });
 });
 

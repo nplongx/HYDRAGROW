@@ -20,6 +20,7 @@ import { apiPost, apiDelete, apiPut, apiGet } from '../lib/apiClient';
 import { useOwnedDevices } from '../hooks/useOwnedDevices';
 import { useDeviceStore } from '../store/useDeviceStore';
 import type { OwnedDevice, StatusPayload } from '../types/models';
+import { Banner } from '../components/ui/Banner';
 import {
   ScanConfirmOverlay,
   deriveConfirmationCode,
@@ -173,7 +174,6 @@ export function DevicePairing() {
       if (activeDeviceId === deviceId) setDeviceId(null);
       await refresh();
     } catch (e: any) {
-      setFormError(e.message);
       toast.error(e.message);
     } finally {
       setSubmitting(false);
@@ -187,7 +187,6 @@ export function DevicePairing() {
       setRenamingId(null);
       await refresh();
     } catch (e: any) {
-      setFormError(e.message);
       toast.error(e.message);
     }
   }
@@ -230,10 +229,10 @@ export function DevicePairing() {
         </div>
       </div>
 
-      {(error || formError) && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-medium">
-          {error || formError}
-        </div>
+      {error && (
+        <Banner tone="danger" title="Không thể tải danh sách thiết bị">
+          {error}
+        </Banner>
       )}
 
       {/* CAMERA QR SCANNER VIEWPORT */}
@@ -268,10 +267,12 @@ export function DevicePairing() {
           deviceId={pendingDeviceId}
           initialLabel={newLabel}
           isSubmitting={submitting}
+          errorMessage={formError}
           onConfirm={(devId, label) => executeClaim(devId, label || null)}
           onCancel={() => {
             setShowConfirmOverlay(false);
             setPendingDeviceId(null);
+            setFormError(null);
           }}
         />
       )}

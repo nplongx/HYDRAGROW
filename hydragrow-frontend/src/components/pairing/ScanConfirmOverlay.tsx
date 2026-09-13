@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Check, X, Tag } from 'lucide-react';
+import { Banner } from '../ui/Banner';
 
 export interface ScanConfirmOverlayProps {
   deviceId: string;
   initialLabel?: string;
+  errorMessage?: string | null;
   onConfirm: (deviceId: string, label: string) => void | Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -26,6 +28,7 @@ export function deriveConfirmationCode(deviceId: string): string {
 export const ScanConfirmOverlay: React.FC<ScanConfirmOverlayProps> = ({
   deviceId,
   initialLabel = '',
+  errorMessage = null,
   onConfirm,
   onCancel,
   isSubmitting = false,
@@ -93,6 +96,12 @@ export const ScanConfirmOverlay: React.FC<ScanConfirmOverlayProps> = ({
             className="w-full px-3 py-2 text-sm rounded-xl border border-line bg-white focus:outline-none focus:border-primary"
           />
         </div>
+
+        {errorMessage && (
+          <Banner tone="danger" title="Không thể ghép nối">
+            {errorMessage}
+          </Banner>
+        )}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3 pt-2">

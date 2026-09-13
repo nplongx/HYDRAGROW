@@ -229,8 +229,31 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
           ) : visibleRows.length === 0 ? (
             <StateView
               icon={Zap}
-              title="Dòng thời gian trống"
-              description="Chưa ghi nhận khoảnh khắc nào khớp bộ lọc/tìm kiếm hiện tại."
+              title={search ? `Không tìm thấy kết quả cho "${search}"` : 'Dòng thời gian trống'}
+              description={
+                search
+                  ? 'Thử từ khoá ngắn hơn, kiểm tra chính tả, hoặc đổi bộ lọc danh mục đang chọn.'
+                  : 'Chưa ghi nhận khoảnh khắc nào khớp bộ lọc hiện tại.'
+              }
+              action={
+                search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="text-xs font-semibold text-primary hover:text-primary-deep"
+                  >
+                    Xoá tìm kiếm
+                  </button>
+                ) : filter !== 'all' ? (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('all')}
+                    className="text-xs font-semibold text-primary hover:text-primary-deep"
+                  >
+                    Xem tất cả danh mục
+                  </button>
+                ) : undefined
+              }
             />
           ) : (
             <div className="relative pl-3">

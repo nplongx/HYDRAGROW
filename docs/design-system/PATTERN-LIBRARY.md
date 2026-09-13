@@ -100,9 +100,7 @@ className="ui-switch">`, where `ui-switch` was never defined in `App.css`):
 />
 ```
 
-Other call sites: `src/components/ui/ControlCard.tsx:71`
-(`<Switch isOn={isOn} disabled={isProcessing || !isOnline} />`),
-`src/pages/settings/ThresholdsSection.tsx:248-301` (sensor/auto-refill
+Other call sites: `src/pages/settings/ThresholdsSection.tsx:248-301` (sensor/auto-refill
 toggles via `isOn` + `onClick`), `src/pages/settings/GeneralSection.tsx:140`
 with `colorClass="bg-amber-600"`.
 
@@ -201,3 +199,32 @@ touch-target assertion plus a source scan asserting no other
 uniqueness). Note for tests: the component takes `deviceId` + `variant` —
 there is no `onConfirm` prop; render as
 `<EmergencyStopButton deviceId={null} variant="floating" />`.
+
+---
+
+## 5. `pumpVisualTheme` + `PumpControlStatePill` — định danh & trạng thái bơm dosing
+
+**Files:** `hydragrow-frontend/src/lib/dosing/pumpVisualTheme.ts`,
+`hydragrow-frontend/src/lib/dosing/pumpControlStateMachine.ts`,
+`hydragrow-frontend/src/components/ui/PumpControlStatePill.tsx`.
+
+`pumpVisualTheme.ts` là nguồn sự thật DUY NHẤT cho màu định danh bơm/van
+(`pumpThemeFor(pumpId)` → `'nutrient' | 'phUp' | 'phDown' | 'aqua'`). Trước
+khi có module này, `AdvancedDeviceControl.tsx` và `DosingReportCard.tsx` tự
+vẽ 2 bảng màu khác nhau cho cùng khái niệm "bơm pH Up" — một dùng
+`fuchsia`, một dùng `purple` — và `ControlPanel.tsx` từng truyền
+`colorTheme="purple"` không khớp key nào, âm thầm rơi về theme mặc định
+(bug thật, sửa tại `LAYER2-STATEMACHINE-003`, 2026-09-13).
+
+**Don't:** định nghĩa lại một `Record<string, {activeIcon, glow, ...}>`
+cục bộ trong component mới cho bơm/van. **Dùng `PUMP_VISUAL_THEME[pumpThemeFor(pumpId)]`
+thay vào đó** — kể cả khi component đó không nằm trong
+`src/components/control/` (ví dụ: chart legend, badge lịch sử châm phân).
+
+`pumpControlStateMachine.ts`'s `derivePumpControlState()` tính trạng thái
+3 chế độ (`idle` / `running` / `locked`, kèm `reason` khi `locked`) từ 4
+cờ nguyên thuỷ (`currentStatus`, `isAutoMode`, `isEmergency`,
+`lockedByPumpId`) — dùng hàm này thay vì tự viết lại biểu thức boolean
+`isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId)`
+ở nơi khác. `PumpControlStatePill` hiển thị kết quả đó theo đúng khuôn
+mẫu chấm tròn + nhãn + token đã dùng ở `DeviceStatePill` (mục 1).

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lock, ChevronDown, ShieldAlert, Timer } from 'lucide-react';
+import { ChevronDown, ShieldAlert, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useDeviceStore } from '../../store/useDeviceStore';

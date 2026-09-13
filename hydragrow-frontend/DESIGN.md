@@ -285,6 +285,7 @@ Recorded so future readers (human or agent) do not have to rediscover them:
 - **`/user-management`** **và** **`/roles`** **point to the same component** (`Roles`). If there is no business reason to keep both paths, they should be reduced to one official route.
 - **`docs/hydragrow-hifi-spec.md`** **uses a different color palette** (`Green-700 #2E7D32`...) than the color palette actually being implemented trong `App.css`/CHUAN-GIAO-DIEN-FRONTEND.md (`primary-deep #14532D`...). This is a Lo-Fi→Hi-Fi spec from an earlier phase, not the current color source — it should be marked "historical" directly in that file.
 - **Build** **`gleam_core`** **is a manual step**, not yet wired into `npm run build:web`/`dev:web` — modifying `.gleam` while forgetting `gleam build` will cause the changes not to appear in the build..
+- **`SensorBentoCard.tsx`, `ConfigBackup.tsx`, `RecipeBuilder.tsx`** vẫn dùng màu Tailwind hardcode ngoài token — khoanh vùng có chủ đích trong Layer 2 rollout (2026-09-13), không phải bị bỏ sót; xem `colorAllowlist.json` mục `_comment_trackedDebt` và `docs/design-system/PR-QA-CHECKLIST.md` mục 9.
 
 ---
 

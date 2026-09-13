@@ -142,8 +142,11 @@ Hiện có 2 hệ thống song song: Blockly (kéo-thả khối) và React Flow 
 ## 7. Trạng thái & phản hồi
 
 - Loading: `<LoadingState />` (đã có, dùng class `.ui-loading*`).
-- Rỗng / chưa cấu hình: `.ui-state` + `.ui-state-title` + `.ui-state-desc`.
-- Lỗi/cảnh báo inline: khối `rounded-2xl border` với nền theo mức độ nghiêm trọng — `amber-50` (cảnh báo), `red-50` (lỗi) — **không** phối `blue`.
+- Rỗng / chưa cấu hình: `.ui-state` + `.ui-state-title` + `.ui-state-desc` (hoặc component `<StateView />`).
+- Trạng thái thiết bị & điều khiển: `<DeviceStatePill />` cho trạng thái kết nối; `<PumpControlStatePill />` cho trạng thái điều khiển bơm (idle/running/locked theo `pumpControlStateMachine`).
+- Trực quan hoá dữ liệu: `<DosingHourlyChart />` cho dữ liệu theo giờ đa kênh; `<Sparkline />` cho xu hướng nhanh.
+- Tiến độ & hoàn thành mùa vụ: `<SeasonStageChecklist />` (Zeigarnik checklist); `<SeasonCompletionSummary />` (Peak-End dialog).
+- Lỗi/cảnh báo inline: khối `rounded-2xl border` với nền theo mức độ nghiêm trọng — `amber-50` (cảnh báo), `red-50` (lỗi) — **không** phối `blue` (hoặc dùng `<Banner />`).
 - Toast: dùng `react-hot-toast` đã có sẵn, không thêm thư viện toast khác.
 
 ---

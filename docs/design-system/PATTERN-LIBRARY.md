@@ -228,3 +228,60 @@ cờ nguyên thuỷ (`currentStatus`, `isAutoMode`, `isEmergency`,
 `isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId)`
 ở nơi khác. `PumpControlStatePill` hiển thị kết quả đó theo đúng khuôn
 mẫu chấm tròn + nhãn + token đã dùng ở `DeviceStatePill` (mục 1).
+
+---
+
+## 6. `DosingHourlyChart` / `Sparkline` — data-visualization dùng chung
+
+**Files:** `hydragrow-frontend/src/components/dosing/DosingHourlyChart.tsx`,
+`hydragrow-frontend/src/components/ui/Sparkline.tsx`.
+
+`DosingHourlyChart` vẽ cột nhóm 24 giờ × 4 bơm, màu lấy từ
+`pumpVisualTheme.ts` (mục 5), luôn kèm bảng `sr-only` làm text alternative
+và `aria-label` theo từng cột giờ. `Sparkline` là đường xu hướng SVG tối
+giản cho 1 chuỗi số — dùng cho chỉ số không có endpoint lịch sử ở backend
+(xem `useHealthHistory.ts`: ring-buffer trong bộ nhớ phiên, không phải
+lịch sử vĩnh viễn).
+
+**Don't:** tự vẽ lại 1 dãy `<div style={{height}}>` mới cho biểu đồ cột —
+đó chính là cách `DosingTotalCard.tsx` từng làm trước khi có
+`DosingHourlyChart` (không nhãn trục, không chú giải, không text
+alternative). **Dùng `DosingHourlyChart` cho dữ liệu nhiều-chuỗi-theo-giờ,
+`Sparkline` cho 1 chuỗi xu hướng đơn giản.**
+
+---
+
+## 7. `pumpControlStateMachine` — trạng thái điều khiển thiết bị 3 chế độ
+
+**File:** `hydragrow-frontend/src/lib/dosing/pumpControlStateMachine.ts`
+
+`derivePumpControlState({currentStatus, isAutoMode, isEmergency,
+lockedByPumpId})` → `{state: 'idle'|'running'|'locked', reason:
+'auto_mode'|'emergency'|'interlock'|null}`. `running` luôn thắng mọi lý do
+khoá (bơm đang thực sự chạy thì không có ý nghĩa hiển thị "đã khoá" cho
+lệnh BẬT tiếp theo). Hiển thị qua `PumpControlStatePill` (mục 5); lý do
+khoá `interlock` còn được hiển thị đầy đủ qua `Banner` (xem
+`AdvancedDeviceControl.tsx`).
+
+**Don't:** viết lại biểu thức `isAutoMode || (isEmergency && !currentStatus)
+|| Boolean(lockedByPumpId)` ở component khác. **Import
+`derivePumpControlState` thay vào đó** — logic ưu tiên giữa 3 lý do khoá
+(`auto_mode > emergency > interlock`) chỉ nên tồn tại ở một nơi.
+
+---
+
+## 8. `SeasonStageChecklist` + `SeasonCompletionSummary` — động lực mùa vụ (Zeigarnik & Peak-End)
+
+**Files:** `hydragrow-frontend/src/components/seasons/SeasonStageChecklist.tsx`,
+`hydragrow-frontend/src/components/seasons/SeasonCompletionSummary.tsx`,
+`hydragrow-frontend/src/lib/seasons/seasonProgress.ts`.
+
+`SeasonStageChecklist` (Zeigarnik) trực quan hoá các giai đoạn mùa vụ (đã xong,
+hiện tại, sắp tới) cùng số ngày còn lại (mở vòng lặp tâm lý giúp người dùng chủ động theo dõi).
+`SeasonCompletionSummary` (Peak-End) là dialog chúc mừng và tổng kết các chỉ số khi kết thúc
+mùa vụ (lưu lại ấn tượng tích cực ở thời điểm hoàn thành hành trình).
+
+**Don't:** kết thúc mùa vụ đột ngột bằng màn hình tạo mùa mới trống trơn hoặc chỉ hiển thị thanh tiến độ
+phần trăm tĩnh. **Dùng `SeasonStageChecklist` để duy trì sự chú ý trong suốt mùa vụ, và
+`SeasonCompletionSummary` để tạo điểm nhấn hoàn thành có ý nghĩa.**
+

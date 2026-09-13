@@ -207,7 +207,6 @@ export const AdvancedDeviceControl = ({
               isOn={currentStatus}
               disabled={!canSendCommands || isToggling || isProcessing || isLocked}
               onClick={handleToggle}
-              colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-600' : 'bg-primary') : undefined}
             />
           </div>
         </div>

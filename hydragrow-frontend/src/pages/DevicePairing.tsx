@@ -223,7 +223,7 @@ export function DevicePairing() {
             <button
               type="button"
               onClick={stopScanner}
-              className="ui-btn-md border border-rose-300 text-rose-600 bg-rose-50 hover:bg-rose-100 flex items-center gap-2"
+              className="ui-btn-md border border-error/40 text-error bg-danger-bg hover:bg-danger-bg/70 flex items-center gap-2"
             >
               <StopCircle size={18} /> Dừng quét camera
             </button>
@@ -408,7 +408,7 @@ export function DevicePairing() {
                   <button
                     onClick={() => unclaimDevice(d.device_id)}
                     disabled={submitting}
-                    className="p-2 text-text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                    className="p-2 text-text-muted hover:text-error hover:bg-danger-bg rounded-xl transition-colors"
                     title="Huỷ liên kết trạm"
                   >
                     <Trash2 size={16} />

@@ -33,7 +33,7 @@ Chuẩn màu theo Figma **Hi-Fi — Full App (v1)** (`node 213-2`, file `UvfamFT
 | Border / Line | `--color-border` / `--color-line` `#e4efe6` | Viền card, chia khối, nền bottom-nav (mobile) |
 | Text | `--color-text` `#14532d` | Văn bản chính |
 | Text muted | `--color-text-muted` `#4b6354` | Mô tả phụ, caption |
-| Text faint | `--color-faint` `#7c9385` | Nhãn mờ, section title, chấm điều hướng inactive |
+| Text faint | `--color-faint` `#556d5e` | Nhãn mờ, section title, chấm điều hướng inactive |
 | Nền trang | `--color-page-bg` `#dcf0dc` | Nền body / trang (toàn app) |
 | Toggle off | `--color-toggleoff` `#d9e5db` | Track toggle trạng thái OFF |
 | Config (Automation) | `--color-config` `#4338ca` / `--color-config-soft` `#eef2ff` | Chỉ dùng cho canvas automation / cấu hình / IR |

@@ -1,0 +1,29 @@
+{
+  "requirement_id": "ROLES-CAPABILITY-ALIGNMENT-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Roles.capabilities.test.ts src/pages/Roles.test.tsx (2 files, 5 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:06:59Z",
+      "notes": "The device capability row allows Operator access because ROLE_DEFAULT_SCOPES.operator contains device:ota and device:network."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "npx vitest run src/pages/Roles.capabilities.test.ts src/pages/Roles.test.tsx (2 files, 5 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:06:59Z",
+      "notes": "The permissions capability row remains Admin-only because ROLE_DEFAULT_SCOPES.operator contains no user:invite or equivalent scope."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "git diff -- hydragrow-frontend/src/pages/Roles.tsx contains only CAPABILITIES and matrix-label hunks",
+      "environment": "HYDRAGROW working tree",
+      "verified_at": "2026-09-13T02:06:59Z",
+      "notes": "ROLE_DEFAULT_SCOPES hunks are absent; it remains the unchanged source of truth."
+    }
+  ]
+}

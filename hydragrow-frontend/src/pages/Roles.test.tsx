@@ -56,10 +56,12 @@ describe('Roles Page', () => {
 
     // Check permission matrix rendered
     expect(screen.getByTestId('permission-matrix')).toBeInTheDocument();
+    expect(screen.getByText(/Ma trận phân quyền \(5 Năng lực × 3 Vai trò\)/)).toBeInTheDocument();
     expect(screen.getByText(/Giám sát & Số liệu/i)).toBeInTheDocument();
     expect(screen.getByText(/Điều khiển & Vận hành/i)).toBeInTheDocument();
     expect(screen.getByText(/Cấu hình nông học & Kịch bản/i)).toBeInTheDocument();
-    expect(screen.getByText(/Quản trị hệ thống & Phân quyền/i)).toBeInTheDocument();
+    expect(screen.getByText(/OTA & Device Network/i)).toBeInTheDocument();
+    expect(screen.getByText(/Permissions & Member Invitation/i)).toBeInTheDocument();
   });
 
   it('thay đổi vai trò thành viên gọi apiPatch với đúng role và scopes', async () => {

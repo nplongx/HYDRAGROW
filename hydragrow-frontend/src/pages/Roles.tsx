@@ -173,14 +173,14 @@ export function Roles() {
   };
 
   return (
-    <div className="farm-page-shell space-y-8 max-w-6xl mx-auto">
+    <div className="app-page space-y-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="farm-title flex items-center gap-2.5">
+          <h1 className="page-header-title flex items-center gap-2.5">
             <Users className="text-primary" size={26} /> Quản lý thành viên &amp; Vai trò
           </h1>
-          <p className="farm-subtitle">
+          <p className="page-header-subtitle">
             Phân quyền tài khoản trong hệ thống trạm thuỷ canh và ma trận năng lực truy cập
           </p>
         </div>

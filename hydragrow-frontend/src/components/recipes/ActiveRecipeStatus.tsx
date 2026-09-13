@@ -51,7 +51,7 @@ export const ActiveRecipeStatus: React.FC = () => {
             </div>
             <div className="farm-muted-panel">
               <span className="ui-form-label">Tỷ lệ Dinh dưỡng A:B</span>
-              <p className="font-bold text-orange-700 text-sm font-mono">
+              <p className="font-bold text-primary-deep text-sm font-mono">
                 {currentStage ? `${currentStage.nutrient_a_ratio} : ${currentStage.nutrient_b_ratio}` : '1.0 : 1.0'}
               </p>
             </div>

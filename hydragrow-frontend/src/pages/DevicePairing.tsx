@@ -64,6 +64,7 @@ export function DevicePairing() {
 
   // Confirmation overlay states
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
+  const [pendingDeviceIdSource, setPendingDeviceIdSource] = useState<'qr' | 'manual'>('manual');
   const [showConfirmOverlay, setShowConfirmOverlay] = useState(false);
 
   // Inline rename state
@@ -113,6 +114,7 @@ export function DevicePairing() {
             const extracted = parseDeviceIdFromQr(decodedText);
             stopScanner();
             setPendingDeviceId(extracted);
+            setPendingDeviceIdSource('qr');
             setShowConfirmOverlay(true);
           },
           () => {
@@ -274,6 +276,16 @@ export function DevicePairing() {
             setPendingDeviceId(null);
             setFormError(null);
           }}
+          onRetryScan={
+            pendingDeviceIdSource === 'qr'
+              ? () => {
+                  setShowConfirmOverlay(false);
+                  setPendingDeviceId(null);
+                  setFormError(null);
+                  startScanner();
+                }
+              : undefined
+          }
         />
       )}
 
@@ -464,6 +476,7 @@ export function DevicePairing() {
               setDeviceIdFieldError(err);
               if (!err) {
                 setPendingDeviceId(newDeviceId.trim());
+                setPendingDeviceIdSource('manual');
                 setShowConfirmOverlay(true);
               }
             }}

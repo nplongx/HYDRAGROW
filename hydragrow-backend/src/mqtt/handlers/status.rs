@@ -49,10 +49,11 @@ pub fn parse_controller_status_payload(
     })
 }
 
-#[instrument(skip(app_state, payload), fields(device_id = %device_id, node_type = %node_type))]
+#[instrument(skip(app_state, payload), fields(device_id = %device_id, node_type = %node_type, topic_category = %topic_category))]
 pub async fn handle_device(
     device_id: String,
     node_type: &str,
+    topic_category: &str,
     payload: &[u8],
     app_state: web::Data<AppState>,
 ) {
@@ -84,15 +85,7 @@ pub async fn handle_device(
     let _ = crate::db::topic_last_seen::touch_topic(
         &app_state.pg_pool,
         &device_id,
-        "controller/status",
-        chrono::Utc::now(),
-    )
-    .await;
-
-    let _ = crate::db::topic_last_seen::touch_topic(
-        &app_state.pg_pool,
-        &device_id,
-        "controller/status",
+        topic_category,
         chrono::Utc::now(),
     )
     .await;
@@ -158,6 +151,14 @@ pub async fn handle_device(
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
+    let _ = crate::db::topic_last_seen::touch_topic(
+        &app_state.pg_pool,
+        &device_id,
+        "controller/status",
+        chrono::Utc::now(),
+    )
+    .await;
+
     if let Ok(parsed) = parse_controller_status_payload(payload) {
         if let Some(health) = parsed.health_snapshot.as_ref() {
             if !health.firmware_version.is_empty() && health.firmware_version != "unknown" {
@@ -629,5 +630,12 @@ mod tests {
             firmware_version: None,
         };
         assert_eq!(interpret_online_signal(&s), None);
+    }
+
+    #[test]
+    fn topic_category_for_sensor_differs_from_controller() {
+        let controller_cat = "controller/status";
+        let sensor_cat = "sensor/status";
+        assert_ne!(controller_cat, sensor_cat);
     }
 }

@@ -50,13 +50,25 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
         }
 
         "/status" => {
-            handlers::status::handle_device(device_id, "Trạm Điều Khiển", &payload_bytes, app_state)
-                .await
+            handlers::status::handle_device(
+                device_id,
+                "Trạm Điều Khiển",
+                "controller/status",
+                &payload_bytes,
+                app_state,
+            )
+            .await
         }
 
         "/sensor/status" => {
-            handlers::status::handle_device(device_id, "Mạch Cảm Biến", &payload_bytes, app_state)
-                .await
+            handlers::status::handle_device(
+                device_id,
+                "Mạch Cảm Biến",
+                "sensor/status",
+                &payload_bytes,
+                app_state,
+            )
+            .await
         }
 
         "/controller/status" => {

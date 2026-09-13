@@ -53,4 +53,21 @@ mod tests {
         assert!(ids.contains(&"device-001"));
         assert!(ids.contains(&"device-002"));
     }
+
+    #[sqlx::test]
+    async fn sensor_and_controller_status_tracked_independently(pool: sqlx::PgPool) {
+        let now = chrono::Utc::now();
+        touch_topic(&pool, "device-001", "controller/status", now)
+            .await
+            .unwrap();
+        touch_topic(&pool, "device-001", "sensor/status", now)
+            .await
+            .unwrap();
+
+        let topics = get_topics_for_device(&pool, "device-001").await.unwrap();
+        assert_eq!(topics.len(), 2);
+        let categories: Vec<&str> = topics.iter().map(|t| t.topic_category.as_str()).collect();
+        assert!(categories.contains(&"controller/status"));
+        assert!(categories.contains(&"sensor/status"));
+    }
 }

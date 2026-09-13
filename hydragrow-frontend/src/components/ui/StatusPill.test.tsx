@@ -12,7 +12,7 @@ describe('StatusPill', () => {
     render(<StatusPill commandStatus="sending" />);
     const pill = screen.getByText('Đang gửi…');
     expect(pill).toBeInTheDocument();
-    expect(pill.className).toContain('bg-[#FFFBEB]');
+    expect(pill.className).toContain('bg-warning-bg');
     expect(pill.className).toContain('text-warn-deep');
     expect(pill.className).toContain('rounded-full');
   });
@@ -23,6 +23,13 @@ describe('StatusPill', () => {
     expect(pill).toBeInTheDocument();
     expect(pill.className).toContain('bg-pill');
     expect(pill.className).toContain('text-status');
+  });
+
+  it('hiển thị "⚠ Lỗi phản hồi" dùng token bg-danger-bg/text-error', () => {
+    render(<StatusPill commandStatus="network_error" />);
+    const pill = screen.getByText('⚠ Lỗi phản hồi');
+    expect(pill.className).toContain('bg-danger-bg');
+    expect(pill.className).toContain('text-error');
   });
 
   it.each(['network_error', 'rate_limited', 'HTTP 500', 'safety_blocked'])(

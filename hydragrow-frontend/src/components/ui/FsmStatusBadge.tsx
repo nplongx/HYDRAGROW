@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { FaultExplanation, getFaultGuide } from './FaultExplanation';
+import { EVENT_CATEGORY_THEME } from '../../lib/logs/eventCategoryTheme';
 
 // File: components/ui/FsmStatusBadge.tsx
 
@@ -31,10 +32,10 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
     const toneClass =
       tone === 'danger' ? 'bg-red-50 border-red-200 text-red-700'
         : tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800'
-: tone === 'success' ? 'bg-pill border-line text-status'
-              : tone === 'info' ? 'bg-sky-50 border-sky-200 text-sky-700'
-                : tone === 'mist' ? 'bg-cyan-50 border-cyan-200 text-cyan-700'
-                  : 'bg-soft border-line text-primary-deep';
+        : tone === 'success' ? 'bg-pill border-line text-status'
+        : tone === 'info' ? 'bg-sky-50 border-sky-200 text-sky-700'
+        : tone === 'mist' ? EVENT_CATEGORY_THEME.device.badge
+        : 'bg-soft border-line text-primary-deep';
 
     const baseClass = `px-2.5 py-0.5 rounded-md text-xs font-medium border ${toneClass}`;
     if (faultCode) {

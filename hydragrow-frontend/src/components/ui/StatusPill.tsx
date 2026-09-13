@@ -1,9 +1,9 @@
 type StatusPillKind = 'sending' | 'accepted' | 'error';
 
 const STYLES: Record<StatusPillKind, string> = {
-  sending: 'bg-[#FFFBEB] text-warn-deep',
+  sending: 'bg-warning-bg text-warn-deep',
   accepted: 'bg-pill text-status',
-  error: 'bg-[#FEE2E2] text-error',
+  error: 'bg-danger-bg text-error',
 };
 
 const LABELS: Record<StatusPillKind, string> = {

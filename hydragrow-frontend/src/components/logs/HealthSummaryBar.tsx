@@ -1,6 +1,7 @@
 // src/components/logs/HealthSummaryBar.tsx
-import { Search, ShieldAlert, FlaskConical, Waves, AlertTriangle } from 'lucide-react';
+import { Search, ShieldAlert, FlaskConical, Waves, AlertTriangle, X } from 'lucide-react';
 import { Switch } from '../ui/Switch';
+import { EVENT_CATEGORY_THEME } from '../../lib/logs/eventCategoryTheme';
 
 export interface SystemHealthSummary {
   window_seconds?: number;
@@ -20,26 +21,27 @@ interface HealthSummaryBarProps {
   onModeChange: (mode: LogViewMode) => void;
   search: string;
   onSearchChange: (value: string) => void;
+  resultCount?: number;
 }
 
-export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearchChange }: HealthSummaryBarProps) => {
+export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearchChange, resultCount }: HealthSummaryBarProps) => {
   return (
     <div className="ui-card space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
         <div className="farm-muted-panel flex items-center gap-2">
-          <FlaskConical size={14} className="text-cyan-700 shrink-0" />
+          <FlaskConical size={14} className={`${EVENT_CATEGORY_THEME.ecDosing.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">{summary?.ec_dosing_count ?? 0} lần châm EC</span>
         </div>
         <div className="farm-muted-panel flex items-center gap-2">
-          <FlaskConical size={14} className="text-purple-700 shrink-0" />
+          <FlaskConical size={14} className={`${EVENT_CATEGORY_THEME.phDosing.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">{summary?.ph_dosing_count ?? 0} lần châm pH</span>
         </div>
         <div className="farm-muted-panel flex items-center gap-2">
-          <Waves size={14} className="text-sky-700 shrink-0" />
+          <Waves size={14} className={`${EVENT_CATEGORY_THEME.water.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">{summary?.water_operation_count ?? 0} thao tác nước</span>
         </div>
         <div className="farm-muted-panel flex items-center gap-2">
-          <AlertTriangle size={14} className="text-amber-700 shrink-0" />
+          <AlertTriangle size={14} className={`${EVENT_CATEGORY_THEME.warning.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">
             {summary?.warning_count ?? 0} cảnh báo · {summary?.critical_count ?? 0} nghiêm trọng
           </span>
@@ -54,10 +56,25 @@ export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearch
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Tìm theo tiêu đề, nội dung, danh mục..."
-            className="ui-input pl-8"
+            className="ui-input pl-8 pr-8"
             aria-label="Tìm kiếm nhật ký"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              aria-label="Xoá tìm kiếm"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-faint hover:text-primary-deep"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {search && resultCount !== undefined && (
+          <span className="text-[11px] font-semibold text-text-muted shrink-0">
+            {resultCount} kết quả
+          </span>
+        )}
         <div className="flex items-center gap-2 shrink-0">
           <ShieldAlert size={14} className="text-primary" />
           <Switch

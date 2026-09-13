@@ -20,10 +20,12 @@ import { apiPost, apiDelete, apiPut, apiGet } from '../lib/apiClient';
 import { useOwnedDevices } from '../hooks/useOwnedDevices';
 import { useDeviceStore } from '../store/useDeviceStore';
 import type { OwnedDevice, StatusPayload } from '../types/models';
+import { Banner } from '../components/ui/Banner';
 import {
   ScanConfirmOverlay,
   deriveConfirmationCode,
 } from '../components/pairing/ScanConfirmOverlay';
+import { validateDeviceId } from '../lib/pairing/deviceIdValidation';
 
 export function parseDeviceIdFromQr(raw: string): string {
   const trimmed = raw.trim();
@@ -51,6 +53,7 @@ export function DevicePairing() {
 
   const [newDeviceId, setNewDeviceId] = useState('');
   const [newLabel, setNewLabel] = useState('');
+  const [deviceIdFieldError, setDeviceIdFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export function DevicePairing() {
 
   // Confirmation overlay states
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
+  const [pendingDeviceIdSource, setPendingDeviceIdSource] = useState<'qr' | 'manual'>('manual');
   const [showConfirmOverlay, setShowConfirmOverlay] = useState(false);
 
   // Inline rename state
@@ -110,6 +114,7 @@ export function DevicePairing() {
             const extracted = parseDeviceIdFromQr(decodedText);
             stopScanner();
             setPendingDeviceId(extracted);
+            setPendingDeviceIdSource('qr');
             setShowConfirmOverlay(true);
           },
           () => {
@@ -171,7 +176,6 @@ export function DevicePairing() {
       if (activeDeviceId === deviceId) setDeviceId(null);
       await refresh();
     } catch (e: any) {
-      setFormError(e.message);
       toast.error(e.message);
     } finally {
       setSubmitting(false);
@@ -185,7 +189,6 @@ export function DevicePairing() {
       setRenamingId(null);
       await refresh();
     } catch (e: any) {
-      setFormError(e.message);
       toast.error(e.message);
     }
   }
@@ -220,7 +223,7 @@ export function DevicePairing() {
             <button
               type="button"
               onClick={stopScanner}
-              className="ui-btn-md border border-rose-300 text-rose-600 bg-rose-50 hover:bg-rose-100 flex items-center gap-2"
+              className="ui-btn-md border border-error/40 text-error bg-danger-bg hover:bg-danger-bg/70 flex items-center gap-2"
             >
               <StopCircle size={18} /> Dừng quét camera
             </button>
@@ -228,10 +231,10 @@ export function DevicePairing() {
         </div>
       </div>
 
-      {(error || formError) && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-medium">
-          {error || formError}
-        </div>
+      {error && (
+        <Banner tone="danger" title="Không thể tải danh sách thiết bị">
+          {error}
+        </Banner>
       )}
 
       {/* CAMERA QR SCANNER VIEWPORT */}
@@ -266,11 +269,23 @@ export function DevicePairing() {
           deviceId={pendingDeviceId}
           initialLabel={newLabel}
           isSubmitting={submitting}
+          errorMessage={formError}
           onConfirm={(devId, label) => executeClaim(devId, label || null)}
           onCancel={() => {
             setShowConfirmOverlay(false);
             setPendingDeviceId(null);
+            setFormError(null);
           }}
+          onRetryScan={
+            pendingDeviceIdSource === 'qr'
+              ? () => {
+                  setShowConfirmOverlay(false);
+                  setPendingDeviceId(null);
+                  setFormError(null);
+                  startScanner();
+                }
+              : undefined
+          }
         />
       )}
 
@@ -393,7 +408,7 @@ export function DevicePairing() {
                   <button
                     onClick={() => unclaimDevice(d.device_id)}
                     disabled={submitting}
-                    className="p-2 text-text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                    className="p-2 text-text-muted hover:text-error hover:bg-danger-bg rounded-xl transition-colors"
                     title="Huỷ liên kết trạm"
                   >
                     <Trash2 size={16} />
@@ -418,16 +433,27 @@ export function DevicePairing() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-primary-deep mb-1">
+            <label htmlFor="manual-device-id" className="block text-xs font-semibold text-primary-deep mb-1">
               Device ID *
             </label>
             <input
+              id="manual-device-id"
               type="text"
               placeholder="Ví dụ: hydra_station_01"
               value={newDeviceId}
               onChange={(e) => setNewDeviceId(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-line bg-white focus:outline-none focus:border-primary font-mono text-xs"
+              onBlur={() => setDeviceIdFieldError(newDeviceId ? validateDeviceId(newDeviceId) : null)}
+              aria-invalid={Boolean(deviceIdFieldError)}
+              aria-describedby={deviceIdFieldError ? 'manual-device-id-error' : undefined}
+              className={`w-full px-3 py-2 text-sm rounded-xl border bg-white focus:outline-none font-mono text-xs ${
+                deviceIdFieldError ? 'border-error focus:border-error' : 'border-line focus:border-primary'
+              }`}
             />
+            {deviceIdFieldError && (
+              <p id="manual-device-id-error" className="mt-1 text-[11px] text-error font-medium">
+                {deviceIdFieldError}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-primary-deep mb-1">
@@ -446,8 +472,11 @@ export function DevicePairing() {
         <div className="flex justify-end pt-1">
           <button
             onClick={() => {
-              if (newDeviceId.trim()) {
+              const err = validateDeviceId(newDeviceId);
+              setDeviceIdFieldError(err);
+              if (!err) {
                 setPendingDeviceId(newDeviceId.trim());
+                setPendingDeviceIdSource('manual');
                 setShowConfirmOverlay(true);
               }
             }}

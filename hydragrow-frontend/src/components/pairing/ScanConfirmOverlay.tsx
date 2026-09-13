@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Check, X, Tag } from 'lucide-react';
+import { Banner } from '../ui/Banner';
 
 export interface ScanConfirmOverlayProps {
   deviceId: string;
   initialLabel?: string;
+  errorMessage?: string | null;
   onConfirm: (deviceId: string, label: string) => void | Promise<void>;
   onCancel: () => void;
+  /** Khi có: nút "Mã không khớp" đổi thành "Quét lại" và gọi hàm này thay vì chỉ đóng overlay. */
+  onRetryScan?: () => void;
   isSubmitting?: boolean;
 }
 
@@ -26,8 +30,10 @@ export function deriveConfirmationCode(deviceId: string): string {
 export const ScanConfirmOverlay: React.FC<ScanConfirmOverlayProps> = ({
   deviceId,
   initialLabel = '',
+  errorMessage = null,
   onConfirm,
   onCancel,
+  onRetryScan,
   isSubmitting = false,
 }) => {
   const [label, setLabel] = useState(initialLabel);
@@ -94,15 +100,21 @@ export const ScanConfirmOverlay: React.FC<ScanConfirmOverlayProps> = ({
           />
         </div>
 
+        {errorMessage && (
+          <Banner tone="danger" title="Không thể ghép nối">
+            {errorMessage}
+          </Banner>
+        )}
+
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3 pt-2">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={onRetryScan ?? onCancel}
             disabled={isSubmitting}
-            className="ui-btn-md border border-line text-rose-600 bg-white hover:bg-rose-50 flex items-center justify-center gap-1.5"
+            className="ui-btn-md border border-line text-error bg-white hover:bg-danger-bg flex items-center justify-center gap-1.5"
           >
-            <X size={16} /> Mã không khớp
+            <X size={16} /> {onRetryScan ? 'Quét lại' : 'Mã không khớp'}
           </button>
           <button
             type="button"

@@ -106,8 +106,8 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
         <div className="space-y-3">
           <h2 className="farm-section-title">Châm dinh dưỡng và pH</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm phân A" icon={FlaskConical} currentStatus={Boolean(pumps.pump_a)} allowPwm={true} colorTheme="orange" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm phân B" icon={FlaskConical} currentStatus={Boolean(pumps.pump_b)} allowPwm={true} colorTheme="orange" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_A" title="Bơm phân A" icon={FlaskConical} currentStatus={Boolean(pumps.pump_a)} allowPwm={true} colorTheme="nutrient" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="PUMP_B" title="Bơm phân B" icon={FlaskConical} currentStatus={Boolean(pumps.pump_b)} allowPwm={true} colorTheme="nutrient" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
             <AdvancedDeviceControl
               deviceId={deviceId}
               pumpId="PH_UP"
@@ -115,7 +115,7 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
               icon={Activity}
               currentStatus={Boolean(pumps.ph_up)}
               allowPwm={true}
-              colorTheme="purple"
+              colorTheme="phUp"
               canSendCommands={canSendCommands}
               isEmergency={isEmergency}
               isAutoMode={isAutoMode}
@@ -129,7 +129,7 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
               icon={Activity}
               currentStatus={Boolean(pumps.ph_down)}
               allowPwm={true}
-              colorTheme="fuchsia"
+              colorTheme="phDown"
               canSendCommands={canSendCommands}
               isEmergency={isEmergency}
               isAutoMode={isAutoMode}
@@ -143,8 +143,8 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
         <div className="space-y-3">
           <h2 className="farm-section-title">Cấp & Xả nước bồn</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Van cấp nước" icon={Droplets} currentStatus={Boolean(pumps.water_pump_in)} allowPwm={false} colorTheme="water" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Bơm xả thoát" icon={Droplets} currentStatus={Boolean(pumps.water_pump_out)} allowPwm={false} colorTheme="sky" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_IN" title="Van cấp nước" icon={Droplets} currentStatus={Boolean(pumps.water_pump_in)} allowPwm={false} colorTheme="aqua" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="WATER_PUMP_OUT" title="Bơm xả thoát" icon={Droplets} currentStatus={Boolean(pumps.water_pump_out)} allowPwm={false} colorTheme="aqua" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
           </div>
         </div>
 
@@ -152,9 +152,9 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
         <div className="space-y-3">
           <h2 className="farm-section-title">Phun sương và Tuần hoàn</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="OSAKA" title="Bơm tăng áp" icon={Power} currentStatus={Boolean(pumps.osaka_pump)} allowPwm={true} colorTheme="water" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="MIST" title="Van phun sương" icon={Wind} currentStatus={Boolean(pumps.mist_valve)} allowPwm={false} colorTheme="sky" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
-            <AdvancedDeviceControl deviceId={deviceId} pumpId="MIX" title="Van trộn" icon={Wind} currentStatus={Boolean(pumps.mix_valve)} allowPwm={false} colorTheme="sky" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="OSAKA" title="Bơm tăng áp" icon={Power} currentStatus={Boolean(pumps.osaka_pump)} allowPwm={true} colorTheme="aqua" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="MIST" title="Van phun sương" icon={Wind} currentStatus={Boolean(pumps.mist_valve)} allowPwm={false} colorTheme="aqua" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
+            <AdvancedDeviceControl deviceId={deviceId} pumpId="MIX" title="Van trộn" icon={Wind} currentStatus={Boolean(pumps.mix_valve)} allowPwm={false} colorTheme="aqua" canSendCommands={canSendCommands} isEmergency={isEmergency} isAutoMode={isAutoMode} />
           </div>
         </div>
       </div>

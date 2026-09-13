@@ -100,9 +100,7 @@ className="ui-switch">`, where `ui-switch` was never defined in `App.css`):
 />
 ```
 
-Other call sites: `src/components/ui/ControlCard.tsx:71`
-(`<Switch isOn={isOn} disabled={isProcessing || !isOnline} />`),
-`src/pages/settings/ThresholdsSection.tsx:248-301` (sensor/auto-refill
+Other call sites: `src/pages/settings/ThresholdsSection.tsx:248-301` (sensor/auto-refill
 toggles via `isOn` + `onClick`), `src/pages/settings/GeneralSection.tsx:140`
 with `colorClass="bg-amber-600"`.
 
@@ -201,3 +199,120 @@ touch-target assertion plus a source scan asserting no other
 uniqueness). Note for tests: the component takes `deviceId` + `variant` —
 there is no `onConfirm` prop; render as
 `<EmergencyStopButton deviceId={null} variant="floating" />`.
+
+---
+
+## 5. `pumpVisualTheme` + `PumpControlStatePill` — định danh & trạng thái bơm dosing
+
+**Files:** `hydragrow-frontend/src/lib/dosing/pumpVisualTheme.ts`,
+`hydragrow-frontend/src/lib/dosing/pumpControlStateMachine.ts`,
+`hydragrow-frontend/src/components/ui/PumpControlStatePill.tsx`.
+
+`pumpVisualTheme.ts` là nguồn sự thật DUY NHẤT cho màu định danh bơm/van
+(`pumpThemeFor(pumpId)` → `'nutrient' | 'phUp' | 'phDown' | 'aqua'`). Trước
+khi có module này, `AdvancedDeviceControl.tsx` và `DosingReportCard.tsx` tự
+vẽ 2 bảng màu khác nhau cho cùng khái niệm "bơm pH Up" — một dùng
+`fuchsia`, một dùng `purple` — và `ControlPanel.tsx` từng truyền
+`colorTheme="purple"` không khớp key nào, âm thầm rơi về theme mặc định
+(bug thật, sửa tại `LAYER2-STATEMACHINE-003`, 2026-09-13).
+
+**Don't:** định nghĩa lại một `Record<string, {activeIcon, glow, ...}>`
+cục bộ trong component mới cho bơm/van. **Dùng `PUMP_VISUAL_THEME[pumpThemeFor(pumpId)]`
+thay vào đó** — kể cả khi component đó không nằm trong
+`src/components/control/` (ví dụ: chart legend, badge lịch sử châm phân).
+
+`pumpControlStateMachine.ts`'s `derivePumpControlState()` tính trạng thái
+3 chế độ (`idle` / `running` / `locked`, kèm `reason` khi `locked`) từ 4
+cờ nguyên thuỷ (`currentStatus`, `isAutoMode`, `isEmergency`,
+`lockedByPumpId`) — dùng hàm này thay vì tự viết lại biểu thức boolean
+`isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId)`
+ở nơi khác. `PumpControlStatePill` hiển thị kết quả đó theo đúng khuôn
+mẫu chấm tròn + nhãn + token đã dùng ở `DeviceStatePill` (mục 1).
+
+---
+
+## 6. `DosingHourlyChart` / `Sparkline` — data-visualization dùng chung
+
+**Files:** `hydragrow-frontend/src/components/dosing/DosingHourlyChart.tsx`,
+`hydragrow-frontend/src/components/ui/Sparkline.tsx`.
+
+`DosingHourlyChart` vẽ cột nhóm 24 giờ × 4 bơm, màu lấy từ
+`pumpVisualTheme.ts` (mục 5), luôn kèm bảng `sr-only` làm text alternative
+và `aria-label` theo từng cột giờ. `Sparkline` là đường xu hướng SVG tối
+giản cho 1 chuỗi số — dùng cho chỉ số không có endpoint lịch sử ở backend
+(xem `useHealthHistory.ts`: ring-buffer trong bộ nhớ phiên, không phải
+lịch sử vĩnh viễn).
+
+**Don't:** tự vẽ lại 1 dãy `<div style={{height}}>` mới cho biểu đồ cột —
+đó chính là cách `DosingTotalCard.tsx` từng làm trước khi có
+`DosingHourlyChart` (không nhãn trục, không chú giải, không text
+alternative). **Dùng `DosingHourlyChart` cho dữ liệu nhiều-chuỗi-theo-giờ,
+`Sparkline` cho 1 chuỗi xu hướng đơn giản.**
+
+---
+
+## 7. `pumpControlStateMachine` — trạng thái điều khiển thiết bị 3 chế độ
+
+**File:** `hydragrow-frontend/src/lib/dosing/pumpControlStateMachine.ts`
+
+`derivePumpControlState({currentStatus, isAutoMode, isEmergency,
+lockedByPumpId})` → `{state: 'idle'|'running'|'locked', reason:
+'auto_mode'|'emergency'|'interlock'|null}`. `running` luôn thắng mọi lý do
+khoá (bơm đang thực sự chạy thì không có ý nghĩa hiển thị "đã khoá" cho
+lệnh BẬT tiếp theo). Hiển thị qua `PumpControlStatePill` (mục 5); lý do
+khoá `interlock` còn được hiển thị đầy đủ qua `Banner` (xem
+`AdvancedDeviceControl.tsx`).
+
+**Don't:** viết lại biểu thức `isAutoMode || (isEmergency && !currentStatus)
+|| Boolean(lockedByPumpId)` ở component khác. **Import
+`derivePumpControlState` thay vào đó** — logic ưu tiên giữa 3 lý do khoá
+(`auto_mode > emergency > interlock`) chỉ nên tồn tại ở một nơi.
+
+---
+
+## 8. `SeasonStageChecklist` + `SeasonCompletionSummary` — động lực mùa vụ (Zeigarnik & Peak-End)
+
+**Files:** `hydragrow-frontend/src/components/seasons/SeasonStageChecklist.tsx`,
+`hydragrow-frontend/src/components/seasons/SeasonCompletionSummary.tsx`,
+`hydragrow-frontend/src/lib/seasons/seasonProgress.ts`.
+
+`SeasonStageChecklist` (Zeigarnik) trực quan hoá các giai đoạn mùa vụ (đã xong,
+hiện tại, sắp tới) cùng số ngày còn lại (mở vòng lặp tâm lý giúp người dùng chủ động theo dõi).
+`SeasonCompletionSummary` (Peak-End) là dialog chúc mừng và tổng kết các chỉ số khi kết thúc
+mùa vụ (lưu lại ấn tượng tích cực ở thời điểm hoàn thành hành trình).
+
+**Don't:** kết thúc mùa vụ đột ngột bằng màn hình tạo mùa mới trống trơn hoặc chỉ hiển thị thanh tiến độ
+phần trăm tĩnh. **Dùng `SeasonStageChecklist` để duy trì sự chú ý trong suốt mùa vụ, và
+`SeasonCompletionSummary` để tạo điểm nhấn hoàn thành có ý nghĩa.**
+
+---
+
+## 9. `validateDeviceId` — xác thực mã thiết bị ghép nối (form-design)
+
+**Files:** `hydragrow-frontend/src/lib/pairing/deviceIdValidation.ts`,
+`hydragrow-frontend/src/pages/DevicePairing.tsx`.
+
+Hàm xác thực thuần `validateDeviceId(raw)` kiểm tra mã thiết bị theo quy tắc:
+không rỗng, chỉ gồm ký tự chữ, số, dấu gạch dưới `_`, dấu gạch ngang `-`, và độ dài 3-64 ký tự.
+Được gọi `onBlur` để kích hoạt validation nội tuyến (inline error) kèm thuộc tính `aria-invalid` và `aria-describedby`,
+đồng thời chặn submit khi mã không hợp lệ.
+
+**Don't:** chỉ kiểm tra mã thiết bị khi bấm nút "Ghép nối" hoặc để backend trả lỗi về mới báo người dùng.
+**Dùng `validateDeviceId` khi blur và trước khi submit** để người dùng phát hiện lỗi ngay tại trường nhập.
+
+---
+
+## 10. `EVENT_CATEGORY_THEME` & `splitByMatch` — tìm kiếm và phân loại nhật ký (search-ux)
+
+**Files:** `hydragrow-frontend/src/lib/logs/eventCategoryTheme.ts`,
+`hydragrow-frontend/src/lib/logs/highlightMatch.ts`,
+`hydragrow-frontend/src/components/logs/HealthSummaryBar.tsx`,
+`hydragrow-frontend/src/components/logs/EventLogCard.tsx`.
+
+`EVENT_CATEGORY_THEME` chuẩn hoá bảng màu tokenized cho từng nhóm sự kiện hệ thống (`ecDosing`, `phDosing`, `water`, `warning`, `device`),
+thay thế các mã màu Tailwind hardcode (`text-indigo-*`, `text-purple-*`, `text-amber-*`).
+`splitByMatch(text, query)` phân đoạn chuỗi văn bản thành mảng các đoạn khớp / không khớp để hiển thị highlight từ khoá tìm kiếm an toàn (tránh XSS, không dùng `dangerouslySetInnerHTML`).
+
+**Don't:** dùng `dangerouslySetInnerHTML` với thẻ `<mark>` hoặc hardcode màu riêng lẻ trong từng card nhật ký.
+**Dùng `splitByMatch` cho highlight tìm kiếm và `EVENT_CATEGORY_THEME` cho nhãn danh mục sự kiện.**
+

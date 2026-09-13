@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lock, ChevronDown, ShieldAlert, Timer } from 'lucide-react';
+import { ChevronDown, ShieldAlert, Timer } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useDeviceStore } from '../../store/useDeviceStore';
@@ -8,7 +8,10 @@ import { Switch } from '../ui/Switch';
 import { StatusPill } from '../ui/StatusPill';
 import { Slider } from '../ui/Slider';
 
-// Hệ thống quy đổi PWM(%) -> ml/phút, tạm thời tuyến tính cho hiển thị nhanh trên card.
+import { Banner } from '../ui/Banner';
+import { PumpControlStatePill } from '../ui/PumpControlStatePill';
+import { derivePumpControlState } from '../../lib/dosing/pumpControlStateMachine';
+import { PUMP_VISUAL_THEME, type PumpThemeKey } from '../../lib/dosing/pumpVisualTheme';
 // TODO(sau khi có dữ liệu hiệu chuẩn DosingCalibration thật): thay bằng giá trị đo thực tế theo từng bơm.
 const PWM_TO_ML_PER_MIN: Record<string, number> = {
   PUMP_A: 0.12,
@@ -28,7 +31,7 @@ interface AdvancedDeviceControlProps {
   canSendCommands: boolean;
   isEmergency: boolean;
   isAutoMode: boolean;
-  colorTheme: 'orange' | 'fuchsia' | 'water' | 'sky' | string;
+  colorTheme: PumpThemeKey;
   lockedByPumpId?: string;
   lockedByPumpLabel?: string;
 }
@@ -58,15 +61,15 @@ export const AdvancedDeviceControl = ({
   const [isToggling, setIsToggling] = useState(false);
   const pendingTargetRef = useRef<boolean | null>(null);
 
-  const isLocked = isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId);
+  const pumpControlState = derivePumpControlState({
+    currentStatus,
+    isAutoMode,
+    isEmergency,
+    lockedByPumpId,
+  });
+  const isLocked = pumpControlState.state === 'locked';
 
-  const themeClasses: Record<string, { activeIcon: string; glow: string; border: string }> = {
-    orange: { activeIcon: 'bg-orange-600 text-white', glow: 'border-orange-200 bg-orange-50', border: 'border-orange-300' },
-    fuchsia: { activeIcon: 'bg-fuchsia-600 text-white', glow: 'border-fuchsia-200 bg-fuchsia-50', border: 'border-fuchsia-300' },
-    water: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
-    sky: { activeIcon: 'bg-sky-600 text-white', glow: 'border-sky-200 bg-sky-50', border: 'border-sky-300' },
-  };
-  const activeTheme = themeClasses[colorTheme] || themeClasses.water;
+  const activeTheme = PUMP_VISUAL_THEME[colorTheme];
 
   const disabledReason = !canSendCommands
     ? 'Chưa kết nối máy chủ'
@@ -199,21 +202,19 @@ export const AdvancedDeviceControl = ({
           </div>
           <div className="flex items-center gap-2">
             <StatusPill commandStatus={commandStatus[pumpId]} />
-            {isLocked && !currentStatus && <Lock size={12} className="text-primary/60 mr-0.5" />}
+            <PumpControlStatePill state={pumpControlState.state} reason={pumpControlState.reason} />
             <Switch
               isOn={currentStatus}
               disabled={!canSendCommands || isToggling || isProcessing || isLocked}
               onClick={handleToggle}
-              colorClass={currentStatus ? (pumpId.startsWith('PH') ? 'bg-fuchsia-600' : 'bg-primary') : undefined}
             />
           </div>
         </div>
 
-        {lockedByPumpId && (
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-text-muted bg-soft border border-line rounded-lg px-2.5 py-1.5">
-            <Lock size={11} className="shrink-0" />
-            <span>Đã khoá vì {lockedByPumpLabel || 'thiết bị xung khắc'} đang chạy — tránh trung hoà lẫn nhau</span>
-          </div>
+        {pumpControlState.state === 'locked' && pumpControlState.reason === 'interlock' && (
+          <Banner tone="warning" title={`Đã khoá vì ${lockedByPumpLabel || 'thiết bị xung khắc'} đang chạy — tránh trung hoà lẫn nhau`}>
+            Sẽ tự mở khoá khi {lockedByPumpLabel || 'thiết bị xung khắc'} dừng — không cần thao tác gì thêm.
+          </Banner>
         )}
 
         {allowPwm && currentStatus && (

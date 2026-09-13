@@ -1,0 +1,48 @@
+{
+  "requirement_id": "LAYER2-DESIGN-UX-ROLLOUT-001",
+  "objective": "Execute Layer 2 Design & UX Rollout across 6 tracks (Task 0 Baseline, Track A State Machine, Track B Data Viz, Track C Form UX, Track D Search UX, Track E Zeigarnik/Peak-End, Track F Integration).",
+  "acceptance": [
+    {
+      "id": "AC-1",
+      "criterion": "Task 0 baseline debt allowlisted in colorAllowlist.json for SensorBentoCard.tsx, ConfigBackup.tsx, RecipeBuilder.tsx, with rationale in GOVERNANCE.md and PR-QA-CHECKLIST.md",
+      "verification": "unit test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Track A dosing pump state machine, 3-state pill, shared palette, lock banner refactor, and ControlCard cleanup verified",
+      "verification": "unit test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Track B hourly dosing aggregation, DosingHourlyChart SVG chart, DosingReportCard pump themes, and Sparkline component verified",
+      "verification": "unit test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Track C device ID on-blur validation, contextual error placement, ScanConfirmOverlay tokenization, and one-tap rescan recovery verified",
+      "verification": "unit test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Track D search clear button, result count, zero-results empty state, match term highlighting, and EVENT_CATEGORY_THEME palette verified",
+      "verification": "unit test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Track E remainingDays/stageChecklist helpers, SeasonStageChecklist, SeasonCompletionSummary celebration, and recipe tokenization verified",
+      "verification": "unit test",
+      "evidence_required": true
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Track F PATTERN-LIBRARY.md, DESIGN.md, CHUAN-GIAO-DIEN-FRONTEND.md synchronized, 0 off-brand colors across 18 scoped files, and full vitest suite 101/101 passing",
+      "verification": "unit test",
+      "evidence_required": true
+    }
+  ]
+}

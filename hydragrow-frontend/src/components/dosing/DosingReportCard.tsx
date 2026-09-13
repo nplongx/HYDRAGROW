@@ -1,5 +1,6 @@
 // src/components/dosing/DosingReportCard.tsx
 import { FlaskConical, Waves } from 'lucide-react';
+import { PUMP_VISUAL_THEME } from '../../lib/dosing/pumpVisualTheme';
 
 export interface DosingReportRecord {
   id: number;
@@ -41,10 +42,12 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
         <div
           className={`w-8 h-8 rounded-full border-4 border-white flex items-center justify-center shadow-md ${
             hasNutrient
-              ? 'bg-orange-500 text-white'
-              : hasPhUp || hasPhDown
-              ? 'bg-fuchsia-600 text-white'
-              : 'bg-sky-600 text-white'
+              ? PUMP_VISUAL_THEME.nutrient.activeIcon
+              : hasPhUp
+              ? PUMP_VISUAL_THEME.phUp.activeIcon
+              : hasPhDown
+              ? PUMP_VISUAL_THEME.phDown.activeIcon
+              : PUMP_VISUAL_THEME.aqua.activeIcon
           }`}
         >
           <FlaskConical size={14} strokeWidth={2.5} />
@@ -60,27 +63,27 @@ export const DosingReportCard = ({ record, index }: { record: DosingReportRecord
             </h4>
             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-semibold">
               {record.pump_a_ml > 0 && (
-                <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+                <span className={`px-2 py-0.5 rounded border ${PUMP_VISUAL_THEME.nutrient.badge}`}>
                   A: {record.pump_a_ml.toFixed(1)}ml
                 </span>
               )}
               {record.pump_b_ml > 0 && (
-                <span className="text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+                <span className={`px-2 py-0.5 rounded border ${PUMP_VISUAL_THEME.nutrient.badge}`}>
                   B: {record.pump_b_ml.toFixed(1)}ml
                 </span>
               )}
               {record.ph_up_ml > 0 && (
-                <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                <span className={`px-2 py-0.5 rounded border ${PUMP_VISUAL_THEME.phUp.badge}`}>
                   pH Up: {record.ph_up_ml.toFixed(1)}ml
                 </span>
               )}
               {record.ph_down_ml > 0 && (
-                <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                <span className={`px-2 py-0.5 rounded border ${PUMP_VISUAL_THEME.phDown.badge}`}>
                   pH Down: {record.ph_down_ml.toFixed(1)}ml
                 </span>
               )}
               {(dosing.water_in_sec ?? 0) > 0 && (
-                <span className="text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200 flex items-center gap-1">
+                <span className={`px-2 py-0.5 rounded border flex items-center gap-1 ${PUMP_VISUAL_THEME.aqua.badge}`}>
                   <Waves size={10} /> Cấp nước {dosing.water_in_sec?.toFixed(1)}s
                 </span>
               )}

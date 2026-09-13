@@ -7,8 +7,12 @@
     "src/components/automation/FlowDetailDrawer.tsx",
     "src/components/automation/WebhookAndChainPanel.tsx",
     "src/components/automation/AutomationMultiDeviceTemplatePanel.tsx",
-    "src/pages/Roles.tsx"
+    "src/pages/Roles.tsx",
+    "src/components/ui/SensorBentoCard.tsx",
+    "src/pages/ConfigBackup.tsx",
+    "src/pages/RecipeBuilder.tsx"
   ],
   "_comment": "These files use indigo/purple/rose/teal/orange/cyan as a deliberate categorical color code distinguishing automation NODE TYPES (trigger/condition/action/etc.), not a semantic-status duplication of --color-error/--color-warning/--color-success. Do not remove an entry here without confirming with component-spec skill that the categorical scheme has been redesigned to use tokens instead.",
-  "_comment_Roles": "emerald-* in src/pages/Roles.tsx is a genuine drift too (should use --color-success), tracked separately — only the rose/danger duplication was in scope for this task."
+  "_comment_Roles": "emerald-* in src/pages/Roles.tsx is a genuine drift too (should use --color-success), tracked separately — only the rose/danger duplication was in scope for this task.",
+  "_comment_trackedDebt": "SensorBentoCard.tsx (Dashboard sensor tiles), ConfigBackup.tsx (Settings), RecipeBuilder.tsx (Recipes) are pre-existing hardcoded-color drift found while auditing the whole guard for the 2026-09-13 Layer 2 design/UX rollout (docs/superpowers/plans/2026-09-13-layer2-design-ux-agentteams-rollout.md). None of the three pages is one of that plan's six scoped items (dosing controls, dosing history/analytics, device pairing, journal/system log, crop seasons), so they are allowlisted here — not fixed — to keep the guard meaningful for new drift without silently expanding that plan's file perimeter. Tracked follow-up: docs/design-system/PR-QA-CHECKLIST.md item 9."
 }

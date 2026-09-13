@@ -180,7 +180,14 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         />
       )}
 
-      <HealthSummaryBar summary={healthSummary} mode={mode} onModeChange={setMode} search={search} onSearchChange={setSearch} />
+      <HealthSummaryBar
+        summary={healthSummary}
+        mode={mode}
+        onModeChange={setMode}
+        search={search}
+        onSearchChange={setSearch}
+        resultCount={search ? visibleRows.length : undefined}
+      />
 
       {/* Filter & CSV Export Bar */}
       <div className="bg-white/90 border border-line rounded-3xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">
@@ -222,8 +229,31 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
           ) : visibleRows.length === 0 ? (
             <StateView
               icon={Zap}
-              title="Dòng thời gian trống"
-              description="Chưa ghi nhận khoảnh khắc nào khớp bộ lọc/tìm kiếm hiện tại."
+              title={search ? `Không tìm thấy kết quả cho "${search}"` : 'Dòng thời gian trống'}
+              description={
+                search
+                  ? 'Thử từ khoá ngắn hơn, kiểm tra chính tả, hoặc đổi bộ lọc danh mục đang chọn.'
+                  : 'Chưa ghi nhận khoảnh khắc nào khớp bộ lọc hiện tại.'
+              }
+              action={
+                search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="text-xs font-semibold text-primary hover:text-primary-deep"
+                  >
+                    Xoá tìm kiếm
+                  </button>
+                ) : filter !== 'all' ? (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('all')}
+                    className="text-xs font-semibold text-primary hover:text-primary-deep"
+                  >
+                    Xem tất cả danh mục
+                  </button>
+                ) : undefined
+              }
             />
           ) : (
             <div className="relative pl-3">
@@ -240,7 +270,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                     {group.rows.map((row, idx) => {
                       const globalIdx = groupIdx * 1000 + idx;
                       if (row.type === 'event') {
-                        return <EventLogCard key={row.event.id} ev={row.event} idx={globalIdx} onOpenDetail={setSelectedEvent} onAcknowledge={handleAcknowledge} />;
+                        return <EventLogCard key={row.event.id} ev={row.event} idx={globalIdx} search={search} onOpenDetail={setSelectedEvent} onAcknowledge={handleAcknowledge} />;
                       }
                       if (row.type === 'cycle') {
                         return <CycleEventCard key={row.cycleId} cycleId={row.cycleId} events={row.events} onOpenDetail={setSelectedEvent} />;

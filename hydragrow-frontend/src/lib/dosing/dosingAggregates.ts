@@ -6,8 +6,8 @@ export interface DosingHistoryRangeRecord {
     ph_down_ml: number;
 }
 
-type PumpField = 'pump_a_ml' | 'pump_b_ml' | 'ph_up_ml' | 'ph_down_ml';
-const PUMP_FIELDS: PumpField[] = ['pump_a_ml', 'pump_b_ml', 'ph_up_ml', 'ph_down_ml'];
+export type PumpField = 'pump_a_ml' | 'pump_b_ml' | 'ph_up_ml' | 'ph_down_ml';
+export const PUMP_FIELDS: PumpField[] = ['pump_a_ml', 'pump_b_ml', 'ph_up_ml', 'ph_down_ml'];
 
 const recordTotal = (r: DosingHistoryRangeRecord): number =>
     r.pump_a_ml + r.pump_b_ml + r.ph_up_ml + r.ph_down_ml;
@@ -27,6 +27,24 @@ export const hourlyBuckets = (records: DosingHistoryRangeRecord[]): number[] => 
         buckets[hour] += recordTotal(r);
     }
     return buckets;
+};
+
+export const hourlyBucketsByPump = (
+    records: DosingHistoryRangeRecord[],
+): Record<PumpField, number[]> => {
+    const result: Record<PumpField, number[]> = {
+        pump_a_ml: new Array(24).fill(0),
+        pump_b_ml: new Array(24).fill(0),
+        ph_up_ml: new Array(24).fill(0),
+        ph_down_ml: new Array(24).fill(0),
+    };
+    for (const r of records) {
+        const hour = new Date(r.created_at).getHours();
+        for (const field of PUMP_FIELDS) {
+            result[field][hour] += r[field];
+        }
+    }
+    return result;
 };
 
 export const sevenDayAverage = (

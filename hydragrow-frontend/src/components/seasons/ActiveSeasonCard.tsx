@@ -7,13 +7,15 @@ import { ActiveRecipeStatus } from '../recipes/ActiveRecipeStatus';
 import { Banner } from '../ui/Banner';
 import { Button } from '../ui/Button';
 import { useActiveRecipeStatus } from '../../hooks/useActiveRecipeStatus';
-import { totalPlannedDays, elapsedDays, delayDays } from '../../lib/seasons/seasonProgress';
+import { totalPlannedDays, elapsedDays, delayDays, remainingDays, stageChecklist } from '../../lib/seasons/seasonProgress';
+import { SeasonStageChecklist } from './SeasonStageChecklist';
 
 interface ActiveSeasonCardProps {
   activeSeason: CropSeason;
   isLoading: boolean;
   onEndSeason: () => Promise<any>;
   onUpdateSeason?: (name: string, plantType: string, description: string) => Promise<any>;
+  onEnded?: (season: CropSeason, elapsedDaysGrown: number) => void;
 }
 
 export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
@@ -21,6 +23,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   isLoading,
   onEndSeason,
   onUpdateSeason,
+  onEnded,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(activeSeason.name || '');
@@ -33,6 +36,8 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   const delay = activeRecipe
     ? delayDays(activeRecipe.stages, activeRecipe.current_stage_index, elapsed)
     : 0;
+  const checklistItems = activeRecipe ? stageChecklist(activeRecipe.stages, activeRecipe.current_stage_index, elapsed) : [];
+  const daysLeft = totalDays !== null ? Math.ceil(remainingDays(totalDays, elapsed)) : 0;
 
   useEffect(() => {
     if (activeSeason && isEditing) {
@@ -56,6 +61,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   const handleEnd = async () => {
     if (window.confirm('Xác nhận kết thúc mùa vụ? Sau khi kết thúc, quy trình nuôi trồng trên trạm sẽ được hoàn tất và chuyển vào lịch sử.')) {
       await onEndSeason();
+      onEnded?.(activeSeason, Math.floor(elapsed));
     }
   };
 
@@ -79,6 +85,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
                   So với "{activeRecipe.recipe_id}" đang áp dụng
                 </Banner>
               )}
+              <SeasonStageChecklist items={checklistItems} remainingDaysCount={daysLeft} />
             </div>
           )}
 

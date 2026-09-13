@@ -107,3 +107,11 @@ Reusable guards live in `hydragrow-frontend/src/lib/design-lint/`
       `ROLE_DEFAULT_SCOPES` (`src/pages/Roles.tsx:21`). No automated guard
       exists yet — every role key in one table must have a consistent entry
       in the other. If you touch either table, paste the diff in the PR.
+
+### 9. **Hardcoded-color tracked debt** — nếu PR của bạn chạm vào
+   `SensorBentoCard.tsx`, `ConfigBackup.tsx`, hoặc `RecipeBuilder.tsx`,
+   đây là lúc dọn luôn drift màu của đúng file đó (xoá entry tương ứng
+   khỏi `colorAllowlist.json` trong cùng PR) — đừng để lại cho người
+   sau. Ba file này được ghi nợ có chủ đích trong
+   `2026-09-13-layer2-design-ux-agentteams-rollout.md`, không phải
+   miễn trừ vĩnh viễn.

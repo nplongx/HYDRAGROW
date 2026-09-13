@@ -44,4 +44,32 @@ describe('HealthSummaryBar', () => {
     fireEvent.click(screen.getByRole('switch'));
     expect(onModeChange).toHaveBeenCalledWith('all_technical');
   });
+
+  it('không hiện nút xoá khi search rỗng', () => {
+    render(<HealthSummaryBar mode="important" onModeChange={vi.fn()} search="" onSearchChange={vi.fn()} />);
+    expect(screen.queryByLabelText('Xoá tìm kiếm')).not.toBeInTheDocument();
+  });
+
+  it('hiện nút xoá + số kết quả khi có search và resultCount', () => {
+    render(
+      <HealthSummaryBar
+        mode="important"
+        onModeChange={vi.fn()}
+        search="bơm"
+        onSearchChange={vi.fn()}
+        resultCount={7}
+      />,
+    );
+    expect(screen.getByLabelText('Xoá tìm kiếm')).toBeInTheDocument();
+    expect(screen.getByText('7 kết quả')).toBeInTheDocument();
+  });
+
+  it('bấm nút xoá gọi onSearchChange("")', () => {
+    const onSearchChange = vi.fn();
+    render(
+      <HealthSummaryBar mode="important" onModeChange={vi.fn()} search="bơm" onSearchChange={onSearchChange} resultCount={0} />,
+    );
+    fireEvent.click(screen.getByLabelText('Xoá tìm kiếm'));
+    expect(onSearchChange).toHaveBeenCalledWith('');
+  });
 });

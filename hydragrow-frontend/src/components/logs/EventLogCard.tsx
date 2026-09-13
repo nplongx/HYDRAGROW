@@ -3,6 +3,8 @@ import {
   AlertCircle, AlertTriangle, FlaskConical, Waves, Settings2, Radio, UserCheck, Power, Wifi, Cpu, CheckCircle, Info, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { MetadataRenderer } from './MetadataRenderers';
+import { splitByMatch } from '../../lib/logs/highlightMatch';
+import { EVENT_CATEGORY_THEME } from '../../lib/logs/eventCategoryTheme';
 
 export interface SystemEvent {
   id: number;
@@ -28,15 +30,15 @@ interface EventStyle {
 const getEventStyle = (event: SystemEvent): EventStyle => {
   const { level, category, title } = event;
   if (level === 'critical' || title.toLowerCase().includes('khẩn') || title.toLowerCase().includes('emergency')) {
-    return { icon: AlertCircle, iconColor: 'text-red-700', borderColor: 'border-red-200', bgColor: 'from-rose-500/5 to-transparent', dot: 'bg-rose-500' };
+    return { icon: AlertCircle, iconColor: 'text-red-700', borderColor: 'border-red-200', bgColor: 'from-primary-deep/5 to-transparent', dot: 'bg-primary-deep' };
   }
   if (level === 'warning') {
-    return { icon: AlertTriangle, iconColor: 'text-amber-800', borderColor: 'border-amber-500/10', bgColor: 'from-amber-500/5 to-transparent', dot: 'bg-amber-500' };
+    return { icon: AlertTriangle, iconColor: EVENT_CATEGORY_THEME.warning.icon, borderColor: 'border-warn-deep/20', bgColor: 'from-warning-bg to-transparent', dot: 'bg-warn-deep' };
   }
   switch (category?.toLowerCase().replace('_', '')) {
-    case 'dosing': return { icon: FlaskConical, iconColor: 'text-cyan-700', borderColor: 'border-cyan-500/10', bgColor: 'from-cyan-500/5 to-transparent', dot: 'bg-cyan-400' };
-    case 'water': return { icon: Waves, iconColor: 'text-sky-700', borderColor: 'border-sky-200', bgColor: 'from-sky-500/5 to-transparent', dot: 'bg-sky-400' };
-    case 'calibration': return { icon: Settings2, iconColor: 'text-purple-700', borderColor: 'border-purple-500/10', bgColor: 'from-purple-500/5 to-transparent', dot: 'bg-purple-400' };
+    case 'dosing': return { icon: FlaskConical, iconColor: EVENT_CATEGORY_THEME.device.icon, borderColor: 'border-line', bgColor: 'from-soft to-transparent', dot: 'bg-primary' };
+    case 'water': return { icon: Waves, iconColor: EVENT_CATEGORY_THEME.water.icon, borderColor: 'border-line', bgColor: 'from-soft to-transparent', dot: 'bg-primary' };
+    case 'calibration': return { icon: Settings2, iconColor: EVENT_CATEGORY_THEME.phDosing.icon, borderColor: 'border-line', bgColor: 'from-soft to-transparent', dot: 'bg-primary' };
     case 'sensor': return { icon: Radio, iconColor: 'text-amber-800', borderColor: 'border-amber-500/10', bgColor: 'from-amber-500/5 to-transparent', dot: 'bg-amber-400' };
     case 'useraction': return { icon: UserCheck, iconColor: 'text-status', borderColor: 'border-line', bgColor: 'from-primary/5 to-transparent', dot: 'bg-status' };
     case 'system':
@@ -57,10 +59,10 @@ const getEventStyle = (event: SystemEvent): EventStyle => {
 
 const FsmBadge = ({ message }: { message: string }) => {
   const stateMap: Record<string, { label: string; color: string }> = {
-    'WaterRefilling': { label: 'Đang cấp nước', color: 'text-sky-700 bg-sky-50 border-sky-200' },
-    'WaterDraining': { label: 'Đang xả nước', color: 'text-sky-700 bg-sky-50 border-sky-200' },
-    'MimoDosing': { label: 'Đang châm MIMO', color: 'text-cyan-700 bg-cyan-50 border-cyan-200' },
-    'ActiveMixing': { label: 'Trộn tuần hoàn', color: 'text-purple-700 bg-purple-50 border-purple-200' },
+    'WaterRefilling': { label: 'Đang cấp nước', color: EVENT_CATEGORY_THEME.water.badge },
+    'WaterDraining': { label: 'Đang xả nước', color: EVENT_CATEGORY_THEME.water.badge },
+    'MimoDosing': { label: 'Đang châm MIMO', color: EVENT_CATEGORY_THEME.device.badge },
+    'ActiveMixing': { label: 'Trộn tuần hoàn', color: EVENT_CATEGORY_THEME.phDosing.badge },
     'Monitoring': { label: 'Giám sát', color: 'text-primary-deep bg-soft border-line' },
     'EmergencyStop': { label: 'Dừng khẩn cấp', color: 'text-red-700 bg-red-50 border-red-200' },
   };
@@ -73,14 +75,30 @@ const FsmBadge = ({ message }: { message: string }) => {
   );
 };
 
+const HighlightedText = ({ text, query }: { text: string; query?: string }) => (
+  <>
+    {splitByMatch(text, query ?? '').map((seg, i) =>
+      seg.matched ? (
+        <mark key={i} className="bg-warning-bg text-warn-deep rounded-sm px-0.5">
+          {seg.text}
+        </mark>
+      ) : (
+        <span key={i}>{seg.text}</span>
+      ),
+    )}
+  </>
+);
+
 export const EventLogCard = ({
   ev,
   idx,
+  search,
   onOpenDetail,
   onAcknowledge,
 }: {
   ev: SystemEvent;
   idx: number;
+  search?: string;
   onOpenDetail?: (ev: SystemEvent) => void;
   onAcknowledge?: (ev: SystemEvent) => void;
 }) => {
@@ -109,7 +127,7 @@ export const EventLogCard = ({
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className={`text-sm font-bold tracking-tight leading-snug ${style.iconColor}`}>
-                {ev.title}
+                <HighlightedText text={ev.title} query={search} />
               </h4>
               {isResolved && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-status/30 bg-pill text-status">

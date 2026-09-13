@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { totalMlToday, hourlyBuckets, sevenDayAverage, detectAnomalies } from './dosingAggregates';
+import { totalMlToday, hourlyBuckets, sevenDayAverage, detectAnomalies, hourlyBucketsByPump } from './dosingAggregates';
 import type { DosingHistoryRangeRecord } from './dosingAggregates';
 
 const record = (hoursAgo: number, overrides: Partial<DosingHistoryRangeRecord> = {}): DosingHistoryRangeRecord => ({
@@ -45,5 +45,25 @@ describe('detectAnomalies', () => {
     it('không báo bất thường khi lượng châm ổn định', () => {
         const normalCycles = Array.from({ length: 14 }, (_, i) => record(1 + i * 12, { pump_a_ml: 5 }));
         expect(detectAnomalies(normalCycles)).toHaveLength(0);
+    });
+});
+
+describe('hourlyBucketsByPump', () => {
+    it('trả về 4 mảng 24 phần tử, tách riêng theo từng field bơm', () => {
+        const records = [
+            { created_at: new Date(new Date().setHours(9, 0, 0, 0)).toISOString(), pump_a_ml: 5, pump_b_ml: 0, ph_up_ml: 0, ph_down_ml: 0 },
+            { created_at: new Date(new Date().setHours(9, 30, 0, 0)).toISOString(), pump_a_ml: 0, pump_b_ml: 0, ph_up_ml: 2, ph_down_ml: 0 },
+        ];
+        const result = hourlyBucketsByPump(records);
+        expect(Object.keys(result).sort()).toEqual(['ph_down_ml', 'ph_up_ml', 'pump_a_ml', 'pump_b_ml'].sort());
+        expect(result.pump_a_ml).toHaveLength(24);
+        expect(result.pump_a_ml[9]).toBe(5);
+        expect(result.ph_up_ml[9]).toBe(2);
+        expect(result.pump_b_ml[9]).toBe(0);
+    });
+
+    it('mảng rỗng → tất cả bucket = 0', () => {
+        const result = hourlyBucketsByPump([]);
+        expect(result.pump_a_ml.every((v) => v === 0)).toBe(true);
     });
 });

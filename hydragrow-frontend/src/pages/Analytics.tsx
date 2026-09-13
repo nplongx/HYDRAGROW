@@ -21,6 +21,8 @@ import { useDeviceStore } from '../store/useDeviceStore';
 import { loadAppSettings } from '../platform/settings';
 import { apiGet, apiPut } from '../lib/apiClient';
 import { useWhoami } from '../hooks/useWhoami';
+import { Sparkline } from '../components/ui/Sparkline';
+import { useHealthHistory } from '../hooks/useHealthHistory';
 
 export interface DeviceHealthMetrics {
   free_heap_bytes: number | null;
@@ -94,6 +96,11 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
     refetchInterval: 15000,
   });
 
+  const { record } = useHealthHistory();
+  const heapHistory = record('heap', health?.free_heap_bytes ?? null);
+  const rssiHistory = record('rssi', health?.wifi_rssi_dbm ?? null);
+  const cpuHistory = record('cpu', health?.backend_process_cpu_percent ?? null);
+
   const handleToggleWeeklyReport = async (enabled: boolean) => {
     setWeeklyReport(enabled);
     setIsUpdatingPref(true);
@@ -132,11 +139,12 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         <div className="ui-card p-4 space-y-1">
           <div className="flex items-center justify-between text-text-muted">
             <span className="text-xs font-medium">RAM Vi điều khiển</span>
-            <Cpu size={16} className="text-purple-600" />
+            <Cpu size={16} className="text-primary" />
           </div>
           <div className="text-xl font-bold text-primary-deep" data-testid="health-free-heap">
             {isHealthLoading ? '...' : formatHeap(health?.free_heap_bytes)}
           </div>
+          <Sparkline values={heapHistory} label="bộ nhớ heap khả dụng" />
           <p className="text-[11px] text-text-muted">Bộ nhớ heap khả dụng ESP32</p>
         </div>
 
@@ -148,6 +156,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
           <div className="text-xl font-bold text-primary-deep" data-testid="health-wifi-rssi">
             {isHealthLoading ? '...' : formatRssi(health?.wifi_rssi_dbm)}
           </div>
+          <Sparkline values={rssiHistory} label="tín hiệu WiFi" />
           <p className="text-[11px] text-text-muted">Cường độ sóng kết nối trạm</p>
         </div>
 
@@ -175,6 +184,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
               ? `${health.backend_process_cpu_percent.toFixed(1)}%`
               : '—'}
           </div>
+          <Sparkline values={cpuHistory} label="tải CPU backend" />
           <p className="text-[11px] text-text-muted">Mức sử dụng CPU tiến trình backend</p>
         </div>
       </div>
@@ -312,7 +322,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
               </span>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 bg-surface-muted rounded-lg border border-line">
-              <Cpu size={16} className="text-purple-700 shrink-0" />
+              <Cpu size={16} className="text-primary shrink-0" />
               <span>
                 <b>ESP32 Telemetry:</b> Free Heap, WiFi RSSI, Uptime &amp; Log Drop Count.
               </span>

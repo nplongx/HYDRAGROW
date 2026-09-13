@@ -64,9 +64,17 @@ export const CAPABILITIES = [
     viewer: false,
   },
   {
-    id: 'admin',
-    title: 'Quản trị hệ thống & Phân quyền (Roles / OTA / WiFi)',
-    description: 'Cập nhật firmware OTA, thiết lập mạng WiFi trạm, mời và đổi vai trò thành viên',
+    id: 'device',
+    title: 'OTA & Mạng thiết bị (OTA & Device Network)',
+    description: 'Cập nhật firmware OTA, thiết lập mạng WiFi trạm',
+    admin: true,
+    operator: true,
+    viewer: false,
+  },
+  {
+    id: 'permissions',
+    title: 'Phân quyền & Mời thành viên (Permissions & Member Invitation)',
+    description: 'Mời và đổi vai trò thành viên',
     admin: true,
     operator: false,
     viewer: false,
@@ -396,10 +404,10 @@ export function Roles() {
         )}
       </div>
 
-      {/* Permission Matrix (4 capabilities × 3 roles) */}
+      {/* Permission Matrix (5 capabilities × 3 roles) */}
       <div className="ui-card space-y-4">
         <div className="border-b border-line pb-3">
-          <h2 className="farm-section-title">Ma trận phân quyền (4 Năng lực × 3 Vai trò)</h2>
+          <h2 className="farm-section-title">Ma trận phân quyền (5 Năng lực × 3 Vai trò)</h2>
           <p className="text-xs text-text-muted mt-0.5">
             Bản ánh xạ quyền hạn chi tiết giữa các vai trò hệ thống trạm HydraGrow
           </p>

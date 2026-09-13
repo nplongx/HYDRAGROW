@@ -7,7 +7,8 @@ import { ActiveRecipeStatus } from '../recipes/ActiveRecipeStatus';
 import { Banner } from '../ui/Banner';
 import { Button } from '../ui/Button';
 import { useActiveRecipeStatus } from '../../hooks/useActiveRecipeStatus';
-import { totalPlannedDays, elapsedDays, delayDays } from '../../lib/seasons/seasonProgress';
+import { totalPlannedDays, elapsedDays, delayDays, remainingDays, stageChecklist } from '../../lib/seasons/seasonProgress';
+import { SeasonStageChecklist } from './SeasonStageChecklist';
 
 interface ActiveSeasonCardProps {
   activeSeason: CropSeason;
@@ -33,6 +34,8 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
   const delay = activeRecipe
     ? delayDays(activeRecipe.stages, activeRecipe.current_stage_index, elapsed)
     : 0;
+  const checklistItems = activeRecipe ? stageChecklist(activeRecipe.stages, activeRecipe.current_stage_index, elapsed) : [];
+  const daysLeft = totalDays !== null ? Math.ceil(remainingDays(totalDays, elapsed)) : 0;
 
   useEffect(() => {
     if (activeSeason && isEditing) {
@@ -79,6 +82,7 @@ export const ActiveSeasonCard: React.FC<ActiveSeasonCardProps> = ({
                   So với "{activeRecipe.recipe_id}" đang áp dụng
                 </Banner>
               )}
+              <SeasonStageChecklist items={checklistItems} remainingDaysCount={daysLeft} />
             </div>
           )}
 

@@ -702,3 +702,191 @@ fn valid_sensors_recover_from_nan_sensor_fault() {
         "Valid finite sensor data must recover system from SensorTimeout fault back to Monitoring"
     );
 }
+
+#[test]
+fn hardware_fault_in_stabilizing_emits_fsm_transition_event() {
+    use hydragrow_controller_core::core::fsm::phase_tick::PhaseTick;
+    use hydragrow_controller_core::core::fsm::phases::stabilizing::StabilizingPhase;
+    use hydragrow_controller_core::core::fsm::types::PendingCalibrationSample;
+    use hydragrow_shared::telemetry::transition::TransitionReason;
+
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Stabilizing;
+    ctx.phase_start_ms = Some(1000);
+    ctx.phase_finish_ms = Some(15_000);
+
+    // Setup pending sample with dosing that triggers fault
+    let sample = PendingCalibrationSample {
+        cycle_id: "sample-1".to_string(),
+        trigger: "manual".to_string(),
+        start_ec: 1.0,
+        start_ph: 6.0,
+        start_water_level: 20.0,
+        start_temp: 25.0,
+        target_ec: 1.5,
+        target_ph: 6.0,
+        dose_a_ml: 10.0,
+        dose_b_ml: 10.0,
+        dose_ph_up_ml: 0.0,
+        dose_ph_down_ml: 0.0,
+        water_in_sec: 0.0,
+        water_out_sec: 0.0,
+        post_mixing_ec: 1.0,
+        post_mixing_ph: 6.0,
+        start_ms: 1000,
+        active_mixing_finish_ms: 2000,
+        stabilizing_start_ms: Some(2000),
+        stabilizing_finish_ms: None,
+        invalid_by_noise: false,
+        invalid_by_water_change: false,
+    };
+    ctx.calibration.start_sample(sample);
+
+    // Set diagnostics streak to 2 so next failure is streak 3 -> Err(fault_code)
+    ctx.diagnostic.ec_pump_streak = 2;
+
+    // Sensors show zero change despite dosing -> diagnose_hardware_fault fails with EcDosingFailed
+    let sensors = SensorData {
+        ec: 1.0, // no delta
+        ph: 6.0,
+        water_level: 20.0,
+        temp: 25.0,
+        ..normal_sensor()
+    };
+
+    let phase = StabilizingPhase;
+    // Tick at 16_000ms (> phase_finish_ms 15_000ms so is_ready = true)
+    let result = phase.tick(16_000, 16_000, &config, &sensors, &mut ctx);
+
+    assert_eq!(
+        result.delta.phase,
+        Some(SystemPhase::Fault(FaultCode::EcDosingFailed))
+    );
+
+    let transition_event = result.events.iter().find_map(|e| match e {
+        OrchestratorEvent::PublishFsmTransition {
+            from_phase,
+            to_phase,
+            reason,
+            phase_duration_ms,
+        } => Some((from_phase, to_phase, reason, phase_duration_ms)),
+        _ => None,
+    });
+
+    assert!(
+        transition_event.is_some(),
+        "Stabilizing hardware fault must emit OrchestratorEvent::PublishFsmTransition"
+    );
+
+    let (from_p, to_p, reason, duration) = transition_event.unwrap();
+    assert_eq!(*from_p, SystemPhase::Stabilizing);
+    assert_eq!(*to_p, SystemPhase::Fault(FaultCode::EcDosingFailed));
+    assert_eq!(
+        *reason,
+        TransitionReason::FaultDetected {
+            fault_code: FaultCode::EcDosingFailed,
+            consecutive_failures: 1,
+        }
+    );
+    assert_eq!(*duration, Some(15_000));
+}
+
+#[test]
+fn safety_lockout_in_monitoring_emits_fsm_transition_event() {
+    let mut config = minimal_config();
+    config.max_drain_cycles_per_hour = 1;
+    config.enable_water_level_sensor = true;
+    config.auto_drain_overflow = true;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Monitoring;
+    ctx.phase_start_ms = Some(1000);
+    ctx.safety.record_drain(0, 1); // drain budget exhausted
+
+    let high_water = SensorData {
+        water_level: 25.0,
+        ..normal_sensor()
+    };
+
+    let events = tick_apply(&mut ctx, &config, &high_water, 10_000, 10_000);
+
+    assert_eq!(ctx.phase, SystemPhase::Fault(FaultCode::TooManyDrains));
+
+    let transition_event = events.iter().find_map(|e| match e {
+        OrchestratorEvent::PublishFsmTransition {
+            from_phase,
+            to_phase,
+            reason,
+            ..
+        } => Some((from_phase, to_phase, reason)),
+        _ => None,
+    });
+
+    assert!(
+        transition_event.is_some(),
+        "Monitoring safety lockout must emit OrchestratorEvent::PublishFsmTransition"
+    );
+
+    let (from_p, to_p, reason) = transition_event.unwrap();
+    assert_eq!(*from_p, SystemPhase::Monitoring);
+    assert_eq!(*to_p, SystemPhase::Fault(FaultCode::TooManyDrains));
+    assert_eq!(
+        *reason,
+        hydragrow_shared::telemetry::transition::TransitionReason::FaultDetected {
+            fault_code: FaultCode::TooManyDrains,
+            consecutive_failures: 1,
+        }
+    );
+}
+
+#[test]
+fn water_draining_timeout_emits_fsm_transition_event() {
+    let mut config = minimal_config();
+    config.max_drain_duration_sec = 5;
+    let mut sensors = normal_sensor();
+    sensors.water_level = 30.0;
+
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::WaterDraining;
+    ctx.phase_start_ms = Some(1000);
+    ctx.water
+        .start_drain_with_duration(1000, 10.0, &sensors, "test", Some(5));
+
+    // Tick at 1000 + 5001ms -> times out
+    let t = 6001u64;
+    let r = hydragrow_controller_core::core::fsm::orchestrator::tick(
+        t, t, &config, &sensors, t, &mut ctx,
+    );
+
+    assert_eq!(
+        r.delta.phase,
+        Some(SystemPhase::Fault(FaultCode::WaterDrainFailed))
+    );
+
+    let transition_event = r.events.iter().find_map(|e| match e {
+        OrchestratorEvent::PublishFsmTransition {
+            from_phase,
+            to_phase,
+            reason,
+            ..
+        } => Some((from_phase, to_phase, reason)),
+        _ => None,
+    });
+
+    assert!(
+        transition_event.is_some(),
+        "Water draining timeout must emit OrchestratorEvent::PublishFsmTransition"
+    );
+
+    let (from_p, to_p, reason) = transition_event.unwrap();
+    assert_eq!(*from_p, SystemPhase::WaterDraining);
+    assert_eq!(*to_p, SystemPhase::Fault(FaultCode::WaterDrainFailed));
+    assert_eq!(
+        *reason,
+        hydragrow_shared::telemetry::transition::TransitionReason::FaultDetected {
+            fault_code: FaultCode::WaterDrainFailed,
+            consecutive_failures: 1,
+        }
+    );
+}

@@ -610,7 +610,9 @@ mod send_system_log_tests {
             "send_system_log must not increment LOG_DROP_COUNT when the send succeeds"
         );
 
-        let received = rx.try_recv().expect("expected a JSON payload on the channel");
+        let received = rx
+            .try_recv()
+            .expect("expected a JSON payload on the channel");
         let parsed: UnifiedSystemLog =
             serde_json::from_str(&received).expect("payload must be valid UnifiedSystemLog JSON");
         assert_eq!(parsed.device_id, "dev-1");

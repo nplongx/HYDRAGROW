@@ -1,5 +1,6 @@
 // src/core/fsm/phases/water_phases.rs
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
+use hydragrow_shared::telemetry::transition::TransitionReason;
 use hydragrow_shared::{ControllerConfig, SensorData};
 
 use crate::core::actors::water_actor::{WaterEvent, WaterSubState};
@@ -53,6 +54,17 @@ impl PhaseTick for WaterRefillingPhase {
         {
             if !success {
                 log::warn!("⚠️ WaterRefilling: timeout sau {}s", duration_sec);
+                result.events.push(OrchestratorEvent::PublishFsmTransition {
+                    from_phase: SystemPhase::WaterRefilling,
+                    to_phase: SystemPhase::Fault(FaultCode::WaterRefillFailed),
+                    reason: TransitionReason::FaultDetected {
+                        fault_code: FaultCode::WaterRefillFailed,
+                        consecutive_failures: 1,
+                    },
+                    phase_duration_ms: Some(
+                        uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                    ),
+                });
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::WaterRefillFailed));
             } else {
                 result.delta.phase = Some(SystemPhase::Monitoring);
@@ -112,6 +124,17 @@ impl PhaseTick for WaterDrainingPhase {
         {
             if !success {
                 log::warn!("⚠️ WaterDraining: timeout sau {}s", duration_sec);
+                result.events.push(OrchestratorEvent::PublishFsmTransition {
+                    from_phase: SystemPhase::WaterDraining,
+                    to_phase: SystemPhase::Fault(FaultCode::WaterDrainFailed),
+                    reason: TransitionReason::FaultDetected {
+                        fault_code: FaultCode::WaterDrainFailed,
+                        consecutive_failures: 1,
+                    },
+                    phase_duration_ms: Some(
+                        uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                    ),
+                });
                 result.delta.phase = Some(SystemPhase::Fault(FaultCode::WaterDrainFailed));
             } else {
                 result.delta.phase = Some(SystemPhase::Monitoring);

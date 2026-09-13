@@ -1,5 +1,6 @@
 // src/fsm/phase_impls/mimo_dosing.rs
 use hydragrow_shared::fsm::SystemPhase;
+use hydragrow_shared::telemetry::transition::TransitionReason;
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::warn;
 
@@ -49,9 +50,12 @@ impl PhaseTick for MimoDosingPhase {
             result.events.push(OrchestratorEvent::PublishFsmTransition {
                 from_phase: SystemPhase::MimoDosing,
                 to_phase: SystemPhase::Cooldown,
-                // TODO: replace with TransitionReason::HardTimeout if shared telemetry adds it.
-                reason: hydragrow_shared::telemetry::transition::TransitionReason::Manual {
-                    description: "MimoDosing hard timeout".to_string(),
+                reason: TransitionReason::HardTimeout {
+                    phase_name: SystemPhase::MimoDosing.as_str().to_string(),
+                    timeout_ms: ctx
+                        .phase_finish_ms
+                        .unwrap_or(uptime)
+                        .saturating_sub(ctx.phase_start_ms.unwrap_or(uptime)),
                 },
                 phase_duration_ms: Some(
                     uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime)),
@@ -206,6 +210,17 @@ impl PhaseTick for MimoDosingPhase {
             }
             DosingEvent::Failed(code) => {
                 shutdown_all_actuators(ctx, &mut result, &mut peri_delta);
+                result.events.push(OrchestratorEvent::PublishFsmTransition {
+                    from_phase: SystemPhase::MimoDosing,
+                    to_phase: SystemPhase::Fault(code),
+                    reason: TransitionReason::FaultDetected {
+                        fault_code: code,
+                        consecutive_failures: 1,
+                    },
+                    phase_duration_ms: Some(
+                        uptime.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime)),
+                    ),
+                });
                 result.delta.phase = Some(SystemPhase::Fault(code));
             }
         }

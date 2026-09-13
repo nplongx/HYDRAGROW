@@ -3,6 +3,7 @@
 use cron::Schedule;
 use hydragrow_shared::fsm::{FaultCode, SystemPhase};
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+use hydragrow_shared::telemetry::transition::TransitionReason;
 use hydragrow_shared::{ControllerConfig, SensorData};
 use log::warn;
 use std::str::FromStr;
@@ -254,6 +255,17 @@ pub fn apply_decision(
                         config.max_dose_per_hour,
                     )
                 {
+                    result.events.push(OrchestratorEvent::PublishFsmTransition {
+                        from_phase: SystemPhase::Monitoring,
+                        to_phase: SystemPhase::Fault(FaultCode::MaxHourlyDoseEc),
+                        reason: TransitionReason::FaultDetected {
+                            fault_code: FaultCode::MaxHourlyDoseEc,
+                            consecutive_failures: 1,
+                        },
+                        phase_duration_ms: Some(
+                            uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                        ),
+                    });
                     result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDoseEc));
                     return result;
                 }
@@ -265,6 +277,17 @@ pub fn apply_decision(
                         config.max_dose_per_hour,
                     )
                 {
+                    result.events.push(OrchestratorEvent::PublishFsmTransition {
+                        from_phase: SystemPhase::Monitoring,
+                        to_phase: SystemPhase::Fault(FaultCode::MaxHourlyDosePh),
+                        reason: TransitionReason::FaultDetected {
+                            fault_code: FaultCode::MaxHourlyDosePh,
+                            consecutive_failures: 1,
+                        },
+                        phase_duration_ms: Some(
+                            uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                        ),
+                    });
                     result.delta.phase = Some(SystemPhase::Fault(FaultCode::MaxHourlyDosePh));
                     return result;
                 }
@@ -275,6 +298,17 @@ pub fn apply_decision(
                         .peek_refill(uptime_sec, config.max_refill_cycles_per_hour as u32)
                 {
                     warn!("  [SAFETY] Vượt quá giới hạn chu kỳ cấp nước / giờ.");
+                    result.events.push(OrchestratorEvent::PublishFsmTransition {
+                        from_phase: SystemPhase::Monitoring,
+                        to_phase: SystemPhase::Fault(FaultCode::TooManyRefills),
+                        reason: TransitionReason::FaultDetected {
+                            fault_code: FaultCode::TooManyRefills,
+                            consecutive_failures: 1,
+                        },
+                        phase_duration_ms: Some(
+                            uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                        ),
+                    });
                     result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyRefills));
                     return result;
                 }
@@ -285,6 +319,17 @@ pub fn apply_decision(
                         .peek_drain(uptime_sec, config.max_drain_cycles_per_hour as u32)
                 {
                     warn!("  [SAFETY] Vượt quá giới hạn chu kỳ xả nước / giờ.");
+                    result.events.push(OrchestratorEvent::PublishFsmTransition {
+                        from_phase: SystemPhase::Monitoring,
+                        to_phase: SystemPhase::Fault(FaultCode::TooManyDrains),
+                        reason: TransitionReason::FaultDetected {
+                            fault_code: FaultCode::TooManyDrains,
+                            consecutive_failures: 1,
+                        },
+                        phase_duration_ms: Some(
+                            uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                        ),
+                    });
                     result.delta.phase = Some(SystemPhase::Fault(FaultCode::TooManyDrains));
                     return result;
                 }

@@ -8,6 +8,7 @@ use hydragrow_shared::telemetry::DosingCycleEvent;
 use hydragrow_shared::telemetry::cycle::{
     CycleOutcome, DosingDoseRecord, DosingPhaseSnapshot, KalmanLearningData,
 };
+use hydragrow_shared::telemetry::transition::TransitionReason;
 use hydragrow_shared::{ControllerConfig, DoseData, DosingReportPayload, PhaseData, SensorData};
 use log::warn;
 
@@ -70,6 +71,17 @@ impl PhaseTick for StabilizingPhase {
                 actual_delta_water,
                 config,
             ) {
+                result.events.push(OrchestratorEvent::PublishFsmTransition {
+                    from_phase: SystemPhase::Stabilizing,
+                    to_phase: SystemPhase::Fault(fault_code),
+                    reason: TransitionReason::FaultDetected {
+                        fault_code,
+                        consecutive_failures: 1,
+                    },
+                    phase_duration_ms: Some(
+                        uptime_ms.saturating_sub(ctx.phase_start_ms.unwrap_or(uptime_ms)),
+                    ),
+                });
                 result.delta.phase = Some(SystemPhase::Fault(fault_code));
                 return result;
             }

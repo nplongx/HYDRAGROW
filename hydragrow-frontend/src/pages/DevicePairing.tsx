@@ -24,6 +24,7 @@ import {
   ScanConfirmOverlay,
   deriveConfirmationCode,
 } from '../components/pairing/ScanConfirmOverlay';
+import { validateDeviceId } from '../lib/pairing/deviceIdValidation';
 
 export function parseDeviceIdFromQr(raw: string): string {
   const trimmed = raw.trim();
@@ -51,6 +52,7 @@ export function DevicePairing() {
 
   const [newDeviceId, setNewDeviceId] = useState('');
   const [newLabel, setNewLabel] = useState('');
+  const [deviceIdFieldError, setDeviceIdFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [qrPayload, setQrPayload] = useState<string | null>(null);
@@ -418,16 +420,27 @@ export function DevicePairing() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-primary-deep mb-1">
+            <label htmlFor="manual-device-id" className="block text-xs font-semibold text-primary-deep mb-1">
               Device ID *
             </label>
             <input
+              id="manual-device-id"
               type="text"
               placeholder="Ví dụ: hydra_station_01"
               value={newDeviceId}
               onChange={(e) => setNewDeviceId(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-line bg-white focus:outline-none focus:border-primary font-mono text-xs"
+              onBlur={() => setDeviceIdFieldError(newDeviceId ? validateDeviceId(newDeviceId) : null)}
+              aria-invalid={Boolean(deviceIdFieldError)}
+              aria-describedby={deviceIdFieldError ? 'manual-device-id-error' : undefined}
+              className={`w-full px-3 py-2 text-sm rounded-xl border bg-white focus:outline-none font-mono text-xs ${
+                deviceIdFieldError ? 'border-error focus:border-error' : 'border-line focus:border-primary'
+              }`}
             />
+            {deviceIdFieldError && (
+              <p id="manual-device-id-error" className="mt-1 text-[11px] text-error font-medium">
+                {deviceIdFieldError}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-primary-deep mb-1">
@@ -446,7 +459,9 @@ export function DevicePairing() {
         <div className="flex justify-end pt-1">
           <button
             onClick={() => {
-              if (newDeviceId.trim()) {
+              const err = validateDeviceId(newDeviceId);
+              setDeviceIdFieldError(err);
+              if (!err) {
                 setPendingDeviceId(newDeviceId.trim());
                 setShowConfirmOverlay(true);
               }

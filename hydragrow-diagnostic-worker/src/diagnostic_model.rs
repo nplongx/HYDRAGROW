@@ -263,6 +263,14 @@ pub fn unexplained_anomaly_fallback(trigger: &SupervisorTrigger) -> Diagnosis {
             "A watchdog liveness breach was open but the diagnosis could not be completed within budget.".to_string(),
             vec!["watchdog_breach".to_string()],
         ),
+        SupervisorTrigger::SensorStaleness => (
+            "A sensor staleness breach was detected but the diagnosis could not be completed within budget.".to_string(),
+            vec!["sensor_staleness".to_string()],
+        ),
+        SupervisorTrigger::DosingAnomaly => (
+            "A dosing anomaly was detected but the diagnosis could not be completed within budget.".to_string(),
+            vec!["dosing_anomaly".to_string()],
+        ),
     };
     Diagnosis {
         reason_codes: vec![SupervisorReasonCode::UnexplainedAnomaly],

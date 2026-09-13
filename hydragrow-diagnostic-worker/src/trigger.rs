@@ -1,13 +1,22 @@
 use serde::{Deserialize, Serialize};
 
 /// Design spec §4.1: an extensible set of trigger sources, not a single
-/// boolean gate. Two variants today; a future trigger type (e.g. a
-/// cross-signal pattern independent of Hestia) can be added as a third
-/// without restructuring evaluate_triggers's signature or callers.
+/// boolean gate.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SupervisorTrigger {
     HestiaState { state: String, reasons: Vec<String> },
     WatchdogBreach,
+    SensorStaleness,
+    DosingAnomaly,
+}
+
+#[allow(dead_code)]
+pub fn evaluate_sensor_triggers(has_stale_sensor: bool) -> Option<SupervisorTrigger> {
+    if has_stale_sensor {
+        Some(SupervisorTrigger::SensorStaleness)
+    } else {
+        None
+    }
 }
 
 /// `hestia` is the raw JSON from `/api/health/hestia` for one device (may be
@@ -46,6 +55,12 @@ pub fn evaluate_triggers(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sensor_staleness_trigger_is_evaluated() {
+        let trigger = evaluate_sensor_triggers(true);
+        assert_eq!(trigger, Some(SupervisorTrigger::SensorStaleness));
+    }
 
     #[test]
     fn warning_state_produces_hestia_trigger() {

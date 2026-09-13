@@ -17,6 +17,8 @@ pub async fn run_diagnosis(
             .cloned()
             .unwrap_or_else(|| "unexplained_anomaly".to_string()),
         SupervisorTrigger::WatchdogBreach => "topic_stale_controller_status".to_string(),
+        SupervisorTrigger::SensorStaleness => "sensor_fault_suspected".to_string(),
+        SupervisorTrigger::DosingAnomaly => "dosing_ineffective".to_string(),
     };
     if backend
         .recent_alert_exists(device_id, &reason_code_for_dedup)

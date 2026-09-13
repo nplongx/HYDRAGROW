@@ -890,3 +890,90 @@ fn water_draining_timeout_emits_fsm_transition_event() {
         }
     );
 }
+
+#[test]
+fn streak_1_and_2_emit_early_warning_system_log() {
+    use hydragrow_controller_core::core::fsm::phase_tick::PhaseTick;
+    use hydragrow_controller_core::core::fsm::phases::stabilizing::StabilizingPhase;
+    use hydragrow_controller_core::core::fsm::types::PendingCalibrationSample;
+    use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
+
+    let config = minimal_config();
+    let mut ctx = SystemContext::default();
+    ctx.phase = SystemPhase::Stabilizing;
+    ctx.phase_start_ms = Some(1000);
+    ctx.phase_finish_ms = Some(15_000);
+
+    // Initial streak is 0
+    assert_eq!(ctx.diagnostic.ec_pump_streak, 0);
+
+    let sample = PendingCalibrationSample {
+        cycle_id: "streak-warning-cycle-1".to_string(),
+        trigger: "manual".to_string(),
+        start_ec: 1.0,
+        start_ph: 6.0,
+        start_water_level: 20.0,
+        start_temp: 25.0,
+        target_ec: 1.5,
+        target_ph: 6.0,
+        dose_a_ml: 10.0,
+        dose_b_ml: 10.0,
+        dose_ph_up_ml: 0.0,
+        dose_ph_down_ml: 0.0,
+        water_in_sec: 0.0,
+        water_out_sec: 0.0,
+        post_mixing_ec: 1.0,
+        post_mixing_ph: 6.0,
+        start_ms: 1000,
+        active_mixing_finish_ms: 2000,
+        stabilizing_start_ms: Some(2000),
+        stabilizing_finish_ms: None,
+        invalid_by_noise: false,
+        invalid_by_water_change: false,
+    };
+    ctx.calibration.start_sample(sample);
+
+    // Sensor shows no EC change -> streak will become 1
+    let sensors = SensorData {
+        ec: 1.0,
+        ph: 6.0,
+        water_level: 20.0,
+        temp: 25.0,
+        ..normal_sensor()
+    };
+
+    let phase = StabilizingPhase;
+    let result = phase.tick(16_000, 16_000, &config, &sensors, &mut ctx);
+
+    // Should NOT fault on streak 1
+    assert_ne!(
+        result.delta.phase,
+        Some(SystemPhase::Fault(FaultCode::EcDosingFailed))
+    );
+    assert_eq!(ctx.diagnostic.ec_pump_streak, 1);
+
+    // Verify OrchestratorEvent::PublishSystemLog was emitted
+    let warning_log = result.events.iter().find_map(|e| match e {
+        OrchestratorEvent::PublishSystemLog { payload_json } => {
+            let log: UnifiedSystemLog = serde_json::from_str(payload_json).ok()?;
+            if log.category == LogCategory::Alert && log.level == LogLevel::Warning {
+                Some(log)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    });
+
+    assert!(
+        warning_log.is_some(),
+        "Diagnostic streak 1 must emit a Warning Alert UnifiedSystemLog"
+    );
+
+    let log = warning_log.unwrap();
+    if let hydragrow_shared::log::SystemLogEvent::BasicSystemLog(meta) = log.event {
+        assert!(meta.message.contains("lần 1/3"));
+    } else {
+        panic!("Expected BasicSystemLog event payload");
+    }
+}

@@ -61,6 +61,10 @@ impl PhaseTick for StabilizingPhase {
             let actual_delta_water = sensors.water_level - sample.start_water_level;
 
             // A. Kiểm tra chẩn đoán lỗi phần cứng (Hardware Fault Diagnostics)
+            let prev_ec_streak = ctx.diagnostic.ec_pump_streak;
+            let prev_ph_streak = ctx.diagnostic.ph_pump_streak;
+            let prev_water_streak = ctx.diagnostic.water_hydraulics_streak;
+
             if let Err(fault_code) = ctx.diagnostic.diagnose_hardware_fault(
                 total_nutrient,
                 total_ph_agent,
@@ -84,6 +88,73 @@ impl PhaseTick for StabilizingPhase {
                 });
                 result.delta.phase = Some(SystemPhase::Fault(fault_code));
                 return result;
+            }
+
+            // Gửi cảnh báo sớm (Pre-fault early warnings) cho chuỗi lỗi 1 và 2 (C20)
+            if ctx.diagnostic.ec_pump_streak > 0
+                && ctx.diagnostic.ec_pump_streak < 3
+                && ctx.diagnostic.ec_pump_streak != prev_ec_streak
+            {
+                let payload = UnifiedSystemLog::build_basic_log_json_with_ts(
+                    &config.device_id,
+                    LogLevel::Warning,
+                    LogCategory::Alert,
+                    "Cảnh báo châm dinh dưỡng không hiệu quả",
+                    format!(
+                        "Bơm chạy {:.1}ml nhưng EC không thay đổi (lần {}/3).",
+                        total_nutrient, ctx.diagnostic.ec_pump_streak
+                    ),
+                    Some(&sample.cycle_id),
+                    "diagnostic_streak",
+                    now_ms,
+                );
+                result.events.push(OrchestratorEvent::PublishSystemLog {
+                    payload_json: payload,
+                });
+            }
+
+            if ctx.diagnostic.ph_pump_streak > 0
+                && ctx.diagnostic.ph_pump_streak < 3
+                && ctx.diagnostic.ph_pump_streak != prev_ph_streak
+            {
+                let payload = UnifiedSystemLog::build_basic_log_json_with_ts(
+                    &config.device_id,
+                    LogLevel::Warning,
+                    LogCategory::Alert,
+                    "Cảnh báo hiệu chỉnh pH không hiệu quả",
+                    format!(
+                        "Bơm chạy {:.1}ml nhưng pH không thay đổi (lần {}/3).",
+                        total_ph_agent, ctx.diagnostic.ph_pump_streak
+                    ),
+                    Some(&sample.cycle_id),
+                    "diagnostic_streak",
+                    now_ms,
+                );
+                result.events.push(OrchestratorEvent::PublishSystemLog {
+                    payload_json: payload,
+                });
+            }
+
+            if ctx.diagnostic.water_hydraulics_streak > 0
+                && ctx.diagnostic.water_hydraulics_streak < 3
+                && ctx.diagnostic.water_hydraulics_streak != prev_water_streak
+            {
+                let payload = UnifiedSystemLog::build_basic_log_json_with_ts(
+                    &config.device_id,
+                    LogLevel::Warning,
+                    LogCategory::Alert,
+                    "Cảnh báo thủy lực nước không hiệu quả",
+                    format!(
+                        "Thao tác nước thất thường nhưng chưa chạm ngưỡng lỗi (lần {}/3).",
+                        ctx.diagnostic.water_hydraulics_streak
+                    ),
+                    Some(&sample.cycle_id),
+                    "diagnostic_streak",
+                    now_ms,
+                );
+                result.events.push(OrchestratorEvent::PublishSystemLog {
+                    payload_json: payload,
+                });
             }
 
             // B. Chạy Pipeline Học máy Thích ứng (Adaptive Learning)

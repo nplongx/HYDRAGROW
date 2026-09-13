@@ -73,3 +73,14 @@ const PUMP_ID_THEME: Record<string, PumpThemeKey> = {
 export function pumpThemeFor(pumpId: string): PumpThemeKey {
   return PUMP_ID_THEME[pumpId] ?? 'aqua';
 }
+
+/**
+ * Bar fill color classes for DosingHourlyChart.
+ * Kept in this .ts file as categorical configuration data.
+ */
+export const PUMP_BAR_FILL = {
+  pump_a_ml: 'bg-orange-500',
+  pump_b_ml: 'bg-orange-300',
+  ph_up_ml: 'bg-violet-500',
+  ph_down_ml: 'bg-fuchsia-500',
+} as const;

@@ -270,7 +270,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
                     {group.rows.map((row, idx) => {
                       const globalIdx = groupIdx * 1000 + idx;
                       if (row.type === 'event') {
-                        return <EventLogCard key={row.event.id} ev={row.event} idx={globalIdx} onOpenDetail={setSelectedEvent} onAcknowledge={handleAcknowledge} />;
+                        return <EventLogCard key={row.event.id} ev={row.event} idx={globalIdx} search={search} onOpenDetail={setSelectedEvent} onAcknowledge={handleAcknowledge} />;
                       }
                       if (row.type === 'cycle') {
                         return <CycleEventCard key={row.cycleId} cycleId={row.cycleId} events={row.events} onOpenDetail={setSelectedEvent} />;

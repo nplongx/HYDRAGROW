@@ -1,6 +1,7 @@
 // src/components/logs/HealthSummaryBar.tsx
 import { Search, ShieldAlert, FlaskConical, Waves, AlertTriangle, X } from 'lucide-react';
 import { Switch } from '../ui/Switch';
+import { EVENT_CATEGORY_THEME } from '../../lib/logs/eventCategoryTheme';
 
 export interface SystemHealthSummary {
   window_seconds?: number;
@@ -28,19 +29,19 @@ export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearch
     <div className="ui-card space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
         <div className="farm-muted-panel flex items-center gap-2">
-          <FlaskConical size={14} className="text-cyan-700 shrink-0" />
+          <FlaskConical size={14} className={`${EVENT_CATEGORY_THEME.ecDosing.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">{summary?.ec_dosing_count ?? 0} lần châm EC</span>
         </div>
         <div className="farm-muted-panel flex items-center gap-2">
-          <FlaskConical size={14} className="text-purple-700 shrink-0" />
+          <FlaskConical size={14} className={`${EVENT_CATEGORY_THEME.phDosing.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">{summary?.ph_dosing_count ?? 0} lần châm pH</span>
         </div>
         <div className="farm-muted-panel flex items-center gap-2">
-          <Waves size={14} className="text-sky-700 shrink-0" />
+          <Waves size={14} className={`${EVENT_CATEGORY_THEME.water.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">{summary?.water_operation_count ?? 0} thao tác nước</span>
         </div>
         <div className="farm-muted-panel flex items-center gap-2">
-          <AlertTriangle size={14} className="text-amber-700 shrink-0" />
+          <AlertTriangle size={14} className={`${EVENT_CATEGORY_THEME.warning.icon} shrink-0`} />
           <span className="text-primary-deep font-semibold">
             {summary?.warning_count ?? 0} cảnh báo · {summary?.critical_count ?? 0} nghiêm trọng
           </span>

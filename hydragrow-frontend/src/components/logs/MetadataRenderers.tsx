@@ -1,4 +1,5 @@
 // src/components/logs/MetadataRenderers.tsx
+import { EVENT_CATEGORY_THEME } from '../../lib/logs/eventCategoryTheme';
 
 const formatMetadataLabel = (key: string) => {
   const labels: Record<string, string> = {
@@ -38,13 +39,13 @@ export const DosingMetadata = ({ meta }: { meta: any }) => {
 
   const doseRows: { label: string; value: string; accent?: string }[] = [];
   if (dose.pump_a_ml != null && dose.pump_a_ml > 0)
-    doseRows.push({ label: 'Dinh dưỡng A:', value: `${Number(dose.pump_a_ml).toFixed(1)} ml`, accent: 'text-orange-600 font-bold' });
+    doseRows.push({ label: 'Dinh dưỡng A:', value: `${Number(dose.pump_a_ml).toFixed(1)} ml`, accent: `${EVENT_CATEGORY_THEME.ecDosing.icon} font-bold` });
   if (dose.pump_b_ml != null && dose.pump_b_ml > 0)
-    doseRows.push({ label: 'Dinh dưỡng B:', value: `${Number(dose.pump_b_ml).toFixed(1)} ml`, accent: 'text-orange-600 font-bold' });
+    doseRows.push({ label: 'Dinh dưỡng B:', value: `${Number(dose.pump_b_ml).toFixed(1)} ml`, accent: `${EVENT_CATEGORY_THEME.ecDosing.icon} font-bold` });
   if (dose.ph_up_ml != null && dose.ph_up_ml > 0)
-    doseRows.push({ label: 'Thuốc pH Up:', value: `${Number(dose.ph_up_ml).toFixed(1)} ml`, accent: 'text-purple-700 font-bold' });
+    doseRows.push({ label: 'Thuốc pH Up:', value: `${Number(dose.ph_up_ml).toFixed(1)} ml`, accent: `${EVENT_CATEGORY_THEME.phDosing.icon} font-bold` });
   if (dose.ph_down_ml != null && dose.ph_down_ml > 0)
-    doseRows.push({ label: 'Thuốc pH Down:', value: `${Number(dose.ph_down_ml).toFixed(1)} ml`, accent: 'text-red-700 font-bold' });
+    doseRows.push({ label: 'Thuốc pH Down:', value: `${Number(dose.ph_down_ml).toFixed(1)} ml`, accent: `${EVENT_CATEGORY_THEME.warning.icon} font-bold` });
 
   if (doseRows.length === 0) return null;
 

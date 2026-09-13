@@ -19,7 +19,7 @@ describe('AdvancedDeviceControl', () => {
     useDeviceStore.setState({ pwmPreferences: {}, savePwmPreference: vi.fn() } as any);
   });
 
-  it('hiển thị banner khoá chéo khi có lockedByPumpId', () => {
+  it('hiển thị banner khoá chéo khi có lockedByPumpId, dùng component Banner dùng chung', () => {
     render(
       <AdvancedDeviceControl
         deviceId="dev-1"
@@ -35,7 +35,9 @@ describe('AdvancedDeviceControl', () => {
         lockedByPumpLabel="Bơm pH Up"
       />,
     );
-    expect(screen.getByText(/Đã khoá vì Bơm pH Up đang chạy/)).toBeInTheDocument();
+    const banner = screen.getByRole('alert');
+    expect(banner).toHaveTextContent('Đã khoá vì Bơm pH Up đang chạy');
+    expect(banner).toHaveTextContent('Sẽ tự mở khoá khi Bơm pH Up dừng');
   });
 
   it('hiển thị StatusPill theo commandStatus từ hook', () => {

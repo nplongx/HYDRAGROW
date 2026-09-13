@@ -8,6 +8,9 @@ import { Switch } from '../ui/Switch';
 import { StatusPill } from '../ui/StatusPill';
 import { Slider } from '../ui/Slider';
 
+import { Banner } from '../ui/Banner';
+import { PumpControlStatePill } from '../ui/PumpControlStatePill';
+import { derivePumpControlState } from '../../lib/dosing/pumpControlStateMachine';
 import { PUMP_VISUAL_THEME, type PumpThemeKey } from '../../lib/dosing/pumpVisualTheme';
 // TODO(sau khi có dữ liệu hiệu chuẩn DosingCalibration thật): thay bằng giá trị đo thực tế theo từng bơm.
 const PWM_TO_ML_PER_MIN: Record<string, number> = {
@@ -58,7 +61,13 @@ export const AdvancedDeviceControl = ({
   const [isToggling, setIsToggling] = useState(false);
   const pendingTargetRef = useRef<boolean | null>(null);
 
-  const isLocked = isAutoMode || (isEmergency && !currentStatus) || Boolean(lockedByPumpId);
+  const pumpControlState = derivePumpControlState({
+    currentStatus,
+    isAutoMode,
+    isEmergency,
+    lockedByPumpId,
+  });
+  const isLocked = pumpControlState.state === 'locked';
 
   const activeTheme = PUMP_VISUAL_THEME[colorTheme];
 
@@ -193,7 +202,7 @@ export const AdvancedDeviceControl = ({
           </div>
           <div className="flex items-center gap-2">
             <StatusPill commandStatus={commandStatus[pumpId]} />
-            {isLocked && !currentStatus && <Lock size={12} className="text-primary/60 mr-0.5" />}
+            <PumpControlStatePill state={pumpControlState.state} reason={pumpControlState.reason} />
             <Switch
               isOn={currentStatus}
               disabled={!canSendCommands || isToggling || isProcessing || isLocked}
@@ -203,11 +212,10 @@ export const AdvancedDeviceControl = ({
           </div>
         </div>
 
-        {lockedByPumpId && (
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-text-muted bg-soft border border-line rounded-lg px-2.5 py-1.5">
-            <Lock size={11} className="shrink-0" />
-            <span>Đã khoá vì {lockedByPumpLabel || 'thiết bị xung khắc'} đang chạy — tránh trung hoà lẫn nhau</span>
-          </div>
+        {pumpControlState.state === 'locked' && pumpControlState.reason === 'interlock' && (
+          <Banner tone="warning" title={`Đã khoá vì ${lockedByPumpLabel || 'thiết bị xung khắc'} đang chạy — tránh trung hoà lẫn nhau`}>
+            Sẽ tự mở khoá khi {lockedByPumpLabel || 'thiết bị xung khắc'} dừng — không cần thao tác gì thêm.
+          </Banner>
         )}
 
         {allowPwm && currentStatus && (

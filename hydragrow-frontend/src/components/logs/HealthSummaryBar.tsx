@@ -1,5 +1,5 @@
 // src/components/logs/HealthSummaryBar.tsx
-import { Search, ShieldAlert, FlaskConical, Waves, AlertTriangle } from 'lucide-react';
+import { Search, ShieldAlert, FlaskConical, Waves, AlertTriangle, X } from 'lucide-react';
 import { Switch } from '../ui/Switch';
 
 export interface SystemHealthSummary {
@@ -20,9 +20,10 @@ interface HealthSummaryBarProps {
   onModeChange: (mode: LogViewMode) => void;
   search: string;
   onSearchChange: (value: string) => void;
+  resultCount?: number;
 }
 
-export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearchChange }: HealthSummaryBarProps) => {
+export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearchChange, resultCount }: HealthSummaryBarProps) => {
   return (
     <div className="ui-card space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -54,10 +55,25 @@ export const HealthSummaryBar = ({ summary, mode, onModeChange, search, onSearch
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Tìm theo tiêu đề, nội dung, danh mục..."
-            className="ui-input pl-8"
+            className="ui-input pl-8 pr-8"
             aria-label="Tìm kiếm nhật ký"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              aria-label="Xoá tìm kiếm"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-faint hover:text-primary-deep"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {search && resultCount !== undefined && (
+          <span className="text-[11px] font-semibold text-text-muted shrink-0">
+            {resultCount} kết quả
+          </span>
+        )}
         <div className="flex items-center gap-2 shrink-0">
           <ShieldAlert size={14} className="text-primary" />
           <Switch

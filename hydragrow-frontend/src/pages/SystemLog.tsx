@@ -180,7 +180,14 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         />
       )}
 
-      <HealthSummaryBar summary={healthSummary} mode={mode} onModeChange={setMode} search={search} onSearchChange={setSearch} />
+      <HealthSummaryBar
+        summary={healthSummary}
+        mode={mode}
+        onModeChange={setMode}
+        search={search}
+        onSearchChange={setSearch}
+        resultCount={search ? visibleRows.length : undefined}
+      />
 
       {/* Filter & CSV Export Bar */}
       <div className="bg-white/90 border border-line rounded-3xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 relative z-10 backdrop-blur-md">

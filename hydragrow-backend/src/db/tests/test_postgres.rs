@@ -134,6 +134,46 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
+    async fn insert_device_status_message_event(pool: sqlx::PgPool) {
+        let cfg = DeviceConfig {
+            device_id: "test-dev-device-status".to_string(),
+            ec_target: 1.4,
+            ec_tolerance: 0.1,
+            ph_target: 6.0,
+            ph_tolerance: 0.2,
+            control_mode: "auto".to_string(),
+            is_enabled: true,
+            delay_between_a_and_b_sec: 5,
+            last_updated: chrono::Utc::now(),
+        };
+        upsert_device_config(&pool, &cfg).await.unwrap();
+
+        let event = NewSystemEventRecord {
+            device_id: "test-dev-device-status".to_string(),
+            level: "warning".to_string(),
+            category: "device".to_string(),
+            title: "Thông điệp Mạch Cảm Biến".to_string(),
+            message: "Trạng thái: error".to_string(),
+            reason: Some("error".to_string()),
+            metadata: Some(
+                serde_json::json!({ "status": "error", "message": "invalid command JSON" }),
+            ),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            source: "rule".to_string(),
+            primary_reason_code: None,
+        };
+        insert_system_event(&pool, &event).await.unwrap();
+
+        let events = get_system_events(&pool, "test-dev-device-status", &[], 10, None, None, None)
+            .await
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].category, "device");
+        assert_eq!(events[0].level, "warning");
+        assert_eq!(events[0].title, "Thông điệp Mạch Cảm Biến");
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn insert_ai_supervisor_event_with_reason_code(pool: sqlx::PgPool) {
         let cfg = DeviceConfig {
             device_id: "test-dev-ai".to_string(),

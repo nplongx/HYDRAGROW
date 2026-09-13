@@ -77,11 +77,6 @@ pub async fn handle_device(
             .insert(device_id.clone(), fw.to_string());
     }
 
-    let is_online = match interpret_online_signal(&status) {
-        None => return,
-        Some(v) => v,
-    };
-
     let _ = crate::db::topic_last_seen::touch_topic(
         &app_state.pg_pool,
         &device_id,
@@ -90,61 +85,98 @@ pub async fn handle_device(
     )
     .await;
 
-    info!(
-        "Trạng thái: {}",
-        if is_online { "ONLINE" } else { "OFFLINE (LWT)" }
-    );
+    match interpret_online_signal(&status) {
+        Some(is_online) => {
+            info!(
+                "Trạng thái: {}",
+                if is_online { "ONLINE" } else { "OFFLINE (LWT)" }
+            );
 
-    let alert = AlertMessage {
-        level: if is_online {
-            "success".to_string()
-        } else {
-            "warning".to_string()
-        },
-        category: "system".to_string(),
-        title: format!("Trạng thái {}", node_type),
-        message: format!(
-            "{} ({}) vừa {}",
-            node_type,
-            device_id,
-            if is_online {
-                "Trực tuyến"
-            } else {
-                "Mất kết nối"
+            let alert = AlertMessage {
+                level: if is_online {
+                    "success".to_string()
+                } else {
+                    "warning".to_string()
+                },
+                category: "system".to_string(),
+                title: format!("Trạng thái {}", node_type),
+                message: format!(
+                    "{} ({}) vừa {}",
+                    node_type,
+                    device_id,
+                    if is_online {
+                        "Trực tuyến"
+                    } else {
+                        "Mất kết nối"
+                    }
+                ),
+                device_id: device_id.clone(),
+                timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                reason: None,
+                metadata: Some(json!({ "event_type": "device_status" })),
+            };
+            let _ = app_state
+                .event_bus
+                .send(AppEvent::SystemAlert(alert.clone()));
+
+            let _ = app_state
+                .event_bus
+                .send(AppEvent::DeviceStatus(SharedDeviceStatusPayload {
+                    device_id: device_id.clone(),
+                    is_online,
+                }));
+
+            if alert.level == "warning" || alert.level == "critical" {
+                let tokens = match app_state.fcm_tokens.lock() {
+                    Ok(guard) => guard.get(&device_id).cloned().unwrap_or_default(),
+                    Err(poisoned) => poisoned
+                        .into_inner()
+                        .get(&device_id)
+                        .cloned()
+                        .unwrap_or_default(),
+                };
+                if !tokens.is_empty() {
+                    let push_title = alert.title.clone();
+                    let push_message = alert.message.clone();
+                    tokio::spawn(async move {
+                        crate::services::fcm::send_push_notification(
+                            &push_title,
+                            &push_message,
+                            tokens,
+                        )
+                        .await;
+                    });
+                }
             }
-        ),
-        device_id: device_id.clone(),
-        timestamp: chrono::Utc::now().timestamp_millis() as u64,
-        reason: None,
-        metadata: Some(json!({ "event_type": "device_status" })),
-    };
-    let _ = app_state
-        .event_bus
-        .send(AppEvent::SystemAlert(alert.clone()));
-
-    let _ = app_state
-        .event_bus
-        .send(AppEvent::DeviceStatus(SharedDeviceStatusPayload {
-            device_id: device_id.clone(),
-            is_online,
-        }));
-
-    if alert.level == "warning" || alert.level == "critical" {
-        let tokens = match app_state.fcm_tokens.lock() {
-            Ok(guard) => guard.get(&device_id).cloned().unwrap_or_default(),
-            Err(poisoned) => poisoned
-                .into_inner()
-                .get(&device_id)
-                .cloned()
-                .unwrap_or_default(),
-        };
-        if !tokens.is_empty() {
-            let push_title = alert.title.clone();
-            let push_message = alert.message.clone();
-            tokio::spawn(async move {
-                crate::services::fcm::send_push_notification(&push_title, &push_message, tokens)
-                    .await;
-            });
+        }
+        None => {
+            // Non-online status (e.g. "ok", "error", "applied") - log to system_events under "device"
+            if let Some(status_str) = status.status.as_deref() {
+                let level = if status_str == "error" {
+                    "warning"
+                } else {
+                    "info"
+                };
+                let title = format!("Thông điệp {}", node_type);
+                let message = format!("Trạng thái: {}", status_str);
+                let record = crate::db::postgres::NewSystemEventRecord {
+                    device_id: device_id.clone(),
+                    level: level.to_string(),
+                    category: "device".to_string(),
+                    title,
+                    message,
+                    reason: Some(status_str.to_string()),
+                    metadata: serde_json::from_slice(payload).ok(),
+                    timestamp: chrono::Utc::now().timestamp_millis(),
+                    source: "rule".to_string(),
+                    primary_reason_code: None,
+                };
+                if let Err(e) =
+                    crate::db::postgres::insert_system_event(&app_state.pg_pool, &record).await
+                {
+                    error!(error = ?e, "Không thể lưu device system_event");
+                }
+            }
         }
     }
 }
@@ -637,5 +669,52 @@ mod tests {
         let controller_cat = "controller/status";
         let sensor_cat = "sensor/status";
         assert_ne!(controller_cat, sensor_cat);
+    }
+
+    #[test]
+    fn status_payload_with_custom_message_is_recognized() {
+        let payload = serde_json::json!({
+            "device_id": "sensor_001",
+            "status": "ok",
+            "message": "configuration applied"
+        });
+        let parsed: DeviceStatusPayload = serde_json::from_value(payload).unwrap();
+        assert_eq!(parsed.status.as_deref(), Some("ok"));
+    }
+
+    #[test]
+    fn non_online_status_maps_level_and_fields_correctly() {
+        let payload = serde_json::json!({
+            "device_id": "sensor_001",
+            "status": "error",
+            "message": "invalid command JSON"
+        });
+        let status: DeviceStatusPayload = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!(interpret_online_signal(&status), None);
+        let status_str = status.status.as_deref().unwrap();
+        let level = if status_str == "error" {
+            "warning"
+        } else {
+            "info"
+        };
+        let node_type = "Mạch Cảm Biến";
+        let title = format!("Thông điệp {}", node_type);
+        let message = format!("Trạng thái: {}", status_str);
+        let record = crate::db::postgres::NewSystemEventRecord {
+            device_id: "sensor_001".to_string(),
+            level: level.to_string(),
+            category: "device".to_string(),
+            title,
+            message,
+            reason: Some(status_str.to_string()),
+            metadata: Some(payload),
+            timestamp: 1700000000000,
+            source: "rule".to_string(),
+            primary_reason_code: None,
+        };
+        assert_eq!(record.category, "device");
+        assert_eq!(record.level, "warning");
+        assert_eq!(record.reason.as_deref(), Some("error"));
+        assert_eq!(record.title, "Thông điệp Mạch Cảm Biến");
     }
 }

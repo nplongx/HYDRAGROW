@@ -44,6 +44,7 @@ impl SupervisorReasonCode {
     }
 
     /// Inverse of [`Self::as_str`]; `None` for unknown strings.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "ec_out_of_range" => Some(Self::EcOutOfRange),

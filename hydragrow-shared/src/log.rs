@@ -182,6 +182,34 @@ pub struct RecipeCompletedMetadata {
     pub cycle_id: Option<String>,
 }
 
+/// Metadata cho các sự kiện Châm phân / Dosing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DosingMetadata {
+    pub source: String,
+    pub pump: String,
+    pub dose_ml: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ec_before: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ec_after: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ph_before: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ph_after: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle_id: Option<String>,
+}
+
+/// Metadata cho các sự kiện Tín hiệu cảm biến (nhiễu, lỗi)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensorMetadata {
+    pub sensor_type: String,
+    pub error_state: bool,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_value: Option<f32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BasicSystemLogMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -209,6 +237,10 @@ pub enum SystemLogEvent {
     RecipeStageChanged(RecipeStageChangedMetadata),
 
     RecipeCompleted(RecipeCompletedMetadata),
+
+    DosingEvent(DosingMetadata),
+
+    SensorEvent(SensorMetadata),
 
     /// Dành cho các log text cơ bản không cần metadata phức tạp
     BasicSystemLog(BasicSystemLogMetadata),
@@ -355,5 +387,54 @@ impl UnifiedSystemLog {
         };
 
         serde_json::to_string(&log).unwrap_or_else(|_| "{}".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dosing_and_sensor_event_serialization_roundtrip() {
+        let dosing_event = SystemLogEvent::DosingEvent(DosingMetadata {
+            source: "mimo".to_string(),
+            pump: "PUMP_A".to_string(),
+            dose_ml: 5.0,
+            ec_before: Some(1.2),
+            ec_after: Some(1.6),
+            ph_before: None,
+            ph_after: None,
+            cycle_id: Some("cycle-123".to_string()),
+        });
+        let json = serde_json::to_string(&dosing_event).unwrap();
+        assert!(json.contains("DosingEvent"));
+        let decoded: SystemLogEvent = serde_json::from_str(&json).unwrap();
+        if let SystemLogEvent::DosingEvent(meta) = decoded {
+            assert_eq!(meta.pump, "PUMP_A");
+            assert_eq!(meta.dose_ml, 5.0);
+            assert_eq!(meta.ec_before, Some(1.2));
+            assert_eq!(meta.ec_after, Some(1.6));
+            assert_eq!(meta.cycle_id, Some("cycle-123".to_string()));
+        } else {
+            panic!("Expected DosingEvent");
+        }
+
+        let sensor_event = SystemLogEvent::SensorEvent(SensorMetadata {
+            sensor_type: "ph".to_string(),
+            error_state: true,
+            message: "ADS1115 read timeout".to_string(),
+            raw_value: None,
+        });
+        let json2 = serde_json::to_string(&sensor_event).unwrap();
+        assert!(json2.contains("SensorEvent"));
+        let decoded2: SystemLogEvent = serde_json::from_str(&json2).unwrap();
+        if let SystemLogEvent::SensorEvent(meta) = decoded2 {
+            assert_eq!(meta.sensor_type, "ph");
+            assert!(meta.error_state);
+            assert_eq!(meta.message, "ADS1115 read timeout");
+            assert_eq!(meta.raw_value, None);
+        } else {
+            panic!("Expected SensorEvent");
+        }
     }
 }

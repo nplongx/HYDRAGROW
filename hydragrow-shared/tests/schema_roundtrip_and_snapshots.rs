@@ -141,6 +141,22 @@ fn unified_system_log_round_trip_for_all_event_variants() {
             final_stage_name: Some("Harvest".into()),
             cycle_id: Some("recipe-cycle-004".into()),
         }),
+        SystemLogEvent::DosingEvent(hydragrow_shared::log::DosingMetadata {
+            source: "mimo".into(),
+            pump: "PUMP_A".into(),
+            dose_ml: 12.5,
+            ec_before: Some(1.1),
+            ec_after: Some(1.5),
+            ph_before: Some(6.2),
+            ph_after: Some(6.1),
+            cycle_id: Some("dosing-cycle-001".into()),
+        }),
+        SystemLogEvent::SensorEvent(hydragrow_shared::log::SensorMetadata {
+            sensor_type: "ec".into(),
+            error_state: true,
+            message: "I2C read error".into(),
+            raw_value: Some(0.0),
+        }),
     ];
 
     for event in variants {

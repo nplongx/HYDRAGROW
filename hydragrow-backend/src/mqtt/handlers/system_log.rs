@@ -100,6 +100,19 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             ),
             None => format!("Recipe '{}' hoàn tất", meta.recipe_name),
         },
+        SystemLogEvent::DosingEvent(meta) => {
+            format!(
+                "Châm phân {}: {:.1}ml (EC: {:?} -> {:?}, pH: {:?} -> {:?})",
+                meta.pump, meta.dose_ml, meta.ec_before, meta.ec_after, meta.ph_before, meta.ph_after
+            )
+        }
+        SystemLogEvent::SensorEvent(meta) => {
+            if meta.error_state {
+                format!("Lỗi cảm biến {}: {}", meta.sensor_type, meta.message)
+            } else {
+                format!("Cảm biến {}: {}", meta.sensor_type, meta.message)
+            }
+        }
     };
 
     // =========================================================================

@@ -167,6 +167,7 @@ pub fn validate_provision_structure(config: &WifiProvisionConfig) -> Result<(), 
             return Err("ssid must be 1..=32 bytes after trimming".into());
         }
         if let Some(password) = &entry.password {
+            #[allow(clippy::collapsible_if)]
             if password.len() > 64 {
                 return Err("password must be 0..=64 bytes".into());
             }

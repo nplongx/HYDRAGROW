@@ -23,6 +23,8 @@ import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useAuth } from '../contexts/AuthContext';
 import { pumpLabels, pumpColors } from '../lib/pumpLabels';
 import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
+import { OnboardingWizard } from '../components/onboarding';
+import { useOnboardingState } from '../hooks/useOnboardingState';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${color}`}>
@@ -65,6 +67,7 @@ const Dashboard = () => {
   const { forceOn } = useDeviceControl(deviceId ?? '');
   const { permission, enableNotifications } = useFCM();
   const { data: healthSummary } = useSystemHealthSummary(deviceId ?? '');
+  const { shouldShowOnboarding } = useOnboardingState();
   const dosingTotalCount = (healthSummary?.ec_dosing_count ?? 0) + (healthSummary?.ph_dosing_count ?? 0);
 
   const displayName = user?.displayName?.trim() || user?.email?.split('@')[0] || undefined;
@@ -229,6 +232,8 @@ const Dashboard = () => {
         onPausePumps={() => navigate('/operations')}
         onViewAlerts={() => navigate('/journal')}
       />
+
+      {shouldShowOnboarding && <OnboardingWizard className="mb-6" />}
 
       {/* Sensor Bento Grid */}
       <div className="space-y-3">

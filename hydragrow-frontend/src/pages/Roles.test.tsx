@@ -55,7 +55,9 @@ describe('Roles Page', () => {
     });
 
     // Check permission matrix rendered
-    expect(screen.getByTestId('permission-matrix')).toBeInTheDocument();
+    const matrix = screen.getByTestId('permission-matrix');
+    expect(matrix).toBeInTheDocument();
+    expect(matrix).toHaveAttribute('role', 'grid');
     expect(screen.getByText(/Ma trận phân quyền \(5 Năng lực × 3 Vai trò\)/)).toBeInTheDocument();
     expect(screen.getByText(/Giám sát & Số liệu/i)).toBeInTheDocument();
     expect(screen.getByText(/Điều khiển & Vận hành/i)).toBeInTheDocument();
@@ -87,19 +89,22 @@ describe('Roles Page', () => {
     });
   });
 
-  it('mở modal thêm thành viên và submit gọi apiPost', async () => {
+  it('mở modal thêm thành viên và submit gọi apiPost với dữ liệu hợp lệ', async () => {
     vi.mocked(apiClient.apiPost).mockResolvedValue({ status: 'ok' });
     render(<Roles />);
 
     fireEvent.click(screen.getByRole('button', { name: /Thêm thành viên/i }));
 
     expect(screen.getByText('Thêm thành viên mới')).toBeInTheDocument();
+    expect(screen.getByTestId('group-identity')).toBeInTheDocument();
+    expect(screen.getByTestId('group-role')).toBeInTheDocument();
+    expect(screen.getByTestId('group-confirmation')).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText('operator@farm.vn'), {
       target: { value: 'newuser@farm.vn' },
     });
     fireEvent.change(screen.getByPlaceholderText('Lấy từ Firebase Console > Authentication'), {
-      target: { value: 'uid-new-123' },
+      target: { value: 'uidNew123' },
     });
     fireEvent.change(screen.getByPlaceholderText('Kỹ sư nông học A'), {
       target: { value: 'Kỹ sư C' },
@@ -112,11 +117,23 @@ describe('Roles Page', () => {
         '/admin/users',
         expect.objectContaining({
           email: 'newuser@farm.vn',
-          firebase_uid: 'uid-new-123',
+          firebase_uid: 'uidNew123',
           display_name: 'Kỹ sư C',
           scopes: expect.arrayContaining(['read:telemetry']),
         })
       );
+    });
+  });
+
+  it('huỷ modal thêm thành viên sẽ đóng modal', async () => {
+    render(<Roles />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Thêm thành viên/i }));
+    expect(screen.getByText('Thêm thành viên mới')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Huỷ/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Thêm thành viên mới')).not.toBeInTheDocument();
     });
   });
 

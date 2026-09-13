@@ -316,3 +316,83 @@ thay thế các mã màu Tailwind hardcode (`text-indigo-*`, `text-purple-*`, `t
 **Don't:** dùng `dangerouslySetInnerHTML` với thẻ `<mark>` hoặc hardcode màu riêng lẻ trong từng card nhật ký.
 **Dùng `splitByMatch` cho highlight tìm kiếm và `EVENT_CATEGORY_THEME` cho nhãn danh mục sự kiện.**
 
+---
+
+## 11. `PermissionMatrix` — ma trận phân quyền hệ thống (component-spec & accessibility-audit)
+
+**Files:** `hydragrow-frontend/src/components/roles/PermissionMatrix.tsx`,
+`hydragrow-frontend/src/pages/Roles.tsx`,
+`docs/design-system/layer3/PERMISSION-MODEL-SPEC.md`.
+
+`PermissionMatrix` trực quan hoá bảng đối chiếu các năng lực hệ thống (Capabilities) với các vai trò người dùng (Admin, Operator, Viewer).
+Component hỗ trợ đầy đủ ngữ nghĩa trợ năng ARIA grid (`role="grid"`, `role="row"`, `role="rowheader"`, `role="columnheader"`, `role="gridcell"`), điều hướng bàn phím 4 hướng (Arrow keys, Home, End), và tự động chuyển đổi sang dạng thẻ xếp chồng (stacked cards) trên màn hình di động (< 640px) để loại bỏ thanh cuộn ngang khó chịu.
+
+**Khi nào dùng:** Sử dụng trên trang quản lý phân quyền `/roles`, trong các modal tra cứu quyền hạn, hoặc trang kiểm toán bảo mật.
+**Không dùng:** Dành cho các form chuyển đổi quyền dạng checkbox tùy tiện của từng cá nhân (quyền trong HydraGrow gắn theo vai trò, không phân tán).
+
+**Props chính:**
+- `capabilities?: Capability[]` — Danh sách năng lực hiển thị (mặc định lấy `CAPABILITIES`).
+- `roles?: UserRole[]` — Danh sách vai trò hiển thị dạng cột (mặc định `['admin', 'operator', 'viewer']`).
+- `compact?: boolean` — Chế độ thu gọn khoảng đệm cho modal/flyout drawer.
+
+**Mẫu liên quan:** `RoleBadge` (mục 12), `RoleSelector`, `InviteForm` (mục 13).
+
+---
+
+## 12. `RoleBadge` — huy hiệu vai trò người dùng chuẩn hóa (component-spec)
+
+**Files:** `hydragrow-frontend/src/components/roles/RoleBadge.tsx`,
+`hydragrow-frontend/src/pages/Roles.tsx`,
+`hydragrow-frontend/src/components/roles/InviteForm.tsx`.
+
+`RoleBadge` đóng gói hiển thị nhãn vai trò (`Admin`, `Operator`, `Viewer`) sử dụng thiết kế token màu nhất quán (`--color-status`, `--color-warning`, `--color-primary-deep`) và nhãn hiển thị tiếng Việt chuẩn hóa (`Quản trị viên`, `Vận hành viên`, `Người xem`). Hỗ trợ kích thước `sm` và `md` cùng tùy chọn hiển thị dấu chấm trạng thái trực quan (`showDot`).
+
+**Khi nào dùng:** Mọi nơi cần định danh vai trò của thành viên trong danh sách, bảng người dùng, tiêu đề ma trận phân quyền, hoặc bản tóm tắt phân quyền.
+**Don't:** Hardcode chuỗi nhãn và màu sắc vai trò thủ công trong từng component. **Luôn dùng `RoleBadge` để đảm bảo tính nhất quán toàn diện.**
+
+---
+
+## 13. `InviteForm` — biểu mẫu mời và phân quyền thành viên (form-design & hicks-law)
+
+**Files:** `hydragrow-frontend/src/components/roles/InviteForm.tsx`,
+`hydragrow-frontend/src/pages/Roles.tsx`.
+
+`InviteForm` áp dụng định luật Miller (chunking) chia nhỏ quá trình thêm thành viên thành 3 khối logic rõ ràng:
+1. Thông tin định danh: Firebase UID và Email (xác thực tức thời khi blur với `aria-invalid`, `aria-describedby`).
+2. Lựa chọn vai trò: Nút chọn vai trò trực quan (Radio Group) kèm gợi ý khuyên dùng cho `Vận hành viên` (Smart Default giảm tải nhận thức theo Hick's Law) và xem nhanh quyền hạn tương ứng.
+3. Bảng tóm tắt xác nhận: Xem trước các mã OAuth scope sẽ được cấp trước khi bấm gửi, kèm banner thông báo lỗi và cơ chế tự phục hồi.
+
+**Khi nào dùng:** Khi thêm hoặc mời người dùng mới vào hệ thống quản lý trạm.
+**Don't:** Dùng form một bước nhồi nhét tất cả input và checkbox phân quyền hỗn loạn. **Dùng `InviteForm` để tách bạch thông tin và giảm thiểu sai sót gán nhầm quyền nguy hiểm.**
+
+---
+
+## 14. `FleetStationCard` — thẻ giám sát trạm trong cụm (responsive-design & data-visualization)
+
+**Files:** `hydragrow-frontend/src/components/fleet/FleetStationCard.tsx`,
+`hydragrow-frontend/src/pages/FleetView.tsx`,
+`docs/design-system/layer3/FLEET-VIEW-SPEC.md`.
+
+`FleetStationCard` là thẻ tương tác hiển thị trạng thái tổng hợp của một trạm khí canh trong chế độ xem cụm (Fleet View). Thẻ đáp ứng tiêu chuẩn diện tích chạm tối thiểu 48px trên thiết bị di động, tự động định dạng màu sắc cho chip đo lường EC và pH theo các ngưỡng an toàn sinh học, và hiển thị huy hiệu cảnh báo nổi bật khi trạm có lỗi. Kết hợp với logic sắp xếp ưu tiên cảnh báo (Warning-First) và gom nhóm theo loại cây (Crop Grouping khi $\ge 4$ trạm).
+
+**Khi nào dùng:** Trong trang tổng quan cụm trạm `/fleet` hoặc danh sách trạm quản lý đa thiết bị.
+**Props chính:**
+- `device: DeviceItem` — Thông tin cơ bản và trạng thái kết nối trạm.
+- `summary?: FleetStationSummary` — Dữ liệu thời gian thực (EC, pH, cây trồng, số cảnh báo 1h qua).
+- `onClick: () => void` — Hành động chuyển đổi trạm làm việc chính.
+
+---
+
+## 15. `OnboardingWizard` & `OnboardingStep` — trải nghiệm khởi động lần đầu (onboarding-design & peak-end-rule)
+
+**Files:** `hydragrow-frontend/src/components/onboarding/OnboardingWizard.tsx`,
+`hydragrow-frontend/src/components/onboarding/OnboardingStep.tsx`,
+`hydragrow-frontend/src/hooks/useOnboardingState.ts`,
+`docs/design-system/layer3/ONBOARDING-SPEC.md`.
+
+`OnboardingWizard` cung cấp danh sách kiểm tra lũy tiến 4 bước (Chào mừng $\to$ Kết nối thiết bị $\to$ Nhận dữ liệu đầu tiên $\to$ Bắt đầu mùa vụ) dẫn dắt người dùng mới nhanh chóng đạt được "Khoảnh khắc bừng sáng" (Aha Moment: khi dữ liệu cảm biến thời gian thực đầu tiên truyền về màn hình). Trạng thái tiến độ được lưu trữ bền vững tại `localStorage`. Áp dụng quy tắc Đỉnh-Kết (Peak-End Rule), khi hoàn thành cả 4 bước, hệ thống hiển thị banner chúc mừng rực rỡ củng cố niềm tin của người trồng trước khi đóng vĩnh viễn hướng dẫn.
+
+**Khi nào dùng:** Hiển thị tự động trên `Dashboard` khi người dùng mới tạo tài khoản và chưa hoàn thành quy trình khởi động.
+**Hook quản lý:** `useOnboardingState()` — cung cấp trạng thái các bước hoàn thành, khả năng bỏ qua (dismiss) và tự động nhận diện tín hiệu khi trạm kết nối thành công.
+
+

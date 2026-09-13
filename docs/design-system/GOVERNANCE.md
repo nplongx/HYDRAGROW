@@ -128,3 +128,14 @@ exists yet.**
   a session's declared file perimeter is not that session's bugfix to
   make. The other 18, all inside the six Layer 2 tracks, were fixed as
   part of the track that already had to touch that file.
+
+---
+
+## (d) Layer 3 tracked decisions & Q1 extension points governance
+
+**Rule: Q1 Extension Points are design debt until Q1 resolves.**
+
+1. **Design Debt Classification:** All extension points authored in Layer 3 (dynamic role arrays in `PermissionMatrix`, chunked validation in `InviteForm`, warning sort and grouping in `FleetStationCard`/`FleetView`, and persona hooks in `OnboardingWizard`) represent defensive architectural hooks created to prevent premature commitment to either hobbyist or commercial branches. Until empirical signal (production SQL telemetry or 3/5 archetype interviews) formally unblocks Open Question 1, these extension points are tracked design debt.
+2. **Mandatory Documentation Gate:** No feature that is dependent on Open Question 1 (household vs commercial priority) may ship to production without updating `docs/design-system/layer3/Q1-DECISION-FRAMEWORK.md` to record which branch was taken, along with the concrete empirical evidence justifying that branch.
+3. **Parity Preservation:** Changes to component props or state machines within Layer 3 components must maintain backward compatibility with single-station household operations while keeping the extension hooks open for commercial tier enablement.
+

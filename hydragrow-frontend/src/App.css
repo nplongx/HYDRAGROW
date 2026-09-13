@@ -20,7 +20,7 @@
   --color-line: #e4efe6;
   --color-text: #14532d;
   --color-text-muted: #4b6354;
-  --color-faint: #7c9385;
+  --color-faint: #556d5e;
   --color-page-bg: #dcf0dc;
   --color-status: #047857;
   --color-pill: #d1fae5;
@@ -121,6 +121,10 @@ p {
 
   .ui-state-desc {
     @apply text-xs md:text-sm text-text-muted mt-1 max-w-md mx-auto;
+  }
+
+  .ui-state-icon {
+    @apply inline-flex items-center justify-center w-14 h-14 rounded-full bg-pill mx-auto;
   }
 
   .ui-input {

@@ -1,0 +1,14 @@
+{
+  "allowedPathPrefixes": [
+    "src/components/automation/reactflow/",
+    "src/components/automation/ConfigExplorerView.tsx",
+    "src/components/automation/ConfigExplorerWidget.tsx",
+    "src/components/automation/FlowOverviewCard.tsx",
+    "src/components/automation/FlowDetailDrawer.tsx",
+    "src/components/automation/WebhookAndChainPanel.tsx",
+    "src/components/automation/AutomationMultiDeviceTemplatePanel.tsx",
+    "src/pages/Roles.tsx"
+  ],
+  "_comment": "These files use indigo/purple/rose/teal/orange/cyan as a deliberate categorical color code distinguishing automation NODE TYPES (trigger/condition/action/etc.), not a semantic-status duplication of --color-error/--color-warning/--color-success. Do not remove an entry here without confirming with component-spec skill that the categorical scheme has been redesigned to use tokens instead.",
+  "_comment_Roles": "emerald-* in src/pages/Roles.tsx is a genuine drift too (should use --color-success), tracked separately — only the rose/danger duplication was in scope for this task."
+}

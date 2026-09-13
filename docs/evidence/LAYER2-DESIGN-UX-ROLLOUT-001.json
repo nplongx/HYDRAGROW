@@ -1,0 +1,61 @@
+{
+  "requirement_id": "LAYER2-DESIGN-UX-ROLLOUT-001",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/lib/design-lint/hardcodedColors.test.ts",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:40:00Z",
+      "notes": "colorAllowlist.json updated with tracked-debt entries for SensorBentoCard.tsx, ConfigBackup.tsx, RecipeBuilder.tsx; GOVERNANCE.md and PR-QA-CHECKLIST.md updated (commit 15811c27)."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/lib/dosing/ src/components/ui/PumpControlStatePill.test.tsx src/pages/AdvancedDeviceControl.test.tsx (39 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:45:00Z",
+      "notes": "PumpControlStatePill, pumpControlStateMachine, pumpVisualTheme, and AdvancedDeviceControl refactored with 0 errors (commits 920534fc..ca95aabb)."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/dosing/ src/components/ui/Sparkline.test.tsx src/lib/dosing/ (42 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:50:00Z",
+      "notes": "DosingHourlyChart, hourlyBucketsByPump, Sparkline, useHealthHistory, and Analytics.tsx tokenization pass cleanly (commits 47e98e78..95a84a18)."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/pages/DevicePairing.test.tsx src/components/pairing/ src/lib/pairing/ (14 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:44:00Z",
+      "notes": "deviceIdValidation, contextual error banner, tokenized ScanConfirmOverlay, and one-tap rescan recovery pass cleanly (commits 20edb73f..e53fb616)."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/logs/ src/lib/logs/ src/pages/SystemLog.test.tsx (42 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:45:00Z",
+      "notes": "Clear search, live result count, zero-results empty state, splitByMatch highlight, and EVENT_CATEGORY_THEME pass cleanly (commits 6b7b7544..66d9a6a5)."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run src/components/seasons/ src/components/recipes/ (13 tests)",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:45:00Z",
+      "notes": "seasonProgress helpers, SeasonStageChecklist, SeasonCompletionSummary dialog, and ActiveRecipeStatus/FsmStatusBadge tokens pass cleanly (commits 3eeada06..3a06683f)."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "cd hydragrow-frontend && npx vitest run && npx tsc --noEmit && ./node_modules/.bin/eslint .",
+      "environment": "hydragrow-frontend, Node v24.21.0, Vitest v4.1.11",
+      "verified_at": "2026-09-13T02:55:00Z",
+      "notes": "101/101 test files passed (496 tests passed), tsc clean, eslint clean, hardcodedColors clean across all 18 scoped files (commits 98e16271..db5b2015)."
+    }
+  ]
+}

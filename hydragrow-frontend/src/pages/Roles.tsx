@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Check, X, Shield, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiGet, apiPost, apiPatch } from '../lib/apiClient';
+import { DeviceStatePill } from '../components/ui/DeviceStatePill';
 
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
@@ -172,14 +173,14 @@ export function Roles() {
   };
 
   return (
-    <div className="farm-page-shell space-y-8 max-w-6xl mx-auto">
+    <div className="app-page space-y-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="farm-title flex items-center gap-2.5">
+          <h1 className="page-header-title flex items-center gap-2.5">
             <Users className="text-primary" size={26} /> Quản lý thành viên &amp; Vai trò
           </h1>
-          <p className="farm-subtitle">
+          <p className="page-header-subtitle">
             Phân quyền tài khoản trong hệ thống trạm thuỷ canh và ma trận năng lực truy cập
           </p>
         </div>
@@ -367,20 +368,10 @@ export function Roles() {
                         </select>
                       </td>
                       <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${
-                            user.is_active
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-rose-50 text-rose-700'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              user.is_active ? 'bg-emerald-500' : 'bg-rose-500'
-                            }`}
-                          />
-                          {user.is_active ? 'Hoạt động' : 'Tạm dừng'}
-                        </span>
+                        <DeviceStatePill
+                          state={user.is_active ? 'online' : 'offline'}
+                          label={user.is_active ? 'Hoạt động' : 'Tạm dừng'}
+                        />
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button
@@ -388,7 +379,7 @@ export function Roles() {
                           onClick={() => handleToggleActive(user.id, user.is_active)}
                           className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
                             user.is_active
-                              ? 'border-line text-text-muted hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                              ? 'border-line text-text-muted hover:bg-danger-bg hover:text-error hover:border-red-200'
                               : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                           }`}
                         >

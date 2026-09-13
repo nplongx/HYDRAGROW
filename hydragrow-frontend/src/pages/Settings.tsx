@@ -98,12 +98,10 @@ const Settings = () => {
   const visibleSections = openSection === 'general'
     ? ['general']
     : openSection === 'growth'
-      ? ['growth', 'water']
+      ? ['growth', 'water', 'sensor']
       : openSection === 'dosing'
         ? ['dosing']
-        : openSection === 'sensor'
-          ? ['sensor']
-          : ['integrations', 'network'];
+        : ['integrations', 'network'];
 
   const [config, setConfig] = useState<any>({
     control_mode: 'auto', is_enabled: true,
@@ -630,7 +628,7 @@ const Settings = () => {
     </button>
   </header>
 
-  <div className="ui-tabbar grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+  <div className="ui-tabbar grid grid-cols-2 sm:grid-cols-4">
     {SETTINGS_TABS.map((tab) => (
       <button key={tab.id} type="button" onClick={() => setOpenSection(tab.id)} className={`ui-tab ${openSection === tab.id ? 'ui-tab-active' : ''}`}>
         {tab.label}

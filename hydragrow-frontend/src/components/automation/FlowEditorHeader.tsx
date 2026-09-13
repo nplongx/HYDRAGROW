@@ -1,4 +1,5 @@
 import { AutomationIr } from "../../lib/automation/ir";
+import { Switch } from "../ui/Switch";
 
 interface FlowEditorHeaderProps {
   name: string;
@@ -40,15 +41,11 @@ export function FlowEditorHeader({
           <option value="recipe_override">Recipe Override</option>
         </select>
       </div>
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => onChange({ enabled: e.target.checked })}
-          className="ui-switch"
-        />
-        <span>Kích hoạt</span>
-      </label>
+      <Switch
+        checked={enabled}
+        onChange={(next) => onChange({ enabled: next })}
+        label="Kích hoạt"
+      />
     </div>
   );
 }

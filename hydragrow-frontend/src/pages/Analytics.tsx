@@ -139,7 +139,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         <div className="ui-card p-4 space-y-1">
           <div className="flex items-center justify-between text-text-muted">
             <span className="text-xs font-medium">RAM Vi điều khiển</span>
-            <Cpu size={16} className="text-purple-600" />
+            <Cpu size={16} className="text-primary" />
           </div>
           <div className="text-xl font-bold text-primary-deep" data-testid="health-free-heap">
             {isHealthLoading ? '...' : formatHeap(health?.free_heap_bytes)}
@@ -322,7 +322,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
               </span>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 bg-surface-muted rounded-lg border border-line">
-              <Cpu size={16} className="text-purple-700 shrink-0" />
+              <Cpu size={16} className="text-primary shrink-0" />
               <span>
                 <b>ESP32 Telemetry:</b> Free Heap, WiFi RSSI, Uptime &amp; Log Drop Count.
               </span>

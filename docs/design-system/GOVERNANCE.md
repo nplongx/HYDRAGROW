@@ -117,3 +117,14 @@ exists yet.**
   automated guard, it stays a manual PR-checklist item
   (`docs/design-system/PR-QA-CHECKLIST.md` item 8) — and any drift found
   there is still a standard bugfix, not a redesign.
+
+- **2026-09-13 Layer 2 audit**: running `hardcodedColors.test.ts`
+  against the full tree (not just files touched by a given PR) found
+  21 pre-existing violations, none related to the PR that had just
+  landed. Three (`SensorBentoCard.tsx`, `ConfigBackup.tsx`,
+  `RecipeBuilder.tsx`) are outside every in-flight Layer 2 track and
+  were allowlisted with a dated, named comment rather than fixed —
+  this is the correct move per this section: a guard failure outside
+  a session's declared file perimeter is not that session's bugfix to
+  make. The other 18, all inside the six Layer 2 tracks, were fixed as
+  part of the track that already had to touch that file.

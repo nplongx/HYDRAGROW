@@ -12,14 +12,18 @@ pub struct StaleBreach {
 /// fixed threshold is safe. `fsm/transition` is event-driven and is never
 /// evaluated here at all, even if present in `topics` — a long gap there
 /// can simply mean nothing needed to change, not that anything is stuck.
-pub fn check_staleness(
+///
+/// `sensor/status` is likewise periodic (sensor-node heartbeat) and is
+/// evaluated via the same helper with an explicit target category.
+pub fn check_topic_staleness(
     topics: &[TopicStatus],
+    target_category: &str,
     now: DateTime<Utc>,
     threshold_secs: u64,
 ) -> Option<StaleBreach> {
     let status = topics
         .iter()
-        .find(|t| t.topic_category == "controller/status")?;
+        .find(|t| t.topic_category == target_category)?;
 
     let seconds_stale = (now - status.last_seen_at).num_seconds();
     if seconds_stale >= threshold_secs as i64 {
@@ -27,6 +31,15 @@ pub fn check_staleness(
     } else {
         None
     }
+}
+
+#[allow(dead_code)]
+pub fn check_staleness(
+    topics: &[TopicStatus],
+    now: DateTime<Utc>,
+    threshold_secs: u64,
+) -> Option<StaleBreach> {
+    check_topic_staleness(topics, "controller/status", now, threshold_secs)
 }
 
 #[cfg(test)]
@@ -48,6 +61,18 @@ mod tests {
     }
 
     #[test]
+    fn flags_stale_when_sensor_status_exceeds_threshold() {
+        let now = Utc::now();
+        let topics = vec![TopicStatus {
+            topic_category: "sensor/status".to_string(),
+            last_seen_at: now - Duration::seconds(120),
+        }];
+        let breach = check_topic_staleness(&topics, "sensor/status", now, 60);
+        assert!(breach.is_some());
+        assert_eq!(breach.unwrap().seconds_stale, 120);
+    }
+
+    #[test]
     fn does_not_flag_when_within_threshold() {
         let now = Utc::now();
         let topics = vec![TopicStatus {
@@ -55,6 +80,16 @@ mod tests {
             last_seen_at: now - Duration::seconds(10),
         }];
         assert!(check_staleness(&topics, now, 60).is_none());
+    }
+
+    #[test]
+    fn does_not_flag_sensor_when_within_threshold() {
+        let now = Utc::now();
+        let topics = vec![TopicStatus {
+            topic_category: "sensor/status".to_string(),
+            last_seen_at: now - Duration::seconds(10),
+        }];
+        assert!(check_topic_staleness(&topics, "sensor/status", now, 60).is_none());
     }
 
     #[test]

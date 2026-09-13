@@ -124,6 +124,38 @@ impl BackendClient {
         }
         Ok(())
     }
+
+    pub async fn create_stale_sensor_alert(
+        &self,
+        device_id: &str,
+        seconds_stale: i64,
+    ) -> anyhow::Result<()> {
+        let url = format!("{}/api/devices/{}/events", self.base_url, device_id);
+        let reason_code = hydragrow_shared::supervisor::SupervisorReasonCode::SensorFaultSuspected
+            .as_str()
+            .to_string();
+
+        let body = CreateEventRequest {
+            level: "warning".to_string(),
+            category: "alert".to_string(),
+            title: "Sensor status feed is stale".to_string(),
+            message: format!("No sensor/status message received in {seconds_stale} seconds"),
+            reason_codes: vec![reason_code],
+        };
+
+        let resp = self
+            .http
+            .post(&url)
+            .header("X-API-Key", &self.api_key)
+            .json(&body)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            anyhow::bail!("POST .../events returned {}", resp.status());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -210,6 +242,30 @@ mod tests {
         let client = BackendClient::new(server.url(), "svc_test123".to_string());
         client
             .create_stale_controller_alert("dev-1", 90)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_sensor_alert_posts_expected_body() {
+        let mut server = mockito::Server::new_async().await;
+        let _m = server
+            .mock("POST", "/api/devices/dev-1/events")
+            .match_header("x-api-key", "svc_test123")
+            .match_body(mockito::Matcher::PartialJson(serde_json::json!({
+                "level": "warning",
+                "category": "alert",
+                "reason_codes": ["sensor_fault_suspected"]
+            })))
+            .with_status(201)
+            .with_header("content-type", "application/json")
+            .with_body(r#"{"status": "created", "timestamp": 1234}"#)
+            .create_async()
+            .await;
+
+        let client = BackendClient::new(server.url(), "svc_test123".to_string());
+        client
+            .create_stale_sensor_alert("dev-1", 120)
             .await
             .unwrap();
     }

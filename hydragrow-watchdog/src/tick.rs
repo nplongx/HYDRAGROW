@@ -1,5 +1,5 @@
 use crate::backend_client::{BackendClient, TopicStatus};
-use crate::staleness::check_staleness;
+use crate::staleness::check_topic_staleness;
 use std::collections::HashMap;
 
 /// Abstracts over `BackendClient` so `run_tick`'s orchestration logic (which
@@ -11,6 +11,11 @@ pub trait TickClient {
     async fn recent_alert_exists(&self, device_id: &str, reason_code: &str)
     -> anyhow::Result<bool>;
     async fn create_stale_controller_alert(
+        &self,
+        device_id: &str,
+        seconds_stale: i64,
+    ) -> anyhow::Result<()>;
+    async fn create_stale_sensor_alert(
         &self,
         device_id: &str,
         seconds_stale: i64,
@@ -36,6 +41,13 @@ impl TickClient for BackendClient {
     ) -> anyhow::Result<()> {
         BackendClient::create_stale_controller_alert(self, device_id, seconds_stale).await
     }
+    async fn create_stale_sensor_alert(
+        &self,
+        device_id: &str,
+        seconds_stale: i64,
+    ) -> anyhow::Result<()> {
+        BackendClient::create_stale_sensor_alert(self, device_id, seconds_stale).await
+    }
 }
 
 /// One fleet-wide tick: design spec §12 requires logging which trigger
@@ -46,37 +58,75 @@ pub async fn run_tick(client: &impl TickClient, threshold_secs: u64) -> anyhow::
     let fleet = client.get_fleet_topics().await?;
 
     for (device_id, topics) in &fleet {
-        let Some(breach) = check_staleness(topics, chrono::Utc::now(), threshold_secs) else {
-            continue;
-        };
+        let now = chrono::Utc::now();
 
-        tracing::info!(
-            device_id = %device_id,
-            seconds_stale = breach.seconds_stale,
-            "controller/status staleness breach detected"
-        );
+        if let Some(breach) =
+            check_topic_staleness(topics, "controller/status", now, threshold_secs)
+        {
+            tracing::info!(
+                device_id = %device_id,
+                seconds_stale = breach.seconds_stale,
+                "controller/status staleness breach detected"
+            );
 
-        let reason_code =
-            hydragrow_shared::supervisor::SupervisorReasonCode::TopicStaleControllerStatus.as_str();
+            let reason_code =
+                hydragrow_shared::supervisor::SupervisorReasonCode::TopicStaleControllerStatus
+                    .as_str();
 
-        match client.recent_alert_exists(device_id, reason_code).await {
-            Ok(true) => {
-                tracing::debug!(device_id = %device_id, "breach already alerted within cooldown, skipping");
-                continue;
-            }
-            Ok(false) => {}
-            Err(e) => {
-                tracing::error!(device_id = %device_id, error = %e, "dedup check failed, skipping this tick");
-                continue;
+            match client.recent_alert_exists(device_id, reason_code).await {
+                Ok(true) => {
+                    tracing::debug!(device_id = %device_id, "breach already alerted within cooldown, skipping");
+                }
+                Ok(false) => {
+                    match client
+                        .create_stale_controller_alert(device_id, breach.seconds_stale)
+                        .await
+                    {
+                        Ok(()) => {
+                            tracing::info!(device_id = %device_id, "stale-controller alert created")
+                        }
+                        Err(e) => {
+                            tracing::error!(device_id = %device_id, error = %e, "failed to create alert")
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(device_id = %device_id, error = %e, "dedup check failed, skipping this tick");
+                }
             }
         }
 
-        match client
-            .create_stale_controller_alert(device_id, breach.seconds_stale)
-            .await
-        {
-            Ok(()) => tracing::info!(device_id = %device_id, "stale-controller alert created"),
-            Err(e) => tracing::error!(device_id = %device_id, error = %e, "failed to create alert"),
+        if let Some(breach) = check_topic_staleness(topics, "sensor/status", now, threshold_secs) {
+            tracing::info!(
+                device_id = %device_id,
+                seconds_stale = breach.seconds_stale,
+                "sensor/status staleness breach detected"
+            );
+
+            let reason_code =
+                hydragrow_shared::supervisor::SupervisorReasonCode::SensorFaultSuspected.as_str();
+
+            match client.recent_alert_exists(device_id, reason_code).await {
+                Ok(true) => {
+                    tracing::debug!(device_id = %device_id, "sensor breach already alerted within cooldown, skipping");
+                }
+                Ok(false) => {
+                    match client
+                        .create_stale_sensor_alert(device_id, breach.seconds_stale)
+                        .await
+                    {
+                        Ok(()) => {
+                            tracing::info!(device_id = %device_id, "stale-sensor alert created")
+                        }
+                        Err(e) => {
+                            tracing::error!(device_id = %device_id, error = %e, "failed to create sensor alert")
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(device_id = %device_id, error = %e, "sensor dedup check failed, skipping this tick");
+                }
+            }
         }
     }
 
@@ -100,6 +150,7 @@ mod tests {
     struct FakeClient {
         recent_alert_exists: Mutex<HashMap<String, bool>>,
         created_alerts: Mutex<Vec<String>>,
+        created_sensor_alerts: Mutex<Vec<String>>,
     }
 
     #[async_trait::async_trait]
@@ -155,6 +206,18 @@ mod tests {
                 .push(device_id.to_string());
             Ok(())
         }
+
+        async fn create_stale_sensor_alert(
+            &self,
+            device_id: &str,
+            _seconds_stale: i64,
+        ) -> anyhow::Result<()> {
+            self.created_sensor_alerts
+                .lock()
+                .unwrap()
+                .push(device_id.to_string());
+            Ok(())
+        }
     }
 
     #[tokio::test]
@@ -169,5 +232,71 @@ mod tests {
         run_tick(&client, 60).await.unwrap();
         let created = client.created_alerts.lock().unwrap();
         assert_eq!(*created, vec!["stale-dev".to_string()]);
+        // No sensor/status topics in this fixture, so no sensor alerts fire.
+        assert!(client.created_sensor_alerts.lock().unwrap().is_empty());
+    }
+
+    #[derive(Default)]
+    struct SensorFakeClient {
+        created_sensor_alerts: Mutex<Vec<String>>,
+    }
+
+    #[async_trait::async_trait]
+    impl TickClient for SensorFakeClient {
+        async fn get_fleet_topics(&self) -> anyhow::Result<HashMap<String, Vec<TopicStatus>>> {
+            let now = Utc::now();
+            Ok(HashMap::from([
+                (
+                    "sensor-stale-dev".to_string(),
+                    vec![TopicStatus {
+                        topic_category: "sensor/status".to_string(),
+                        last_seen_at: now - Duration::seconds(120),
+                    }],
+                ),
+                (
+                    "sensor-fresh-dev".to_string(),
+                    vec![TopicStatus {
+                        topic_category: "sensor/status".to_string(),
+                        last_seen_at: now - Duration::seconds(5),
+                    }],
+                ),
+            ]))
+        }
+
+        async fn recent_alert_exists(
+            &self,
+            _device_id: &str,
+            _reason_code: &str,
+        ) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+
+        async fn create_stale_controller_alert(
+            &self,
+            _device_id: &str,
+            _seconds_stale: i64,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn create_stale_sensor_alert(
+            &self,
+            device_id: &str,
+            _seconds_stale: i64,
+        ) -> anyhow::Result<()> {
+            self.created_sensor_alerts
+                .lock()
+                .unwrap()
+                .push(device_id.to_string());
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn run_tick_alerts_stale_sensor_devices() {
+        let client = SensorFakeClient::default();
+        run_tick(&client, 60).await.unwrap();
+        let created = client.created_sensor_alerts.lock().unwrap();
+        assert_eq!(*created, vec!["sensor-stale-dev".to_string()]);
     }
 }

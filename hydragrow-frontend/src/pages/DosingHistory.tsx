@@ -11,7 +11,7 @@ import { httpFetch } from '../platform/http';
 import { saveTextFile } from '../platform/file';
 import {
   totalMlToday,
-  hourlyBuckets,
+  hourlyBucketsByPump,
   sevenDayAverage,
   detectAnomalies,
   DosingHistoryRangeRecord,
@@ -50,7 +50,7 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
   });
 
   const totalToday = totalMlToday(records);
-  const hourlyValues = hourlyBuckets(records);
+  const bucketsByPump = hourlyBucketsByPump(records);
   const { averageMlPerDay, changePercentVsPrevious7Days } = sevenDayAverage(records);
   const anomalies = detectAnomalies(records);
 
@@ -118,7 +118,7 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
 
       <DosingTotalCard
         totalMlToday={totalToday}
-        hourlyValues={hourlyValues}
+        bucketsByPump={bucketsByPump}
         averageMlPerDay={averageMlPerDay}
         changePercent={changePercentVsPrevious7Days}
       />

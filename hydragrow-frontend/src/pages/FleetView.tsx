@@ -96,28 +96,28 @@ export function FleetView() {
   }, [devices, summaries]);
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6 pb-24">
+    <div className="app-page">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3">
+      <div className="page-header">
+        <div className="page-header-main">
           <button
             onClick={() => navigate(-1)}
             aria-label="Quay lại"
-            className="flex items-center justify-center w-9 h-9 border border-line rounded-xl text-primary-deep hover:bg-soft transition-colors"
+            className="page-header-icon"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-primary-deep tracking-tight">
+            <h1 className="page-header-title">
               Tổng Quan Thiết Bị
             </h1>
-            <p className="text-xs md:text-sm text-text-muted mt-0.5">
+            <p className="page-header-subtitle">
               Theo dõi tình trạng kết nối, dinh dưỡng EC/pH và cảnh báo theo thời gian thực.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-2">
           <button
             onClick={refresh}
             disabled={loading}

@@ -12,7 +12,7 @@ interface AuthCardProps {
 export function AuthCard({ subtitle, children, footer }: AuthCardProps) {
   return (
     <div className="login-screen min-h-screen flex items-center justify-center p-4 bg-surface-muted">
-      <div className="w-full max-w-sm ui-card bg-white border border-line rounded-2xl p-8 shadow-sm">
+      <div className="w-full max-w-sm ui-card bg-white border border-line rounded-2xl p-4 md:p-5 shadow-sm">
         <div className="text-center mb-6">
           <h1 className="login-screen-title text-3xl font-bold text-primary-deep tracking-tight">
             HydraGrow
@@ -54,8 +54,8 @@ export function AuthTextField({
   required = true,
 }: AuthTextFieldProps) {
   return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-semibold text-primary-deep" htmlFor={id}>
+    <div className="ui-form-row">
+      <label className="ui-form-label" htmlFor={id}>
         {label}
       </label>
       <input
@@ -67,9 +67,9 @@ export function AuthTextField({
         placeholder={placeholder}
         required={required}
         aria-invalid={invalid}
-        className={`w-full rounded-xl border px-4 py-2.5 text-sm text-primary-deep outline-none transition-colors ${
+        className={`ui-input ${
           invalid
-            ? 'border-red-500 ring-1 ring-red-200 focus:border-red-500'
+            ? 'border-error ring-1 ring-error/30 focus:border-error'
             : 'border-line bg-white focus:border-primary'
         }`}
       />

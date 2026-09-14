@@ -190,6 +190,10 @@ p {
   .ui-tab-active {
     @apply bg-primary-deep text-white;
   }
+
+  .bg-soft {
+    @apply bg-surface-muted;
+  }
 }
 
 .toggle-checkbox {

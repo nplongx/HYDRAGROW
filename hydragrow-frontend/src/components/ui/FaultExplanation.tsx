@@ -21,7 +21,7 @@ export const FaultExplanation: React.FC<FaultExplanationProps> = ({ code, onClos
   const guide = getFaultGuide(code);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F1F14]/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary-deep/40 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white border border-red-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">

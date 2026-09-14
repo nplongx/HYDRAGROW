@@ -9,9 +9,8 @@ const isBrowser = typeof window !== 'undefined';
 
 export const isTauriRuntime = () => isBrowser && '__TAURI_INTERNALS__' in window;
 
-/// Máy chủ mặc định cho web: cùng origin (reverse-proxy) để không phải nhập tay.
+/// Máy chủ mặc định cho web: đã hardcode theo yêu cầu
 export const getDefaultBackendUrl = (): string => {
-  if (isBrowser && window.location.origin) return window.location.origin;
   return 'https://hydragrow.onrender.com';
 };
 

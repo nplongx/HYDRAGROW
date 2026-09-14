@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LoadingState } from '../components/ui/LoadingState';
 
 // --- IMPORT PLATFORM & UTILS ---
@@ -30,6 +31,7 @@ type DosingValidationErrors = Partial<Record<DosingFieldKey, string>>;
 
 // --- COMPONENT SETTINGS CHÍNH ---
 const Settings = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { data: whoami } = useWhoami();
   const roleLabel =
@@ -641,7 +643,7 @@ const Settings = () => {
           userEmail={user?.email}
           userRole={roleLabel}
           onLogout={() => logout()}
-          onGoToPairing={() => { window.location.href = '/pairing'; }}
+          onGoToPairing={() => navigate('/pairing')}
           isAdvancedMode={isAdvancedMode}
           onToggleAdvancedMode={setIsAdvancedMode}
           controlMode={config.control_mode === 'manual' ? 'manual' : 'auto'}

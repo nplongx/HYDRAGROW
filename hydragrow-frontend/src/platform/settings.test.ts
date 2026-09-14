@@ -96,10 +96,10 @@ describe('loadAppSettings (web — không yêu cầu nhập API key tay)', () =>
     Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
   });
 
-  it('trả về backend_url = window.location.origin khi chưa có cấu hình', async () => {
+  it('trả về backend_url hardcoded khi chưa có cấu hình', async () => {
     const s = await loadAppSettings();
     expect(s).not.toBeNull();
-    expect(s?.backend_url).toBe(window.location.origin);
+    expect(s?.backend_url).toBe('https://hydragrow.onrender.com');
     expect(s?.api_key).toBe('');
     expect(s?.device_id).toBe('');
   });

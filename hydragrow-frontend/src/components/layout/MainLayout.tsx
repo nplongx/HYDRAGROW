@@ -76,7 +76,7 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
         <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-          isSensorOnline ? 'bg-pill text-status' : 'bg-[#FEE2E2] text-error'
+          isSensorOnline ? 'bg-pill text-status' : 'bg-danger-bg text-error'
         }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${isSensorOnline ? 'bg-status' : 'bg-error'}`} />
           {isSensorOnline ? 'Đang kết nối' : 'Mất tín hiệu'}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Upload } from 'lucide-react';
+import { Download, Upload, DatabaseBackup } from 'lucide-react';
 import { useDeviceStore } from '../store/useDeviceStore';
 import { apiGet, apiPost } from '../lib/apiClient';
 
@@ -45,24 +45,36 @@ export function ConfigBackup() {
   }
 
   return (
-    <div className="max-w-xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Backup & Restore Cấu Hình</h1>
+    <div className="app-page">
+      <div className="page-header">
+        <div className="page-header-main">
+          <div className="page-header-icon">
+            <DatabaseBackup size={20} />
+          </div>
+          <div>
+            <h1 className="page-header-title">Backup & Restore Cấu Hình</h1>
+            <p className="page-header-subtitle">
+              Sao lưu và khôi phục cấu hình thiết bị để đảm bảo an toàn dữ liệu.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {message && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
-          message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+          message.type === 'success' ? 'bg-pill text-status' : 'bg-danger-bg text-error'
         }`}>
           {message.text}
         </div>
       )}
 
       <div className="space-y-4">
-        <div className="p-6 border rounded-xl">
+        <div className="ui-card">
           <div className="flex items-center gap-3 mb-3">
-            <Download className="text-sky-600" size={20} />
+            <Download className="text-water" size={20} />
             <h2 className="font-semibold">Xuất Backup</h2>
           </div>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-text-muted mb-4">
             Tải xuống file JSON chứa toàn bộ cấu hình thiết bị và recipe hiện tại.
           </p>
           <button
@@ -73,15 +85,15 @@ export function ConfigBackup() {
           </button>
         </div>
 
-        <div className="p-6 border rounded-xl">
+        <div className="ui-card">
           <div className="flex items-center gap-3 mb-3">
-            <Upload className="text-orange-500" size={20} />
+            <Upload className="text-warning" size={20} />
             <h2 className="font-semibold">Import Backup</h2>
           </div>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-text-muted mb-4">
             Khôi phục cấu hình từ file backup. Thao tác này sẽ ghi đè cấu hình hiện tại của thiết bị.
           </p>
-          <label className={`flex items-center gap-2 px-4 py-2 border border-orange-400 text-orange-600 rounded-lg text-sm cursor-pointer hover:bg-orange-50 ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+          <label className={`flex items-center gap-2 px-4 py-2 border border-warning text-warning rounded-lg text-sm cursor-pointer hover:bg-warning-bg ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
             <Upload size={16} /> {importing ? 'Đang import...' : 'Chọn file backup'}
             <input type="file" accept=".json" onChange={handleImport} className="hidden" disabled={importing} />
           </label>

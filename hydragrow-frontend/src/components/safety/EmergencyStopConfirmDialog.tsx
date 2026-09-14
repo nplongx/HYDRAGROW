@@ -25,7 +25,7 @@ export const EmergencyStopConfirmDialog = ({
     .map(([key]) => key);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-[#0F1F14]/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-primary-deep/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
         <div className="flex items-start gap-3">
           <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-red-600 shrink-0">

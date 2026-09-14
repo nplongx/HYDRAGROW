@@ -50,15 +50,24 @@ export function UserManagement() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Shield className="text-primary" size={24} />
-        <h1 className="text-2xl font-bold text-primary-deep">Quản Lý Người Dùng & Quyền</h1>
+    <div className="app-page">
+      <div className="page-header">
+        <div className="page-header-main">
+          <div className="page-header-icon">
+            <Shield size={20} />
+          </div>
+          <div>
+            <h1 className="page-header-title">Quản Lý Người Dùng & Quyền</h1>
+            <p className="page-header-subtitle">
+              Quản lý quyền truy cập và vai trò cho người dùng trong hệ thống.
+            </p>
+          </div>
+        </div>
       </div>
 
       {message && (
         <div className={`mb-4 p-3 rounded-lg text-sm ${
-          message.type === 'success' ? 'bg-pill text-status' : 'bg-red-50 text-red-700'
+          message.type === 'success' ? 'bg-pill text-status' : 'bg-danger-bg text-error'
         }`}>
           {message.text}
         </div>

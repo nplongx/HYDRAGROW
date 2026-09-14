@@ -228,7 +228,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             label: 'Tạo mùa vụ',
             onClick: () => {
               completeStep('first_season');
-              navigate('/seasons');
+              navigate('/cultivation');
             },
           }}
         />

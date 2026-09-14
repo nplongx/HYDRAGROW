@@ -26,8 +26,8 @@ const themeClasses: Record<string, string> = {
 
 const statusClasses: Record<string, string> = {
   good: 'bg-pill text-status border-transparent',
-  warn: 'bg-[#FFFBEB] text-warn-deep border-transparent',
-  danger: 'bg-[#FEE2E2] text-error border-transparent',
+  warn: 'bg-warning-bg text-warn-deep border-transparent',
+  danger: 'bg-danger-bg text-error border-transparent',
   info: 'bg-sky-50 text-sky-700 border-transparent',
 };
 

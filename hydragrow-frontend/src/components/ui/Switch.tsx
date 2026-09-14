@@ -2,9 +2,9 @@ import React from 'react';
 
 interface SwitchProps {
   checked?: boolean;
-  isOn?: boolean;
+  isOn?: boolean; // @deprecated Use checked instead
   onChange?: (checked: boolean) => void;
-  onClick?: (checked: boolean) => void;
+  onClick?: (checked: boolean) => void; // @deprecated Use onChange instead
   disabled?: boolean;
   label?: string;
   size?: 'sm' | 'md';
@@ -25,8 +25,9 @@ export const Switch: React.FC<SwitchProps> = ({
 
   const handleToggle = (nextVal: boolean) => {
     if (disabled) return;
+    // Prefer onChange, fall back to onClick for backward compatibility
     if (onChange) onChange(nextVal);
-    if (onClick) onClick(nextVal);
+    else if (onClick) onClick(nextVal);
   };
 
   const trackW = size === 'sm' ? 'w-[30px]' : 'w-[38px]';

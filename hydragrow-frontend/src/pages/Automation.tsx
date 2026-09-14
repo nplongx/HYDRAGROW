@@ -297,7 +297,7 @@ export function Automation() {
           <div
             data-testid="drawer-backdrop"
             onClick={canvas.closeEditor}
-            className="fixed inset-0 bg-[#0F1F14]/40 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-primary-deep/40 backdrop-blur-sm transition-opacity"
           />
           <div className="relative z-50 h-[92vh] max-h-[960px] w-full max-w-7xl rounded-3xl bg-white shadow-2xl border border-line overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <FlowDetailDrawer

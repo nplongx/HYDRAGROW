@@ -376,7 +376,7 @@ export function DevicePairing() {
                     <span className="flex items-center gap-1">
                       <span
                         className={`w-2 h-2 rounded-full ${
-                          isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                          isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-faint'
                         }`}
                       />
                       <span className={isOnline ? 'text-status font-medium' : 'text-text-muted'}>

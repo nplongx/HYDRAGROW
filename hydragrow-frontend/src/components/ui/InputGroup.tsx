@@ -4,14 +4,15 @@ interface InputGroupProps {
   label: string;
   unit?: string;
   helperText?: string;
-  desc?: string;
+  desc?: string; // @deprecated Use helperText instead
   error?: string;
-  errorText?: string;
+  errorText?: string; // @deprecated Use error instead
   children?: React.ReactNode;
   // Input props for direct use when children is omitted
   type?: string;
   value?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChangeValue?: (value: string | number) => void; // Preferred for direct value access
   step?: string;
   min?: number;
   max?: number;
@@ -21,10 +22,20 @@ interface InputGroupProps {
 
 export const InputGroup: React.FC<InputGroupProps> = ({
   label, unit, helperText, desc, error, errorText, children,
-  type = 'number', value, onChange, step, min, max, disabled, placeholder
+  type = 'number', value, onChange, onChangeValue, step, min, max, disabled, placeholder
 }) => {
   const displayHelper = helperText || desc;
   const displayError = error || errorText;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (onChange) {
+      onChange(e);
+    }
+    if (onChangeValue) {
+      const newValue = type === 'number' ? parseFloat(e.target.value) : e.target.value;
+      onChangeValue(newValue);
+    }
+  };
 
   return (
     <div className="ui-form-row flex flex-col gap-1">
@@ -39,7 +50,7 @@ export const InputGroup: React.FC<InputGroupProps> = ({
           min={min}
           max={max}
           value={value ?? ''}
-          onChange={onChange}
+          onChange={handleChange}
           disabled={disabled}
           placeholder={placeholder}
           className={`w-full bg-white text-primary-deep text-sm rounded-lg p-2.5 outline-none transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${

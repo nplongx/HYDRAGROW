@@ -26,7 +26,7 @@ export const ActiveRecipeStatus: React.FC = () => {
       </div>
 
       {isError ? (
-        <div className="rounded-xl border border-transparent bg-[#FEE2E2] p-3 text-xs text-error">
+        <div className="rounded-xl border border-transparent bg-danger-bg p-3 text-xs text-error">
           Không thể lấy thông tin recipe: {(error as Error).message}
         </div>
       ) : !activeRecipe ? (

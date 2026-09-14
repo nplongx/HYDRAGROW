@@ -99,6 +99,7 @@ function AppRoutes() {
             {/* legacy deep links redirect into the merged tab pages */}
             <Route path="control" element={<Navigate to="/operations" replace />} />
             <Route path="automation" element={<Navigate to="/operations" replace />} />
+            <Route path="seasons" element={<Navigate to="/cultivation" replace />} />
             <Route path="crop-seasons" element={<Navigate to="/cultivation" replace />} />
             <Route path="recipes" element={<Navigate to="/cultivation" replace />} />
             <Route path="dosing-history" element={<Navigate to="/cultivation" replace />} />

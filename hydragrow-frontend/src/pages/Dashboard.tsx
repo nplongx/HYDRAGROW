@@ -89,10 +89,6 @@ const Dashboard = () => {
     return <LoadingState message="Đang tải dữ liệu trạm thông minh..." />;
   }
 
-  if (!sensorData) {
-    return <LoadingState message="Không có tín hiệu cảm biến!" />;
-  }
-
   if (!deviceId) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-5 p-6 text-center">

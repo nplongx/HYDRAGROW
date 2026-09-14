@@ -49,13 +49,9 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
 
   if (isLoading) return <LoadingState message="Đang kết nối trung tâm điều khiển..." />;
 
-  if (!sensorData) {
-    return <LoadingState message="Không có tín hiệu cảm biến!" />;
-  }
-
   const isOnline = deviceStatus?.is_online || false;
   const showDisconnected = isControllerStatusKnown && !isOnline;
-  const pumps: Partial<PumpStatus> = sensorData.pump_status || {};
+  const pumps: Partial<PumpStatus> = sensorData?.pump_status || {};
   const isEmergency = Boolean(fsmState?.toUpperCase().includes('EMERGENCY') || fsmState?.toUpperCase().includes('FAULT'));
   const isAutoMode = settings?.control_mode === 'auto';
   const canSendCommands = Boolean(deviceId && settings?.backend_url);
@@ -68,6 +64,11 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
     <>
       {/* Cảnh báo sự cố / Mất kết nối */}
       <div className="space-y-3 mt-3">
+        {!sensorData && (
+          <Banner tone="info" title="Đang chờ dữ liệu cảm biến">
+            Trang điều khiển sẽ hiển thị khi có dữ liệu từ thiết bị.
+          </Banner>
+        )}
         {showDisconnected && (
           <Banner tone="danger" title="Hệ thống Ngoại tuyến">
             Không thể truyền lệnh do mất kết nối Wi-Fi.

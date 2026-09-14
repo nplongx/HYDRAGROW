@@ -1,9 +1,0 @@
-[
-  12, / type code                                          /
-  2,  / block number                                       /
-  1,  / flags - block must be replicated in every fragment /
-  0,  / CRC type                                           /
-  h'820301020182028202018382014c5477656c7665313231323132820203820407
-    8281820150220ffc45c8a901999ecc60991dd78b2981820150d2c51cb2481792
-    dae8b21d848cede99b'
-]

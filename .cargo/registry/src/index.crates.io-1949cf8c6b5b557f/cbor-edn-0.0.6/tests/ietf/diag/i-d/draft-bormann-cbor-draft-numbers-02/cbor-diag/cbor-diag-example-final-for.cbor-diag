@@ -1,9 +1,0 @@
-{
-  / title /         -1: "title of the error",
-  / detail /        -2: "detailed information about the error",
-  / instance /      -3: "coaps://pd.example/FA317434",
-  / response-code / -4: 128, / 4.00 /
-  4711: {
-     / ... /
-  }
-}

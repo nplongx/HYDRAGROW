@@ -1,2 +1,0 @@
-"/ietf-system:system/authentication/user[name='bob']/
-authorized-key[name='admin'][country='france']/key-data"

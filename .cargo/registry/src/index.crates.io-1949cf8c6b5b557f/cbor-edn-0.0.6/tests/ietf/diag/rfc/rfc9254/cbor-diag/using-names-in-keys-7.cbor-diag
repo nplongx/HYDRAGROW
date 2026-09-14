@@ -1,8 +1,0 @@
-{
-  "ietf-coreconf:error" : {
-    "error-tag" : "invalid-value",
-    "error-app-tag" : "not-in-range",
-    "error-data-node" : "timezone-utc-offset",
-    "error-message" : "Maximum exceeded"
-  }
-}

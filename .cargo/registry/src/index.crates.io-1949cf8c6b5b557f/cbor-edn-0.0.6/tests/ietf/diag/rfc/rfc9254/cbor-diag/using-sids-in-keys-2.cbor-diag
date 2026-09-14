@@ -1,8 +1,0 @@
-{
-  1720 : {                              / system-state (SID 1720) /
-    1 : {                               / clock  (SID 1721) /
-      2 : "2015-10-02T14:47:24Z-05:00", / current-datetime(SID 1723)/
-      1 : "2015-09-15T09:12:58Z-05:00"  / boot-datetime (SID 1722) /
-    }
-  }
-}

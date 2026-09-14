@@ -1,7 +1,0 @@
-bin.name = "cbor-edn"
-args = ["diag2cbor", "-o", "hex", "--apply-999"]
-
-stdin = "[1, 2, foo'bar']"
-stdout = """
-830102d903e78263666f6f63626172
-"""

@@ -1,3 +1,0 @@
-# By default, known tags are evaluated
-bin.name = "cbor-edn"
-args = ["cbor2diag", "input.cbor", "output.diag"]

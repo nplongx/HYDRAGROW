@@ -1,3 +1,0 @@
-bin.name = "cbor-edn"
-args = ["cbor2diag", "input.cbor", "--no-annotate-tags"]
-stdout = "1(123)"

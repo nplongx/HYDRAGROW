@@ -1,5 +1,0 @@
-error: unknown attribute 'unknown'
-  --> ui_tests/rhai_fn_bad_attr.rs:11:11
-   |
-11 | #[rhai_fn(unknown = "thing")]
-   |           ^^^^^^^

@@ -1,7 +1,0 @@
-[
-  7,      / type code: Bundle Age Block    /
-  2,      / block number                   /
-  0,      / block processing control flags /
-  0,      / CRC type                       /
-  <<300>> / type-specific-data: age        /
-]

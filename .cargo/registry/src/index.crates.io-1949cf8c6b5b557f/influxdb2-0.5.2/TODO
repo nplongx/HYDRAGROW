@@ -1,4 +1,0 @@
-[x] Rename influxdb2_structmap_derive to influxdb2_derive
-[x] Rename influxdb2_structmap_derive::FromMap to FromDataPoint
-[ ] Remove chrono dependency
-[ ] Implement ToDataPoint proc macro

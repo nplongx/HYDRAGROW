@@ -1,8 +1,0 @@
-[                                   / Consistency proof 1           /
-  4,                                / Tree size 1                   /
-  6,                                / Tree size 2                   /
-  [                                 / Consistency hashes (2)        /
-     h'0bdaaed3...32568964' +       / Intermediate hash 1           /
-     h'75f177fd...2e73a8ab'         / Intermediate hash 2           /
-  ]
-]

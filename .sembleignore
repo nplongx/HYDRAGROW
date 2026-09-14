@@ -1,0 +1,46 @@
+# Build artifacts
+target/
+dist/
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Dependencies
+node_modules/
+vendor/
+.git/
+
+# Generated files
+*.generated.*
+*.pb.go
+*.pb.rs
+*.gen.ts
+*.gen.js
+
+# Cache and temporary
+.cache/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Worktrees
+.worktrees/
+
+# Documentation (can be read directly if needed)
+docs/
+*.md

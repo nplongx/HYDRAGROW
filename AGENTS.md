@@ -148,3 +148,55 @@ For reusable multi-step techniques (writing implementation plans, systematic
 debugging, subagent-driven execution, parallel worktree sessions), see
 `.agents/skills/`. For a starting template when writing a task prompt for any
 coding agent, see [`.agent/prompts/Task_Template.md`](.agent/prompts/Task_Template.md).
+
+---
+
+## 8. Code Retrieval Optimization
+
+This project uses Semble and Graft as MCP servers to minimize token usage during code exploration:
+
+### Tool Selection Logic
+
+- **Specific code queries (functions, classes, implementations):** Use `mcp__semble__search` first
+  - Example: "Find the authentication middleware implementation"
+  - Use Semble's semantic search to locate exact code snippets
+  - Follow up with `mcp__semble__find_related` to explore similar code
+
+- **Architectural understanding (subsystems, dependencies, relationships):** Use Graft tools
+  - Example: "What are the main subsystems and how do they relate?"
+  - Use `mcp__graft__repo_map` for ranked codebase tree
+  - Use `mcp__graft__file_api` for file-specific dependencies
+  - Use `mcp__graft__trace_calls` to understand change effects
+
+- **Direct file reading:** Only when Semble/Graft retrieval is insufficient
+  - Example: When you need the complete file context for editing
+  - Example: When examining configuration files not indexed by Semble/Graft
+
+### Usage Examples
+
+**Search for specific function:**
+```
+Use mcp__semble__search with query: "authentication middleware"
+If results are insufficient, then use grep or read files directly
+```
+
+**Understand architecture:**
+```
+Use mcp__graft__repo_map to get ranked codebase overview
+Use mcp__graft__file_api for specific file dependencies
+Use mcp__graft__trace_calls to see what changes affect
+```
+
+**Trace dependencies:**
+```
+Use mcp__graft__find_code to find definitions by name
+Use mcp__graft__trace_calls to see what imports/uses a symbol
+```
+
+### Configuration
+
+Both tools are configured as MCP servers in `~/.config/devin/mcp_config.json`:
+- **Semble:** `uvx --from "semble[mcp]" semble` (semantic code search)
+- **Graft:** `graft serve` (structural codebase mapping)
+
+Graph is cached in `graft/` directory (gitignored) and auto-updates on code changes.

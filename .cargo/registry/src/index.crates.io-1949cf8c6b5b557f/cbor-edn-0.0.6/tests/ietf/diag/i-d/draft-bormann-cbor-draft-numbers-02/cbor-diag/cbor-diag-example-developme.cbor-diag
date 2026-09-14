@@ -1,9 +1,0 @@
-{
-  / title-CPA /         -1: "title of the error",
-  / detail-CPA /        -2: "detailed information about the error",
-  / instance-CPA /      -3: "coaps://pd.example/FA317434",
-  / response-code-CPA / -4: 128, / 4.00 /
-  4711: {
-     / ... /
-  }
-}

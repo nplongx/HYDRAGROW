@@ -1,3 +1,0 @@
-[toolchain]
-channel = '1.61.0'
-# Templated by `cargo-generate` using https://github.com/danielhenrymantilla/proc-macro-template

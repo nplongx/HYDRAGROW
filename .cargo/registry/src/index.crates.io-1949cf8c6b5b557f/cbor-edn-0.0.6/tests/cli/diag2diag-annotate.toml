@@ -1,9 +1,0 @@
-bin.name = "cbor-edn"
-args = ["diag2diag", "--annotate-tags"]
-
-stdin = "[1(1234567890), 54(h'2001db80000000000000000000000001'), 38([\"he\", \"שלום\", true])]"
-stdout = """[
-    DT'2009-02-13T23:31:30+00:00',
-    IP'2001:db80::1',
-    38([\"he\", \"שלום\", true/ Right-to-left /])
-]"""

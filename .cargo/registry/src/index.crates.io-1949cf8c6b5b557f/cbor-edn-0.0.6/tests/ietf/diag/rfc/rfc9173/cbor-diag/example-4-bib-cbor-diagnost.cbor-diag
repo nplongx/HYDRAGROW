@@ -1,9 +1,0 @@
-[
-  11, / type code    /
-  3,  / block number /
-  0,  / flags        /
-  0,  / CRC type     /
-  h'81010101820282020182820106820307818182015830f75fe4c37f76f0461658
-    55bd5ff72fbfd4e3a64b4695c40e2b787da005ae819f0a2e30a2e8b325527de8
-    aefb52e73d71'
-]

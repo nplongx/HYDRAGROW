@@ -1,2 +1,0 @@
-[alias]
-clippy-mockito = "clippy --lib --tests --all-features"

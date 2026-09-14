@@ -30,3 +30,9 @@ deploy/oracle/mosquitto/certs/
 
 # Isolated git worktrees (implementation scratch, never commit contents)
 .worktrees/
+
+# Build caches & agent runtime state (never commit contents)
+.cargo/
+.pnpm-store/
+.dsh/
+.agent-teams/

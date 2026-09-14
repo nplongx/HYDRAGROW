@@ -1,6 +1,0 @@
-    {
-     / AS / 1 : "coaps://as.example.com/token",
-     / audience / 5 : "coaps://rs.example.com",
-     / scope / 9 : "rTempC",
-     / cnonce / 39 : h'e0a156bb3f'
-    }

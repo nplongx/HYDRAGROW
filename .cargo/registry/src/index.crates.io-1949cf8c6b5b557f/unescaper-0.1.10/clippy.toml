@@ -1,3 +1,0 @@
-allow-unwrap-in-tests        = true
-too-many-lines-threshold     = 120
-warn-on-all-wildcard-imports = true

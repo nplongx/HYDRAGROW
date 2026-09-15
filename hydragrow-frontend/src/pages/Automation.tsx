@@ -29,6 +29,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useDeviceStore } from "../store/useDeviceStore";
 import type { UserScript } from "../types/automation";
 import { hasConfigOverride } from "../lib/automation/configDirectives";
+import { NavLink } from "react-router-dom";
 
 const nodeTypes = {
   flowSummary: FlowSummaryNode,
@@ -130,8 +131,17 @@ export function Automation() {
 
   return (
     <div className="app-page min-h-screen p-4 sm:p-6 lg:p-8 flex flex-col space-y-6">
+      <nav aria-label="Khu vực vận hành" className="ui-tabbar -mx-4 -mt-4 px-2 sm:-mx-6 lg:-mx-8">
+        <NavLink to="/operations" className="ui-tab px-4 py-2 text-sm">
+          Điều khiển
+        </NavLink>
+        <NavLink to="/automation" aria-current="page" className="ui-tab ui-tab-active px-4 py-2 text-sm">
+          Tự động hóa
+        </NavLink>
+      </nav>
       {/* Header */}
       <AutomationPageHeader
+        deviceId={deviceId}
         onNewFlow={() => canvas.openEditor("new")}
         onOpenConfigExplorer={() => setCurrentView("config_explorer")}
       />

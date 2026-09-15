@@ -25,6 +25,7 @@ const queryClient = new QueryClient({
 
 import Dashboard from './pages/Dashboard';
 import { Operations } from './pages/Operations';
+import { Automation } from './pages/Automation';
 import Cultivation from './pages/Cultivation';
 import Journal from './pages/Journal';
 const Settings = React.lazy(() => import('./pages/Settings'));
@@ -88,6 +89,7 @@ function AppRoutes() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="operations" element={<Operations />} />
+            <Route path="automation" element={<Automation />} />
             <Route path="cultivation" element={<Cultivation />} />
             <Route path="journal" element={<Journal />} />
             <Route path="settings" element={<Settings />} />
@@ -98,7 +100,6 @@ function AppRoutes() {
             <Route path="roles" element={<Roles />} />
             {/* legacy deep links redirect into the merged tab pages */}
             <Route path="control" element={<Navigate to="/operations" replace />} />
-            <Route path="automation" element={<Navigate to="/operations" replace />} />
             <Route path="seasons" element={<Navigate to="/cultivation" replace />} />
             <Route path="crop-seasons" element={<Navigate to="/cultivation" replace />} />
             <Route path="recipes" element={<Navigate to="/cultivation" replace />} />

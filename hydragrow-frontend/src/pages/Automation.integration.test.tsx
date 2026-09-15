@@ -62,8 +62,8 @@ describe('Automation Integration', () => {
       </QueryClientProvider>
     );
 
-    // -> overview
-    expect(screen.getByText('Tự động hóa')).toBeInTheDocument();
+    // -> overview (page title heading; the surface nav link shares the same text)
+    expect(screen.getByRole('heading', { name: 'Tự động hóa' })).toBeInTheDocument();
 
     // -> open Flow (create new)
     const newFlowBtn = screen.getByRole('button', { name: /Flow mới/i });

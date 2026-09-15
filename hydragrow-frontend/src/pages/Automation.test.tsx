@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { Automation } from "./Automation";
 import { useDeviceStore } from "../store/useDeviceStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -82,10 +83,13 @@ describe("Automation Page", () => {
   it("renders saved flows", () => {
     // we mocked useMediaQuery in setupTests to return false, so we are in mobile view
     // showing flow cards instead of canvas
+    // Automation renders NavLinks, so it needs a Router context
     render(
-      <QueryClientProvider client={queryClient}>
-        <Automation />
-      </QueryClientProvider>
+      <MemoryRouter initialEntries={['/automation']}>
+        <QueryClientProvider client={queryClient}>
+          <Automation />
+        </QueryClientProvider>
+      </MemoryRouter>
     );
 
     // a saved alert node shows its kind badge
@@ -104,9 +108,11 @@ describe("Automation Page", () => {
   it("shows prompt when no deviceId is selected in useDeviceStore", () => {
     useDeviceStore.setState({ deviceId: null });
     render(
-      <QueryClientProvider client={queryClient}>
-        <Automation />
-      </QueryClientProvider>
+      <MemoryRouter initialEntries={['/automation']}>
+        <QueryClientProvider client={queryClient}>
+          <Automation />
+        </QueryClientProvider>
+      </MemoryRouter>
     );
     expect(
       screen.getByText(/Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động/i)

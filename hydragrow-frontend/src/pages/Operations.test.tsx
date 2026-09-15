@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { Operations } from './Operations';
@@ -9,33 +9,27 @@ vi.mock('./ControlPanel', () => ({
   ),
 }));
 
-vi.mock('./Automation', () => ({
-  Automation: () => <div data-testid="automation-page">Automation Mock</div>,
-}));
-
 describe('Operations Page', () => {
-  it('renders both Điều khiển and Tự động hóa tabs, defaulting to Điều khiển', () => {
+  it('renders Điều khiển / Tự động hóa surface nav links, defaulting to Điều khiển', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/operations']}>
         <Operations />
       </MemoryRouter>
     );
-    expect(screen.getByRole('tab', { name: /điều khiển/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /tự động hóa/i })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('link', { name: /điều khiển/i })).toHaveAttribute('href', '/operations');
+    expect(screen.getByRole('link', { name: /tự động hóa/i })).toHaveAttribute('href', '/automation');
+    expect(screen.getByRole('link', { name: /điều khiển/i })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTestId('control-panel')).toBeInTheDocument();
-    expect(screen.queryByTestId('automation-page')).not.toBeInTheDocument();
   });
 
-  it('switches to Automation tab on click', () => {
+  it('always shows ControlPanel and never embeds Automation', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/automation']}>
         <Operations />
       </MemoryRouter>
     );
-    fireEvent.click(screen.getByRole('tab', { name: /tự động hóa/i }));
-    expect(screen.getByRole('tab', { name: /tự động hóa/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /điều khiển/i })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByTestId('automation-page')).toBeInTheDocument();
-    expect(screen.queryByTestId('control-panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /tự động hóa/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('control-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('automation-page')).not.toBeInTheDocument();
   });
 });

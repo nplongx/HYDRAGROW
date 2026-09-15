@@ -3,9 +3,10 @@ import { Plus } from "lucide-react";
 interface AutomationPageHeaderProps {
   onNewFlow: () => void;
   onOpenConfigExplorer?: () => void;
+  deviceId: string;
 }
 
-export function AutomationPageHeader({ onNewFlow, onOpenConfigExplorer }: AutomationPageHeaderProps) {
+export function AutomationPageHeader({ onNewFlow, onOpenConfigExplorer, deviceId }: AutomationPageHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
       <div>
@@ -13,6 +14,7 @@ export function AutomationPageHeader({ onNewFlow, onOpenConfigExplorer }: Automa
         <p className="text-xs text-text-muted mt-1 max-w-2xl">
           Flow & Cấu hình thiết bị — Quản lý các Flow tự động, theo dõi trạng thái và ghi đè cấu hình theo điều kiện.
         </p>
+        <p className="text-[11px] text-faint mt-1">Thiết bị đang chọn: {deviceId}</p>
       </div>
 
       <div className="flex items-center gap-3 self-start sm:self-auto">

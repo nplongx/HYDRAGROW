@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { Automation } from "./Automation";
 import { useDeviceStore } from "../store/useDeviceStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -62,10 +63,13 @@ describe("Automation Page Desktop Drawer", () => {
 
   it("renders backdrop and max-w-7xl centered container when a script is selected in desktop mode", () => {
     mockSelectedScript = "new";
+    // Automation renders NavLinks, so it needs a Router context
     render(
-      <QueryClientProvider client={queryClient}>
-        <Automation />
-      </QueryClientProvider>
+      <MemoryRouter initialEntries={['/automation']}>
+        <QueryClientProvider client={queryClient}>
+          <Automation />
+        </QueryClientProvider>
+      </MemoryRouter>
     );
 
     const backdrop = screen.getByTestId("drawer-backdrop");
@@ -81,9 +85,11 @@ describe("Automation Page Desktop Drawer", () => {
   it("does not render drawer or backdrop when no script is selected", () => {
     mockSelectedScript = null;
     render(
-      <QueryClientProvider client={queryClient}>
-        <Automation />
-      </QueryClientProvider>
+      <MemoryRouter initialEntries={['/automation']}>
+        <QueryClientProvider client={queryClient}>
+          <Automation />
+        </QueryClientProvider>
+      </MemoryRouter>
     );
 
     expect(screen.queryByTestId("drawer-backdrop")).not.toBeInTheDocument();

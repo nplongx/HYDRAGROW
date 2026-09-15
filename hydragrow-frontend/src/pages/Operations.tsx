@@ -1,35 +1,31 @@
-import { useState } from 'react';
 import ControlPanel from './ControlPanel';
-import { Automation } from './Automation';
 import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
 import { useDeviceStore } from '../store/useDeviceStore';
+import { NavLink } from 'react-router-dom';
 
-const TABS = [
-  { id: 'control', label: 'Điều khiển' },
-  { id: 'automation', label: 'Tự động hóa' },
+const SURFACES = [
+  { path: '/operations', label: 'Điều khiển' },
+  { path: '/automation', label: 'Tự động hóa' },
 ] as const;
 
 export function Operations() {
-  const [active, setActive] = useState<(typeof TABS)[number]['id']>('control');
   const deviceId = useDeviceStore((s) => s.deviceId);
 
   return (
     <div className="app-page h-[calc(100vh-4rem)] flex flex-col">
-      <div role="tablist" className="ui-tabbar px-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={active === tab.id}
-            className={`ui-tab px-4 py-2 text-sm ${active === tab.id ? 'ui-tab-active' : ''}`}
-            onClick={() => setActive(tab.id)}
+      <nav aria-label="Khu vực vận hành" className="ui-tabbar px-2">
+        {SURFACES.map((surface) => (
+          <NavLink
+            key={surface.path}
+            to={surface.path}
+            className={({ isActive }) => `ui-tab px-4 py-2 text-sm ${isActive ? 'ui-tab-active' : ''}`}
           >
-            {tab.label}
-          </button>
+            {surface.label}
+          </NavLink>
         ))}
-      </div>
+      </nav>
       <div className="flex-1 overflow-hidden pb-20 lg:pb-0">
-        {active === 'control' ? <ControlPanel variant="embedded" /> : <Automation />}
+        <ControlPanel variant="embedded" />
       </div>
       <EmergencyStopButton deviceId={deviceId} variant="bar" />
     </div>

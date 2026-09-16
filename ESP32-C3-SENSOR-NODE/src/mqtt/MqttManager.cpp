@@ -238,8 +238,8 @@ void MqttManager::reconnect() {
         }
     }
 
-    mqttClient.subscribe(TOPIC_COMMAND.c_str(), 0);
-    mqttClient.subscribe(TOPIC_CONFIG.c_str(), 0);
+    mqttClient.subscribe(TOPIC_COMMAND.c_str(), 1);
+    mqttClient.subscribe(TOPIC_CONFIG.c_str(), 1);
 
     publishStatus("online", "Sensor node connected");
 }
@@ -364,7 +364,8 @@ void MqttManager::publishSensorData() {
     doc["err_temp"]       = data.errTemperature;
     doc["err_water"]       = data.errWaterLevel;
     doc["err_ph"]         = data.errPh;
-    doc["err_tds"]        = data.errTds;
+    // Canonical P1.9 wire name is `err_ec`; `err_tds` is input-only legacy.
+    doc["err_ec"]         = data.errTds;
 
     char buffer[1024];
     size_t length = serializeJson(doc, buffer, sizeof(buffer));

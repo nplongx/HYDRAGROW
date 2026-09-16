@@ -12,7 +12,7 @@ use crate::config::SharedConfig;
 use crate::hw::mqtt_client::get_uptime_ms; // SỬA: Import đúng module chứa get_uptime_ms
 use crate::hw::pump_controller::PumpController;
 use crate::hw::NvsStore;
-use crate::runtime::command_handler::{build_stop_pump_events, process_mqtt_commands};
+use crate::runtime::command_handler::{build_stop_pump_events, process_mqtt_commands_with_dedupe};
 use crate::runtime::dispatcher::{DispatchContext, EventDispatcher};
 use crate::runtime::health::build_status_msg;
 use crate::runtime::observers::ObserverSet;
@@ -104,13 +104,14 @@ pub fn start_fsm_control_loop(
         }
 
         // 1. Parse lệnh MQTT
-        let (mut cmd_delta, cmd_events) = process_mqtt_commands(
+        let (mut cmd_delta, cmd_events) = process_mqtt_commands_with_dedupe(
             &cmd_rx,
             &config,
             &ctx,
             current_uptime_ms,
             current_wall_time_ms,
             &fsm_mqtt_tx,
+            nvs.as_mut(),
         );
         ctx.apply_delta(&mut cmd_delta);
         if !cmd_events.is_empty() {

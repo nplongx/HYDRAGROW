@@ -1,56 +1,69 @@
 import { httpFetch } from '../platform/http';
-import { getDefaultBackendUrl } from '../platform/settings';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { loadAppSettings, getDefaultBackendUrl } from '../platform/settings';
 
-function getBackendUrl(): string {
-  const settings = useDeviceStore.getState().settings;
-  if (settings?.backend_url) return settings.backend_url;
-  try {
-    const raw = typeof window !== 'undefined' ? localStorage.getItem('hydragrow_app_settings') : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.backend_url) return parsed.backend_url;
-    }
-  } catch {
-    // window/localStorage unavailable or corrupt JSON — fall through to default
-  }
-  return getDefaultBackendUrl();
+async function getApiConfig(): Promise<{ backendUrl: string; apiKey: string }> {
+    const settings = await loadAppSettings();
+    return {
+        backendUrl: settings?.backend_url || getDefaultBackendUrl(),
+        apiKey: settings?.api_key || '',
+    };
 }
 
-function getApiKey(): string {
-  const settings = useDeviceStore.getState().settings;
-  if (settings?.api_key) return settings.api_key;
-  try {
-    const raw = typeof window !== 'undefined' ? localStorage.getItem('hydragrow_app_settings') : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.api_key) return parsed.api_key;
+export type ApiRequestOptions = {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+};
+
+export class ApiError extends Error {
+    readonly status: number;
+    readonly code?: string;
+    readonly details?: unknown;
+    readonly requestId?: string;
+
+    constructor(input: { status: number; message: string; code?: string; details?: unknown; requestId?: string }) {
+        super(input.message);
+        this.name = 'ApiError';
+        this.status = input.status;
+        this.code = input.code;
+        this.details = input.details;
+        this.requestId = input.requestId;
     }
-  } catch {
-    // window/localStorage unavailable or corrupt JSON — fall through to empty key
-  }
-  return '';
 }
 
-export async function apiGet<T>(url: string): Promise<T> {
-    const backendUrl = getBackendUrl();
-    const apiKey = getApiKey();
+async function throwApiError(res: Response, method: string, path: string): Promise<never> {
+    let payload: unknown;
+    try { payload = await res.json(); } catch { payload = undefined; }
+    const error = payload && typeof payload === 'object'
+        ? (payload as { error?: Record<string, unknown> }).error
+        : undefined;
+    throw new ApiError({
+        status: res.status,
+        message: typeof error?.message === 'string' ? error.message : `${method} ${path} failed with status ${res.status}`,
+        code: typeof error?.code === 'string' ? error.code : undefined,
+        details: error?.details,
+        requestId: typeof error?.request_id === 'string' ? error.request_id : undefined,
+    });
+}
+
+export async function apiGet<T>(url: string, options?: ApiRequestOptions): Promise<T> {
+    const { backendUrl, apiKey } = await getApiConfig();
     const res = await httpFetch(`${backendUrl}/api${url}`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
             'X-API-Key': apiKey,
         },
-    });
+        ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+        ...(options?.signal ? { signal: options.signal } : {}),
+    } as RequestInit & { timeout?: number });
     if (!res.ok) {
-        throw new Error(`GET ${url} failed with status ${res.status}`);
+        return throwApiError(res, 'GET', url);
     }
     return res.json();
 }
 
-export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-    const backendUrl = getBackendUrl();
-    const apiKey = getApiKey();
+export async function apiPut<T>(path: string, body: unknown, options?: ApiRequestOptions): Promise<T> {
+    const { backendUrl, apiKey } = await getApiConfig();
     const res = await httpFetch(`${backendUrl}/api${path}`, {
         method: 'PUT',
         headers: {
@@ -58,9 +71,11 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
             'X-API-Key': apiKey,
         },
         body: JSON.stringify(body),
-    });
+        ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+        ...(options?.signal ? { signal: options.signal } : {}),
+    } as RequestInit & { timeout?: number });
     if (!res.ok) {
-        throw new Error(`PUT ${path} failed with status ${res.status}`);
+        return throwApiError(res, 'PUT', path);
     }
     return res.json() as Promise<T>;
 }
@@ -73,10 +88,10 @@ export async function apiBulkPost<T>(path: string, body: unknown): Promise<T> {
 export async function apiPost<T, B = Record<string, unknown>>(
     url: string,
     body: B,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    options?: ApiRequestOptions,
 ): Promise<T> {
-    const backendUrl = getBackendUrl();
-    const apiKey = getApiKey();
+    const { backendUrl, apiKey } = await getApiConfig();
     const res = await httpFetch(`${backendUrl}/api${url}`, {
         method: 'POST',
         headers: {
@@ -84,10 +99,12 @@ export async function apiPost<T, B = Record<string, unknown>>(
             'X-API-Key': apiKey,
             ...headers
         },
+        ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+        ...(options?.signal ? { signal: options.signal } : {}),
         body: JSON.stringify(body)
-    });
+    } as RequestInit & { timeout?: number });
     if (!res.ok) {
-        throw new Error(`POST ${url} failed with status ${res.status}`);
+        return throwApiError(res, 'POST', url);
     }
     return res.json() as Promise<T>;
 }
@@ -95,10 +112,10 @@ export async function apiPost<T, B = Record<string, unknown>>(
 export async function apiPatch<T, B = Record<string, unknown>>(
     url: string,
     body: B,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    options?: ApiRequestOptions
 ): Promise<T> {
-    const backendUrl = getBackendUrl();
-    const apiKey = getApiKey();
+    const { backendUrl, apiKey } = await getApiConfig();
     const res = await httpFetch(`${backendUrl}/api${url}`, {
         method: 'PATCH',
         headers: {
@@ -106,26 +123,29 @@ export async function apiPatch<T, B = Record<string, unknown>>(
             'X-API-Key': apiKey,
             ...headers
         },
+        ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+        ...(options?.signal ? { signal: options.signal } : {}),
         body: JSON.stringify(body)
-    });
+    } as RequestInit & { timeout?: number });
     if (!res.ok) {
-        throw new Error(`PATCH ${url} failed with status ${res.status}`);
+        return throwApiError(res, 'PATCH', url);
     }
     return res.json() as Promise<T>;
 }
 
-export async function apiDelete<T>(url: string): Promise<T> {
-    const backendUrl = getBackendUrl();
-    const apiKey = getApiKey();
+export async function apiDelete<T>(url: string, options?: ApiRequestOptions): Promise<T> {
+    const { backendUrl, apiKey } = await getApiConfig();
     const res = await httpFetch(`${backendUrl}/api${url}`, {
         method: 'DELETE',
         headers: {
             'Content-Type': 'application/json',
             'X-API-Key': apiKey,
         },
-    });
+        ...(options?.timeoutMs ? { timeout: options.timeoutMs } : {}),
+        ...(options?.signal ? { signal: options.signal } : {}),
+    } as RequestInit & { timeout?: number });
     if (!res.ok) {
-        throw new Error(`DELETE ${url} failed with status ${res.status}`);
+        return throwApiError(res, 'DELETE', url);
     }
     return res.json() as Promise<T>;
 }

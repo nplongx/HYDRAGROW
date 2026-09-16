@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::recipe::CropRecipe;
 
+pub mod command;
 pub mod dosing;
 pub mod events;
 pub mod fsm;
@@ -15,8 +16,18 @@ pub mod supervisor;
 pub mod telemetry;
 pub mod topics;
 pub mod wifi_tx;
+pub mod wire;
 
+pub use command::{
+    CommandId, CommandLifecycle, CommandLifecycleError, CommandLifecycleEvent, CommandMetadata,
+    CommandRecord,
+};
 pub use sensors::IncomingSensorPayload;
+pub use wire::{
+    ApiErrorBody, ApiErrorEnvelope, CANONICAL_SCHEMA_VERSION, CommandWireRecord, DeviceId,
+    EventId, JournalEventEnvelope, OperationalTelemetryEnvelope, Principal, PrincipalKind,
+    ResourceId, UserId,
+};
 
 /// A WiFi network credential tried by a controller in ascending priority order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -168,6 +179,8 @@ pub struct MqttCommandOut {
     pub nonce: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<CommandMetadata>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -183,6 +196,8 @@ pub struct MqttCommandIn {
     pub duration_sec: Option<u64>,
     #[serde(default)]
     pub pwm: Option<u32>,
+    #[serde(default)]
+    pub metadata: Option<CommandMetadata>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

@@ -1,5 +1,6 @@
 #![warn(clippy::unwrap_used)]
 
+pub mod command_lifecycle;
 pub mod dosing_cycle;
 pub mod events;
 pub mod fsm;

@@ -15,8 +15,9 @@ pub const KNOWN_SCOPES: &[&str] = &[
     "device:network", // Cập nhật WiFi priority list
     "device:admin",   // Reboot, factory reset — quyền cao nhất cho thiết bị
     // User script APIs
-    "script:read",  // Đọc / validate user scripts
-    "script:write", // Tạo, cập nhật, xóa user scripts
+    "script:read",    // Đọc / validate user scripts
+    "script:write",   // Tạo, cập nhật, xóa user scripts
+    "webhook:invoke", // Trigger device-scoped webhook automation
     // Recipe APIs (công thức mùa vụ)
     "recipe:write", // Tạo, cập nhật, xóa, áp dụng / gỡ recipe
     // System event / alert APIs
@@ -42,6 +43,7 @@ pub fn scope_description(scope: &str) -> &'static str {
         "device:admin" => "Reboot và factory reset thiết bị (toàn quyền quản trị)",
         "script:read" => "Đọc và kiểm tra (validate) các user scripts",
         "script:write" => "Tạo, cập nhật và xóa các user scripts",
+        "webhook:invoke" => "Kích hoạt automation qua webhook theo device",
         "recipe:write" => "Tạo, cập nhật, xóa và áp dụng công thức mùa vụ (recipe)",
         "events:write" => "Tạo và xác nhận đã xử lý (acknowledge) các sự kiện hệ thống",
         "*" => "Toàn quyền truy cập (chỉ dành cho admin hệ thống)",

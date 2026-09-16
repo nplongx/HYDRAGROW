@@ -1,0 +1,35 @@
+{
+  "requirement_id": "P1.2-DURABLE-COMMAND-LIFECYCLE",
+  "status": "IMPLEMENTED",
+  "evidence": [
+    {"acceptance_id":"AC-1","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs","actual":"Every accepted control request creates a UUID command_id and commits REQUESTED before MQTT publication."},
+    {"acceptance_id":"AC-2","status":"PASS","source":"hydragrow-backend/migrations/20260916100000_durable_command_lifecycle.sql; hydragrow-backend/src/services/durable_command.rs","actual":"commands is authoritative current state; command_lifecycle_events is append-only durable history."},
+    {"acceptance_id":"AC-3","status":"PASS","source":"hydragrow-shared/src/command.rs; hydragrow-backend/src/services/durable_command.rs","actual":"All accepted backend lifecycle mutations use row-locked transition authority; terminal states are immutable and duplicate same-state events are idempotent."},
+    {"acceptance_id":"AC-4","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs; src/api/control.rs","actual":"Retries reuse the same command_id; idempotency_key is uniquely scoped and conflicting reuse returns conflict."},
+    {"acceptance_id":"AC-5","status":"PASS","source":"hydragrow-backend/src/mqtt/handlers/command_lifecycle.rs","actual":"Controller lifecycle events require matching device_id and known command_id before durable transition."},
+    {"acceptance_id":"AC-6","status":"PASS","source":"hydragrow-backend/src/mqtt/handlers/status.rs","actual":"CONFIRMED remains gated by correlated authoritative runtime/controller observation; ACK does not imply physical confirmation."},
+    {"acceptance_id":"AC-7","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs","test_command":"cargo test --manifest-path hydragrow-backend/Cargo.toml services::durable_command::tests -- --test-threads=1","actual":"15 passed; 0 failed","notes":"SENT and ACKNOWLEDGED deadlines produce TIMEOUT; ambiguous outbound attempts produce UNKNOWN; retry budget exhaustion produces FAILED."},
+    {"acceptance_id":"AC-8","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs; hydragrow-backend/src/main.rs","actual":"Startup/periodic reconciliation reads PostgreSQL active commands and resumes only eligible safe retries using the persisted command_id; terminal records are not reopened."},
+    {"acceptance_id":"AC-9","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs","test_command":"cargo test --manifest-path hydragrow-backend/Cargo.toml services::durable_command::tests::concurrent_same_transition_has_one_effective_writer -- --test-threads=1","actual":"PASS; one concurrent transition is Applied and the other is Duplicate; retry_due uses UPDATE ... FOR UPDATE SKIP LOCKED atomic claim."},
+    {"acceptance_id":"AC-10","status":"PASS","source":"hydragrow-backend/src/api/control.rs; hydragrow-backend/src/services/durable_command.rs","actual":"Command list/detail/history read from durable PostgreSQL state and remain behind existing P1.1 capability/ownership boundary."},
+    {"acceptance_id":"AC-11","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs; hydragrow-backend/src/api/ws.rs","actual":"Lifecycle AppEvent and compatibility system_events are emitted only after durable transition/create commit."},
+    {"acceptance_id":"AC-12","status":"PASS","source":"hydragrow-backend/src/api/control.rs; hydragrow-backend/src/api/recipe.rs","actual":"Current actuator control API is single-device; there is no bulk actuator-command route requiring command fan-out. Existing bulk recipe route authorizes all devices before mutation and returns per-device success/failure, so it does not claim whole-operation success from partial transport outcomes."},
+    {"acceptance_id":"AC-13","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs; hydragrow-backend/src/api/control.rs","actual":"Durable request_payload is allowlisted to retry-safe command fields; privileged/API/WiFi/webhook secrets are excluded from lifecycle persistence."},
+    {"acceptance_id":"AC-14","status":"PASS","source":"hydragrow-backend/src/services/durable_command.rs","actual":"15 durable lifecycle tests pass serially, covering creation, idempotency/conflict, transition/terminal immutability, duplicate transition concurrency, publish retry, timeout, UNKNOWN, retry safety, and secret-safe payload."},
+    {"acceptance_id":"AC-15","status":"PASS_WITH_FIRMWARE_BLOCK","source":"P1.0 baseline + current verification","actual":"Backend cargo check/clippy/fmt verified; prior backend regression baseline was 364/364 before the final retry-safety change; shared/controller-core prior verification remains green. ESP32 application target check is blocked only by environment: esp-idf-sys reports Unsupported target x86_64-unknown-linux-gnu."},
+    {"acceptance_id":"AC-16","status":"PASS","source":"docs/project-state/CURRENT-STATUS.md; docs/project-state/TRACEABILITY.md","actual":"P1.2 implementation, verification, environmental firmware limitation, and phase boundary are recorded."}
+  ],
+  "verification": {
+    "durable_targeted_tests": "15 passed; 0 failed",
+    "backend_clippy": "PASS",
+    "backend_check": "PASS",
+    "backend_fmt": "PASS",
+    "git_diff_check": "PASS",
+    "database_schema": "retry_safe column verified in live PostgreSQL"
+  },
+  "known_limitations": [
+    "ESP32-C3 application target build cannot run in this host environment because ESP-IDF is being invoked for x86_64-unknown-linux-gnu.",
+    "A direct two-AppState integration test for retry_due claim contention is not present; the implementation uses an atomic PostgreSQL UPDATE with FOR UPDATE SKIP LOCKED and transition concurrency is directly tested.",
+    "No bulk actuator-control endpoint exists in the current API surface; AC-12 is therefore satisfied by explicit scope boundary plus existing all-device bulk recipe authorization semantics."
+  ]
+}

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ControlPanel from './ControlPanel';
 import { Automation } from './Automation';
 import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
+import { parseTab, serializeTab } from '../lib/routeState';
 
 const TABS = [
   { id: 'control', label: 'Điều khiển' },
@@ -10,8 +11,9 @@ const TABS = [
 ] as const;
 
 export function Operations() {
-  const [active, setActive] = useState<(typeof TABS)[number]['id']>('control');
-  const deviceId = useDeviceStore((s) => s.deviceId);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const active = parseTab(searchParams.toString(), TABS.map((tab) => tab.id), 'control') as (typeof TABS)[number]['id'];
+  const { selectedDeviceId: deviceId } = useStationContext();
 
   return (
     <div className="app-page h-[calc(100vh-4rem)] flex flex-col">
@@ -22,7 +24,7 @@ export function Operations() {
             role="tab"
             aria-selected={active === tab.id}
             className={`ui-tab px-4 py-2 text-sm ${active === tab.id ? 'ui-tab-active' : ''}`}
-            onClick={() => setActive(tab.id)}
+            onClick={() => setSearchParams(serializeTab(searchParams.toString(), tab.id, 'control'), { replace: true })}
           >
             {tab.label}
           </button>

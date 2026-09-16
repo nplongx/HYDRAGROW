@@ -7,8 +7,12 @@ use crate::AppState;
 use crate::db::device_wifi;
 use crate::metrics::*;
 use crate::models::alert::AlertMessage;
+use hydragrow_shared::CommandLifecycle;
 use hydragrow_shared::events::{AppEvent, DeviceStatusPayload as SharedDeviceStatusPayload};
-use hydragrow_shared::telemetry::DeviceHealthSnapshot;
+use hydragrow_shared::telemetry::{
+    AuthoritativeTelemetrySnapshot, DeviceHealthSnapshot, ObservedActuatorState, ObservedFsmState,
+    TelemetryAvailability, TelemetrySource,
+};
 use hydragrow_shared::wifi_tx::WifiConfigStatus;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -47,6 +51,13 @@ pub fn parse_controller_status_payload(
         raw_json,
         health_snapshot,
     })
+}
+
+/// A controller/status packet is operational evidence only when it contains
+/// the complete authoritative health snapshot. A syntactically valid JSON
+/// object such as `{}` must not refresh contact/freshness by itself.
+fn is_authoritative_controller_status(parsed: &ParsedControllerStatus) -> bool {
+    parsed.health_snapshot.is_some()
 }
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id, node_type = %node_type, topic_category = %topic_category))]
@@ -124,6 +135,7 @@ pub async fn handle_device(
                 .send(AppEvent::DeviceStatus(SharedDeviceStatusPayload {
                     device_id: device_id.clone(),
                     is_online,
+                    last_seen_at: Some(chrono::Utc::now().to_rfc3339()),
                 }));
 
             if alert.level == "warning" || alert.level == "critical" {
@@ -183,6 +195,25 @@ pub async fn handle_device(
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
+    let parsed = match parse_controller_status_payload(payload) {
+        Ok(parsed) if is_authoritative_controller_status(&parsed) => parsed,
+        Ok(_) => {
+            tracing::warn!(
+                device_id = %device_id,
+                "Bỏ qua controller/status không có authoritative health snapshot"
+            );
+            return;
+        }
+        Err(error) => {
+            tracing::warn!(
+                device_id = %device_id,
+                error = ?error,
+                "Bỏ qua controller/status payload không hợp lệ"
+            );
+            return;
+        }
+    };
+
     let _ = crate::db::topic_last_seen::touch_topic(
         &app_state.pg_pool,
         &device_id,
@@ -191,187 +222,483 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
     )
     .await;
 
-    if let Ok(parsed) = parse_controller_status_payload(payload) {
-        if let Some(health) = parsed.health_snapshot.as_ref() {
-            if !health.firmware_version.is_empty() && health.firmware_version != "unknown" {
-                tracing::info!(
-                    device_id = %device_id,
-                    firmware_version = %health.firmware_version,
-                    "Cập nhật firmware version map"
-                );
-                app_state
-                    .device_firmware
-                    .write()
-                    .await
-                    .insert(device_id.clone(), health.firmware_version.clone());
-            } else {
-                tracing::debug!(
-                    device_id = %device_id,
-                    received_version = %health.firmware_version,
-                    "Bỏ qua firmware version không hợp lệ"
-                );
-            }
-        }
-        let payload_json = &parsed.raw_json;
-        let dev = &device_id;
-        let mut states = app_state.device_states.write().await;
-
-        let mut merged = states
-            .get(&device_id)
-            .and_then(|existing_str| serde_json::from_str::<serde_json::Value>(existing_str).ok())
-            .unwrap_or_else(|| json!({ "device_id": device_id.clone() }));
-
-        if let (Some(merged_obj), Some(incoming_obj)) =
-            (merged.as_object_mut(), payload_json.as_object())
-        {
-            for (key, value) in incoming_obj {
-                merged_obj.insert(key.clone(), value.clone());
-            }
-            merged_obj.insert("device_id".to_string(), json!(device_id.clone()));
-            merged_obj.insert(
-                "controller_status_ts".to_string(),
-                json!(chrono::Utc::now().to_rfc3339()),
+    if let Some(health) = parsed.health_snapshot.as_ref() {
+        if !health.firmware_version.is_empty() && health.firmware_version != "unknown" {
+            tracing::info!(
+                device_id = %device_id,
+                firmware_version = %health.firmware_version,
+                "Cập nhật firmware version map"
+            );
+            app_state
+                .device_firmware
+                .write()
+                .await
+                .insert(device_id.clone(), health.firmware_version.clone());
+        } else {
+            tracing::debug!(
+                device_id = %device_id,
+                received_version = %health.firmware_version,
+                "Bỏ qua firmware version không hợp lệ"
             );
         }
+    }
+    let payload_json = &parsed.raw_json;
+    let dev = &device_id;
+    let mut states = app_state.device_states.write().await;
 
-        // Phát hiện misting qua pump_status
-        if let Some(pump_status) = payload_json.get("pump_status") {
-            let mist_on = pump_status
-                .get("mist_valve")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let prev_mist = states
-                .get(&device_id)
-                .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
-                .and_then(|v| v.get("pump_status").cloned())
-                .and_then(|ps| ps.get("mist_valve").cloned())
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+    let mut merged = states
+        .get(&device_id)
+        .and_then(|existing_str| serde_json::from_str::<serde_json::Value>(existing_str).ok())
+        .unwrap_or_else(|| json!({ "device_id": device_id.clone() }));
 
-            if mist_on != prev_mist {
-                let mist_alert = AlertMessage {
-                    level: "FSM_UPDATE".to_string(),
-                    category: "system".to_string(),
-                    title: "FSM_SYNC".to_string(),
-                    message: if mist_on {
-                        "Misting".to_string()
-                    } else {
-                        "Monitoring".to_string()
-                    },
-                    device_id: device_id.clone(),
-                    timestamp: chrono::Utc::now().timestamp_millis() as u64,
-                    reason: None,
-                    metadata: None,
-                };
-                let _ = app_state.event_bus.send(AppEvent::SystemAlert(mist_alert));
-            }
+    if let (Some(merged_obj), Some(incoming_obj)) =
+        (merged.as_object_mut(), payload_json.as_object())
+    {
+        for (key, value) in incoming_obj {
+            merged_obj.insert(key.clone(), value.clone());
         }
+        merged_obj.insert("device_id".to_string(), json!(device_id.clone()));
+        merged_obj.insert(
+            "controller_status_ts".to_string(),
+            json!(chrono::Utc::now().to_rfc3339()),
+        );
+    }
 
-        if let Ok(updated_str) = serde_json::to_string(&merged) {
-            states.insert(device_id.clone(), updated_str);
+    // Phát hiện misting qua pump_status
+    if let Some(pump_status) = payload_json.get("pump_status") {
+        let mist_on = pump_status.get("mist_valve").and_then(|v| v.as_bool());
+        let prev_mist = states
+            .get(&device_id)
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+            .and_then(|v| v.get("pump_status").cloned())
+            .and_then(|ps| ps.get("mist_valve").cloned())
+            .and_then(|v| v.as_bool());
+
+        if let Some(mist_on) = mist_on
+            && prev_mist.is_some()
+            && Some(mist_on) != prev_mist
+        {
+            let mist_alert = AlertMessage {
+                level: "FSM_UPDATE".to_string(),
+                category: "system".to_string(),
+                title: "FSM_SYNC".to_string(),
+                message: if mist_on {
+                    "Misting".to_string()
+                } else {
+                    "Monitoring".to_string()
+                },
+                device_id: device_id.clone(),
+                timestamp: chrono::Utc::now().timestamp_millis() as u64,
+                reason: None,
+                metadata: None,
+            };
+            let _ = app_state.event_bus.send(AppEvent::SystemAlert(mist_alert));
         }
+    }
 
-        drop(states);
+    if let Ok(updated_str) = serde_json::to_string(&merged) {
+        states.insert(device_id.clone(), updated_str);
+    }
 
-        let _ = app_state
-            .event_bus
-            .send(AppEvent::ControllerStatus(payload_json.clone()));
+    drop(states);
 
-        // 1. Cập nhật thông số phần cứng ESP32
-        if let Some(heap) = payload_json.get("free_heap").and_then(|v| v.as_u64()) {
-            CONTROLLER_FREE_HEAP_BYTES
+    reconcile_command_confirmations(&app_state, &device_id, payload_json).await;
+
+    let received_at = chrono::Utc::now().to_rfc3339();
+    let cached_telemetry = app_state
+        .device_states
+        .read()
+        .await
+        .get(&device_id)
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .and_then(|state| state.get("telemetry").cloned())
+        .and_then(|value| serde_json::from_value::<AuthoritativeTelemetrySnapshot>(value).ok());
+    let mut incoming_authoritative = AuthoritativeTelemetrySnapshot::from_incoming_payload(
+        &device_id,
+        &hydragrow_shared::sensors::IncomingSensorPayload::default(),
+        Some(received_at.clone()),
+    );
+    incoming_authoritative.device_id = device_id.clone();
+    incoming_authoritative.availability = TelemetryAvailability::Online;
+    let observation_time = parsed
+        .health_snapshot
+        .as_ref()
+        .and_then(|health| chrono::DateTime::from_timestamp_millis(health.timestamp_ms as i64))
+        .map(|dt| dt.to_rfc3339());
+    incoming_authoritative.observed_at = observation_time.clone();
+    if let Some(health) = parsed.health_snapshot.clone() {
+        incoming_authoritative.controller_health = Some(health);
+    }
+    incoming_authoritative.runtime_ready = payload_json
+        .get("runtime_ready")
+        .or_else(|| payload_json.get("ready"))
+        .and_then(|value| value.as_bool());
+    if let Some(pump_value) = payload_json.get("pump_status")
+        && let Ok(pump_status) = serde_json::from_value(pump_value.clone())
+    {
+        incoming_authoritative.actuator = Some(ObservedActuatorState {
+            pump_status,
+            observed_at: observation_time.clone(),
+            received_at: Some(received_at.clone()),
+            source: TelemetrySource::ControllerSensor,
+        });
+    }
+    if let Some(state) = payload_json
+        .get("fsm_state")
+        .or_else(|| payload_json.get("current_state"))
+        .or_else(|| payload_json.get("current_phase"))
+        .and_then(|value| value.as_str())
+    {
+        incoming_authoritative.fsm = Some(ObservedFsmState {
+            state: state.to_string(),
+            observed_at: observation_time.clone(),
+            received_at: Some(received_at.clone()),
+            source: TelemetrySource::ControllerSensor,
+        });
+    }
+    let mut authoritative = incoming_authoritative.merge_into(cached_telemetry.as_ref());
+    authoritative.refresh_operational_state(chrono::Utc::now());
+    if let Ok(telemetry_json) = serde_json::to_value(&authoritative) {
+        let mut states = app_state.device_states.write().await;
+        if let Some(state) = states
+            .get(&device_id)
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+            .and_then(|mut state| {
+                state
+                    .as_object_mut()?
+                    .insert("telemetry".into(), telemetry_json);
+                serde_json::to_string(&state).ok()
+            })
+        {
+            states.insert(device_id.clone(), state);
+        }
+    }
+    let _ = app_state
+        .event_bus
+        .send(AppEvent::TelemetrySnapshot(Box::new(authoritative)));
+
+    let _ = app_state
+        .event_bus
+        .send(AppEvent::ControllerStatus(payload_json.clone()));
+
+    // 1. Cập nhật thông số phần cứng ESP32
+    if let Some(heap) = payload_json.get("free_heap").and_then(|v| v.as_u64()) {
+        CONTROLLER_FREE_HEAP_BYTES
+            .with_label_values(&[dev])
+            .set(heap as i64);
+    }
+    if let Some(rssi) = payload_json.get("rssi").and_then(|v| v.as_i64()) {
+        CONTROLLER_WIFI_RSSI_DBM.with_label_values(&[dev]).set(rssi);
+    }
+    if let Some(uptime) = payload_json.get("uptime_sec").and_then(|v| v.as_u64()) {
+        CONTROLLER_UPTIME_SECONDS
+            .with_label_values(&[dev])
+            .set(uptime as i64);
+    }
+    if let Some(drops) = payload_json.get("log_drop_count").and_then(|v| v.as_u64()) {
+        CONTROLLER_LOG_DROPPED_TOTAL
+            .with_label_values(&[dev])
+            .set(drops as i64);
+    }
+
+    // 2. Cập nhật Budgets & Streaks từ FsmSnapshot nếu có
+    if let Some(budgets) = payload_json.get("budgets") {
+        if let Some(ec_ml) = budgets.get("ec_ml").and_then(|v| v.as_f64()) {
+            SAFETY_HOURLY_DOSE_ML
+                .with_label_values(&[dev, "ec"])
+                .set(ec_ml);
+        }
+        if let Some(ph_ml) = budgets.get("ph_ml").and_then(|v| v.as_f64()) {
+            SAFETY_HOURLY_DOSE_ML
+                .with_label_values(&[dev, "ph"])
+                .set(ph_ml);
+        }
+        if let Some(refills) = budgets.get("refill_count").and_then(|v| v.as_i64()) {
+            SAFETY_HOURLY_WATER_CYCLES
+                .with_label_values(&[dev, "refill"])
+                .set(refills);
+        }
+        if let Some(drains) = budgets.get("drain_count").and_then(|v| v.as_i64()) {
+            SAFETY_HOURLY_WATER_CYCLES
+                .with_label_values(&[dev, "drain"])
+                .set(drains);
+        }
+    }
+
+    if let Some(diag) = payload_json.get("diagnostics") {
+        if let Some(ec_streak) = diag.get("ec_pump_streak").and_then(|v| v.as_i64()) {
+            DIAGNOSTIC_FAULT_STREAK
+                .with_label_values(&[dev, "ec_pump"])
+                .set(ec_streak);
+        }
+        if let Some(ph_streak) = diag.get("ph_pump_streak").and_then(|v| v.as_i64()) {
+            DIAGNOSTIC_FAULT_STREAK
+                .with_label_values(&[dev, "ph_pump"])
+                .set(ph_streak);
+        }
+        if let Some(water_streak) = diag.get("water_hydraulics_streak").and_then(|v| v.as_i64()) {
+            DIAGNOSTIC_FAULT_STREAK
+                .with_label_values(&[dev, "water_hydraulics"])
+                .set(water_streak);
+        }
+        if let Some(snapshot) = parsed.health_snapshot
+            && let Some(hestia) = snapshot.hestia
+        {
+            HESTIA_CONFIDENCE
                 .with_label_values(&[dev])
-                .set(heap as i64);
+                .set(hestia.confidence as f64);
+
+            HESTIA_AXIS_WEIGHT
+                .with_label_values(&[dev, "ec"])
+                .set(hestia.axes.ec.weight as f64);
+            HESTIA_AXIS_WEIGHT
+                .with_label_values(&[dev, "ph"])
+                .set(hestia.axes.ph.weight as f64);
+            HESTIA_AXIS_WEIGHT
+                .with_label_values(&[dev, "water_level"])
+                .set(hestia.axes.water_level.weight as f64);
+            HESTIA_AXIS_WEIGHT
+                .with_label_values(&[dev, "temp"])
+                .set(hestia.axes.temp.weight as f64);
+
+            HESTIA_AXIS_ACTION_FACTOR
+                .with_label_values(&[dev, "ec"])
+                .set(hestia.axes.ec.action_factor as f64);
+            HESTIA_AXIS_ACTION_FACTOR
+                .with_label_values(&[dev, "ph"])
+                .set(hestia.axes.ph.action_factor as f64);
+            HESTIA_AXIS_ACTION_FACTOR
+                .with_label_values(&[dev, "water_level"])
+                .set(hestia.axes.water_level.action_factor as f64);
+            HESTIA_AXIS_ACTION_FACTOR
+                .with_label_values(&[dev, "temp"])
+                .set(hestia.axes.temp.action_factor as f64);
         }
-        if let Some(rssi) = payload_json.get("rssi").and_then(|v| v.as_i64()) {
-            CONTROLLER_WIFI_RSSI_DBM.with_label_values(&[dev]).set(rssi);
+    }
+}
+
+async fn reconcile_command_confirmations(
+    app_state: &web::Data<AppState>,
+    device_id: &str,
+    payload: &serde_json::Value,
+) {
+    let pump_status = payload.get("pump_status");
+    let fsm_state = payload
+        .get("current_phase")
+        .or_else(|| payload.get("current_state"))
+        .or_else(|| payload.get("fsm_state"))
+        .and_then(|value| value.as_str())
+        .map(str::to_ascii_lowercase);
+    let observed_at_ms = controller_observation_timestamp_ms(payload)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+
+    let commands = match crate::services::durable_command::list_commands(
+        &app_state.pg_pool,
+        device_id,
+        100,
+    )
+    .await
+    {
+        Ok(commands) => commands,
+        Err(error) => {
+            error!(device_id = %device_id, ?error, "Failed to load durable commands for confirmation");
+            return;
         }
-        if let Some(uptime) = payload_json.get("uptime_sec").and_then(|v| v.as_u64()) {
-            CONTROLLER_UPTIME_SECONDS
-                .with_label_values(&[dev])
-                .set(uptime as i64);
+    };
+    for record in commands {
+        if record.lifecycle != CommandLifecycle::Acknowledged {
+            continue;
         }
-        if let Some(drops) = payload_json.get("log_drop_count").and_then(|v| v.as_u64()) {
-            CONTROLLER_LOG_DROPPED_TOTAL
-                .with_label_values(&[dev])
-                .set(drops as i64);
+        if record
+            .last_observed_at
+            .is_some_and(|t| observed_at_ms <= t.timestamp_millis())
+        {
+            continue;
+        }
+        if !observation_can_confirm(observed_at_ms, record.acknowledged_at) {
+            continue;
         }
 
-        // 2. Cập nhật Budgets & Streaks từ FsmSnapshot nếu có
-        if let Some(budgets) = payload_json.get("budgets") {
-            if let Some(ec_ml) = budgets.get("ec_ml").and_then(|v| v.as_f64()) {
-                SAFETY_HOURLY_DOSE_ML
-                    .with_label_values(&[dev, "ec"])
-                    .set(ec_ml);
+        let matches_requested_state = match record.action.as_str() {
+            "emergency_stop" => {
+                fsm_state
+                    .as_deref()
+                    .is_some_and(|state| state.contains("emergency"))
+                    && all_pumps_off(pump_status)
             }
-            if let Some(ph_ml) = budgets.get("ph_ml").and_then(|v| v.as_f64()) {
-                SAFETY_HOURLY_DOSE_ML
-                    .with_label_values(&[dev, "ph"])
-                    .set(ph_ml);
+            "reset_fault" => fsm_state.as_deref() == Some("monitoring"),
+            "on" | "off" | "force_on" => record
+                .pump_id
+                .as_deref()
+                .and_then(|pump| pump_state(pump_status, pump))
+                .zip(record.requested_state)
+                .is_some_and(|(actual, requested)| actual == requested),
+            "set_pwm" => {
+                if record.requested_state == Some(false) {
+                    record
+                        .pump_id
+                        .as_deref()
+                        .and_then(|pump| pump_state(pump_status, pump))
+                        == Some(false)
+                } else {
+                    record
+                        .pump_id
+                        .as_deref()
+                        .and_then(|pump| pump_pwm(pump_status, pump))
+                        .zip(record.requested_pwm)
+                        .is_some_and(|(actual, requested)| actual == requested)
+                }
             }
-            if let Some(refills) = budgets.get("refill_count").and_then(|v| v.as_i64()) {
-                SAFETY_HOURLY_WATER_CYCLES
-                    .with_label_values(&[dev, "refill"])
-                    .set(refills);
-            }
-            if let Some(drains) = budgets.get("drain_count").and_then(|v| v.as_i64()) {
-                SAFETY_HOURLY_WATER_CYCLES
-                    .with_label_values(&[dev, "drain"])
-                    .set(drains);
-            }
+            _ => false,
+        };
+
+        if matches_requested_state
+            && let Err(error) = crate::services::durable_command::transition_with_state(
+                app_state,
+                &record.command_id,
+                device_id,
+                CommandLifecycle::Confirmed,
+                Some("controller_status".to_string()),
+                "runtime_confirmation",
+                json!({"confirmation_source":"controller_status"}),
+            )
+            .await
+        {
+            error!(device_id = %device_id, command_id = %record.command_id, ?error, "Failed to persist command confirmation");
         }
+    }
+}
 
-        if let Some(diag) = payload_json.get("diagnostics") {
-            if let Some(ec_streak) = diag.get("ec_pump_streak").and_then(|v| v.as_i64()) {
-                DIAGNOSTIC_FAULT_STREAK
-                    .with_label_values(&[dev, "ec_pump"])
-                    .set(ec_streak);
-            }
-            if let Some(ph_streak) = diag.get("ph_pump_streak").and_then(|v| v.as_i64()) {
-                DIAGNOSTIC_FAULT_STREAK
-                    .with_label_values(&[dev, "ph_pump"])
-                    .set(ph_streak);
-            }
-            if let Some(water_streak) = diag.get("water_hydraulics_streak").and_then(|v| v.as_i64())
-            {
-                DIAGNOSTIC_FAULT_STREAK
-                    .with_label_values(&[dev, "water_hydraulics"])
-                    .set(water_streak);
-            }
-            if let Some(snapshot) = parsed.health_snapshot
-                && let Some(hestia) = snapshot.hestia
-            {
-                HESTIA_CONFIDENCE
-                    .with_label_values(&[dev])
-                    .set(hestia.confidence as f64);
+fn pump_state(pump_status: Option<&serde_json::Value>, pump: &str) -> Option<bool> {
+    let key = match pump.to_ascii_uppercase().as_str() {
+        "A" | "PUMP_A" => "pump_a",
+        "B" | "PUMP_B" => "pump_b",
+        "PH_UP" | "PUMP_PH_UP" => "ph_up",
+        "PH_DOWN" | "PUMP_PH_DOWN" => "ph_down",
+        "OSAKA" | "OSAKA_PUMP" => "osaka_pump",
+        "MIST" | "MIST_VALVE" => "mist_valve",
+        "MIX" | "MIX_VALVE" => "mix_valve",
+        "WATER_PUMP" | "WATER_PUMP_IN" | "PUMP_IN" => "water_pump_in",
+        "WATER_PUMP_OUT" | "DRAIN_PUMP" | "PUMP_OUT" => "water_pump_out",
+        _ => return None,
+    };
+    pump_status?.get(key)?.as_bool()
+}
 
-                HESTIA_AXIS_WEIGHT
-                    .with_label_values(&[dev, "ec"])
-                    .set(hestia.axes.ec.weight as f64);
-                HESTIA_AXIS_WEIGHT
-                    .with_label_values(&[dev, "ph"])
-                    .set(hestia.axes.ph.weight as f64);
-                HESTIA_AXIS_WEIGHT
-                    .with_label_values(&[dev, "water_level"])
-                    .set(hestia.axes.water_level.weight as f64);
-                HESTIA_AXIS_WEIGHT
-                    .with_label_values(&[dev, "temp"])
-                    .set(hestia.axes.temp.weight as f64);
+fn pump_pwm(pump_status: Option<&serde_json::Value>, pump: &str) -> Option<u32> {
+    if matches!(pump.to_ascii_uppercase().as_str(), "OSAKA" | "OSAKA_PUMP") {
+        return pump_status?.get("osaka_pwm")?.as_u64().map(|v| v as u32);
+    }
+    None
+}
 
-                HESTIA_AXIS_ACTION_FACTOR
-                    .with_label_values(&[dev, "ec"])
-                    .set(hestia.axes.ec.action_factor as f64);
-                HESTIA_AXIS_ACTION_FACTOR
-                    .with_label_values(&[dev, "ph"])
-                    .set(hestia.axes.ph.action_factor as f64);
-                HESTIA_AXIS_ACTION_FACTOR
-                    .with_label_values(&[dev, "water_level"])
-                    .set(hestia.axes.water_level.action_factor as f64);
-                HESTIA_AXIS_ACTION_FACTOR
-                    .with_label_values(&[dev, "temp"])
-                    .set(hestia.axes.temp.action_factor as f64);
-            }
-        }
+fn all_pumps_off(pump_status: Option<&serde_json::Value>) -> bool {
+    [
+        "pump_a",
+        "pump_b",
+        "ph_up",
+        "ph_down",
+        "osaka_pump",
+        "mist_valve",
+        "mix_valve",
+        "water_pump_in",
+        "water_pump_out",
+    ]
+    .iter()
+    .all(|key| {
+        pump_status
+            .and_then(|status| status.get(key))
+            .and_then(|v| v.as_bool())
+            == Some(false)
+    })
+}
+
+fn controller_observation_timestamp_ms(payload: &serde_json::Value) -> Option<i64> {
+    payload
+        .get("timestamp_ms")
+        .and_then(serde_json::Value::as_i64)
+        .filter(|timestamp| *timestamp > 0)
+}
+
+fn observation_can_confirm(
+    observed_at_ms: i64,
+    acknowledged_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    acknowledged_at.is_none_or(|ack| observed_at_ms >= ack.timestamp_millis())
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod command_confirmation_tests {
+    use super::{
+        all_pumps_off, controller_observation_timestamp_ms, observation_can_confirm, pump_pwm,
+        pump_state,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn pump_state_uses_canonical_aliases() {
+        let status = json!({"pump_a": true, "ph_down": false});
+        assert_eq!(pump_state(Some(&status), "A"), Some(true));
+        assert_eq!(pump_state(Some(&status), "PUMP_A"), Some(true));
+        assert_eq!(pump_state(Some(&status), "PH_DOWN"), Some(false));
+        assert_eq!(pump_state(Some(&status), "UNKNOWN"), None);
+    }
+
+    #[test]
+    fn pwm_confirmation_is_only_available_where_controller_status_exposes_pwm() {
+        let status = json!({"osaka_pwm": 60});
+        assert_eq!(pump_pwm(Some(&status), "OSAKA_PUMP"), Some(60));
+        assert_eq!(pump_pwm(Some(&status), "PUMP_A"), None);
+    }
+
+    #[test]
+    fn all_pumps_off_requires_every_runtime_field_to_be_observed_off() {
+        let status = json!({
+            "pump_a": false,
+            "pump_b": false,
+            "ph_up": false,
+            "ph_down": false,
+            "osaka_pump": false,
+            "mist_valve": false,
+            "mix_valve": false,
+            "water_pump_in": false,
+            "water_pump_out": false
+        });
+        assert!(all_pumps_off(Some(&status)));
+        assert!(!all_pumps_off(Some(&json!({"pump_a": false}))));
+    }
+
+    #[test]
+    fn controller_observation_timestamp_is_used_only_when_trustworthy() {
+        assert_eq!(
+            controller_observation_timestamp_ms(&json!({
+                "timestamp_ms": 1_700_000_000_000i64
+            })),
+            Some(1_700_000_000_000)
+        );
+        assert_eq!(
+            controller_observation_timestamp_ms(&json!({"timestamp_ms": 0})),
+            None
+        );
+        assert_eq!(
+            controller_observation_timestamp_ms(&json!({"timestamp_ms": "bad"})),
+            None
+        );
+    }
+
+    #[test]
+    fn observation_before_ack_cannot_confirm_command() {
+        let observed_at = 1_700_000_000_000i64;
+        let acknowledged_at = observed_at + 1_000;
+        let ack = chrono::DateTime::from_timestamp_millis(acknowledged_at).unwrap();
+        assert!(!observation_can_confirm(observed_at, Some(ack)));
+        assert!(observation_can_confirm(acknowledged_at, Some(ack)));
+    }
+
+    #[test]
+    fn observation_without_ack_is_allowed() {
+        assert!(observation_can_confirm(1_700_000_000_000, None));
     }
 }
 
@@ -511,7 +838,7 @@ pub async fn handle_wifi_config_status(
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
-    use super::parse_controller_status_payload;
+    use super::{is_authoritative_controller_status, parse_controller_status_payload};
 
     #[test]
     fn parses_and_sets_firmware_version() {
@@ -708,6 +1035,21 @@ mod tests {
         let controller_cat = "controller/status";
         let sensor_cat = "sensor/status";
         assert_ne!(controller_cat, sensor_cat);
+    }
+
+    #[test]
+    fn controller_status_requires_authoritative_health_before_refreshing_operational_state() {
+        let empty = parse_controller_status_payload(br"{}").unwrap();
+        assert!(!is_authoritative_controller_status(&empty));
+
+        let incomplete = serde_json::json!({
+            "device_id": "controller_001",
+            "uptime_sec": 10,
+            "timestamp_ms": 1_700_000_000_000i64
+        });
+        let parsed =
+            parse_controller_status_payload(&serde_json::to_vec(&incomplete).unwrap()).unwrap();
+        assert!(!is_authoritative_controller_status(&parsed));
     }
 
     #[test]

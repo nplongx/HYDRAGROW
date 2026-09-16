@@ -1,24 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Users, UserPlus, X, Shield, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { apiGet, apiPost, apiPatch } from '../lib/apiClient';
+import { type AdminUser } from '../api/admin';
+import { useAdminUsers } from '../hooks/useAdminUsers';
 import { DeviceStatePill } from '../components/ui/DeviceStatePill';
 import { RoleBadge, PermissionMatrix } from '../components/roles';
 import { InviteForm } from '../components/roles/InviteForm';
 
 export type UserRole = 'admin' | 'operator' | 'viewer';
 
-export interface UserItem {
-  id: number;
-  firebase_uid: string;
-  email: string;
-  display_name: string | null;
-  role: UserRole | null;
-  scopes: string[];
-  is_active: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
+export type UserItem = AdminUser;
 
 export const ROLE_DEFAULT_SCOPES: Record<UserRole, string[]> = {
   admin: ['*'],
@@ -85,27 +76,8 @@ export const CAPABILITIES = [
 ];
 
 export function Roles() {
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-
-  const fetchUsers = async () => {
-    try {
-      setIsLoading(true);
-      const res = await apiGet<UserItem[]>('/admin/users');
-      setUsers(Array.isArray(res) ? res : []);
-    } catch {
-      // Endpoint may return forbidden if not admin or empty
-      setUsers([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  const { users, isLoading, error: usersError, refetch: fetchUsers, provisionUser, updateUser, isProvisioning } = useAdminUsers();
 
   const handleCreateUser = async (data: {
     firebase_uid: string;
@@ -113,10 +85,9 @@ export function Roles() {
     display_name: string | null;
     role: UserRole;
   }) => {
-    setIsSubmitting(true);
     try {
       const scopes = ROLE_DEFAULT_SCOPES[data.role];
-      await apiPost('/admin/users', {
+      await provisionUser({
         firebase_uid: data.firebase_uid,
         email: data.email,
         display_name: data.display_name,
@@ -129,22 +100,17 @@ export function Roles() {
     } catch (err: any) {
       toast.error(err?.message || 'Không thể thêm thành viên');
       throw err;
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleRoleChange = async (userId: number, newRole: UserRole) => {
     const scopes = ROLE_DEFAULT_SCOPES[newRole];
     try {
-      await apiPatch(`/admin/users/${userId}`, {
+      await updateUser(userId, {
         role: newRole,
         scopes,
       });
       toast.success(`Đã đổi vai trò thành ${ROLE_DISPLAY_NAMES[newRole]}`);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: newRole, scopes } : u))
-      );
     } catch (err: any) {
       toast.error(err?.message || 'Không thể đổi vai trò');
     }
@@ -152,13 +118,10 @@ export function Roles() {
 
   const handleToggleActive = async (userId: number, currentActive: boolean) => {
     try {
-      await apiPatch(`/admin/users/${userId}`, {
+      await updateUser(userId, {
         is_active: !currentActive,
       });
       toast.success(!currentActive ? 'Đã kích hoạt tài khoản' : 'Đã tạm dừng tài khoản');
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, is_active: !currentActive } : u))
-      );
     } catch (err: any) {
       toast.error(err?.message || 'Không thể cập nhật trạng thái');
     }
@@ -179,7 +142,7 @@ export function Roles() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={fetchUsers}
+            onClick={() => void fetchUsers()}
             disabled={isLoading}
             className="ui-btn-md border border-line text-primary-deep bg-white hover:bg-soft flex items-center gap-2"
             title="Làm mới danh sách"
@@ -218,7 +181,7 @@ export function Roles() {
             <InviteForm
               onSubmit={handleCreateUser}
               onCancel={() => setShowInviteModal(false)}
-              isSubmitting={isSubmitting}
+            isSubmitting={isProvisioning}
             />
           </div>
         </div>
@@ -237,6 +200,11 @@ export function Roles() {
 
         {isLoading ? (
           <div className="py-12 text-center text-sm text-text-muted">Đang tải danh sách thành viên...</div>
+        ) : usersError ? (
+          <div className="py-12 text-center space-y-2">
+            <p className="text-sm font-semibold text-primary-deep">Không thể tải danh sách thành viên</p>
+            <p className="text-xs text-text-muted">{usersError instanceof Error ? usersError.message : 'Lỗi không xác định'}</p>
+          </div>
         ) : users.length === 0 ? (
           <div className="py-12 text-center space-y-2">
             <p className="text-sm font-semibold text-primary-deep">Chưa có thành viên nào được cấp quyền</p>

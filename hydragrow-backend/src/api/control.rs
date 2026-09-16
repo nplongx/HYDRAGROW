@@ -1,6 +1,7 @@
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use hydragrow_shared::topics::topic_controller_command;
-use hydragrow_shared::{MqttCommandOut, MqttCommandParams};
+use hydragrow_shared::{CommandLifecycle, CommandMetadata, MqttCommandOut, MqttCommandParams};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use rumqttc::QoS;
 use serde::Deserialize;
 use serde_json::json;
@@ -12,6 +13,10 @@ use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::models::config::{DosingCalibration, SafetyConfig};
+use crate::services::durable_command::{
+    NewCommand, create_command_with_state, list_lifecycle_events, mark_publish_attempt,
+    schedule_publish_retry_with_state, transition_with_state,
+};
 use hydragrow_shared::events::AppEvent;
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +30,8 @@ pub struct PumpControlReq {
     #[serde(default, alias = "max_allowed_ml", alias = "manual_max_dose_per_cycle")]
     pub manual_max_allowed_ml: Option<f32>,
     pub command_metadata: Option<ControlCommandMetadata>,
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -44,6 +51,22 @@ pub struct PumpControlParams {
     pub pwm: Option<u32>,
     pub state: Option<bool>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct PrivilegedTokenRequest {
+    pub action_class: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct PrivilegedControlClaims {
+    sub: String,
+    device_id: String,
+    action_class: String,
+    exp: usize,
+}
+
+const PRIVILEGED_TOKEN_TTL_SECS: u64 = 60;
+const PRIVILEGED_ACTION_CLASS: &str = "dangerous_control";
 
 // #[derive(Debug, Serialize)]
 // struct MqttCommandOut {
@@ -161,6 +184,17 @@ pub async fn control_pump(
         }));
     }
 
+    if let Err(response) = crate::api::middleware::auth::authorize_device(
+        &http_req,
+        &app_state,
+        Some(required_scope),
+        &device_id,
+    )
+    .await
+    {
+        return response;
+    }
+
     if is_dangerous_control(&req_data.action, pwm, &pump_name)
         && !has_dangerous_confirmation(&http_req)
     {
@@ -177,10 +211,26 @@ pub async fn control_pump(
         )
         .await;
         return HttpResponse::Forbidden().json(json!({
-            "error": "Dangerous command requires user confirmation or elevated token",
-            "required_confirmation": "X-User-Confirmed: true",
-            "alternative": "X-Elevated-Token with a short-lived backend-issued token"
+            "error": "Dangerous command requires user confirmation",
+            "required_confirmation": "X-User-Confirmed: true"
         }));
+    }
+
+    if is_dangerous_control(&req_data.action, pwm, &pump_name) {
+        let Some(token) = http_req
+            .headers()
+            .get("X-Privileged-Token")
+            .and_then(|value| value.to_str().ok())
+        else {
+            return HttpResponse::Forbidden().json(json!({
+                "error": "Dangerous command requires X-Privileged-Token"
+            }));
+        };
+        if !validate_privileged_token(&app_state, &auth, &device_id, token) {
+            return HttpResponse::Forbidden().json(json!({
+                "error": "Invalid or expired privileged control token"
+            }));
+        }
     }
 
     if let (Some(pwm), Some(duration_sec)) = (pwm, duration_sec)
@@ -225,6 +275,65 @@ pub async fn control_pump(
         _ => "pump_off",
     };
 
+    let requested_state = match req_data.action.as_str() {
+        "on" | "force_on" => Some(true),
+        "off" | "emergency_stop" => Some(false),
+        "set_pwm" => Some(pwm.unwrap_or(0) > 0),
+        _ => None,
+    };
+    let principal_id = auth.user_id.clone();
+    let user_id = principal_id
+        .as_deref()
+        .and_then(|id| id.parse::<i64>().ok());
+    let request_payload = json!({
+        "action": req_data.action,
+        "pump_id": pump_name,
+        "duration_sec": duration_sec,
+        "pwm": pwm,
+        "state": explicit_state,
+    });
+    let (durable, existing) = match create_command_with_state(
+        &app_state,
+        NewCommand {
+            idempotency_key: req_data.idempotency_key.clone(),
+            principal_kind: format!("{:?}", auth.principal_kind()).to_ascii_lowercase(),
+            principal_id,
+            service_key_label: auth.service_key_label.clone(),
+            session_id: auth.session_id.clone(),
+            user_id,
+            device_id: device_id.clone(),
+            action: req_data.action.clone(),
+            request_payload,
+            requested_state,
+            requested_pwm: pwm,
+            pump_id: Some(pump_name.clone()),
+            retry_safe: !is_dangerous_control(&req_data.action, pwm, &pump_name),
+        },
+    )
+    .await
+    {
+        Ok(value) => value,
+        Err(e) if e.to_string().contains("idempotency key conflicts") => {
+            return HttpResponse::Conflict()
+                .json(json!({"error": "Idempotency key conflicts with existing command"}));
+        }
+        Err(e) => {
+            error!(error = %e, device_id = %device_id, "Failed to persist command intent");
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "Could not persist command"}));
+        }
+    };
+    let command_id = durable.command_id.clone();
+    if existing {
+        return HttpResponse::Ok().json(json!({
+            "status": "success",
+            "message": "Existing idempotent command",
+            "command_id": command_id,
+            "lifecycle": format_lifecycle(durable.lifecycle),
+            "device_id": device_id,
+        }));
+    }
+
     let command = MqttCommandOut {
         target,
         action: mqtt_action.to_string(),
@@ -240,10 +349,20 @@ pub async fn control_pump(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: Some(CommandMetadata {
+            command_id: Some(command_id.clone()),
+        }),
     };
+
+    if let Err(e) = mark_publish_attempt(&app_state.pg_pool, &command_id).await {
+        error!(error = %e, command_id = %command_id, "Failed to persist MQTT attempt");
+        return HttpResponse::InternalServerError()
+            .json(json!({"error": "Could not persist command attempt"}));
+    }
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {
         error!("Lỗi gửi lệnh qua MQTT: {:?}", e);
+        let _ = schedule_publish_retry_with_state(&app_state, &command_id, &e.to_string()).await;
         audit_control_command(
             &app_state,
             &device_id,
@@ -258,6 +377,22 @@ pub async fn control_pump(
         .await;
         return HttpResponse::InternalServerError()
             .json(json!({"error": "Không thể gửi lệnh xuống thiết bị"}));
+    }
+
+    if let Err(e) = transition_with_state(
+        &app_state,
+        &command_id,
+        &device_id,
+        CommandLifecycle::Sent,
+        None,
+        "publish",
+        json!({}),
+    )
+    .await
+    {
+        error!(error = %e, command_id = %command_id, "Failed to persist SENT lifecycle");
+        return HttpResponse::InternalServerError()
+            .json(json!({"error": "Command lifecycle persistence failed"}));
     }
 
     info!(
@@ -329,7 +464,9 @@ pub async fn control_pump(
 
     HttpResponse::Ok().json(json!({
         "status": "success",
-        "message": "Command published to MQTT",
+        "message": "Command published to MQTT; awaiting device lifecycle",
+        "command_id": command_id,
+        "lifecycle": "SENT",
         "device_id": device_id,
         "target": command.target,
         "action": command.action,
@@ -338,6 +475,91 @@ pub async fn control_pump(
         "pwm": pwm,
         "published_at": timestamp
     }))
+}
+
+pub async fn issue_privileged_token(
+    path: web::Path<String>,
+    req: HttpRequest,
+    body: web::Json<PrivilegedTokenRequest>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("control:emergency")
+        && !auth.has_scope("device:admin")
+        && !auth.has_scope("control:pump")
+    {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing privileged control capability"}));
+    }
+    if body.action_class != PRIVILEGED_ACTION_CLASS {
+        return HttpResponse::BadRequest().json(json!({"error":"Unsupported action_class"}));
+    }
+    if !has_dangerous_confirmation(&req) {
+        return HttpResponse::Forbidden().json(json!({"error":"Requires X-User-Confirmed: true"}));
+    }
+
+    let sub = auth.user_id.clone().or(auth.service_key_label.clone());
+    let Some(sub) = sub else {
+        return HttpResponse::Unauthorized().json(json!({"error":"Unauthorized"}));
+    };
+    let exp = (chrono::Utc::now().timestamp() as u64 + PRIVILEGED_TOKEN_TTL_SECS) as usize;
+    let claims = PrivilegedControlClaims {
+        sub,
+        device_id,
+        action_class: body.action_class.clone(),
+        exp,
+    };
+    match encode(
+        &Header::new(Algorithm::HS256),
+        &claims,
+        &EncodingKey::from_secret(app_state.privileged_control_secret.as_bytes()),
+    ) {
+        Ok(token) => HttpResponse::Ok().json(json!({"token": token, "expires_at": exp})),
+        Err(_) => HttpResponse::InternalServerError()
+            .json(json!({"error":"Could not issue privileged token"})),
+    }
+}
+
+fn validate_privileged_token(
+    app_state: &AppState,
+    auth: &AuthContext,
+    device_id: &str,
+    token: &str,
+) -> bool {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    let Ok(data) = decode::<PrivilegedControlClaims>(
+        token,
+        &DecodingKey::from_secret(app_state.privileged_control_secret.as_bytes()),
+        &validation,
+    ) else {
+        return false;
+    };
+    let expected_sub = auth
+        .user_id
+        .as_deref()
+        .or(auth.service_key_label.as_deref());
+    expected_sub == Some(data.claims.sub.as_str())
+        && data.claims.device_id == device_id
+        && data.claims.action_class == PRIVILEGED_ACTION_CLASS
+}
+
+fn format_lifecycle(lifecycle: CommandLifecycle) -> &'static str {
+    match lifecycle {
+        CommandLifecycle::Requested => "REQUESTED",
+        CommandLifecycle::Sent => "SENT",
+        CommandLifecycle::Acknowledged => "ACKNOWLEDGED",
+        CommandLifecycle::Confirmed => "CONFIRMED",
+        CommandLifecycle::Rejected => "REJECTED",
+        CommandLifecycle::Failed => "FAILED",
+        CommandLifecycle::Timeout => "TIMEOUT",
+        CommandLifecycle::Unknown => "UNKNOWN",
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -419,24 +641,11 @@ fn is_dangerous_control(action: &str, pwm: Option<u32>, pump: &str) -> bool {
 }
 
 fn has_dangerous_confirmation(req: &HttpRequest) -> bool {
-    let confirmed = req
-        .headers()
+    req.headers()
         .get("X-User-Confirmed")
         .and_then(|hv| hv.to_str().ok())
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-        .unwrap_or(false);
-
-    let elevated = std::env::var("ELEVATED_CONTROL_TOKEN")
-        .ok()
-        .and_then(|expected| {
-            req.headers()
-                .get("X-Elevated-Token")
-                .and_then(|hv| hv.to_str().ok())
-                .map(|actual| actual == expected)
-        })
-        .unwrap_or(false);
-
-    confirmed || elevated
+        .unwrap_or(false)
 }
 
 async fn validate_manual_dose_safety(
@@ -556,9 +765,19 @@ fn capacity_ml_per_sec(dosing_cfg: &DosingCalibration, normalized_pump: &str) ->
 
 pub async fn request_device_sync(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<crate::AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("device:admin") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: device:admin"}));
+    }
 
     // Gửi lệnh "SYNC" xuống topic điều khiển của ESP32
     let topic = topic_controller_command(&device_id);
@@ -591,9 +810,19 @@ pub async fn request_device_sync(
 
 pub async fn get_control_state(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<crate::AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
     let states = app_state.device_states.read().await;
     let cached = states
         .get(&device_id)
@@ -620,6 +849,92 @@ pub async fn get_control_state(
     HttpResponse::Ok().json(json!({ "status": "success", "data": data }))
 }
 
+pub async fn get_command_lifecycles(
+    path: web::Path<String>,
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
+    match crate::services::durable_command::list_commands(&app_state.pg_pool, &device_id, 100).await
+    {
+        Ok(commands) => HttpResponse::Ok().json(json!({
+            "status": "success",
+            "data": commands.into_iter().map(command_json).collect::<Vec<_>>()
+        })),
+        Err(error) => {
+            error!(device_id = %device_id, ?error, "Failed to load command lifecycle history");
+            HttpResponse::InternalServerError()
+                .json(json!({ "error": "Failed to load command lifecycle history" }))
+        }
+    }
+}
+
+pub async fn get_command_lifecycle(
+    path: web::Path<(String, String)>,
+    req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let (device_id, command_id) = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error": "Missing required scope: read:telemetry"}));
+    }
+    match crate::services::durable_command::get_command(&app_state.pg_pool, &command_id).await {
+        Ok(command) if command.device_id == device_id => {
+            let history = list_lifecycle_events(&app_state.pg_pool, &command_id)
+                .await
+                .unwrap_or_default();
+            HttpResponse::Ok()
+                .json(json!({"status":"success","data":command_json(command),"history":history}))
+        }
+        Ok(_) => HttpResponse::NotFound().json(json!({"error":"Command not found"})),
+        Err(error) if error.to_string().contains("no rows returned") => {
+            HttpResponse::NotFound().json(json!({"error":"Command not found"}))
+        }
+        Err(error) => {
+            error!(device_id = %device_id, command_id = %command_id, ?error, "Failed to load command");
+            HttpResponse::InternalServerError().json(json!({"error":"Failed to load command"}))
+        }
+    }
+}
+
+fn command_json(command: crate::services::durable_command::DurableCommand) -> serde_json::Value {
+    json!({
+        "command_id": command.command_id,
+        "device_id": command.device_id,
+        "action": command.action,
+        "pump_id": command.pump_id,
+        "requested_state": command.requested_state,
+        "requested_pwm": command.requested_pwm,
+        "lifecycle": format_lifecycle(command.lifecycle),
+        "created_at": command.created_at,
+        "authorized_at": command.authorized_at,
+        "sent_at": command.sent_at,
+        "acknowledged_at": command.acknowledged_at,
+        "confirmed_at": command.confirmed_at,
+        "terminal_at": command.terminal_at,
+        "next_retry_at": command.next_retry_at,
+        "attempt_count": command.attempt_count,
+        "last_error": command.last_error,
+        "last_observed_at": command.last_observed_at,
+        "version": command.version,
+    })
+}
+
 fn resolve_control_target(target: Option<String>) -> String {
     target
         .unwrap_or_else(|| "all".to_string())
@@ -638,6 +953,15 @@ fn control_event_level(action: &str) -> &'static str {
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/control", web::post().to(control_pump))
+        .route(
+            "/control/privileged-token",
+            web::post().to(issue_privileged_token),
+        )
+        .route("/control/commands", web::get().to(get_command_lifecycles))
+        .route(
+            "/control/commands/{command_id}",
+            web::get().to(get_command_lifecycle),
+        )
         .route("/control/sync", web::post().to(request_device_sync))
         .route("/control/state", web::get().to(get_control_state));
 }
@@ -645,8 +969,13 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 #[cfg(test)]
 mod tests {
     use super::{
-        control_event_level, is_dangerous_control, required_control_scope, resolve_control_target,
+        PRIVILEGED_ACTION_CLASS, PrivilegedControlClaims, control_event_level,
+        is_dangerous_control, issue_privileged_token, required_control_scope,
+        resolve_control_target, validate_privileged_token,
     };
+    use crate::api::middleware::auth::AuthContext;
+    use actix_web::{HttpMessage, Responder, web};
+    use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 
     #[test]
     fn control_target_defaults_to_all_for_controller_commands() {
@@ -815,5 +1144,64 @@ mod tests {
             super::compute_effective_max_allowed_ml(Some(-1.0), 10.0),
             10.0
         );
+    }
+
+    #[actix_web::test]
+    async fn privileged_token_is_bound_to_principal_device_and_action_class() {
+        let state = crate::api::test_support::test_app_state();
+        let auth = AuthContext {
+            scopes: vec!["control:emergency".to_string()],
+            user_id: Some("42".to_string()),
+            session_id: Some("session-1".to_string()),
+            service_key_label: None,
+        };
+        let claims = PrivilegedControlClaims {
+            sub: "42".to_string(),
+            device_id: "device-A".to_string(),
+            action_class: PRIVILEGED_ACTION_CLASS.to_string(),
+            exp: (chrono::Utc::now().timestamp() + 30) as usize,
+        };
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(state.privileged_control_secret.as_bytes()),
+        )
+        .expect("test signing key must produce a valid JWT");
+
+        assert!(validate_privileged_token(&state, &auth, "device-A", &token));
+        assert!(!validate_privileged_token(
+            &state, &auth, "device-B", &token
+        ));
+        assert!(!validate_privileged_token(
+            &state,
+            &AuthContext {
+                user_id: Some("99".to_string()),
+                ..auth.clone()
+            },
+            "device-A",
+            &token
+        ));
+    }
+
+    #[actix_web::test]
+    async fn privileged_token_issue_requires_confirmation_and_supported_action() {
+        let state = web::Data::new(crate::api::test_support::test_app_state());
+        let req = actix_web::test::TestRequest::post()
+            .uri("/api/devices/device-A/control/privileged-token")
+            .to_http_request();
+        req.extensions_mut().insert(AuthContext {
+            scopes: vec!["control:emergency".to_string()],
+            user_id: Some("42".to_string()),
+            session_id: Some("session-1".to_string()),
+            service_key_label: None,
+        });
+        let body = web::Json(super::PrivilegedTokenRequest {
+            action_class: PRIVILEGED_ACTION_CLASS.to_string(),
+        });
+        let response =
+            issue_privileged_token(web::Path::from("device-A".to_string()), req, body, state)
+                .await
+                .respond_to(&actix_web::test::TestRequest::default().to_http_request());
+        assert_eq!(response.status(), actix_web::http::StatusCode::FORBIDDEN);
     }
 }

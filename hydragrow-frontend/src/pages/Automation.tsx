@@ -8,9 +8,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useAutomationScripts, useConfigOverrides, useExecutionSuccessRate, useRevertConfigOverride } from "../hooks/useAutomationScripts";
-import { useQueryClient } from "@tanstack/react-query";
-import { apiPut } from "../lib/apiClient";
+import { useAutomationScripts, useConfigOverrides, useExecutionSuccessRate, useRevertConfigOverride, useUpdateAutomationScriptById } from "../hooks/useAutomationScripts";
 import toast from "react-hot-toast";
 import { FlowDetailDrawer } from "../components/automation/FlowDetailDrawer";
 import { AutomationPageHeader } from "../components/automation/AutomationPageHeader";
@@ -26,7 +24,7 @@ import { LoadingState } from "../components/ui/LoadingState";
 import { FaultExplanation } from "../components/ui/FaultExplanation";
 import { useFlowCanvas } from "../hooks/useFlowCanvas";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useDeviceStore } from "../store/useDeviceStore";
+import { useStationContext } from "../contexts/StationContext";
 import type { UserScript } from "../types/automation";
 import { hasConfigOverride } from "../lib/automation/configDirectives";
 
@@ -35,7 +33,8 @@ const nodeTypes = {
 };
 
 export function Automation() {
-  const deviceId = useDeviceStore((s) => s.deviceId) ?? "";
+  const { status: stationStatus, selectedDeviceId } = useStationContext();
+  const deviceId = selectedDeviceId ?? "";
   const { data: scripts, isLoading, isError } = useAutomationScripts(deviceId, {
     enabled: !!deviceId,
   });
@@ -44,7 +43,6 @@ export function Automation() {
   });
   const revertMutation = useRevertConfigOverride(deviceId);
   const { data: successRatePercent } = useExecutionSuccessRate(deviceId);
-  const queryClient = useQueryClient();
 
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const canvas = useFlowCanvas(scripts ?? []);
@@ -54,20 +52,24 @@ export function Automation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterKind, setFilterKind] = useState<"all" | "alert" | "recipe" | "action" | "config">("all");
 
+  const updateScript = useUpdateAutomationScriptById(deviceId);
+
   const activeScripts = scripts ?? [];
   const scheduleConflicts = useMemo(() => findScheduleConflicts(activeScripts), [activeScripts]);
 
   const toggleScriptEnabled = async (script: UserScript, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await apiPut(`/devices/${deviceId}/scripts/${script.id}`, {
+      await updateScript.mutateAsync({
+        scriptId: script.id,
+        body: {
         name: script.name,
         kind: script.kind,
         source: script.source,
         enabled: !script.enabled,
-        ir_json: script.ir_json,
+        ir_json: script.ir_json ?? undefined,
+        },
       });
-      queryClient.invalidateQueries({ queryKey: ["automation-scripts", deviceId] });
       toast.success(script.enabled ? "Đã tắt Flow" : "Đã bật Flow");
     } catch {
       toast.error("Không thể thay đổi trạng thái Flow");
@@ -104,10 +106,18 @@ export function Automation() {
     });
   }, [activeScripts, filterKind, searchQuery]);
 
-  if (!deviceId) {
+  if (stationStatus === 'LoadingSelection') {
+    return <div className="absolute inset-0 flex items-center justify-center text-text-muted">Đang tải danh sách trạm...</div>;
+  }
+
+  if (stationStatus !== 'Selected' || !deviceId) {
     return (
       <div className="absolute inset-0 flex items-center justify-center text-text-muted">
-        Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động.
+        {stationStatus === 'Unavailable'
+          ? 'Không thể tải danh sách trạm. Vui lòng thử lại.'
+          : stationStatus === 'PermissionDenied'
+            ? 'Bạn không có quyền truy cập danh sách trạm.'
+            : 'Chưa chọn thiết bị — hãy chọn một trạm từ Tổng Quan Thiết Bị.'}
       </div>
     );
   }

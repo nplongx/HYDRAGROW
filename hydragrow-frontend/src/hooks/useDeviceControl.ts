@@ -1,9 +1,11 @@
-import { useState, useCallback } from "react";
-import { useDeviceStore } from "../store/useDeviceStore";
+import { useState, useCallback, useEffect } from "react";
+import { useStationContext } from "../contexts/StationContext";
 import toast from "react-hot-toast";
-import { httpFetch } from "../platform/http";
 import { isTauriRuntime } from "../platform/settings";
 import { invoke } from "@tauri-apps/api/core";
+import { buildControlCommandRequest, controlApi } from "../api/control";
+import { useDeviceTelemetry } from "./useDeviceTelemetry";
+import type { PumpStatus } from "../types/models";
 
 export const INTERLOCK_PAIRS: Record<string, string> = {
   WATER_PUMP_IN: "WATER_PUMP_OUT",
@@ -19,33 +21,39 @@ const INTERLOCK_LABELS: Record<string, string> = {
   PH_DOWN: "Bơm pH Down",
 };
 
-const isPumpRunning = (
-  pumps: Record<string, boolean> | undefined,
+const readPumpState = (
+  pumps: Partial<PumpStatus> | undefined,
   pumpId: string,
-): boolean => {
+): boolean | undefined => {
+  if (!pumps) return undefined;
   switch (pumpId) {
     case "WATER_PUMP_IN":
-      return Boolean(pumps?.water_pump_in);
+      return pumps.water_pump_in;
     case "WATER_PUMP_OUT":
-      return Boolean(pumps?.water_pump_out);
+      return pumps.water_pump_out;
     case "PH_UP":
-      return Boolean(pumps?.ph_up);
+      return pumps.ph_up;
     case "PH_DOWN":
-      return Boolean(pumps?.ph_down);
+      return pumps.ph_down;
     default:
-      return false;
+      return undefined;
   }
 };
 
 export const ensureInterlock = async (
   pumpId: string,
   action: string,
+  pumpsOverride?: Partial<PumpStatus>,
 ): Promise<string | null> => {
   const partnerId = INTERLOCK_PAIRS[pumpId];
   if (action !== "on" || !partnerId) return null;
 
-  const pumps = useDeviceStore.getState().sensorData?.pump_status;
-  if (isPumpRunning(pumps as Record<string, boolean> | undefined, partnerId)) {
+  const pumps = pumpsOverride;
+  const partnerState = readPumpState(pumps, partnerId);
+  if (partnerState === undefined) {
+    return `⛔ KHÔNG XÁC ĐỊNH TRẠNG THÁI AN TOÀN: Không thể bật ${INTERLOCK_LABELS[pumpId]} khi trạng thái ${INTERLOCK_LABELS[partnerId]} chưa được xác nhận.`;
+  }
+  if (partnerState) {
     return `⛔ XUNG ĐỘT AN TOÀN: Không thể bật ${INTERLOCK_LABELS[pumpId]} khi ${INTERLOCK_LABELS[partnerId]} đang chạy.`;
   }
 
@@ -71,7 +79,10 @@ const isDangerousCommand = (pumpId: string, action: string, pwm?: number) => {
 };
 
 export const useDeviceControl = (deviceId: string) => {
-  const settings = useDeviceStore((state) => state.settings);
+  const { selectedDeviceId } = useStationContext();
+  const activeDeviceId = selectedDeviceId;
+  void deviceId; // Transitional callers may still pass the store mirror; StationContext is authoritative.
+  const { data: telemetry } = useDeviceTelemetry(activeDeviceId);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingPumpIds, setProcessingPumpIds] = useState<
@@ -80,6 +91,59 @@ export const useDeviceControl = (deviceId: string) => {
   const [commandStatus, setCommandStatus] = useState<Record<string, string>>(
     {},
   );
+  const [commandIds, setCommandIds] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setCommandIds({});
+    setCommandStatus({});
+    setProcessingPumpIds({});
+    if (!activeDeviceId) return;
+    let cancelled = false;
+    void controlApi.listCommands(activeDeviceId)
+      .then((records) => {
+        if (cancelled) return;
+        const ids: Record<string, string> = {};
+        const statuses: Record<string, string> = {};
+        for (const record of records) {
+          if (record.pump_id && !ids[record.pump_id]) {
+            ids[record.pump_id] = record.command_id;
+            statuses[record.pump_id] = record.lifecycle;
+          }
+        }
+        if (!cancelled) {
+          setCommandIds(ids);
+          setCommandStatus(statuses);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDeviceId]);
+
+  useEffect(() => {
+    const onLifecycle = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!detail || detail.device_id !== activeDeviceId || !detail.command_id)
+        return;
+      const pumpId = Object.keys(commandIds).find(
+        (key) => commandIds[key] === detail.command_id,
+      );
+      if (!pumpId) return;
+      const lifecycle = String(detail.lifecycle || "").toUpperCase();
+      setCommandStatus((prev) => ({ ...prev, [pumpId]: lifecycle }));
+      if (
+        ["CONFIRMED", "REJECTED", "FAILED", "TIMEOUT", "UNKNOWN"].includes(
+          lifecycle,
+        )
+      ) {
+        setProcessingPumpIds((prev) => ({ ...prev, [pumpId]: false }));
+      }
+    };
+    window.addEventListener("hydragrow:command-lifecycle", onLifecycle);
+    return () =>
+      window.removeEventListener("hydragrow:command-lifecycle", onLifecycle);
+  }, [activeDeviceId, commandIds]);
 
   const cooldownPump = useCallback((pumpId: string, status: string) => {
     setProcessingPumpIds((prev) => ({ ...prev, [pumpId]: true }));
@@ -97,11 +161,15 @@ export const useDeviceControl = (deviceId: string) => {
       pwm?: number,
       forceConfirmed = false,
     ) => {
-      if (!deviceId || !settings?.backend_url) {
+      if (!activeDeviceId) {
         toast.error("Chưa cấu hình máy chủ!");
         return false;
       }
-      const interlockError = await ensureInterlock(pumpId, action);
+      const interlockError = await ensureInterlock(
+        pumpId,
+        action,
+        telemetry?.actuator?.pump_status,
+      );
       if (interlockError) {
         setCommandStatus((prev) => ({ ...prev, [pumpId]: "safety_blocked" }));
         toast.error(interlockError);
@@ -116,56 +184,30 @@ export const useDeviceControl = (deviceId: string) => {
       }
       const isConfirmed = dangerous || forceConfirmed;
       setIsProcessing(true);
-      cooldownPump(pumpId, "sending");
+      cooldownPump(pumpId, "REQUESTED");
       try {
-        const payload = {
-          target: "all",
-          action: action,
-          params: {
-            pump_id: pumpId,
-            duration_sec: duration_sec || null,
-            pwm: pwm ?? null,
-          },
-          command_metadata: {
-            action,
-            pump_id: pumpId,
-            duration_sec: duration_sec ?? null,
-            pwm: pwm ?? null,
-            dangerous,
-          },
-        };
-        const res = await httpFetch(
-          `${settings.backend_url}/api/devices/${deviceId}/control`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-API-Key": settings.api_key || "",
-              ...(isConfirmed ? { "X-User-Confirmed": "true" } : {}),
-            },
-            body: JSON.stringify(payload),
-          },
-        );
-        if (res.ok) {
-          setCommandStatus((prev) => ({ ...prev, [pumpId]: "accepted" }));
-          toast.success(`Đã gửi lệnh: ${action} -> ${pumpId}`);
-          return true;
-        } else {
-          const rejectedStatus =
-            res.status === 429 ? "rate_limited" : `HTTP ${res.status}`;
-          setCommandStatus((prev) => ({ ...prev, [pumpId]: rejectedStatus }));
-          toast.error(`Từ chối: ${rejectedStatus}`);
-          return false;
+        const payload = buildControlCommandRequest(action, pumpId, duration_sec, pwm, dangerous);
+        const body = await controlApi.send(activeDeviceId, payload, isConfirmed);
+        const commandId = body.command_id;
+        if (commandId) {
+          setCommandIds((prev) => ({ ...prev, [pumpId]: commandId }));
         }
-      } catch {
-        setCommandStatus((prev) => ({ ...prev, [pumpId]: "network_error" }));
-        toast.error("Lỗi mạng khi gửi lệnh!");
+        setCommandStatus((prev) => ({ ...prev, [pumpId]: "SENT" }));
+        toast.success(`Đã gửi lệnh: ${action} -> ${pumpId}`);
+        return true;
+      } catch (error) {
+        const status = (error as Error & { status?: number })?.status;
+        const lifecycle = status === 429 ? "REJECTED" : "UNKNOWN";
+        setCommandStatus((prev) => ({ ...prev, [pumpId]: lifecycle }));
+        toast.error(
+          status ? `Từ chối: ${lifecycle}` : "Lỗi mạng khi gửi lệnh!",
+        );
         return false;
       } finally {
         setIsProcessing(false);
       }
     },
-    [deviceId, settings, cooldownPump],
+    [activeDeviceId, telemetry, cooldownPump],
   );
 
   const togglePump = (pumpId: string, action: "on" | "off") =>
@@ -175,7 +217,8 @@ export const useDeviceControl = (deviceId: string) => {
   const setPwm = (pumpId: string, pwmValue: number, durationSec?: number) =>
     sendCommand(pumpId, "set_pwm", durationSec, pwmValue);
   const resetFault = () => sendCommand("ALL", "reset_fault");
-  const emergencyStop = () => sendCommand("ALL", "emergency_stop", undefined, undefined, true);
+  const emergencyStop = () =>
+    sendCommand("ALL", "emergency_stop", undefined, undefined, true);
 
   return {
     isProcessing,

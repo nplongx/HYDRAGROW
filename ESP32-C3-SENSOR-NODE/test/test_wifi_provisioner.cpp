@@ -1,6 +1,10 @@
 #include <unity.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 // Stub Preferences để test trên host
 #include "../test/stubs/Preferences.h"
 #include "../src/wifi/WifiProvisioner.cpp"
@@ -126,6 +130,29 @@ void test_validation_gate_first_call_returns_true() {
     TEST_ASSERT_TRUE(gate.markIfNeeded());
 }
 
+void test_p1_9_sensor_fixture_matches_arduinojson_wire_shape() {
+    // Keep the canonical fixture as the cross-language input artifact used by
+    // the C++ sensor-node's ArduinoJson parser. The C++ publisher emits these
+    // same canonical names in MqttManager::publishSensorData().
+    const auto fixturePath = std::filesystem::path(HYDRAGROW_PROJECT_DIR)
+        / "schema/contracts/fixtures/sensor-data.json";
+    std::ifstream file(fixturePath);
+    TEST_ASSERT_TRUE(file.good());
+    std::stringstream contents;
+    contents << file.rdbuf();
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, contents.str());
+    TEST_ASSERT_FALSE(err);
+    TEST_ASSERT_EQUAL_STRING("device-001", doc["device_id"] | "");
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.5f, doc["ec"].as<float>());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 6.0f, doc["ph"].as<float>());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 27.0f, doc["temp"].as<float>());
+    TEST_ASSERT_TRUE(doc["time"].is<const char*>());
+    TEST_ASSERT_FALSE(doc["err_ec"].isNull());
+    TEST_ASSERT_TRUE(doc["err_tds"].isNull());
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     RUN_TEST(test_load_returns_empty_when_nvs_empty);
@@ -141,5 +168,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_returns_empty_when_assets_field_missing);
     RUN_TEST(test_validation_gate_marks_exactly_once);
     RUN_TEST(test_validation_gate_first_call_returns_true);
+    RUN_TEST(test_p1_9_sensor_fixture_matches_arduinojson_wire_shape);
     return UNITY_END();
 }

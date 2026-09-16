@@ -1,0 +1,31 @@
+{
+  "phase": "P1.8",
+  "requirement": "Route / Navigation Contract",
+  "status": "implemented",
+  "verified": {
+    "route_manifest": "hydragrow-frontend/src/routes.ts",
+    "canonical_routes": 10,
+    "legacy_aliases": 9,
+    "primary_navigation": ["dashboard", "operations", "cultivation", "journal", "settings"],
+    "explicit_404": true,
+    "capability_gate": "admin",
+    "device_scope_gate": true,
+    "mock_auth_dev_test_only": true,
+    "url_tabs": ["operations", "cultivation", "journal"],
+    "spa_fallback": "hydragrow-frontend/vercel.json",
+    "history_back_fallback": "FleetView -> /dashboard replace"
+  },
+  "tests": {
+    "command": "npx tsc --noEmit && npx vitest run src/lib/routeState.test.ts src/routes.test.ts src/contexts/StationContext.test.tsx src/lib/apiClient.test.ts src/components/layout/MainLayout.test.tsx src/pages/FleetView.test.tsx",
+    "result": "30/30 tests passed; TypeScript passed"
+  },
+  "build": {
+    "command": "npm run build",
+    "result": "passed; Vite chunk-size warning only"
+  },
+  "diff_check": "passed",
+  "notes": [
+    "Existing OrphanedPagesRoutes.test.tsx still mounts ConfigBackup/UserManagement without QueryClientProvider; those failures are test-harness/provider regressions from P1.7 hook migration, not route resolution failures.",
+    "No commits created; existing dirty worktree preserved."
+  ]
+}

@@ -29,6 +29,7 @@ pub mod db;
 pub mod metrics;
 pub mod models;
 pub mod mqtt;
+pub mod observability;
 pub mod services;
 
 #[derive(Debug, Clone)]
@@ -95,9 +96,12 @@ pub struct AppState {
 
     // Messaging
     pub mqtt_client: AsyncClient,
+    pub mqtt_connected: Arc<std::sync::atomic::AtomicBool>,
+    pub command_reconciliation_worker: Arc<std::sync::atomic::AtomicBool>,
 
     // Auth
     pub api_key: String,
+    pub privileged_control_secret: String,
     pub firebase_auth: std::sync::Arc<crate::services::firebase_auth::FirebaseAuthVerifier>,
 
     // Event bus — tất cả side-effect đi qua đây
@@ -127,6 +131,30 @@ pub struct AppState {
 
     pub script_cache: crate::services::script_engine::ScriptCache,
     pub cloudinary: Option<crate::services::cloudinary::CloudinaryConfig>,
+}
+
+async fn subscribe_mqtt_topics(mqtt_client: &AsyncClient) -> anyhow::Result<()> {
+    const SUBSCRIPTIONS: &[(&str, QoS)] = &[
+        ("sensors", QoS::AtMostOnce),
+        ("status", QoS::AtLeastOnce),
+        ("sensor/status", QoS::AtLeastOnce),
+        ("fsm/state", QoS::AtLeastOnce),
+        ("fsm/events", QoS::AtLeastOnce),
+        ("system_log", QoS::AtLeastOnce),
+        ("calibration", QoS::AtLeastOnce),
+        ("controller/status", QoS::AtLeastOnce),
+        ("controller/command-status", QoS::AtLeastOnce),
+        ("fsm/transition", QoS::AtLeastOnce),
+        ("dosing_cycle", QoS::AtLeastOnce),
+        ("water_cycle", QoS::AtLeastOnce),
+    ];
+
+    for (suffix, qos) in SUBSCRIPTIONS {
+        mqtt_client
+            .subscribe(&format!("{}/+/{}", AGITECH_PREFIX, suffix), *qos)
+            .await?;
+    }
+    Ok(())
 }
 
 #[tokio::main]
@@ -268,6 +296,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let (event_bus, _) = broadcast::channel(256);
+    let mqtt_connected = crate::observability::new_mqtt_connection_state();
+    let command_reconciliation_worker = crate::observability::new_mqtt_connection_state();
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let firebase_project_id =
         std::env::var("FIREBASE_PROJECT_ID").context("FIREBASE_PROJECT_ID must be set in .env")?;
@@ -285,7 +315,11 @@ async fn main() -> anyhow::Result<()> {
         influx_client,
         influx_bucket,
         mqtt_client: mqtt_client.clone(),
+        mqtt_connected: mqtt_connected.clone(),
+        command_reconciliation_worker: command_reconciliation_worker.clone(),
         api_key,
+        privileged_control_secret: env::var("PRIVILEGED_CONTROL_SECRET")
+            .context("PRIVILEGED_CONTROL_SECRET must be set in .env")?,
         firebase_auth,
         device_states,
         device_firmware,
@@ -302,6 +336,11 @@ async fn main() -> anyhow::Result<()> {
         },
         cloudinary,
     });
+
+    crate::services::durable_command::spawn_recovery(
+        app_state.clone().into_inner(),
+        command_reconciliation_worker.clone(),
+    );
 
     // Nạp lại toàn bộ script đã enable từ DB vào cache khi khởi động
     {
@@ -377,8 +416,20 @@ async fn main() -> anyhow::Result<()> {
                 Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(publish))) => {
                     process_message(publish, app_state_for_mqtt.clone()).await;
                 }
+                Ok(rumqttc::Event::Incoming(rumqttc::Packet::ConnAck(_))) => {
+                    mqtt_connected.store(true, std::sync::atomic::Ordering::Relaxed);
+                    // A broker restart can lose the persistent subscription set.
+                    // Re-install subscriptions on every successful connection; this
+                    // does not fabricate device state or telemetry.
+                    if let Err(e) = subscribe_mqtt_topics(&app_state_for_mqtt.mqtt_client).await {
+                        error!(error = ?e, "Không thể khôi phục MQTT subscriptions sau reconnect");
+                    } else {
+                        info!("MQTT subscriptions restored after connection");
+                    }
+                }
                 Ok(_) => {}
                 Err(e) => {
+                    mqtt_connected.store(false, std::sync::atomic::Ordering::Relaxed);
                     error!("Mất kết nối MQTT, thử lại sau 5 giây... Lỗi: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
@@ -386,86 +437,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "sensors"),
-            QoS::AtMostOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "status"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "sensor/status"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "fsm/state"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "fsm/events"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "system_log"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "calibration"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "controller/status"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-    // Trong hydragrow-backend/src/main.rs, thêm sau các subscribe hiện tại:
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "fsm/transition"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub fsm/transition"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "dosing_cycle"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub dosing_cycle"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
-
-    mqtt_client
-        .subscribe(
-            &format!("{}/+/{}", AGITECH_PREFIX, "water_cycle"),
-            QoS::AtLeastOnce,
-        )
-        .await
-        .expect("Lỗi sub water_cycle"); // startup: acceptable to panic — fail fast if initial MQTT subscription fails
+    subscribe_mqtt_topics(&mqtt_client).await?;
 
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let server_port: u16 = env::var("SERVER_PORT")
@@ -506,8 +478,10 @@ async fn main() -> anyhow::Result<()> {
 
         App::new()
             .app_data(app_state.clone())
+            .wrap(observability::RequestObservability)
             .wrap(cors)
-            .route("/metrics", web::get().to(api::metrics::metrics_handler)) // 🟢 1. Chỉ bắt đúng 1 endpoint WebSocket, KHÔNG dùng web::scope chiếm toàn bộ đường dẫn
+            .route("/metrics", web::get().to(api::metrics::metrics_handler))
+            .configure(observability::init_routes) // 🟢 1. Chỉ bắt đúng 1 endpoint WebSocket, KHÔNG dùng web::scope chiếm toàn bộ đường dẫn
             .service(
                 web::resource("/api/devices/{device_id}/ws")
                     .route(web::get().to(api::ws::ws_handler)),
@@ -517,6 +491,7 @@ async fn main() -> anyhow::Result<()> {
                 web::scope("/api")
                     .wrap(auth_middleware)
                     .wrap(rate_limit_middleware)
+                    .wrap(api::error::NormalizeJsonErrors)
                     .configure(api::notification::init_routes)
                     .configure(api::solana::init_routes)
                     .configure(api::recipe::init_routes)
@@ -526,6 +501,7 @@ async fn main() -> anyhow::Result<()> {
                     .configure(api::fleet::init_fleet_routes)
                     .service(
                         web::scope("/devices/{device_id}")
+                            .wrap(api::middleware::auth::DeviceOwnershipAuth)
                             .configure(api::control::init_routes)
                             .service(
                                 web::scope("/admin").configure(api::config_backup::init_routes),

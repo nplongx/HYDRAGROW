@@ -202,6 +202,28 @@ impl EventDispatcher {
                 });
                 let _ = dc.mqtt_tx.send(wrapper.to_string());
             }
+            OrchestratorEvent::PublishCommandLifecycle {
+                command_id,
+                lifecycle,
+                reason,
+            } => {
+                crate::runtime::command_handler::mark_persistent_command_processed(
+                    &command_id,
+                    dc.nvs,
+                );
+                let payload = hydragrow_shared::CommandLifecycleEvent {
+                    command_id,
+                    device_id: dc.device_id.to_string(),
+                    lifecycle,
+                    reason,
+                    timestamp_ms: (dc.now_sec * 1000) as i64,
+                };
+                let wrapper = serde_json::json!({
+                    "_mqtt_topic_override": hydragrow_shared::topics::topic_command_lifecycle(dc.device_id),
+                    "_payload": payload
+                });
+                let _ = dc.mqtt_tx.send(wrapper.to_string());
+            }
             OrchestratorEvent::RequestSensorForcePublish => {
                 let _ = dc.sensor_cmd_tx.send(
                     r#"{"target":"sensor","action":"force_publish","params":{}}"#.to_string(),

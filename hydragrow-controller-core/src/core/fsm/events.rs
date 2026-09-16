@@ -63,6 +63,11 @@ pub enum OrchestratorEvent {
         reason: String,
         requested: bool,
     },
+    PublishCommandLifecycle {
+        command_id: String,
+        lifecycle: hydragrow_shared::CommandLifecycle,
+        reason: Option<String>,
+    },
 
     // --- CONTROL FLOW: Sensor node ---
     RequestSensorForcePublish,

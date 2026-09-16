@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Download, Upload, DatabaseBackup } from 'lucide-react';
-import { useDeviceStore } from '../store/useDeviceStore';
-import { apiGet, apiPost } from '../lib/apiClient';
+import { useStationContext } from '../contexts/StationContext';
+import { BackupArtifact, useConfigBackup } from '../hooks/useConfigBackup';
 
 export function ConfigBackup() {
-  const deviceId = useDeviceStore((s) => s.deviceId);
-  const [importing, setImporting] = useState(false);
+  const { selectedDeviceId: deviceId } = useStationContext();
+  const { exportMutation, previewMutation, restoreMutation } = useConfigBackup(deviceId);
+  const [selectedArtifact, setSelectedArtifact] = useState<BackupArtifact | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   async function handleExport() {
     try {
-      const backup = await apiGet(`/devices/${deviceId}/admin/backup`);
+      const backup = await exportMutation.mutateAsync();
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -19,30 +20,45 @@ export function ConfigBackup() {
       a.click();
       URL.revokeObjectURL(url);
       setMessage({ type: 'success', text: 'Đã xuất backup thành công!' });
-    } catch (e: any) {
-      setMessage({ type: 'error', text: e.message });
+    } catch (e: unknown) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     }
   }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImporting(true);
     try {
       const text = await file.text();
-      const backup = JSON.parse(text);
-      if (!confirm(`Import backup từ ${backup.exported_at}?\nThiết bị: ${backup.device_id}\nThao tác này sẽ ghi đè cấu hình hiện tại.`)) {
-        return;
-      }
-      await apiPost(`/devices/${deviceId}/admin/restore`, backup);
-      setMessage({ type: 'success', text: 'Import thành công! Cấu hình đang được áp dụng.' });
-    } catch (e: any) {
-      setMessage({ type: 'error', text: `Lỗi import: ${e.message}` });
+      const backup = JSON.parse(text) as BackupArtifact;
+      const preview = await previewMutation.mutateAsync(backup);
+      setSelectedArtifact(backup);
+      const summary = [
+        `Thêm: ${preview.additions.length}`,
+        `Thay đổi: ${preview.changes.length}`,
+        `Không đổi: ${preview.unchanged.length}`,
+      ].join(' · ');
+      setMessage({ type: 'success', text: `Đã kiểm tra backup. ${summary}` });
+    } catch (e: unknown) {
+      setMessage({ type: 'error', text: `Backup bị từ chối: ${e instanceof Error ? e.message : String(e)}` });
     } finally {
-      setImporting(false);
       e.target.value = '';
     }
   }
+
+  async function handleApply() {
+    if (!selectedArtifact) return;
+    if (!confirm('Áp dụng backup đã được kiểm tra? Cấu hình sẽ được commit nguyên tử.')) return;
+    try {
+      const result = await restoreMutation.mutateAsync(selectedArtifact);
+      setMessage({ type: 'success', text: `Restore: ${result.status}. Kiểm tra đồng bộ controller nếu cần.` });
+      setSelectedArtifact(null);
+    } catch (e: unknown) {
+      setMessage({ type: 'error', text: `Restore bị từ chối: ${e instanceof Error ? e.message : String(e)}` });
+    }
+  }
+
+  const busy = exportMutation.isPending || previewMutation.isPending || restoreMutation.isPending;
 
   return (
     <div className="app-page">
@@ -79,6 +95,7 @@ export function ConfigBackup() {
           </p>
           <button
             onClick={handleExport}
+            disabled={busy || !deviceId}
             className="flex items-center gap-2 px-4 py-2 ui-btn-primary"
           >
             <Download size={16} /> Xuất Backup
@@ -91,12 +108,27 @@ export function ConfigBackup() {
             <h2 className="font-semibold">Import Backup</h2>
           </div>
           <p className="text-sm text-text-muted mb-4">
-            Khôi phục cấu hình từ file backup. Thao tác này sẽ ghi đè cấu hình hiện tại của thiết bị.
+            Chọn file để kiểm tra preview trước. Chỉ backup hợp lệ mới được phép áp dụng.
           </p>
-          <label className={`flex items-center gap-2 px-4 py-2 border border-warning text-warning rounded-lg text-sm cursor-pointer hover:bg-warning-bg ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
-            <Upload size={16} /> {importing ? 'Đang import...' : 'Chọn file backup'}
-            <input type="file" accept=".json" onChange={handleImport} className="hidden" disabled={importing} />
+          <label className={`flex items-center gap-2 px-4 py-2 border border-warning text-warning rounded-lg text-sm cursor-pointer hover:bg-warning-bg ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+            <Upload size={16} /> {previewMutation.isPending ? 'Đang kiểm tra...' : 'Chọn file backup'}
+            <input type="file" accept=".json" onChange={handleImport} className="hidden" disabled={busy || !deviceId} />
           </label>
+          {previewMutation.data && (
+            <div className="mt-4 text-sm text-text-muted space-y-1">
+              <div>Thêm: {previewMutation.data.additions.length}</div>
+              <div>Thay đổi: {previewMutation.data.changes.length}</div>
+              <div>Không đổi: {previewMutation.data.unchanged.length}</div>
+              {previewMutation.data.warnings.map((warning) => <div key={warning}>Cảnh báo: {warning}</div>)}
+              <button
+                onClick={handleApply}
+                disabled={busy || !previewMutation.data.apply_permitted || !selectedArtifact}
+                className="mt-3 px-4 py-2 ui-btn-primary"
+              >
+                {restoreMutation.isPending ? 'Đang restore...' : 'Áp dụng backup'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

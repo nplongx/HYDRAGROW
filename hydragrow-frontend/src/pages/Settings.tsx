@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingState } from '../components/ui/LoadingState';
 
 // --- IMPORT PLATFORM & UTILS ---
-import { httpFetch } from '../platform/http';
 import { forgetStoredApiKey, getDefaultBackendUrl, loadAppSettings, saveAppSettings } from '../platform/settings';
 import { useAuth } from '../contexts/AuthContext';
 import { useWhoami } from '../hooks/useWhoami';
@@ -15,7 +14,12 @@ import { build_full_unified_payload_json } from '../../gleam_core/build/dev/java
 
 import { Save, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
+import { useDeviceTelemetry } from '../hooks/useDeviceTelemetry';
+import { useDeviceConfig } from '../hooks/useDeviceConfig';
+import { routePath } from '../routes';
+import { configApi } from '../api/config';
+import { deviceSettingsApi } from '../api/deviceSettings';
 import type { OtaStatus, WifiCandidate, WifiConfigStatus, WifiProvisionEntry } from '../types/models';
 
 import { GeneralSection } from './settings/GeneralSection';
@@ -42,10 +46,15 @@ const Settings = () => {
       : whoami?.role === 'viewer'
       ? 'Người xem'
       : undefined;
-  const sensorData = useDeviceStore((s) => s.sensorData);
-  const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
-  const runtimeSettings = useDeviceStore((s) => s.settings);
-  const ctxDeviceId = useDeviceStore((s) => s.deviceId);
+  const { selectedDeviceId: ctxDeviceId } = useStationContext();
+  const { data: telemetry } = useDeviceTelemetry(ctxDeviceId);
+  const {
+    data: remoteConfig,
+    isLoading: isConfigLoading,
+    isError: isConfigError,
+    error: configError,
+    refetch: refetchConfig,
+  } = useDeviceConfig(ctxDeviceId);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -58,18 +67,10 @@ const Settings = () => {
   async function sendReboot() {
     if (!confirm('Xác nhận reboot thiết bị?')) return;
     setRebootLoading(true);
-    const settings = runtimeSettings || appSettings;
     const deviceId = ctxDeviceId;
+    if (!deviceId) { setRebootLoading(false); toast.error('Thiếu Device ID.'); return; }
     try {
-      const res = await httpFetch(`${settings?.backend_url}/api/devices/${deviceId}/reboot`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': settings?.api_key || '',
-            'X-User-Confirmed': 'true'
-        }
-      });
-      if(!res.ok) throw new Error(await res.text());
+      await deviceSettingsApi.reboot(deviceId);
       toast.success('Lệnh reboot đã được gửi');
     } catch (e: any) {
       toast.error(e.message);
@@ -77,18 +78,10 @@ const Settings = () => {
   }
 
   async function sendFactoryReset() {
-    const settings = runtimeSettings || appSettings;
     const deviceId = ctxDeviceId;
+    if (!deviceId) { toast.error('Thiếu Device ID.'); return; }
     try {
-      const res = await httpFetch(`${settings?.backend_url}/api/devices/${deviceId}/factory-reset`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': settings?.api_key || '',
-            'X-User-Confirmed': 'true'
-        }
-      });
-      if(!res.ok) throw new Error(await res.text());
+      await deviceSettingsApi.factoryReset(deviceId);
       setFactoryResetConfirm(false);
       toast.success('Lệnh factory reset đã được gửi');
     } catch (e: any) {
@@ -159,63 +152,29 @@ const Settings = () => {
   const [capturedPoints, setCapturedPoints] = useState<Record<number, { voltage: number; confidence: number; capturedAt: string }>>({});
 
   const activePoint = calibrationPoints[wizardStep];
-  const isPhError = sensorData?.err_ph === true;
+  const phAxis = telemetry?.axes.find((axis) => axis.name === 'ph');
+  const isSensorOnline = telemetry?.availability === 'ONLINE';
+  const isPhError = phAxis?.quality === 'ERROR' || phAxis?.quality === 'INVALID';
   const isCalibrationBlocked = !isSensorOnline || isPhError;
 
-  const callApi = async (
-    path: string,
-    method: string = 'GET',
-    body: any = null,
-    currentSettings: any = appSettings,
-    customTimeoutMs?: number,
-    extraHeaders?: Record<string, string>
-  ) => {
-    const url = `${currentSettings.backend_url}${path}`;
-    const options: any = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': currentSettings.api_key,
-        ...extraHeaders,
-      },
-    };
-    if (customTimeoutMs) { options.connectTimeout = customTimeoutMs; options.timeout = customTimeoutMs; }
-    if (body) options.body = JSON.stringify(body);
-    const res = await httpFetch(url, options);
-    if (!res.ok) {
-      let errDetail = `HTTP ${res.status}`;
-      try { errDetail = `${res.status}: ${await res.text()}`; } catch { /* ignore text parse error */ }
-      throw new Error(errDetail);
-    }
-    return await res.json();
-  };
 
   useEffect(() => {
     const deviceId = ctxDeviceId;
-    const settings = runtimeSettings || appSettings;
-    if (!deviceId || !settings?.backend_url) { setOtaStatus(null); return; }
-    callApi(`/api/devices/${deviceId}/ota/status`, 'GET', null, settings)
+    if (!deviceId) { setOtaStatus(null); return; }
+    deviceSettingsApi.otaStatus(deviceId)
       .then((status) => setOtaStatus(status as OtaStatus))
       .catch(() => setOtaStatus(null));
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [appSettings.api_key, appSettings.backend_url, ctxDeviceId, runtimeSettings]);
+  }, [appSettings.api_key, appSettings.backend_url, ctxDeviceId]);
 
   const handleTriggerOta = async () => {
     const deviceId = ctxDeviceId;
-    const settings = runtimeSettings || appSettings;
     if (!deviceId || !otaStatus?.update_available || isTriggeringOta) return;
     if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version}?\nThiết bị sẽ khởi động lại và tạm ngừng điều khiển trong quá trình cập nhật.`)) return;
     setIsTriggeringOta(true);
     try {
       // OTA-only: no wifi payload, active credentials untouched.
-      await callApi(
-        `/api/devices/${deviceId}/ota/trigger`,
-        'POST',
-        {},
-        settings,
-        undefined,
-        { 'X-User-Confirmed': 'true' }
-      );
+      await deviceSettingsApi.triggerOta(deviceId);
       toast.success('Đã gửi lệnh cập nhật. Theo dõi tiến trình trong Nhật ký hệ thống.');
     } catch { toast.error('Không gửi được lệnh cập nhật firmware.'); }
     finally { setIsTriggeringOta(false); }
@@ -226,11 +185,9 @@ const Settings = () => {
   // Load password-blind desired state; seed secret inputs blank (keep semantics).
   useEffect(() => {
     const deviceId = ctxDeviceId;
-    const settings = runtimeSettings || appSettings;
-    if (!deviceId || !settings?.backend_url) { setWifiConfig(null); return; }
-    callApi(`/api/devices/${deviceId}/wifi`, 'GET', null, settings)
-      .then((config) => {
-        const view = config as WifiConfigStatus;
+    if (!deviceId) { setWifiConfig(null); return; }
+    deviceSettingsApi.wifiConfig(deviceId)
+      .then((view) => {
         setWifiConfig(view);
         if (view?.ssids?.length) {
           setWifiCandidates(view.ssids.map((entry) => ({ ssid: entry.ssid, password: '', priority: entry.priority })));
@@ -238,15 +195,14 @@ const Settings = () => {
       })
       .catch(() => setWifiConfig(null));
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [appSettings.api_key, appSettings.backend_url, ctxDeviceId, runtimeSettings]);
+  }, [appSettings.api_key, appSettings.backend_url, ctxDeviceId]);
 
   const refreshWifiConfig = async () => {
     const deviceId = ctxDeviceId;
-    const settings = runtimeSettings || appSettings;
     if (!deviceId) return;
     try {
-      const config = await callApi(`/api/devices/${deviceId}/wifi`, 'GET', null, settings);
-      setWifiConfig(config as WifiConfigStatus);
+      const config = await deviceSettingsApi.wifiConfig(deviceId);
+      setWifiConfig(config);
     } catch { /* keep last known state */ }
   };
 
@@ -283,7 +239,6 @@ const Settings = () => {
 
   const handleTriggerOtaWifi = async () => {
     const deviceId = ctxDeviceId;
-    const settings = runtimeSettings || appSettings;
     if (!deviceId || !otaStatus?.update_available || isProvisioningOta) return;
     const entries = buildProvisionEntries();
     if (!entries) return;
@@ -291,14 +246,7 @@ const Settings = () => {
     if (!window.confirm(`Cập nhật firmware lên ${otaStatus.latest_version} và áp dụng ${entries.length} mạng WiFi (config v${configVersion})?\nThiết bị sẽ khởi động lại; WiFi mới chỉ có hiệu lực sau khi OTA thành công.`)) return;
     setIsProvisioningOta(true);
     try {
-      await callApi(
-        `/api/devices/${deviceId}/ota/trigger`,
-        'POST',
-        { wifi: { config_version: configVersion, entries } },
-        settings,
-        undefined,
-        { 'X-User-Confirmed': 'true' }
-      );
+      await deviceSettingsApi.triggerOtaWithWifi(deviceId, configVersion, entries);
       // Minimize password lifetime in browser memory.
       clearTransientPasswords();
       toast.success(`Đã gửi OTA + WiFi config v${configVersion}. Theo dõi trạng thái áp dụng bên dưới.`);
@@ -313,21 +261,13 @@ const Settings = () => {
 
   const handleSaveWifiList = async () => {
     const deviceId = ctxDeviceId;
-    const settings = runtimeSettings || appSettings;
     const candidates = wifiCandidates.filter((candidate) => candidate.ssid.trim() !== '');
     if (!deviceId) { toast.error('Thiếu Device ID.'); return; }
     if (!candidates.length) { toast.error('Cần nhập ít nhất một SSID.'); return; }
     if (!window.confirm(`Gửi ${candidates.length} mạng WiFi xuống thiết bị?\nThông tin sai có thể khiến thiết bị mất kết nối cho tới khi có người kiểm tra tại chỗ.`)) return;
     setIsSavingWifi(true);
     try {
-      await callApi(
-        `/api/devices/${deviceId}/wifi`,
-        'POST',
-        { candidates },
-        settings,
-        undefined,
-        { 'X-User-Confirmed': 'true' }
-      );
+      await deviceSettingsApi.saveWifi(deviceId, candidates);
       toast.success('Đã gửi danh sách WiFi; thiết bị áp dụng sau lần khởi động tiếp theo.');
     } catch { toast.error('Không gửi được danh sách WiFi.'); }
     finally { setIsSavingWifi(false); }
@@ -351,11 +291,10 @@ const Settings = () => {
   const handleCapturePoint = async () => {
     if (!activePoint || isCalibrationBlocked || isCapturingPoint) return;
     const currentDeviceId = ctxDeviceId;
-    const currentSettings = runtimeSettings || appSettings;
-    if (!currentDeviceId || !currentSettings?.backend_url) { toast.error('Thiếu Device ID hoặc URL máy chủ.'); return; }
+    if (!currentDeviceId) { toast.error('Thiếu Device ID.'); return; }
     setIsCapturingPoint(true);
     if (wizardStep === 0) {
-      try { await callApi(`/api/devices/${currentDeviceId}/calibration/ph/start`, 'POST', { mode: '2-point' }, currentSettings); }
+      try { await deviceSettingsApi.startPhCalibration(currentDeviceId); }
       catch (error: any) { toast.error(`Lỗi: ${error.message}`); setIsCapturingPoint(false); return; }
     }
     const targetSamples = 5;
@@ -368,7 +307,11 @@ const Settings = () => {
       setCountdown((prev) => { if (prev <= 1) { clearInterval(timer); setStabilityStatus('stable'); return 0; } return prev - 1; });
     }, 1000);
     try {
-      const captureRes = await callApi(`/api/devices/${currentDeviceId}/calibration/ph/capture`, 'POST', { point: activePoint, sample_target: targetSamples, window_seconds: dynamicWindowSec }, currentSettings, requestTimeoutMs);
+      const captureRes = await deviceSettingsApi.capturePhCalibration(
+        currentDeviceId,
+        { point: activePoint, sample_target: targetSamples, window_seconds: dynamicWindowSec },
+        requestTimeoutMs,
+      );
       const voltage = normalizeVoltage(captureRes);
       if (voltage === null) throw new Error('Không nhận được giá trị.');
       setCapturedPoints((prev) => ({ ...prev, [activePoint]: { voltage, confidence: normalizeConfidence(captureRes), capturedAt: new Date().toISOString() } }));
@@ -410,53 +353,34 @@ const Settings = () => {
     const c = applyCalibrationToConfig();
     if (!c) return;
     const currentDeviceId = ctxDeviceId;
-    const currentSettings = runtimeSettings || appSettings;
-    if (!currentDeviceId || !currentSettings?.backend_url) return;
+    if (!currentDeviceId) return;
     try {
-      await callApi(`/api/devices/${currentDeviceId}/calibration/ph/finish`, 'POST', {}, currentSettings);
+      await deviceSettingsApi.finishPhCalibration(currentDeviceId);
     } catch (error: any) {
       console.warn('Finish calibration session error (non-fatal):', error.message);
     }
     await handleSave(c);
   };
 
-  const loadConfig = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const settings: any = await loadAppSettings();
-      if (settings) setAppSettings(settings);
-      const currentDeviceId = ctxDeviceId;
-      if (!currentDeviceId) return;
-      const unifiedData = await callApi(`/api/devices/${currentDeviceId}/config/unified`, 'GET', null, settings).catch(() => null);
-      if (unifiedData) {
-        const merged = {
-          ...unifiedData.device_config,
-          ...unifiedData.water_config,
-          ...unifiedData.safety_config,
-          ...unifiedData.sensor_calibration,
-          ...unifiedData.dosing_calibration
-        };
-        const ecAliases = {
-          ec_target: merged.ec_target ?? merged.ec_target,
-          ec_tolerance: merged.ec_tolerance ?? merged.ec_tolerance,
-          min_ec_limit: merged.min_ec_limit ?? merged.min_ec_limit,
-          max_ec_limit: merged.max_ec_limit ?? merged.max_ec_limit,
-          max_ec_delta: merged.max_ec_delta ?? merged.max_ec_delta,
-          ec_ack_threshold: merged.ec_ack_threshold ?? merged.ec_ack_threshold,
-          ec_gain_per_ml: merged.ec_gain_per_ml ?? merged.ec_gain_per_ml,
-          ec_step_ratio: merged.ec_step_ratio ?? merged.ec_step_ratio,
-          best_ec_ratio: merged.best_ec_ratio ?? merged.best_ec_ratio,
-          enable_ec_sensor: merged.enable_ec_sensor ?? merged.enable_ec_sensor
-        };
-        setConfig((prev: any) => ({ ...prev, ...merged, ...ecAliases }));
-      }
-    } catch { /* ignore config load error */ } finally { setIsLoading(false); }
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [ctxDeviceId]);
+  useEffect(() => {
+    let active = true;
+    loadAppSettings()
+      .then((settings) => {
+        if (active && settings) setAppSettings(settings);
+      })
+      .catch(() => {
+        // Application connection settings remain local platform state.
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+    if (!remoteConfig) return;
+    setConfig((prev: any) => ({ ...prev, ...remoteConfig }));
+  }, [remoteConfig]);
 
   const dosingValidationErrors = useMemo(() => {
     const gleamErrors = validate_dosing_config(
@@ -488,7 +412,7 @@ const Settings = () => {
       if (Object.keys(dosingValidationErrors).length > 0) { toast.error('Dữ liệu không hợp lệ.'); return; }
       const devId = ctxDeviceId;
 
-      await saveAppSettings({ ...appSettings, device_id: devId });
+      await saveAppSettings({ ...appSettings, device_id: '' });
       const ts = new Date().toISOString();
 
       const jsonStringPayload = build_full_unified_payload_json(
@@ -582,20 +506,13 @@ const Settings = () => {
         ts
       );
 
-      const res = await httpFetch(`${appSettings.backend_url}/api/devices/${devId}/config/unified`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': appSettings.api_key
-        },
-        body: jsonStringPayload
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      const result = await configApi.update(devId, JSON.parse(jsonStringPayload));
+      if (result?.status === 'partial_success') {
+        toast.error('Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị.', { id: toastId });
+        return;
       }
 
-      await loadConfig();
+      await refetchConfig();
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã lưu cấu hình thành công.', { id: toastId });
     } catch (error: any) { toast.error(`Lỗi: ${error?.message}`, { id: toastId }); }
@@ -613,7 +530,17 @@ const Settings = () => {
     }
   };
 
-  if (isLoading) return <LoadingState message="Đang tải cấu hình..." />;
+  if (isLoading || isConfigLoading) return <LoadingState message="Đang tải cấu hình..." />;
+  if (isConfigError) {
+    return (
+      <div className="app-page pb-36">
+        <div className="ui-card p-6 space-y-3">
+          <h2 className="text-lg font-bold text-primary-deep">Không tải được cấu hình thiết bị</h2>
+          <p className="text-sm text-text-muted">{configError instanceof Error ? configError.message : 'Lỗi không xác định.'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
   <div className="app-page pb-36">
@@ -643,7 +570,7 @@ const Settings = () => {
           userEmail={user?.email}
           userRole={roleLabel}
           onLogout={() => logout()}
-          onGoToPairing={() => navigate('/pairing')}
+          onGoToPairing={() => navigate(routePath('pairing'))}
           isAdvancedMode={isAdvancedMode}
           onToggleAdvancedMode={setIsAdvancedMode}
           controlMode={config.control_mode === 'manual' ? 'manual' : 'auto'}

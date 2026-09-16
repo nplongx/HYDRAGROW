@@ -1,8 +1,10 @@
 import { Settings2, RefreshCw, Sparkles, FlaskConical, Activity, Droplets, Power, Wind } from 'lucide-react';
 
 // --- ZUSTAND, GLEAM & HOOKS ---
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { useDeviceControl, INTERLOCK_PAIRS } from '../hooks/useDeviceControl';
+import { useDeviceTelemetry } from '../hooks/useDeviceTelemetry';
+import { useDeviceConfig } from '../hooks/useDeviceConfig';
 import { extract_fault_code_str } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
 
@@ -37,24 +39,25 @@ const lockedByFor = (pumpId: string, pumps: Partial<PumpStatus>) => {
 };
 
 const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
-  const deviceId = useDeviceStore((s) => s.deviceId);
-  const sensorData = useDeviceStore((s) => s.sensorData);
-  const deviceStatus = useDeviceStore((s) => s.deviceStatus);
-  const isControllerStatusKnown = useDeviceStore((s) => s.isControllerStatusKnown);
-  const isLoading = useDeviceStore((s) => s.isLoading);
-  const fsmState = useDeviceStore((s) => s.fsmState);
-  const settings = useDeviceStore((s) => s.settings);
+  const { status: stationStatus, selectedDeviceId: deviceId } = useStationContext();
+  const { data: telemetry, isLoading: telemetryLoading } = useDeviceTelemetry(deviceId);
+  const { data: settings, isLoading: configLoading } = useDeviceConfig(deviceId);
 
   const { isProcessing, resetFault } = useDeviceControl(deviceId || '');
 
-  if (isLoading) return <LoadingState message="Đang kết nối trung tâm điều khiển..." />;
+  if (telemetryLoading || configLoading) return <LoadingState message="Đang kết nối trung tâm điều khiển..." />;
 
-  const isOnline = deviceStatus?.is_online || false;
-  const showDisconnected = isControllerStatusKnown && !isOnline;
-  const pumps: Partial<PumpStatus> = sensorData?.pump_status || {};
+  if (stationStatus !== 'Selected' || !deviceId) {
+    return <div className="p-6 text-sm text-text-muted">Chưa chọn thiết bị. Hãy chọn một trạm trước khi vận hành.</div>;
+  }
+
+  const isOnline = telemetry?.availability === 'ONLINE';
+  const showDisconnected = telemetry?.availability === 'OFFLINE';
+  const pumps: Partial<PumpStatus> = telemetry?.actuator?.pump_status || {};
+  const fsmState = telemetry?.fsm?.state || '';
   const isEmergency = Boolean(fsmState?.toUpperCase().includes('EMERGENCY') || fsmState?.toUpperCase().includes('FAULT'));
   const isAutoMode = settings?.control_mode === 'auto';
-  const canSendCommands = Boolean(deviceId && settings?.backend_url);
+  const canSendCommands = Boolean(deviceId);
 
   const faultCode = extract_fault_code_str(fsmState || '');
   const faultGuideOpt = faultCode ? get_fault_guide(faultCode) : null;
@@ -64,7 +67,7 @@ const ControlPanel = ({ variant = 'standalone' }: { variant?: 'standalone' | 'em
     <>
       {/* Cảnh báo sự cố / Mất kết nối */}
       <div className="space-y-3 mt-3">
-        {!sensorData && (
+        {!telemetry && (
           <Banner tone="info" title="Đang chờ dữ liệu cảm biến">
             Trang điều khiển sẽ hiển thị khi có dữ liệu từ thiết bị.
           </Banner>

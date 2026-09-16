@@ -31,6 +31,7 @@ export const EventDetailDrawer = ({ event, onClose }: EventDetailDrawerProps) =>
           <p className="text-xs text-primary-deep leading-relaxed mt-2">{event.message}</p>
         )}
         {event.reason && <p className="text-xs text-red-700 mt-2">Mã lỗi: {event.reason}</p>}
+        <p className="text-[10px] text-text-muted mt-2">Đây là sự kiện lịch sử. Trạng thái hiện tại của thiết bị lấy từ mô hình trạng thái vận hành.</p>
       </div>
 
       {hasMetadata && <MetadataRenderer metadata={event.metadata} />}

@@ -1,46 +1,10 @@
 import { create } from 'zustand';
-import {
-  SensorData,
-  StatusPayload,
-  AppSettings,
-  TankAlert,
-  DeviceHealthSnapshot,
-  SystemEvent,
-  OwnedDevice,
-} from '../types/models';
-import { setItem } from '../platform/storage';
+import { getItem, setItem } from '../platform/storage';
 
 interface DeviceStoreState {
-  // --- STATES ---
-  deviceId: string | null;
-  settings: AppSettings | null;
-  isMissingConfig: boolean;
-  sensorData: SensorData | null;
-  deviceStatus: StatusPayload;
-  isControllerStatusKnown: boolean;
-  controllerHealth: DeviceHealthSnapshot | null;
-  fsmState: string;
-  systemEvents: SystemEvent[];
-  isLoading: boolean;
-  isSensorOnline: boolean;
+  // Explicitly local UI preference; not device-domain truth.
   pwmPreferences: Record<string, number>;
-  tankAlert: TankAlert | null; // <-- Thêm state
-  setTankAlert: (tankAlert: TankAlert | null) => void;
-  ownedDevices: OwnedDevice[];
-  setOwnedDevices: (devices: OwnedDevice[]) => void;
 
-  // --- ACTIONS ---
-  setDeviceId: (id: string | null) => void;
-  setSettings: (settings: AppSettings | null) => void;
-  setIsMissingConfig: (missing: boolean) => void;
-  setSensorData: (data: SensorData | null | ((prev: SensorData | null) => SensorData | null)) => void;
-  setDeviceStatus: (status: StatusPayload | ((prev: StatusPayload) => StatusPayload)) => void;
-  setIsControllerStatusKnown: (known: boolean) => void;
-  setControllerHealth: (health: DeviceHealthSnapshot | null) => void;
-  setFsmState: (state: string) => void;
-  setSystemEvents: (events: SystemEvent[] | ((prev: SystemEvent[]) => SystemEvent[])) => void;
-  setIsLoading: (loading: boolean) => void;
-  setIsSensorOnline: (online: boolean) => void;
   setPwmPreferences: (prefs: Record<string, number>) => void;
   savePwmPreference: (pumpId: string, pwm: number) => void;
 }
@@ -48,51 +12,22 @@ interface DeviceStoreState {
 const PWM_PREFS_STORE_KEY = 'pump_pwm_prefs';
 
 export const useDeviceStore = create<DeviceStoreState>((set, get) => ({
-  deviceId: null,
-  settings: null,
-  isMissingConfig: false,
-  sensorData: null,
-  deviceStatus: { is_online: false, last_seen: '' },
-  isControllerStatusKnown: false,
-  controllerHealth: null,
-  fsmState: 'Offline',
-  systemEvents: [],
-  isLoading: true,
-  isSensorOnline: false,
   pwmPreferences: {},
-  tankAlert: null,
-  setTankAlert: (tankAlert) => set({ tankAlert }),
-  ownedDevices: [],
-  setOwnedDevices: (ownedDevices) => set({ ownedDevices }),
 
-  setDeviceId: (deviceId) => set({ deviceId }),
-  setSettings: (settings) => set({ settings }),
-  setIsMissingConfig: (isMissingConfig) => set({ isMissingConfig }),
-  setSensorData: (updater) =>
-    set((state) => ({
-      sensorData: typeof updater === 'function' ? updater(state.sensorData) : updater,
-    })),
-  setDeviceStatus: (updater) =>
-    set((state) => ({
-      deviceStatus: typeof updater === 'function' ? updater(state.deviceStatus) : updater,
-    })),
-  setIsControllerStatusKnown: (isControllerStatusKnown) => set({ isControllerStatusKnown }),
-  setControllerHealth: (controllerHealth) => set({ controllerHealth }),
-  setFsmState: (fsmState) => set({ fsmState }),
-  setSystemEvents: (updater) =>
-    set((state) => ({
-      systemEvents: typeof updater === 'function' ? updater(state.systemEvents) : updater,
-    })),
-  setIsLoading: (isLoading) => set({ isLoading }),
-  setIsSensorOnline: (isSensorOnline) => set({ isSensorOnline }),
   setPwmPreferences: (pwmPreferences) => set({ pwmPreferences }),
 
   savePwmPreference: (pumpId: string, pwm: number) => {
     const updated = { ...get().pwmPreferences, [pumpId]: pwm };
     set({ pwmPreferences: updated });
-    setItem(PWM_PREFS_STORE_KEY, updated).catch(() => {});
+    void setItem(PWM_PREFS_STORE_KEY, updated).catch(() => {});
   },
 }));
+
+void getItem<Record<string, number>>(PWM_PREFS_STORE_KEY)
+  .then((stored) => {
+    if (stored) useDeviceStore.setState({ pwmPreferences: stored });
+  })
+  .catch(() => {});
 
 if (typeof window !== 'undefined') {
   (window as any).useDeviceStore = useDeviceStore;

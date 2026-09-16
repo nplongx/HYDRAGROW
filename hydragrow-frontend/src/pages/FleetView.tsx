@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { RefreshCw, Cpu, ArrowLeft, PlusCircle, AlertTriangle, Layers, Sprout } from 'lucide-react';
 import { useFleetStatus, FleetDevice } from '../hooks/useFleetStatus';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../lib/apiClient';
 import { FleetStationCard, FleetStationCardSummary } from '../components/fleet';
+import { routePath } from '../routes';
 
 interface FleetSummaryEntry {
   device_id: string;
@@ -16,7 +17,7 @@ interface FleetSummaryEntry {
 
 export function FleetView() {
   const { devices, loading, error, refresh } = useFleetStatus();
-  const setDeviceId = useDeviceStore((s) => s.setDeviceId);
+  const { selectDevice: setSelectedDevice } = useStationContext();
   const navigate = useNavigate();
 
   const [summaries, setSummaries] = useState<Record<string, FleetSummaryEntry>>({});
@@ -43,8 +44,17 @@ export function FleetView() {
   }, [devices]);
 
   function selectDevice(deviceId: string) {
-    setDeviceId(deviceId);
-    navigate('/');
+    setSelectedDevice(deviceId);
+    navigate(routePath('dashboard'));
+  }
+
+  function goBack() {
+    const historyIndex = window.history.state?.idx;
+    if (typeof historyIndex === 'number' && historyIndex > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate(routePath('dashboard'), { replace: true });
   }
 
   // Warning-first sort: stations with warning_count > 0 always surface to top
@@ -101,7 +111,7 @@ export function FleetView() {
       <div className="page-header">
         <div className="page-header-main">
           <button
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             aria-label="Quay lại"
             className="page-header-icon"
           >
@@ -128,7 +138,7 @@ export function FleetView() {
           </button>
 
           <button
-            onClick={() => navigate('/pairing')}
+            onClick={() => navigate(routePath('pairing'))}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary-deep transition-all shadow-sm"
           >
             <PlusCircle size={14} />
@@ -230,7 +240,7 @@ export function FleetView() {
             </button>
           ) : (
             <button
-              onClick={() => navigate('/pairing')}
+              onClick={() => navigate(routePath('pairing'))}
               className="px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary-deep transition-all shadow-sm"
             >
               Liên kết thiết bị mới

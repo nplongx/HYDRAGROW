@@ -30,6 +30,22 @@ fn require_write_config_scope(req: &HttpRequest) -> Result<(), HttpResponse> {
     }
 }
 
+fn require_read_telemetry_scope(req: &HttpRequest) -> Result<(), HttpResponse> {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if auth.has_scope("read:telemetry") {
+        Ok(())
+    } else {
+        Err(HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "read:telemetry"
+        })))
+    }
+}
+
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct UnifiedConfigRequest {
     pub device_config: DeviceConfig,
@@ -84,27 +100,29 @@ async fn fetch_unified_config_concurrently(
         .map_err(|e| format!("DB Error dev: {}", e))?
         .ok_or_else(|| "Device base config not found".to_string())?;
 
-    let water = water_res.ok().flatten().unwrap_or_else(|| WaterConfig {
-        device_id: device_id.to_string(),
-        ..Default::default()
-    });
+    let water = water_res
+        .map_err(|e| format!("DB Error water: {}", e))?
+        .unwrap_or_else(|| WaterConfig {
+            device_id: device_id.to_string(),
+            ..Default::default()
+        });
 
-    let safe = safe_res.ok().flatten().unwrap_or_else(|| SafetyConfig {
-        device_id: device_id.to_string(),
-        ..Default::default()
-    });
+    let safe = safe_res
+        .map_err(|e| format!("DB Error safety: {}", e))?
+        .unwrap_or_else(|| SafetyConfig {
+            device_id: device_id.to_string(),
+            ..Default::default()
+        });
 
     let dose = dose_res
-        .ok()
-        .flatten()
+        .map_err(|e| format!("DB Error dosing: {}", e))?
         .unwrap_or_else(|| DosingCalibration {
             device_id: device_id.to_string(),
             ..Default::default()
         });
 
     let sens = sens_res
-        .ok()
-        .flatten()
+        .map_err(|e| format!("DB Error sensor: {}", e))?
         .unwrap_or_else(|| SensorCalibration {
             device_id: device_id.to_string(),
             ph_v7: 2.5,
@@ -155,8 +173,7 @@ pub async fn sync_config_to_esp32(
     .bind(device_id)
     .fetch_optional(&app_state.pg_pool)
     .await
-    .ok()
-    .flatten();
+    .map_err(|e| format!("Lỗi đọc Sensor Config: {:?}", e))?;
 
     if let Some(sensor_config) = sens {
         let sensor_payload = json!({
@@ -199,7 +216,7 @@ pub async fn sync_config_to_esp32(
 }
 
 async fn upsert_water_db(
-    pool: &sqlx::PgPool,
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
     config: &WaterConfig,
     now: &chrono::DateTime<chrono::Utc>,
 ) -> Result<(), sqlx::Error> {
@@ -257,13 +274,13 @@ async fn upsert_water_db(
     .bind(config.high_temp_misting_on_duration_ms)
     .bind(config.high_temp_misting_off_duration_ms)
     .bind(now)
-    .execute(pool)
+    .execute(executor)
     .await?;
     Ok(())
 }
 
 async fn upsert_sensor_db(
-    pool: &sqlx::PgPool,
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
     cal: &SensorCalibration,
     now: &chrono::DateTime<chrono::Utc>,
 ) -> Result<(), sqlx::Error> {
@@ -301,7 +318,7 @@ async fn upsert_sensor_db(
     .bind(cal.enable_temp_sensor)
     .bind(cal.enable_water_level_sensor)
     .bind(now)
-    .execute(pool).await?;
+    .execute(executor).await?;
     Ok(())
 }
 
@@ -355,7 +372,7 @@ fn validate_dosing_constraints(dose: &DosingCalibration) -> Result<(), String> {
 }
 
 async fn upsert_dosing_db(
-    pool: &sqlx::PgPool,
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
     cal: &DosingCalibration,
     now: &chrono::DateTime<chrono::Utc>,
 ) -> Result<(), sqlx::Error> {
@@ -425,7 +442,7 @@ async fn upsert_dosing_db(
     .bind(cal.dosing_pulse_off_ms)
     .bind(cal.dosing_min_dose_ml)
     .bind(cal.dosing_max_pulse_count_per_cycle)
-    .execute(pool).await?;
+    .execute(executor).await?;
 
     Ok(())
 }
@@ -451,41 +468,49 @@ pub async fn update_unified_config(
 
     payload.device_config.device_id = device_id.clone();
     payload.device_config.last_updated = now;
-    if let Err(e) =
-        crate::db::postgres::upsert_device_config(&app_state.pg_pool, &payload.device_config).await
-    {
-        error!("Failed to update device config: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Device"}));
-    }
-
     payload.safety_config.device_id = device_id.clone();
     payload.safety_config.last_updated = now;
-    if let Err(e) =
-        crate::db::postgres::upsert_safety_config(&app_state.pg_pool, &payload.safety_config).await
-    {
-        error!("Failed to update safety config: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Safety"}));
-    }
-
     payload.water_config.device_id = device_id.clone();
-    if let Err(e) = upsert_water_db(&app_state.pg_pool, &payload.water_config, &now).await {
-        error!("Failed to update water config: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Water"}));
-    }
-
     payload.sensor_calibration.device_id = device_id.clone();
-    if let Err(e) = upsert_sensor_db(&app_state.pg_pool, &payload.sensor_calibration, &now).await {
-        error!("Failed to update sensor config: {:?}", e);
-        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Sensor"}));
-    }
-
     payload.dosing_calibration.device_id = device_id.clone();
     if let Err(msg) = validate_dosing_constraints(&payload.dosing_calibration) {
         return HttpResponse::BadRequest().json(json!({"error": msg}));
     }
-    if let Err(e) = upsert_dosing_db(&app_state.pg_pool, &payload.dosing_calibration, &now).await {
+
+    let mut tx = match app_state.pg_pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            error!("Failed to begin config transaction: {:?}", e);
+            return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
+        }
+    };
+    if let Err(e) =
+        crate::db::postgres::upsert_device_config(&mut *tx, &payload.device_config).await
+    {
+        error!("Failed to update device config: {:?}", e);
+        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Device"}));
+    }
+    if let Err(e) =
+        crate::db::postgres::upsert_safety_config(&mut *tx, &payload.safety_config).await
+    {
+        error!("Failed to update safety config: {:?}", e);
+        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Safety"}));
+    }
+    if let Err(e) = upsert_water_db(&mut *tx, &payload.water_config, &now).await {
+        error!("Failed to update water config: {:?}", e);
+        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Water"}));
+    }
+    if let Err(e) = upsert_sensor_db(&mut *tx, &payload.sensor_calibration, &now).await {
+        error!("Failed to update sensor config: {:?}", e);
+        return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Sensor"}));
+    }
+    if let Err(e) = upsert_dosing_db(&mut *tx, &payload.dosing_calibration, &now).await {
         error!("Failed to update dosing config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Dosing"}));
+    }
+    if let Err(e) = tx.commit().await {
+        error!("Failed to commit unified config transaction: {:?}", e);
+        return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
 
     let audit_event = NewSystemEventRecord {
@@ -526,6 +551,9 @@ pub async fn get_unified_device_config(
     app_state: web::Data<AppState>,
     http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     if let Err(resp) =
         crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
@@ -556,54 +584,74 @@ pub async fn get_unified_device_config(
         .fetch_optional(pool)
     );
 
+    let device_config = match dev_res {
+        Ok(Some(config)) => config,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(json!({
+                "error": "Configuration not found",
+                "reason": "device_config_missing"
+            }));
+        }
+        Err(e) => {
+            error!(device_id = %device_id, error = ?e, "Failed to read device config");
+            return HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to read configuration"
+            }));
+        }
+    };
+
+    let water_config = match water_res {
+        Ok(Some(config)) => config,
+        Ok(None) => WaterConfig {
+            device_id: device_id.clone(),
+            ..Default::default()
+        },
+        Err(e) => {
+            error!(device_id = %device_id, error = ?e, "Failed to read water config");
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "Failed to read configuration"}));
+        }
+    };
+    let safety_config = match safe_res {
+        Ok(Some(config)) => config,
+        Ok(None) => SafetyConfig {
+            device_id: device_id.clone(),
+            ..Default::default()
+        },
+        Err(e) => {
+            error!(device_id = %device_id, error = ?e, "Failed to read safety config");
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "Failed to read configuration"}));
+        }
+    };
+    let dosing_calibration = match dose_res {
+        Ok(Some(config)) => config,
+        Ok(None) => DosingCalibration {
+            device_id: device_id.clone(),
+            ..Default::default()
+        },
+        Err(e) => {
+            error!(device_id = %device_id, error = ?e, "Failed to read dosing calibration");
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "Failed to read configuration"}));
+        }
+    };
+    let sensor_calibration = match sens_res {
+        Ok(Some(config)) => config,
+        Ok(None) => default_sensor_calibration(&device_id, Utc::now()),
+        Err(e) => {
+            error!(device_id = %device_id, error = ?e, "Failed to read sensor calibration");
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "Failed to read configuration"}));
+        }
+    };
+
     let response_payload = UnifiedConfigRequest {
-        device_config: dev_res.ok().flatten().unwrap_or_else(|| DeviceConfig {
-            device_id: device_id.clone(),
-            ec_target: 1.5,
-            ec_tolerance: 0.1,
-            ph_target: 6.0,
-            ph_tolerance: 0.5,
-            control_mode: "auto".to_string(),
-            is_enabled: false,
-            delay_between_a_and_b_sec: 10,
-            last_updated: Utc::now(),
-        }),
-        water_config: water_res.ok().flatten().unwrap_or_else(|| WaterConfig {
-            device_id: device_id.clone(),
-            ..Default::default()
-        }),
-        safety_config: safe_res.ok().flatten().unwrap_or_else(|| SafetyConfig {
-            device_id: device_id.clone(),
-            ..Default::default()
-        }),
-        dosing_calibration: dose_res
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| DosingCalibration {
-                device_id: device_id.clone(),
-                ..Default::default()
-            }),
-        sensor_calibration: sens_res
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| SensorCalibration {
-                device_id: device_id.clone(),
-                ph_v7: 2.5,
-                ph_v4: 3.04,
-                ph_v10: None,
-                ph_calibration_mode: "2-point".into(),
-                ec_factor: 880.0,
-                ec_offset: 0.0,
-                temp_offset: 0.0,
-                temp_compensation_beta: 0.02,
-                publish_interval: 5000,
-                moving_average_window: 10,
-                enable_ph_sensor: true,
-                enable_ec_sensor: true,
-                enable_temp_sensor: true,
-                enable_water_level_sensor: true,
-                last_calibrated: Utc::now(),
-            }),
+        device_config,
+        water_config,
+        safety_config,
+        dosing_calibration,
+        sensor_calibration,
     };
 
     HttpResponse::Ok().json(response_payload)
@@ -615,6 +663,9 @@ pub async fn get_config(
     app_state: web::Data<AppState>,
     http_req: HttpRequest,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     if let Err(resp) =
         crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
@@ -676,15 +727,27 @@ pub async fn update_config(
     };
     let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
 
-    let _ = sync_config_to_esp32(&app_state, &device_id).await;
-    HttpResponse::Ok().json(json!({"status": "success"}))
+    match sync_config_to_esp32(&app_state, &device_id).await {
+        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Err(e) => {
+            error!("Lưu DB thành công nhưng lỗi đồng bộ config: {}", e);
+            HttpResponse::Accepted().json(json!({
+                "status": "partial_success",
+                "message": "Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị."
+            }))
+        }
+    }
 }
 
 #[instrument(skip(app_state))]
 pub async fn get_water_config(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let result =
         sqlx::query_as::<_, WaterConfig>("SELECT * FROM water_config WHERE device_id = $1")
@@ -714,7 +777,8 @@ pub async fn update_water_config(
     {
         return resp;
     }
-    let config = req.into_inner();
+    let mut config = req.into_inner();
+    config.device_id = device_id.clone();
     let now = Utc::now();
     if upsert_water_db(&app_state.pg_pool, &config, &now)
         .await
@@ -722,15 +786,27 @@ pub async fn update_water_config(
     {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
-    let _ = sync_config_to_esp32(&app_state, &device_id).await;
-    HttpResponse::Ok().json(json!({"status": "success"}))
+    match sync_config_to_esp32(&app_state, &device_id).await {
+        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Err(e) => {
+            error!("Lưu water config thành công nhưng lỗi đồng bộ: {}", e);
+            HttpResponse::Accepted().json(json!({
+                "status": "partial_success",
+                "message": "Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị."
+            }))
+        }
+    }
 }
 
 #[instrument(skip(app_state))]
 pub async fn get_safety_config(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let result =
         sqlx::query_as::<_, SafetyConfig>("SELECT * FROM safety_config WHERE device_id = $1")
@@ -792,15 +868,27 @@ pub async fn update_safety_config(
     };
     let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
 
-    let _ = sync_config_to_esp32(&app_state, &device_id).await;
-    HttpResponse::Ok().json(json!({"status": "success"}))
+    match sync_config_to_esp32(&app_state, &device_id).await {
+        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Err(e) => {
+            error!("Lưu safety config thành công nhưng lỗi đồng bộ: {}", e);
+            HttpResponse::Accepted().json(json!({
+                "status": "partial_success",
+                "message": "Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị."
+            }))
+        }
+    }
 }
 
 #[instrument(skip(app_state))]
 pub async fn get_sensor_calibration(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let result = sqlx::query_as::<_, SensorCalibration>(
         "SELECT * FROM sensor_calibration WHERE device_id = $1",
@@ -831,7 +919,8 @@ pub async fn update_sensor_calibration(
     {
         return resp;
     }
-    let config = req.into_inner();
+    let mut config = req.into_inner();
+    config.device_id = device_id.clone();
     let now = Utc::now();
     if upsert_sensor_db(&app_state.pg_pool, &config, &now)
         .await
@@ -839,8 +928,16 @@ pub async fn update_sensor_calibration(
     {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
-    let _ = sync_config_to_esp32(&app_state, &device_id).await;
-    HttpResponse::Ok().json(json!({"status": "success"}))
+    match sync_config_to_esp32(&app_state, &device_id).await {
+        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Err(e) => {
+            error!("Lưu sensor config thành công nhưng lỗi đồng bộ: {}", e);
+            HttpResponse::Accepted().json(json!({
+                "status": "partial_success",
+                "message": "Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị."
+            }))
+        }
+    }
 }
 
 #[instrument(skip(app_state, req))]
@@ -968,8 +1065,17 @@ pub async fn finish_sensor_calibration(
     }
 
     if applied {
-        let _ = sync_config_to_esp32(&app_state, &device_id).await;
-        HttpResponse::Ok().json(json!({"status": "success", "applied": true}))
+        match sync_config_to_esp32(&app_state, &device_id).await {
+            Ok(()) => HttpResponse::Ok().json(json!({"status": "success", "applied": true})),
+            Err(e) => {
+                error!("Lưu calibration thành công nhưng lỗi đồng bộ: {}", e);
+                HttpResponse::Accepted().json(json!({
+                    "status": "partial_success",
+                    "applied": true,
+                    "message": "Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị."
+                }))
+            }
+        }
     } else {
         HttpResponse::Ok().json(json!({
             "status": "ignored_stale_request",
@@ -981,8 +1087,12 @@ pub async fn finish_sensor_calibration(
 #[instrument(skip(app_state))]
 pub async fn get_sensor_calibration_history(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let result = sqlx::query_as::<_, SystemEventRecord>(
         r#"
@@ -1006,8 +1116,12 @@ pub async fn get_sensor_calibration_history(
 #[instrument(skip(app_state))]
 pub async fn get_dosing_calibration(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
     let device_id = path.into_inner();
     let result = sqlx::query_as::<_, DosingCalibration>(
         "SELECT * FROM dosing_calibration WHERE device_id = $1",
@@ -1050,8 +1164,16 @@ pub async fn update_dosing_calibration(
     {
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
-    let _ = sync_config_to_esp32(&app_state, &device_id).await;
-    HttpResponse::Ok().json(json!({"status": "success"}))
+    match sync_config_to_esp32(&app_state, &device_id).await {
+        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Err(e) => {
+            error!("Lưu dosing config thành công nhưng lỗi đồng bộ: {}", e);
+            HttpResponse::Accepted().json(json!({
+                "status": "partial_success",
+                "message": "Đã lưu CSDL nhưng chưa đồng bộ được cấu hình tới thiết bị."
+            }))
+        }
+    }
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
@@ -1059,10 +1181,15 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         .route("/config/unified", web::get().to(get_unified_device_config))
         .route("/config", web::get().to(get_config))
         .route("/config", web::put().to(update_config))
+        // Canonical config resource paths. Keep the legacy `/safety` GET and
+        // POST update routes below as compatibility aliases during migration.
         .route("/safety", web::get().to(get_safety_config))
+        .route("/config/safety", web::get().to(get_safety_config))
         .route("/config/safety", web::post().to(update_safety_config))
+        .route("/config/safety", web::put().to(update_safety_config))
         .route("/config/water", web::get().to(get_water_config))
         .route("/config/water", web::post().to(update_water_config))
+        .route("/config/water", web::put().to(update_water_config))
         .route("/calibration/sensor", web::get().to(get_sensor_calibration))
         .route(
             "/calibration/sensor",
@@ -1178,5 +1305,67 @@ mod tests {
         assert_eq!(meta["scope"], "unified");
         assert_eq!(meta["ec_target"], 1.8);
         assert_eq!(meta["ph_target"], 6.2);
+    }
+
+    #[actix_web::test]
+    async fn canonical_safety_and_water_routes_are_registered() {
+        use actix_web::{App, test};
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(crate::api::test_support::test_app_state()))
+                .service(web::scope("/devices/{device_id}").configure(init_routes)),
+        )
+        .await;
+
+        for (method, uri, expected) in [
+            (
+                actix_web::http::Method::GET,
+                "/devices/device-1/config/safety",
+                actix_web::http::StatusCode::FORBIDDEN,
+            ),
+            (
+                actix_web::http::Method::PUT,
+                "/devices/device-1/config/safety",
+                actix_web::http::StatusCode::BAD_REQUEST,
+            ),
+            (
+                actix_web::http::Method::GET,
+                "/devices/device-1/config/water",
+                actix_web::http::StatusCode::FORBIDDEN,
+            ),
+            (
+                actix_web::http::Method::PUT,
+                "/devices/device-1/config/water",
+                actix_web::http::StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            let req = test::TestRequest::default()
+                .method(method)
+                .uri(uri)
+                .to_request();
+            let response = test::call_service(&app, req).await;
+            // GET reaches the auth guard; PUT reaches the JSON extractor first.
+            // Both statuses prove the canonical route matched before business logic.
+            assert_eq!(response.status(), expected);
+        }
+    }
+
+    #[actix_web::test]
+    async fn legacy_safety_post_remains_registered_for_compatibility() {
+        use actix_web::{App, test};
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(crate::api::test_support::test_app_state()))
+                .service(web::scope("/devices/{device_id}").configure(init_routes)),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/devices/device-1/config/safety")
+            .to_request();
+        let response = test::call_service(&app, req).await;
+
+        assert_eq!(response.status(), actix_web::http::StatusCode::BAD_REQUEST);
     }
 }

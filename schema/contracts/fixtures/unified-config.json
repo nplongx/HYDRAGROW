@@ -1,0 +1,7 @@
+{
+  "device_config": {"device_id": "device-001", "control_mode": "auto", "is_enabled": true},
+  "water_config": {"water_level_min": 15, "water_level_target": 20, "water_level_max": 24, "tank_height": 50},
+  "safety_config": {"emergency_shutdown": false, "max_ec_limit": 3.5, "min_ph_limit": 4.0, "max_ph_limit": 8.5},
+  "sensor_calibration": {"enable_ec_sensor": true, "enable_ph_sensor": true, "enable_water_level_sensor": true, "enable_temp_sensor": true},
+  "dosing_calibration": {"pump_a_capacity_ml_per_sec": 1.2, "pump_b_capacity_ml_per_sec": 1.15, "dosing_pwm_percent": 50}
+}

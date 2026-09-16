@@ -3,8 +3,10 @@ use sqlx::PgPool;
 use tracing::{error, info, warn};
 
 use crate::AppState;
+use crate::api::middleware::auth::AuthContext;
 use crate::api::webhook_tokens::{find_by_token_hash, sha256_hex};
 use crate::models::script::ActionCommandOutput;
+use actix_web::HttpMessage;
 
 async fn extract_webhook_auth(req: &HttpRequest, pool: &PgPool, device_id: &str) -> bool {
     if let Some(token) = req
@@ -27,6 +29,17 @@ async fn receive_webhook_action(
     payload: web::Json<ActionCommandOutput>,
 ) -> HttpResponse {
     let device_id = path.into_inner();
+
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("webhook:invoke") {
+        return HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Missing required scope: webhook:invoke"
+        }));
+    }
 
     // Verify authentication
     let is_authorized_webhook = extract_webhook_auth(&req, &app_state.pg_pool, &device_id).await;
@@ -142,6 +155,17 @@ async fn receive_webhook_flow_event(
     payload: web::Json<serde_json::Value>,
 ) -> HttpResponse {
     let device_id = path.into_inner();
+
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("webhook:invoke") {
+        return HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Missing required scope: webhook:invoke"
+        }));
+    }
 
     let is_authorized_webhook = extract_webhook_auth(&req, &app_state.pg_pool, &device_id).await;
     let is_authorized_api_key = if !is_authorized_webhook {

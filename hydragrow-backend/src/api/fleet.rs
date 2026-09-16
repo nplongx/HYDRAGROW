@@ -1,6 +1,6 @@
 //! GET /api/fleet/summary — trạng thái tổng hợp cho từng thiết bị của user.
 
-use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde::Serialize;
 use serde_json::json;
 
@@ -14,8 +14,9 @@ use crate::db::postgres::get_system_events;
 pub struct FleetSummaryEntry {
     pub device_id: String,
     pub label: Option<String>,
-    pub is_online: bool,
+    pub is_online: Option<bool>,
     pub last_seen: Option<String>,
+    pub operational_state: hydragrow_shared::telemetry::OperationalState,
     /// Tên giai đoạn đang chạy của recipe active (nếu có).
     pub crop: Option<String>,
     pub ec_latest: Option<f32>,
@@ -40,28 +41,71 @@ async fn active_stage_name(pool: &sqlx::PgPool, device_id: &str) -> Option<Strin
     .flatten()
 }
 
-async fn status_from_cache(app_state: &AppState, device_id: &str) -> (bool, Option<String>) {
+async fn status_from_cache(
+    app_state: &AppState,
+    device_id: &str,
+) -> (
+    Option<bool>,
+    Option<String>,
+    hydragrow_shared::telemetry::OperationalState,
+) {
     let raw = app_state.device_states.read().await.get(device_id).cloned();
-
     let Some(raw) = raw else {
-        return (false, None);
+        return (
+            None,
+            None,
+            hydragrow_shared::telemetry::OperationalState::default(),
+        );
     };
-
-    let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
-    let ts = parsed
+    let parsed: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => {
+            return (
+                None,
+                None,
+                hydragrow_shared::telemetry::OperationalState::default(),
+            );
+        }
+    };
+    let last_seen = parsed
         .get("controller_status_ts")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let is_online = ts
-        .as_ref()
-        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-        .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_seconds() < 30)
-        .unwrap_or(false);
-
-    (is_online, ts)
+        .map(str::to_string);
+    let mut state = parsed
+        .get("telemetry")
+        .and_then(|value| {
+            serde_json::from_value::<hydragrow_shared::telemetry::AuthoritativeTelemetrySnapshot>(
+                value.clone(),
+            )
+            .ok()
+        })
+        .map(|snapshot| snapshot.operational_state)
+        .unwrap_or_default();
+    let now = chrono::Utc::now();
+    state.freshness = hydragrow_shared::telemetry::OperationalState::classify_freshness(
+        state.received_at.as_deref().or(last_seen.as_deref()),
+        now,
+        hydragrow_shared::telemetry::OPERATIONAL_FRESHNESS_THRESHOLD_SECS,
+    );
+    if state.contact == hydragrow_shared::telemetry::ContactState::Unknown
+        && !matches!(
+            state.freshness,
+            hydragrow_shared::telemetry::FreshnessState::Unknown
+        )
+    {
+        state.contact = hydragrow_shared::telemetry::ContactState::Contacted;
+    }
+    state.classified_at = Some(now.to_rfc3339());
+    let is_online = match (state.contact, state.freshness) {
+        (
+            hydragrow_shared::telemetry::ContactState::Contacted,
+            hydragrow_shared::telemetry::FreshnessState::Fresh,
+        ) => Some(true),
+        (hydragrow_shared::telemetry::ContactState::NotContacted, _) => Some(false),
+        _ => None,
+    };
+    (is_online, last_seen, state)
 }
-
 async fn warning_count_in_last_hour(pool: &sqlx::PgPool, device_id: &str) -> usize {
     let now = chrono::Utc::now().timestamp_millis();
     let window_ms = 3_600_000i64;
@@ -90,6 +134,17 @@ async fn latest_ec_ph(app_state: &AppState, device_id: &str) -> (Option<f32>, Op
 }
 
 pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "read:telemetry"
+        }));
+    }
     let Some(user_id) = user_id_from(&req) else {
         return HttpResponse::Unauthorized().json(json!({"error": "Chưa đăng nhập"}));
     };
@@ -105,7 +160,8 @@ pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> 
 
     let mut entries = Vec::with_capacity(devices.len());
     for rec in devices {
-        let (is_online, last_seen) = status_from_cache(&app_state, &rec.device_id).await;
+        let (is_online, last_seen, operational_state) =
+            status_from_cache(&app_state, &rec.device_id).await;
         let (ec_latest, ph_latest) = latest_ec_ph(&app_state, &rec.device_id).await;
         let warning_count = warning_count_in_last_hour(&app_state.pg_pool, &rec.device_id).await;
         let crop = active_stage_name(&app_state.pg_pool, &rec.device_id).await;
@@ -115,6 +171,7 @@ pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> 
             label: rec.label,
             is_online,
             last_seen,
+            operational_state,
             crop,
             ec_latest,
             ph_latest,
@@ -139,8 +196,9 @@ mod tests {
         let entry = FleetSummaryEntry {
             device_id: "dev-01".to_string(),
             label: Some("Trạm 1".to_string()),
-            is_online: true,
+            is_online: Some(true),
             last_seen: Some("2026-09-10T00:00:00Z".to_string()),
+            operational_state: hydragrow_shared::telemetry::OperationalState::default(),
             crop: Some("Sinh trưởng".to_string()),
             ec_latest: Some(1.4),
             ph_latest: Some(6.0),
@@ -163,8 +221,9 @@ mod tests {
         let entry = FleetSummaryEntry {
             device_id: "dev-02".to_string(),
             label: None,
-            is_online: false,
+            is_online: None,
             last_seen: None,
+            operational_state: hydragrow_shared::telemetry::OperationalState::default(),
             crop: None,
             ec_latest: None,
             ph_latest: None,

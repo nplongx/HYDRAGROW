@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "invalid_request",
+    "message": "Invalid request",
+    "details": {"field": "device_id"},
+    "request_id": "req-p1-9-001"
+  }
+}

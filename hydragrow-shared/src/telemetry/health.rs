@@ -8,7 +8,7 @@ fn default_unknown_version() -> String {
 
 /// Độ tự tin của từng trục Kalman (0.0 - 1.0)
 /// Ánh xạ với 8 cột của InteractionMatrix
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KalmanConfidence {
     pub nutrient_a: f32,
     pub nutrient_b: f32,
@@ -23,7 +23,7 @@ pub struct KalmanConfidence {
 /// Snapshot sức khỏe thiết bị tổng hợp
 /// Topic: `AGITECH/{device_id}/controller/status`
 /// Gửi mỗi 10 giây (hoặc khi force_sync)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeviceHealthSnapshot {
     pub device_id: String,
     pub free_heap: u32,

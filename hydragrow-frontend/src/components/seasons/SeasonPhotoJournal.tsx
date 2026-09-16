@@ -2,14 +2,8 @@ import { useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { httpFetch } from '../../platform/http';
-import { useDeviceStore } from '../../store/useDeviceStore';
-
-interface SeasonPhoto {
-    id: string;
-    day_offset: number;
-    cloudinary_url: string;
-}
+import { seasonPhotosApi, type SeasonPhoto } from '../../api/seasons';
+import { useStationContext } from '../../contexts/StationContext';
 
 interface SeasonPhotoJournalProps {
     seasonId: string;
@@ -17,22 +11,15 @@ interface SeasonPhotoJournalProps {
 }
 
 export const SeasonPhotoJournal = ({ seasonId, seasonStartTime }: SeasonPhotoJournalProps) => {
-    const deviceId = useDeviceStore((s) => s.deviceId);
-    const settings = useDeviceStore((s) => s.settings);
+    const { selectedDeviceId: deviceId } = useStationContext();
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const headers = { 'Content-Type': 'application/json', 'X-API-Key': settings?.api_key || '' };
-    const baseUrl = `${settings?.backend_url}/api/devices/${deviceId}/seasons/${seasonId}/photos`;
-
     const { data: photos = [] } = useQuery<SeasonPhoto[]>({
         queryKey: ['season-photos', deviceId, seasonId],
-        enabled: Boolean(deviceId && settings?.backend_url),
+        enabled: Boolean(deviceId),
         queryFn: async () => {
-            const res = await httpFetch(baseUrl, { headers });
-            if (!res.ok) return [];
-            const json = await res.json();
-            return json.data || [];
+            return seasonPhotosApi.list(deviceId!, seasonId);
         },
     });
 
@@ -42,9 +29,7 @@ export const SeasonPhotoJournal = ({ seasonId, seasonStartTime }: SeasonPhotoJou
         if (!file) return;
 
         try {
-            const signRes = await httpFetch(`${baseUrl}/sign`, { method: 'POST', headers });
-            if (!signRes.ok) throw new Error('Không lấy được chữ ký upload');
-            const { data: sign } = await signRes.json();
+            const { data: sign } = await seasonPhotosApi.signUpload(deviceId!, seasonId);
 
             const form = new FormData();
             form.append('file', file);
@@ -66,16 +51,11 @@ export const SeasonPhotoJournal = ({ seasonId, seasonStartTime }: SeasonPhotoJou
                 Math.floor((Date.now() - new Date(seasonStartTime).getTime()) / 86400000),
             );
 
-            const saveRes = await httpFetch(baseUrl, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    cloudinary_public_id: uploaded.public_id,
-                    cloudinary_url: uploaded.secure_url,
-                    day_offset: dayOffset,
-                }),
+            await seasonPhotosApi.create(deviceId!, seasonId, {
+                cloudinary_public_id: uploaded.public_id,
+                cloudinary_url: uploaded.secure_url,
+                day_offset: dayOffset,
             });
-            if (!saveRes.ok) throw new Error('Không lưu được ảnh vào hệ thống');
             toast.success('Đã thêm ảnh vào nhật ký.');
             queryClient.invalidateQueries({ queryKey: ['season-photos', deviceId, seasonId] });
         } catch (err) {
@@ -86,8 +66,7 @@ export const SeasonPhotoJournal = ({ seasonId, seasonStartTime }: SeasonPhotoJou
     const handleDeletePhoto = async (photo: SeasonPhoto) => {
         if (!window.confirm(`Xoá ảnh "Ngày ${photo.day_offset}" khỏi nhật ký?`)) return;
         try {
-            const res = await httpFetch(`${baseUrl}/${photo.id}`, { method: 'DELETE', headers });
-            if (!res.ok) throw new Error('Không xoá được ảnh');
+            await seasonPhotosApi.remove(deviceId!, seasonId, photo.id);
             toast.success('Đã xoá ảnh.');
             queryClient.invalidateQueries({ queryKey: ['season-photos', deviceId, seasonId] });
         } catch (err) {

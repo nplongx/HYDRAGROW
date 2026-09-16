@@ -31,6 +31,15 @@ export function useUpdateAutomationScript(deviceId: string, scriptId: string) {
   });
 }
 
+export function useUpdateAutomationScriptById(deviceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scriptId, body }: { scriptId: string; body: UpsertScriptRequest }) =>
+      apiPut<{ status: string; data: UserScript }>(`/devices/${deviceId}/scripts/${scriptId}`, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation-scripts', deviceId] }),
+  });
+}
+
 export function useDeleteAutomationScript(deviceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -116,4 +125,3 @@ export function useExecutionSuccessRate(deviceId: string) {
     enabled: Boolean(deviceId),
   });
 }
-

@@ -44,27 +44,25 @@ fn auth_from(req: &HttpRequest) -> AuthContext {
         .unwrap_or_default()
 }
 
-/// Supports the existing confirmation header and the existing elevated token mechanism.
+/// Explicit confirmation is an intent signal only; authentication, capability,
+/// and ownership are enforced independently by the API boundary.
 fn has_dangerous_confirmation(req: &HttpRequest) -> bool {
     req.headers()
         .get("X-User-Confirmed")
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value.eq_ignore_ascii_case("true") || value == "1")
-        || std::env::var("ELEVATED_CONTROL_TOKEN")
-            .ok()
-            .is_some_and(|expected| {
-                req.headers()
-                    .get("X-Elevated-Token")
-                    .and_then(|value| value.to_str().ok())
-                    == Some(expected.as_str())
-            })
 }
 
 pub async fn get_ota_status(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    if !auth_from(&req).has_scope("device:ota") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Missing required scope: device:ota"}));
+    }
     let current_version = app_state
         .device_firmware
         .read()
@@ -127,7 +125,7 @@ pub async fn trigger_ota(
 
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden().json(
-            serde_json::json!({"error": "Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}),
+            serde_json::json!({"error": "Dangerous command requires X-User-Confirmed: true"}),
         );
     }
 
@@ -293,6 +291,7 @@ pub fn build_update_firmware_command(wifi: Option<WifiProvisionConfig>) -> MqttC
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     }
 }
 
@@ -411,7 +410,7 @@ pub async fn update_wifi_list(
 
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden().json(
-            serde_json::json!({"error":"Dangerous command requires X-User-Confirmed: true or X-Elevated-Token"}),
+            serde_json::json!({"error":"Dangerous command requires X-User-Confirmed: true"}),
         );
     }
 
@@ -434,6 +433,7 @@ pub async fn update_wifi_list(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     match publish_command(&app_state, &device_id, &command).await {
@@ -488,6 +488,7 @@ pub async fn reboot_device(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     match publish_command(&app_state, &device_id, &command).await {
@@ -526,6 +527,7 @@ pub async fn factory_reset_device(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     match publish_command(&app_state, &device_id, &command).await {
@@ -542,41 +544,90 @@ pub async fn factory_reset_device(
 
 #[derive(Debug, Serialize)]
 pub struct DeviceStatusResponse {
-    pub is_online: bool,
+    pub is_online: Option<bool>,
     pub firmware_version: String,
     pub last_seen: Option<String>,
+    pub operational_state: hydragrow_shared::telemetry::OperationalState,
 }
 
 pub async fn get_device_status(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    if !auth_from(&req).has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error": "Missing required scope: read:telemetry"}));
+    }
 
     let states = app_state.device_states.read().await;
     let raw = states.get(&device_id).cloned();
     drop(states);
 
-    let (is_online, last_seen) = match raw {
+    let (is_online, last_seen, operational_state) = match raw {
         Some(s) => {
             let parsed: serde_json::Value = serde_json::from_str(&s).unwrap_or_default();
-
             let ts = parsed
                 .get("controller_status_ts")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-
-            // Online if a heartbeat landed in the last 30s
-            // (firmware publish cycle is 10s — see health.rs run_main_health_loop)
-            let is_online = ts
-                .as_ref()
-                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_seconds() < 30)
-                .unwrap_or(false);
-
-            (is_online, ts)
+                .map(str::to_string);
+            let mut state = parsed
+                .get("telemetry")
+                .and_then(|value| {
+                    serde_json::from_value::<
+                        hydragrow_shared::telemetry::AuthoritativeTelemetrySnapshot,
+                    >(value.clone())
+                    .ok()
+                })
+                .map(|snapshot| snapshot.operational_state)
+                .unwrap_or_default();
+            if state.classified_at.is_none() {
+                let freshness = hydragrow_shared::telemetry::OperationalState::classify_freshness(
+                    ts.as_deref(),
+                    chrono::Utc::now(),
+                    hydragrow_shared::telemetry::OPERATIONAL_FRESHNESS_THRESHOLD_SECS,
+                );
+                state.contact = match freshness {
+                    hydragrow_shared::telemetry::FreshnessState::Fresh
+                    | hydragrow_shared::telemetry::FreshnessState::Stale => {
+                        hydragrow_shared::telemetry::ContactState::Contacted
+                    }
+                    hydragrow_shared::telemetry::FreshnessState::Unknown => {
+                        hydragrow_shared::telemetry::ContactState::Unknown
+                    }
+                };
+                state.freshness = freshness;
+                state.observed_at = ts.clone();
+                state.classified_at = Some(chrono::Utc::now().to_rfc3339());
+            } else {
+                let freshness_source = state.received_at.as_deref().or(ts.as_deref());
+                state.freshness = hydragrow_shared::telemetry::OperationalState::classify_freshness(
+                    freshness_source,
+                    chrono::Utc::now(),
+                    hydragrow_shared::telemetry::OPERATIONAL_FRESHNESS_THRESHOLD_SECS,
+                );
+                state.classified_at = Some(chrono::Utc::now().to_rfc3339());
+            }
+            let online = match state.contact {
+                hydragrow_shared::telemetry::ContactState::Contacted
+                    if matches!(
+                        state.freshness,
+                        hydragrow_shared::telemetry::FreshnessState::Fresh
+                    ) =>
+                {
+                    Some(true)
+                }
+                hydragrow_shared::telemetry::ContactState::NotContacted => Some(false),
+                _ => None,
+            };
+            (online, ts, state)
         }
-        None => (false, None),
+        None => (
+            None,
+            None,
+            hydragrow_shared::telemetry::OperationalState::default(),
+        ),
     };
 
     let firmware_version = app_state
@@ -591,6 +642,7 @@ pub async fn get_device_status(
         is_online,
         firmware_version,
         last_seen,
+        operational_state,
     })
 }
 
@@ -608,7 +660,7 @@ pub async fn trigger_sensor_ota(
 
     if !has_dangerous_confirmation(&req) {
         return HttpResponse::Forbidden().json(
-            serde_json::json!({"error": "Dangerous command requires X-User-Confirmed:true or X-Elevated-Token"}),
+            serde_json::json!({"error": "Dangerous command requires X-User-Confirmed:true"}),
         );
     }
 
@@ -619,6 +671,7 @@ pub async fn trigger_sensor_ota(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     match publish_sensor_command(&app_state, &device_id, &command).await {
@@ -821,15 +874,17 @@ mod status_tests {
     #[allow(clippy::unwrap_used)]
     fn device_status_response_serializes_expected_shape() {
         let resp = DeviceStatusResponse {
-            is_online: true,
+            is_online: Some(true),
             firmware_version: "1.2.3".to_string(),
             last_seen: Some("2026-08-23T10:00:00+00:00".to_string()),
+            operational_state: hydragrow_shared::telemetry::OperationalState::default(),
         };
 
         let json = serde_json::to_value(&resp).unwrap();
 
         assert_eq!(json["is_online"], true);
         assert_eq!(json["firmware_version"], "1.2.3");
+        assert_eq!(json["operational_state"]["contact"], "UNKNOWN");
     }
 
     #[test]

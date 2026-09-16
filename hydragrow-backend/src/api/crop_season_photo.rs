@@ -1,13 +1,24 @@
 use crate::AppState;
+use crate::api::middleware::auth::AuthContext;
 use crate::db::postgres;
 use crate::models::crop_season_photo::CreateCropSeasonPhotoRequest;
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde_json::json;
 
 async fn sign_photo_upload(
     path: web::Path<(String, String)>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
     let (device_id, season_id) = path.into_inner();
     let Some(cloudinary) = app_state.cloudinary.as_ref() else {
         return HttpResponse::ServiceUnavailable().json(json!({
@@ -35,9 +46,19 @@ async fn sign_photo_upload(
 
 async fn create_photo(
     path: web::Path<(String, String)>,
+    req_auth: HttpRequest,
     req: web::Json<CreateCropSeasonPhotoRequest>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req_auth
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("write:config") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: write:config"}));
+    }
     let (device_id, season_id) = path.into_inner();
     if app_state.cloudinary.is_none() {
         return HttpResponse::ServiceUnavailable().json(json!({
@@ -61,8 +82,18 @@ async fn create_photo(
 
 async fn list_photos(
     path: web::Path<(String, String)>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
     let (_device_id, season_id) = path.into_inner();
     match postgres::list_crop_season_photos(&app_state.pg_pool, &season_id).await {
         Ok(photos) => HttpResponse::Ok().json(json!({ "status": "success", "data": photos })),
@@ -73,8 +104,18 @@ async fn list_photos(
 
 async fn delete_photo(
     path: web::Path<(String, String, String)>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("write:config") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: write:config"}));
+    }
     let (device_id, season_id, photo_id) = path.into_inner();
     match postgres::delete_crop_season_photo(&app_state.pg_pool, &device_id, &season_id, &photo_id)
         .await

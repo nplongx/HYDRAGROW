@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Sprout } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCropSeason } from '../hooks/useCropSeason';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingState } from '../components/ui/LoadingState';
 import { ActiveSeasonCard } from '../components/seasons/ActiveSeasonCard';
@@ -14,7 +14,7 @@ import type { CropSeason } from '../types/models';
 
 export const CropSeasons = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
   const { activeSeason, history, isLoading, createSeason, endSeason, updateSeason, deleteSeason } = useCropSeason();
-  const deviceId = useDeviceStore((s) => s.deviceId);
+  const { selectedDeviceId: deviceId } = useStationContext();
   const queryClient = useQueryClient();
   const [justEnded, setJustEnded] = useState<{ season: CropSeason; days: number } | null>(null);
 

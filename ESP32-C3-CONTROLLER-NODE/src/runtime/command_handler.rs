@@ -4,7 +4,7 @@
 
 use hydragrow_shared::fsm::SystemPhase;
 use hydragrow_shared::log::{LogCategory, LogLevel, UnifiedSystemLog};
-use hydragrow_shared::{ControlMode, ControllerConfig, MqttCommandIn};
+use hydragrow_shared::{CommandLifecycle, ControlMode, ControllerConfig, MqttCommandIn};
 use log::{info, warn};
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -186,6 +186,7 @@ impl CommandStateSnapshot {
     }
 }
 
+#[allow(dead_code)]
 pub fn process_mqtt_commands(
     cmd_rx: &Receiver<MqttCommandIn>,
     config: &ControllerConfig,
@@ -194,11 +195,34 @@ pub fn process_mqtt_commands(
     now_wall_time_ms: u64,
     _fsm_mqtt_tx: &Sender<String>,
 ) -> (ContextDelta, Vec<OrchestratorEvent>) {
+    process_mqtt_commands_with_dedupe(
+        cmd_rx,
+        config,
+        ctx,
+        now_uptime_ms,
+        now_wall_time_ms,
+        _fsm_mqtt_tx,
+        None,
+    )
+}
+
+pub fn process_mqtt_commands_with_dedupe(
+    cmd_rx: &Receiver<MqttCommandIn>,
+    config: &ControllerConfig,
+    ctx: &SystemContext,
+    now_uptime_ms: u64,
+    now_wall_time_ms: u64,
+    _fsm_mqtt_tx: &Sender<String>,
+    nvs: Option<&mut esp_idf_svc::nvs::EspDefaultNvs>,
+) -> (ContextDelta, Vec<OrchestratorEvent>) {
     let mut accumulated_delta = ContextDelta::default();
     let mut all_events = Vec::new();
     let mut temp_state = CommandStateSnapshot::new(ctx);
 
     while let Ok(cmd) = cmd_rx.try_recv() {
+        if is_duplicate_persistent_command(&cmd, &nvs) {
+            continue;
+        }
         let action_lower = cmd.action.to_lowercase();
         let mut step_delta = ContextDelta::default();
         let mut step_events = Vec::new();
@@ -235,6 +259,7 @@ pub fn process_mqtt_commands(
             temp_state.apply_step_delta(&step_delta);
             merge_delta(&mut accumulated_delta, step_delta);
             all_events.append(&mut step_events);
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut all_events);
             continue;
         }
 
@@ -247,6 +272,19 @@ pub fn process_mqtt_commands(
 
                 temp_state.apply_step_delta(&step_delta);
                 merge_delta(&mut accumulated_delta, step_delta);
+                append_command_lifecycle(
+                    &cmd,
+                    CommandLifecycle::Acknowledged,
+                    None,
+                    &mut all_events,
+                );
+            } else {
+                append_command_lifecycle(
+                    &cmd,
+                    CommandLifecycle::Rejected,
+                    Some("not in sensor calibration".to_string()),
+                    &mut all_events,
+                );
             }
             continue;
         }
@@ -254,6 +292,7 @@ pub fn process_mqtt_commands(
         // --- 2. Lệnh đồng bộ trạng thái ---
         if action_lower == "sync_status" {
             all_events.push(OrchestratorEvent::PublishFsmState);
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut all_events);
             continue;
         }
 
@@ -287,6 +326,7 @@ pub fn process_mqtt_commands(
             temp_state.apply_step_delta(&step_delta);
             merge_delta(&mut accumulated_delta, step_delta);
             all_events.append(&mut step_events);
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut all_events);
             continue;
         }
 
@@ -312,6 +352,7 @@ pub fn process_mqtt_commands(
             temp_state.apply_step_delta(&step_delta);
             merge_delta(&mut accumulated_delta, step_delta);
             all_events.append(&mut step_events);
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut all_events);
             continue;
         }
 
@@ -375,6 +416,12 @@ pub fn process_mqtt_commands(
                                     reason: format!("invalid wifi provision: {reason}"),
                                     requested: true,
                                 });
+                                append_command_lifecycle(
+                                    &cmd,
+                                    CommandLifecycle::Rejected,
+                                    Some(format!("invalid wifi provision: {reason}")),
+                                    &mut all_events,
+                                );
                                 temp_state.apply_step_delta(&step_delta);
                                 merge_delta(&mut accumulated_delta, step_delta);
                                 all_events.append(&mut step_events);
@@ -388,6 +435,7 @@ pub fn process_mqtt_commands(
             temp_state.apply_step_delta(&step_delta);
             merge_delta(&mut accumulated_delta, step_delta);
             all_events.append(&mut step_events);
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut all_events);
             continue;
         }
 
@@ -408,8 +456,22 @@ pub fn process_mqtt_commands(
                     all_events.push(OrchestratorEvent::UpdateWifiList {
                         list: hydragrow_shared::WifiCredentialList { candidates },
                     });
+                    append_command_lifecycle(
+                        &cmd,
+                        CommandLifecycle::Acknowledged,
+                        None,
+                        &mut all_events,
+                    );
                 }
-                _ => warn!("⚠️ [CMD] Ignoring update_wifi_list without a valid SSID."),
+                _ => {
+                    warn!("⚠️ [CMD] Ignoring update_wifi_list without a valid SSID.");
+                    append_command_lifecycle(
+                        &cmd,
+                        CommandLifecycle::Rejected,
+                        Some("missing valid SSID".to_string()),
+                        &mut all_events,
+                    );
+                }
             }
             continue;
         }
@@ -428,12 +490,24 @@ pub fn process_mqtt_commands(
                     reason: "invalid device id: must be 1..=32 chars".into(),
                     requested: true,
                 });
+                append_command_lifecycle(
+                    &cmd,
+                    CommandLifecycle::Rejected,
+                    Some("invalid device id".to_string()),
+                    &mut all_events,
+                );
             } else {
                 // Device ids are identity, not secrets — safe to log.
                 info!("🆔 [CMD] Provisioning device identity: {}", trimmed);
                 all_events.push(OrchestratorEvent::ProvisionDeviceId {
                     device_id: trimmed.to_string(),
                 });
+                append_command_lifecycle(
+                    &cmd,
+                    CommandLifecycle::Acknowledged,
+                    None,
+                    &mut all_events,
+                );
             }
             continue;
         }
@@ -441,6 +515,7 @@ pub fn process_mqtt_commands(
         if action_lower == "reboot_device" {
             info!("🔄 [CMD] Nhận lệnh reboot_device. Dừng hardware...");
             stop_all_hardware(&mut step_events);
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut step_events);
             step_events.push(OrchestratorEvent::RebootDevice);
             all_events.append(&mut step_events);
             break;
@@ -452,6 +527,7 @@ pub fn process_mqtt_commands(
             step_delta.phase = Some(hydragrow_shared::fsm::SystemPhase::Fault(
                 hydragrow_shared::fsm::FaultCode::EmergencyStop,
             ));
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut step_events);
             step_events.push(OrchestratorEvent::FactoryReset);
 
             temp_state.apply_step_delta(&step_delta);
@@ -479,6 +555,7 @@ pub fn process_mqtt_commands(
             step_events.push(OrchestratorEvent::PublishSystemLog {
                 payload_json: log_payload,
             });
+            append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut step_events);
 
             temp_state.apply_step_delta(&step_delta);
             merge_delta(&mut accumulated_delta, step_delta);
@@ -489,12 +566,26 @@ pub fn process_mqtt_commands(
         // Nếu đang ở chế độ AUTO thì bỏ qua lệnh điều khiển tay đơn lẻ
         if config.control_mode == ControlMode::Auto {
             warn!("⚠️ Bỏ qua lệnh thủ công vì hệ thống đang ở chế độ AUTO.");
+            append_command_lifecycle(
+                &cmd,
+                CommandLifecycle::Rejected,
+                Some("manual control blocked by AUTO mode".to_string()),
+                &mut all_events,
+            );
             continue;
         }
 
         match cmd.target.as_deref() {
             Some("all") => {}
-            _ => continue,
+            _ => {
+                append_command_lifecycle(
+                    &cmd,
+                    CommandLifecycle::Rejected,
+                    Some("unsupported command target".to_string()),
+                    &mut all_events,
+                );
+                continue;
+            }
         }
 
         let pump_name = cmd
@@ -527,6 +618,12 @@ pub fn process_mqtt_commands(
                 "⛔ BLOCKED: Không thể điều khiển {} trong trạng thái khẩn cấp (kể cả force_on).",
                 pump_name
             );
+            append_command_lifecycle(
+                &cmd,
+                CommandLifecycle::Rejected,
+                Some("command blocked by emergency/fault state".to_string()),
+                &mut all_events,
+            );
             continue;
         }
 
@@ -549,6 +646,12 @@ pub fn process_mqtt_commands(
                     warn!(
                         "⛔ BLOCKED: Lệnh force_on cho {} vượt ngưỡng an toàn liều lượng ({:.2}ml > max_dose_per_cycle {:.2}ml)",
                         pump_name, estimated_ml, config.max_dose_per_cycle
+                    );
+                    append_command_lifecycle(
+                        &cmd,
+                        CommandLifecycle::Rejected,
+                        Some("force_on exceeds max dose per cycle".to_string()),
+                        &mut all_events,
                     );
                     continue;
                 }
@@ -594,9 +697,76 @@ pub fn process_mqtt_commands(
         temp_state.apply_step_delta(&step_delta);
         merge_delta(&mut accumulated_delta, step_delta);
         all_events.append(&mut step_events);
+        append_command_lifecycle(&cmd, CommandLifecycle::Acknowledged, None, &mut all_events);
     }
 
     (accumulated_delta, all_events)
+}
+
+const PROCESSED_COMMAND_IDS_KEY: &str = "processed_cmd_ids";
+const MAX_PROCESSED_COMMAND_IDS: usize = 32;
+
+fn is_duplicate_persistent_command(
+    cmd: &MqttCommandIn,
+    nvs: &Option<&mut esp_idf_svc::nvs::EspDefaultNvs>,
+) -> bool {
+    let Some(command_id) = cmd.metadata.as_ref().and_then(|m| m.command_id.as_deref()) else {
+        return false;
+    };
+    let Some(nvs) = nvs.as_deref() else {
+        return false;
+    };
+    let mut buffer = [0u8; 4096];
+    nvs.get_str(PROCESSED_COMMAND_IDS_KEY, &mut buffer)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok())
+        .is_some_and(|ids| ids.iter().any(|id| id == command_id))
+}
+
+/// Persist a command ID only after its lifecycle event reaches the dispatcher.
+/// This avoids marking a command before actuator side effects are executed.
+pub(crate) fn mark_persistent_command_processed(
+    command_id: &str,
+    nvs: &mut Option<esp_idf_svc::nvs::EspDefaultNvs>,
+) {
+    let Some(nvs) = nvs.as_mut() else {
+        return;
+    };
+    let mut buffer = [0u8; 4096];
+    let mut ids: Vec<String> = nvs
+        .get_str(PROCESSED_COMMAND_IDS_KEY, &mut buffer)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok())
+        .unwrap_or_default();
+    if ids.iter().any(|id| id == command_id) {
+        return;
+    }
+    ids.push(command_id.to_string());
+    if ids.len() > MAX_PROCESSED_COMMAND_IDS {
+        let drop_count = ids.len() - MAX_PROCESSED_COMMAND_IDS;
+        ids.drain(..drop_count);
+    }
+    if let Ok(serialized) = serde_json::to_string(&ids) {
+        let _ = nvs.set_str(PROCESSED_COMMAND_IDS_KEY, &serialized);
+    }
+}
+
+fn append_command_lifecycle(
+    cmd: &MqttCommandIn,
+    lifecycle: CommandLifecycle,
+    reason: Option<String>,
+    events: &mut Vec<OrchestratorEvent>,
+) {
+    let Some(command_id) = cmd.metadata.as_ref().and_then(|m| m.command_id.clone()) else {
+        return;
+    };
+    events.push(OrchestratorEvent::PublishCommandLifecycle {
+        command_id,
+        lifecycle,
+        reason,
+    });
 }
 
 fn stop_all_hardware(events: &mut Vec<OrchestratorEvent>) {
@@ -806,6 +976,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -826,6 +997,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -869,6 +1041,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -919,6 +1092,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -949,6 +1123,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -969,6 +1144,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -1021,6 +1197,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -1048,6 +1225,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -1084,6 +1262,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -1104,6 +1283,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 
@@ -1161,6 +1341,7 @@ mod tests {
                 pump: None,
                 duration_sec: None,
                 pwm: None,
+                metadata: None,
             })
             .unwrap();
 

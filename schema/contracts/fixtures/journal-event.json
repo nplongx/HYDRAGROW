@@ -1,0 +1,13 @@
+{
+  "id": 42,
+  "device_id": "device-001",
+  "level": "critical",
+  "category": "sensor",
+  "title": "EC sensor error",
+  "message": "EC sensor returned an invalid reading",
+  "occurred_at": "2026-09-16T10:00:00Z",
+  "received_at": "2026-09-16T10:00:01Z",
+  "source": "controller",
+  "event_type": "sensor_error",
+  "metadata": {"sensor": "ec"}
+}

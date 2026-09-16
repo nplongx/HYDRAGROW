@@ -102,6 +102,42 @@ where
         };
 
         // 2. Ưu tiên xác thực bằng Firebase ID token (Authorization: Bearer <token>)
+        if req.path().contains("/webhook/")
+            && let Some(token) = req
+                .headers()
+                .get("X-Webhook-Token")
+                .and_then(|value| value.to_str().ok())
+        {
+            let token = token.to_string();
+            let device_id = req.match_info().get("device_id").map(str::to_string);
+            let srv = Rc::clone(&self.service);
+            return Box::pin(async move {
+                let key_hash = crate::api::webhook_tokens::sha256_hex(&token);
+                if let Some(webhook) =
+                    crate::api::webhook_tokens::find_by_token_hash(&app_state.pg_pool, &key_hash)
+                        .await
+                    && webhook.is_active
+                    && device_id.as_deref() == Some(webhook.device_id.as_str())
+                {
+                    let auth_context = AuthContext {
+                        scopes: vec!["webhook:invoke".to_string()],
+                        user_id: None,
+                        session_id: None,
+                        service_key_label: Some(format!("webhook:{}", webhook.id)),
+                    };
+                    req.extensions_mut().insert(auth_context);
+                    let res = srv.call(req).await?;
+                    return Ok(res.map_into_left_body());
+                }
+                let response = HttpResponse::Unauthorized()
+                    .json(serde_json::json!({"error": "Invalid or missing Webhook Token"}))
+                    .map_into_right_body();
+                let (http_req, _payload) = req.into_parts();
+                Ok(ServiceResponse::new(http_req, response))
+            });
+        }
+
+        // 2b. Firebase ID token (Authorization: Bearer <token>)
         if let Some(token) = extract_bearer_token(req.headers()) {
             let token = token.to_string();
             let srv = Rc::clone(&self.service);
@@ -193,17 +229,6 @@ where
             .and_then(|hv| hv.to_str().ok())
             .map(ToString::to_string);
 
-        let user_id = req
-            .headers()
-            .get("X-User-Id")
-            .and_then(|hv| hv.to_str().ok())
-            .map(ToString::to_string);
-        let session_id = req
-            .headers()
-            .get("X-Session-Id")
-            .and_then(|hv| hv.to_str().ok())
-            .map(ToString::to_string);
-
         let srv = Rc::clone(&self.service);
         Box::pin(async move {
             if let Some(key) = header_key.as_deref() {
@@ -235,16 +260,235 @@ where
                 return Ok(ServiceResponse::new(http_req, response));
             }
 
-            let scopes = default_legacy_scopes();
+            let scopes = default_legacy_scopes_for_ws();
 
             let auth_context = AuthContext {
                 scopes,
-                user_id,
-                session_id,
-                service_key_label: None,
+                user_id: None,
+                session_id: None,
+                service_key_label: Some("legacy-api-key".to_string()),
             };
 
             req.extensions_mut().insert(auth_context);
+
+            let res = srv.call(req).await?;
+            Ok(res.map_into_left_body())
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrincipalKind {
+    User,
+    Service,
+}
+
+impl AuthContext {
+    pub fn principal_kind(&self) -> PrincipalKind {
+        if self.user_id.is_some() {
+            PrincipalKind::User
+        } else {
+            PrincipalKind::Service
+        }
+    }
+}
+
+pub async fn authorize_device(
+    req: &actix_web::HttpRequest,
+    app_state: &AppState,
+    capability: Option<&str>,
+    device_id: &str,
+) -> Result<AuthContext, HttpResponse> {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .ok_or_else(|| {
+            HttpResponse::Unauthorized().json(serde_json::json!({"error": "Unauthorized"}))
+        })?;
+
+    if let Some(required) = capability
+        && !auth.has_scope(required)
+    {
+        return Err(HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Missing required scope",
+            "required_scope": required
+        })));
+    }
+
+    if auth.principal_kind() == PrincipalKind::User {
+        let user_id = auth
+            .user_id
+            .as_deref()
+            .and_then(|id| id.parse::<i64>().ok())
+            .ok_or_else(|| {
+                HttpResponse::Unauthorized().json(serde_json::json!({"error": "Unauthorized"}))
+            })?;
+        let owned = crate::db::device_ownership::is_owner(&app_state.pg_pool, user_id, device_id)
+            .await
+            .map_err(|_| {
+                HttpResponse::InternalServerError()
+                    .json(serde_json::json!({"error": "Authorization lookup failed"}))
+            })?;
+        if !owned {
+            return Err(HttpResponse::Forbidden()
+                .json(serde_json::json!({"error": "Device ownership required"})));
+        }
+    }
+
+    Ok(auth)
+}
+
+pub async fn authorize_all_devices(
+    req: &actix_web::HttpRequest,
+    app_state: &AppState,
+    capability: Option<&str>,
+    device_ids: &[&str],
+) -> Result<AuthContext, HttpResponse> {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .ok_or_else(|| {
+            HttpResponse::Unauthorized().json(serde_json::json!({"error": "Unauthorized"}))
+        })?;
+
+    if let Some(required) = capability
+        && !auth.has_scope(required)
+    {
+        return Err(HttpResponse::Forbidden().json(serde_json::json!({
+            "error": "Missing required scope",
+            "required_scope": required
+        })));
+    }
+
+    if auth.principal_kind() == PrincipalKind::User {
+        let user_id = auth
+            .user_id
+            .as_deref()
+            .and_then(|id| id.parse::<i64>().ok())
+            .ok_or_else(|| {
+                HttpResponse::Unauthorized().json(serde_json::json!({"error": "Unauthorized"}))
+            })?;
+        let owned =
+            crate::db::device_ownership::is_owner_of_all(&app_state.pg_pool, user_id, device_ids)
+                .await
+                .map_err(|_| {
+                    HttpResponse::InternalServerError()
+                        .json(serde_json::json!({"error": "Authorization lookup failed"}))
+                })?;
+        if !owned {
+            return Err(HttpResponse::Forbidden().json(serde_json::json!({
+                "error": "Device ownership required for all targets"
+            })));
+        }
+    }
+
+    Ok(auth)
+}
+
+/// Enforces ownership for every `/api/devices/{device_id}/...` REST route.
+/// Service principals are authorized by their service scopes; user principals
+/// must also own the target device. This is deliberately separate from the
+/// route-specific capability checks.
+pub struct DeviceOwnershipAuth;
+
+impl<S, B> Transform<S, ServiceRequest> for DeviceOwnershipAuth
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<EitherBody<B>>;
+    type Error = Error;
+    type InitError = ();
+    type Transform = DeviceOwnershipAuthMiddleware<S>;
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ready(Ok(DeviceOwnershipAuthMiddleware {
+            service: Rc::new(service),
+        }))
+    }
+}
+
+pub struct DeviceOwnershipAuthMiddleware<S> {
+    service: Rc<S>,
+}
+
+impl<S, B> Service<ServiceRequest> for DeviceOwnershipAuthMiddleware<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<EitherBody<B>>;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    forward_ready!(service);
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let srv = Rc::clone(&self.service);
+        let device_id = req.match_info().get("device_id").map(str::to_owned);
+        let app_state = req.app_data::<actix_web::web::Data<AppState>>().cloned();
+        let auth = req.extensions().get::<AuthContext>().cloned();
+
+        Box::pin(async move {
+            let Some(device_id) = device_id else {
+                let res = srv.call(req).await?;
+                return Ok(res.map_into_left_body());
+            };
+            let Some(auth) = auth else {
+                let (http_req, _payload) = req.into_parts();
+                let response = HttpResponse::Unauthorized()
+                    .json(serde_json::json!({"error": "Unauthorized"}))
+                    .map_into_right_body();
+                return Ok(ServiceResponse::new(http_req, response));
+            };
+            let Some(app_state) = app_state else {
+                let (http_req, _payload) = req.into_parts();
+                let response = HttpResponse::InternalServerError()
+                    .json(serde_json::json!({"error": "AppState missing"}))
+                    .map_into_right_body();
+                return Ok(ServiceResponse::new(http_req, response));
+            };
+
+            if auth.principal_kind() == PrincipalKind::User {
+                let user_id = match auth
+                    .user_id
+                    .as_deref()
+                    .and_then(|id| id.parse::<i64>().ok())
+                {
+                    Some(id) => id,
+                    None => {
+                        let (http_req, _payload) = req.into_parts();
+                        let response = HttpResponse::Unauthorized()
+                            .json(serde_json::json!({"error": "Unauthorized"}))
+                            .map_into_right_body();
+                        return Ok(ServiceResponse::new(http_req, response));
+                    }
+                };
+                match crate::db::device_ownership::is_owner(&app_state.pg_pool, user_id, &device_id)
+                    .await
+                {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        let (http_req, _payload) = req.into_parts();
+                        let response = HttpResponse::Forbidden()
+                            .json(serde_json::json!({"error": "Device ownership required"}))
+                            .map_into_right_body();
+                        return Ok(ServiceResponse::new(http_req, response));
+                    }
+                    Err(_) => {
+                        let (http_req, _payload) = req.into_parts();
+                        let response = HttpResponse::InternalServerError()
+                            .json(serde_json::json!({"error": "Authorization lookup failed"}))
+                            .map_into_right_body();
+                        return Ok(ServiceResponse::new(http_req, response));
+                    }
+                }
+            }
 
             let res = srv.call(req).await?;
             Ok(res.map_into_left_body())
@@ -261,7 +505,7 @@ fn extract_bearer_token(headers: &actix_web::http::header::HeaderMap) -> Option<
         .filter(|token| !token.is_empty())
 }
 
-fn default_legacy_scopes() -> Vec<String> {
+pub(crate) fn default_legacy_scopes_for_ws() -> Vec<String> {
     vec![
         "read:telemetry".to_string(),
         "write:config".to_string(),
@@ -270,6 +514,7 @@ fn default_legacy_scopes() -> Vec<String> {
         "device:ota".to_string(),
         "device:network".to_string(),
         "health:read".to_string(),
+        "webhook:invoke".to_string(),
     ]
 }
 
@@ -306,5 +551,30 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer "));
         assert_eq!(extract_bearer_token(&headers), None);
+    }
+
+    #[test]
+    fn legacy_service_context_is_not_user_scoped() {
+        let auth = AuthContext {
+            scopes: default_legacy_scopes_for_ws(),
+            user_id: None,
+            session_id: None,
+            service_key_label: Some("legacy-api-key".to_string()),
+        };
+
+        assert_eq!(auth.principal_kind(), PrincipalKind::Service);
+        assert!(auth.user_id.is_none());
+    }
+
+    #[test]
+    fn firebase_user_context_is_user_scoped() {
+        let auth = AuthContext {
+            scopes: vec!["read:telemetry".to_string()],
+            user_id: Some("42".to_string()),
+            session_id: Some("firebase-session".to_string()),
+            service_key_label: None,
+        };
+
+        assert_eq!(auth.principal_kind(), PrincipalKind::User);
     }
 }

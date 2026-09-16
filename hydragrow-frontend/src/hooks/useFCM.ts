@@ -1,20 +1,17 @@
 // src/hooks/useFCM.ts
 import { useEffect, useState } from 'react';
 import { requestForWebToken, subscribeWebMessages } from '../lib/firebase';
-import { useDeviceStore } from '../store/useDeviceStore';
-import { httpFetch } from '../platform/http';
+import { useStationContext } from '../contexts/StationContext';
+import { notificationsApi } from '../api/notifications';
 import { debugLog, redactSecret } from '../lib/redact';
 
 export function useFCM() {
-  // Lấy settings trực tiếp từ Zustand Store
-  const settings = useDeviceStore((s) => s.settings);
+  const { selectedDeviceId: deviceId } = useStationContext();
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [permission, setPermission] = useState(Notification.permission);
 
   const enableNotifications = async () => {
     try {
-      if (!settings?.backend_url) return;
-      const deviceId = useDeviceStore.getState().deviceId;
       if (!deviceId) return;
       const isWeb = !('__TAURI__' in window);
       if (!isWeb) {
@@ -31,25 +28,8 @@ export function useFCM() {
       if (!token) return;
       setFcmToken(token);
       debugLog("FCM Token:", redactSecret(token));
-      const res = await httpFetch(
-        `${settings.backend_url}/api/notifications/register`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': settings.api_key
-          },
-          body: JSON.stringify({
-            fcm_token: token,
-            device_id: useDeviceStore.getState().deviceId
-          })
-        }
-      );
-      if (res.ok) {
-        debugLog("Đăng ký FCM token thành công");
-      } else {
-        console.error(await res.text());
-      }
+      await notificationsApi.registerFcmToken(token, deviceId);
+      debugLog("Đăng ký FCM token thành công");
     } catch (err) {
       console.error(err);
     }
@@ -59,7 +39,7 @@ export function useFCM() {
     const isWeb = !('__TAURI__' in window);
     if (!isWeb) return;
 
-    if (Notification.permission === 'granted' && settings?.backend_url) {
+    if (Notification.permission === 'granted' && deviceId) {
       enableNotifications();
     }
 
@@ -67,7 +47,7 @@ export function useFCM() {
       debugLog('Foreground message:', payload);
     });
     return unsubscribe;
-  }, [settings?.backend_url]);
+  }, [deviceId]);
 
   return {
     fcmToken,

@@ -39,6 +39,7 @@ pub fn apply_event(hw: &mut VirtualHardwareState, event: &OrchestratorEvent) {
         | OrchestratorEvent::PublishSystemLog { .. }
         | OrchestratorEvent::PublishRecipeStageChanged { .. }
         | OrchestratorEvent::PublishCommandRejected { .. }
+        | OrchestratorEvent::PublishCommandLifecycle { .. }
         | OrchestratorEvent::RequestSensorForcePublish
         | OrchestratorEvent::SetSensorContinuousMode { .. }
         | OrchestratorEvent::PublishFsmTransition { .. }

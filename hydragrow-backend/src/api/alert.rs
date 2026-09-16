@@ -3,11 +3,13 @@ use crate::{
     AppState,
     api::middleware::auth::AuthContext,
     db::postgres::{
-        NewSystemEventRecord, get_events_by_cycle_id, get_system_events, insert_system_event,
+        NewSystemEventRecord, SystemEventRecord, get_events_by_cycle_id, get_system_events,
+        get_system_events_export, get_system_events_filtered, insert_system_event,
         resolve_system_event,
     },
 };
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
+use base64::Engine;
 use serde_json::json;
 
 fn default_reason_codes() -> Vec<String> {
@@ -105,6 +107,20 @@ pub struct EventsQuery {
     pub after_timestamp: Option<i64>,
     #[serde(default)]
     pub level: Option<String>,
+    #[serde(default)]
+    pub event_type: Option<String>,
+    #[serde(default)]
+    pub unresolved: bool,
+    #[serde(default)]
+    pub search: Option<String>,
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub to: Option<String>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 fn default_limit() -> i64 {
@@ -140,8 +156,18 @@ struct HealthSummary {
 
 pub async fn health_summary(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("health:read") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: health:read"}));
+    }
     let device_id = path.into_inner();
     let now = chrono::Utc::now().timestamp_millis();
     let window_ms = 3_600_000i64;
@@ -190,38 +216,209 @@ pub async fn health_summary(
     }
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+struct EventCursor {
+    timestamp: i64,
+    id: i32,
+}
+
+fn decode_cursor(raw: Option<&str>) -> Result<Option<EventCursor>, String> {
+    let Some(raw) = raw.filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(raw)
+        .map_err(|_| "invalid cursor".to_string())?;
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|_| "invalid cursor".to_string())
+}
+fn encode_cursor(event: &SystemEventRecord) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&EventCursor {
+            timestamp: event.timestamp,
+            id: event.id,
+        })
+        .unwrap_or_default(),
+    )
+}
+fn parse_bound(raw: Option<&String>) -> Result<Option<i64>, String> {
+    raw.map(|s| {
+        s.parse::<i64>()
+            .map_err(|_| "invalid timestamp bound".to_string())
+    })
+    .transpose()
+}
+
 pub async fn fetch_events(
     path: web::Path<String>,
+    req: HttpRequest,
     query: web::Query<EventsQuery>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
-    let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
+    let cursor = match decode_cursor(query.cursor.as_deref()) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::BadRequest().json(json!({"error":e})),
+    };
+    let from = match parse_bound(query.from.as_ref()) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::BadRequest().json(json!({"error":e})),
+    };
+    let to = match parse_bound(query.to.as_ref()) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::BadRequest().json(json!({"error":e})),
+    };
     let categories = normalize_categories(query.category.as_ref());
-
-    match get_system_events(
+    let limit = query.limit.clamp(1, 500);
+    match get_system_events_filtered(
         &app_state.pg_pool,
-        &device_id,
+        &path,
         &categories,
-        query.limit,
-        query.before_timestamp,
-        query.after_timestamp,
+        limit + 1,
+        cursor.as_ref().map(|c| c.timestamp),
+        cursor.as_ref().map(|c| c.id),
+        None,
         query.level.clone(),
+        query.event_type.clone(),
+        query.unresolved,
+        query.search.clone(),
+        from,
+        to,
     )
     .await
     {
-        Ok(events) => HttpResponse::Ok().json(json!({ "status": "success", "data": events })),
+        Ok(mut events) => {
+            let has_more = events.len() > limit as usize;
+            if has_more {
+                events.truncate(limit as usize);
+            }
+            let next_cursor = if has_more {
+                events.last().map(encode_cursor)
+            } else {
+                None
+            };
+            HttpResponse::Ok()
+                .json(json!({"status":"success","data":events,"next_cursor":next_cursor}))
+        }
         Err(e) => {
             tracing::error!("Lỗi lấy system_events: {:?}", e);
-            HttpResponse::InternalServerError().json(json!({ "error": "Database Error" }))
+            HttpResponse::InternalServerError().json(json!({"error":"Database Error"}))
         }
+    }
+}
+
+fn csv_field(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+fn event_csv(events: &[SystemEventRecord]) -> String {
+    let mut out = String::from(
+        "id,occurred_at,received_at,device_id,category,level,event_type,source,actor_kind,actor_id,title,message,reason_code,resolved_at,resolved_by\n",
+    );
+    for e in events {
+        let fields = [
+            e.id.to_string(),
+            e.timestamp.to_string(),
+            e.received_at.to_rfc3339(),
+            e.device_id.clone(),
+            e.category.clone(),
+            e.level.clone(),
+            e.event_type.clone(),
+            e.source.clone(),
+            e.actor_kind.clone(),
+            e.actor_id.clone().unwrap_or_default(),
+            e.title.clone(),
+            e.message.clone(),
+            e.primary_reason_code.clone().unwrap_or_default(),
+            e.resolved_at.map(|v| v.to_rfc3339()).unwrap_or_default(),
+            e.resolved_by.clone().unwrap_or_default(),
+        ];
+        out.push_str(
+            &fields
+                .iter()
+                .map(|v| csv_field(v))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        out.push('\n');
+    }
+    out
+}
+
+fn export_json_event(e: &SystemEventRecord) -> serde_json::Value {
+    json!({
+        "id": e.id, "occurred_at": e.timestamp, "received_at": e.received_at,
+        "device_id": e.device_id, "category": e.category, "level": e.level,
+        "event_type": e.event_type, "source": e.source,
+        "actor": { "kind": e.actor_kind, "id": e.actor_id },
+        "title": e.title, "message": e.message, "reason_code": e.primary_reason_code,
+        "resolution": { "resolved_at": e.resolved_at, "resolved_by": e.resolved_by }
+    })
+}
+
+pub async fn export_events(
+    path: web::Path<String>,
+    req: HttpRequest,
+    query: web::Query<EventsQuery>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
+    let format = query
+        .format
+        .as_deref()
+        .unwrap_or("json")
+        .to_ascii_lowercase();
+    if format != "json" && format != "csv" {
+        return HttpResponse::BadRequest().json(json!({"error":"format must be json or csv"}));
+    }
+    let from = match parse_bound(query.from.as_ref()) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::BadRequest().json(json!({"error":e})),
+    };
+    let to = match parse_bound(query.to.as_ref()) {
+        Ok(v) => v,
+        Err(e) => return HttpResponse::BadRequest().json(json!({"error":e})),
+    };
+    let categories = normalize_categories(query.category.as_ref());
+    match get_system_events_export(&app_state.pg_pool, &path, &categories, query.level.clone(), query.event_type.clone(), query.unresolved, query.search.clone(), from, to, 1000).await {
+        Ok(events) if format == "csv" => HttpResponse::Ok().content_type("text/csv; charset=utf-8").insert_header(("Content-Disposition", "attachment; filename=journal-events.csv")).body(event_csv(&events)),
+        Ok(events) => HttpResponse::Ok().content_type("application/json; charset=utf-8").json(json!({"status":"success","data":events.iter().map(export_json_event).collect::<Vec<_>>(),"count":events.len(),"truncated":events.len() == 1000})),
+        Err(e) => { tracing::error!("Lỗi export system_events: {:?}", e); HttpResponse::InternalServerError().json(json!({"error":"Database Error"})) }
     }
 }
 
 // 2. 👇 THÊM STRUCT & HÀM NÀY: Để xử lý endpoint /events/cycle/{cycle_id}
 pub async fn get_cycle_timeline(
     path: web::Path<(String, String)>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
     let (device_id, cycle_id) = path.into_inner();
 
     match get_events_by_cycle_id(&app_state.pg_pool, &device_id, &cycle_id).await {
@@ -262,7 +459,15 @@ pub async fn resolve_event(
     }
 
     let (device_id, event_id) = path.into_inner();
-    match resolve_system_event(&app_state.pg_pool, &device_id, event_id, body.resolved).await {
+    match resolve_system_event(
+        &app_state.pg_pool,
+        &device_id,
+        event_id,
+        body.resolved,
+        auth.user_id.as_deref(),
+    )
+    .await
+    {
         Ok(()) => HttpResponse::Ok().json(json!({
             "status": "success",
             "data": { "id": event_id, "resolved": body.resolved }
@@ -277,6 +482,7 @@ pub async fn resolve_event(
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     // Expose API cho Frontend
     cfg.route("/events", web::get().to(fetch_events));
+    cfg.route("/events/export", web::get().to(export_events));
     cfg.route("/health-summary", web::get().to(health_summary));
 
     // 3. 👇 ĐĂNG KÝ ROUTE MỚI
@@ -329,6 +535,33 @@ mod tests {
         assert_eq!(query.after_timestamp, Some(1717000000000_i64));
         assert_eq!(query.limit, 50);
         assert_eq!(query.category.as_deref(), Some("dosing"));
+    }
+
+    #[test]
+    async fn compound_cursor_round_trips_timestamp_and_id() {
+        let event = SystemEventRecord {
+            id: 77,
+            device_id: "dev".into(),
+            level: "info".into(),
+            category: "system".into(),
+            title: "t".into(),
+            message: "m".into(),
+            reason: None,
+            metadata: None,
+            timestamp: 1717000000123,
+            source: "system".into(),
+            primary_reason_code: None,
+            resolved_at: None,
+            event_type: "system.test".into(),
+            actor_kind: "system".into(),
+            actor_id: None,
+            received_at: chrono::Utc::now(),
+            resolved_by: None,
+        };
+        let cursor = encode_cursor(&event);
+        let decoded = decode_cursor(Some(&cursor)).unwrap().unwrap();
+        assert_eq!(decoded.timestamp, 1717000000123);
+        assert_eq!(decoded.id, 77);
     }
 
     #[test]

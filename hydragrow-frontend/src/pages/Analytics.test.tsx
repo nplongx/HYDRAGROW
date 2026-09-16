@@ -1,29 +1,29 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import Analytics, { formatUptime, formatHeap, formatRssi } from './Analytics';
-import * as apiClient from '../lib/apiClient';
 import * as settingsPlatform from '../platform/settings';
 
 vi.mock('../lib/apiClient', () => ({
-  apiGet: vi.fn(),
-  apiPut: vi.fn(),
 }));
 
 vi.mock('../platform/settings', () => ({
   loadAppSettings: vi.fn(),
 }));
 
-vi.mock('../store/useDeviceStore', () => ({
-  useDeviceStore: vi.fn((selector) =>
-    selector({
-      deviceId: 'hydra-001',
-      sensorData: null,
-      isSensorOnline: true,
-      settings: null,
-    })
-  ),
+
+vi.mock('../hooks/useAnalytics', () => ({
+  useAnalyticsHealth: vi.fn(() => ({ data: { free_heap_bytes: 184320, wifi_rssi_dbm: -64.0, uptime_seconds: 7200, backend_process_cpu_percent: 1.25, last_updated_at: '2026-09-10T10:00:00Z' }, isLoading: false, refetch: vi.fn() })),
+  useUpdateWeeklyReportPreference: vi.fn(() => ({ mutateAsync: vi.fn().mockResolvedValue({ status: 'success' }) })),
+}));
+
+vi.mock('../contexts/StationContext', () => ({
+  useStationContext: () => ({
+    status: 'Selected', selectedDeviceId: 'hydra-001', selectedDevice: null,
+    availableDevices: [], error: null, selectDevice: vi.fn(), switchDevice: vi.fn(),
+    clearSelection: vi.fn(), refreshAvailableDevices: vi.fn(),
+  }),
 }));
 
 vi.mock('../hooks/useWhoami', () => ({
@@ -39,14 +39,6 @@ vi.mock('../hooks/useWhoami', () => ({
   })),
 }));
 
-const mockHealth = {
-  free_heap_bytes: 184320, // 180 KB
-  wifi_rssi_dbm: -64.0,
-  uptime_seconds: 7200, // 2h 0m
-  backend_process_cpu_percent: 1.25,
-  last_updated_at: '2026-09-10T10:00:00Z',
-};
-
 describe('Analytics Page', () => {
   let queryClient: QueryClient;
 
@@ -55,7 +47,6 @@ describe('Analytics Page', () => {
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    vi.mocked(apiClient.apiGet).mockResolvedValue(mockHealth);
     vi.mocked(settingsPlatform.loadAppSettings).mockResolvedValue({
       api_key: 'test-key',
       backend_url: 'http://localhost:8080',
@@ -132,20 +123,19 @@ describe('Analytics Page', () => {
   });
 
   it('bật toggle báo cáo tuần qua email gọi apiPut lưu preferences', async () => {
-    vi.mocked(apiClient.apiPut).mockResolvedValue({ status: 'success' });
     renderWithProviders();
 
     const checkbox = screen.getByRole('checkbox', { name: 'Báo cáo tuần qua email' });
     expect(checkbox).not.toBeChecked();
 
-    fireEvent.click(checkbox);
+    await act(async () => {
+      fireEvent.click(checkbox);
+    });
 
+    const { useUpdateWeeklyReportPreference } = await import('../hooks/useAnalytics');
     await waitFor(() => {
-      expect(apiClient.apiPut).toHaveBeenCalledWith(
-        '/admin/me/preferences',
-        expect.objectContaining({
-          preferences: expect.objectContaining({ weekly_report: true }),
-        })
+      expect(vi.mocked(useUpdateWeeklyReportPreference).mock.results[0]?.value.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ weekly_report: true }),
       );
     });
   });

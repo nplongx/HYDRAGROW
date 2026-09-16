@@ -28,7 +28,7 @@ impl WatchdogConfig {
         let stale_threshold_secs = get("WATCHDOG_STALE_THRESHOLD_SECS")
             .map(|v| v.parse())
             .transpose()?
-            .unwrap_or(60); // design spec §4.2
+            .unwrap_or(hydragrow_shared::telemetry::OPERATIONAL_FRESHNESS_THRESHOLD_SECS as u64); // shared operational-state contract
 
         Ok(Self {
             backend_url,
@@ -84,7 +84,10 @@ mod tests {
         ];
         let config = WatchdogConfig::from_pairs(&vars).unwrap();
         assert_eq!(config.poll_interval_secs, 20); // design spec §4.2 default
-        assert_eq!(config.stale_threshold_secs, 60); // design spec §4.2 default
+        assert_eq!(
+            config.stale_threshold_secs,
+            hydragrow_shared::telemetry::OPERATIONAL_FRESHNESS_THRESHOLD_SECS as u64
+        ); // shared operational-state contract
     }
 
     #[test]

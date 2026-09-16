@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SeasonPhotoJournal } from './SeasonPhotoJournal';
-import { useDeviceStore } from '../../store/useDeviceStore';
 
 const mockPhotos = [
     { id: 'p1', day_offset: 4, cloudinary_url: 'https://res.cloudinary.com/demo/p1.jpg' },
@@ -17,15 +16,15 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
     };
 });
 
+vi.mock('../../contexts/StationContext', () => ({
+    useStationContext: () => ({ selectedDeviceId: 'dev-1' }),
+}));
+
 describe('SeasonPhotoJournal', () => {
     let queryClient: QueryClient;
 
     beforeEach(() => {
         queryClient = new QueryClient();
-        useDeviceStore.setState({
-            deviceId: 'dev-1',
-            settings: { backend_url: 'http://test', api_key: 'k' },
-        } as any);
     });
 
     const renderWithClient = (ui: React.ReactNode) =>

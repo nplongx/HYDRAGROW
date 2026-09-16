@@ -2,7 +2,7 @@ export interface AppSettings {
   backend_url: string;
   api_key: string;
   device_id: string;
-  control_mode?: 'auto' | 'manual';
+  control_mode?: "auto" | "manual";
   min_ph_limit?: number;
   max_ph_limit?: number;
   min_temp_limit?: number;
@@ -15,7 +15,7 @@ export interface AppSettings {
   [key: string]: unknown;
 }
 
-export type DeviceState = 'on' | 'off';
+export type DeviceState = "on" | "off";
 
 export interface PumpStatus {
   pump_a: boolean;
@@ -53,6 +53,46 @@ export interface SensorData extends DeviceHealth {
   err_ec?: boolean;
   is_continuous?: boolean;
   ph_voltage_mv?: number;
+}
+
+export type TelemetryQuality =
+  "UNKNOWN" | "VALID" | "STALE" | "ERROR" | "INVALID";
+export type TelemetryAvailability =
+  "UNKNOWN" | "ONLINE" | "DEGRADED" | "OFFLINE" | "UNAVAILABLE";
+
+export interface TelemetryAxis {
+  name: "ph" | "ec" | "temp" | "water_level" | string;
+  value: number | null;
+  unit: string;
+  quality: TelemetryQuality;
+  observed_at: string | null;
+  received_at: string | null;
+  source: "controller_sensor" | "backend_cache";
+  error_code?: string | null;
+}
+
+export interface AuthoritativeTelemetrySnapshot {
+  device_id: string;
+  observed_at: string | null;
+  received_at: string | null;
+  availability: TelemetryAvailability;
+  axes: TelemetryAxis[];
+  controller_health?: DeviceHealthSnapshot | null;
+  actuator?: {
+    pump_status: PumpStatus;
+    observed_at: string | null;
+    received_at: string | null;
+    source: "controller_sensor" | "backend_cache";
+  } | null;
+  fsm?: {
+    state: string;
+    observed_at: string | null;
+    received_at: string | null;
+    source: "controller_sensor" | "backend_cache";
+  } | null;
+  operational_state: OperationalState;
+  runtime_ready?: boolean | null;
+  actuator_contradictory: boolean;
 }
 
 export interface CropStage {
@@ -96,7 +136,7 @@ export interface RecipeTemplate {
 
 export interface UnifiedDeviceConfig {
   device_id: string;
-  control_mode: 'auto' | 'manual';
+  control_mode: "auto" | "manual";
   is_enabled: boolean;
   ec_target: number;
   ec_tolerance: number;
@@ -123,6 +163,8 @@ export interface UnifiedDeviceConfig {
   min_ec_limit: number;
   min_ph_limit: number;
   max_ph_limit: number;
+  min_temp_limit?: number;
+  max_temp_limit?: number;
   max_ec_delta: number;
   max_ph_delta: number;
   max_dose_per_cycle: number;
@@ -169,7 +211,7 @@ export interface CropSeason {
   description: string | null;
   start_time: string;
   end_time: string | null;
-  status: 'active' | 'completed';
+  status: "active" | "completed";
 }
 
 export interface DeviceHealth {
@@ -179,8 +221,23 @@ export interface DeviceHealth {
 }
 
 export interface StatusPayload {
-  is_online: boolean;
-  last_seen: string;
+  is_online?: boolean;
+  last_seen?: string;
+  operational_state?: OperationalState;
+}
+
+export type ContactState = "UNKNOWN" | "CONTACTED" | "NOT_CONTACTED";
+export type FreshnessState = "UNKNOWN" | "FRESH" | "STALE";
+export type RuntimeReadiness = "UNKNOWN" | "READY" | "NOT_READY";
+export type ActuatorKnowledge = "UNKNOWN" | "KNOWN" | "STALE" | "CONTRADICTORY";
+
+export interface OperationalState {
+  contact: ContactState;
+  freshness: FreshnessState;
+  readiness: RuntimeReadiness;
+  actuator: ActuatorKnowledge;
+  classified_at: string | null;
+  observed_at: string | null;
 }
 
 export interface TankAlert {
@@ -203,7 +260,7 @@ export interface WifiCandidate {
   priority: number;
 }
 
-export type WifiSecretAction = 'keep' | 'set' | 'clear';
+export type WifiSecretAction = "keep" | "set" | "clear";
 
 export interface WifiProvisionEntry {
   ssid: string;
@@ -216,7 +273,7 @@ export interface WifiConfigStatus {
   device_id: string;
   ssids: Array<{ ssid: string; priority: number }>;
   config_version: number;
-  state: 'pending' | 'applied' | 'rolled_back' | 'rejected' | 'unknown';
+  state: "pending" | "applied" | "rolled_back" | "rejected" | "unknown";
 }
 
 // --- Types từ hydragrow-shared/src/telemetry/health.rs ---
@@ -251,16 +308,16 @@ export interface DeviceHealthSnapshot {
 }
 
 // --- Types từ hydragrow-shared/src/log.rs ---
-export type LogLevel = 'info' | 'success' | 'warning' | 'critical';
+export type LogLevel = "debug" | "info" | "success" | "warning" | "error" | "critical";
 
 export type LogCategory =
-  | 'system'
-  | 'dosing'
-  | 'water'
-  | 'calibration'
-  | 'sensor'
-  | 'alert'
-  | 'user_action';
+  | "system"
+  | "dosing"
+  | "water"
+  | "calibration"
+  | "sensor"
+  | "alert"
+  | "user_action";
 
 export interface SystemEvent {
   id?: string | number;

@@ -152,6 +152,7 @@ pub async fn dispatch_action_command(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     crate::api::mqtt_utils::publish_command(app_state, device_id, &command)

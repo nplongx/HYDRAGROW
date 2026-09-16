@@ -1,0 +1,107 @@
+{
+  "requirement_id": "P1.1-AUTHORIZATION-OWNERSHIP-BOUNDARY",
+  "status": "IMPLEMENTED",
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/middleware/auth.rs",
+      "test_command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::middleware::auth::tests -- --nocapture --test-threads=1",
+      "actual": "6 passed; 0 failed",
+      "notes": "AuthContext now distinguishes User and Service principals; legacy API-key context cannot acquire caller-supplied user identity."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/middleware/auth.rs; hydragrow-backend/src/main.rs",
+      "actual": "DeviceOwnershipAuth is mounted on /api/devices/{device_id}; existing route-level ownership guards remain in config/recipe paths.",
+      "notes": "User principals must own the route device; service principals remain governed by service scopes."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/{sensor.rs,analytics.rs,device_admin.rs,fleet.rs,control.rs,recipe.rs,script.rs,alert.rs,health_topics.rs}",
+      "test_command": "cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings",
+      "actual": "PASS",
+      "notes": "Device-scoped control, admin, sensor, analytics, fleet, health, recipe, script, alert, crop-season/photo, config, calibration, webhook-token and webhook invocation paths have explicit capability gates."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/middleware/auth.rs; hydragrow-backend/src/api/health_topics.rs",
+      "test_command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::middleware::auth::tests api::ws::tests api::health_topics::tests -- --nocapture --test-threads=1",
+      "actual": "20 passed; 0 failed across the three targeted suites",
+      "notes": "WS device event filtering remains defense-in-depth; user fleet Hestia/topic data is filtered by device_ownership."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/middleware/auth.rs; hydragrow-backend/src/api/recipe.rs",
+      "test_command": "cargo test --manifest-path hydragrow-backend/Cargo.toml db::tests::test_device_ownership::tests::is_owner_of_all_returns_false_when_one_not_owned -- --nocapture --test-threads=1",
+      "actual": "PASS",
+      "notes": "Bulk recipe ownership uses is_owner_of_all and now surfaces DB lookup failure instead of converting infrastructure failure into a false ownership decision."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/ws.rs",
+      "test_command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::ws::tests -- --nocapture --test-threads=1",
+      "actual": "7 passed; 0 failed",
+      "notes": "Missing query credentials are rejected before actix_ws::handle; Firebase query tokens require read:telemetry plus device ownership; service keys are scope-checked."
+    },
+    {
+      "acceptance_id": "AC-7",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/middleware/auth.rs; hydragrow-backend/src/api/ws.rs",
+      "actual": "PASS",
+      "notes": "service_api_keys remain scope-based; legacy shared API key is represented as a Service principal and cannot use X-User-Id/X-Session-Id to impersonate a user."
+    },
+    {
+      "acceptance_id": "AC-8",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/control.rs; hydragrow-backend/src/api/device_admin.rs",
+      "actual": "PASS",
+      "notes": "Static ELEVATED_CONTROL_TOKEN/X-Elevated-Token acceptance was removed. Dangerous control now requires a backend-issued 60-second HS256 token bound to principal, device and dangerous_control action class, plus normal capability/ownership and X-User-Confirmed. Secret is PRIVILEGED_CONTROL_SECRET and is never logged."
+    },
+    {
+      "acceptance_id": "AC-9",
+      "status": "PASS",
+      "source": "hydragrow-backend/src/api/middleware/auth.rs; hydragrow-backend/src/api/device_pairing.rs",
+      "test_command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::middleware::auth::tests api::recipe::tests::bulk_apply_surfaces_ownership_lookup_failure_when_db_is_unavailable -- --nocapture --test-threads=1",
+      "actual": "7 passed; 0 failed",
+      "notes": "Missing auth remains 401; capability/ownership failures remain 403; authorization lookup failures are not collapsed into false ownership."
+    },
+    {
+      "acceptance_id": "AC-10",
+      "status": "PASS",
+      "source": "Route audit across hydragrow-backend/src/main.rs and hydragrow-backend/src/api/*.rs",
+      "actual": "PASS",
+      "notes": "main.rs places all /api/devices/{device_id} REST surfaces behind DeviceOwnershipAuth. Route audit covers telemetry/state, sensor, config/calibration, crop seasons/photos, analytics/health, events/alerts, scripts, recipes, webhooks/webhook tokens, control/lifecycle, device admin, and backup/restore. Fleet routes filter user data through device_ownership."
+    },
+    {
+      "acceptance_id": "AC-11",
+      "status": "PASS",
+      "source": "Current backend command output",
+      "test_command": "cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings; cargo fmt --manifest-path hydragrow-backend/Cargo.toml -- --check; git diff --check",
+      "actual": "All three PASS; backend full suite PASS",
+      "notes": "Full backend suite: 364 passed; 0 failed. Targeted auth/WS/scope/privileged tests also pass."
+    },
+    {
+      "acceptance_id": "AC-12",
+      "status": "PASS",
+      "source": "docs/project-state/TRACEABILITY.md; docs/project-state/CURRENT-STATUS.md",
+      "actual": "PASS",
+      "notes": "Requirement, implementation boundary, verification evidence, and P1.2 carry-over are recorded under the P1.1 requirement ID."
+    }
+  ],
+  "aggregate_status": "IMPLEMENTED",
+  "verification_status": "FULL_BACKEND_SUITE_PASS",
+  "full_backend_test": {
+    "command": "cargo test --manifest-path hydragrow-backend/Cargo.toml",
+    "actual": "364 passed; 0 failed; 0 ignored; finished in 260.14s"
+  },
+  "known_limitations": [
+    "Frontend runtime verification remains blocked by unavailable node/npm/npx as recorded in P1.0.",
+    "P1.2 durable command lifecycle, restart/reconnect reconciliation, timeout/UNKNOWN, and multi-instance authority are intentionally out of scope."
+  ]
+}

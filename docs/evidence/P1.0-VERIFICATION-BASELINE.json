@@ -1,0 +1,51 @@
+{
+  "requirement_id": "P1.0-VERIFICATION-BASELINE",
+  "verified_at": "2026-09-16",
+  "worktree": "current dirty worktree; no reset/clean/revert",
+  "environment": {
+    "os": "linux x86_64",
+    "rustc": "1.98.1",
+    "cargo": "1.98.1",
+    "postgres": "accepting connections on /var/run/postgresql:5432",
+    "node": "v24.21.0",
+    "npm": "available",
+    "npx": "available"
+  },
+  "results": {
+    "shared": "PASS: 82 tests",
+    "controller_core": "PASS: 205 tests",
+    "simulator": "PASS: 35 tests",
+    "backend": "PASS",
+    "frontend_build": "PASS",
+    "frontend_tests": "PASS: 110 files / 546 tests",
+    "frontend_eslint": "PASS: 0 errors; warnings only",
+    "frontend_tsc": "PASS",
+    "frontend_prettier": "DIAGNOSED: repository-wide check reports 294 files; no checked-in Prettier baseline exists and mass-formatting unrelated worktree changes is out of scope"
+  },
+  "backend_suite": {
+    "tests": 393,
+    "failed": 0,
+    "ignored": 0,
+    "duration_seconds": 291.14
+  },
+  "simulator": {
+    "unit_tests": 25,
+    "integration_and_scenario_tests": 10,
+    "failed": 0,
+    "publish_command_lifecycle_exhaustive": true
+  },
+  "acceptance": {
+    "AC-1": "PASS",
+    "AC-2": "PASS",
+    "AC-3": "PASS",
+    "AC-4": "PASS",
+    "AC-5": "PASS",
+    "AC-6": "PASS",
+    "AC-7": "PASS",
+    "AC-8": "PASS",
+    "AC-9": "PASS",
+    "AC-9_notes": "Current P1.0 status is recorded in the requirement evidence, CURRENT-STATUS.md, and TRACEABILITY.md."
+  },
+  "aggregate_status": "CLOSED_FOR_P1_ENTRY",
+  "aggregate_reason": "All executable P1.0 build/test/lint/typecheck and cross-system Rust checks are green. Current runs: shared 82 tests, controller-core 205 tests, simulator 35 tests, backend 393/393, frontend 110/546. Repository-wide Prettier reports 294 files; this is diagnosed non-runtime formatting debt and is deliberately not mass-formatted during P1.0."
+}

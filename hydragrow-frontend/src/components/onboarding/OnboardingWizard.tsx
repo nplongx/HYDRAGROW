@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { routePath } from '../../routes';
 import {
   Sparkles,
   X,
@@ -9,7 +10,8 @@ import {
   Trophy,
 } from 'lucide-react';
 import { useOnboardingState } from '../../hooks/useOnboardingState';
-import { useDeviceStore } from '../../store/useDeviceStore';
+import { useStationContext } from '../../contexts/StationContext';
+import { useDeviceTelemetry } from '../../hooks/useDeviceTelemetry';
 import { OnboardingStep } from './OnboardingStep';
 import { Button } from '../ui/Button';
 
@@ -31,21 +33,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     isStepComplete,
   } = useOnboardingState();
 
-  const sensorData = useDeviceStore((s) => s.sensorData);
-  const ownedDevices = useDeviceStore((s) => s.ownedDevices);
+  const { availableDevices, selectedDeviceId } = useStationContext();
+  const { data: telemetry } = useDeviceTelemetry(selectedDeviceId);
+  const hasTelemetry = telemetry !== undefined;
 
   // Auto-detect step completion from live store state
   useEffect(() => {
-    if (ownedDevices && ownedDevices.length > 0 && !isStepComplete('pair_device')) {
+    if (availableDevices.length > 0 && !isStepComplete('pair_device')) {
       completeStep('pair_device');
     }
-  }, [ownedDevices, isStepComplete, completeStep]);
+  }, [availableDevices, isStepComplete, completeStep]);
 
   useEffect(() => {
-    if (sensorData !== null && !isStepComplete('first_data')) {
+    if (hasTelemetry && !isStepComplete('first_data')) {
       completeStep('first_data');
     }
-  }, [sensorData, isStepComplete, completeStep]);
+  }, [hasTelemetry, isStepComplete, completeStep]);
 
   const stepKeys = useMemo(
     () => ['welcome', 'pair_device', 'first_data', 'first_season'],
@@ -190,7 +193,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             label: 'Ghép nối thiết bị',
             onClick: () => {
               completeStep('pair_device');
-              navigate('/pairing');
+              navigate(routePath('pairing'));
             },
           }}
         />
@@ -204,15 +207,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           isComplete={isStepComplete('first_data')}
           isActive={activeStepKey === 'first_data'}
           primaryAction={{
-            label: sensorData ? 'Đã nhận dữ liệu' : 'Kiểm tra tín hiệu',
+            label: hasTelemetry ? 'Đã nhận dữ liệu' : 'Kiểm tra tín hiệu',
             onClick: () => {
-              if (sensorData) {
+              if (hasTelemetry) {
                 completeStep('first_data');
               } else {
-                navigate('/');
+                navigate(routePath('dashboard'));
               }
             },
-            disabled: !sensorData && isStepComplete('first_data'),
+            disabled: !hasTelemetry && isStepComplete('first_data'),
           }}
         />
 
@@ -228,7 +231,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             label: 'Tạo mùa vụ',
             onClick: () => {
               completeStep('first_season');
-              navigate('/cultivation');
+              navigate(routePath('cultivation'));
             },
           }}
         />

@@ -76,6 +76,10 @@ pub async fn process_message(publish: Publish, app_state: web::Data<AppState>) {
             handlers::status::handle_controller(device_id, &payload_bytes, app_state).await
         }
 
+        "/controller/command-status" => {
+            handlers::command_lifecycle::handle(device_id, &payload_bytes, app_state).await
+        }
+
         "/controller/wifi-config-status" => {
             handlers::status::handle_wifi_config_status(device_id, &payload_bytes, app_state).await
         }

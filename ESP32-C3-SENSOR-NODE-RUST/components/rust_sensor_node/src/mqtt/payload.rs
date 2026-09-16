@@ -22,7 +22,8 @@ pub fn build_sensor_payload(
         "err_temp": data.err_temperature,
         "err_water": data.err_water_level,
         "err_ph": data.err_ph,
-        "err_tds": data.err_tds,
+        // Canonical P1.9 wire name is `err_ec`; `err_tds` is input-only legacy.
+        "err_ec": data.err_tds,
     })
 }
 

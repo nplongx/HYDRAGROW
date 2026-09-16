@@ -157,14 +157,14 @@ impl ScriptEngine {
         ast: &AST,
         input: &ScriptActionInput,
     ) -> Result<Option<ActionCommandOutput>> {
-        self.eval_action_command_with_range_stat(ast, input, |_, _, _| 0.0)
+        self.eval_action_command_with_range_stat(ast, input, |_, _, _| Ok(0.0))
     }
 
     pub fn eval_action_command_with_range_stat(
         &self,
         ast: &AST,
         input: &ScriptActionInput,
-        range_stat_fetcher: impl Fn(String, String, i64) -> f64 + Send + Sync + 'static,
+        range_stat_fetcher: impl Fn(String, String, i64) -> Result<f64, String> + Send + Sync + 'static,
     ) -> Result<Option<ActionCommandOutput>> {
         self.eval_action_command_with_context(ast, input, range_stat_fetcher, &HashMap::new())
     }
@@ -175,7 +175,7 @@ impl ScriptEngine {
         &self,
         ast: &AST,
         input: &ScriptActionInput,
-        range_stat_fetcher: impl Fn(String, String, i64) -> f64 + Send + Sync + 'static,
+        range_stat_fetcher: impl Fn(String, String, i64) -> Result<f64, String> + Send + Sync + 'static,
         context: &HashMap<String, f64>,
     ) -> Result<Option<ActionCommandOutput>> {
         // We must preserve configuration limits while mutating it to register the function.
@@ -188,8 +188,15 @@ impl ScriptEngine {
 
         engine.register_fn(
             "fetch_range_stat",
-            move |sensor: String, mode: String, window_sec: i64| -> rhai::FLOAT {
-                range_stat_fetcher(sensor, mode, window_sec) as rhai::FLOAT
+            move |sensor: String, mode: String, window_sec: i64| {
+                range_stat_fetcher(sensor, mode, window_sec)
+                    .map(|value| value as rhai::FLOAT)
+                    .map_err(|e| {
+                        Box::new(rhai::EvalAltResult::ErrorRuntime(
+                            e.into(),
+                            rhai::Position::NONE,
+                        ))
+                    })
             },
         );
 
@@ -749,14 +756,39 @@ fn main(input) {
             timestamp_ms: 0,
         };
         let res = engine
-            .eval_action_command_with_range_stat(&ast, &input, |sensor, mode, window_sec| {
-                assert_eq!(sensor, "ph");
-                assert_eq!(mode, "mean");
-                assert_eq!(window_sec, 900);
-                7.0
-            })
+            .eval_action_command_with_range_stat(
+                &ast,
+                &input,
+                |sensor, mode, window_sec| -> Result<f64, String> {
+                    assert_eq!(sensor, "ph");
+                    assert_eq!(mode, "mean");
+                    assert_eq!(window_sec, 900);
+                    Ok(7.0)
+                },
+            )
             .unwrap();
         assert!(res.is_some());
+    }
+
+    #[test]
+    fn eval_action_command_blocks_when_range_stat_is_unavailable() {
+        let engine = ScriptEngine::new();
+        let ast = engine
+            .compile(r#"fn main(input) { if fetch_range_stat("ph", "mean", 900) > 6.5 { return #{ "action": "dose", "pump": "PH_DOWN", "dose_ml": 5.0, "pwm": 100 }; } () }"#)
+            .unwrap();
+        let input = ScriptActionInput {
+            ph: 6.0,
+            ec: 1.5,
+            temp: 25.0,
+            water_level: 80.0,
+            phase: "Monitoring".into(),
+            device_id: "d1".into(),
+            timestamp_ms: 0,
+        };
+        let result = engine.eval_action_command_with_range_stat(&ast, &input, |_, _, _| {
+            Err("Influx query failed".to_string())
+        });
+        assert!(result.is_err());
     }
 
     #[tokio::test]

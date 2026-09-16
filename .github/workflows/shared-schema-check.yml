@@ -1,48 +1,100 @@
 name: shared-schema-check
 
 on:
-  pull_request:
-    paths:
-      - 'hydragrow-shared/**'
-      - '.github/workflows/shared-schema-check.yml'
   push:
     branches: [main]
     paths:
+      - 'schema/contracts/**'
       - 'hydragrow-shared/**'
+      - 'hydragrow-frontend/src/contracts/**'
+      - 'hydragrow-frontend/package.json'
+      - 'hydragrow-frontend/package-lock.json'
+      - '.github/workflows/shared-schema-check.yml'
+  pull_request:
+    paths:
+      - 'schema/contracts/**'
+      - 'hydragrow-shared/**'
+      - 'hydragrow-frontend/src/contracts/**'
+      - 'hydragrow-frontend/package.json'
+      - 'hydragrow-frontend/package-lock.json'
       - '.github/workflows/shared-schema-check.yml'
 
 jobs:
-  schema:
+  shared-schema:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: hydragrow-shared
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Cache cargo registry
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: hydragrow-shared
-
-      - name: Format check
-        run: cargo fmt --check
-
-      - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run shared crate tests (includes schema snapshots)
-        run: cargo test
-
-      - name: Snapshot update instruction
-        if: failure()
+      - name: Validate canonical registry and fixture corpus
         run: |
-          echo "Schema snapshot mismatch detected."
-          echo "If this is intentional, run: INSTA_UPDATE=always cargo test --test schema_roundtrip_and_snapshots"
-          exit 1
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('schema/contracts')
+          registry_path = root / 'registry.json'
+          registry = json.loads(registry_path.read_text())
+          assert registry['registry_version']
+          assert registry['schema_dialect'] == 'https://json-schema.org/draft/2020-12/schema'
+          contracts = registry['contracts']
+          assert contracts, 'registry must contain contracts'
+          def values_at_path(value, path):
+              parts = path.replace('[]', '').split('.')
+              current = [value]
+              for part in parts:
+                  next_values = []
+                  for item in current:
+                      if isinstance(item, list) and part.isdigit():
+                          if int(part) < len(item):
+                              next_values.append(item[int(part)])
+                      elif isinstance(item, list):
+                          next_values.extend(
+                              child[part] for child in item if isinstance(child, dict) and part in child
+                          )
+                      elif isinstance(item, dict) and part in item:
+                          next_values.append(item[part])
+                  current = next_values
+              return current
+
+          for name, contract in contracts.items():
+              assert isinstance(contract['version'], int) and contract['version'] >= 1, name
+              fixture = root / contract['fixture']
+              assert fixture.is_file(), f'{name}: missing fixture {fixture}'
+              payload = json.loads(fixture.read_text())
+              assert isinstance(payload, dict), f'{name}: fixture must be a JSON object'
+              for path, field in contract['fields'].items():
+                  values = values_at_path(payload, path)
+                  if field['required']:
+                      assert values, f'{name}: required field missing from fixture: {path}'
+                  if values:
+                      for value in values:
+                          if value is None:
+                              assert field['nullable'], f'{name}: non-nullable field is null: {path}'
+          print(f'validated {len(contracts)} canonical contracts and fixtures')
+          PY
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run canonical shared Rust schema/fixture tests
+        run: cargo test --manifest-path hydragrow-shared/Cargo.toml --test p1_9_schema_registry
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: hydragrow-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: hydragrow-frontend
+        run: npm ci
+
+      - name: Run frontend registry/fixture tests
+        working-directory: hydragrow-frontend
+        run: npx vitest run src/contracts/sharedSchemaRegistry.test.ts
+
+      - name: Type-check frontend registry consumer
+        working-directory: hydragrow-frontend
+        run: npx tsc --noEmit

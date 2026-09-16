@@ -4,7 +4,6 @@ import path from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from './Dashboard';
-import { useDeviceStore } from '../store/useDeviceStore';
 
 vi.mock('../hooks/useFCM', () => ({
   useFCM: () => ({ permission: 'granted', enableNotifications: vi.fn() }),
@@ -16,6 +15,50 @@ vi.mock('../hooks/useSystemHealthSummary', () => ({
   }),
 }));
 
+vi.mock('../hooks/useDeviceTelemetry', () => ({
+  useDeviceTelemetry: () => ({
+    data: {
+      device_id: 'dev-001',
+      availability: 'ONLINE',
+      controller_health: null,
+      fsm: { state: 'Monitoring' },
+      axes: [
+        { name: 'ec', value: 1.2, quality: 'VALID' },
+        { name: 'ph', value: 6, quality: 'VALID' },
+        { name: 'temp', value: 25, quality: 'VALID' },
+        { name: 'water_level', value: 80, quality: 'VALID' },
+      ],
+      actuator: { pump_status: {} },
+    },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
+vi.mock('../hooks/useDeviceConfig', () => ({
+  useDeviceConfig: () => ({
+    data: {
+      control_mode: 'auto',
+      min_ec_limit: 0.5,
+      max_ec_limit: 3,
+      min_ph_limit: 4,
+      max_ph_limit: 8,
+      min_temp_limit: 15,
+      max_temp_limit: 35,
+      water_level_min: 20,
+      water_level_max: 90,
+    },
+  }),
+}));
+
+vi.mock('../hooks/useSystemEvents', () => ({
+  useSystemEvents: () => ({ data: [] }),
+}));
+
+vi.mock('../hooks/useDeviceControl', () => ({
+  useDeviceControl: () => ({ forceOn: vi.fn() }),
+}));
+
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     status: 'authenticated',
@@ -23,6 +66,14 @@ vi.mock('../contexts/AuthContext', () => ({
     error: null,
     login: vi.fn(),
     logout: vi.fn(),
+  }),
+}));
+
+vi.mock('../contexts/StationContext', () => ({
+  useStationContext: () => ({
+    status: 'Selected', selectedDeviceId: 'dev-001', selectedDevice: null,
+    availableDevices: [], error: null, selectDevice: vi.fn(), switchDevice: vi.fn(),
+    clearSelection: vi.fn(), refreshAvailableDevices: vi.fn(),
   }),
 }));
 
@@ -36,34 +87,6 @@ describe('Dashboard pumpColors token', () => {
 
 describe('Dashboard component wiring', () => {
   it('hiển thị QuickActionBar và DosingSummaryCard', () => {
-    useDeviceStore.setState({
-      deviceId: 'dev-001',
-      isLoading: false,
-      isSensorOnline: true,
-      deviceStatus: { is_online: true, last_seen: '2026-09-02T00:00:00Z' },
-      sensorData: {
-        device_id: 'dev-001',
-        time: '2026-09-02T00:00:00Z',
-        ec: 1.2,
-        ph: 6.0,
-        temp: 25.0,
-        water_level: 80,
-        pump_status: {
-          pump_a: false,
-          pump_b: false,
-          ph_up: false,
-          ph_down: false,
-          osaka_pump: false,
-          mist_valve: false,
-          mix_valve: false,
-          water_pump_in: false,
-          water_pump_out: false,
-        },
-      },
-      fsmState: 'Monitoring',
-      settings: { backend_url: 'http://localhost:1420', api_key: 'test', device_id: 'dev-001' },
-    });
-
     render(
       <MemoryRouter>
         <Dashboard />

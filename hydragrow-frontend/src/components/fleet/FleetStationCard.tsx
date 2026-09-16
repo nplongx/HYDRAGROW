@@ -1,4 +1,5 @@
 import { Wifi, AlertTriangle, ChevronRight, Activity, Clock } from 'lucide-react';
+import type { OperationalState } from '../../types/models';
 
 export interface FleetStationCardDevice {
   device_id: string;
@@ -6,6 +7,7 @@ export interface FleetStationCardDevice {
   is_online?: boolean;
   last_seen?: string;
   firmware_version?: string;
+  operational_state?: OperationalState;
 }
 
 export interface FleetStationCardSummary {
@@ -82,7 +84,9 @@ function getPhStatusClass(ph: number | null | undefined): { bg: string; text: st
 }
 
 export function FleetStationCard({ device, summary, onSelect }: FleetStationCardProps) {
-  const isOnline = Boolean(device.is_online);
+  const isOnline = device.operational_state?.contact === 'CONTACTED' && device.operational_state?.freshness === 'FRESH';
+  const isOffline = device.operational_state?.contact === 'NOT_CONTACTED';
+  const isUnknown = !isOnline && !isOffline;
   const warningCount = summary?.warning_count ?? 0;
   const label = device.label || device.device_id;
   const ec = summary?.ec_latest;
@@ -92,7 +96,7 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
   const ecStyle = getEcStatusClass(ec);
   const phStyle = getPhStatusClass(ph);
 
-  const ariaLabel = `Trạm ${label}: ${isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}${
+  const ariaLabel = `Trạm ${label}: ${isOnline ? 'Đang hoạt động' : isOffline ? 'Ngoại tuyến' : 'Chưa rõ trạng thái'}${
     warningCount > 0 ? `, ${warningCount} cảnh báo` : ''
   }${ec !== null && ec !== undefined ? `, EC ${ec.toFixed(1)}` : ''}${
     ph !== null && ph !== undefined ? `, pH ${ph.toFixed(1)}` : ''
@@ -115,14 +119,14 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={`relative flex h-3 w-3 flex-shrink-0`}
-              title={isOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+              title={isOnline ? 'Trực tuyến' : isOffline ? 'Ngoại tuyến' : 'Chưa rõ trạng thái'}
             >
               {isOnline && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status opacity-75" />
               )}
               <span
                 className={`relative inline-flex rounded-full h-3 w-3 ${
-                  isOnline ? 'bg-status' : 'bg-gray-300'
+                  isOnline ? 'bg-status' : isUnknown ? 'bg-text-muted' : 'bg-gray-300'
                 }`}
               />
             </span>
@@ -186,10 +190,15 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
               <Wifi size={12} />
               Trực tuyến
             </span>
-          ) : (
+          ) : isOffline ? (
             <span className="flex items-center gap-1">
               <Clock size={12} />
               {formatRelativeTime(device.last_seen)}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-text-muted">
+              <Clock size={12} />
+              Chưa rõ trạng thái
             </span>
           )}
         </div>

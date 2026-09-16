@@ -556,7 +556,12 @@ pub fn log_drop_counter() -> &'static AtomicU32 {
 mod send_system_log_tests {
     use super::*;
     use hydragrow_shared::log::BasicSystemLogMetadata;
-    use std::sync::mpsc::channel;
+    use std::sync::{Mutex, OnceLock, mpsc::channel};
+
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
 
     fn sample_event() -> SystemLogEvent {
         SystemLogEvent::BasicSystemLog(BasicSystemLogMetadata {
@@ -569,8 +574,10 @@ mod send_system_log_tests {
 
     #[test]
     fn send_system_log_increments_drop_count_when_channel_closed() {
+        let _guard = test_lock();
         let (tx, rx) = channel::<String>();
         drop(rx); // simulate a closed/full MQTT channel on the other end
+        LOG_DROP_COUNT.store(0, Ordering::Relaxed);
 
         let before = get_log_drop_count();
         send_system_log(
@@ -592,7 +599,9 @@ mod send_system_log_tests {
 
     #[test]
     fn send_system_log_does_not_increment_drop_count_on_success() {
+        let _guard = test_lock();
         let (tx, rx) = channel::<String>();
+        LOG_DROP_COUNT.store(0, Ordering::Relaxed);
 
         let before = get_log_drop_count();
         send_system_log(

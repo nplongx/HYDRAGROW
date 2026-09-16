@@ -1,0 +1,26 @@
+{
+  "requirement_id": "P1.10-OBSERVABILITY-CROSS-SYSTEM-SYNC",
+  "objective": "Add truthful observability and cross-system synchronization semantics across backend, PostgreSQL, MQTT, firmware, WebSocket, and frontend without making diagnostics authoritative.",
+  "acceptance": [
+    {"id":"AC-1","criterion":"Observability remains diagnostic; authoritative state remains in its declared domain.","verification":"Source/spec inspection and evidence review"},
+    {"id":"AC-2","criterion":"Documentation distinguishes deployed infrastructure from proposed integrations.","verification":"Spec and evidence review"},
+    {"id":"AC-3","criterion":"Supported cross-system operations preserve correlation_id while keeping request_id, trace_id, command_id, event_id, and config version distinct.","verification":"Backend/frontend contract and focused tests"},
+    {"id":"AC-4","criterion":"Supported backend boundaries propagate trace context without using it as business identity or authorization.","verification":"Backend observability tests and source inspection"},
+    {"id":"AC-5","criterion":"Synchronization-sensitive observations have explicit freshness rules and stale observations do not become current.","verification":"topic_last_seen regression test and frontend sync tests"},
+    {"id":"AC-6","criterion":"Desired, observed/applied, cached, transport, and synchronization state are distinguished where implemented.","verification":"Contract/source inspection"},
+    {"id":"AC-7","criterion":"Delayed or out-of-order observations cannot overwrite newer authoritative state.","verification":"topic_last_seen and frontend synchronization tests"},
+    {"id":"AC-8","criterion":"Stable identities are used to prevent duplicate logical processing where implemented.","verification":"Backend lifecycle and shared contract tests"},
+    {"id":"AC-9","criterion":"Actual delivery guarantees are documented; no unsupported exactly-once guarantee is claimed.","verification":"Spec and evidence review"},
+    {"id":"AC-10","criterion":"Retry/reconciliation behavior is bounded and restart-safe where implemented.","verification":"Backend lifecycle tests and source inspection"},
+    {"id":"AC-11","criterion":"Outbox use is an explicit architecture decision; no unsupported outbox claim is made.","verification":"Spec and evidence review"},
+    {"id":"AC-12","criterion":"WebSocket reconnect recovers from authoritative query state rather than treating the stream as complete history.","verification":"useDeviceSync focused tests"},
+    {"id":"AC-13","criterion":"MQTT reconnect restores subscriptions without fabricating device state.","verification":"Backend MQTT lifecycle tests and source inspection"},
+    {"id":"AC-14","criterion":"Liveness, dependency readiness, device health, and synchronization health remain distinct.","verification":"Backend observability focused tests"},
+    {"id":"AC-15","criterion":"New metric labels have bounded cardinality and do not contain correlation/request/command IDs or arbitrary payloads.","verification":"Observability source inspection and tests"},
+    {"id":"AC-16","criterion":"Secrets are not added to logs, metrics, traces, diagnostics, or synchronization metadata.","verification":"Source/evidence review"},
+    {"id":"AC-17","criterion":"Backend and frontend caches remain non-authoritative and recover freshness/version semantics where required.","verification":"Frontend sync tests and source inspection"},
+    {"id":"AC-18","criterion":"Executable tests cover applicable cross-system success, duplication, staleness, ordering, failure, and recovery behavior.","verification":"Repository test suites and evidence contract"},
+    {"id":"AC-19","criterion":"Existing P1.1-P1.9 authorization, lifecycle, safety, state, journal, API/cache, context, and schema invariants remain intact.","verification":"Existing focused tests plus shared/backend/frontend validation"},
+    {"id":"AC-20","criterion":"Acceptance evidence distinguishes PASS, BLOCKED, and unverified runtime claims.","verification":"docs/evidence/P1.10-OBSERVABILITY-CROSS-SYSTEM-SYNC.json review","evidence_required":true}
+  ]
+}

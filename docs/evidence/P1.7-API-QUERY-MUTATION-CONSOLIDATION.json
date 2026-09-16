@@ -1,0 +1,99 @@
+{
+  "phase": "P1.7",
+  "status": "CORE_CONSOLIDATION_IMPLEMENTED_WITH_RUNTIME_TEST_ENVIRONMENT_BLOCKERS",
+  "timestamp": "2026-09-16",
+  "scope": "API Query / Mutation Consolidation",
+  "implementation": {
+    "frontend": [
+      "hydragrow-frontend/src/lib/apiClient.ts",
+      "hydragrow-frontend/src/api/queryKeys.ts",
+      "hydragrow-frontend/src/api/devices.ts",
+      "hydragrow-frontend/src/api/config.ts",
+      "hydragrow-frontend/src/api/telemetry.ts",
+      "hydragrow-frontend/src/api/seasons.ts",
+      "hydragrow-frontend/src/api/recipes.ts",
+      "hydragrow-frontend/src/api/admin.ts",
+      "hydragrow-frontend/src/api/analytics.ts",
+      "hydragrow-frontend/src/api/notifications.ts",
+      "hydragrow-frontend/src/api/journal.ts",
+      "hydragrow-frontend/src/api/deviceSettings.ts",
+      "hydragrow-frontend/src/hooks/useDeviceConfig.ts",
+      "hydragrow-frontend/src/hooks/useDeviceTelemetry.ts",
+      "hydragrow-frontend/src/hooks/useCropSeason.ts",
+      "hydragrow-frontend/src/hooks/useRecipes.ts",
+      "hydragrow-frontend/src/hooks/useAnalytics.ts",
+      "hydragrow-frontend/src/hooks/useAdminUsers.ts",
+      "hydragrow-frontend/src/hooks/useRecipes.test.tsx",
+      "hydragrow-frontend/src/hooks/useAdminUsers.test.tsx",
+      "hydragrow-frontend/src/api/deviceSettings.test.ts",
+      "hydragrow-frontend/src/lib/apiClient.test.ts",
+      "hydragrow-frontend/src/api/admin.test.ts",
+      "hydragrow-frontend/src/hooks/useAnalytics.test.tsx",
+      "hydragrow-frontend/src/hooks/useCropSeason.test.tsx",
+      "hydragrow-frontend/src/hooks/useDeviceDataArchitecture.test.ts"
+    ],
+    "backend": [
+      "hydragrow-backend/src/api/error.rs",
+      "hydragrow-backend/src/api/config.rs",
+      "hydragrow-backend/src/api/mod.rs",
+      "hydragrow-backend/src/main.rs"
+    ],
+    "inventory": [
+      "docs/evidence/P1.7-api-inventory-worker-7.json"
+    ]
+  },
+  "verified": {
+    "frontend_focused_tests": "PASS: 39/39 in the latest combined P1.7 migration/contract suite; earlier P1.7 focused suites also passed",
+    "frontend_typescript": "PASS after migration batch",
+    "frontend_build": "PASS; existing Vite chunk-size warning",
+    "backend_cargo_check": "PASS",
+    "backend_error_tests": "PASS: 6/6",
+    "backend_full_tests": "FAIL: 324 passed, 85 failed; failures are PostgreSQL test-environment/migration storage failures, including project size limit and missing device_config during test migration",
+    "route_compat_tests": "PASS: canonical_safety_and_water_routes_are_registered; legacy_safety_post_remains_registered_for_compatibility",
+    "git_diff_check": "PASS where run on P1.7 touched files",
+    "full_frontend_suite": "NOT GREEN: 3 unrelated failures observed by audit (EventLogCard.test.tsx 2, OrphanedPagesRoutes.test.tsx 1)"
+  },
+  "implemented_contracts": {
+    "frontend_transport": "Single apiClient transport with typed ApiError, canonical error parsing, timeout and AbortSignal support",
+    "domain_access": "Domain API modules for devices/config/telemetry/seasons/recipes/admin/analytics/notifications/journal/device-settings; production direct generic-client call sites removed outside canonical src/api modules",
+    "query_keys": "Device identity included in canonical config/telemetry/season keys; deterministic Journal key coverage added",
+    "mutation_invalidation": "Season and recipe mutations explicitly invalidate affected device/resource query families; bulk recipe apply invalidates every targeted device recipe-status key",
+    "device_isolation": "Config/telemetry/Journal query-key isolation tested across Device A/B; device-targeted recipe invalidation is explicit",
+    "backend_errors": "Canonical error envelope with stable status codes, bounded fields, request ID support, and 5xx sanitization",
+    "compatibility": "Canonical safety/water config GET/PUT routes added while legacy routes remain additive aliases",
+    "commands": "Existing command routes remain explicit; no conversion to generic CRUD mutation",
+    "authorization": "Existing P1.1 handler/middleware authorization path preserved"
+  },
+  "acceptance": {
+    "AC-1": "PASS for production HydraGrow generic-client call sites: direct apiGet/apiPost/apiPut/apiPatch/apiDelete calls are confined to canonical src/api modules; command/stream ownership remains explicit",
+    "AC-2": "PASS: apiClient remains low-level transport boundary",
+    "AC-3": "PASS for migrated device-scoped hooks and tested A/B isolation",
+    "AC-4": "PASS for audited production frontend call sites; pages/components delegate to canonical domain API modules/hooks",
+    "AC-5": "PASS for migrated mutations with explicit invalidation policies",
+    "AC-6": "PASS by policy and existing command/operational-state boundaries",
+    "AC-7": "PASS: frontend ApiError",
+    "AC-8": "PASS: backend canonical error middleware",
+    "AC-9": "PASS: route/device ownership boundaries preserved",
+    "AC-10": "PASS by existing P1.1 bulk authorization semantics; no bypass introduced",
+    "AC-11": "PASS: commands remain distinct",
+    "AC-12": "PASS: mutation success is not used as authoritative physical state",
+    "AC-13": "PASS: P1.6 Journal contract preserved",
+    "AC-14": "PASS: retained aliases delegate to existing handlers",
+    "AC-15": "PASS for migrated client transport; no blind mutation retry introduced",
+    "AC-16": "PASS for tested migrated query/mutation cache paths; no production direct generic-client calls remain outside src/api",
+    "AC-17": "PASS for audited production frontend call sites: zero direct generic HydraGrow API-client calls remain outside src/api; external Cloudinary fetch is documented as external ingress",
+    "AC-18": "PARTIAL: focused migration/contract/cache tests pass; full runtime integration remains blocked by database test environment",
+    "AC-19": "PASS: no P1.8/P1.9/P1.10 redesign introduced"
+  },
+  "known_blockers": [
+    "Full backend test suite cannot be treated as green because PostgreSQL-backed tests fail in the current environment; observed failures include migration setup relation errors and external 512 MB project-size limit.",
+    "Full frontend suite has three unrelated existing failures outside the P1.7 implementation scope.",
+    "P1.7 direct-call migration completed for the audited production frontend surface; remaining work is integration-environment verification and any newly discovered non-canonical server-state owner."
+  ],
+  "notes": [
+    "No commit created.",
+    "All pre-existing dirty worktree changes were preserved.",
+    "P1.7 implementation did not modify database migrations.",
+    "P1.9 shared/generated schema alignment remains out of scope."
+  ]
+}

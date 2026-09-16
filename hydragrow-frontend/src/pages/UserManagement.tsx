@@ -1,14 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Shield, Save } from 'lucide-react';
-import { apiGet, apiPost } from '../lib/apiClient';
-
-interface ScopeInfo {
-  scope: string;
-  description: string;
-}
+import { useAdminScopes, useAdminUsers } from '../hooks/useAdminUsers';
 
 export function UserManagement() {
-  const [scopes, setScopes] = useState<ScopeInfo[]>([]);
   const [firebaseUid, setFirebaseUid] = useState('');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -16,9 +10,8 @@ export function UserManagement() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    apiGet<ScopeInfo[]>('/admin/scopes').then(setScopes).catch(() => {});
-  }, []);
+  const { data: scopes = [] } = useAdminScopes();
+  const { provisionUser } = useAdminUsers();
 
   function toggleScope(scope: string) {
     setSelectedScopes((prev) =>
@@ -34,7 +27,7 @@ export function UserManagement() {
     setLoading(true);
     setMessage(null);
     try {
-      await apiPost('/admin/users', {
+      await provisionUser({
         firebase_uid: firebaseUid.trim(),
         email: email.trim(),
         display_name: displayName.trim() || null,

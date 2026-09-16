@@ -21,6 +21,6 @@
     {"id":"AC-17","criterion":"Backend and frontend caches remain non-authoritative and recover freshness/version semantics where required.","verification":"Frontend sync tests and source inspection"},
     {"id":"AC-18","criterion":"Executable tests cover applicable cross-system success, duplication, staleness, ordering, failure, and recovery behavior.","verification":"Repository test suites and evidence contract"},
     {"id":"AC-19","criterion":"Existing P1.1-P1.9 authorization, lifecycle, safety, state, journal, API/cache, context, and schema invariants remain intact.","verification":"Existing focused tests plus shared/backend/frontend validation"},
-    {"id":"AC-20","criterion":"Acceptance evidence distinguishes PASS, BLOCKED, and unverified runtime claims.","verification":"docs/evidence/P1.10-OBSERVABILITY-CROSS-SYSTEM-SYNC.json review"}
+    {"id":"AC-20","criterion":"Acceptance evidence distinguishes PASS, BLOCKED, and unverified runtime claims.","verification":"docs/evidence/P1.10-OBSERVABILITY-CROSS-SYSTEM-SYNC.json review","evidence_required":true}
   ]
 }

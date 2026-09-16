@@ -556,7 +556,7 @@ pub fn log_drop_counter() -> &'static AtomicU32 {
 mod send_system_log_tests {
     use super::*;
     use hydragrow_shared::log::BasicSystemLogMetadata;
-    use std::sync::{mpsc::channel, Mutex, OnceLock};
+    use std::sync::{Mutex, OnceLock, mpsc::channel};
 
     fn test_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();

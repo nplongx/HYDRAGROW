@@ -186,6 +186,7 @@ impl CommandStateSnapshot {
     }
 }
 
+#[allow(dead_code)]
 pub fn process_mqtt_commands(
     cmd_rx: &Receiver<MqttCommandIn>,
     config: &ControllerConfig,
@@ -719,7 +720,7 @@ fn is_duplicate_persistent_command(
     nvs.get_str(PROCESSED_COMMAND_IDS_KEY, &mut buffer)
         .ok()
         .flatten()
-        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok())
         .is_some_and(|ids| ids.iter().any(|id| id == command_id))
 }
 
@@ -737,7 +738,7 @@ pub(crate) fn mark_persistent_command_processed(
         .get_str(PROCESSED_COMMAND_IDS_KEY, &mut buffer)
         .ok()
         .flatten()
-        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok())
         .unwrap_or_default();
     if ids.iter().any(|id| id == command_id) {
         return;

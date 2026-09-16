@@ -16,7 +16,7 @@ use crate::metrics::BACKUP_RESTORE_TOTAL;
 
 #[cfg(test)]
 async fn ensure_config_backup_test_schema(pool: &sqlx::PgPool) {
-    sqlx::migrate!("migrations")
+    sqlx::migrate!()
         .run(pool)
         .await
         .expect("test database migrations must apply");

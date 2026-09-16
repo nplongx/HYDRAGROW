@@ -24,7 +24,7 @@ fn factory_device_id() -> String {
             mac.as_mut_ptr(),
             esp_idf_sys::esp_mac_type_t_ESP_MAC_WIFI_STA,
         );
-        if err == esp_idf_sys::ESP_OK as i32 {
+        if err == esp_idf_sys::ESP_OK {
             return hydragrow_controller_core::device_identity::format_factory_id(&mac);
         }
     }

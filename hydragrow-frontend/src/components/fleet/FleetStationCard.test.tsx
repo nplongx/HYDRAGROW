@@ -1,14 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { FleetStationCard, formatRelativeTime } from './FleetStationCard';
+import type { FleetStationCardDevice } from './FleetStationCard';
 
 describe('FleetStationCard', () => {
-  const mockDevice = {
+  const mockDevice: FleetStationCardDevice = {
     device_id: 'esp32_01',
     label: 'Trạm Thủy Canh 1',
     is_online: true,
     last_seen: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     firmware_version: 'v1.4.2',
+    operational_state: { contact: 'CONTACTED', freshness: 'FRESH', readiness: 'UNKNOWN', actuator: 'UNKNOWN', classified_at: new Date().toISOString(), observed_at: new Date().toISOString() } as const,
   };
 
   const mockSummary = {

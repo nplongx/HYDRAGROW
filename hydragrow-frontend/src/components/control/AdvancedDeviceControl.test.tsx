@@ -10,7 +10,7 @@ vi.mock('../../hooks/useDeviceControl', () => ({
     setPwm: vi.fn(),
     forceOn: vi.fn(),
     processingPumpIds: {},
-    commandStatus: { PH_UP: 'sending' },
+    commandStatus: { PH_UP: 'SENT' },
   }),
 }));
 

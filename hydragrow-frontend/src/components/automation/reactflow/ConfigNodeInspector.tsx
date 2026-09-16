@@ -1,17 +1,26 @@
 import { useState } from "react";
 import { AlertTriangle, ShieldCheck, X, RefreshCw } from "lucide-react";
-import { DEVICE_CONFIG_BOUNDS, clampConfigValue } from "../../../lib/automation/ir";
-import { useDeviceStore } from "../../../store/useDeviceStore";
+import {
+  DEVICE_CONFIG_BOUNDS,
+  clampConfigValue,
+} from "../../../lib/automation/ir";
+import { useDeviceConfig } from "../../../hooks/useDeviceConfig";
 import type { ConfigAuditLogEntry } from "../../../types/automation";
 
 interface Props {
+  deviceId?: string | null;
   initialKey?: string;
   initialValue?: number;
   initialAutoRestore?: boolean;
   initialPriority?: number;
   conditionSummary?: string;
   auditLogs?: ConfigAuditLogEntry[];
-  onSave?: (data: { configKey: string; overrideValue: number; autoRestore: boolean; priority: number }) => void;
+  onSave?: (data: {
+    configKey: string;
+    overrideValue: number;
+    autoRestore: boolean;
+    priority: number;
+  }) => void;
   onClose: () => void;
 }
 
@@ -24,13 +33,14 @@ export function ConfigNodeInspector({
   auditLogs = [],
   onSave,
   onClose,
+  deviceId,
 }: Props) {
   const [configKey, setConfigKey] = useState(initialKey);
   const [overrideValue, setOverrideValue] = useState<number>(initialValue);
   const [autoRestore, setAutoRestore] = useState(initialAutoRestore);
   const [priority, setPriority] = useState<number>(initialPriority);
 
-  const settings = useDeviceStore((s) => s.settings);
+  const { data: settings } = useDeviceConfig(deviceId);
 
   const bound = DEVICE_CONFIG_BOUNDS[configKey] ?? {
     min: 0.8,
@@ -41,10 +51,10 @@ export function ConfigNodeInspector({
     defaultVal: 2.4,
   };
 
-  const currentOriginalVal = (settings && typeof (settings as any)[configKey] === "number")
-    ? (settings as any)[configKey]
-    : bound.defaultVal;
-
+  const currentOriginalVal =
+    settings && typeof (settings as any)[configKey] === "number"
+      ? (settings as any)[configKey]
+      : bound.defaultVal;
 
   const handleValueChange = (valStr: string) => {
     const n = parseFloat(valStr);
@@ -53,7 +63,10 @@ export function ConfigNodeInspector({
     }
   };
 
-  const { value: clampedVal, clamped } = clampConfigValue(configKey, overrideValue);
+  const { value: clampedVal, clamped } = clampConfigValue(
+    configKey,
+    overrideValue,
+  );
 
   const percentage = Math.max(
     0,
@@ -71,14 +84,17 @@ export function ConfigNodeInspector({
                 NODE MỚI
               </span>
               <span className="text-xs text-emerald-800/60 font-medium">
-                Panel chi tiết trong Flow Editor · Thay thế NodeEditorPanel khi chọn node Config
+                Panel chi tiết trong Flow Editor · Thay thế NodeEditorPanel khi
+                chọn node Config
               </span>
             </div>
             <h2 className="text-xl font-bold text-emerald-950">
               Đọc & Ghi đè Config theo điều kiện
             </h2>
             <p className="text-xs text-emerald-800/70 mt-1">
-              Cho phép Flow đọc giá trị cấu hình hiện tại của thiết bị, và ghi đè có kiểm soát khi điều kiện của Flow đúng — có giới hạn an toàn, chế độ áp dụng, và tự động khôi phục.
+              Cho phép Flow đọc giá trị cấu hình hiện tại của thiết bị, và ghi
+              đè có kiểm soát khi điều kiện của Flow đúng — có giới hạn an toàn,
+              chế độ áp dụng, và tự động khôi phục.
             </p>
           </div>
 
@@ -124,7 +140,10 @@ export function ConfigNodeInspector({
                 </div>
 
                 <div className="text-[11px] text-emerald-800/70">
-                  Thuộc nhóm: <span className="font-medium text-emerald-950">{bound.sourceGroup}</span>
+                  Thuộc nhóm:{" "}
+                  <span className="font-medium text-emerald-950">
+                    {bound.sourceGroup}
+                  </span>
                 </div>
 
                 <div className="bg-white rounded-xl p-3 border border-emerald-100">
@@ -147,7 +166,9 @@ export function ConfigNodeInspector({
                   </div>
                   <div className="flex items-center justify-between text-xs font-medium text-emerald-950">
                     <span>Min {bound.min}</span>
-                    <span>Max {bound.max} {bound.unit}</span>
+                    <span>
+                      Max {bound.max} {bound.unit}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -167,7 +188,9 @@ export function ConfigNodeInspector({
               </div>
 
               <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3 mb-4">
-                <div className="font-semibold text-xs text-amber-950">Điều kiện của Flow</div>
+                <div className="font-semibold text-xs text-amber-950">
+                  Điều kiện của Flow
+                </div>
                 <div className="text-[11px] text-amber-900/80 font-mono mt-0.5">
                   {conditionSummary}
                 </div>
@@ -184,7 +207,10 @@ export function ConfigNodeInspector({
                     onChange={(e) => setAutoRestore(e.target.checked)}
                     className="text-emerald-600 rounded"
                   />
-                  <span>Tự động khôi phục giá trị gốc ({bound.defaultVal} {bound.unit})</span>
+                  <span>
+                    Tự động khôi phục giá trị gốc ({bound.defaultVal}{" "}
+                    {bound.unit})
+                  </span>
                 </label>
               </div>
             </div>
@@ -222,7 +248,10 @@ export function ConfigNodeInspector({
                 {clamped && (
                   <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Giá trị vượt cận biên! Tự động kẹp về {clampedVal} {bound.unit}</span>
+                    <span>
+                      Giá trị vượt cận biên! Tự động kẹp về {clampedVal}{" "}
+                      {bound.unit}
+                    </span>
                   </div>
                 )}
 
@@ -235,7 +264,8 @@ export function ConfigNodeInspector({
                     />
                   </div>
                   <div className="text-[11px] text-emerald-800/60 mt-1.5">
-                    Khoảng cho phép: {bound.min} – {bound.max} {bound.unit} (kẹp cứng theo schema thiết bị)
+                    Khoảng cho phép: {bound.min} – {bound.max} {bound.unit} (kẹp
+                    cứng theo schema thiết bị)
                   </div>
                 </div>
 
@@ -247,7 +277,9 @@ export function ConfigNodeInspector({
                     type="number"
                     aria-label="Priority"
                     value={priority}
-                    onChange={(e) => setPriority(parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) =>
+                      setPriority(parseInt(e.target.value, 10) || 0)
+                    }
                     className="ui-input text-xs w-full font-medium"
                   />
                 </div>
@@ -258,7 +290,8 @@ export function ConfigNodeInspector({
                     <AlertTriangle className="w-3.5 h-3.5" />
                     CẢNH BÁO AN TOÀN
                   </div>
-                  Nếu 2 Flow cùng ghi đè 1 config key, Flow có priority cao hơn sẽ thắng — xung đột được ghi vào nhật ký.
+                  Nếu 2 Flow cùng ghi đè 1 config key, Flow có priority cao hơn
+                  sẽ thắng — xung đột được ghi vào nhật ký.
                 </div>
               </div>
             </div>
@@ -304,10 +337,12 @@ export function ConfigNodeInspector({
                 </tr>
               </thead>
               <tbody className="divide-y divide-emerald-50 text-[11px]">
-                {((auditLogs ?? []).filter((l) => l.configKey === configKey)).length === 0 ? (
+                {(auditLogs ?? []).filter((l) => l.configKey === configKey)
+                  .length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-6 text-center text-slate-500">
-                      Chưa có nhật ký ghi đè nào cho tham số này. Nhật ký sẽ được ghi nhận khi Flow kích hoạt.
+                      Chưa có nhật ký ghi đè nào cho tham số này. Nhật ký sẽ
+                      được ghi nhận khi Flow kích hoạt.
                     </td>
                   </tr>
                 ) : (
@@ -315,10 +350,18 @@ export function ConfigNodeInspector({
                     .filter((l) => l.configKey === configKey)
                     .map((log) => (
                       <tr key={log.id} className="hover:bg-emerald-50/20">
-                        <td className="py-2 px-3 font-mono text-slate-500">{log.timestamp}</td>
-                        <td className="py-2 px-3 text-slate-600">{log.originalValue} {bound.unit}</td>
-                        <td className="py-2 px-3 font-bold text-indigo-700">{log.overrideValue} {bound.unit}</td>
-                        <td className="py-2 px-3 text-slate-700">{log.reason}</td>
+                        <td className="py-2 px-3 font-mono text-slate-500">
+                          {log.timestamp}
+                        </td>
+                        <td className="py-2 px-3 text-slate-600">
+                          {log.originalValue} {bound.unit}
+                        </td>
+                        <td className="py-2 px-3 font-bold text-indigo-700">
+                          {log.overrideValue} {bound.unit}
+                        </td>
+                        <td className="py-2 px-3 text-slate-700">
+                          {log.reason}
+                        </td>
                         <td className="py-2 px-3">
                           {log.status === "applied" && (
                             <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
@@ -332,7 +375,8 @@ export function ConfigNodeInspector({
                           )}
                           {log.status === "clamped_warning" && (
                             <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5" /> Cảnh báo - Đã kẹp
+                              <AlertTriangle className="w-3.5 h-3.5" /> Cảnh báo
+                              - Đã kẹp
                             </span>
                           )}
                         </td>
@@ -340,7 +384,6 @@ export function ConfigNodeInspector({
                     ))
                 )}
               </tbody>
-
             </table>
           </div>
         </div>

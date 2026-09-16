@@ -16,10 +16,10 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import QRCode from 'react-qr-code';
 import toast from 'react-hot-toast';
-import { apiPost, apiDelete, apiPut, apiGet } from '../lib/apiClient';
+import { devicesApi, type DeviceStatus } from '../api/devices';
 import { useOwnedDevices } from '../hooks/useOwnedDevices';
-import { useDeviceStore } from '../store/useDeviceStore';
-import type { OwnedDevice, StatusPayload } from '../types/models';
+import { useStationContext } from '../contexts/StationContext';
+import type { OwnedDevice } from '../types/models';
 import { Banner } from '../components/ui/Banner';
 import {
   ScanConfirmOverlay,
@@ -47,9 +47,7 @@ export function parseDeviceIdFromQr(raw: string): string {
 
 export function DevicePairing() {
   const { devices, loading, error, refresh } = useOwnedDevices();
-
-  const activeDeviceId = useDeviceStore((s) => s.deviceId);
-  const setDeviceId = useDeviceStore((s) => s.setDeviceId);
+  const { selectedDeviceId: activeDeviceId, selectDevice: setDeviceId, clearSelection } = useStationContext();
 
   const [newDeviceId, setNewDeviceId] = useState('');
   const [newLabel, setNewLabel] = useState('');
@@ -72,7 +70,7 @@ export function DevicePairing() {
   const [renameValue, setRenameValue] = useState('');
 
   // Device status map (online/offline)
-  const [deviceStatuses, setDeviceStatuses] = useState<Record<string, StatusPayload>>({});
+  const [deviceStatuses, setDeviceStatuses] = useState<Record<string, DeviceStatus>>({});
 
   useEffect(() => {
     return () => {
@@ -89,7 +87,7 @@ export function DevicePairing() {
   useEffect(() => {
     if (!devices.length) return;
     devices.forEach((d) => {
-      apiGet<StatusPayload>(`/devices/${d.device_id}/status`)
+      devicesApi.status(d.device_id)
         .then((res) => {
           setDeviceStatuses((prev) => ({ ...prev, [d.device_id]: res }));
         })
@@ -147,10 +145,7 @@ export function DevicePairing() {
     setSubmitting(true);
     setFormError(null);
     try {
-      const res = await apiPost<{ device_id: string; label: string | null; qr_payload: string }>(
-        '/devices/claim',
-        { device_id: deviceIdToClaim.trim(), label: labelToClaim?.trim() || null }
-      );
+      const res = await devicesApi.claim(deviceIdToClaim.trim(), labelToClaim?.trim() || null);
       toast.success(`Đã ghép nối thiết bị ${res.device_id} thành công!`);
       setQrPayload(res.qr_payload);
       setNewDeviceId('');
@@ -171,9 +166,9 @@ export function DevicePairing() {
     if (!confirm(`Xác nhận huỷ liên kết thiết bị ${deviceId}?`)) return;
     setSubmitting(true);
     try {
-      await apiDelete(`/devices/${deviceId}/claim`);
+      await devicesApi.unclaim(deviceId);
       toast.success(`Đã huỷ liên kết ${deviceId}`);
-      if (activeDeviceId === deviceId) setDeviceId(null);
+      if (activeDeviceId === deviceId) clearSelection();
       await refresh();
     } catch (e: any) {
       toast.error(e.message);
@@ -184,7 +179,7 @@ export function DevicePairing() {
 
   async function saveRename(deviceId: string) {
     try {
-      await apiPut(`/devices/${deviceId}/label`, { label: renameValue.trim() || null });
+      await devicesApi.rename(deviceId, renameValue.trim() || null);
       toast.success('Đã cập nhật tên trạm');
       setRenamingId(null);
       await refresh();
@@ -313,7 +308,8 @@ export function DevicePairing() {
           {devices.map((d) => {
             const isActive = activeDeviceId === d.device_id;
             const status = deviceStatuses[d.device_id];
-            const isOnline = status?.is_online ?? false;
+            const isOnline = status?.operational_state?.contact === 'CONTACTED' && status?.operational_state?.freshness === 'FRESH';
+            const isOffline = status?.operational_state?.contact === 'NOT_CONTACTED';
             const confirmCode = deriveConfirmationCode(d.device_id);
 
             return (
@@ -380,7 +376,7 @@ export function DevicePairing() {
                         }`}
                       />
                       <span className={isOnline ? 'text-status font-medium' : 'text-text-muted'}>
-                        {isOnline ? 'Trực tuyến' : 'Ngoại tuyến'}
+                        {isOnline ? 'Trực tuyến' : isOffline ? 'Ngoại tuyến' : 'Chưa rõ'}
                       </span>
                     </span>
                     {status?.last_seen && (

@@ -2,8 +2,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { OnboardingWizard } from './OnboardingWizard';
-import { useDeviceStore } from '../../store/useDeviceStore';
 import { ONBOARDING_STORAGE_KEY } from '../../hooks/useOnboardingState';
+
+const onboardingMocks = vi.hoisted(() => ({
+  availableDevices: [] as any[],
+  telemetry: undefined as any,
+}));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -14,14 +18,27 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+vi.mock('../../contexts/StationContext', () => ({
+  useStationContext: () => ({
+    status: onboardingMocks.availableDevices.length ? 'Selected' : 'NoSelection',
+    selectedDeviceId: onboardingMocks.availableDevices[0]?.device_id ?? null,
+    selectedDevice: onboardingMocks.availableDevices[0] ?? null,
+    availableDevices: onboardingMocks.availableDevices,
+    error: null,
+    selectDevice: vi.fn(), switchDevice: vi.fn(), clearSelection: vi.fn(), refreshAvailableDevices: vi.fn(),
+  }),
+}));
+
+vi.mock('../../hooks/useDeviceTelemetry', () => ({
+  useDeviceTelemetry: () => ({ data: onboardingMocks.telemetry }),
+}));
+
 describe('OnboardingWizard', () => {
   beforeEach(() => {
     localStorage.clear();
     mockNavigate.mockReset();
-    useDeviceStore.setState({
-      sensorData: null,
-      ownedDevices: [],
-    });
+    onboardingMocks.availableDevices = [];
+    onboardingMocks.telemetry = undefined;
   });
 
   const renderWizard = () => {
@@ -72,13 +89,11 @@ describe('OnboardingWizard', () => {
     expect(stored.dismissed).toBe(true);
   });
 
-  it('tự động hoàn thành bước 2 khi có ownedDevices trong store', () => {
+  it('tự động hoàn thành bước 2 khi có availableDevices trong StationContext', () => {
     act(() => {
-      useDeviceStore.setState({
-        ownedDevices: [
+      onboardingMocks.availableDevices = [
           { id: 1, user_id: 1, device_id: 'dev-001', label: 'Trạm A', claimed_at: '2026-08-24' },
-        ],
-      });
+      ];
     });
 
     renderWizard();
@@ -86,19 +101,9 @@ describe('OnboardingWizard', () => {
     expect(screen.getByText('1/4 bước')).toBeInTheDocument();
   });
 
-  it('tự động hoàn thành bước 3 khi có sensorData trong store (Aha moment)', () => {
+  it('tự động hoàn thành bước 3 khi có telemetry (Aha moment)', () => {
     act(() => {
-      useDeviceStore.setState({
-        sensorData: {
-          ec: 1.8,
-          ph: 6.0,
-          water_temperature: 24.5,
-          air_temperature: 28.0,
-          humidity: 70,
-          water_level: 80,
-          timestamp: '2026-09-13T10:00:00Z',
-        } as any,
-      });
+      onboardingMocks.telemetry = { device_id: 'dev-001', availability: 'ONLINE', axes: [] };
     });
 
     renderWizard();

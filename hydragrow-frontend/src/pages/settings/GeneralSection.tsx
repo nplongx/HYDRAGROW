@@ -2,6 +2,7 @@ import React from 'react';
 import { LockKeyhole, Power } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Switch } from '../../components/ui/Switch';
+import { routePath } from '../../routes';
 
 interface GeneralSectionProps {
   userEmail: string | null | undefined;
@@ -54,7 +55,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </div>
         <button
           type="button"
-          onClick={() => navigate('/roles')}
+          onClick={() => navigate(routePath('roles'))}
           className="ui-btn-md w-full border border-line text-primary-deep bg-white hover:bg-soft flex items-center justify-center gap-2 text-xs"
         >
           Quản lý thành viên &amp; vai trò
@@ -98,7 +99,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
         <button
           type="button"
-          onClick={onGoToPairing ?? (() => navigate('/pairing'))}
+          onClick={onGoToPairing ?? (() => navigate(routePath('pairing')))}
           className="ui-btn-md w-full border border-primary text-primary hover:bg-soft flex items-center justify-center gap-2"
         >
           Ghép thiết bị mới
@@ -112,7 +113,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
         <button
           type="button"
-          onClick={() => navigate('/config-backup')}
+          onClick={() => navigate(routePath('config-backup'))}
           className="ui-btn-md w-full border border-line text-primary-deep bg-white hover:bg-soft flex items-center justify-center gap-2"
         >
           Mở Backup &amp; Restore

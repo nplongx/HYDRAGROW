@@ -17,6 +17,13 @@ export interface SystemEvent {
   metadata?: Record<string, unknown>;
   timestamp: number;
   resolved_at?: string | null;
+  occurred_at?: string;
+  received_at?: string;
+  event_type?: string;
+  source?: string;
+  actor?: { kind?: string; id?: string };
+  reason_code?: string;
+  correlation?: Record<string, unknown>;
 }
 
 interface EventStyle {
@@ -159,21 +166,23 @@ export const EventLogCard = ({
           </div>
         )}
 
-        {hasMetadata && (
+        {(hasMetadata || onOpenDetail || onAcknowledge) && (
           <div className="mt-2.5 pt-2 border-t border-line flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 text-[10px] font-bold text-primary/75 hover:text-primary-deep tracking-wide uppercase transition-colors"
-            >
-              <span>{isExpanded ? 'Thu nhỏ thông số' : 'Xem thông số kỹ thuật'}</span>
-              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
+            {hasMetadata && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="flex items-center gap-1 text-[10px] font-bold text-primary/75 hover:text-primary-deep tracking-wide uppercase transition-colors"
+              >
+                <span>{isExpanded ? 'Thu nhỏ thông số' : 'Xem thông số kỹ thuật'}</span>
+                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            )}
             {onOpenDetail && (
               <button
                 onClick={() => onOpenDetail(ev)}
                 className="flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary-deep tracking-wide uppercase transition-colors"
               >
-                <span>Xem JSON thô</span>
+                <span>Xem chi tiết</span>
               </button>
             )}
             {onAcknowledge && (
@@ -186,7 +195,7 @@ export const EventLogCard = ({
                 <span>{isResolved ? 'Mở lại' : 'Đánh dấu đã xử lý'}</span>
               </button>
             )}
-            {isExpanded && <MetadataRenderer metadata={ev.metadata} />}
+            {isExpanded && hasMetadata && <MetadataRenderer metadata={ev.metadata} />}
           </div>
         )}
       </div>

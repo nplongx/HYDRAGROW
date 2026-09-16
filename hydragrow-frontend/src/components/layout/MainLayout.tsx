@@ -1,22 +1,29 @@
 import React, { useMemo } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { matchPath, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, SlidersHorizontal, Settings, Sprout,
   AlignLeft, Leaf
 } from 'lucide-react';
-import { useDeviceStore } from '../../store/useDeviceStore';
+import type { LucideIcon } from 'lucide-react';
 import { useDeviceSync } from '../../hooks/useDeviceSync';
+import { useDeviceTelemetry } from '../../hooks/useDeviceTelemetry';
+import { useDeviceConfig } from '../../hooks/useDeviceConfig';
+import { useSystemEvents } from '../../hooks/useSystemEvents';
+import { useStationContext } from '../../contexts/StationContext';
 import { SystemEvent } from '../../types/models';
+import { PRIMARY_ROUTE_IDS, routePath, type CanonicalRouteId } from '../../routes';
 
 const MainLayout: React.FC = () => {
   useDeviceSync();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const deviceId = useDeviceStore((state) => state.deviceId);
-  const isSensorOnline = useDeviceStore((state) => state.isSensorOnline);
-  const isMissingConfig = useDeviceStore((state) => state.isMissingConfig);
-  const systemEvents = useDeviceStore((state) => state.systemEvents);
+  const { selectedDeviceId: deviceId } = useStationContext();
+  const { data: telemetry } = useDeviceTelemetry(deviceId);
+  const { isLoading: isConfigLoading, error: configError } = useDeviceConfig(deviceId);
+  const { data: systemEvents = [] } = useSystemEvents(deviceId);
+  const isMissingConfig = Boolean(deviceId) && !isConfigLoading &&
+    (configError as { status?: number } | null)?.status === 404;
 
   const unreadAlertCount = useMemo(() => {
     if (!systemEvents || !Array.isArray(systemEvents)) return 0;
@@ -31,15 +38,16 @@ const MainLayout: React.FC = () => {
   }, [systemEvents]);
 
 
-  const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Tổng quan' },
-    { path: '/operations', icon: SlidersHorizontal, label: 'Vận hành' },
-    { path: '/cultivation', icon: Leaf, label: 'Canh tác' },
-    { path: '/journal', icon: AlignLeft, label: 'Nhật ký', hasBadge: unreadAlertCount > 0 },
-    { path: '/settings', icon: Settings, label: 'Cài đặt' },
-  ];
+  const navMetadata: Record<typeof PRIMARY_ROUTE_IDS[number], { icon: LucideIcon; label: string; hasBadge?: boolean }> = {
+    dashboard: { icon: LayoutDashboard, label: 'Tổng quan' },
+    operations: { icon: SlidersHorizontal, label: 'Vận hành' },
+    cultivation: { icon: Leaf, label: 'Canh tác' },
+    journal: { icon: AlignLeft, label: 'Nhật ký', hasBadge: unreadAlertCount > 0 },
+    settings: { icon: Settings, label: 'Cài đặt' },
+  };
+  const navItems = PRIMARY_ROUTE_IDS.map((id) => ({ id, ...navMetadata[id] }));
 
-  const isActive = (path: string) => location.pathname === path || (path === '/dashboard' && location.pathname === '/');
+  const isActive = (id: CanonicalRouteId) => matchPath({ path: routePath(id), end: false }, location.pathname) !== null;
 
   if (isMissingConfig && location.pathname !== '/settings') {
     return (
@@ -54,7 +62,7 @@ const MainLayout: React.FC = () => {
               Ứng dụng cần cấu hình backend để nhận dữ liệu trực tiếp. Vui lòng kiểm tra lại trong phần Cài đặt.
             </p>
           </div>
-          <button onClick={() => navigate('/settings')} className="ui-btn-primary w-full">
+          <button onClick={() => navigate(routePath('settings'))} className="ui-btn-primary w-full">
             Đi tới Cài đặt
           </button>
         </div>
@@ -76,10 +84,15 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
         <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
-          isSensorOnline ? 'bg-pill text-status' : 'bg-danger-bg text-error'
+          telemetry?.availability === 'ONLINE' ? 'bg-pill text-status' :
+          telemetry?.availability === 'OFFLINE' ? 'bg-danger-bg text-error' : 'bg-soft text-text-muted'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isSensorOnline ? 'bg-status' : 'bg-error'}`} />
-          {isSensorOnline ? 'Đang kết nối' : 'Mất tín hiệu'}
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            telemetry?.availability === 'ONLINE' ? 'bg-status' :
+            telemetry?.availability === 'OFFLINE' ? 'bg-error' : 'bg-faint'
+          }`} />
+          {telemetry?.availability === 'ONLINE' ? 'Đang kết nối' :
+            telemetry?.availability === 'OFFLINE' ? 'Mất tín hiệu' : 'Chưa rõ trạng thái'}
         </div>
       </header>
 
@@ -94,11 +107,11 @@ const MainLayout: React.FC = () => {
 
         <nav aria-label="Điều hướng chính" className="flex flex-col gap-1">
           {navItems.map((item) => {
-            const active = isActive(item.path);
+            const active = isActive(item.id);
             return (
               <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
+                key={item.id}
+                onClick={() => navigate(routePath(item.id))}
                 className={`relative flex w-full items-center gap-2.5 rounded-[10px] px-3.5 py-2.5 text-sm transition-colors ${
                   active
                     ? 'bg-emerald-50 font-semibold text-emerald-800'
@@ -117,8 +130,14 @@ const MainLayout: React.FC = () => {
 
         <div className="mt-auto rounded-xl bg-emerald-50 px-3.5 py-3 space-y-1.5">
           <div className="flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-full ${isSensorOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
-            <span className="text-xs font-bold text-emerald-800">{isSensorOnline ? 'Trạm Online' : 'Trạm Offline'}</span>
+            <span className={`h-2 w-2 rounded-full ${
+              telemetry?.availability === 'ONLINE' ? 'bg-emerald-500' :
+              telemetry?.availability === 'OFFLINE' ? 'bg-red-500' : 'bg-faint'
+            }`} />
+            <span className="text-xs font-bold text-emerald-800">
+              {telemetry?.availability === 'ONLINE' ? 'Trạm Online' :
+                telemetry?.availability === 'OFFLINE' ? 'Trạm Offline' : 'Trạng thái chưa rõ'}
+            </span>
           </div>
           <p className="text-[11px] text-emerald-700/75">ID: {deviceId ?? '—'}</p>
         </div>
@@ -133,11 +152,11 @@ const MainLayout: React.FC = () => {
       <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]">
         <div className="flex items-center justify-between bg-line/80 backdrop-blur-md rounded-full px-3 py-2 border border-white/40 shadow-[0_-8px_24px_rgba(20,83,45,0.07)]">
           {navItems.map((item) => {
-            const active = isActive(item.path);
+            const active = isActive(item.id);
             return (
               <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
+                key={item.id}
+                onClick={() => navigate(routePath(item.id))}
                 aria-current={active ? 'page' : undefined}
                 className={`relative flex flex-col items-center justify-center w-full gap-1 py-1 rounded-full transition-colors ${active ? '' : 'group'}`}
               >

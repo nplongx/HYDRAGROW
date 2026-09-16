@@ -18,15 +18,21 @@ vi.mock('../lib/apiClient', () => ({
 }));
 
 const mockSetDeviceId = vi.fn();
+const mockClearSelection = vi.fn();
 let mockActiveDeviceId: string | null = 'dev-1';
 
-vi.mock('../store/useDeviceStore', () => ({
-  useDeviceStore: vi.fn((selector) =>
-    selector({
-      deviceId: mockActiveDeviceId,
-      setDeviceId: mockSetDeviceId,
-    })
-  ),
+vi.mock('../contexts/StationContext', () => ({
+  useStationContext: () => ({
+    status: mockActiveDeviceId ? 'Selected' : 'NoSelection',
+    selectedDeviceId: mockActiveDeviceId,
+    selectedDevice: null,
+    availableDevices: mockDevices,
+    error: null,
+    selectDevice: mockSetDeviceId,
+    switchDevice: mockSetDeviceId,
+    clearSelection: mockClearSelection,
+    refreshAvailableDevices: vi.fn(),
+  }),
 }));
 
 const mockDevices = [
@@ -61,7 +67,7 @@ describe('DevicePairing & QR Scan Flow', () => {
     mockActiveDeviceId = 'dev-1';
     vi.mocked(apiClient.apiGet).mockImplementation(async (path: string) => {
       if (path.includes('/status')) {
-        return { is_online: true, last_seen: '2026-09-10T10:00:00Z' };
+        return { is_online: true, last_seen: '2026-09-10T10:00:00Z', operational_state: { contact: 'CONTACTED', freshness: 'FRESH', readiness: 'UNKNOWN', actuator: 'UNKNOWN', classified_at: '2026-09-10T10:00:00Z', observed_at: '2026-09-10T10:00:00Z' } };
       }
       return {};
     });

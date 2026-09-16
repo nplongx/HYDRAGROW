@@ -3,11 +3,11 @@ import { ShieldCheck, Box, Download, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
 
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { escape_field_str } from '../../gleam_core/build/dev/javascript/gleam_core/csv.mjs';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
-import { httpFetch } from '../platform/http';
+import { apiGet } from '../lib/apiClient';
 import { saveTextFile } from '../platform/file';
 import {
   totalMlToday,
@@ -20,8 +20,7 @@ import { DosingTotalCard } from '../components/dosing/DosingTotalCard';
 import { DosingAnomalyBanner } from '../components/dosing/DosingAnomalyBanner';
 
 const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
-  const deviceId = useDeviceStore((s) => s.deviceId);
-  const settings = useDeviceStore((s) => s.settings);
+  const { selectedDeviceId: deviceId } = useStationContext();
   const [range, setRange] = useState<'today' | '7d' | '30d'>('today');
 
   const { start, end } = useMemo(() => {
@@ -37,16 +36,13 @@ const DosingHistory = ({ variant = 'standalone' }: { variant?: 'standalone' | 'e
   const { data: records = [], isLoading, isError, error } = useQuery<DosingHistoryRangeRecord[]>({
     queryKey: ['dosing-history-range', deviceId, range],
     queryFn: async () => {
-      if (!deviceId || !settings?.backend_url) return [];
-      const res = await httpFetch(
-        `${settings.backend_url}/api/devices/${deviceId}/analytics/dosing-history?start=${start}&end=${end}`,
-        { headers: { 'X-API-Key': settings.api_key || '' } },
+      if (!deviceId) return [];
+      const json = await apiGet<{ data?: DosingHistoryRangeRecord[] }>(
+        `/devices/${deviceId}/analytics/dosing-history?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
       return json.data || [];
     },
-    enabled: Boolean(deviceId && settings?.backend_url),
+    enabled: Boolean(deviceId),
   });
 
   const totalToday = totalMlToday(records);

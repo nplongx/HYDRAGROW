@@ -12,25 +12,17 @@ import {
   SlidersHorizontal,
   RefreshCw,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/ui/PageHeader';
 import { SubCard } from '../components/ui/SubCard';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { loadAppSettings } from '../platform/settings';
-import { apiGet, apiPut } from '../lib/apiClient';
+import { routePath } from '../routes';
 import { useWhoami } from '../hooks/useWhoami';
 import { Sparkline } from '../components/ui/Sparkline';
 import { useHealthHistory } from '../hooks/useHealthHistory';
-
-export interface DeviceHealthMetrics {
-  free_heap_bytes: number | null;
-  wifi_rssi_dbm: number | null;
-  uptime_seconds: number | null;
-  backend_process_cpu_percent: number | null;
-  last_updated_at: string | null;
-}
+import { useAnalyticsHealth, useUpdateWeeklyReportPreference } from '../hooks/useAnalytics';
 
 export function formatUptime(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || seconds <= 0) return '—';
@@ -53,12 +45,13 @@ export function formatRssi(rssi: number | null | undefined): string {
 }
 
 const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
-  const deviceId = useDeviceStore((s) => s.deviceId);
+  const { selectedDeviceId: deviceId } = useStationContext();
   const [grafanaUrl, setGrafanaUrl] = useState<string>('');
   const [weeklyReport, setWeeklyReport] = useState<boolean>(false);
   const [isUpdatingPref, setIsUpdatingPref] = useState(false);
 
-  const { data: whoami, refetch: refetchWhoami } = useWhoami();
+  const { data: whoami } = useWhoami();
+  const updateWeeklyReportPreference = useUpdateWeeklyReportPreference();
 
   useEffect(() => {
     loadAppSettings().then((settings) => {
@@ -74,28 +67,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
     }
   }, [whoami]);
 
-  const {
-    data: health,
-    isLoading: isHealthLoading,
-    refetch: refetchHealth,
-  } = useQuery<DeviceHealthMetrics>({
-    queryKey: ['device-health', deviceId],
-    queryFn: async () => {
-      if (!deviceId) {
-        return {
-          free_heap_bytes: null,
-          wifi_rssi_dbm: null,
-          uptime_seconds: null,
-          backend_process_cpu_percent: null,
-          last_updated_at: null,
-        };
-      }
-      return apiGet<DeviceHealthMetrics>(`/devices/${deviceId}/analytics/health`);
-    },
-    enabled: Boolean(deviceId),
-    refetchInterval: 15000,
-  });
-
+  const { data: health, isLoading: isHealthLoading, refetch: refetchHealth } = useAnalyticsHealth(deviceId);
   const { record } = useHealthHistory();
   const heapHistory = record('heap', health?.free_heap_bytes ?? null);
   const rssiHistory = record('rssi', health?.wifi_rssi_dbm ?? null);
@@ -109,13 +81,12 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
         ...(whoami?.preferences || {}),
         weekly_report: enabled,
       };
-      await apiPut('/admin/me/preferences', { preferences: nextPrefs });
+      await updateWeeklyReportPreference.mutateAsync(nextPrefs);
       toast.success(
         enabled
           ? 'Đã kích hoạt gửi báo cáo tuần về email của bạn'
           : 'Đã tắt tính năng nhận báo cáo tuần'
       );
-      refetchWhoami();
     } catch {
       setWeeklyReport(!enabled);
       toast.error('Không thể cập nhật tuỳ chọn báo cáo tuần');
@@ -277,7 +248,7 @@ const Analytics = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
           </div>
           <div>
             <Link
-              to="/settings"
+              to={routePath('settings')}
               className="ui-btn-primary inline-flex items-center gap-2 text-xs"
             >
               <SlidersHorizontal size={15} /> Đi tới Cài đặt &gt; Tích hợp để thêm URL

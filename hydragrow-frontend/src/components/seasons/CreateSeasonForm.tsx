@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Sprout, Bookmark, CheckCircle, Droplets } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { InputGroup } from '../ui/InputGroup';
-import { useDeviceStore } from '../../store/useDeviceStore';
-import { httpFetch } from '../../platform/http';
+import { useRecipes } from '../../hooks/useRecipes';
 import { RecipeTemplate } from '../../types/models';
 import toast from 'react-hot-toast';
 
@@ -13,24 +11,12 @@ interface CreateSeasonFormProps {
 }
 
 export const CreateSeasonForm: React.FC<CreateSeasonFormProps> = ({ isLoading, onCreateSeason }) => {
-  const settings = useDeviceStore((s) => s.settings);
   const [newName, setNewName] = useState('');
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeTemplate | null>(null);
   const [newDesc, setNewDesc] = useState('');
 
-  const { data: recipesList = [] } = useQuery<RecipeTemplate[]>({
-    queryKey: ['recipes-templates', settings?.backend_url],
-    enabled: Boolean(settings?.backend_url),
-    queryFn: async () => {
-      const res = await httpFetch(`${settings!.backend_url}/api/recipes`, {
-        headers: { 'X-API-Key': settings?.api_key || '' },
-      });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return json.data || [];
-    },
-  });
+  const { data: recipesList = [] } = useRecipes();
 
   const handleSelectRecipe = (recipeId: string) => {
     setSelectedRecipeId(recipeId);

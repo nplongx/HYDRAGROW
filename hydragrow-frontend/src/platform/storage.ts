@@ -33,3 +33,15 @@ export const setItem = async <T = unknown>(key: string, value: T): Promise<void>
 
   window.localStorage.setItem(key, JSON.stringify(value));
 };
+
+export const removeItem = async (key: string): Promise<void> => {
+  if (isTauriRuntime()) {
+    const { Store } = await import('@tauri-apps/plugin-store');
+    const store = await Store.load(STORE_FILE);
+    await store.delete(key);
+    await store.save();
+    return;
+  }
+
+  window.localStorage.removeItem(key);
+};

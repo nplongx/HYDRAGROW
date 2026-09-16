@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertOctagon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDeviceControl } from '../../hooks/useDeviceControl';
-import { useDeviceStore } from '../../store/useDeviceStore';
+import { useDeviceTelemetry } from '../../hooks/useDeviceTelemetry';
 import { EmergencyStopConfirmDialog } from './EmergencyStopConfirmDialog';
 
 interface EmergencyStopButtonProps {
@@ -13,8 +13,19 @@ interface EmergencyStopButtonProps {
 export const EmergencyStopButton = ({ deviceId, variant }: EmergencyStopButtonProps) => {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const pumpStatus = useDeviceStore((s) => s.sensorData?.pump_status);
-  const pumps = (pumpStatus ?? {}) as Record<string, boolean>;
+  const { data: telemetry } = useDeviceTelemetry(deviceId);
+  const pumpStatus = telemetry?.actuator?.pump_status;
+  const pumps: Record<string, boolean | undefined> = {
+    pump_a: pumpStatus?.pump_a,
+    pump_b: pumpStatus?.pump_b,
+    ph_up: pumpStatus?.ph_up,
+    ph_down: pumpStatus?.ph_down,
+    osaka_pump: pumpStatus?.osaka_pump,
+    mist_valve: pumpStatus?.mist_valve,
+    mix_valve: pumpStatus?.mix_valve,
+    water_pump_in: pumpStatus?.water_pump_in,
+    water_pump_out: pumpStatus?.water_pump_out,
+  };
   const { emergencyStop } = useDeviceControl(deviceId || '');
 
   const runningPwm = useMemo(() => {

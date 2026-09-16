@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
@@ -11,12 +10,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { httpFetch } from '../platform/http';
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { useOwnedDevices } from '../hooks/useOwnedDevices';
 import { useActiveRecipeStatus } from '../hooks/useActiveRecipeStatus';
 import { useCropSeason } from '../hooks/useCropSeason';
-import { apiBulkPost } from '../lib/apiClient';
+import { useApplyRecipe, useBulkApplyRecipe, useCreateRecipe, useDeleteRecipe, useRecipes, useUpdateRecipe } from '../hooks/useRecipes';
 import { CropStage, RecipeTemplate, BulkApplyResult } from '../types/models';
 
 type EditableStage = CropStage & {
@@ -56,9 +54,7 @@ const toNumber = (value: string, fallback = 0) => {
 };
 
 const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ variant = 'standalone' }) => {
-  const queryClient = useQueryClient();
-  const settings = useDeviceStore((s) => s.settings);
-  const deviceId = useDeviceStore((s) => s.deviceId);
+  const { selectedDeviceId: deviceId } = useStationContext();
 
   const { devices } = useOwnedDevices();
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
@@ -78,7 +74,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
     }
     setBulkApplying(true);
     try {
-      const result = await apiBulkPost<{ data: BulkApplyResult }>('/recipes/bulk-apply', {
+      const result = await bulkApplyRecipeMutation.mutateAsync({
         device_ids: selectedDeviceIds,
         recipe_id: recipeId,
       });
@@ -103,6 +99,12 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
 
   const { activeSeason } = useCropSeason();
   const { activeRecipe } = useActiveRecipeStatus();
+  const { data: recipesList = [], isLoading: isLoadingTemplates } = useRecipes();
+  const createRecipeMutation = useCreateRecipe();
+  const updateRecipeMutation = useUpdateRecipe();
+  const deleteRecipeMutation = useDeleteRecipe();
+  const applyRecipeMutation = useApplyRecipe(deviceId);
+  const bulkApplyRecipeMutation = useBulkApplyRecipe();
 
   const handleSaveSeasonAsRecipe = () => {
     if (!activeSeason || !activeRecipe) return;
@@ -120,14 +122,6 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
     toast.success('Đã điền sẵn thông tin từ mùa vụ hiện tại — chỉnh sửa rồi bấm Lưu bên dưới.');
   };
 
-  const headers = useMemo(
-    () => ({
-      'Content-Type': 'application/json',
-      'X-API-Key': settings?.api_key || '',
-    }),
-    [settings?.api_key]
-  );
-
   const timeline = useMemo(() => {
     let cursor = 1;
     return stages.map((stage, index) => {
@@ -138,35 +132,9 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
     });
   }, [stages]);
 
-  // Lấy ID của công thức đang được nạp dưới Controller Node
-  const { data: activeRecipeId } = useQuery<string | null>({
-    queryKey: ['active-recipe', deviceId],
-    enabled: Boolean(settings?.backend_url && deviceId),
-    queryFn: async () => {
-      const res = await httpFetch(`${settings!.backend_url}/api/devices/${deviceId}/recipe/status`, {
-        method: 'GET',
-        headers,
-      });
-      if (!res.ok) return null;
-      const json = await res.json();
-      
-      const activeRecipe = json.data?.active_recipe || json.active_recipe;
-      return activeRecipe?.recipe_id || null;
-    },
-  });
+  const activeRecipeId = activeRecipe?.recipe_id ?? null;
 
   const totalDays = timeline.length ? timeline[timeline.length - 1].endDay : 0;
-
-  const { data: recipesList = [], isLoading: isLoadingTemplates } = useQuery<RecipeTemplate[]>({
-    queryKey: ['recipes-templates', settings?.backend_url],
-    enabled: Boolean(settings?.backend_url),
-    queryFn: async () => {
-      const res = await httpFetch(`${settings!.backend_url}/api/recipes`, { method: 'GET', headers });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return json.data || [];
-    },
-  });
 
   const handleSelectTemplate = (template: RecipeTemplate) => {
     setSelectedTemplateId(template.id);
@@ -191,9 +159,7 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
     setStages([createDefaultStage(1), createDefaultStage(2)]);
   };
 
-  const saveRecipeMutation = useMutation({
-    mutationFn: async () => {
-      if (!settings?.backend_url) throw new Error('Thiếu backend URL.');
+  const saveRecipe = () => {
       const payload = {
         name: templateName.trim(),
         crop: cropType.trim().toLowerCase(),
@@ -204,73 +170,35 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
         })),
       };
 
-      const isUpdate = Boolean(selectedTemplateId);
-      const url = isUpdate
-        ? `${settings.backend_url}/api/recipes/${selectedTemplateId}`
-        : `${settings.backend_url}/api/recipes`;
-
-      const res = await httpFetch(url, {
-        method: isUpdate ? 'PUT' : 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success(selectedTemplateId ? 'Đã cập nhật Công thức mẫu!' : 'Đã tạo Công thức mẫu mới!');
-      queryClient.invalidateQueries({ queryKey: ['recipes-templates'] });
-    },
-    onError: (error: Error) => toast.error(`Lỗi lưu công thức: ${error.message}`),
-  });
-
-  const deleteRecipeMutation = useMutation({
-    mutationFn: async (recipeId: string) => {
-      if (!settings?.backend_url) throw new Error('Thiếu backend URL.');
-      const res = await httpFetch(`${settings.backend_url}/api/recipes/${recipeId}`, {
-        method: 'DELETE',
-        headers,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('Đã xóa công thức mẫu!');
-      if (selectedTemplateId) handleResetForm();
-      queryClient.invalidateQueries({ queryKey: ['recipes-templates'] });
-    },
-    onError: (err: Error) => toast.error(`Lỗi xóa: ${err.message}`),
-  });
-
-  const applyRecipeMutation = useMutation({
-    mutationFn: async (recipeId: string) => {
-      if (!settings?.backend_url || !deviceId) throw new Error('Thiếu kết nối hoặc chưa chọn thiết bị.');
-      const res = await httpFetch(`${settings.backend_url}/api/devices/${deviceId}/recipe/apply`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ recipe_id: recipeId }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('Đã nạp Lộ trình xuống Controller Node thành công!');
-      queryClient.invalidateQueries({ queryKey: ['recipe-status'] }); 
-    },
-    onError: (err: Error) => toast.error(`Lỗi áp dụng: ${err.message}`),
-  });
+      const onSuccess = () => toast.success(selectedTemplateId ? 'Đã cập nhật Công thức mẫu!' : 'Đã tạo Công thức mẫu mới!');
+      const onError = (error: Error) => toast.error(`Lỗi lưu công thức: ${error.message}`);
+      if (selectedTemplateId) {
+        updateRecipeMutation.mutate({ recipeId: selectedTemplateId, payload }, { onSuccess, onError });
+      } else {
+        createRecipeMutation.mutate(payload, { onSuccess, onError });
+      }
+  };
 
   const handleApplyTemplate = (e: React.MouseEvent, template: RecipeTemplate) => {
     e.stopPropagation();
     if (window.confirm(`Bạn muốn áp dụng lộ trình "${template.name}" cho trạm hiện tại?`)) {
-      applyRecipeMutation.mutate(template.id);
+      applyRecipeMutation.mutate(template.id, {
+        onSuccess: () => toast.success('Đã nạp Lộ trình xuống Controller Node thành công!'),
+        onError: (err: Error) => toast.error(`Lỗi áp dụng: ${err.message}`),
+      });
     }
   };
 
   const handleDeleteTemplate = (e: React.MouseEvent, template: RecipeTemplate) => {
     e.stopPropagation();
     if (window.confirm(`Bạn có chắc muốn xóa công thức "${template.name}"?`)) {
-      deleteRecipeMutation.mutate(template.id);
+      deleteRecipeMutation.mutate(template.id, {
+        onSuccess: () => {
+          toast.success('Đã xóa công thức mẫu!');
+          if (selectedTemplateId) handleResetForm();
+        },
+        onError: (err: Error) => toast.error(`Lỗi xóa: ${err.message}`),
+      });
     }
   };
 
@@ -570,12 +498,12 @@ const RecipeBuilder: React.FC<{ variant?: 'standalone' | 'embedded' }> = ({ vari
                 )}
 
                 <button
-                  onClick={() => saveRecipeMutation.mutate()}
-                  disabled={saveRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
+                  onClick={saveRecipe}
+                  disabled={createRecipeMutation.isPending || updateRecipeMutation.isPending || !templateName.trim() || !cropType.trim()}
                   className="ui-btn-md bg-primary hover:bg-primary-deep text-white flex items-center justify-center gap-2 shadow-sm font-bold text-xs"
                 >
                   <Save size={15} />
-                  {saveRecipeMutation.isPending 
+                  {(createRecipeMutation.isPending || updateRecipeMutation.isPending)
                     ? 'Đang lưu...' 
                     : selectedTemplateId 
                       ? 'Cập nhật' 

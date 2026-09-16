@@ -83,8 +83,9 @@ export const loadAppSettings = async (): Promise<AppSettings | null> => {
 
 export const saveWebSettings = (settings: AppSettings) => {
   if (!isBrowser || isTauriRuntime()) return;
+  const { device_id: _deviceId, ...settingsWithoutDeviceId } = settings;
   // Lưu cấu hình bao gồm cả API key vào localStorage để duy trì trạng thái đăng nhập
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsWithoutDeviceId));
 
   if (settings.api_key?.trim()) {
     sessionStorage.setItem(SESSION_API_KEY_STORAGE_KEY, settings.api_key.trim());

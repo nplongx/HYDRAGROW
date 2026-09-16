@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Clock, Filter, AlertTriangle, FlaskConical, Waves, UserCheck, Cpu, CheckCircle, Workflow, Download, Zap, ExternalLink, Radio } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useInfiniteQuery } from '@tanstack/react-query';
 
 // --- STORE, GLEAM & COMPONENTS ---
-import { useDeviceStore } from '../store/useDeviceStore';
+import { useStationContext } from '../contexts/StationContext';
 import { escape_field_str } from '../../gleam_core/build/dev/javascript/gleam_core/csv.mjs';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StateView } from '../components/ui/StateView';
@@ -14,10 +13,8 @@ import { CycleEventCard } from '../components/logs/CycleEventCard';
 import { EventDetailDrawer } from '../components/logs/EventDetailDrawer';
 import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
 import { buildLogRows, filterEventsBySearch, type LogViewMode } from '../lib/logs/eventGrouping';
-import { httpFetch } from '../platform/http';
+import { useAcknowledgeJournalEvent, useJournalEvents } from '../hooks/useSystemEvents';
 import { saveTextFile } from '../platform/file';
-
-const PAGE_SIZE = 200;
 
 const FILTERS = [
   { id: 'all', label: 'Tất cả', icon: Filter },
@@ -33,68 +30,52 @@ const FILTERS = [
 ];
 
 const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embedded' }) => {
-  const deviceId = useDeviceStore((s) => s.deviceId);
-  const settings = useDeviceStore((s) => s.settings);
+  const { selectedDeviceId: deviceId } = useStationContext();
   const [filter, setFilter] = useState<string>('all');
+  const [level, setLevel] = useState<string>('all');
+  const [unresolved, setUnresolved] = useState(false);
   const [mode, setMode] = useState<LogViewMode>('important');
   const [search, setSearch] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<SystemEvent | null>(null);
 
   const { data: healthSummary } = useSystemHealthSummary(deviceId || '');
 
-  // TanStack Query tự động caching & cancellation. Mỗi trang tối đa PAGE_SIZE sự
-  // kiện; trang tiếp theo dùng before_timestamp = timestamp của event cũ nhất
-  // trong trang trước (API đã hỗ trợ cursor này, xem hydragrow-backend/src/api/alert.rs).
-  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useInfiniteQuery({
-    queryKey: ['system-events', deviceId, filter],
-    initialPageParam: undefined as number | undefined,
-    queryFn: async ({ pageParam }) => {
-      if (!deviceId || !settings?.backend_url) return [];
-      let url = `${settings.backend_url}/api/devices/${deviceId}/events?limit=${PAGE_SIZE}`;
-      if (filter !== 'all' && filter !== 'unresolved') {
-        const category = filter === 'user_action' ? 'user_action,alert' : filter;
-        url += `&category=${encodeURIComponent(category)}`;
-      }
-      if (pageParam) url += `&before_timestamp=${pageParam}`;
-      const res = await httpFetch(url, { headers: { 'X-API-Key': settings.api_key || '' } });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return (json.data ?? []) as SystemEvent[];
-    },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
-      return lastPage[lastPage.length - 1]?.timestamp;
-    },
-    enabled: Boolean(deviceId && settings?.backend_url)
-  });
+  const journalFilters = useMemo(() => ({
+    deviceId,
+    category: filter !== 'all' && filter !== 'unresolved' ? filter : undefined,
+    level: level !== 'all' ? level : undefined,
+    unresolved,
+    search: search.trim() || undefined,
+  }), [deviceId, filter, level, unresolved, search]);
 
-  const systemEvents = useMemo(() => (data?.pages ?? []).flat(), [data]);
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useJournalEvents(journalFilters);
+  const acknowledgeMutation = useAcknowledgeJournalEvent(journalFilters);
+
+  const systemEvents = useMemo(() => (data?.pages ?? []).flatMap((page) => page.data ?? []), [data]);
 
   const visibleRows = useMemo(() => {
-    let filtered = filterEventsBySearch(systemEvents as SystemEvent[], search);
-    if (filter === 'unresolved') {
+    let filtered = filterEventsBySearch(systemEvents, search);
+    if (unresolved) {
       filtered = filtered.filter((ev) => !ev.resolved_at);
     }
     return buildLogRows(filtered, mode);
-  }, [systemEvents, search, mode, filter]);
+  }, [systemEvents, search, mode, unresolved]);
 
   const handleAcknowledge = async (ev: SystemEvent) => {
-    if (!deviceId || !settings?.backend_url) return;
+    if (!deviceId) return;
     try {
-      const res = await httpFetch(
-        `${settings.backend_url}/api/devices/${deviceId}/events/${ev.id}/acknowledge`,
-        {
-          method: 'PUT',
-          headers: { 'X-API-Key': settings.api_key || '', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resolved: !ev.resolved_at }),
-        },
-      );
-      if (res.ok) {
-        toast.success(ev.resolved_at ? 'Đã mở lại sự kiện.' : 'Đã đánh dấu xử lý xong.');
-        refetch();
-      } else {
-        toast.error('Không thể cập nhật trạng thái sự kiện.');
-      }
+      await acknowledgeMutation.mutateAsync({ eventId: String(ev.id), resolved: !ev.resolved_at });
+      toast.success(ev.resolved_at ? 'Đã mở lại sự kiện.' : 'Đã đánh dấu xử lý xong.');
+      await refetch();
     } catch {
       toast.error('Lỗi mạng khi cập nhật trạng thái sự kiện.');
     }
@@ -139,7 +120,7 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
     if (systemEvents.length === 0) return toast.error("Không có nhật ký!");
     try {
       const headers = ["ID", "Thời Gian", "Mã Thiết Bị", "Cấp Độ", "Danh Mục", "Tiêu Đề", "Nội Dung Message"];
-      const csvRows = (systemEvents as SystemEvent[]).map((ev) => {
+      const csvRows = systemEvents.map((ev) => {
         const date = new Date(ev.timestamp > 1e12 ? ev.timestamp : ev.timestamp * 1000).toLocaleString('vi-VN');
         return [
           escape_field_str(String(ev.id || '')),
@@ -199,7 +180,11 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
             return (
               <button
                 key={btn.id}
-                onClick={() => setFilter(btn.id)}
+                onClick={() => {
+                  setFilter(btn.id);
+                  if (btn.id === 'unresolved') setUnresolved(true);
+                  else if (filter === 'unresolved') setUnresolved(false);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 border whitespace-nowrap ${
                   active ? 'bg-primary-deep text-white border-transparent shadow-md' : 'bg-white text-text-muted border-line hover:bg-pill'
                 }`}
@@ -210,6 +195,26 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
             );
           })}
         </div>
+        <label className="flex items-center gap-2 text-xs font-semibold text-text-muted shrink-0">
+          Cấp độ
+          <select
+            aria-label="Lọc cấp độ nhật ký"
+            value={level}
+            onChange={(event) => setLevel(event.target.value)}
+            className="rounded-xl border border-line bg-white px-2.5 py-1.5 text-xs"
+          >
+            <option value="all">Tất cả</option>
+            <option value="info">Info</option>
+            <option value="success">Success</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+            <option value="critical">Critical</option>
+          </select>
+        </label>
+        <label className="inline-flex items-center gap-2 text-xs font-semibold text-text-muted shrink-0">
+          <input type="checkbox" checked={unresolved} onChange={(event) => setUnresolved(event.target.checked)} />
+          Chưa xử lý
+        </label>
         <button
           onClick={handleExportCSV}
           disabled={systemEvents.length === 0}
@@ -227,6 +232,13 @@ const SystemLog = ({ variant = 'standalone' }: { variant?: 'standalone' | 'embed
               <div className="w-4 h-4 border-2 border-line border-t-primary rounded-full animate-spin" />
               <span className="text-xs font-semibold uppercase tracking-wider text-primary-deep">Đang đồng bộ dòng thời gian...</span>
             </div>
+          ) : isError ? (
+            <StateView
+              icon={AlertTriangle}
+              title="Không thể tải nhật ký"
+              description={error instanceof Error ? error.message : 'Đã xảy ra lỗi khi truy vấn nhật ký.'}
+              action={<button type="button" onClick={() => refetch()} className="text-xs font-semibold text-primary hover:text-primary-deep">Thử lại</button>}
+            />
           ) : visibleRows.length === 0 ? (
             <StateView
               icon={filter === 'sensor' && !search ? Radio : Zap}

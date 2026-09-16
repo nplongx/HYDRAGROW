@@ -3,7 +3,7 @@ import { pumpLabels } from '../../lib/pumpLabels';
 
 interface EmergencyStopConfirmDialogProps {
   open: boolean;
-  runningPumps: Record<string, boolean>;
+  runningPumps: Record<string, boolean | undefined>;
   runningPwm?: Record<string, number>;
   onCancel: () => void;
   onConfirm: () => void;
@@ -23,6 +23,7 @@ export const EmergencyStopConfirmDialog = ({
   const runningKeys = Object.entries(runningPumps)
     .filter(([, isOn]) => isOn)
     .map(([key]) => key);
+  const stateUnknown = Object.values(runningPumps).some((isOn) => isOn === undefined);
 
   return (
     <div className="fixed inset-0 z-[60] bg-primary-deep/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
@@ -41,7 +42,9 @@ export const EmergencyStopConfirmDialog = ({
 
         <div className="space-y-1.5">
           <p className="text-[10px] font-bold uppercase tracking-wider text-faint">Thiết bị đang chạy sẽ bị tắt</p>
-          {runningKeys.length === 0 ? (
+          {stateUnknown ? (
+            <p className="text-xs text-warning italic">Chưa xác nhận đầy đủ trạng thái cơ cấu chấp hành; danh sách đang chạy có thể chưa đầy đủ.</p>
+          ) : runningKeys.length === 0 ? (
             <p className="text-xs text-text-muted italic">Không có thiết bị nào đang chạy.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">

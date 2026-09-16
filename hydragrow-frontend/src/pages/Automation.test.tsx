@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Automation } from "./Automation";
-import { useDeviceStore } from "../store/useDeviceStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useStationContext } from "../contexts/StationContext";
 
 const queryClient = new QueryClient();
 
@@ -56,9 +56,13 @@ vi.mock("../hooks/useAutomationScripts", () => ({
     isLoading: false,
     isError: false,
   }),
-  useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
+  useConfigOverrides: () => ({
+    data: { active: [], history: [] },
+    isLoading: false,
+  }),
   useRevertConfigOverride: () => ({ mutate: vi.fn(), isPending: false }),
   useExecutionSuccessRate: () => ({ data: null }),
+  useUpdateAutomationScriptById: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock("../hooks/useFlowCanvas", () => ({
@@ -74,9 +78,33 @@ vi.mock("../hooks/useFlowCanvas", () => ({
   }),
 }));
 
+vi.mock("../contexts/StationContext", () => ({
+  useStationContext: vi.fn(() => ({
+    status: "Selected",
+    selectedDeviceId: "dev1",
+    selectedDevice: null,
+    availableDevices: [],
+    error: null,
+    selectDevice: vi.fn(),
+    switchDevice: vi.fn(),
+    clearSelection: vi.fn(),
+    refreshAvailableDevices: vi.fn(),
+  })),
+}));
+
 describe("Automation Page", () => {
   beforeEach(() => {
-    useDeviceStore.setState({ deviceId: "dev1" });
+    vi.mocked(useStationContext).mockReturnValue({
+      status: "Selected",
+      selectedDeviceId: "dev1",
+      selectedDevice: null,
+      availableDevices: [],
+      error: null,
+      selectDevice: vi.fn(),
+      switchDevice: vi.fn(),
+      clearSelection: vi.fn(),
+      refreshAvailableDevices: vi.fn(),
+    });
   });
 
   it("renders saved flows", () => {
@@ -85,7 +113,7 @@ describe("Automation Page", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <Automation />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
 
     // a saved alert node shows its kind badge
@@ -101,15 +129,27 @@ describe("Automation Page", () => {
     expect(screen.getByText("WEBHOOK")).toBeInTheDocument();
   });
 
-  it("shows prompt when no deviceId is selected in useDeviceStore", () => {
-    useDeviceStore.setState({ deviceId: null });
+  it("shows prompt when no deviceId is selected in StationContext", () => {
+    vi.mocked(useStationContext).mockReturnValue({
+      status: "NoSelection",
+      selectedDeviceId: null,
+      selectedDevice: null,
+      availableDevices: [],
+      error: null,
+      selectDevice: vi.fn(),
+      switchDevice: vi.fn(),
+      clearSelection: vi.fn(),
+      refreshAvailableDevices: vi.fn(),
+    });
     render(
       <QueryClientProvider client={queryClient}>
         <Automation />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
     expect(
-      screen.getByText(/Chưa chọn thiết bị — vào Cài đặt để chọn thiết bị đang hoạt động/i)
+      screen.getByText(
+        /Chưa chọn thiết bị — hãy chọn một trạm từ Tổng Quan Thiết Bị/i,
+      ),
     ).toBeInTheDocument();
   });
 });

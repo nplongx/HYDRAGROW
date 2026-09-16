@@ -1,15 +1,18 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Roles } from './Roles';
-import * as apiClient from '../lib/apiClient';
+import * as adminApiModule from '../api/admin';
 
-vi.mock('../lib/apiClient', () => ({
-  apiGet: vi.fn(),
-  apiPost: vi.fn(),
-  apiPatch: vi.fn(),
+vi.mock('../api/admin', () => ({
+  adminApi: {
+    listUsers: vi.fn(),
+    provisionUser: vi.fn(),
+    updateUser: vi.fn(),
+  },
 }));
 
-const mockUsers = [
+const mockUsers: adminApiModule.AdminUser[] = [
   {
     id: 1,
     firebase_uid: 'uid-admin-1',
@@ -39,14 +42,23 @@ const mockUsers = [
   },
 ];
 
+function renderRoles() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Roles />
+    </QueryClientProvider>,
+  );
+}
+
 describe('Roles Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(apiClient.apiGet).mockResolvedValue(mockUsers);
+    vi.mocked(adminApiModule.adminApi.listUsers).mockResolvedValue(mockUsers);
   });
 
   it('hiển thị danh sách thành viên với role pill và bảng ma trận năng lực', async () => {
-    render(<Roles />);
+    renderRoles();
 
     await waitFor(() => {
       expect(screen.getByText('Quản Trị Viên Trưởng')).toBeInTheDocument();
@@ -67,8 +79,8 @@ describe('Roles Page', () => {
   });
 
   it('thay đổi vai trò thành viên gọi apiPatch với đúng role và scopes', async () => {
-    vi.mocked(apiClient.apiPatch).mockResolvedValue({ id: 2, role: 'admin' });
-    render(<Roles />);
+    vi.mocked(adminApiModule.adminApi.updateUser).mockResolvedValue({ id: 2, role: 'admin' });
+    renderRoles();
 
     await waitFor(() => {
       expect(screen.getByLabelText('Đổi vai trò cho operator@farm.vn')).toBeInTheDocument();
@@ -79,8 +91,8 @@ describe('Roles Page', () => {
     });
 
     await waitFor(() => {
-      expect(apiClient.apiPatch).toHaveBeenCalledWith(
-        '/admin/users/2',
+      expect(adminApiModule.adminApi.updateUser).toHaveBeenCalledWith(
+        2,
         expect.objectContaining({
           role: 'admin',
           scopes: ['*'],
@@ -90,8 +102,8 @@ describe('Roles Page', () => {
   });
 
   it('mở modal thêm thành viên và submit gọi apiPost với dữ liệu hợp lệ', async () => {
-    vi.mocked(apiClient.apiPost).mockResolvedValue({ status: 'ok' });
-    render(<Roles />);
+    vi.mocked(adminApiModule.adminApi.provisionUser).mockResolvedValue({ status: 'ok' });
+    renderRoles();
 
     fireEvent.click(screen.getByRole('button', { name: /Thêm thành viên/i }));
 
@@ -113,8 +125,7 @@ describe('Roles Page', () => {
     fireEvent.click(screen.getByRole('button', { name: /Xác nhận cấp quyền/i }));
 
     await waitFor(() => {
-      expect(apiClient.apiPost).toHaveBeenCalledWith(
-        '/admin/users',
+      expect(adminApiModule.adminApi.provisionUser).toHaveBeenCalledWith(
         expect.objectContaining({
           email: 'newuser@farm.vn',
           firebase_uid: 'uidNew123',
@@ -126,7 +137,7 @@ describe('Roles Page', () => {
   });
 
   it('huỷ modal thêm thành viên sẽ đóng modal', async () => {
-    render(<Roles />);
+    renderRoles();
 
     fireEvent.click(screen.getByRole('button', { name: /Thêm thành viên/i }));
     expect(screen.getByText('Thêm thành viên mới')).toBeInTheDocument();
@@ -138,8 +149,8 @@ describe('Roles Page', () => {
   });
 
   it('khoá/mở khoá thành viên gọi apiPatch is_active', async () => {
-    vi.mocked(apiClient.apiPatch).mockResolvedValue({ id: 1, is_active: false });
-    render(<Roles />);
+    vi.mocked(adminApiModule.adminApi.updateUser).mockResolvedValue({ id: 1, is_active: false });
+    renderRoles();
 
     await waitFor(() => {
       expect(screen.getByText('Quản Trị Viên Trưởng')).toBeInTheDocument();
@@ -149,8 +160,8 @@ describe('Roles Page', () => {
     fireEvent.click(lockButtons[0]);
 
     await waitFor(() => {
-      expect(apiClient.apiPatch).toHaveBeenCalledWith(
-        '/admin/users/1',
+      expect(adminApiModule.adminApi.updateUser).toHaveBeenCalledWith(
+        1,
         expect.objectContaining({
           is_active: false,
         })

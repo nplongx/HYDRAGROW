@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiGet } from '../lib/apiClient';
-import { useDeviceStore } from '../store/useDeviceStore';
+import type { OperationalState } from '../types/models';
 
 export interface FleetDevice {
   device_id: string;
@@ -8,6 +8,7 @@ export interface FleetDevice {
   is_online?: boolean;
   firmware_version?: string;
   last_seen?: string;
+  operational_state?: OperationalState;
 }
 
 interface FleetStatusState {
@@ -33,40 +34,22 @@ export function useFleetStatus(): FleetStatusState {
       const enriched = await Promise.allSettled(
         owned.map(async (d) => {
           try {
-            const status = await apiGet<{ is_online: boolean; firmware_version: string; last_seen: string }>(
+            const status = await apiGet<{ is_online?: boolean; firmware_version: string; last_seen?: string; operational_state?: OperationalState }>(
               `/devices/${d.device_id}/status`
             );
             return { ...d, ...status };
           } catch {
-            return { ...d, is_online: false };
+            return d;
           }
         })
       );
 
       setDevices(
-        enriched.map((r) => (r.status === 'fulfilled' ? r.value : { device_id: 'unknown', label: null }))
+        enriched.map((r, index) => (r.status === 'fulfilled' ? r.value : owned[index]))
       );
     } catch (e: any) {
-      const isMockAuth = typeof window !== 'undefined' && (
-        localStorage.getItem('mock_auth') === 'true' ||
-        new URLSearchParams(window.location.search).get('mock_auth') === 'true'
-      );
-      if (isMockAuth) {
-        const currentDeviceId = useDeviceStore.getState().deviceId || 'esp32_01';
-        setDevices([
-          {
-            device_id: currentDeviceId,
-            label: 'Trạm Thủy Canh 1',
-            is_online: false,
-            firmware_version: 'v1.4.2',
-            last_seen: new Date().toISOString(),
-          },
-        ]);
-        setError(null);
-      } else {
-        setError(e.message);
-        setDevices([]);
-      }
+      setError(e.message);
+      setDevices([]);
     } finally {
       setLoading(false);
     }

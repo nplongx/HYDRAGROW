@@ -3,7 +3,6 @@ import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
   LineChart, ArrowRight
 } from 'lucide-react';
-import { useDeviceStore } from '../store/useDeviceStore';
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
@@ -25,6 +24,12 @@ import { pumpLabels, pumpColors } from '../lib/pumpLabels';
 import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
 import { OnboardingWizard } from '../components/onboarding';
 import { useOnboardingState } from '../hooks/useOnboardingState';
+import { useStationContext } from '../contexts/StationContext';
+import { useDeviceTelemetry } from '../hooks/useDeviceTelemetry';
+import { useDeviceConfig } from '../hooks/useDeviceConfig';
+import { useSystemEvents } from '../hooks/useSystemEvents';
+import type { TelemetryQuality } from '../types/models';
+import { routePath } from '../routes';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
   <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${color}`}>
@@ -41,9 +46,13 @@ const formatNumber = (value: any, digits = 1) => {
 
 const getTdsSetting = (settings: any, ecKey: string, legacyEcKey: string) => settings?.[ecKey] ?? settings?.[legacyEcKey];
 
-const sensorStatus = (hasError: boolean | undefined, value: any, min?: any, max?: any) => {
+const sensorStatus = (quality: TelemetryQuality | undefined, value: unknown, min?: any, max?: any) => {
+  if (quality === 'ERROR') return { label: 'Lỗi', tone: 'danger' as const };
+  if (quality === 'INVALID') return { label: 'Không hợp lệ', tone: 'danger' as const };
+  if (quality === 'STALE') return { label: 'Cũ', tone: 'warn' as const };
+  if (quality !== 'VALID') return { label: 'Chưa có dữ liệu', tone: 'info' as const };
   const res = eval_sensor_status_safe(
-    Boolean(hasError),
+    false,
     String(value ?? ''),
     String(min ?? ''),
     String(max ?? '')
@@ -52,15 +61,38 @@ const sensorStatus = (hasError: boolean | undefined, value: any, min?: any, max?
 };
 
 const Dashboard = () => {
-  const deviceId = useDeviceStore((s) => s.deviceId);
-  const sensorData = useDeviceStore((s) => s.sensorData);
-  const isOnline = useDeviceStore((s) => s.deviceStatus.is_online);
-  const controllerHealth = useDeviceStore((s) => s.controllerHealth);
-  const fsmState = useDeviceStore((s) => s.fsmState);
-  const isLoading = useDeviceStore((s) => s.isLoading);
-  const isSensorOnline = useDeviceStore((s) => s.isSensorOnline);
-  const settings = useDeviceStore((s) => s.settings);
-  const tankAlert = useDeviceStore((s) => s.tankAlert);
+  const { status: stationStatus, selectedDeviceId: deviceId } = useStationContext();
+  const {
+    data: authoritativeTelemetry,
+    isLoading: isTelemetryLoading,
+    error: telemetryError,
+  } = useDeviceTelemetry(deviceId);
+  const { data: settings } = useDeviceConfig(deviceId);
+  const availability = authoritativeTelemetry?.availability ?? 'UNKNOWN';
+  const operationalState = authoritativeTelemetry?.operational_state;
+  const isOnline = operationalState?.contact === 'CONTACTED' && operationalState?.freshness === 'FRESH';
+  const isOffline = operationalState?.contact === 'NOT_CONTACTED';
+  const controllerHealth = authoritativeTelemetry?.controller_health ?? null;
+  const fsmState = authoritativeTelemetry?.fsm?.state ?? 'Unknown';
+  const isLoading = isTelemetryLoading;
+  const isSensorOnline = operationalState?.freshness === 'FRESH';
+  const isSensorUnknown = operationalState?.freshness === 'UNKNOWN' || !operationalState;
+  const { data: systemEvents = [] } = useSystemEvents(deviceId);
+  const tankAlert = useMemo(() => {
+    const alert = systemEvents.find(
+      (event) => event.category === 'alert' && (
+        event.metadata?.reason === 'tank_level_alert' || event.metadata?.tank_a_low !== undefined
+      ),
+    );
+    const details = alert?.metadata;
+    if (!details) return null;
+    return {
+      tank_a_low: Boolean(details.tank_a_low),
+      tank_b_low: Boolean(details.tank_b_low),
+      tank_ph_down_low: Boolean(details.tank_ph_down_low),
+      tank_ph_up_low: Boolean(details.tank_ph_up_low),
+    };
+  }, [systemEvents]);
 
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -74,33 +106,59 @@ const Dashboard = () => {
   const greetingName = displayName ? (displayName[0].toUpperCase() + displayName.slice(1)) : '';
 
   const friendlyState = useMemo(() => {
+    if (!operationalState || operationalState.contact === 'UNKNOWN' || operationalState.freshness === 'UNKNOWN') {
+      return { label: 'Chưa rõ trạng thái', description: 'Chưa có bằng chứng đủ mới về trạng thái trạm.', type: 'warning' as const };
+    }
+    if (operationalState.freshness === 'STALE') {
+      return { label: 'Dữ liệu đã cũ', description: 'Chưa nhận được quan sát vận hành đủ mới.', type: 'warning' as const };
+    }
     const res = friendly_state(fsmState || 'Monitoring', isOnline);
     return { label: res.label, description: res.description, type: res.tone as any };
-  }, [fsmState, isOnline]);
+  }, [operationalState, fsmState, isOnline]);
 
   const computedHealth = useMemo(() => {
+    if (availability === 'UNKNOWN') {
+      return { score: null, label: 'Chưa rõ', color: 'text-faint', description: 'Chưa có dữ liệu health hiện tại.' };
+    }
     const rawScore = controllerHealth?.health_score_percent ?? controllerHealth?.diagnostics?.health_score_percent;
     const scoreInt = typeof rawScore === 'number' ? Math.round(rawScore) : -1;
     const res = compute_health_safe(isOnline, scoreInt);
     return { score: res.score, label: res.label, color: res.color, description: res.description };
-  }, [controllerHealth, isOnline]);
+  }, [availability, controllerHealth, isOnline]);
 
-  if (isLoading) {
+  if (stationStatus === 'LoadingSelection' || isLoading || isTelemetryLoading) {
     return <LoadingState message="Đang tải dữ liệu trạm thông minh..." />;
   }
 
-  if (!deviceId) {
+  if (stationStatus !== 'Selected' || !deviceId) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-5 p-6 text-center">
         <div className="p-6 bg-white rounded-3xl border border-line shadow-xl shadow-primary/10">
           <Settings size={40} className="text-primary" />
         </div>
         <div className="space-y-2 max-w-xs">
-          <h2 className="text-xl font-bold text-primary-deep">Chưa chọn thiết bị</h2>
+          <h2 className="text-xl font-bold text-primary-deep">
+            {stationStatus === 'InvalidSelection' ? 'Thiết bị không còn khả dụng' : 'Chưa chọn thiết bị'}
+          </h2>
           <p className="text-sm text-text-muted leading-relaxed">
-            Hệ thống cần Device ID. Vui lòng chuyển tới cài đặt.
+            {stationStatus === 'InvalidSelection'
+              ? 'Thiết bị đã chọn không còn nằm trong danh sách trạm có thể truy cập.'
+              : stationStatus === 'PermissionDenied'
+                ? 'Bạn không có quyền truy cập danh sách trạm.'
+                : stationStatus === 'Unavailable'
+                  ? 'Không thể tải danh sách trạm. Vui lòng thử lại.'
+                  : 'Vui lòng chọn một trạm từ trang Tổng Quan Thiết Bị.'}
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (telemetryError || !authoritativeTelemetry) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-3 p-6 text-center">
+        <h2 className="text-xl font-bold text-primary-deep">Không có dữ liệu telemetry</h2>
+        <p className="text-sm text-text-muted">Không thể đọc trạng thái hiện tại của trạm. Dữ liệu không được thay bằng giá trị mặc định.</p>
       </div>
     );
   }
@@ -109,15 +167,23 @@ const Dashboard = () => {
   const faultGuideOpt = faultCode ? get_fault_guide(faultCode) : null;
   const faultGuide = faultGuideOpt && (faultGuideOpt as any)[0] ? (faultGuideOpt as any)[0] : null;
 
-  const pumps: any = sensorData?.pump_status || {};
+  const pumps: any = authoritativeTelemetry?.actuator?.pump_status || {};
+  const telemetryAxis = (name: 'ec' | 'ph' | 'temp' | 'water_level') =>
+    authoritativeTelemetry?.axes.find((axis) => axis.name === name);
+  const ecAxis = telemetryAxis('ec');
+  const phAxis = telemetryAxis('ph');
+  const tempAxis = telemetryAxis('temp');
+  const waterAxis = telemetryAxis('water_level');
   const modeLabel = settings?.control_mode === 'auto' ? 'Tự động' : 'Thủ công';
 
-  const ecStatus = sensorStatus(sensorData?.err_ec, sensorData?.ec, getTdsSetting(settings, 'min_ec_limit', 'min_ec_limit'), getTdsSetting(settings, 'max_ec_limit', 'max_ec_limit'));
-  const phStatus = sensorStatus(sensorData?.err_ph, sensorData?.ph, settings?.min_ph_limit, settings?.max_ph_limit);
-  const tempStatus = sensorStatus(sensorData?.err_temp, sensorData?.temp, settings?.min_temp_limit, settings?.max_temp_limit);
-  const waterStatus = sensorStatus(sensorData?.err_water, sensorData?.water_level, settings?.water_level_min, settings?.water_level_max);
+  const ecStatus = sensorStatus(ecAxis?.quality, ecAxis?.value, getTdsSetting(settings, 'min_ec_limit', 'min_ec_limit'), getTdsSetting(settings, 'max_ec_limit', 'max_ec_limit'));
+  const phStatus = sensorStatus(phAxis?.quality, phAxis?.value, settings?.min_ph_limit, settings?.max_ph_limit);
+  const tempStatus = sensorStatus(tempAxis?.quality, tempAxis?.value, settings?.min_temp_limit, settings?.max_temp_limit);
+  const waterStatus = sensorStatus(waterAxis?.quality, waterAxis?.value, settings?.water_level_min, settings?.water_level_max);
 
-  const nextAction = !isOnline
+  const nextAction = availability === 'UNKNOWN'
+    ? 'Chưa đủ dữ liệu để xác định trạng thái trạm.'
+    : isOffline
     ? 'Kiểm tra nguồn Wi-Fi trạm điều khiển.'
     : !isSensorOnline
       ? 'Đang mất tín hiệu cảm biến. Kiểm tra nguồn node cảm biến.'
@@ -127,8 +193,8 @@ const Dashboard = () => {
     tankAlert && (tankAlert.tank_a_low || tankAlert.tank_b_low || tankAlert.tank_ph_down_low || tankAlert.tank_ph_up_low)
   );
 
-  const hasActionableIssue = Boolean(faultCode) || !isOnline || !isSensorOnline;
-  const isCritical = !isOnline || !isSensorOnline;
+  const hasActionableIssue = Boolean(faultCode) || isOffline || isSensorUnknown || !isSensorOnline;
+  const isCritical = isOffline;
 
   return (
     <div className="app-page">
@@ -138,15 +204,15 @@ const Dashboard = () => {
           <div className="space-y-4 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
               <DeviceStatePill
-                state={isOnline ? 'online' : 'offline'}
-                label={isOnline ? 'Trạm Online' : 'Trạm Offline'}
+                state={isOnline ? 'online' : isOffline ? 'offline' : 'unknown'}
+                label={isOnline ? 'Trạm Online' : isOffline ? 'Trạm Offline' : 'Trạng thái chưa rõ'}
               />
               <span className="farm-status-pill bg-soft text-text-muted border-line">
                 <Cpu size={13} />
                 {modeLabel}
               </span>
               <Link
-                to="/fleet"
+                to={routePath('fleet')}
                 title="Quản lý các thiết bị đã liên kết"
                 className="farm-status-pill bg-white text-text-muted border-line hover:bg-soft transition-colors"
               >
@@ -175,7 +241,7 @@ const Dashboard = () => {
                 hasActionableIssue || permission !== 'granted' ? (
                   <div className="flex flex-col items-stretch gap-2">
                     {hasActionableIssue && (
-                      <Button size="sm" onClick={() => navigate('/operations')}>
+                      <Button size="sm" onClick={() => navigate(routePath('operations'))}>
                         Mở Vận hành <ArrowRight size={12} />
                       </Button>
                     )}
@@ -201,10 +267,14 @@ const Dashboard = () => {
             </div>
             <div className="rounded-2xl border border-line bg-surface-muted p-4 text-center">
               <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Cảm biến</span>
-              <div className={`text-2xl font-black mt-3 ${isSensorOnline ? 'text-status' : 'text-error'}`}>
-                {isSensorOnline ? 'Tốt' : 'Mất'}
+              <div className={`text-2xl font-black mt-3 ${
+                isSensorUnknown ? 'text-faint' : isSensorOnline ? 'text-status' : 'text-error'
+              }`}>
+                {isSensorUnknown ? 'Chưa rõ' : isSensorOnline ? 'Tốt' : 'Mất'}
               </div>
-              <p className="text-xs font-semibold text-primary-deep mt-2">{isSensorOnline ? 'Đang đo' : 'Cần kiểm tra'}</p>
+              <p className="text-xs font-semibold text-primary-deep mt-2">
+                {isSensorUnknown ? 'Chưa đủ dữ liệu' : isSensorOnline ? 'Đang đo' : 'Cần kiểm tra'}
+              </p>
             </div>
           </div>
         </div>
@@ -224,9 +294,9 @@ const Dashboard = () => {
 
       <QuickActionBar
         onWaterNow={() => forceOn('WATER_PUMP_IN', 30)}
-        onDose={() => navigate('/operations')}
-        onPausePumps={() => navigate('/operations')}
-        onViewAlerts={() => navigate('/journal')}
+        onDose={() => navigate(routePath('operations'))}
+        onPausePumps={() => navigate(routePath('operations'))}
+        onViewAlerts={() => navigate(routePath('journal'))}
       />
 
       {shouldShowOnboarding && <OnboardingWizard className="mb-6" />}
@@ -242,51 +312,51 @@ const Dashboard = () => {
         <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 transition-all duration-500 ${!isSensorOnline ? 'opacity-60 grayscale' : ''}`}>
           <SensorBentoCard
             title="Dinh dưỡng EC"
-            value={sensorData?.err_ec === true ? "Bảo trì" : formatNumber(sensorData?.ec, 2)}
-            unit={sensorData?.err_ec === true ? "" : "ppm"}
+            value={ecAxis?.quality === 'ERROR' ? "Lỗi" : ecAxis?.quality === 'INVALID' ? "Không hợp lệ" : ecAxis?.quality === 'STALE' ? "Cũ" : ecAxis?.quality === 'VALID' ? formatNumber(ecAxis.value, 2) : "Chưa có dữ liệu"}
+            unit={ecAxis?.quality === 'VALID' ? "ppm" : ""}
             icon={Activity}
-            theme={sensorData?.err_ec === true ? "rose" : "blue"}
+            theme={ecAxis?.quality === 'ERROR' || ecAxis?.quality === 'INVALID' ? "rose" : "blue"}
             statusLabel={ecStatus.label}
             statusTone={ecStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber(getTdsSetting(settings, 'ec_target', 'ec_target'), 2)} ± ${formatNumber(getTdsSetting(settings, 'ec_tolerance', 'ec_tolerance'), 2)}`}
-            description={sensorData?.err_ec === true ? 'Lỗi cảm biến EC.' : 'Nồng độ dinh dưỡng bồn chứa.'}
-            sparkline={sensorData?.err_ec === true ? 0 : Math.max(0, Math.min(100, (Number(sensorData?.ec ?? 0) / (Number(getTdsSetting(settings, 'ec_max_limit', 'ec_max_limit')) || 1)) * 100))}
+            description={ecAxis?.quality === 'ERROR' ? 'Lỗi cảm biến EC.' : 'Nồng độ dinh dưỡng bồn chứa.'}
+            sparkline={ecAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, (Number(ecAxis.value) / (Number(getTdsSetting(settings, 'ec_max_limit', 'ec_max_limit')) || 1)) * 100)) : undefined}
           />
           <SensorBentoCard
             title="Độ pH"
-            value={sensorData?.err_ph === true ? "Lỗi" : formatNumber(sensorData?.ph, 2)}
+            value={phAxis?.quality === 'ERROR' ? "Lỗi" : phAxis?.quality === 'INVALID' ? "Không hợp lệ" : phAxis?.quality === 'STALE' ? "Cũ" : phAxis?.quality === 'VALID' ? formatNumber(phAxis.value, 2) : "Chưa có dữ liệu"}
             unit=""
             icon={Droplets}
-            theme={sensorData?.err_ph === true ? "rose" : "fuchsia"}
+            theme={phAxis?.quality === 'ERROR' || phAxis?.quality === 'INVALID' ? "rose" : "fuchsia"}
             statusLabel={phStatus.label}
             statusTone={phStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber((settings as any)?.ph_target, 2)} ± ${formatNumber((settings as any)?.ph_tolerance, 2)}`}
-            description={sensorData?.err_ph === true ? 'Cần hiệu chuẩn pH.' : 'Độ cân bằng axit/kiềm.'}
-            sparkline={sensorData?.err_ph === true ? 0 : Math.max(0, Math.min(100, (Number(sensorData?.ph ?? 14) / 14) * 100))}
+            description={phAxis?.quality === 'ERROR' ? 'Cần hiệu chuẩn pH.' : 'Độ cân bằng axit/kiềm.'}
+            sparkline={phAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, (Number(phAxis.value) / 14) * 100)) : undefined}
           />
           <SensorBentoCard
             title="Nhiệt độ"
-            value={sensorData?.err_temp === true ? "Lỗi" : formatNumber(sensorData?.temp, 1)}
-            unit={sensorData?.err_temp === true ? "" : "°C"}
+            value={tempAxis?.quality === 'ERROR' ? "Lỗi" : tempAxis?.quality === 'INVALID' ? "Không hợp lệ" : tempAxis?.quality === 'STALE' ? "Cũ" : tempAxis?.quality === 'VALID' ? formatNumber(tempAxis.value, 1) : "Chưa có dữ liệu"}
+            unit={tempAxis?.quality === 'VALID' ? "°C" : ""}
             icon={Thermometer}
-            theme={sensorData?.err_temp === true ? "rose" : "orange"}
+            theme={tempAxis?.quality === 'ERROR' || tempAxis?.quality === 'INVALID' ? "rose" : "orange"}
             statusLabel={tempStatus.label}
             statusTone={tempStatus.tone}
             rangeLabel={`An toàn ${formatNumber((settings as any)?.min_temp_limit, 0)}-${formatNumber((settings as any)?.max_temp_limit, 0)}°C`}
-            description="Nhiệt độ dung dịch bồn chứa."
-            sparkline={sensorData?.err_temp === true ? 0 : Math.max(0, Math.min(100, (Number(sensorData?.temp ?? 0) / 50) * 100))}
+            description={tempAxis?.quality === 'ERROR' ? 'Lỗi cảm biến nhiệt độ.' : 'Nhiệt độ dung dịch bồn chứa.'}
+            sparkline={tempAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, (Number(tempAxis.value) / 50) * 100)) : undefined}
           />
           <SensorBentoCard
             title="Mực nước"
-            value={sensorData?.err_water === true ? "Lỗi phao" : formatNumber(sensorData?.water_level, 0)}
-            unit={sensorData?.err_water === true ? "" : "%"}
+            value={waterAxis?.quality === 'ERROR' ? "Lỗi phao" : waterAxis?.quality === 'INVALID' ? "Không hợp lệ" : waterAxis?.quality === 'STALE' ? "Cũ" : waterAxis?.quality === 'VALID' ? formatNumber(waterAxis.value, 0) : "Chưa có dữ liệu"}
+            unit={waterAxis?.quality === 'VALID' ? "%" : ""}
             icon={Waves}
-            theme={sensorData?.err_water === true ? "rose" : "cyan"}
+            theme={waterAxis?.quality === 'ERROR' || waterAxis?.quality === 'INVALID' ? "rose" : "cyan"}
             statusLabel={waterStatus.label}
             statusTone={waterStatus.tone}
             rangeLabel={`Giữ quanh ${formatNumber((settings as any)?.water_level_target, 0)}%`}
-            description={sensorData?.err_water === true ? 'Kiểm tra phao siêu âm.' : 'Đảm bảo bơm không chạy khô.'}
-            sparkline={sensorData?.err_water === true ? 0 : Math.max(0, Math.min(100, Number(sensorData?.water_level ?? 0)))}
+            description={waterAxis?.quality === 'ERROR' ? 'Kiểm tra phao siêu âm.' : 'Đảm bảo bơm không chạy khô.'}
+            sparkline={waterAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, Number(waterAxis.value))) : undefined}
           />
         </div>
       </div>
@@ -295,14 +365,18 @@ const Dashboard = () => {
       <div className="ui-card space-y-3">
         <h3 className="farm-section-title"><Zap size={14} /> Thiết bị đang chạy</h3>
         <div className="flex flex-wrap gap-2">
-          {Object.values(pumps).some(v => v === true) ? (
+          {authoritativeTelemetry?.actuator && Object.values(pumps).some(v => v === true) ? (
             Object.entries(pumps).map(([key, isRunning]) => {
               if (!isRunning) return null;
               return <ActiveDeviceTag key={key} label={pumpLabels[key] || key} color={pumpColors[key] || 'bg-pill text-status border-pill'} />;
             })
-          ) : (
+          ) : authoritativeTelemetry?.actuator ? (
             <span className="farm-status-pill bg-pill text-status border-pill">
               Không có bơm hoặc van nào đang chạy
+            </span>
+          ) : (
+            <span className="farm-status-pill bg-soft text-text-muted border-line">
+              Chưa có dữ liệu trạng thái bơm/van
             </span>
           )}
         </div>

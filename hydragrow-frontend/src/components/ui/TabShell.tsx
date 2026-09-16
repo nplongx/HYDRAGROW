@@ -13,14 +13,16 @@ interface TabShellProps {
   tabs: TabShellTab[];
   defaultTabId: string;
   onTabChange?: (tabId: string) => void;
+  activeTabId?: string;
 }
 
-export const TabShell = ({ title, subtitle, action, tabs, defaultTabId, onTabChange }: TabShellProps) => {
-  const [activeTabId, setActiveTabId] = useState(defaultTabId);
+export const TabShell = ({ title, subtitle, action, tabs, defaultTabId, onTabChange, activeTabId: controlledTabId }: TabShellProps) => {
+  const [localTabId, setLocalTabId] = useState(defaultTabId);
+  const activeTabId = controlledTabId ?? localTabId;
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
   const handleSelect = (tabId: string) => {
-    setActiveTabId(tabId);
+    setLocalTabId(tabId);
     onTabChange?.(tabId);
   };
 

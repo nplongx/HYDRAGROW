@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type DeviceState = 'online' | 'offline' | 'warning' | 'dosing' | 'auto' | 'manual';
+export type DeviceState = 'online' | 'offline' | 'unknown' | 'warning' | 'dosing' | 'auto' | 'manual';
 
 interface DeviceStatePillProps {
   state: DeviceState | string;
@@ -10,6 +10,7 @@ interface DeviceStatePillProps {
 
 const META: Record<DeviceState, { label: string; classes: string; dot: string }> = {
   online: { label: 'Trực tuyến', classes: 'bg-success-bg text-status', dot: 'bg-status' },
+  unknown: { label: 'Chưa rõ', classes: 'bg-surface-muted text-text-muted', dot: 'bg-text-muted' },
   offline: { label: 'Ngoại tuyến', classes: 'bg-surface-muted text-faint', dot: 'bg-faint' },
   warning: { label: 'Cảnh báo', classes: 'bg-warning-bg text-warn-deep', dot: 'bg-warn-deep' },
   dosing: { label: 'Đang châm', classes: 'bg-info-bg text-info-fg', dot: 'bg-info-fg' },

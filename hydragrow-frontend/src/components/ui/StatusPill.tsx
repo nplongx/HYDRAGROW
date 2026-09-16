@@ -1,21 +1,24 @@
-type StatusPillKind = 'sending' | 'accepted' | 'error';
+type StatusPillKind = 'sending' | 'acknowledged' | 'confirmed' | 'error';
 
 const STYLES: Record<StatusPillKind, string> = {
   sending: 'bg-warning-bg text-warn-deep',
-  accepted: 'bg-pill text-status',
+  acknowledged: 'bg-pill text-status',
+  confirmed: 'bg-pill text-status',
   error: 'bg-danger-bg text-error',
 };
 
 const LABELS: Record<StatusPillKind, string> = {
   sending: 'Đang gửi…',
-  accepted: '✓ Xác nhận',
+  acknowledged: 'Đã nhận lệnh',
+  confirmed: '✓ Đã xác nhận',
   error: '⚠ Lỗi phản hồi',
 };
 
 const kindOf = (commandStatus?: string): StatusPillKind | null => {
   if (!commandStatus) return null;
-  if (commandStatus === 'sending') return 'sending';
-  if (commandStatus === 'accepted') return 'accepted';
+  if (commandStatus === 'REQUESTED' || commandStatus === 'SENT') return 'sending';
+  if (commandStatus === 'ACKNOWLEDGED') return 'acknowledged';
+  if (commandStatus === 'CONFIRMED') return 'confirmed';
   return 'error';
 };
 

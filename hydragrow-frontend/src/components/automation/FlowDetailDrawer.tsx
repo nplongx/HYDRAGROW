@@ -46,7 +46,9 @@ export function FlowDetailDrawer({
     isNew ? [] : (script.ir_json?.next_flow_ids ?? []),
   );
   const [passContextVariables, setPassContextVariables] = useState<boolean>(
-    isNew ? false : (script.ir_json?.chainConfig?.passContextVariables ?? false),
+    isNew
+      ? false
+      : (script.ir_json?.chainConfig?.passContextVariables ?? false),
   );
   const builder = useAutomationBuilder();
   const { data: allScripts } = useAutomationScripts(deviceId);
@@ -64,7 +66,9 @@ export function FlowDetailDrawer({
     if (!isNew && script.ir_json) {
       builder.loadFromIr(script.ir_json);
       setNextFlowIds(script.ir_json.next_flow_ids ?? []);
-      setPassContextVariables(script.ir_json.chainConfig?.passContextVariables ?? false);
+      setPassContextVariables(
+        script.ir_json.chainConfig?.passContextVariables ?? false,
+      );
     } else {
       builder.setKind("alert");
       setNextFlowIds([]);
@@ -145,7 +149,9 @@ export function FlowDetailDrawer({
       .filter((n) => n.type === "condition" || n.type === "condition_group")
       .flatMap((n) =>
         Array.isArray((n.data as Record<string, unknown>)?.conditions)
-          ? ((n.data as Record<string, unknown>).conditions as Parameters<typeof summarizeConditionTree>[0])
+          ? ((n.data as Record<string, unknown>).conditions as Parameters<
+              typeof summarizeConditionTree
+            >[0])
           : [],
       ),
   );
@@ -157,17 +163,23 @@ export function FlowDetailDrawer({
   );
 
   const triggerNode = builder.nodes.find((n) => n.type === "trigger");
-  const triggerConfig = triggerNode?.data?.trigger as WebhookTriggerConfig | undefined;
+  const triggerConfig = triggerNode?.data?.trigger as
+    WebhookTriggerConfig | undefined;
   const isWebhookTrigger = triggerConfig?.type === "webhook";
   const configOverwriteNode = builder.nodes.find(
-    (n) => n.type === "config" && (n.data as Record<string, unknown>)?.variant === "overwrite",
+    (n) =>
+      n.type === "config" &&
+      (n.data as Record<string, unknown>)?.variant === "overwrite",
   );
   const configOverwriteSummary = configOverwriteNode
     ? `${(configOverwriteNode.data as Record<string, unknown>)?.configKey} → ${(configOverwriteNode.data as Record<string, unknown>)?.overrideValue}`
     : undefined;
 
   return (
-    <div data-testid="flow-detail-drawer" className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40">
+    <div
+      data-testid="flow-detail-drawer"
+      className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40"
+    >
       {/* Top Header matching Reference 02 */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-2 border-b border-line bg-white p-3 rounded-2xl shadow-2xs">
         <div className="flex items-center gap-3">
@@ -230,7 +242,10 @@ export function FlowDetailDrawer({
         </div>
       </div>
 
-      <NodePalette onAddNode={builder.addNode} onUpdateTrigger={builder.updateTrigger} />
+      <NodePalette
+        onAddNode={builder.addNode}
+        onUpdateTrigger={builder.updateTrigger}
+      />
 
       <div className="flex flex-1 flex-col lg:flex-row overflow-hidden rounded-2xl border border-slate-200 bg-white relative my-2 min-h-[420px]">
         <div className="h-full w-full flex-1 relative">
@@ -252,7 +267,9 @@ export function FlowDetailDrawer({
           {showTestPanel && (
             <div className="absolute right-0 top-0 h-full w-96 shadow-2xl z-30 flex flex-col border-l border-slate-200 bg-white">
               <div className="flex items-center justify-between p-2 border-b">
-                <span className="text-xs font-bold text-slate-500 uppercase px-2">Dry Run Simulator</span>
+                <span className="text-xs font-bold text-slate-500 uppercase px-2">
+                  Dry Run Simulator
+                </span>
                 <button
                   type="button"
                   onClick={() => setShowTestPanel(false)}
@@ -292,13 +309,24 @@ export function FlowDetailDrawer({
         {/* Config·Overwrite nodes open ConfigNodeInspector directly */}
         {isConfigOverwrite && builder.selectedNode && (
           <ConfigNodeInspector
+            deviceId={deviceId}
             initialKey={(selectedData.configKey as string) ?? "ec_target"}
-            initialValue={(() => { const n = Number(selectedData.overrideValue ?? 1.8); return Number.isNaN(n) ? 1.8 : n; })()}
-            initialAutoRestore={(selectedData.readOriginalBeforeWrite as boolean) ?? true}
+            initialValue={(() => {
+              const n = Number(selectedData.overrideValue ?? 1.8);
+              return Number.isNaN(n) ? 1.8 : n;
+            })()}
+            initialAutoRestore={
+              (selectedData.readOriginalBeforeWrite as boolean) ?? true
+            }
             initialPriority={Number(selectedData.priority ?? 0)}
             conditionSummary={conditionSummary}
             auditLogs={auditLogsForSelectedKey}
-            onSave={(updated: { configKey: string; overrideValue: number; autoRestore: boolean; priority: number }) => {
+            onSave={(updated: {
+              configKey: string;
+              overrideValue: number;
+              autoRestore: boolean;
+              priority: number;
+            }) => {
               builder.updateNodeData(builder.selectedNode!.id, {
                 ...builder.selectedNode!.data,
                 configKey: updated.configKey,
@@ -317,14 +345,23 @@ export function FlowDetailDrawer({
 
       {isWebhookTrigger ? (
         <WebhookAndChainPanel
-          webhookUrl={(triggerNode?.data as Record<string, unknown>)?.endpoint as string | undefined}
+          webhookUrl={
+            (triggerNode?.data as Record<string, unknown>)?.endpoint as
+              string | undefined
+          }
           mode={triggerConfig?.mode ?? "flow"}
           onModeChange={(mode) =>
-            builder.updateNodeData(triggerNode!.id, { ...triggerNode!.data, trigger: { ...triggerConfig, type: "webhook", mode } })
+            builder.updateNodeData(triggerNode!.id, {
+              ...triggerNode!.data,
+              trigger: { ...triggerConfig, type: "webhook", mode },
+            })
           }
           mappings={triggerConfig?.fieldMappings ?? []}
           onMappingsChange={(fieldMappings) =>
-            builder.updateNodeData(triggerNode!.id, { ...triggerNode!.data, trigger: { ...triggerConfig, type: "webhook", fieldMappings } })
+            builder.updateNodeData(triggerNode!.id, {
+              ...triggerNode!.data,
+              trigger: { ...triggerConfig, type: "webhook", fieldMappings },
+            })
           }
           currentScriptName={isNew ? name : script.name}
           currentScriptKind={builder.kind}

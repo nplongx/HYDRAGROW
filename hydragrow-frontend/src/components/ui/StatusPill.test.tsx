@@ -8,8 +8,8 @@ describe('StatusPill', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('hiển thị "Đang gửi…" khi commandStatus là sending', () => {
-    render(<StatusPill commandStatus="sending" />);
+  it('hiển thị "Đang gửi…" cho REQUESTED và SENT', () => {
+    render(<StatusPill commandStatus="SENT" />);
     const pill = screen.getByText('Đang gửi…');
     expect(pill).toBeInTheDocument();
     expect(pill.className).toContain('bg-warning-bg');
@@ -17,12 +17,17 @@ describe('StatusPill', () => {
     expect(pill.className).toContain('rounded-full');
   });
 
-  it('hiển thị "✓ Xác nhận" khi commandStatus là accepted', () => {
-    render(<StatusPill commandStatus="accepted" />);
-    const pill = screen.getByText('✓ Xác nhận');
+  it('hiển thị "✓ Đã xác nhận" khi commandStatus là CONFIRMED', () => {
+    render(<StatusPill commandStatus="CONFIRMED" />);
+    const pill = screen.getByText('✓ Đã xác nhận');
     expect(pill).toBeInTheDocument();
     expect(pill.className).toContain('bg-pill');
     expect(pill.className).toContain('text-status');
+  });
+
+  it('hiển thị "Đã nhận lệnh" khi commandStatus là ACKNOWLEDGED', () => {
+    render(<StatusPill commandStatus="ACKNOWLEDGED" />);
+    expect(screen.getByText('Đã nhận lệnh')).toBeInTheDocument();
   });
 
   it('hiển thị "⚠ Lỗi phản hồi" dùng token bg-danger-bg/text-error', () => {

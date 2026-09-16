@@ -1,7 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Automation } from "./Automation";
-import { useDeviceStore } from "../store/useDeviceStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const queryClient = new QueryClient();
@@ -46,6 +45,14 @@ vi.mock("../hooks/useFlowCanvas", () => ({
   }),
 }));
 
+vi.mock("../contexts/StationContext", () => ({
+  useStationContext: () => ({
+    status: 'Selected', selectedDeviceId: 'dev1', selectedDevice: null,
+    availableDevices: [], error: null, selectDevice: vi.fn(), switchDevice: vi.fn(),
+    clearSelection: vi.fn(), refreshAvailableDevices: vi.fn(),
+  }),
+}));
+
 vi.mock("../components/automation/FlowDetailDrawer", () => ({
   FlowDetailDrawer: ({ onClose }: { onClose: () => void }) => (
     <div data-testid="flow-detail-drawer-stub">
@@ -57,7 +64,6 @@ vi.mock("../components/automation/FlowDetailDrawer", () => ({
 describe("Automation Page Desktop Drawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useDeviceStore.setState({ deviceId: "dev1" });
   });
 
   it("renders backdrop and max-w-7xl centered container when a script is selected in desktop mode", () => {

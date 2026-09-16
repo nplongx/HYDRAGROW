@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://hydragrow.onrender.com/api/:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }

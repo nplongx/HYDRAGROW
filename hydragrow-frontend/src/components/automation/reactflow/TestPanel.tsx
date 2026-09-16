@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { Play, Check, X } from "lucide-react";
 import { useTestAutomationScript } from "../../../hooks/useAutomationScripts";
-import { DEVICE_CONFIG_BOUNDS, clampConfigValue, type AutomationIr } from "../../../lib/automation/ir";
-import { useDeviceStore } from "../../../store/useDeviceStore";
+import {
+  DEVICE_CONFIG_BOUNDS,
+  clampConfigValue,
+  type AutomationIr,
+} from "../../../lib/automation/ir";
+import { useDeviceConfig } from "../../../hooks/useDeviceConfig";
 import type { ConditionTraceEntry } from "../../../types/automation";
-
 
 interface TestPanelProps {
   deviceId: string;
@@ -15,7 +18,7 @@ interface TestPanelProps {
 function findFieldMode(ir: AutomationIr, field: string): string {
   const check = (item: any): string | null => {
     if (!item) return null;
-    if (item.sensor === field && item.mode && item.mode !== 'instant') {
+    if (item.sensor === field && item.mode && item.mode !== "instant") {
       return item.mode;
     }
     if (item.children && Array.isArray(item.children)) {
@@ -32,30 +35,41 @@ function findFieldMode(ir: AutomationIr, field: string): string {
       if (res) return res;
     }
   }
-  return 'instant';
+  return "instant";
 }
 
 export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
   const [sampleRaw, setSampleRaw] = useState<Record<string, string>>({});
   const testMutation = useTestAutomationScript(deviceId);
-  const settings = useDeviceStore((s) => s.settings);
+  const { data: settings } = useDeviceConfig(deviceId);
 
-  const targetKey = (ir.configOverwrite?.configKey ?? (ir.actions?.find((a) => a.type === "config_override") as any)?.key ?? "ec_target") as string;
-  const bound = DEVICE_CONFIG_BOUNDS[targetKey] ?? { min: 0.8, max: 3.2, unit: "mS/cm", defaultVal: 2.4 };
-  const actualBeforeVal = (settings && typeof (settings as any)[targetKey] === "number")
-    ? (settings as any)[targetKey]
-    : bound.defaultVal;
-  const overrideVal = ir.configOverwrite?.value ?? (ir.actions?.find((a) => a.type === "config_override") as any)?.value ?? 1.8;
+  const targetKey = (ir.configOverwrite?.configKey ??
+    (ir.actions?.find((a) => a.type === "config_override") as any)?.key ??
+    "ec_target") as string;
+  const bound = DEVICE_CONFIG_BOUNDS[targetKey] ?? {
+    min: 0.8,
+    max: 3.2,
+    unit: "mS/cm",
+    defaultVal: 2.4,
+  };
+  const actualBeforeVal =
+    settings && typeof (settings as any)[targetKey] === "number"
+      ? (settings as any)[targetKey]
+      : bound.defaultVal;
+  const overrideVal =
+    ir.configOverwrite?.value ??
+    (ir.actions?.find((a) => a.type === "config_override") as any)?.value ??
+    1.8;
 
   const handleRun = () => {
     const samplePayload: Record<string, number | number[]> = {};
     for (const field of fields) {
       const raw = sampleRaw[field];
-      if (!raw || raw.trim() === '') continue;
+      if (!raw || raw.trim() === "") continue;
       const mode = findFieldMode(ir, field);
-      if (mode !== 'instant') {
+      if (mode !== "instant") {
         const parts = raw
-          .split(',')
+          .split(",")
           .map((s) => parseFloat(s.trim()))
           .filter((n) => !isNaN(n));
         if (parts.length > 0) {
@@ -94,12 +108,17 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
           <div className="space-y-3">
             {fields.map((field) => {
               const mode = findFieldMode(ir, field);
-              const isWindow = mode !== 'instant';
+              const isWindow = mode !== "instant";
               return (
                 <div key={field} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-emerald-900">
-                      {field} {isWindow && <span className="text-xs text-emerald-600 font-normal">({mode})</span>}
+                      {field}{" "}
+                      {isWindow && (
+                        <span className="text-xs text-emerald-600 font-normal">
+                          ({mode})
+                        </span>
+                      )}
                     </label>
                     <input
                       type={isWindow ? "text" : "number"}
@@ -122,7 +141,8 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
           <div className="rounded border border-sky-100 bg-sky-50 p-3 mt-4 mb-4 text-xs text-sky-800">
             <strong>Lưu ý: Đối với điều kiện time-window</strong>
             <br />
-            Các điều kiện lấy mẫu theo thời gian (mean/min/max) nhận chuỗi số cách nhau bởi dấu phẩy để tính toán cửa sổ giả lập.
+            Các điều kiện lấy mẫu theo thời gian (mean/min/max) nhận chuỗi số
+            cách nhau bởi dấu phẩy để tính toán cửa sổ giả lập.
           </div>
           <button
             type="button"
@@ -195,58 +215,76 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
             </div>
 
             {/* Config Diff Comparison */}
-            {testMutation.data.will_fire && (ir.configOverwrite || ir.actions.some((a) => a.type === "config_override")) && (
-              <div className="space-y-2 mt-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-indigo-900 uppercase">
-                    SO SÁNH CONFIG (DIFF)
-                  </h4>
-                  <span className="bg-indigo-600 text-white text-[9px] font-semibold px-1 rounded">
-                    MỚI
-                  </span>
-                </div>
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                    <span>CONFIG KEY</span>
-                    <span className="font-bold text-indigo-950">
-                      {targetKey}
+            {testMutation.data.will_fire &&
+              (ir.configOverwrite ||
+                ir.actions.some((a) => a.type === "config_override")) && (
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-indigo-900 uppercase">
+                      SO SÁNH CONFIG (DIFF)
+                    </h4>
+                    <span className="bg-indigo-600 text-white text-[9px] font-semibold px-1 rounded">
+                      MỚI
                     </span>
                   </div>
-                  <div className="flex items-baseline justify-between pt-1 border-t border-indigo-100/80">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block uppercase">TRƯỚC</span>
-                      <span className="line-through text-slate-500 font-medium">{actualBeforeVal} {bound.unit}</span>
-                    </div>
-                    <span className="text-indigo-400 font-bold">&rarr;</span>
-                    <div className="text-right">
-                      <span className="text-[10px] text-indigo-700 block uppercase font-semibold">SAU KHI GHI ĐÈ</span>
-                      <span className="text-sm font-bold text-indigo-700">
-                        {overrideVal} {bound.unit}
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                      <span>CONFIG KEY</span>
+                      <span className="font-bold text-indigo-950">
+                        {targetKey}
                       </span>
                     </div>
-                  </div>
-                  {(() => {
-                    const parsed = parseFloat(String(overrideVal));
-                    const clamp = clampConfigValue(targetKey, Number.isNaN(parsed) ? bound.defaultVal : parsed);
-                    return clamp.clamped ? (
-                      <div className="text-[11px] text-amber-700 flex items-center gap-1 font-medium">
-                        <X className="w-3.5 h-3.5" />
-                        <span>Vượt giới hạn — giá trị sẽ bị kẹp (clamp) về {clamp.value} {bound.unit} (cho phép {bound.min} – {bound.max} {bound.unit})</span>
+                    <div className="flex items-baseline justify-between pt-1 border-t border-indigo-100/80">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block uppercase">
+                          TRƯỚC
+                        </span>
+                        <span className="line-through text-slate-500 font-medium">
+                          {actualBeforeVal} {bound.unit}
+                        </span>
                       </div>
-                    ) : (
-                      <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Trong giới hạn cho phép ({bound.min} – {bound.max} {bound.unit})</span>
+                      <span className="text-indigo-400 font-bold">&rarr;</span>
+                      <div className="text-right">
+                        <span className="text-[10px] text-indigo-700 block uppercase font-semibold">
+                          SAU KHI GHI ĐÈ
+                        </span>
+                        <span className="text-sm font-bold text-indigo-700">
+                          {overrideVal} {bound.unit}
+                        </span>
                       </div>
-                    );
-                  })()}
-                  <div className="text-[11px] text-slate-600">
-                    &circlearrowright; Tự động khôi phục {actualBeforeVal} {bound.unit} khi điều kiện hết đúng
+                    </div>
+                    {(() => {
+                      const parsed = parseFloat(String(overrideVal));
+                      const clamp = clampConfigValue(
+                        targetKey,
+                        Number.isNaN(parsed) ? bound.defaultVal : parsed,
+                      );
+                      return clamp.clamped ? (
+                        <div className="text-[11px] text-amber-700 flex items-center gap-1 font-medium">
+                          <X className="w-3.5 h-3.5" />
+                          <span>
+                            Vượt giới hạn — giá trị sẽ bị kẹp (clamp) về{" "}
+                            {clamp.value} {bound.unit} (cho phép {bound.min} –{" "}
+                            {bound.max} {bound.unit})
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>
+                            Trong giới hạn cho phép ({bound.min} – {bound.max}{" "}
+                            {bound.unit})
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    <div className="text-[11px] text-slate-600">
+                      &circlearrowright; Tự động khôi phục {actualBeforeVal}{" "}
+                      {bound.unit} khi điều kiện hết đúng
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-
+              )}
 
             <div className="space-y-2 mt-4">
               <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">

@@ -1,0 +1,26 @@
+{
+  "device_id": "device-001",
+  "observed_at": "2026-05-19T12:00:00Z",
+  "received_at": "2026-05-19T12:00:01Z",
+  "availability": "ONLINE",
+  "axes": [
+    {"name": "ph", "value": 5.98, "unit": "pH", "quality": "VALID", "observed_at": "2026-05-19T12:00:00Z", "received_at": "2026-05-19T12:00:01Z", "source": "controller_sensor", "error_code": null},
+    {"name": "ec", "value": 1.55, "unit": "mS/cm", "quality": "VALID", "observed_at": "2026-05-19T12:00:00Z", "received_at": "2026-05-19T12:00:01Z", "source": "controller_sensor", "error_code": null},
+    {"name": "temp", "value": 27.1, "unit": "°C", "quality": "VALID", "observed_at": "2026-05-19T12:00:00Z", "received_at": "2026-05-19T12:00:01Z", "source": "controller_sensor", "error_code": null},
+    {"name": "water_level", "value": 20.0, "unit": "cm", "quality": "VALID", "observed_at": "2026-05-19T12:00:00Z", "received_at": "2026-05-19T12:00:01Z", "source": "controller_sensor", "error_code": null}
+  ],
+  "controller_health": null,
+  "actuator": null,
+  "fsm": null,
+  "runtime_ready": true,
+  "actuator_contradictory": false,
+  "operational_state": {
+    "contact": "CONTACTED",
+    "freshness": "FRESH",
+    "readiness": "READY",
+    "actuator": "UNKNOWN",
+    "classified_at": "2026-05-19T12:00:02Z",
+    "received_at": "2026-05-19T12:00:01Z",
+    "observed_at": "2026-05-19T12:00:00Z"
+  }
+}

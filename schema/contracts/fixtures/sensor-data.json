@@ -1,0 +1,28 @@
+{
+  "device_id": "device-001",
+  "ec": 1.5,
+  "ph": 6.0,
+  "temp": 27.0,
+  "water_level": 20.0,
+  "pump_status": {
+    "pump_a": false,
+    "pump_b": false,
+    "ph_up": false,
+    "ph_down": false,
+    "osaka_pump": false,
+    "mist_valve": false,
+    "mix_valve": false,
+    "water_pump_in": false,
+    "water_pump_out": false
+  },
+  "time": "2026-05-19T12:00:00Z",
+  "rssi": -59,
+  "free_heap": 176320,
+  "uptime": 42000,
+  "err_water": false,
+  "err_temp": false,
+  "err_ph": false,
+  "err_ec": false,
+  "is_continuous": true,
+  "ph_voltage_mv": 2105.25
+}

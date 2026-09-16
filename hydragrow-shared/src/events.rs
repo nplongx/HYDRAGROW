@@ -1,5 +1,7 @@
 use crate::fsm::FsmSnapshot;
 // hydragrow-shared/src/events.rs — version mới
+use crate::CommandLifecycleEvent;
+use crate::telemetry::authoritative::AuthoritativeTelemetrySnapshot;
 use crate::telemetry::cycle::{DosingCycleEvent, WaterCycleEvent};
 use crate::telemetry::health::DeviceHealthSnapshot;
 use crate::telemetry::transition::FsmTransitionEvent;
@@ -10,6 +12,8 @@ use serde::{Deserialize, Serialize};
 pub struct DeviceStatusPayload {
     pub device_id: String,
     pub is_online: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_seen_at: Option<String>,
 }
 
 /// Legacy — giữ lại để không break backend handler cũ
@@ -64,4 +68,7 @@ pub enum AppEvent {
     HealthSnapshot(DeviceHealthSnapshot),
     /// Raw controller status payload, giữ các field mở rộng như pump_status/budgets nếu firmware gửi kèm.
     ControllerStatus(serde_json::Value),
+    CommandLifecycle(CommandLifecycleEvent),
+    /// Canonical current telemetry/state observation. History remains in InfluxDB.
+    TelemetrySnapshot(Box<AuthoritativeTelemetrySnapshot>),
 }

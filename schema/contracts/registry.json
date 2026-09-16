@@ -1,0 +1,525 @@
+{
+  "registry_version": "1.0.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "compatibility_policy": {
+    "writer_version": "1",
+    "minimum_reader_version": "1",
+    "legacy_aliases_are_input_only": true
+  },
+  "contracts": {
+    "api_error": {
+      "version": 1,
+      "layer": "canonical_wire",
+      "protocol": "http_json",
+      "fixture": "fixtures/api-error.json",
+      "required": [
+        "error"
+      ],
+      "fields": {
+        "error": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "error.code": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "error.message": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "error.details": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "error.request_id": {
+          "type": "string",
+          "required": false,
+          "nullable": true
+        }
+      }
+    },
+    "sensor_data": {
+      "version": 2,
+      "layer": "canonical_wire",
+      "protocol": "mqtt_json",
+      "fixture": "fixtures/sensor-data.json",
+      "required": [
+        "device_id",
+        "ec",
+        "ph",
+        "temp",
+        "water_level",
+        "pump_status",
+        "time"
+      ],
+      "fields": {
+        "device_id": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "device"
+        },
+        "ec": {
+          "type": "number",
+          "required": true,
+          "nullable": false,
+          "unit": "mS/cm",
+          "finite": true,
+          "precision": "IEEE-754 binary32 at Rust shared boundary; JSON number in TypeScript"
+        },
+        "ph": {
+          "type": "number",
+          "required": true,
+          "nullable": false,
+          "unit": "pH",
+          "finite": true,
+          "precision": "IEEE-754 binary32 at Rust shared boundary; JSON number in TypeScript"
+        },
+        "temp": {
+          "type": "number",
+          "required": true,
+          "nullable": false,
+          "unit": "°C",
+          "finite": true,
+          "precision": "IEEE-754 binary32 at Rust shared boundary; JSON number in TypeScript"
+        },
+        "water_level": {
+          "type": "number",
+          "required": true,
+          "nullable": false,
+          "unit": "cm",
+          "finite": true,
+          "precision": "IEEE-754 binary32 at Rust shared boundary; JSON number in TypeScript"
+        },
+        "pump_status": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "time": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "format": "date-time"
+        },
+        "tds": {
+          "type": "number",
+          "required": false,
+          "nullable": false,
+          "compatibility_alias": true,
+          "canonical": "ec",
+          "precision": "IEEE-754 binary32 at Rust shared boundary; JSON number in TypeScript",
+          "unit": "mS/cm",
+          "finite": true
+        },
+        "err_tds": {
+          "type": "boolean",
+          "required": false,
+          "nullable": true,
+          "compatibility_alias": true,
+          "canonical": "err_ec"
+        }
+      },
+      "aliases": [
+        {
+          "name": "tds",
+          "canonical": "ec",
+          "direction": "input_only",
+          "removal": "all_known_sensor_producers_emit_ec"
+        },
+        {
+          "name": "err_tds",
+          "canonical": "err_ec",
+          "direction": "input_only",
+          "removal": "all_known_sensor_producers_emit_err_ec"
+        }
+      ]
+    },
+    "authoritative_telemetry": {
+      "version": 1,
+      "layer": "canonical_wire",
+      "protocol": "mqtt_json",
+      "fixture": "fixtures/authoritative-telemetry.json",
+      "required": [
+        "device_id",
+        "availability",
+        "axes",
+        "actuator_contradictory",
+        "operational_state"
+      ],
+      "fields": {
+        "device_id": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "device"
+        },
+        "observed_at": {
+          "type": "string",
+          "required": false,
+          "nullable": true,
+          "format": "date-time"
+        },
+        "received_at": {
+          "type": "string",
+          "required": false,
+          "nullable": true,
+          "format": "date-time"
+        },
+        "availability": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "enum": [
+            "UNKNOWN",
+            "ONLINE",
+            "DEGRADED",
+            "OFFLINE",
+            "UNAVAILABLE"
+          ]
+        },
+        "axes": {
+          "type": "array",
+          "required": true,
+          "nullable": false
+        },
+        "runtime_ready": {
+          "type": "boolean",
+          "required": false,
+          "nullable": true
+        },
+        "actuator_contradictory": {
+          "type": "boolean",
+          "required": true,
+          "nullable": false
+        },
+        "operational_state": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        }
+      },
+      "axis": {
+        "name_enum": [
+          "ph",
+          "ec",
+          "temp",
+          "water_level"
+        ],
+        "units": {
+          "ph": "pH",
+          "ec": "mS/cm",
+          "temp": "°C",
+          "water_level": "cm"
+        },
+        "timestamp_fields": [
+          "observed_at",
+          "received_at"
+        ]
+      }
+    },
+    "mqtt_command": {
+      "version": 2,
+      "layer": "canonical_wire",
+      "protocol": "mqtt_json",
+      "fixture": "fixtures/mqtt-command.json",
+      "required": [
+        "target",
+        "action"
+      ],
+      "fields": {
+        "target": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "device_or_controller"
+        },
+        "action": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "params": {
+          "type": "object",
+          "required": false,
+          "nullable": true
+        },
+        "ts": {
+          "type": "integer",
+          "required": false,
+          "nullable": true,
+          "unit": "epoch_ms",
+          "timestamp": true,
+          "precision": "exact signed 64-bit integer at Rust boundary; JSON integer"
+        },
+        "nonce": {
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        "signature": {
+          "type": "string",
+          "required": false,
+          "nullable": true
+        }
+      },
+      "aliases": [
+        {
+          "name": "pump",
+          "canonical": "params.pump_id",
+          "direction": "input_only"
+        },
+        {
+          "name": "duration_sec",
+          "canonical": "params.duration_sec",
+          "direction": "input_only"
+        },
+        {
+          "name": "pwm",
+          "canonical": "params.pwm",
+          "direction": "input_only"
+        }
+      ]
+    },
+    "crop_recipe": {
+      "version": 2,
+      "layer": "canonical_wire",
+      "protocol": "json",
+      "fixture": "fixtures/crop-recipe.json",
+      "required": [
+        "schema_version",
+        "recipe_id",
+        "season_id",
+        "device_id",
+        "revision",
+        "start_time_sec",
+        "current_stage_index",
+        "stages"
+      ],
+      "fields": {
+        "schema_version": {
+          "type": "integer",
+          "required": true,
+          "nullable": false,
+          "precision": "exact unsigned integer at Rust boundary; JSON integer"
+        },
+        "recipe_id": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "recipe"
+        },
+        "season_id": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "season"
+        },
+        "device_id": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "device"
+        },
+        "revision": {
+          "type": "integer",
+          "required": true,
+          "nullable": false,
+          "precision": "exact unsigned integer at Rust boundary; JSON integer"
+        },
+        "start_time_sec": {
+          "type": "integer",
+          "required": true,
+          "nullable": false,
+          "unit": "epoch_sec",
+          "timestamp": true,
+          "precision": "exact unsigned 64-bit epoch seconds at Rust boundary; JSON integer"
+        },
+        "current_stage_index": {
+          "type": "integer",
+          "required": true,
+          "nullable": false,
+          "precision": "exact unsigned integer at Rust boundary; JSON integer"
+        },
+        "stages": {
+          "type": "array",
+          "required": true,
+          "nullable": false
+        },
+        "stages[].duration_sec": {
+          "type": "integer",
+          "required": true,
+          "nullable": false,
+          "unit": "s",
+          "precision": "exact unsigned 64-bit duration seconds at Rust boundary; JSON integer"
+        }
+      }
+    },
+    "journal_event": {
+      "version": 1,
+      "layer": "canonical_wire",
+      "protocol": "http_json",
+      "fixture": "fixtures/journal-event.json",
+      "required": [
+        "id",
+        "device_id",
+        "level",
+        "category",
+        "title",
+        "message",
+        "occurred_at",
+        "received_at",
+        "source",
+        "event_type"
+      ],
+      "fields": {
+        "id": {
+          "type": "integer",
+          "required": true,
+          "nullable": false,
+          "id": "event",
+          "precision": "exact signed 64-bit integer at Rust boundary; JSON integer"
+        },
+        "device_id": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "id": "device"
+        },
+        "level": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "enum": [
+            "debug",
+            "info",
+            "warning",
+            "error",
+            "critical"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "title": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "message": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "occurred_at": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "format": "date-time"
+        },
+        "received_at": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "format": "date-time"
+        },
+        "source": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "event_type": {
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        "metadata": {
+          "type": "object",
+          "required": false,
+          "nullable": true
+        }
+      }
+    },
+    "unified_config": {
+      "version": 1,
+      "layer": "canonical_wire",
+      "protocol": "http_json",
+      "fixture": "fixtures/unified-config.json",
+      "required": [
+        "device_config",
+        "water_config",
+        "safety_config",
+        "sensor_calibration",
+        "dosing_calibration"
+      ],
+      "fields": {
+        "device_config": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "water_config": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "safety_config": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "sensor_calibration": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        },
+        "dosing_calibration": {
+          "type": "object",
+          "required": true,
+          "nullable": false
+        }
+      }
+    },
+    "wifi_secret_action": {
+      "version": 1,
+      "layer": "canonical_wire",
+      "protocol": "mqtt_json",
+      "fixture": "fixtures/wifi-secret-action.json",
+      "required": [
+        "secret_action"
+      ],
+      "fields": {
+        "secret_action": {
+          "type": "string",
+          "required": true,
+          "nullable": false,
+          "enum": [
+            "Keep",
+            "Set",
+            "Clear"
+          ]
+        }
+      },
+      "compatibility": {
+        "accepted_legacy_values": [
+          "keep",
+          "set",
+          "clear"
+        ],
+        "emit": [
+          "Keep",
+          "Set",
+          "Clear"
+        ]
+      }
+    }
+  },
+  "artifact_kind": "contract_registry_metadata"
+}

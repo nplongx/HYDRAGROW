@@ -61,7 +61,7 @@ impl Default for HestiaContext {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HestiaAxisAssessment {
     pub comfort: f32,
     pub weight: f32,
@@ -70,7 +70,7 @@ pub struct HestiaAxisAssessment {
     pub action_factor: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HestiaAxesAssessment {
     pub ec: HestiaAxisAssessment,
     pub ph: HestiaAxisAssessment,
@@ -78,7 +78,7 @@ pub struct HestiaAxesAssessment {
     pub temp: HestiaAxisAssessment,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HestiaAssessment {
     pub score: f32,
     pub state: HestiaState,

@@ -93,6 +93,9 @@ pub fn topic_sensor_status(device_id: &str) -> String {
 pub fn topic_controller_status(device_id: &str) -> String {
     MqttTopics::controller_status(device_id)
 }
+pub fn topic_command_lifecycle(device_id: &str) -> String {
+    format!("AGITECH/{}/controller/command-status", device_id)
+}
 pub fn topic_sensor_command(device_id: &str) -> String {
     format!("AGITECH/{}/sensor/command", device_id)
 }
@@ -243,6 +246,14 @@ mod tests {
         assert_ne!(
             topic_wifi_config_status("ESP-001"),
             topic_wifi_config_status("ESP-002")
+        );
+        assert_eq!(
+            topic_command_lifecycle("ESP-001"),
+            "AGITECH/ESP-001/controller/command-status"
+        );
+        assert_ne!(
+            topic_command_lifecycle("ESP-001"),
+            topic_command_lifecycle("ESP-002")
         );
     }
 }

@@ -1,0 +1,13 @@
+{
+  "target": "device-001",
+  "action": "start",
+  "params": {
+    "pump_id": "pump_a",
+    "duration_sec": 8,
+    "pwm": 70,
+    "state": true
+  },
+  "ts": 1771000000000,
+  "nonce": "nonce-golden",
+  "signature": "sig-golden"
+}

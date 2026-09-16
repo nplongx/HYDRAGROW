@@ -227,6 +227,83 @@ fn sensor_data_round_trip_with_and_without_optional_fields() {
 }
 
 #[test]
+fn legacy_sensor_aliases_are_input_only_and_canonical_ec_is_emitted() {
+    let legacy = serde_json::json!({
+        "device_id": "dev-legacy",
+        "tds": 1.23,
+        "ph": 6.1,
+        "temp": 24.5,
+        "water_level": 18.0,
+        "time": "2026-09-16T10:00:00Z",
+        "err_tds": true
+    });
+    let sensor: SensorData = serde_json::from_value(legacy).expect("legacy aliases must remain readable");
+    assert_eq!(sensor.ec, 1.23);
+    assert_eq!(sensor.err_ec, Some(true));
+
+    let emitted = serde_json::to_value(&sensor).expect("sensor must serialize");
+    assert_eq!(emitted["ec"], serde_json::to_value(sensor.ec).unwrap());
+    assert_eq!(emitted["err_ec"], true);
+    assert!(emitted.get("tds").is_none());
+    assert!(emitted.get("err_tds").is_none());
+}
+
+#[test]
+fn wifi_secret_action_wire_values_are_canonical_and_old_casing_is_rejected() {
+    for (action, expected) in [
+        (WifiSecretAction::Keep, "Keep"),
+        (WifiSecretAction::Set, "Set"),
+        (WifiSecretAction::Clear, "Clear"),
+    ] {
+        assert_eq!(serde_json::to_value(action).unwrap(), expected);
+    }
+    for legacy in ["keep", "set", "clear"] {
+        assert!(
+            serde_json::from_str::<WifiSecretAction>(&format!("\"{legacy}\"")).is_err(),
+            "legacy casing must not silently become a canonical enum"
+        );
+    }
+}
+
+#[test]
+fn mqtt_command_legacy_fields_are_accepted_by_input_but_canonical_output_has_one_location() {
+    let legacy = serde_json::json!({
+        "action": "start",
+        "target": "controller",
+        "pump": "pump_a",
+        "duration_sec": 8,
+        "pwm": 70
+    });
+    let decoded: hydragrow_shared::MqttCommandIn =
+        serde_json::from_value(legacy).expect("legacy command fields must remain readable");
+    assert_eq!(decoded.pump.as_deref(), Some("pump_a"));
+    assert_eq!(decoded.duration_sec, Some(8));
+    assert_eq!(decoded.pwm, Some(70));
+
+    let canonical = MqttCommandOut {
+        target: decoded.target.expect("target"),
+        action: decoded.action,
+        params: Some(MqttCommandParams {
+            pump_id: decoded.pump,
+            duration_sec: decoded.duration_sec,
+            pwm: decoded.pwm,
+            ..Default::default()
+        }),
+        ts: None,
+        nonce: None,
+        signature: None,
+        metadata: None,
+    };
+    let emitted = serde_json::to_value(canonical).unwrap();
+    assert_eq!(emitted["params"]["pump_id"], "pump_a");
+    assert_eq!(emitted["params"]["duration_sec"], 8);
+    assert_eq!(emitted["params"]["pwm"], 70);
+    assert!(emitted.get("pump").is_none());
+    assert!(emitted.get("duration_sec").is_none());
+    assert!(emitted.get("pwm").is_none());
+}
+
+#[test]
 fn mqtt_command_payload_round_trip_for_common_actions() {
     let actions = vec![
         MqttCommandOut {
@@ -244,6 +321,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
             signature: Some("sig-test".into()),
+            metadata: None,
         },
         MqttCommandOut {
             target: "pump_a".into(),
@@ -260,6 +338,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
             signature: Some("sig-test".into()),
+            metadata: None,
         },
         MqttCommandOut {
             target: "controller".into(),
@@ -276,6 +355,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
             signature: Some("sig-test".into()),
+            metadata: None,
         },
         MqttCommandOut {
             target: "controller".into(),
@@ -284,6 +364,7 @@ fn mqtt_command_payload_round_trip_for_common_actions() {
             ts: Some(1_771_000_000),
             nonce: Some("nonce-test".into()),
             signature: Some("sig-test".into()),
+            metadata: None,
         },
     ];
 
@@ -352,6 +433,7 @@ fn golden_payload_snapshots() {
         ts: Some(1_771_000_000),
         nonce: Some("nonce-golden".into()),
         signature: Some("sig-golden".into()),
+        metadata: None,
     };
 
     insta::assert_json_snapshot!("unified_system_log_golden", unified);
@@ -529,6 +611,7 @@ fn ota_wifi_payload_round_trips_with_set_passwords() {
         ts: Some(1_700_000_000),
         nonce: Some("n1".into()),
         signature: Some("sig".into()),
+        metadata: None,
     };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: MqttCommandOut = serde_json::from_str(&json).unwrap();

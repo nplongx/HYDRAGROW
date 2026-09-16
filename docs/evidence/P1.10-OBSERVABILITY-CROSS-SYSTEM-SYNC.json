@@ -76,6 +76,28 @@
       ]
     }
   ],
+  "evidence": [
+    {"acceptance_id":"AC-1","status":"BLOCKED","source":"P1.10 evidence review","verified_at":"2026-09-16","notes":"Implemented observability is documented; full authority-boundary verification is incomplete."},
+    {"acceptance_id":"AC-2","status":"BLOCKED","source":"P1.10 spec and evidence review","verified_at":"2026-09-16","notes":"Deployment/runtime infrastructure distinctions are documented; production verification remains incomplete."},
+    {"acceptance_id":"AC-3","status":"BLOCKED","source":"Backend/frontend contract and focused tests","verified_at":"2026-09-16","notes":"Contract work exists; full cross-system propagation is not fully executable-verified."},
+    {"acceptance_id":"AC-4","status":"BLOCKED","source":"Backend observability tests and source review","verified_at":"2026-09-16","notes":"Focused observability tests pass; complete supported-boundary coverage is not verified."},
+    {"acceptance_id":"AC-5","status":"BLOCKED","source":"topic_last_seen regression and frontend sync evidence","verified_at":"2026-09-16","notes":"Monotonic freshness and frontend ordering safeguards exist; full synchronization matrix is incomplete."},
+    {"acceptance_id":"AC-6","status":"BLOCKED","source":"Contract/source inspection","verified_at":"2026-09-16","notes":"Implemented state distinctions are documented; complete device applied-config reconciliation is absent."},
+    {"acceptance_id":"AC-7","status":"BLOCKED","source":"topic_last_seen and frontend synchronization tests","verified_at":"2026-09-16","notes":"Focused stale/out-of-order protections exist; complete cross-system verification is incomplete."},
+    {"acceptance_id":"AC-8","status":"BLOCKED","source":"Backend lifecycle and shared contract tests","verified_at":"2026-09-16","notes":"Existing durable command identity safeguards remain; full duplicate-processing matrix is not verified."},
+    {"acceptance_id":"AC-9","status":"BLOCKED","source":"P1.10 spec and evidence review","verified_at":"2026-09-16","notes":"QoS 1 and non-exactly-once semantics are documented; full delivery test matrix is incomplete."},
+    {"acceptance_id":"AC-10","status":"BLOCKED","source":"Backend lifecycle tests and source inspection","verified_at":"2026-09-16","notes":"Bounded retry/reconciliation implementation exists; complete restart-path verification is incomplete."},
+    {"acceptance_id":"AC-11","status":"PASS","source":"P1.10 spec and evidence review","verified_at":"2026-09-16","notes":"Outbox decision is explicitly NOT_IMPLEMENTED; no unsupported outbox claim is made."},
+    {"acceptance_id":"AC-12","status":"PASS","source":"useDeviceSync focused tests","verified_at":"2026-09-16","notes":"Authoritative query recovery on WebSocket reconnect is covered by 4 focused tests."},
+    {"acceptance_id":"AC-13","status":"BLOCKED","source":"Backend MQTT lifecycle/source inspection","verified_at":"2026-09-16","notes":"Reconnect subscription restoration is implemented; full runtime verification is incomplete."},
+    {"acceptance_id":"AC-14","status":"BLOCKED","source":"Backend observability focused tests","verified_at":"2026-09-16","notes":"/livez and /readyz plus dependency readiness state exist; complete runtime readiness verification is incomplete."},
+    {"acceptance_id":"AC-15","status":"BLOCKED","source":"Observability source inspection","verified_at":"2026-09-16","notes":"Bounded route labels are implemented; complete cardinality/security test coverage is incomplete."},
+    {"acceptance_id":"AC-16","status":"BLOCKED","source":"P1.10 security/evidence review","verified_at":"2026-09-16","notes":"No current dedicated security/redaction test result is available."},
+    {"acceptance_id":"AC-17","status":"PASS","source":"Frontend synchronization tests and source inspection","verified_at":"2026-09-16","notes":"Frontend cache remains non-authoritative and reconnect recovery refetches authoritative state."},
+    {"acceptance_id":"AC-18","status":"BLOCKED","source":"Repository test suites and evidence contract","verified_at":"2026-09-16","notes":"Applicable focused tests exist; full cross-system success/duplication/staleness/failure/recovery matrix is not executable-verified."},
+    {"acceptance_id":"AC-19","status":"BLOCKED","source":"Existing focused tests plus P1.10 validation","verified_at":"2026-09-16","notes":"Existing invariants have focused coverage, but complete P1.1-P1.9 regression verification is not claimed."},
+    {"acceptance_id":"AC-20","status":"PASS","source":"P1.10 evidence review","verified_at":"2026-09-16","notes":"Evidence explicitly uses PASS and BLOCKED statuses and does not convert unverified runtime claims into PASS."}
+  ],
   "validation": [
     {
       "worker": "worker-22",

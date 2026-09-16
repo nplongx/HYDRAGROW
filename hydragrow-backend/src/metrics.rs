@@ -53,6 +53,26 @@ lazy_static! {
         &["consumer"]
     ).expect("metric can be created");
 
+    pub static ref COMMAND_LIFECYCLE_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new("hydragrow_command_lifecycle_total", "Command lifecycle operations by event and outcome"),
+        &["event", "lifecycle"]
+    ).expect("metric can be created");
+
+    pub static ref SAFETY_DECISIONS_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new("hydragrow_safety_decisions_total", "Safety-critical decisions by bounded reason and outcome"),
+        &["reason_code", "outcome"]
+    ).expect("metric can be created");
+
+    pub static ref FLUX_QUERY_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new("hydragrow_flux_query_total", "Flux query outcomes by bounded operation and outcome"),
+        &["operation", "outcome"]
+    ).expect("metric can be created");
+
+    pub static ref BACKUP_RESTORE_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new("hydragrow_backup_restore_total", "Backup and restore outcomes by operation and stage"),
+        &["operation", "stage"]
+    ).expect("metric can be created");
+
     // =========================================================================
     // 2. ADAPTIVE LEARNING & DYNAMIC GAIN / STEP RATIO
     // =========================================================================
@@ -215,6 +235,20 @@ lazy_static! {
         Opts::new("agitech_hestia_axis_action_factor", "Hệ số can thiệp phục hồi của trục môi trường (Action Factor)"),
         &["device_id", "axis"] // axis: "ec", "ph", "water_level", "temp"
     ).expect("metric can be created");
+
+    pub static ref SYNC_ATTEMPTS_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_sync_attempts_total", "Synchronization attempts"), &["operation", "outcome"]).expect("metric can be created");
+    pub static ref SYNC_FAILURES_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_sync_failures_total", "Synchronization failures"), &["operation", "reason_code"]).expect("metric can be created");
+    pub static ref SYNC_RECONCILIATIONS_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_sync_reconciliations_total", "Synchronization reconciliation outcomes"), &["operation", "outcome"]).expect("metric can be created");
+    pub static ref SYNC_PENDING: IntGaugeVec = IntGaugeVec::new(Opts::new("hydragrow_sync_pending", "Current pending synchronization items"), &["operation"]).expect("metric can be created");
+    pub static ref SYNC_STALENESS_SECONDS: GaugeVec = GaugeVec::new(Opts::new("hydragrow_sync_staleness_seconds", "Synchronization observation staleness"), &["operation"]).expect("metric can be created");
+    pub static ref SYNC_CONFLICTS_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_sync_conflicts_total", "Synchronization conflicts"), &["operation"]).expect("metric can be created");
+    pub static ref MQTT_DELIVERY_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_mqtt_delivery_total", "MQTT delivery outcomes"), &["operation", "outcome"]).expect("metric can be created");
+    pub static ref MQTT_DELIVERY_FAILURES_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_mqtt_delivery_failures_total", "MQTT delivery failures"), &["operation", "reason_code"]).expect("metric can be created");
+    pub static ref WS_RECONNECTS_TOTAL: IntCounter = IntCounter::new("hydragrow_ws_reconnects_total", "WebSocket reconnects").expect("metric can be created");
+    pub static ref WS_LAGGED_TOTAL: IntCounter = IntCounter::new("hydragrow_ws_lagged_total", "WebSocket lagged deliveries").expect("metric can be created");
+    pub static ref COMMAND_UNKNOWN_TOTAL: IntCounter = IntCounter::new("hydragrow_command_unknown_total", "Commands entering UNKNOWN").expect("metric can be created");
+    pub static ref COMMAND_TIMEOUT_TOTAL: IntCounter = IntCounter::new("hydragrow_command_timeout_total", "Commands timing out").expect("metric can be created");
+    pub static ref CONFIG_VERSION_MISMATCH_TOTAL: IntCounter = IntCounter::new("hydragrow_config_version_mismatch_total", "Configuration version mismatches").expect("metric can be created");
 }
 
 static INIT: std::sync::Once = std::sync::Once::new();
@@ -252,6 +286,18 @@ pub fn register_metrics() {
             .unwrap();
         REGISTRY
             .register(Box::new(EVENT_BUS_LAGGED_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(COMMAND_LIFECYCLE_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SAFETY_DECISIONS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(FLUX_QUERY_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(BACKUP_RESTORE_TOTAL.clone()))
             .unwrap();
 
         // 2. Adaptive Learning
@@ -351,6 +397,43 @@ pub fn register_metrics() {
             .unwrap();
         REGISTRY
             .register(Box::new(HESTIA_AXIS_ACTION_FACTOR.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SYNC_ATTEMPTS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SYNC_FAILURES_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SYNC_RECONCILIATIONS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY.register(Box::new(SYNC_PENDING.clone())).unwrap();
+        REGISTRY
+            .register(Box::new(SYNC_STALENESS_SECONDS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SYNC_CONFLICTS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(MQTT_DELIVERY_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(MQTT_DELIVERY_FAILURES_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(WS_RECONNECTS_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(WS_LAGGED_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(COMMAND_UNKNOWN_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(COMMAND_TIMEOUT_TOTAL.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(CONFIG_VERSION_MISMATCH_TOTAL.clone()))
             .unwrap();
     });
 }

@@ -66,6 +66,10 @@ async fn delete_one_batch(
     cutoff_ms: i64,
     batch_size: i64,
 ) -> Result<u64, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT set_config('hydragrow.retention_delete', 'on', true)")
+        .execute(&mut *tx)
+        .await?;
     let result = sqlx::query(
         r#"
         WITH batch AS (
@@ -80,8 +84,9 @@ async fn delete_one_batch(
     )
     .bind(cutoff_ms)
     .bind(batch_size)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
 
     Ok(result.rows_affected())
 }

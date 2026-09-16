@@ -402,10 +402,36 @@ pub async fn validate_script(
 
 pub async fn apply_template(
     path: web::Path<(String, uuid::Uuid)>,
+    http_req: HttpRequest,
     body: web::Json<Vec<crate::services::multi_device_template::TemplateTarget>>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let (device_id, script_id) = path.into_inner();
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("script:write") {
+        return HttpResponse::Forbidden().json(json!({"error":"Missing scope script:write"}));
+    }
+    let target_ids: Vec<&str> = body
+        .iter()
+        .map(|target| target.device_id.as_str())
+        .collect();
+    if target_ids.is_empty() {
+        return HttpResponse::BadRequest().json(json!({"error":"targets không được rỗng"}));
+    }
+    if let Err(resp) = crate::api::middleware::auth::authorize_all_devices(
+        &http_req,
+        &app_state,
+        Some("script:write"),
+        &target_ids,
+    )
+    .await
+    {
+        return resp;
+    }
     let source: Option<UserScript> =
         sqlx::query_as("SELECT * FROM user_scripts WHERE id = $1 AND device_id = $2")
             .bind(script_id)
@@ -625,9 +651,18 @@ pub async fn revert_config_override(
 
 pub async fn get_execution_success_rate(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("script:read") {
+        return HttpResponse::Forbidden().json(json!({"error":"Missing scope script:read"}));
+    }
     match crate::services::execution_log::success_rate_percent(&app_state.pg_pool, &device_id).await
     {
         Ok(rate) => HttpResponse::Ok()
@@ -715,7 +750,15 @@ pub fn eval_condition_tree(
     passed
 }
 
-pub async fn test_script(body: web::Json<TestScriptRequest>) -> impl Responder {
+pub async fn test_script(req: HttpRequest, body: web::Json<TestScriptRequest>) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("script:read") {
+        return HttpResponse::Forbidden().json(json!({"error":"Missing scope script:read"}));
+    }
     let conditions = body
         .ir_json
         .get("conditions")
@@ -784,7 +827,7 @@ mod tests {
     #[actix_web::test]
     async fn test_endpoint_returns_will_fire_true_and_trace_when_condition_met() {
         use crate::api::script::init_routes;
-        use actix_web::{App, test, web};
+        use actix_web::{App, HttpMessage, test, web};
         use serde_json::json;
 
         let app = test::init_service(
@@ -818,6 +861,12 @@ mod tests {
             .uri("/api/scripts/test")
             .set_json(&req_body)
             .to_request();
+        req.extensions_mut().insert(AuthContext {
+            scopes: vec!["script:read".to_string()],
+            user_id: Some("42".to_string()),
+            session_id: Some("test-session".to_string()),
+            service_key_label: None,
+        });
         let resp: crate::models::script::TestScriptResponse =
             test::call_and_read_body_json(&app, req).await;
 
@@ -832,7 +881,7 @@ mod tests {
     #[actix_web::test]
     async fn test_endpoint_returns_will_fire_false_with_failing_leaf_marked() {
         use crate::api::script::init_routes;
-        use actix_web::{App, test, web};
+        use actix_web::{App, HttpMessage, test, web};
         use serde_json::json;
 
         let app = test::init_service(
@@ -870,6 +919,12 @@ mod tests {
             .uri("/api/scripts/test")
             .set_json(&req_body)
             .to_request();
+        req.extensions_mut().insert(AuthContext {
+            scopes: vec!["script:read".to_string()],
+            user_id: Some("42".to_string()),
+            session_id: Some("test-session".to_string()),
+            service_key_label: None,
+        });
         let resp: crate::models::script::TestScriptResponse =
             test::call_and_read_body_json(&app, req).await;
 

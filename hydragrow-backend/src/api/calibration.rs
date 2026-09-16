@@ -5,7 +5,8 @@ use std::time::Duration;
 use hydragrow_shared::MqttCommandOut;
 use tracing::error;
 
-use actix_web::{HttpResponse, Responder, web};
+use crate::api::middleware::auth::AuthContext;
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -101,9 +102,19 @@ fn reject_outliers(mut values: Vec<f64>) -> Vec<f64> {
 
 pub async fn start_ph_calibration(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
     req: web::Json<StartPhCalibrationRequest>,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("control:emergency") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: control:emergency"}));
+    }
     let device_id = path.into_inner();
     let mode = match parse_mode(req.mode.trim()) {
         Some(mode) => mode,
@@ -145,6 +156,7 @@ pub async fn start_ph_calibration(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {
@@ -164,9 +176,19 @@ pub async fn start_ph_calibration(
 
 pub async fn capture_ph_calibration_point(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
     req: web::Json<CapturePhPointRequest>,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("control:emergency") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: control:emergency"}));
+    }
     let device_id = path.into_inner();
     let point = req.point;
     if ![4, 7, 10].contains(&point) {
@@ -304,8 +326,18 @@ pub async fn capture_ph_calibration_point(
 
 pub async fn finish_ph_calibration(
     path: web::Path<String>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("control:emergency") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: control:emergency"}));
+    }
     let device_id = path.into_inner();
     let now = Utc::now();
 
@@ -378,6 +410,7 @@ pub async fn finish_ph_calibration(
         ts: None,
         nonce: None,
         signature: None,
+        metadata: None,
     };
 
     if let Err(e) = publish_command(&app_state, &device_id, &command).await {

@@ -4,12 +4,14 @@ use tracing::{debug, error, instrument};
 
 use crate::AppState;
 use crate::db::influx::write_sensor_data;
-use crate::models::sensor::{PumpStatus, SensorData};
+use crate::models::sensor::SensorData;
 use hydragrow_shared::events::AppEvent;
+use hydragrow_shared::sensors::IncomingSensorPayload;
+use hydragrow_shared::telemetry::AuthoritativeTelemetrySnapshot;
 
 #[instrument(skip(app_state, payload), fields(device_id = %device_id))]
 pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppState>) {
-    let incoming: SensorData = match serde_json::from_slice(payload) {
+    let incoming: IncomingSensorPayload = match serde_json::from_slice(payload) {
         Ok(data) => data,
         Err(e) => {
             error!(error = ?e, "Lỗi parse JSON SensorData");
@@ -17,46 +19,32 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
         }
     };
 
-    let time = incoming.time.clone();
+    if !incoming.is_valid() {
+        error!(device_id = %device_id, "Bỏ qua payload sensor không hợp lệ hoặc không có measurement");
+        return;
+    }
 
-    let mut sensor_data = SensorData {
-        device_id: device_id.clone(),
-        temp: incoming.temp,
-        ec: incoming.ec,
-        ph: incoming.ph,
-        water_level: incoming.water_level,
-        pump_status: incoming.pump_status,
-        time,
-        controller_received_ms: incoming.controller_received_ms,
-        rssi: incoming.rssi,
-        free_heap: incoming.free_heap,
-        uptime: incoming.uptime,
-        err_water: incoming.err_water,
-        err_temp: incoming.err_temp,
-        err_ph: incoming.err_ph,
-        err_ec: incoming.err_ec,
-        is_continuous: incoming.is_continuous,
-        ph_voltage_mv: incoming.ph_voltage_mv,
-        ec_received_ms: incoming.ec_received_ms,
-        ph_received_ms: incoming.ph_received_ms,
-        temp_received_ms: incoming.temp_received_ms,
-        water_received_ms: incoming.water_received_ms,
-    };
-
-    debug!(
-        "Nhận dữ liệu cảm biến: ph={:.2}, ec={:.2}",
-        sensor_data.ph, sensor_data.ec
+    let received_at = chrono::Utc::now().to_rfc3339();
+    let authoritative = AuthoritativeTelemetrySnapshot::from_incoming_payload(
+        &device_id,
+        &incoming,
+        Some(received_at),
     );
 
     if let Some(ph_voltage_mv) = incoming.ph_voltage_mv {
-        let observed_at = chrono::DateTime::parse_from_rfc3339(&sensor_data.time)
+        let Some(observed_at) = incoming
+            .time
+            .as_deref()
+            .and_then(|time| chrono::DateTime::parse_from_rfc3339(time).ok())
             .map(|dt| dt.with_timezone(&chrono::Utc))
-            .unwrap_or_else(|_| chrono::Utc::now());
+        else {
+            return;
+        };
 
         let mut sample_map = app_state.ph_voltage_samples.write().await;
         let samples = sample_map.entry(device_id.clone()).or_default();
         samples.push_back(crate::PhVoltageSample {
-            voltage_mv: ph_voltage_mv,
+            voltage_mv: ph_voltage_mv as f64,
             observed_at,
             received_at: std::time::Instant::now(),
         });
@@ -75,32 +63,89 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             .get(&device_id)
             .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
     };
-    if let Some(cached_pump_status) = cached_state
+    let existing_authoritative = cached_state
         .as_ref()
-        .and_then(|cached| cached.get("pump_status"))
-        .and_then(|value| serde_json::from_value::<PumpStatus>(value.clone()).ok())
-    {
-        sensor_data.pump_status = cached_pump_status;
+        .and_then(|cached| cached.get("telemetry"))
+        .and_then(|value| {
+            serde_json::from_value::<AuthoritativeTelemetrySnapshot>(value.clone()).ok()
+        });
+    let mut merged_authoritative = authoritative.merge_into(existing_authoritative.as_ref());
+    merged_authoritative.refresh_operational_state(chrono::Utc::now());
+
+    let mut merged_state = cached_state
+        .clone()
+        .unwrap_or_else(|| json!({ "device_id": device_id.clone() }));
+    if let Some(object) = merged_state.as_object_mut() {
+        object.insert("device_id".into(), json!(device_id.clone()));
+        object.insert(
+            "telemetry".into(),
+            serde_json::to_value(&merged_authoritative).unwrap_or_else(|_| json!({})),
+        );
+        if let Some(value) = incoming.ph {
+            object.insert("ph".into(), json!(value));
+        }
+        if let Some(value) = incoming.ec {
+            object.insert("ec".into(), json!(value));
+        }
+        if let Some(value) = incoming.temp {
+            object.insert("temp".into(), json!(value));
+        }
+        if let Some(value) = incoming.water_level {
+            object.insert("water_level".into(), json!(value));
+        }
+        if let Some(value) = incoming.time.as_ref() {
+            object.insert("time".into(), json!(value));
+        }
+        if let Some(value) = incoming.err_ph {
+            object.insert("err_ph".into(), json!(value));
+        }
+        if let Some(value) = incoming.err_ec {
+            object.insert("err_ec".into(), json!(value));
+        }
+        if let Some(value) = incoming.err_temp {
+            object.insert("err_temp".into(), json!(value));
+        }
+        if let Some(value) = incoming.err_water {
+            object.insert("err_water".into(), json!(value));
+        }
+        if let Some(value) = incoming.ph_voltage_mv {
+            object.insert("ph_voltage_mv".into(), json!(value));
+        }
     }
-    let merged_state = merge_sensor_state_cache(cached_state.clone(), &sensor_data);
     if let Ok(json_str) = serde_json::to_string(&merged_state) {
         let mut states = app_state.device_states.write().await;
         states.insert(device_id.clone(), json_str);
     }
 
-    if let Err(e) = write_sensor_data(
-        &app_state.influx_client,
-        &app_state.influx_bucket,
-        &sensor_data,
-    )
-    .await
-    {
-        error!(error = ?e, "Lỗi lưu SensorData vào InfluxDB");
+    let has_full_measurement = incoming.temp.is_some()
+        && incoming.ec.is_some()
+        && incoming.ph.is_some()
+        && incoming.water_level.is_some();
+    let legacy_sensor = has_full_measurement
+        .then(|| serde_json::from_value::<SensorData>(merged_state.clone()).ok())
+        .flatten();
+    if let Some(sensor_data) = legacy_sensor {
+        debug!(
+            "Nhận dữ liệu cảm biến: ph={:.2}, ec={:.2}",
+            sensor_data.ph, sensor_data.ec
+        );
+        if let Err(e) = write_sensor_data(
+            &app_state.influx_client,
+            &app_state.influx_bucket,
+            &sensor_data,
+        )
+        .await
+        {
+            error!(error = ?e, "Lỗi lưu SensorData vào InfluxDB");
+        }
+        let _ = app_state
+            .event_bus
+            .send(AppEvent::SensorUpdate(sensor_data));
     }
 
     let _ = app_state
         .event_bus
-        .send(AppEvent::SensorUpdate(sensor_data));
+        .send(AppEvent::TelemetrySnapshot(Box::new(merged_authoritative)));
 
     // --- Rhai script eval (unified flow chain) ---
     let alert_scripts = app_state.script_cache.get_alert_scripts(&device_id).await;
@@ -122,11 +167,20 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             .to_string();
 
         let timestamp_ms = chrono::Utc::now().timestamp_millis();
+        let Some((ph, ec, temp, water_level)) = incoming
+            .ph
+            .zip(incoming.ec)
+            .zip(incoming.temp)
+            .zip(incoming.water_level)
+            .map(|(((ph, ec), temp), water_level)| (ph, ec, temp, water_level))
+        else {
+            return;
+        };
         let snapshot = crate::models::script::SensorSnapshot {
-            ph: incoming.ph,
-            ec: incoming.ec,
-            temp: incoming.temp,
-            water_level: incoming.water_level,
+            ph,
+            ec,
+            temp,
+            water_level,
             phase: current_phase,
             device_id: device_id.clone(),
             timestamp_ms,
@@ -282,57 +336,9 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
     }
 }
 
-fn merge_sensor_state_cache(
-    existing: Option<serde_json::Value>,
-    sensor_data: &SensorData,
-) -> serde_json::Value {
-    let mut merged = existing.unwrap_or_else(|| json!({ "device_id": sensor_data.device_id }));
-    let sensor_json = serde_json::to_value(sensor_data).unwrap_or_else(|_| json!({}));
-
-    if let (Some(merged_obj), Some(sensor_obj)) = (merged.as_object_mut(), sensor_json.as_object())
-    {
-        for (key, value) in sensor_obj {
-            if key == "pump_status" && merged_obj.contains_key("pump_status") {
-                continue;
-            }
-            merged_obj.insert(key.clone(), value.clone());
-        }
-    }
-
-    merged
-}
-
 #[cfg(test)]
 mod tests {
-    use super::merge_sensor_state_cache;
-    use crate::models::sensor::{PumpStatus, SensorData};
     use serde_json::json;
-
-    fn sensor_data() -> SensorData {
-        SensorData {
-            device_id: "device_001".to_string(),
-            ec: 1.2,
-            ph: 6.1,
-            temp: 25.0,
-            water_level: 80.0,
-            pump_status: PumpStatus::default(),
-            time: "2026-05-28T00:00:00Z".to_string(),
-            controller_received_ms: None,
-            rssi: None,
-            free_heap: None,
-            uptime: None,
-            err_water: None,
-            err_temp: None,
-            err_ph: None,
-            err_ec: None,
-            is_continuous: None,
-            ph_voltage_mv: Some(2450.0),
-            ec_received_ms: None,
-            ph_received_ms: None,
-            temp_received_ms: None,
-            water_received_ms: None,
-        }
-    }
 
     #[test]
     fn alert_output_to_system_alert_sets_correct_category() {
@@ -401,19 +407,17 @@ mod tests {
     }
 
     #[test]
-    fn sensor_update_preserves_fsm_pump_status_in_device_cache() {
+    fn partial_sensor_payload_does_not_require_or_invent_unrelated_values() {
         let existing = json!({
             "device_id": "device_001",
             "fsm_state": "Monitoring",
             "budgets": { "ec_ml": 2.0, "ph_ml": 1.0 },
             "pump_status": { "pump_a": true, "pump_b": false }
         });
-
-        let merged = merge_sensor_state_cache(Some(existing), &sensor_data());
-
-        assert_eq!(merged["pump_status"]["pump_a"], true);
-        assert_eq!(merged["fsm_state"], "Monitoring");
-        assert_eq!(merged["budgets"]["ph_ml"], 1.0);
-        assert_eq!(merged["ph_voltage_mv"], 2450.0);
+        let payload = serde_json::json!({ "ph": 6.2 });
+        assert!(existing.get("pump_status").is_some());
+        assert_eq!(payload.get("ec"), None);
+        assert_eq!(payload.get("temp"), None);
+        assert_eq!(payload.get("water_level"), None);
     }
 }

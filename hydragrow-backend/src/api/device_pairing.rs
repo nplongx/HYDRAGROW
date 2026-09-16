@@ -171,7 +171,10 @@ pub async fn require_device_owner(
     })?;
     let owned = device_ownership::is_owner(&app_state.pg_pool, user_id, device_id)
         .await
-        .unwrap_or(false);
+        .map_err(|_| {
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "Authorization lookup failed"}))
+        })?;
     if owned {
         Ok(user_id)
     } else {

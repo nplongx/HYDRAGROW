@@ -39,6 +39,29 @@ mod tests {
     }
 
     #[sqlx::test]
+    async fn stale_touch_does_not_move_last_seen_backwards(pool: sqlx::PgPool) {
+        let current = chrono::Utc::now();
+        touch_topic(&pool, "device-001", "controller/status", current)
+            .await
+            .unwrap();
+        let stale = current - chrono::Duration::minutes(5);
+        touch_topic(&pool, "device-001", "controller/status", stale)
+            .await
+            .unwrap();
+
+        let topics = get_topics_for_device(&pool, "device-001").await.unwrap();
+        assert_eq!(topics.len(), 1);
+        // TIMESTAMPTZ stores microsecond precision; the original `current` may carry nanoseconds.
+        assert!(
+            (topics[0].last_seen_at - current)
+                .num_microseconds()
+                .unwrap()
+                .abs()
+                < 1000
+        );
+    }
+
+    #[sqlx::test]
     async fn get_all_devices_returns_every_device(pool: sqlx::PgPool) {
         let now = chrono::Utc::now();
         touch_topic(&pool, "device-001", "controller/status", now)

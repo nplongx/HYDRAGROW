@@ -24,6 +24,7 @@ pub async fn touch_topic(
         VALUES ($1, $2, $3)
         ON CONFLICT (device_id, topic_category)
         DO UPDATE SET last_seen_at = EXCLUDED.last_seen_at
+        WHERE EXCLUDED.last_seen_at > device_topic_last_seen.last_seen_at
         "#,
     )
     .bind(device_id)

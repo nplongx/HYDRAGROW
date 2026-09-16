@@ -51,6 +51,14 @@ pub async fn ws_handler(
 ) -> Result<HttpResponse, Error> {
     let scoped_device_id = path.into_inner();
 
+    // Authenticate and enforce the device boundary before performing the
+    // WebSocket handshake. The frame-auth fallback below remains for protocol
+    // compatibility, but it is no longer reachable for unauthenticated clients.
+    let query = web::Query::<WsQuery>::from_query(req.query_string()).ok();
+    let query_api_key = query.as_ref().and_then(|q| q.api_key.as_deref());
+    let query_token = query.as_ref().and_then(|q| q.token.as_deref());
+    ws_pre_authorize(&app_state, query_api_key, query_token, &scoped_device_id).await?;
+
     // Gọi trực tiếp actix_ws::handle để trả về Handshake Body nguyên bản
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, body)?;
 
@@ -178,7 +186,7 @@ pub async fn ws_handler(
                                         "payload": {
                                             "device_id": status.device_id,
                                             "is_online": status.is_online,
-                                            "last_seen": chrono::Utc::now().to_rfc3339()
+                                            "last_seen_at": status.last_seen_at
                                         }
                                     })
                                 }
@@ -231,6 +239,20 @@ pub async fn ws_handler(
                                         "payload": payload
                                     })
                                 }
+
+                                AppEvent::CommandLifecycle(event) => {
+                                    serde_json::json!({
+                                        "type": "command_lifecycle",
+                                        "payload": event
+                                    })
+                                }
+
+                                AppEvent::TelemetrySnapshot(snapshot) => {
+                                    serde_json::json!({
+                                        "type": "telemetry_snapshot",
+                                        "payload": snapshot
+                                    })
+                                }
                             };
 
                             if let Ok(json_str) = serde_json::to_string(&ws_msg)
@@ -240,6 +262,7 @@ pub async fn ws_handler(
                         }
 
                         Err(RecvError::Lagged(skipped)) => {
+                            crate::metrics::WS_LAGGED_TOTAL.inc();
                             warn!(
                                 client_ip = %client_ip,
                                 skipped,
@@ -291,6 +314,76 @@ pub async fn ws_handler(
     Ok(response)
 }
 
+async fn ws_pre_authorize(
+    app_state: &crate::AppState,
+    api_key: Option<&str>,
+    token: Option<&str>,
+    device_id: &str,
+) -> Result<(), actix_web::Error> {
+    let unauthorized =
+        || actix_web::error::ErrorUnauthorized(serde_json::json!({"error": "Unauthorized"}));
+
+    if let Some(key) = api_key.filter(|key| !key.is_empty()) {
+        let key_hash = crate::db::service_api_keys::sha256_hex(key);
+        if let Some(service) =
+            crate::db::service_api_keys::find_active_by_key_hash(&app_state.pg_pool, &key_hash)
+                .await
+        {
+            if service
+                .scopes
+                .iter()
+                .any(|scope| scope == "read:telemetry" || scope == "*")
+            {
+                return Ok(());
+            }
+            return Err(actix_web::error::ErrorForbidden(serde_json::json!({
+                "error": "Missing required scope",
+                "required_scope": "read:telemetry"
+            })));
+        }
+
+        if key == app_state.api_key {
+            return Ok(());
+        }
+    }
+
+    let Some(token) = token.filter(|token| !token.is_empty()) else {
+        return Err(unauthorized());
+    };
+
+    let claims = app_state
+        .firebase_auth
+        .verify(token)
+        .await
+        .map_err(|_| unauthorized())?;
+    let user = crate::db::users::find_active_by_firebase_uid(&app_state.pg_pool, &claims.sub)
+        .await
+        .map_err(|_| actix_web::error::ErrorInternalServerError("Authorization lookup failed"))?
+        .ok_or_else(unauthorized)?;
+
+    if !user
+        .scopes
+        .iter()
+        .any(|scope| scope == "read:telemetry" || scope == "*")
+    {
+        return Err(actix_web::error::ErrorForbidden(serde_json::json!({
+            "error": "Missing required scope",
+            "required_scope": "read:telemetry"
+        })));
+    }
+
+    let owned = crate::db::device_ownership::is_owner(&app_state.pg_pool, user.id, device_id)
+        .await
+        .map_err(|_| actix_web::error::ErrorInternalServerError("Authorization lookup failed"))?;
+    if !owned {
+        return Err(actix_web::error::ErrorForbidden(serde_json::json!({
+            "error": "Device ownership required"
+        })));
+    }
+
+    Ok(())
+}
+
 /// Xác thực Firebase ID token cho WebSocket: verify chữ ký + kiểm tra user tồn tại + sở hữu thiết bị.
 async fn ws_token_authorized(
     app_state: &crate::AppState,
@@ -328,6 +421,8 @@ fn event_device_id_for_filter(event: &AppEvent) -> Option<&str> {
         AppEvent::HealthSnapshot(s) => Some(s.device_id.as_str()),
         AppEvent::CalibrationUpdate(c) => Some(c.device_id.as_str()),
         AppEvent::ControllerStatus(payload) => payload.get("device_id").and_then(|v| v.as_str()),
+        AppEvent::CommandLifecycle(event) => Some(event.device_id.as_str()),
+        AppEvent::TelemetrySnapshot(snapshot) => Some(snapshot.device_id.as_str()),
         AppEvent::FsmStateUpdate(_) => None,
     }
 }
@@ -390,6 +485,16 @@ mod tests {
         let q: WsQuery = serde_json::from_value(serde_json::json!({})).unwrap();
         assert_eq!(q.token, None);
         assert_eq!(q.api_key, None);
+    }
+
+    #[actix_web::test]
+    async fn websocket_without_query_credentials_is_rejected_before_handshake() {
+        let state = crate::api::test_support::test_app_state();
+        assert!(
+            ws_pre_authorize(&state, None, None, "device-A")
+                .await
+                .is_err()
+        );
     }
 
     #[allow(clippy::unwrap_used)]

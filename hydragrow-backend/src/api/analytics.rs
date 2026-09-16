@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde_json::json;
 
 use crate::AppState;
@@ -24,10 +24,20 @@ pub struct DeviceHealthResponse {
 /// InfluxDB (xem phần Grounding của Phase 4).
 async fn get_dosing_history_range(
     path: web::Path<String>,
+    req: HttpRequest,
     query: web::Query<DosingHistoryRangeQuery>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error": "Missing required scope", "required_scope": "read:telemetry"}));
+    }
     match crate::db::postgres::get_device_dosing_reports_in_range(
         &app_state.pg_pool,
         &device_id,
@@ -64,9 +74,19 @@ async fn get_dosing_history_range(
 
 async fn get_device_health(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
     let device_id = path.into_inner();
+    let auth = req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("health:read") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error": "Missing required scope", "required_scope": "health:read"}));
+    }
 
     let mut heap: Option<i64> = {
         let val = crate::metrics::CONTROLLER_FREE_HEAP_BYTES

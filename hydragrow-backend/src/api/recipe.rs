@@ -971,9 +971,16 @@ pub async fn bulk_apply_recipe(
 
     // Kiểm tra user sở hữu tất cả devices
     let device_id_refs: Vec<&str> = body.device_ids.iter().map(|s| s.as_str()).collect();
-    let all_owned = device_ownership::is_owner_of_all(&app_state.pg_pool, user_id, &device_id_refs)
-        .await
-        .unwrap_or(false);
+    let all_owned =
+        match device_ownership::is_owner_of_all(&app_state.pg_pool, user_id, &device_id_refs).await
+        {
+            Ok(owned) => owned,
+            Err(e) => {
+                tracing::error!(?e, "Failed to verify ownership for bulk recipe apply");
+                return HttpResponse::InternalServerError()
+                    .json(json!({"error": "Authorization lookup failed"}));
+            }
+        };
 
     if !all_owned {
         return HttpResponse::Forbidden().json(json!({
@@ -1517,7 +1524,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn bulk_apply_rejects_devices_not_owned_by_caller() {
+    async fn bulk_apply_surfaces_ownership_lookup_failure_when_db_is_unavailable() {
         let state = web::Data::new(test_app_state());
         let req = authed_request(&["recipe:write"], Some("1"));
         let resp = bulk_apply_recipe(req.clone(), state, bulk_body())
@@ -1525,12 +1532,9 @@ mod tests {
             .respond_to(&req)
             .map_into_boxed_body();
 
-        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
         let v = body_json(resp).await;
-        assert_eq!(
-            v["error"],
-            "Bạn không sở hữu một hoặc nhiều thiết bị trong danh sách"
-        );
+        assert_eq!(v["error"], "Authorization lookup failed");
     }
 
     #[actix_web::test]

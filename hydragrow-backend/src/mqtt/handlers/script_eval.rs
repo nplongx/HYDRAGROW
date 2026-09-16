@@ -232,7 +232,7 @@ pub fn eval_flow_chain_with_fetcher<F>(
     fetcher: F,
 ) -> Vec<(Uuid, ChainFireResult)>
 where
-    F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
+    F: Fn(&str, &RangeStatKey) -> Result<f64, String> + Send + Sync + 'static,
 {
     eval_flow_chain_with_fetcher_and_context(
         engine,
@@ -259,7 +259,7 @@ pub fn eval_flow_chain_with_fetcher_and_context<F>(
     resolved_context_by_node: &HashMap<Uuid, HashMap<String, f64>>,
 ) -> Vec<(Uuid, ChainFireResult)>
 where
-    F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
+    F: Fn(&str, &RangeStatKey) -> Result<f64, String> + Send + Sync + 'static,
 {
     let fetcher_arc = Arc::new(fetcher);
     let mut fired: Vec<(Uuid, ChainFireResult)> = Vec::new();
@@ -329,7 +329,7 @@ pub async fn eval_flow_chain(
     keys.sort();
     keys.dedup();
 
-    let mut cache: HashMap<RangeStatKey, f64> = HashMap::new();
+    let mut cache: HashMap<RangeStatKey, Result<f64, String>> = HashMap::new();
     if !keys.is_empty() {
         let fetches = keys.iter().map(|(sensor, mode, window_sec)| {
             crate::db::influx::query_range_stat(
@@ -345,7 +345,7 @@ pub async fn eval_flow_chain(
         for (key, result) in keys.iter().zip(results) {
             match result {
                 Ok(value) => {
-                    cache.insert(key.clone(), value);
+                    cache.insert(key.clone(), Ok(value));
                 }
                 Err(e) => {
                     warn!(
@@ -354,15 +354,20 @@ pub async fn eval_flow_chain(
                         mode = %key.1,
                         window_sec = key.2,
                         error = %e,
-                        "fetch_range_stat prefetch failed — condition sẽ dùng 0.0, có thể không fire đúng"
+                        "fetch_range_stat prefetch failed — flow evaluation is blocked"
                     );
+                    cache.insert(key.clone(), Err(e.to_string()));
                 }
             }
         }
     }
 
-    let fetcher =
-        move |_dev_id: &str, key: &RangeStatKey| -> f64 { cache.get(key).copied().unwrap_or(0.0) };
+    let fetcher = move |_dev_id: &str, key: &RangeStatKey| -> Result<f64, String> {
+        cache
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| Err("range stat was not prefetched".to_string()))
+    };
 
     // Nạp context Config·Read cho toàn bộ chain trên CÙNG 1 thiết bị — chỉ 1
     // lượt query DeviceConfig, không phải 1 lượt/node.
@@ -510,7 +515,7 @@ fn eval_flow_chain_from<F>(
     seen: &mut Vec<Uuid>,
     fired: &mut Vec<(Uuid, ChainFireResult)>,
 ) where
-    F: Fn(&str, &RangeStatKey) -> f64 + Send + Sync + 'static,
+    F: Fn(&str, &RangeStatKey) -> Result<f64, String> + Send + Sync + 'static,
 {
     if depth >= max_depth || seen.contains(&node.id) {
         if depth >= max_depth {
@@ -574,7 +579,7 @@ fn eval_flow_chain_from<F>(
             let range_stat_fetcher = {
                 let device_id = device_id.to_string();
                 let fetcher_clone = fetcher.clone();
-                move |sensor: String, mode: String, window_sec: i64| -> f64 {
+                move |sensor: String, mode: String, window_sec: i64| -> Result<f64, String> {
                     fetcher_clone(&device_id, &(sensor, mode, window_sec))
                 }
             };
@@ -719,7 +724,7 @@ pub fn eval_alert_scripts_chained(
         err_water_level: None,
     };
 
-    let fetcher = |_dev_id: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+    let fetcher = |_dev_id: &str, _key: &RangeStatKey| -> Result<f64, String> { Ok(0.0) };
     let results =
         eval_flow_chain_with_fetcher(engine, &chain_nodes, &snapshot, &input.device_id, fetcher);
 
@@ -1217,7 +1222,7 @@ fn main(input) {
             ir_json: None,
         };
 
-        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> Result<f64, String> { Ok(0.0) };
         let results = eval_flow_chain_with_fetcher(
             &engine,
             &[alert_root.clone(), action_child.clone()],
@@ -1249,7 +1254,7 @@ fn main(input) {
             ir_json: None,
         };
 
-        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> Result<f64, String> { Ok(0.0) };
         let results = eval_flow_chain_with_fetcher(
             &engine,
             &[alert_root, action_child],
@@ -1284,7 +1289,7 @@ fn main(input) {
             ir_json: None,
         };
 
-        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> f64 { 0.0 };
+        let dummy_fetcher = |_dev: &str, _key: &RangeStatKey| -> Result<f64, String> { Ok(0.0) };
         let results =
             eval_flow_chain_with_fetcher(&engine, &[a, b], &make_snapshot(), "d1", dummy_fetcher);
         assert_eq!(results.len(), 2);
@@ -1355,7 +1360,7 @@ fn main(input) {
             ast: engine.compile(source).expect("compiles"),
             ir_json: Some(ir_json),
         };
-        let fetcher = |_device_id: &str, _key: &RangeStatKey| -> f64 { 7.0 };
+        let fetcher = |_device_id: &str, _key: &RangeStatKey| -> Result<f64, String> { Ok(7.0) };
         let result =
             eval_flow_chain_with_fetcher(&engine, &[node], &make_snapshot(), "device-1", fetcher);
         assert_eq!(
@@ -1363,6 +1368,34 @@ fn main(input) {
             1,
             "phải fire vì 7.0 > 6.5, không phải 0.0 > 6.5 (stub cũ luôn fail)"
         );
+    }
+
+    #[test]
+    fn eval_flow_chain_does_not_fire_when_range_stat_fetcher_errors() {
+        let engine = Arc::new(ScriptEngine::new());
+        let source = r#"
+fn main(input) {
+    if fetch_range_stat("ph", "mean", 900) > 6.5 {
+        return #{ "action": "dose", "pump": "PH_DOWN", "dose_ml": 5, "pwm": 100 };
+    }
+    ()
+}
+"#;
+        let node = ChainNode {
+            id: Uuid::new_v4(),
+            name: "action_node".to_string(),
+            kind: ScriptKind::ActionCommand,
+            next_flow_ids: vec![],
+            ast: engine.compile(source).expect("compiles"),
+            ir_json: Some(serde_json::json!({
+                "conditions": [{ "sensor": "ph", "mode": "mean", "windowSec": 900 }]
+            })),
+        };
+        let result =
+            eval_flow_chain_with_fetcher(&engine, &[node], &make_snapshot(), "device-1", |_, _| {
+                Err("Influx query failed".to_string())
+            });
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -1404,7 +1437,7 @@ fn main(input) {
             &[node],
             &snapshot,
             "d",
-            |_, _| 0.0,
+            |_, _| Ok(0.0),
             &ctx_by_node,
         );
         assert_eq!(fired.len(), 1);
@@ -1459,7 +1492,8 @@ fn main(input) {
             err_water_level: None,
         };
 
-        let fired = eval_flow_chain_with_fetcher(&engine, &[a, b, c], &snapshot, "d", |_, _| 0.0);
+        let fired =
+            eval_flow_chain_with_fetcher(&engine, &[a, b, c], &snapshot, "d", |_, _| Ok(0.0));
         assert_eq!(
             fired.len(),
             1,
@@ -1496,7 +1530,7 @@ fn main(input) {
             err_temperature: None,
             err_water_level: None,
         };
-        let fired = eval_flow_chain_with_fetcher(&engine, &[node], &snapshot, "d", |_, _| 0.0);
+        let fired = eval_flow_chain_with_fetcher(&engine, &[node], &snapshot, "d", |_, _| Ok(0.0));
         assert_eq!(fired.len(), 1);
     }
 }

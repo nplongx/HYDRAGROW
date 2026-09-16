@@ -1,7 +1,7 @@
 use actix_web::{
-    Error,
+    Error, HttpResponse,
+    body::MessageBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
-    error::ErrorTooManyRequests,
 };
 use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::{
@@ -37,9 +37,9 @@ impl<S, B> Transform<S, ServiceRequest> for RateLimiter
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type InitError = ();
     type Transform = RateLimiterMiddleware<S>;
@@ -66,9 +66,9 @@ impl<S, B> Service<ServiceRequest> for RateLimiterMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -124,18 +124,24 @@ where
                 req.path()
             );
 
-            let err = ErrorTooManyRequests(serde_json::json!({
-                "error": "Too Many Requests",
-                "message": format!("Bạn đã vượt quá giới hạn {} requests / {} giây. Vui lòng chờ.", self.max_requests, self.window_duration.as_secs())
+            let response = HttpResponse::TooManyRequests().json(serde_json::json!({
+                "error": {
+                    "code": "rate_limited",
+                    "message": "Too many requests",
+                    "details": {
+                        "limit": self.max_requests,
+                        "window_seconds": self.window_duration.as_secs()
+                    }
+                }
             }));
 
-            return Box::pin(async move { Err(err) });
+            return Box::pin(async move { Ok(req.into_response(response)) });
         }
 
         let fut = self.service.call(req);
         Box::pin(async move {
             let res = fut.await?;
-            Ok(res)
+            Ok(res.map_into_boxed_body())
         })
     }
 }

@@ -68,13 +68,38 @@ pub async fn get_all_health_topics(
     req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
-    if let Err(resp) = auth_or_forbidden(&req) {
-        return resp;
-    }
+    let auth = match auth_or_forbidden(&req) {
+        Ok(auth) => auth,
+        Err(resp) => return resp,
+    };
+    let owned_device_ids = match auth
+        .user_id
+        .as_deref()
+        .and_then(|id| id.parse::<i64>().ok())
+    {
+        Some(user_id) => {
+            match crate::db::device_ownership::list_device_ids_for_user(&app_state.pg_pool, user_id)
+                .await
+            {
+                Ok(ids) => Some(ids.into_iter().collect::<std::collections::HashSet<_>>()),
+                Err(e) => {
+                    tracing::error!(?e, "Failed to load owned devices for health topics");
+                    return HttpResponse::InternalServerError()
+                        .json(json!({ "error": "Database Error" }));
+                }
+            }
+        }
+        None => None,
+    };
     match get_all_topics(&app_state.pg_pool).await {
         Ok(rows) => {
             let grouped = group_by_device(
                 rows.into_iter()
+                    .filter(|r| {
+                        owned_device_ids
+                            .as_ref()
+                            .is_none_or(|ids| ids.contains(&r.device_id))
+                    })
                     .map(|r| TopicRow {
                         device_id: r.device_id,
                         topic_category: r.topic_category,
@@ -123,13 +148,38 @@ pub async fn get_device_health_topics(
 }
 
 pub async fn get_all_hestia(req: HttpRequest, app_state: web::Data<AppState>) -> impl Responder {
-    if let Err(resp) = auth_or_forbidden(&req) {
-        return resp;
-    }
+    let auth = match auth_or_forbidden(&req) {
+        Ok(auth) => auth,
+        Err(resp) => return resp,
+    };
 
     let data = {
         let states = app_state.device_states.read().await;
-        extract_hestia_by_device(&states)
+        let all = extract_hestia_by_device(&states);
+        drop(states);
+        if let Some(user_id) = auth
+            .user_id
+            .as_deref()
+            .and_then(|id| id.parse::<i64>().ok())
+        {
+            match crate::db::device_ownership::list_device_ids_for_user(&app_state.pg_pool, user_id)
+                .await
+            {
+                Ok(ids) => {
+                    let ids: std::collections::HashSet<_> = ids.into_iter().collect();
+                    all.into_iter()
+                        .filter(|(device_id, _)| ids.contains(device_id))
+                        .collect()
+                }
+                Err(e) => {
+                    tracing::error!(?e, "Failed to load owned devices for Hestia");
+                    return HttpResponse::InternalServerError()
+                        .json(json!({ "error": "Database Error" }));
+                }
+            }
+        } else {
+            all
+        }
     };
 
     HttpResponse::Ok().json(json!({
@@ -291,7 +341,10 @@ mod tests {
             ),
             influx_bucket: "test-bucket".to_string(),
             mqtt_client,
+            mqtt_connected: crate::observability::new_mqtt_connection_state(),
+            command_reconciliation_worker: crate::observability::new_mqtt_connection_state(),
             api_key: "test-api-key".to_string(),
+            privileged_control_secret: "test-privileged-secret".to_string(),
             firebase_auth: std::sync::Arc::new(
                 crate::services::firebase_auth::FirebaseAuthVerifier::new(
                     "test-project".to_string(),

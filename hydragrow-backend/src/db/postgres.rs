@@ -62,6 +62,11 @@ pub struct SystemEventRecord {
     pub source: String,
     pub primary_reason_code: Option<String>,
     pub resolved_at: Option<DateTime<Utc>>,
+    pub event_type: String,
+    pub actor_kind: String,
+    pub actor_id: Option<String>,
+    pub received_at: DateTime<Utc>,
+    pub resolved_by: Option<String>,
 }
 
 /// Đánh dấu đã xử lý (hoặc mở lại) một sự kiện hệ thống.
@@ -70,17 +75,19 @@ pub async fn resolve_system_event(
     device_id: &str,
     event_id: i32,
     resolved: bool,
+    resolved_by: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         UPDATE system_events
-        SET resolved_at = CASE WHEN $3 THEN CURRENT_TIMESTAMP ELSE NULL END
+        SET resolved_at = CASE WHEN $3 THEN CURRENT_TIMESTAMP ELSE NULL END, resolved_by = CASE WHEN $3 THEN $4 ELSE NULL END
         WHERE id = $1 AND device_id = $2
         "#,
     )
     .bind(event_id)
     .bind(device_id)
     .bind(resolved)
+    .bind(resolved_by)
     .execute(pool)
     .await?;
     Ok(())
@@ -672,29 +679,93 @@ pub async fn get_system_events(
     after_timestamp: Option<i64>,
     level: Option<String>,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
+    get_system_events_filtered(
+        pool,
+        device_id,
+        categories,
+        limit,
+        before_timestamp,
+        None,
+        after_timestamp,
+        level,
+        None,
+        false,
+        None,
+        None,
+        None,
+    )
+    .await
+}
+
+pub async fn get_system_events_filtered(
+    pool: &PgPool,
+    device_id: &str,
+    categories: &[String],
+    limit: i64,
+    before_timestamp: Option<i64>,
+    before_id: Option<i32>,
+    after_timestamp: Option<i64>,
+    level: Option<String>,
+    event_type: Option<String>,
+    unresolved: bool,
+    search: Option<String>,
+    from_timestamp: Option<i64>,
+    to_timestamp: Option<i64>,
+) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     sqlx::query_as::<_, SystemEventRecord>(
         r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at, event_type, actor_kind, actor_id, received_at, resolved_by
         FROM system_events
         WHERE device_id = $1
           AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
-          AND ($4::bigint IS NULL OR timestamp < $4)
-          AND ($5::bigint IS NULL OR timestamp > $5)
-          AND ($6::text IS NULL OR level = $6)
-        ORDER BY
-            CASE WHEN $5::bigint IS NOT NULL THEN timestamp END ASC,
-            CASE WHEN $5::bigint IS NULL THEN timestamp END DESC
-        LIMIT $3
+          AND ($4::bigint IS NULL OR $5::int IS NULL OR (timestamp,id) < ($4,$5))
+          AND ($6::bigint IS NULL OR (timestamp,id) > ($6,-2147483648))
+          AND ($7::text IS NULL OR level = $7)
+          AND ($8::text IS NULL OR event_type = $8)
+          AND (NOT $9 OR resolved_at IS NULL)
+          AND ($10::text IS NULL OR title ILIKE '%' || $10 || '%' OR message ILIKE '%' || $10 || '%')
+          AND ($11::bigint IS NULL OR timestamp >= $11)
+          AND ($12::bigint IS NULL OR timestamp <= $12)
+        ORDER BY timestamp DESC, id DESC
+        LIMIT LEAST(GREATEST($3,1),500)
         "#,
     )
-    .bind(device_id)
-    .bind(categories)
-    .bind(limit)
-    .bind(before_timestamp)
-    .bind(after_timestamp)
-    .bind(level)
-    .fetch_all(pool)
-    .await
+    .bind(device_id).bind(categories).bind(limit).bind(before_timestamp).bind(before_id).bind(after_timestamp)
+    .bind(level).bind(event_type).bind(unresolved).bind(search).bind(from_timestamp).bind(to_timestamp)
+    .fetch_all(pool).await
+}
+
+pub async fn get_system_events_export(
+    pool: &PgPool,
+    device_id: &str,
+    categories: &[String],
+    level: Option<String>,
+    event_type: Option<String>,
+    unresolved: bool,
+    search: Option<String>,
+    from_timestamp: Option<i64>,
+    to_timestamp: Option<i64>,
+    max_rows: i64,
+) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
+    sqlx::query_as::<_, SystemEventRecord>(
+        r#"
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at, event_type, actor_kind, actor_id, received_at, resolved_by
+        FROM system_events
+        WHERE device_id = $1
+          AND (cardinality($2::text[]) = 0 OR category = ANY($2::text[]))
+          AND ($3::text IS NULL OR level = $3)
+          AND ($4::text IS NULL OR event_type = $4)
+          AND (NOT $5 OR resolved_at IS NULL)
+          AND ($6::text IS NULL OR title ILIKE '%' || $6 || '%' OR message ILIKE '%' || $6 || '%')
+          AND ($7::bigint IS NULL OR timestamp >= $7)
+          AND ($8::bigint IS NULL OR timestamp <= $8)
+        ORDER BY timestamp DESC, id DESC
+        LIMIT LEAST(GREATEST($9,1),1000)
+        "#,
+    )
+    .bind(device_id).bind(categories).bind(level).bind(event_type).bind(unresolved)
+    .bind(search).bind(from_timestamp).bind(to_timestamp).bind(max_rows)
+    .fetch_all(pool).await
 }
 
 pub async fn get_events_by_cycle_id(
@@ -703,7 +774,7 @@ pub async fn get_events_by_cycle_id(
     cycle_id: &str,
 ) -> Result<Vec<SystemEventRecord>, sqlx::Error> {
     let query = r#"
-        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at
+        SELECT id, device_id, level, category, title, message, reason, metadata, timestamp, source, primary_reason_code, resolved_at, event_type, actor_kind, actor_id, received_at, resolved_by
         FROM system_events
         WHERE device_id = $1
           AND (

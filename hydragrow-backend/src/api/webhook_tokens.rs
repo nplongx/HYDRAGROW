@@ -1,5 +1,5 @@
 use crate::AppState;
-use actix_web::{HttpResponse, Scope, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Scope, web};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -76,7 +76,17 @@ pub async fn list_tokens(pool: &PgPool, device_id: &str) -> Result<Vec<WebhookTo
 async fn handle_list_tokens(
     app_state: web::Data<AppState>,
     path: web::Path<String>,
+    req: HttpRequest,
 ) -> HttpResponse {
+    let auth = req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("device:admin") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error":"Missing scope: device:admin"}));
+    }
     let device_id = path.into_inner();
     match list_tokens(&app_state.pg_pool, &device_id).await {
         Ok(tokens) => HttpResponse::Ok().json(tokens),
@@ -91,8 +101,18 @@ async fn handle_list_tokens(
 async fn handle_create_token(
     app_state: web::Data<AppState>,
     path: web::Path<String>,
+    req_auth: HttpRequest,
     req: web::Json<CreateTokenRequest>,
 ) -> HttpResponse {
+    let auth = req_auth
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("device:admin") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error":"Missing scope: device:admin"}));
+    }
     let device_id = path.into_inner();
     match create_token(&app_state.pg_pool, &device_id, &req.label).await {
         Ok((token, raw_token)) => HttpResponse::Ok().json(serde_json::json!({
@@ -110,7 +130,17 @@ async fn handle_create_token(
 async fn handle_revoke_token(
     app_state: web::Data<AppState>,
     path: web::Path<(String, Uuid)>,
+    req: HttpRequest,
 ) -> HttpResponse {
+    let auth = req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("device:admin") {
+        return HttpResponse::Forbidden()
+            .json(serde_json::json!({"error":"Missing scope: device:admin"}));
+    }
     let (device_id, token_id) = path.into_inner();
     match revoke_token(&app_state.pg_pool, token_id, &device_id).await {
         Ok(true) => HttpResponse::Ok().json(serde_json::json!({ "success": true })),

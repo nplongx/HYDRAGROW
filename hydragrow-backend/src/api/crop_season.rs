@@ -1,7 +1,8 @@
+use crate::api::middleware::auth::AuthContext;
 use crate::db::postgres;
 use crate::models::crop_season::CreateCropSeasonRequest;
 use crate::{AppState, db::postgres::end_active_crop_season};
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use serde_json::json;
 
 #[derive(serde::Deserialize)]
@@ -13,8 +14,18 @@ pub struct UpdateCropSeasonRequest {
 
 async fn get_active_season(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
     let device_id = path.into_inner();
     match postgres::get_active_crop_season(&app_state.pg_pool, &device_id).await {
         Ok(season) => HttpResponse::Ok().json(json!({ "status": "success", "data": season })),
@@ -25,8 +36,18 @@ async fn get_active_season(
 
 async fn get_seasons_history(
     path: web::Path<String>,
+    req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: read:telemetry"}));
+    }
     let device_id = path.into_inner();
     match postgres::get_crop_seasons_history(&app_state.pg_pool, &device_id).await {
         Ok(seasons) => HttpResponse::Ok().json(json!({ "status": "success", "data": seasons })),
@@ -37,9 +58,19 @@ async fn get_seasons_history(
 
 async fn create_season(
     path: web::Path<String>,
+    http_req: HttpRequest,
     req: web::Json<CreateCropSeasonRequest>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("write:config") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: write:config"}));
+    }
     let device_id = path.into_inner();
     match postgres::create_crop_season(&app_state.pg_pool, &device_id, req.into_inner()).await {
         Ok(season) => HttpResponse::Ok().json(json!({ "status": "success", "data": season })),
@@ -50,9 +81,19 @@ async fn create_season(
 
 async fn update_season(
     path: web::Path<String>,
+    http_req: HttpRequest,
     req: web::Json<UpdateCropSeasonRequest>,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("write:config") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: write:config"}));
+    }
     let device_id = path.into_inner();
     let data = req.into_inner();
 
@@ -74,7 +115,20 @@ async fn update_season(
     }
 }
 
-async fn end_season(path: web::Path<String>, app_state: web::Data<AppState>) -> impl Responder {
+async fn end_season(
+    path: web::Path<String>,
+    http_req: HttpRequest,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("write:config") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: write:config"}));
+    }
     let device_id = path.into_inner();
     match end_active_crop_season(&app_state.pg_pool, &device_id).await {
         Ok(_) => {
@@ -87,8 +141,18 @@ async fn end_season(path: web::Path<String>, app_state: web::Data<AppState>) -> 
 
 async fn delete_season(
     path: web::Path<(String, String)>,
+    http_req: HttpRequest,
     app_state: web::Data<AppState>,
 ) -> impl Responder {
+    let auth = http_req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("write:config") {
+        return HttpResponse::Forbidden()
+            .json(json!({"error":"Missing required scope: write:config"}));
+    }
     let (device_id, season_id) = path.into_inner();
     match postgres::delete_crop_season(&app_state.pg_pool, &device_id, &season_id).await {
         Ok(0) => HttpResponse::NotFound()

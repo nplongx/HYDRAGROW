@@ -624,10 +624,11 @@ fn observation_can_confirm(
     observed_at_ms: i64,
     acknowledged_at: Option<chrono::DateTime<chrono::Utc>>,
 ) -> bool {
-    acknowledged_at.map_or(true, |ack| observed_at_ms >= ack.timestamp_millis())
+    acknowledged_at.is_none_or(|ack| observed_at_ms >= ack.timestamp_millis())
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod command_confirmation_tests {
     use super::{
         all_pumps_off, controller_observation_timestamp_ms, observation_can_confirm, pump_pwm,

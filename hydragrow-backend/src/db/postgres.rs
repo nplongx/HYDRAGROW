@@ -697,6 +697,7 @@ pub async fn get_system_events(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_system_events_filtered(
     pool: &PgPool,
     device_id: &str,
@@ -735,6 +736,7 @@ pub async fn get_system_events_filtered(
     .fetch_all(pool).await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn get_system_events_export(
     pool: &PgPool,
     device_id: &str,

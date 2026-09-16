@@ -198,22 +198,19 @@ where
                 .and_then(|v| v.to_str().ok())
                 .is_some_and(|v| v.starts_with("application/json"));
 
-            if status.is_client_error() || status.is_server_error() {
-                if is_json {
-                    let (request, response) = response.into_parts();
-                    let body = actix_web::body::to_bytes(response.into_body())
-                        .await
-                        .map_err(|_| {
-                            actix_web::error::ErrorInternalServerError("response body read failed")
-                        })?;
-                    let value =
-                        serde_json::from_slice::<Value>(&body).unwrap_or_else(|_| json!({}));
-                    let normalized = normalize_error_json(status, value, request_id.as_deref());
-                    let response = HttpResponse::build(status)
-                        .json(normalized)
-                        .map_into_boxed_body();
-                    return Ok(ServiceResponse::new(request, response));
-                }
+            if (status.is_client_error() || status.is_server_error()) && is_json {
+                let (request, response) = response.into_parts();
+                let body = actix_web::body::to_bytes(response.into_body())
+                    .await
+                    .map_err(|_| {
+                        actix_web::error::ErrorInternalServerError("response body read failed")
+                    })?;
+                let value = serde_json::from_slice::<Value>(&body).unwrap_or_else(|_| json!({}));
+                let normalized = normalize_error_json(status, value, request_id.as_deref());
+                let response = HttpResponse::build(status)
+                    .json(normalized)
+                    .map_into_boxed_body();
+                return Ok(ServiceResponse::new(request, response));
             }
             Ok(response.map_into_boxed_body())
         })
@@ -221,6 +218,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use actix_web::{App, Responder, test as actix_test, web};

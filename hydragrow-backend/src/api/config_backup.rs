@@ -183,10 +183,10 @@ fn canonicalize(value: &Value) -> Value {
 
 fn payload_without_digest(artifact: &BackupArtifact) -> Value {
     let mut value = serde_json::to_value(artifact).expect("BackupArtifact is serializable");
-    if let Value::Object(root) = &mut value {
-        if let Some(Value::Object(integrity)) = root.get_mut("integrity") {
-            integrity.remove("digest");
-        }
+    if let Value::Object(root) = &mut value
+        && let Some(Value::Object(integrity)) = root.get_mut("integrity")
+    {
+        integrity.remove("digest");
     }
     canonicalize(&value)
 }
@@ -279,10 +279,10 @@ fn validate_artifact(
             _ => errors.push(format!("Missing required configuration domain: {table}")),
         }
     }
-    if let Some(Value::Object(row)) = configuration.get("device_config") {
-        if row.get("device_id").and_then(Value::as_str) != Some(source_device_id.as_str()) {
-            errors.push("device_config.device_id does not match source.device_ids[0]".to_string());
-        }
+    if let Some(Value::Object(row)) = configuration.get("device_config")
+        && row.get("device_id").and_then(Value::as_str) != Some(source_device_id.as_str())
+    {
+        errors.push("device_config.device_id does not match source.device_ids[0]".to_string());
     }
     if target_device_id.trim().is_empty() {
         errors.push("Target device_id is empty".to_string());
@@ -662,7 +662,7 @@ pub async fn export_backup(
                 .json(json!({"error": format!("DB transaction failed: {e}")}));
         }
     };
-    let configuration = match fetch_export_configuration(&mut *tx, &device_id).await {
+    let configuration = match fetch_export_configuration(&mut tx, &device_id).await {
         Ok(value) => value,
         Err(error) => {
             warn!(%device_id, %error, "Backup export failed");
@@ -789,7 +789,7 @@ pub async fn import_backup(
                 return HttpResponse::BadRequest().json(json!({"status":"rejected","error":e}));
             }
         };
-        if let Err(e) = apply_domain(&mut *tx, table, &mapped).await {
+        if let Err(e) = apply_domain(&mut tx, table, &mapped).await {
             error!(%target_device_id, table, error = %e, "Restore transaction failed; rolling back");
             let _ = tx.rollback().await;
             BACKUP_RESTORE_TOTAL
@@ -800,15 +800,15 @@ pub async fn import_backup(
         }
     }
 
-    if let Some(recipe) = artifact.configuration.get("recipe") {
-        if let Err(e) = apply_recipe(&mut *tx, recipe).await {
-            error!(%target_device_id, error = %e, "Recipe restore failed; rolling back");
-            let _ = tx.rollback().await;
-            BACKUP_RESTORE_TOTAL
-                .with_label_values(&["restore", "rejected"])
-                .inc();
-            return HttpResponse::Conflict().json(json!({"status": "rejected", "error": e}));
-        }
+    if let Some(recipe) = artifact.configuration.get("recipe")
+        && let Err(e) = apply_recipe(&mut tx, recipe).await
+    {
+        error!(%target_device_id, error = %e, "Recipe restore failed; rolling back");
+        let _ = tx.rollback().await;
+        BACKUP_RESTORE_TOTAL
+            .with_label_values(&["restore", "rejected"])
+            .inc();
+        return HttpResponse::Conflict().json(json!({"status": "rejected", "error": e}));
     }
 
     if let Err(e) = tx.commit().await {
@@ -879,6 +879,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::explicit_auto_deref)]
 mod tests {
     use super::*;
 

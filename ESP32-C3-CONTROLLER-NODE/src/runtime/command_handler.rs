@@ -729,7 +729,7 @@ pub(crate) fn mark_persistent_command_processed(
     command_id: &str,
     nvs: &mut Option<esp_idf_svc::nvs::EspDefaultNvs>,
 ) {
-    let Some(nvs) = nvs.as_deref_mut() else {
+    let Some(nvs) = nvs.as_mut() else {
         return;
     };
     let mut buffer = [0u8; 4096];
@@ -737,7 +737,7 @@ pub(crate) fn mark_persistent_command_processed(
         .get_str(PROCESSED_COMMAND_IDS_KEY, &mut buffer)
         .ok()
         .flatten()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
         .unwrap_or_default();
     if ids.iter().any(|id| id == command_id) {
         return;

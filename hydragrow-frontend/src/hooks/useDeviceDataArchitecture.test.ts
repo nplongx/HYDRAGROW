@@ -23,7 +23,7 @@ describe('frontend domain data boundaries', () => {
 
   it('rejects malformed telemetry instead of creating plausible defaults', () => {
     expect(() => readSnapshot({ data: undefined })).toThrow('Telemetry response is unavailable');
-    expect(() => readSnapshot({ data: { device_id: 'device-a', axes: [] } as any })).not.toThrow();
+    expect(() => readSnapshot({ data: { device_id: 'device-a', axes: [], operational_state: 'monitoring', actuator_contradictory: false } as any })).not.toThrow();
     expect(() => readSnapshot({ data: { device_id: 'device-a' } as any })).toThrow('Telemetry response is invalid');
     expect(() => readSnapshot({ data: { device_id: 'device-a', axes: [] } as any }, 'device-b'))
       .toThrow('Telemetry response belongs to a different device');

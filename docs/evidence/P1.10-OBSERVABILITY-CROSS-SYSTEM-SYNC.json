@@ -1,4 +1,5 @@
 {
+  "requirement_id": "P1.10-OBSERVABILITY-CROSS-SYSTEM-SYNC",
   "phase": "P1.10",
   "artifact": "OBSERVABILITY-CROSS-SYSTEM-SYNC",
   "worktree_timestamp": "2026-09-16",

@@ -22,13 +22,13 @@ describe('EventLogCard', () => {
 
   it('hiện nút mở JSON thô khi có onOpenDetail và có metadata', () => {
     render(<EventLogCard ev={technicalEvent} idx={0} onOpenDetail={vi.fn()} />);
-    expect(screen.getByText('Xem JSON thô')).toBeInTheDocument();
+    expect(screen.getByText('Xem chi tiết')).toBeInTheDocument();
   });
 
   it('bấm nút mở JSON thô gọi onOpenDetail với đúng event', () => {
     const onOpenDetail = vi.fn();
     render(<EventLogCard ev={technicalEvent} idx={0} onOpenDetail={onOpenDetail} />);
-    fireEvent.click(screen.getByText('Xem JSON thô'));
+    fireEvent.click(screen.getByText('Xem chi tiết'));
     expect(onOpenDetail).toHaveBeenCalledWith(technicalEvent);
   });
 

@@ -14,6 +14,14 @@ use crate::api::middleware::auth::AuthContext;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::metrics::BACKUP_RESTORE_TOTAL;
 
+#[cfg(test)]
+async fn ensure_config_backup_test_schema(pool: &sqlx::PgPool) {
+    sqlx::migrate!("migrations")
+        .run(pool)
+        .await
+        .expect("test database migrations must apply");
+}
+
 const BACKUP_FORMAT: &str = "hydragrow-backup";
 const BACKUP_SCHEMA_VERSION: u8 = 1;
 const CONFIG_TABLES: &[&str] = &[
@@ -927,6 +935,7 @@ mod tests {
             return;
         };
         let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+        ensure_config_backup_test_schema(&pool).await;
         let source_id: Option<String> =
             sqlx::query_scalar("SELECT device_id FROM device_config ORDER BY device_id LIMIT 1")
                 .fetch_optional(&pool)
@@ -999,6 +1008,7 @@ mod tests {
             return;
         };
         let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
+        ensure_config_backup_test_schema(&pool).await;
         let source_id: Option<String> = sqlx::query_scalar(
             "SELECT d.device_id FROM device_config d JOIN water_config w USING(device_id) JOIN safety_config s USING(device_id) JOIN sensor_calibration se USING(device_id) JOIN dosing_calibration dc USING(device_id) ORDER BY d.device_id LIMIT 1",
         )

@@ -50,6 +50,7 @@ vi.mock("../hooks/useAutomationScripts", () => ({
   }),
   useCreateAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateAutomationScriptById: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteAutomationScript: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useValidateAutomationScript: () => ({
     mutateAsync: vi.fn().mockResolvedValue({ valid: true }),

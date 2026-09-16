@@ -22,6 +22,7 @@ vi.mock("../hooks/useAutomationScripts", () => ({
     isLoading: false,
     isError: false,
   }),
+  useUpdateAutomationScriptById: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useApplyTemplate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useConfigOverrides: () => ({ data: { active: [], history: [] }, isLoading: false }),
   useAllConfigOverrides: () => ({ data: [], isLoading: false }),

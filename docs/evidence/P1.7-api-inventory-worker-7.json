@@ -1,0 +1,101 @@
+{
+  "requirement_id": "P1.7",
+  "surface": "backend route registration + frontend API call-site inventory",
+  "canonical_operation": "Query | Mutation | Command | Stream | Webhook/external ingress | Admin/internal operation",
+  "authorization_scope": "Existing P1.1 auth middleware and per-handler ownership/capability checks preserved",
+  "inventory": {
+    "backend_route_modules": [
+      "admin_users", "alert", "analytics", "calibration", "config", "config_backup",
+      "control", "crop_season", "crop_season_photo", "device_admin", "device_pairing",
+      "fleet", "health_topics", "notification", "recipe", "script", "sensor", "solana",
+      "webhook", "webhook_tokens", "ws"
+    ],
+    "backend_scope_conventions": {
+      "device": "/api/devices/{device_id}/...",
+      "fleet": "/api/devices and /api/fleet/...",
+      "admin": "/api/admin/...",
+      "stream": "/api/devices/{device_id}/ws"
+    },
+    "backend_operation_examples": {
+      "query": [
+        "GET /api/devices",
+        "GET /api/devices/{device_id}/status",
+        "GET /api/devices/{device_id}/config",
+        "GET /api/devices/{device_id}/sensors/latest",
+        "GET /api/devices/{device_id}/events",
+        "GET /api/devices/{device_id}/seasons",
+        "GET /api/fleet/summary"
+      ],
+      "mutation": [
+        "PUT /api/devices/{device_id}/config",
+        "POST /api/devices/{device_id}/config/safety",
+        "POST /api/devices/{device_id}/config/water",
+        "POST /api/recipes",
+        "PUT /api/recipes/{recipe_id}",
+        "DELETE /api/recipes/{recipe_id}",
+        "POST /api/devices/{device_id}/seasons",
+        "DELETE /api/devices/{device_id}/seasons/{season_id}"
+      ],
+      "command": [
+        "POST /api/devices/{device_id}/control",
+        "POST /api/devices/{device_id}/control/sync",
+        "POST /api/devices/{device_id}/reboot",
+        "POST /api/devices/{device_id}/factory-reset",
+        "POST /api/devices/{device_id}/ota/trigger",
+        "POST /api/devices/{device_id}/recipe/apply",
+        "POST /api/devices/{device_id}/recipe/clear"
+      ],
+      "stream": ["GET /api/devices/{device_id}/ws"],
+      "webhook_ingress": [
+        "POST /api/devices/{device_id}/webhook/action",
+        "POST /api/devices/{device_id}/webhook/flow-event"
+      ],
+      "admin": [
+        "GET /api/admin/users",
+        "POST /api/admin/users",
+        "PATCH /api/admin/users/{id}",
+        "GET /api/admin/whoami"
+      ]
+    },
+    "frontend_direct_api_files": [
+      "src/api/config.ts", "src/api/devices.ts", "src/api/seasons.ts", "src/api/telemetry.ts",
+      "src/components/seasons/CreateSeasonForm.tsx", "src/components/seasons/SeasonPhotoJournal.tsx",
+      "src/contexts/StationContext.tsx", "src/hooks/useActiveRecipeStatus.ts", "src/hooks/useAutomationScripts.ts",
+      "src/hooks/useConfigBackup.ts", "src/hooks/useCycleTimeline.ts", "src/hooks/useDeviceControl.ts",
+      "src/hooks/useFCM.ts", "src/hooks/useFleetStatus.ts", "src/hooks/useOwnedDevices.ts",
+      "src/hooks/useSystemEvents.ts", "src/hooks/useSystemHealthSummary.ts", "src/hooks/useWhoami.ts",
+      "src/lib/apiClient.ts", "src/pages/Analytics.tsx", "src/pages/Automation.tsx",
+      "src/pages/DevicePairing.tsx", "src/pages/DosingHistory.tsx", "src/pages/FleetView.tsx",
+      "src/pages/RecipeBuilder.tsx", "src/pages/Roles.tsx", "src/pages/Settings.tsx",
+      "src/pages/SystemLog.tsx", "src/pages/UserManagement.tsx"
+    ],
+    "direct_api_file_count_production": 29,
+    "direct_api_file_count_including_tests": 41
+  },
+  "canonicalization": {
+    "changed_route": [
+      "GET /api/devices/{device_id}/config/safety",
+      "PUT /api/devices/{device_id}/config/safety",
+      "GET /api/devices/{device_id}/config/water",
+      "PUT /api/devices/{device_id}/config/water"
+    ],
+    "legacy_aliases_retained": [
+      "GET /api/devices/{device_id}/safety",
+      "POST /api/devices/{device_id}/config/safety",
+      "POST /api/devices/{device_id}/config/water"
+    ],
+    "adapter_rule": "Canonical and legacy registrations call the same existing handlers, preserving existing capability and ownership checks. No duplicate business logic introduced."
+  },
+  "expected_response_error": "Route aliases preserve existing handler response/error behavior during compatibility period.",
+  "expected_cache_effect": "No frontend cache behavior changed by this backend-only route alias migration.",
+  "actual_result": "Canonical config safety/water GET + PUT routes registered additively; legacy routes retained.",
+  "environment": "Linux workspace /home/long/HYDRAGROW; backend Cargo test suite",
+  "test_evidence": [
+    "hydragrow-backend/src/api/config.rs::canonical_safety_and_water_routes_are_registered",
+    "hydragrow-backend/src/api/config.rs::legacy_safety_post_remains_registered_for_compatibility"
+  ],
+  "compatibility_exceptions": [
+    "Legacy safety GET and POST update routes remain until frontend consumer audit and deprecation evidence permit removal.",
+    "Legacy water POST update route remains while canonical PUT adoption proceeds."
+  ]
+}

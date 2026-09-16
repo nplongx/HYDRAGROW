@@ -1,0 +1,81 @@
+{
+  "phase": "P1.5",
+  "title": "Backup / Restore Lifecycle",
+  "verified_at": "2026-09-16T09:23:17Z",
+  "status": "PARTIAL",
+  "implementation": {
+    "backend": "hydragrow-backend/src/api/config_backup.rs",
+    "frontend_hook": "hydragrow-frontend/src/hooks/useConfigBackup.ts",
+    "frontend_page": "hydragrow-frontend/src/pages/ConfigBackup.tsx",
+    "frontend_test": "hydragrow-frontend/src/pages/ConfigBackup.test.tsx"
+  },
+  "environment": {
+    "postgresql": "PASS",
+    "mqtt_broker": "PASS",
+    "controller_hardware_or_runtime": "BLOCKED",
+    "controller_block_reason": "No ESP32 controller runtime is available in this environment; do not infer remote apply/ack from the MQTT broker-only roundtrip."
+  },
+  "checks": {
+    "backend_p1_5_tests": {
+      "command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::config_backup::tests -- --nocapture",
+      "result": "PASS",
+      "tests": 6,
+      "failures": 0,
+      "includes": [
+        "deterministic SHA-256 digest",
+        "digest mismatch detection",
+        "secret-field rejection",
+        "explicit source-to-target device mapping",
+        "real PostgreSQL rollback after injected domain failure",
+        "real PostgreSQL export + preview + atomic apply + repeated apply no-duplicate check"
+      ]
+    },
+    "frontend_test": {
+      "command": "npm test -- --run src/pages/ConfigBackup.test.tsx",
+      "result": "PASS",
+      "tests": 1,
+      "failures": 0,
+      "covers": [
+        "preview endpoint is called before restore",
+        "validated artifact is sent unchanged to restore"
+      ]
+    },
+    "frontend_build": {
+      "command": "npm run build",
+      "result": "PASS",
+      "notes": "TypeScript and Vite production build completed; existing large-chunk warning remains non-blocking."
+    },
+    "targeted_eslint": {
+      "command": "npm exec eslint src/hooks/useConfigBackup.ts src/pages/ConfigBackup.tsx src/pages/ConfigBackup.test.tsx",
+      "result": "PASS",
+      "errors": 0
+    },
+    "mqtt_roundtrip": {
+      "result": "PASS",
+      "details": "Temporary eclipse-mosquitto:2 broker accepted a publish and subscriber received the exact test payload over localhost:1883. Broker was stopped after verification."
+    }
+  },
+  "acceptance": {
+    "AC-1": {"status": "PASS", "basis": "Versioned hydragrow-backup envelope with schema_version=1 and canonical SHA-256 digest."},
+    "AC-2": {"status": "PASS", "basis": "Existing ownership/auth guard is reused; export/restore require write:config or device:admin; exported persistent configuration is checked for forbidden secret keys."},
+    "AC-3": {"status": "PASS", "basis": "Export reads all five required persistent configuration domains inside one PostgreSQL transaction and fails closed when a required domain is absent."},
+    "AC-4": {"status": "PASS", "basis": "Dedicated /restore/validate endpoint performs integrity/schema/domain/target validation and deterministic preview without mutation."},
+    "AC-5": {"status": "PASS", "basis": "Unsupported fields, missing fields, bad source identity, secrets, unsupported format/schema and digest mismatch are rejected."},
+    "AC-6": {"status": "PASS", "basis": "Target ownership is checked before validation/apply and is enforced by the existing device ownership boundary."},
+    "AC-7": {"status": "PASS", "basis": "All persistent configuration domains and optional recipe template apply inside one PostgreSQL transaction."},
+    "AC-8": {"status": "PASS", "basis": "Remote sync is invoked only after commit; response distinguishes applied_sync_pending from applied_sync_failed and never rolls DB back for remote failure."},
+    "AC-9": {"status": "PASS", "basis": "Executable PostgreSQL test injects a later-domain failure and verifies the earlier domain change is absent after rollback."},
+    "AC-10": {"status": "PASS", "basis": "Source device is explicitly mapped to path target; recipe identity conflicts fail closed; ownership remains target-scoped."},
+    "AC-11": {"status": "PASS", "basis": "Configuration uses ON CONFLICT upserts and the PostgreSQL roundtrip test applies the same artifact twice while verifying one logical device row."},
+    "AC-12": {"status": "PASS", "basis": "Config Backup uses StationContext-selected device, React Query mutations own export/preview/restore operation state, and no device lifecycle state was added to useDeviceStore/useDeviceSync."},
+    "AC-13": {"status": "BLOCKED", "basis": "PostgreSQL and broker runtime checks passed, but no controller runtime/hardware is available for end-to-end post-commit controller confirmation."},
+    "AC-14": {"status": "PASS", "basis": "No P1.6 journal redesign, P1.7 API consolidation, P1.8 route redesign, P1.9 broad schema cleanup, or P1.10 observability redesign was introduced."}
+  },
+  "known_gaps": [
+    "Station-wide and controller-only backup scopes are represented by the canonical scope type but are intentionally rejected by the current device-scoped API because their persistent domain mapping is not defined in P1.5 implementation scope.",
+    "No physical controller runtime is available, so post-commit remote sync failure and controller acknowledgement remain code-path verified, not hardware/runtime verified.",
+    "Backup history endpoint/storage is not implemented; history is optional in the P1.5 spec."
+  ],
+  "dirty_worktree": true,
+  "commit_created": false
+}

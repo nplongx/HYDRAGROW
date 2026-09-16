@@ -1,0 +1,107 @@
+{
+  "requirement_id": "P1.3-SAFETY-FAILURE-SEMANTICS",
+  "status": "IMPLEMENTED_WITH_VERIFICATION_GAPS",
+  "acceptance": {
+    "AC-1": {
+      "status": "PASS",
+      "surface": "hydragrow-backend/src/services/cron_scheduler.rs",
+      "evidence": [
+        "cron_sensor_quality accepts fresh finite input",
+        "cron_sensor_quality rejects stale input",
+        "cron_sensor_quality rejects malformed/error input",
+        "Influx latest-sensor failure no longer produces an empty execution payload"
+      ],
+      "tests": "cargo test --manifest-path hydragrow-backend/Cargo.toml cron_sensor_quality"
+    },
+    "AC-2": {
+      "status": "PASS",
+      "surface": "hydragrow-backend/src/mqtt/handlers/status.rs",
+      "evidence": ["all_pumps_off requires every actuator field to be explicitly observed false"],
+      "tests": "cargo test --manifest-path hydragrow-backend/Cargo.toml all_pumps_off"
+    },
+    "AC-3": {
+      "status": "PASS",
+      "surface": "hydragrow-backend/src/mqtt/handlers/status.rs; hydragrow-frontend/src/components/safety/*",
+      "evidence": ["emergency-stop confirmation requires complete observed pump state; frontend renders incomplete actuator state as unresolved"],
+      "tests": "backend command-confirmation tests; frontend EmergencyStopButton.guard.test.tsx"
+    },
+    "AC-4": {
+      "status": "PARTIAL",
+      "surface": "hydragrow-backend/src/mqtt/handlers/status.rs; hydragrow-backend/src/db/topic_last_seen.rs",
+      "evidence": ["controller status updates canonical topic last-seen and telemetry availability"],
+      "gap": "Full watchdog/backend/frontend runtime convergence test not executed."
+    },
+    "AC-5": {
+      "status": "PASS",
+      "surface": "hydragrow-shared/src/telemetry/authoritative.rs",
+      "evidence": ["observed_at and received_at remain distinct; per-axis quality is explicit"],
+      "tests": "cargo test --manifest-path hydragrow-shared/Cargo.toml telemetry"
+    },
+    "AC-6": {
+      "status": "PASS",
+      "surface": "hydragrow-backend/src/api/config_backup.rs",
+      "evidence": ["restore response distinguishes config/recipe publication and physical_confirmation=not_confirmed; publication failure is surfaced"],
+      "tests": "cargo test --manifest-path hydragrow-backend/Cargo.toml backup_redacts"
+    },
+    "AC-7": {
+      "status": "PASS",
+      "surface": "hydragrow-backend/src/api/config_backup.rs",
+      "evidence": ["backup/restore require device ownership; embedded device_id cannot retarget restore; recursive secret redaction added"],
+      "tests": "cargo test --manifest-path hydragrow-backend/Cargo.toml backup_redacts"
+    },
+    "AC-8": {
+      "status": "PASS",
+      "surface": "hydragrow-backend/src/api/sensor.rs; hydragrow-backend/src/db/influx.rs",
+      "evidence": ["device selector/range/resolution are allowlisted and bounded; Flux identifiers are escaped; range-stat empty result is an error rather than zero"],
+      "tests": "cargo test --manifest-path hydragrow-backend/Cargo.toml range_stat; api::sensor::tests"
+    },
+    "AC-9": {
+      "status": "PASS",
+      "surface": "hydragrow-shared/src/telemetry/authoritative.rs; hydragrow-frontend/src/hooks/useDeviceControl.ts",
+      "evidence": ["unknown actuator partner state now blocks interlock instead of becoming false; telemetry quality enum preserves UNKNOWN/STALE/ERROR/INVALID"],
+      "tests": "npm test -- --run src/hooks/useDeviceControl.test.ts src/components/safety/EmergencyStopButton.guard.test.tsx"
+    },
+    "AC-10": {
+      "status": "PARTIAL",
+      "surface": "hydragrow-backend/src/metrics.rs",
+      "evidence": ["bounded SAFETY_DECISIONS_TOTAL, FLUX_QUERY_TOTAL and BACKUP_RESTORE_TOTAL metrics registered"],
+      "gap": "Not all operational paths have runtime metric assertions yet."
+    },
+    "AC-11": {
+      "status": "NOT_VERIFIED",
+      "surface": "backend restart / MQTT reconnect paths",
+      "gap": "Requires runtime integration environment; no claim of pass."
+    },
+    "AC-12": {
+      "status": "PARTIAL",
+      "surface": "shared telemetry contracts + backend + frontend safety UI",
+      "evidence": ["shared telemetry tests and frontend TypeScript build pass"],
+      "gap": "ESP32 application target remains blocked by existing host-target ESP-IDF configuration."
+    },
+    "AC-13": {
+      "status": "PASS",
+      "surface": "backend/frontend negative-path unit tests",
+      "evidence": ["fresh/stale/invalid/error telemetry, range-stat failure, Flux injection/range rejection, secret redaction, unknown interlock state covered"]
+    },
+    "AC-14": {
+      "status": "PASS",
+      "surface": "P1.1/P1.2 authorization and durable command paths",
+      "evidence": ["backend cargo check passes; existing authorization/durable lifecycle tests remain in suite"]
+    },
+    "AC-15": {
+      "status": "PASS",
+      "surface": "docs/project-state/{CURRENT-STATUS,TRACEABILITY}.md",
+      "evidence": ["P1.3 implementation and residual verification gaps recorded"]
+    }
+  },
+  "verification": {
+    "backend_check": "PASS",
+    "backend_targeted_tests": "PASS",
+    "shared_telemetry_tests": "PASS",
+    "frontend_targeted_tests": "10/10 PASS",
+    "frontend_build": "PASS",
+    "full_backend_suite": "PASS: 393 passed; 0 failed",
+    "firmware_target_build": "BLOCKED: ESP-IDF invokes x86_64-unknown-linux-gnu"
+  },
+  "timestamp": "2026-09-16"
+}

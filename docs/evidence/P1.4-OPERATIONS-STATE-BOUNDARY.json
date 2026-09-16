@@ -1,0 +1,55 @@
+{
+  "requirement_id": "P1.4-OPERATIONS-STATE-BOUNDARY",
+  "status": "CLOSED",
+  "environment": {
+    "timestamp": "2026-09-16T15:43:51+07:00",
+    "rust": "1.98.1",
+    "node": "v24.21.0",
+    "postgres": "accepting connections on /var/run/postgresql:5432"
+  },
+  "implementation": [
+    "Shared canonical ContactState/FreshnessState/RuntimeReadiness/ActuatorKnowledge/OperationalState added.",
+    "30-second operational freshness threshold centralized in hydragrow-shared.",
+    "Authoritative telemetry now carries operational_state, separate observed_at/received_at, explicit runtime_ready, and contradiction marker.",
+    "Controller status merges use observation ordering; delayed controller actuator/FSM state cannot replace newer state.",
+    "REST device status and fleet summary expose operational_state and no longer encode unknown contact as is_online=false.",
+    "Frontend Dashboard, DevicePairing, and FleetStationCard preserve unknown/stale state instead of inferring offline/online.",
+    "Cron action commands require contacted + fresh operational state before dispatch; existing P1.3 safety checks remain intact.",
+    "Watchdog default staleness threshold uses the shared operational-state threshold; configured override remains supported.",
+    "Controller reboot detection invalidates prior actuator/FSM/runtime-readiness observations when a newer health snapshot reports lower uptime.",
+    "MQTT subscriptions are centralized and replayed on every successful ConnAck so broker restart/reconnect cannot silently lose operational-state subscriptions."
+  ],
+  "verification": {
+    "shared": "PASS: 67 unit tests + 2 hestia + 17 schema + 3 sensor-ingress; clippy -D warnings; fmt check",
+    "controller_core": "PASS: declared build/test/clippy/fmt checks",
+    "simulator": "PASS: 35 tests; declared build/test/clippy/fmt checks",
+    "backend": "PASS: 395 tests, 0 failed; clippy -D warnings; fmt check",
+    "watchdog": "PASS: 17 tests; build/clippy/fmt checks pass",
+    "frontend": "PASS: build; 110 files / 546 tests; ESLint 0 errors; tsc pass",
+    "prettier": "DIAGNOSED: 294 files; no checked-in repository formatter baseline; no mass-formatting performed",
+    "diff_check": "PASS",
+    "runtime_restart_reconnect": "PASS: live backend restart, controller reboot state re-entry, and MQTT broker disconnect/reconnect exercised against local Mosquitto + REST status API"
+  },
+  "acceptance": {
+    "AC-1": "PASS: shared operational semantic model is now explicit and exposed through current REST/telemetry/frontend boundaries.",
+    "AC-2": "PASS: MQTT transport reconnect is not used as the operational-state source; state requires observed freshness.",
+    "AC-3": "PASS: backend cache starts empty and API returns UNKNOWN rather than fabricated offline/ready state.",
+    "AC-4": "PASS: live controller uptime regression from 500s to 2s cleared prior KNOWN actuator and READY readiness; new health packet yielded ACTUATOR=UNKNOWN and READINESS=UNKNOWN.",
+    "AC-5": "PASS: live broker restart/reconnect produced no fabricated telemetry; state remained at prior freshness until fresh controller/status observation arrived after subscriptions were restored.",
+    "AC-6": "PASS: authoritative merge rejects older actuator/FSM observations; equal conflicting actuator observations become CONTRADICTORY.",
+    "AC-7": "PASS: absent actuator remains UNKNOWN; stale actuator becomes STALE; contradiction is preserved.",
+    "AC-8": "PASS: API cache parse failure remains UNKNOWN/ServiceUnavailable paths; scheduler dependency failure remains denied.",
+    "AC-9": "PASS: cron action dispatch now requires CONTACTED + FRESH operational state before dispatch.",
+    "AC-10": "PASS: no P1.2 lifecycle enum/state changes introduced.",
+    "AC-11": "PASS: REST/WebSocket existing boundaries preserve operational state; P1.1 ownership middleware remains unchanged.",
+    "AC-12": "PASS: frontend no longer maps missing operational state to offline; stale is distinct from current online.",
+    "AC-13": "PASS: watchdog emits staleness alerts from topic observations; process liveness alone is not reported as device health.",
+    "AC-14": "PASS: live backend restart returns UNKNOWN; controller uptime regression invalidates prior actuator/readiness state; MQTT broker reconnect restores subscriptions and fresh controller observation restores current state.",
+    "AC-15": "PASS: StationContext/React Query/useDeviceStore/useDeviceSync architecture preserved.",
+    "AC-16": "PASS: no P1.5-P1.10 feature implementation introduced.",
+    "AC-17": "PASS: evidence and traceability updated; remaining runtime gap explicitly recorded."
+  },
+  "open_gaps": [
+    "ESP32 application target remains blocked by existing ESP-IDF host-target configuration; this is outside the P1.4 declared executable runtime boundary and is not used as P1.4 PASS evidence."
+  ]
+}

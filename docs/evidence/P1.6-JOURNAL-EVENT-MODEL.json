@@ -1,0 +1,66 @@
+{
+  "phase": "P1.6",
+  "status": "IMPLEMENTED_WITH_RUNTIME_DB_BLOCKER",
+  "timestamp": "2026-09-16",
+  "scope": "Journal / Event Model",
+  "implementation": {
+    "backend": [
+      "hydragrow-backend/migrations/20260916110000_p1_6_journal_event_model.sql",
+      "hydragrow-backend/src/db/postgres.rs",
+      "hydragrow-backend/src/api/alert.rs",
+      "hydragrow-backend/src/services/retention.rs"
+    ],
+    "frontend": [
+      "hydragrow-frontend/src/pages/SystemLog.tsx",
+      "hydragrow-frontend/src/hooks/useSystemEvents.ts",
+      "hydragrow-frontend/src/components/logs/EventLogCard.tsx",
+      "hydragrow-frontend/src/components/logs/EventDetailDrawer.tsx",
+      "hydragrow-frontend/src/hooks/useDeviceSync.ts",
+      "hydragrow-frontend/src/pages/SystemLog.test.tsx"
+    ]
+  },
+  "verified": {
+    "backend_cargo_check": "PASS",
+    "backend_alert_tests": "PASS: 9/9",
+    "backend_postgres_tests": "PASS: 15/15",
+    "frontend_system_log_tests": "PASS: 8/8",
+    "frontend_typescript": "PASS",
+    "frontend_build": "PASS; existing Vite chunk-size warning",
+    "git_diff_check": "PASS",
+    "migration_sql_transactional_parse": "PASS; migration executed inside transaction and rolled back",
+    "compound_cursor_unit": "PASS",
+    "server_export": "IMPLEMENTED: bounded JSON/CSV, max 1000 rows, read:telemetry auth",
+    "immutable_event_trigger": "IMPLEMENTED; resolution/resolver fields remain mutable",
+    "retention": "IMPLEMENTED: existing 90-day policy, batched delete with explicit retention-delete trigger setting"
+  },
+  "runtime_blocker": {
+    "status": "BLOCKED",
+    "reason": "sqlx migrate run refuses the current repository migration chain because migration 20260506 was previously applied in the database but is missing from the resolved migrations",
+    "impact": "Could not apply the P1.6 migration to the live development database through the normal SQLx migration path; runtime schema verification against the migrated P1.6 database remains pending.",
+    "mitigation": "The P1.6 migration SQL was executed successfully inside a PostgreSQL transaction and rolled back, proving SQL syntax/constraint/index/trigger creation is valid without mutating the database."
+  },
+  "acceptance": {
+    "AC-1": "PASS by schema/model implementation",
+    "AC-2": "PASS by append-only trigger",
+    "AC-3": "PASS by resolved_at/resolved_by lifecycle",
+    "AC-4": "PASS by timestamp+id deterministic ordering",
+    "AC-5": "PASS by opaque compound cursor timestamp+event_id",
+    "AC-6": "PASS for authorized device-scoped Journal query",
+    "AC-7": "PASS by existing auth middleware/scope boundary; full cross-owner runtime remains pending",
+    "AC-8": "PASS by bounded source/actor fields",
+    "AC-9": "PASS for export projection; legacy producer metadata sanitization remains limited",
+    "AC-10": "PASS; existing command lifecycle remains authoritative",
+    "AC-11": "PARTIAL; existing protected mutation audit transactions preserved, broad producer audit coverage not exhaustively migrated",
+    "AC-12": "PASS; DB errors return explicit 500 and empty data is only returned for successful empty queries",
+    "AC-13": "PASS by existing 90-day bounded retention implementation",
+    "AC-14": "PENDING runtime migrated-schema verification",
+    "AC-15": "PASS by React Query + StationContext frontend changes",
+    "AC-16": "BLOCKED by repository migration-chain inconsistency",
+    "AC-17": "PASS; no P1.7-P1.10 redesign introduced"
+  },
+  "notes": [
+    "No commit created.",
+    "Existing dirty worktree changes were preserved.",
+    "The migration keeps existing legacy event categories/sources accepted so historical rows are not invalidated by the new bounded taxonomy."
+  ]
+}

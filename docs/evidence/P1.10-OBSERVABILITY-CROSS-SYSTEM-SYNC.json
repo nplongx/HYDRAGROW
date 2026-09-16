@@ -1,0 +1,290 @@
+{
+  "phase": "P1.10",
+  "artifact": "OBSERVABILITY-CROSS-SYSTEM-SYNC",
+  "worktree_timestamp": "2026-09-16",
+  "evidence_scope": "worker-reported implemented changes and tests from this worktree; runtime/deployment claims are not inferred from source inspection",
+  "environment": {
+    "node": "v24.21.0",
+    "npm": "11.19.0",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "firmware_toolchain": "PlatformIO CLI unavailable"
+  },
+  "implemented_changes": [
+    {
+      "worker": "worker-22",
+      "files": [
+        "hydragrow-backend/src/observability.rs",
+        "hydragrow-backend/src/metrics.rs",
+        "hydragrow-backend/src/main.rs",
+        "hydragrow-backend/src/api/health_topics.rs",
+        "hydragrow-backend/src/api/mod.rs",
+        "hydragrow-backend/src/services/durable_command.rs",
+        "hydragrow-backend/src/api/test_support.rs"
+      ],
+      "changes": [
+        "request_id/correlation_id generation and validation",
+        "W3C traceparent parsing and RequestContext request-extension propagation",
+        "structured HTTP tracing span fields",
+        "bounded HTTP metric endpoint labels using Actix route patterns",
+        "X-Request-ID and X-Correlation-ID response propagation",
+        "/livez and /readyz",
+        "MQTT connection and command-reconciliation readiness state",
+        "P1.10 metric families",
+        "durable command UNKNOWN/TIMEOUT and MQTT delivery observability metrics",
+        "WebSocket lag metric",
+        "updated backend test fixtures for new state fields"
+      ]
+    },
+    {
+      "worker": "worker-23",
+      "files": [
+        "hydragrow-backend/src/db/topic_last_seen.rs",
+        "hydragrow-backend/src/db/tests/test_topic_last_seen.rs"
+      ],
+      "changes": [
+        "topic last_seen_at UPSERT is monotonic; stale MQTT observations cannot move freshness backward",
+        "added stale_touch_does_not_move_last_seen_backwards SQLx regression test"
+      ]
+    },
+    {
+      "worker": "worker-24",
+      "files": [
+        "hydragrow-frontend/src/hooks/useDeviceSync.ts",
+        "hydragrow-frontend/src/hooks/useDeviceSync.test.tsx"
+      ],
+      "changes": [
+        "WebSocket reconnect recovery via authoritative React Query invalidation/refetch",
+        "recovering state until authoritative refetch completes",
+        "device-scoped event filtering",
+        "older telemetry_snapshot rejection by observed_at",
+        "malformed/out-of-order/no-observed_at recovery",
+        "connection and correlation_id/command_id/last-event diagnostics",
+        "status/lifecycle query invalidation",
+        "two focused synchronization tests"
+      ]
+    },
+    {
+      "worker": "worker-25",
+      "files": [
+        "ESP32-C3-SENSOR-NODE/src/mqtt/MqttManager.cpp"
+      ],
+      "changes": [
+        "MQTT command subscription changed from QoS 0 to QoS 1",
+        "MQTT config subscription changed from QoS 0 to QoS 1"
+      ]
+    }
+  ],
+  "validation": [
+    {
+      "worker": "worker-22",
+      "command": "cargo test --manifest-path hydragrow-backend/Cargo.toml observability::tests -- --nocapture",
+      "status": "PASS",
+      "result": "3 passed, 0 failed"
+    },
+    {
+      "worker": "worker-22",
+      "command": "cargo fmt --manifest-path hydragrow-backend/Cargo.toml -- --check",
+      "status": "PASS"
+    },
+    {
+      "worker": "worker-23",
+      "command": "git diff --check -- hydragrow-backend/src/db/topic_last_seen.rs hydragrow-backend/src/db/tests/test_topic_last_seen.rs",
+      "status": "PASS"
+    },
+    {
+      "worker": "worker-23",
+      "command": "focused backend cargo test",
+      "status": "BLOCKED",
+      "reason": "concurrent pre-existing dirty backend work: missing mqtt_connected in health_topics.rs AppState initializer; missing api::observability wiring; three observability tests missing async keyword; observability middleware lifetime error"
+    },
+    {
+      "worker": "worker-24",
+      "command": "npm test -- --run src/hooks/useDeviceSync.test.tsx",
+      "status": "PASS",
+      "result": "4/4 passed"
+    },
+    {
+      "worker": "worker-24",
+      "command": "npm run build",
+      "status": "PASS",
+      "result": "Vite chunk-size warning only"
+    },
+    {
+      "worker": "worker-24",
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "worker": "worker-25",
+      "command": "pio test --environment native",
+      "status": "BLOCKED",
+      "reason": "zsh: command not found: pio"
+    },
+    {
+      "worker": "worker-25",
+      "command": "Rust sensor-node cargo test",
+      "status": "BLOCKED",
+      "reason": "Rustup began syncing/installing nightly-x86_64-unknown-linux-gnu toolchain components; validation could not complete in the available run."
+    },
+    {
+      "worker": "worker-25",
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "worker": "worker-25",
+      "command": "node JSON.parse evidence validation",
+      "status": "PASS"
+    }
+  ],
+  "firmware_environment_blockers": [
+    {
+      "environment": "C++ PlatformIO",
+      "status": "BLOCKED",
+      "exact_error": "zsh: command not found: pio"
+    },
+    {
+      "environment": "Rust nightly toolchain",
+      "status": "BLOCKED",
+      "exact_observation": "info: syncing channel updates for nightly-x86_64-unknown-linux-gnu"
+    }
+  ],
+  "infrastructure_inventory": {
+    "verification_scope": "repository/source evidence reported by P1.10 workers; no production deployment claim",
+    "prometheus_metrics": "existing GET /metrics; P1.10 adds metric instrumentation",
+    "tracing_loki": "tracing/Loki integration point exists; no production distributed tracing exporter verified",
+    "websocket": "backend broadcast path exists; frontend reconnect recovery implemented and tested",
+    "mqtt": "backend MQTT path exists; firmware command/config subscriptions changed to QoS 1",
+    "postgresql": "durable command/topic freshness stores remain synchronization authority",
+    "influxdb": "existing telemetry persistence path; no new persistence implementation or test reported here",
+    "configuration_sync_worker": "not configured/not present; /readyz does not treat it as readiness blocker"
+  },
+  "observability_evidence": {
+    "metrics": [
+      "HTTP metrics with bounded endpoint labels",
+      "MQTT delivery metrics",
+      "durable command UNKNOWN/TIMEOUT metrics",
+      "WebSocket lag metric",
+      "readiness/liveness endpoints"
+    ],
+    "logs_traces": [
+      "structured HTTP tracing span fields",
+      "W3C traceparent parsing",
+      "RequestContext propagation",
+      "correlation/request response headers"
+    ],
+    "production_status": "instrumentation verified by focused backend tests; production observability deployment not verified"
+  },
+  "synchronization_evidence": {
+    "freshness": "PostgreSQL topic last_seen_at is monotonic; stale observations cannot move freshness backward",
+    "ordering": "frontend rejects older telemetry_snapshot by observed_at and recovers malformed/out-of-order frames",
+    "desired_observed": "frontend recovery refetches authoritative API state; no complete device-side applied-config replica was claimed",
+    "idempotency": "existing P1.2 durable command authority retained; no new command authority added",
+    "delivery": "firmware command/config subscriptions use QoS 1; exact-once delivery is not claimed",
+    "reconciliation": "existing durable command lifecycle remains authority; configuration synchronization worker is absent/not configured"
+  },
+  "outbox_decision": {
+    "status": "NOT_IMPLEMENTED",
+    "evidence": "No P1.10 worker report documents an outbox implementation or a demonstrated commit-to-side-effect gap requiring one."
+  },
+  "health_readiness": {
+    "status": "PARTIAL",
+    "evidence": "worker-22 implemented /livez and /readyz plus MQTT/command-reconciliation readiness state; no complete end-to-end runtime readiness test was reported"
+  },
+  "security_redaction": {
+    "status": "NOT_VERIFIED",
+    "evidence": "No current P1.10 worker report contains a security/redaction test result"
+  },
+  "cross_system_test_matrix": {
+    "HTTP_observability": "PASS: 3 focused observability tests",
+    "PostgreSQL_freshness": "BLOCKED: regression test added; focused backend execution blocked by concurrent dirty backend compile errors",
+    "WebSocket_frontend_recovery": "PASS: useDeviceSync focused suite 4/4",
+    "frontend_build": "PASS",
+    "MQTT_firmware": "BLOCKED: PlatformIO unavailable",
+    "Rust_sensor": "BLOCKED: nightly toolchain sync/install could not complete",
+    "Influx_persistence": "NOT_VERIFIED",
+    "full_HTTP_MQTT_PostgreSQL_InfluxDB_WebSocket_frontend": "BLOCKED/NOT_VERIFIED"
+  },
+  "acceptance_criteria": {
+    "AC-1": "PARTIAL",
+    "AC-2": "PARTIAL",
+    "AC-3": "PARTIAL",
+    "AC-4": "PARTIAL",
+    "AC-5": "PARTIAL",
+    "AC-6": "PARTIAL",
+    "AC-7": "PARTIAL",
+    "AC-8": "PARTIAL",
+    "AC-9": "PARTIAL",
+    "AC-10": "PARTIAL",
+    "AC-11": "PASS",
+    "AC-12": "PASS",
+    "AC-13": "PARTIAL",
+    "AC-14": "PARTIAL",
+    "AC-15": "PARTIAL",
+    "AC-16": "NOT_VERIFIED",
+    "AC-17": "PASS",
+    "AC-18": "BLOCKED",
+    "AC-19": "NOT_VERIFIED",
+    "AC-20": "PASS"
+  },
+  "known_gaps": [
+    "Full backend suite not run in worker-22 slice.",
+    "Backend freshness regression execution blocked by concurrent dirty backend compile errors.",
+    "PlatformIO unavailable; firmware tests blocked.",
+    "Rust nightly sensor-node test blocked during toolchain sync/install.",
+    "No configuration synchronization worker exists in current backend; readiness reports it as not_configured.",
+    "No production distributed tracing exporter/deployment verified.",
+    "No security/redaction test result reported for P1.10.",
+    "No InfluxDB persistence test result reported for P1.10.",
+    "No executable full cross-system test covering HTTP/MQTT/PostgreSQL/InfluxDB/WebSocket/frontend success, duplication, staleness, ordering, failure, restart, and recovery was reported."
+  ],
+  "worktree_integrity": {
+    "no_commit": true,
+    "no_reset": true,
+    "no_clean": true,
+    "no_revert": true,
+    "no_stash": true,
+    "existing_dirty_work_preserved": true
+  },
+  "firmware_environment_investigation": {
+    "platformio": {
+      "status": "TEST_EXECUTED_FAILED",
+      "command": "pio test --environment native",
+      "result": "15 test cases: 1 failed, 13 succeeded; PlatformIO native platform/tool dependencies installed automatically during run.",
+      "failure": "test_p1_9_sensor_fixture_matches_arduinojson_wire_shape: Expected TRUE Was FALSE",
+      "note": "PlatformIO is available at /home/long/.local/bin/pio; no installation action was required."
+    },
+    "rust_sensor_node": {
+      "status": "BLOCKED",
+      "toolchain": "esp rustc 1.97.0-nightly (2026-07-08)",
+      "manifest": "ESP32-C3-SENSOR-NODE-RUST/components/rust_sensor_node/Cargo.toml",
+      "command": "cargo test --manifest-path Cargo.toml --target riscv32imc-unknown-none-elf",
+      "setup": "riscv32imc-unknown-none-elf target was installed via rustup successfully; ESP-IDF target/toolchain integration remains unavailable for this crate.",
+      "error": "error[E0463]: can't find crate for `std`; the `riscv32imc-unknown-none-elf` target may not support the standard library",
+      "additional": "IDF_PATH is empty and sourcing /home/long/export-esp.sh did not populate it; cargo test with riscv32imc-esp-espidf also failed because that target is not installed."
+    }
+  },
+  "acceptance_status": {
+    "AC-1": "DIAGNOSED",
+    "AC-2": "DIAGNOSED",
+    "AC-3": "PASS",
+    "AC-4": "DIAGNOSED",
+    "AC-5": "DIAGNOSED",
+    "AC-6": "DIAGNOSED",
+    "AC-7": "PASS",
+    "AC-8": "DIAGNOSED",
+    "AC-9": "DIAGNOSED",
+    "AC-10": "DIAGNOSED",
+    "AC-11": "DIAGNOSED",
+    "AC-12": "PASS",
+    "AC-13": "DIAGNOSED",
+    "AC-14": "PASS",
+    "AC-15": "DIAGNOSED",
+    "AC-16": "NOT_VERIFIED",
+    "AC-17": "PASS",
+    "AC-18": "BLOCKED",
+    "AC-19": "DIAGNOSED",
+    "AC-20": "PASS"
+  }
+}

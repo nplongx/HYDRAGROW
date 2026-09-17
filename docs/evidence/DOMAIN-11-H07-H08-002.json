@@ -1,0 +1,60 @@
+{
+  "requirement_id": "DOMAIN-11-H07-H08",
+  "domain": "Domain 11 — Physical / HIL E2E",
+  "captured_at": "2026-09-17T11:53:00+07:00",
+  "controller": {
+    "device_id": "device_001",
+    "mac": "ac:a7:04:bf:4f:98",
+    "ip": "192.168.1.6",
+    "firmware": "v0.9.0"
+  },
+  "changes": [
+    "Persist versioned ControllerConfig in NVS under key ctrl_cfg.",
+    "Restore persisted ControllerConfig before runtime start and restore applied config revision.",
+    "Reject stale controller configuration revisions and persist accepted versioned revisions before applying them.",
+    "Run config restore on a dedicated stack and move the MQTT health loop to a dedicated 20 KiB stack; physical logs exposed main-task stack limits during HIL."
+  ],
+  "validation": [
+    {
+      "test_id": "CONTROLLER_BUILD",
+      "status": "PASS",
+      "command": "cd ESP32-C3-CONTROLLER-NODE && source ~/export-esp.sh && cargo build --locked",
+      "observed": "Firmware build completed successfully."
+    },
+    {
+      "test_id": "CONTROLLER_CORE_E2E",
+      "status": "PASS",
+      "command": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test e2e",
+      "observed": "31 passed, 0 failed."
+    },
+    {
+      "test_id": "PHYSICAL_CONFIG_APPLY",
+      "status": "PASS",
+      "observed": "Physical controller accepted retained controller/config revision 1, logged persisted & applied, and published controller status with config_version=1."
+    },
+    {
+      "test_id": "PHYSICAL_RESTART_CONFIG_RESTORE",
+      "status": "PASS_FOR_RESTART",
+      "observed": "Controlled USB/JTAG reset produced boot evidence: device_id device_001 followed by '[NVS] Restored controller config revision 1'; controller then reconnected WiFi and later published controller/status with config_version=1."
+    },
+    {
+      "test_id": "PHYSICAL_CONFIG_REVISION_2_CONVERGENCE",
+      "status": "PASS",
+      "observed": "A subsequent retained revision 2 was received; controller/status converged to config_version=2 with ManualMode and health_score_percent=100."
+    }
+  ],
+  "hil_cases": {
+    "H-07": {
+      "status": "BLOCKED_FULL_CRITERION",
+      "executed": "controlled restart",
+      "reason": "NVS durability across controller restart is physically proven, including revision restoration and post-restart MQTT status. The specified H-07 procedure requires a physical power-cycle using the safe bench procedure; no safe per-device power-cut mechanism was available on this bench, so no power-cycle PASS is claimed."
+    },
+    "H-08": {
+      "status": "BLOCKED",
+      "reason": "The specified procedure requires interrupting the test network path for one device only. Host firewall tools are present but require interactive root authentication; router/AP controls for one-device isolation were not available. Stopping the shared staging broker or host WiFi would affect more than the target controller, so no physical reconnect PASS is claimed.",
+      "supporting_observation": "Controller published config_version=2 status repeatedly before the interruption test was attempted; reconnect behavior was not physically stimulated."
+    }
+  },
+  "safety": "No actuator command was issued during H-07/H-08 testing; controller remained in ManualMode. Domain 12 was not started.",
+  "worktree": "Dirty worktree preserved. This evidence file is Domain-11-only."
+}

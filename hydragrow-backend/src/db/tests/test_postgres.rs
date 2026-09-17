@@ -515,3 +515,122 @@ mod tests {
         assert!((fetched.pump_ph_down_capacity_ml_per_sec - 0.8).abs() < f32::EPSILON);
     }
 }
+
+#[cfg(test)]
+mod configuration_sync_tests {
+    use crate::db::config_sync;
+    use crate::db::postgres::upsert_device_config;
+    use crate::models::config::DeviceConfig;
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn desired_config_revision_is_durable_and_monotonic(pool: sqlx::PgPool) {
+        upsert_device_config(
+            &pool,
+            &DeviceConfig {
+                device_id: "sync-device".to_string(),
+                ec_target: 1.2,
+                ec_tolerance: 0.05,
+                ph_target: 6.0,
+                ph_tolerance: 0.1,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 10,
+                last_updated: chrono::Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        let version = config_sync::next_version(&mut tx, "sync-device")
+            .await
+            .unwrap();
+        assert_eq!(version, 1);
+        config_sync::upsert_desired(
+            &mut *tx,
+            "sync-device",
+            version,
+            &serde_json::json!({"device_id":"sync-device","config_version":version}),
+            &serde_json::json!({"config_version":version}),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let rows = config_sync::list_pending(&pool, 10).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].config_version, 1);
+        assert_eq!(rows[0].controller_state, config_sync::PENDING);
+        assert_eq!(rows[0].sensor_state, config_sync::PENDING);
+
+        let mut tx = pool.begin().await.unwrap();
+        let version = config_sync::next_version(&mut tx, "sync-device")
+            .await
+            .unwrap();
+        assert_eq!(version, 2);
+        config_sync::upsert_desired(
+            &mut *tx,
+            "sync-device",
+            version,
+            &serde_json::json!({"device_id":"sync-device","config_version":version}),
+            &serde_json::json!({"config_version":version}),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let rows = config_sync::list_pending(&pool, 10).await.unwrap();
+        assert_eq!(rows[0].config_version, 2);
+        assert_eq!(rows[0].controller_state, config_sync::PENDING);
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn applied_revision_requires_exact_current_version(pool: sqlx::PgPool) {
+        upsert_device_config(
+            &pool,
+            &DeviceConfig {
+                device_id: "sync-device".to_string(),
+                ec_target: 1.2,
+                ec_tolerance: 0.05,
+                ph_target: 6.0,
+                ph_tolerance: 0.1,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 10,
+                last_updated: chrono::Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+        config_sync::upsert_desired(
+            &pool,
+            "sync-device",
+            7,
+            &serde_json::json!({"config_version":7}),
+            &serde_json::json!({"config_version":7}),
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            !config_sync::mark_applied(&pool, "sync-device", 6, "controller")
+                .await
+                .unwrap()
+        );
+        assert!(
+            config_sync::mark_applied(&pool, "sync-device", 7, "controller")
+                .await
+                .unwrap()
+        );
+        let status = config_sync::get(&pool, "sync-device")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(status.config_version, 7);
+        assert_eq!(status.controller_state, config_sync::APPLIED);
+        assert_eq!(status.sensor_state, config_sync::PENDING);
+        let row = config_sync::list_pending(&pool, 10).await.unwrap();
+        assert_eq!(row[0].controller_state, config_sync::APPLIED);
+        assert_eq!(row[0].sensor_state, config_sync::PENDING);
+    }
+}

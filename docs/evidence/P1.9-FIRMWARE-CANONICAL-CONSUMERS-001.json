@@ -1,0 +1,101 @@
+{
+  "requirement_id": "P1.9-FIRMWARE-CANONICAL-CONSUMERS-001",
+  "domain": "Domain 9 — Firmware C++/Rust canonical fixture consumers",
+  "status": "IMPLEMENTED / VERIFICATION BLOCKED BY FIRMWARE TOOLCHAIN",
+  "verified_at": "2026-09-17",
+  "repo": "/home/long/HYDRAGROW",
+  "implementation": {
+    "rust_controller_file": "ESP32-C3-CONTROLLER-NODE/src/hw/mqtt_client.rs",
+    "sensor_fixture": "schema/contracts/fixtures/sensor-data.json",
+    "command_fixture": "schema/contracts/fixtures/mqtt-command.json",
+    "runtime_sensor_type": "hydragrow_shared::IncomingSensorPayload",
+    "runtime_command_type": "hydragrow_shared::MqttCommandIn",
+    "path_contract": "Rust include_str! paths resolve fixtures from repository root at compile time and do not depend on process cwd",
+    "tests_added": [
+      "controller_sensor_consumer_accepts_canonical_fixture",
+      "controller_command_consumer_accepts_canonical_fixture"
+    ],
+    "ci_trigger": "firmware-controller-ci.yml watches ESP32-C3-CONTROLLER-NODE/** and schema/contracts/** for push and pull_request"
+  },
+  "verification": [
+    {
+      "command": "cargo test --no-run canonical_fixture_tests",
+      "cwd": "ESP32-C3-CONTROLLER-NODE",
+      "status": "PASS",
+      "result": "riscv32imc-esp-espidf firmware test binary compiled successfully; no test case executed",
+      "classification": "compile-only evidence; insufficient for fixture verification"
+    },
+    {
+      "command": "cargo test canonical_fixture_tests -- --nocapture",
+      "cwd": "ESP32-C3-CONTROLLER-NODE",
+      "status": "BLOCKED",
+      "result": "firmware target compilation completed, but configured runner `espflash flash --monitor` received test arguments and exited 2 before executing any test case",
+      "classification": "firmware test runner requires physical ESP32-C3 execution; no HIL/physical verification is in Domain 9 scope"
+    },
+    {
+      "command": "cargo test --target x86_64-unknown-linux-gnu canonical_fixture_tests -- --nocapture",
+      "cwd": "ESP32-C3-CONTROLLER-NODE",
+      "status": "BLOCKED",
+      "result": "esp-idf-sys build script rejected unsupported target x86_64-unknown-linux-gnu",
+      "classification": "host-target workaround is not available for this ESP-IDF firmware crate"
+    },
+    {
+      "command": "cargo test --manifest-path ESP32-C3-CONTROLLER-NODE/Cargo.toml canonical_fixture_tests -- --nocapture",
+      "cwd": "/home/long/HYDRAGROW",
+      "status": "BLOCKED",
+      "result": "repository-root invocation used the host target and esp-idf-sys rejected x86_64-unknown-linux-gnu before test execution"
+    },
+    {
+      "command": "cargo test --manifest-path hydragrow-shared/Cargo.toml --test p1_9_schema_registry",
+      "status": "PASS",
+      "result": "7 passed, 0 failed; canonical sensor and command fixtures deserialize through the shared firmware payload types"
+    },
+    {
+      "command": "cargo fmt --manifest-path ESP32-C3-CONTROLLER-NODE/Cargo.toml -- --check",
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "check": "controller CI path filters and compile-time fixture consumer references",
+      "status": "PASS",
+      "result": "schema/contracts/** and ESP32-C3-CONTROLLER-NODE/** are present in both push and pull_request filters; both fixture include_str! paths and both exact runtime types are present"
+    }
+  ],
+  "acceptance": {
+    "AC-01": "PASS by implementation inspection — controller test uses IncomingSensorPayload, the exact type consumed by mqtt_client.rs",
+    "AC-02": "PASS by implementation inspection — controller test uses MqttCommandIn, the exact type consumed by mqtt_client.rs",
+    "AC-03": "PASS by shared canonical parser regression; controller executable test is blocked by firmware target compilation",
+    "AC-04": "PASS — controller test asserts tds and err_tds are absent; shared canonical fixture regression also passes",
+    "AC-05": "PASS by shared canonical parser regression; controller executable test is blocked by firmware target compilation",
+    "AC-06": "PASS — controller test asserts legacy top-level command fields are absent",
+    "AC-07": "PASS by compile-time include_str! implementation and repository-root invocation reaching the same target constraint",
+    "AC-08": "PASS — controller CI watches schema/contracts/**",
+    "AC-09": "BLOCKED — controller firmware test binary compiles for riscv32imc-esp-espidf, but the configured espflash runner requires physical-device execution; host target is rejected by esp-idf-sys",
+    "AC-10": "PASS — Domain 8 sensor consumer remains intact; no backend/frontend/schema/PostgreSQL changes were made for Domain 9"
+  },
+  "worktree_integrity": {
+    "dirty_worktree_preserved": true,
+    "no_reset": true,
+    "no_clean": true,
+    "no_revert": true,
+    "no_stash": true,
+    "production_postgresql_touched": false,
+    "domain_9_intended_files": [
+      "docs/superpowers/specs/2026-09-17-domain-09-firmware-cpp-rust-canonical-fixture-consumers.md",
+      "ESP32-C3-CONTROLLER-NODE/src/hw/mqtt_client.rs",
+      ".github/workflows/firmware-controller-ci.yml",
+      "docs/evidence/P1.9-FIRMWARE-CANONICAL-CONSUMERS-001.json"
+    ]
+  },
+  "notes": [
+    "The controller mqtt_client.rs and controller CI workflow were already dirty from earlier domains; Domain 9 only appended the canonical fixture tests, schema/contracts CI trigger, and target-compatible i64 config-version synchronization needed by that patch.",
+    "Domain 9 initially introduced AtomicI64 for config-version synchronization alongside the fixture patch. The ESP32-C3 target does not provide AtomicI64, so the compatibility implementation uses Mutex<i64> without changing i64 value semantics. This preserves pre-existing dirty health.rs behavior and is not part of fixture acceptance.",
+    "Domain 8 sensor C++ fixture consumer was not modified by Domain 9.",
+    "The controller test deliberately does not verify HMAC; it validates JSON deserialization shape after removing ts, nonce, and signature, matching the contract that signature verification occurs before MqttCommandIn deserialization in runtime code.",
+    "No production PostgreSQL connection was used.",
+    "Controller firmware compilation reached the test binary successfully after the AtomicI64 fix, but no canonical fixture test case executed because the configured espflash runner requires a physical ESP32-C3."
+  ]
+}

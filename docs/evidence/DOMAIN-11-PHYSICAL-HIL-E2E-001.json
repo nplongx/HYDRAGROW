@@ -1,0 +1,358 @@
+{
+  "requirement_id": "DOMAIN-11-PHYSICAL-HIL-E2E",
+  "domain": "Domain 11 — Physical / HIL E2E",
+  "status": "IMPLEMENTED / H-01,H-02,H-03,H-04 VERIFIED / H-05,H-08,H-09,H-10 BLOCKED / H-06,H-07 PARTIAL",
+  "verified_at": "2026-09-17T06:45:00Z",
+  "repo": "/home/long/HYDRAGROW",
+  "environment_rule": "source ~/export-esp.sh before controller build/check/flash commands",
+  "scope": "Physical/HIL E2E only; no Domain 12 evidence refresh or release-readiness audit",
+  "preflight": [
+    {
+      "check": "Physical USB/serial discovery",
+      "status": "PASS",
+      "command": "lsusb; pio device list",
+      "exit_code": 0,
+      "observed": "Physical ESP32-C3 controller detected on /dev/ttyACM0; USB JTAG/serial device MAC ac:a7:04:bf:4f:98."
+    },
+    {
+      "check": "ESP32-C3 controller port discovery",
+      "status": "PASS",
+      "command": "source ~/export-esp.sh; espflash board-info --port /dev/ttyACM0",
+      "exit_code": 0,
+      "observed": "ESP_ENV_OK; espflash identified ESP32-C3 rev v0.4, 4MB flash, MAC ac:a7:04:bf:4f:98."
+    },
+    {
+      "check": "Isolated readiness PostgreSQL container",
+      "status": "PASS",
+      "command": "docker ps --format '{{.Names}} {{.Ports}}' | grep -E '^hydragrow-domain11-postgres( |$)'",
+      "exit_code": 0,
+      "observed": "Isolated Domain-11 PostgreSQL is running on localhost port 55432 with database hydragrow_test; PostgreSQL reports accepting connections."
+    }
+  ],
+  "verification": [
+    {
+      "test_id": "PRE-HIL-CONTROLLER-BUILD",
+      "status": "PASS",
+      "command": "cd ESP32-C3-CONTROLLER-NODE && source ~/export-esp.sh && cargo build --locked",
+      "exit_code": 0,
+      "observed": "Controller firmware compiled successfully for the repository-configured ESP32-C3 target after sourcing the Espressif environment from the controller project directory.",
+      "classification": "PHYSICAL_CONTROLLER_BUILD_PASS"
+    },
+    {
+      "test_id": "PRE-HIL-SENSOR-BUILD",
+      "status": "PASS",
+      "command": "pio run --project-dir ESP32-C3-SENSOR-NODE --environment esp32-c3-devkitm-1",
+      "exit_code": 0,
+      "observed": "ESP32-C3 sensor firmware compiled successfully; no secret material is included in this evidence.",
+      "classification": "PHYSICAL_SENSOR_BUILD_PASS"
+    },
+    {
+      "test_id": "SUPPORTING-CONTROLLER-CORE-E2E",
+      "status": "PASS",
+      "command": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test e2e",
+      "exit_code": 0,
+      "observed": "31 passed, 0 failed, 0 ignored. Supporting virtual E2E only; does not satisfy physical PASS criteria."
+    },
+    {
+      "test_id": "REPO-INTEGRITY",
+      "status": "PASS",
+      "command": "git diff --check",
+      "exit_code": 0,
+      "observed": "No whitespace errors."
+    },
+    {
+      "test_id": "PHYSICAL-SENSOR-STAGING-MQTT-CAPTURE",
+      "status": "PASS",
+      "command": "timeout 8s mosquitto_sub -h 127.0.0.1 -p 1883 -t 'AGITECH/device_001/sensors' -C 1 -v",
+      "exit_code": 0,
+      "observed": "Physical sensor MAC 88:56:a6:7b:85:f8 was flashed with a reversible staging-only MQTT configuration, connected to staging WiFi at 192.168.1.7, connected to the isolated MQTT broker at 192.168.1.9:1883, and published one physical telemetry message on AGITECH/device_001/sensors. The capture contained device_id, ec, ph, temp, water_level, ph_voltage_mv, time, rssi, free_heap, config_version, and err_* fields. Sensor measurement values were not evaluated.",
+      "classification": "PHYSICAL_SENSOR_TO_STAGING_MQTT_PASS"
+    },
+    {
+      "test_id": "ISOLATED-BACKEND-PHYSICAL-SENSOR-RECEIPT-STAGING",
+      "status": "PASS",
+      "command": "timeout 18s cargo run --locked",
+      "exit_code": 124,
+      "observed": "Backend ran against isolated PostgreSQL, isolated MQTT, and isolated InfluxDB using a temporary staging-only environment. During the run, the backend handler physically received AGITECH/device_001/sensors messages from the real sensor. The same run logged InfluxDB HTTP 401 Unauthorized on SensorData persistence, so this is process-level canonical-path receipt only, not persistence PASS. The timeout stopped the run after evidence capture.",
+      "classification": "SUPPORTING_PHYSICAL_BACKEND_RECEIPT_WITH_PERSISTENCE_BLOCKER"
+    },
+    {
+      "test_id": "ISOLATED-BACKEND-INFLUX-AUTH-REPAIR",
+      "status": "PASS",
+      "command": "docker rm -f hydragrow-domain11-influx; docker volume create hydragrow_domain11_influx_data; docker run -d --name hydragrow-domain11-influx -p 18086:8086 --env-file /tmp/domain11-influx.env -v hydragrow_domain11_influx_data:/var/lib/influxdb2 influxdb:2",
+      "exit_code": 0,
+      "observed": "Recreated only the isolated Domain-11 InfluxDB instance with a fresh staging volume and known staging credentials. Health returned HTTP 200 and authenticated bucket listing returned HTTP 200 with sensors bucket. No production InfluxDB endpoint was used.",
+      "classification": "ISOLATED_INFLUX_CONFIGURATION_REPAIRED"
+    },
+    {
+      "test_id": "ISOLATED-BACKEND-PHYSICAL-SENSOR-INFLUX-PERSISTENCE",
+      "status": "PASS",
+      "command": "set -a; . /tmp/domain11-backend.env; set +a; cargo run --locked",
+      "exit_code": null,
+      "observed": "Backend restarted on 127.0.0.1:18080 using isolated PostgreSQL 127.0.0.1:55432/hydragrow_test, isolated MQTT 127.0.0.1:1883, and isolated InfluxDB 127.0.0.1:18086. Real device_001 sensor publication at 2026-09-17T04:47:54Z was accepted on AGITECH/device_001/sensors and persisted to sensor_data; no Influx write error was logged.",
+      "classification": "PHYSICAL_SENSOR_BACKEND_INFLUX_PERSISTENCE_PASS"
+    },
+    {
+      "test_id": "ISOLATED-INFLUX-DIRECT-QUERY",
+      "status": "PASS",
+      "command": "curl -sS -o /tmp/domain11-influx-query.txt -w 'query_http=%{http_code}\\n' -X POST 'http://127.0.0.1:18086/api/v2/query?org=hydragrow' -H 'Authorization: Token dev_only_token' -H 'Content-Type: application/vnd.flux' --data-binary @/tmp/domain11-flux-query.txt",
+      "exit_code": 0,
+      "observed": "Influx query returned HTTP 200 and sensor_data rows for device_001, including ec, ph, ph_voltage_mv, temp, and water_level samples around 2026-09-17T04:47:54Z.",
+      "classification": "INFLUX_PERSISTED_TELEMETRY_PASS"
+    },
+    {
+      "test_id": "ISOLATED-BACKEND-API-PERSISTED-TELEMETRY",
+      "status": "PASS",
+      "command": "curl -sS -o /tmp/domain11-api-history.txt -w 'api_http=%{http_code}\\n' -H 'X-API-Key: domain11-validation-api-key' 'http://127.0.0.1:18080/api/devices/device_001/sensors/history?range=5m'",
+      "exit_code": 0,
+      "observed": "Backend API returned HTTP 200 with status success and persisted device_001 telemetry records, including the physical sensor sample at 2026-09-17T04:47:54.967020356Z and later samples.",
+      "classification": "BACKEND_API_PERSISTED_TELEMETRY_PASS"
+    },
+    {
+      "test_id": "ISOLATED-BACKEND-INFLUX-UNIT-TESTS",
+      "status": "PASS",
+      "command": "cargo test --locked db::influx::tests:: -- --nocapture",
+      "exit_code": 0,
+      "observed": "7 passed, 0 failed, 0 ignored, 430 filtered out.",
+      "classification": "INFLUX_CODE_PATH_TEST_PASS"
+    },
+    {
+      "test_id": "PHYSICAL-CONTROLLER-FLASH-BOOT",
+      "status": "PASS",
+      "command": "cd ESP32-C3-CONTROLLER-NODE && source ~/export-esp.sh && HYDRAGROW_MQTT_URL=<isolated-LAN-broker> cargo run --locked",
+      "exit_code": 0,
+      "observed": "espflash completed flashing to the physical controller; serial boot reached app v0.9.0, restored device_id device_001, initialized PumpController, joined WiFi, obtained 192.168.1.6, synchronized NTP, entered ManualMode, and started the runtime loop. The command was terminated only after collecting the required boot evidence.",
+      "classification": "PHYSICAL_CONTROLLER_BOOT_PASS"
+    },
+    {
+      "test_id": "PHYSICAL-CONTROLLER-MQTT-CONNECT",
+      "status": "PASS",
+      "command": "captured from controller serial monitor during physical boot",
+      "exit_code": 0,
+      "observed": "Controller reported MQTT Broker Callback: Connected and health loop reported MQTT Client: connected successfully against the isolated LAN broker.",
+      "classification": "PHYSICAL_CONTROLLER_MQTT_PASS"
+    },
+    {
+      "test_id": "PHYSICAL-CONTROLLER-STATUS-CAPTURE",
+      "status": "PASS",
+      "command": "timeout 10s mosquitto_sub -h 127.0.0.1 -p 1883 -t 'AGITECH/+/controller/status' -v -C 1",
+      "exit_code": 0,
+      "observed": "Captured AGITECH/device_001/controller/status with device_id device_001, firmware_version v0.9.0, FSM state ManualMode, health score 100%, and fresh uptime/timestamp fields.",
+      "classification": "PHYSICAL_CONTROLLER_STATUS_PASS"
+    },
+    {
+      "test_id": "PHYSICAL-CONTROLLER-COMMAND-ACCEPTANCE",
+      "status": "PASS",
+      "command": "mosquitto_pub -h 127.0.0.1 -p 1883 -t 'AGITECH/device_001/controller/command' -q 1 -f /tmp/domain11-calibration-command.json",
+      "exit_code": 0,
+      "observed": "Controller serial first rejected an intentionally invalid signature, then accepted a correctly signed enter_calibration command and logged Command received followed by start of sensor calibration. enter_calibration is a safety-preserving command that stops hardware outputs before entering calibration.",
+      "classification": "PHYSICAL_CONTROLLER_COMMAND_PASS"
+    },
+    {
+      "test_id": "PHYSICAL-CONTROLLER-SENSOR-TIMEOUT-FAULT",
+      "status": "PASS",
+      "command": "observed controller serial during physical runtime with no controller-side sensor stream",
+      "exit_code": 0,
+      "observed": "Controller physically entered Fault with SensorTimeout after the documented timeout interval; no actuator operation was intentionally requested during this fault observation. This is supporting H-06 evidence only because physical output-off and recovery conditions were not independently instrumented.",
+      "classification": "PHYSICAL_CONTROLLER_FAULT_OBSERVED"
+    },
+    {
+      "test_id": "H04-REVISION-1-PHYSICAL-CONFIG-SYNC",
+      "status": "PASS",
+      "command": "PUT /api/devices/device_001/config/unified via staging X-API-Key + mosquitto_sub controller/config/status",
+      "exit_code": 0,
+      "observed": "Historical revision 1 remains recorded as physical evidence: safe control_mode=manual and is_enabled=false; controller applied rev=1 and reported config_version=1."
+    },
+    {
+      "test_id": "H04-REVISION-2-PHYSICAL-CONFIG-SYNC",
+      "status": "PASS",
+      "command": "isolated PostgreSQL configuration mutation + staging MQTT capture + physical controller serial/status capture",
+      "exit_code": 0,
+      "observed": "Revision 2 changed only safe ec_target from 1.2 to 1.3 while retaining control_mode=manual and is_enabled=false. Controller serial logged 'New config received, persisted & applied: device_001 rev=2'; controller/status reported config_version=2, ManualMode, health_score_percent=100; isolated PostgreSQL configuration_sync converged to config_version=2, controller_state=applied, controller_attempts=1, sensor_state=applied, and no last_error."
+    },
+    {
+      "test_id": "H04-REVISION-3-PHYSICAL-CONFIG-SYNC",
+      "status": "PASS",
+      "command": "PUT /api/devices/device_001/config/unified via staging X-API-Key + mosquitto_sub -h 127.0.0.1 -p 1883 -t 'AGITECH/device_001/controller/config' -v -R -C 1",
+      "exit_code": 0,
+      "observed": "Backend returned HTTP 202 with config_version=3 for safe ec_target=1.4 and is_enabled=false. MQTT capture contained config_version=3, device_id=device_001, control_mode=manual, ec_target=1.399999976158142, is_enabled=false. Physical controller/status then reported config_version=3, firmware_version=v0.9.0, fsm_state_display=ManualMode, health_score_percent=100. Backend sync API returned HTTP 200 with config_version=3, controller=applied, sensor=applied, overall_state=applied, last_error=null. Unified config API readback returned ec_target=1.4 and is_enabled=false."
+    },
+    {
+      "test_id": "H04-REVISION-4-PHYSICAL-CONFIG-SYNC",
+      "status": "PASS",
+      "command": "PUT /api/devices/device_001/config/unified via staging X-API-Key + mosquitto_sub -h 127.0.0.1 -p 1883 -t 'AGITECH/device_001/controller/config' -v -R -C 1",
+      "exit_code": 0,
+      "observed": "Backend returned HTTP 202 with config_version=4 for safe ec_target=1.5 and is_enabled=false. MQTT capture contained config_version=4, device_id=device_001, control_mode=manual, ec_target=1.5, is_enabled=false. Physical controller/status then reported config_version=4, firmware_version=v0.9.0, fsm_state_display=ManualMode, health_score_percent=100. Backend sync API returned HTTP 200 with config_version=4, controller=applied, sensor=applied, overall_state=applied, last_error=null; controller_applied_at=2026-09-17T05:02:15.180402Z."
+    },
+    {
+      "test_id": "H04-FRONTEND-API-CONVERGENCE",
+      "status": "PASS",
+      "command": "npx vitest run; npm run build",
+      "exit_code": 0,
+      "observed": "Frontend config API uses GET /devices/{device_id}/config/sync with X-API-Key, and useConfigurationSyncStatus polls every 2000 ms. The same staging endpoint returned HTTP 200 with revision 4 and overall_state=applied after physical controller confirmation. Frontend test suite: 125 files, 603 tests passed. Production frontend build completed successfully. Browser UI execution was not available in this worker, so this evidence proves the frontend resource/polling path and backend response convergence, not a rendered-screen observation."
+    },
+    {
+      "test_id": "H04-SERVICE-PRINCIPAL-GUARD",
+      "status": "PASS",
+      "command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::device_pairing::tests::service_principal_can_pass_device_guard -- --nocapture",
+      "exit_code": 0,
+      "observed": "1 passed, 0 failed. Service/API-key principals now pass require_device_owner after route-level scope authorization; this fixes the staging frontend/API path that previously returned 401 Chưa đăng nhập."
+    },
+    {
+      "test_id": "H04-BACKEND-SYNC-READINESS",
+      "status": "PASS",
+      "command": "curl http://127.0.0.1:18080/readyz",
+      "exit_code": 0,
+      "observed": "Isolated backend returned HTTP 200 with status=ready and synchronization.health=healthy, transport_ready=true, worker_ready=true."
+    },
+    {
+      "test_id": "REAL-FIREBASE-AUTH-DEVICE-BINDING-E2E",
+      "status": "PASS",
+      "command": "Real Firebase-authenticated frontend pairing flow for device_001; staging DB ownership query; browser network observation after dashboard reload",
+      "exit_code": 0,
+      "observed": "Real authenticated account successfully claimed device_001 through the frontend pairing flow. Staging PostgreSQL contains one device_001 ownership row for the authenticated user. After reload, dashboard rendered device_001 as Online with real-time telemetry UI. Browser network captured HTTP 200 for /api/devices, /devices/device_001/sensors/latest, /config/unified, /config/sync, /events, and /control/commands. /health-summary remained HTTP 403 because the account lacks health:read; this is scope behavior, not device-ownership failure. Sensor measurement values were not evaluated.",
+      "classification": "REAL_FIREBASE_AUTHORIZATION_AND_FRONTEND_E2E_PASS"
+    }
+  ],
+  "hil_cases": [
+    {
+      "test_id": "H-01",
+      "status": "PASS",
+      "reason": "Physical sensor publication, backend receipt, InfluxDB sensor_data persistence, direct Influx query, and backend API history read are all proven in the isolated staging environment."
+    },
+    {
+      "test_id": "H-02",
+      "status": "PASS",
+      "reason": "Physical controller MAC ac:a7:04:bf:4f:98 was identified; firmware flashed and booted; device_id device_001 and firmware v0.9.0 were reported; WiFi and isolated MQTT connected; runtime entered ManualMode without a reboot loop during the capture window."
+    },
+    {
+      "test_id": "H-03",
+      "status": "PASS",
+      "reason": "Physical sensor publication -> isolated MQTT -> staging backend -> InfluxDB -> backend API persistence/readback -> rendered frontend dashboard is now proven for device_001. The frontend was explicitly configured to the same staging backend and rendered the selected physical device; displayed measurement values were not evaluated."
+    },
+    {
+      "test_id": "H-04",
+      "status": "PASS",
+      "reason": "Two safe configuration revisions (3 and 4) were executed on physical device_001. Each crossed backend PUT -> durable sync -> MQTT -> physical controller, was persisted/applied by the controller, and was reported on controller/status with the matching config_version. Backend configuration_sync converged to applied with no error; frontend uses the same canonical sync resource and 2-second polling contract."
+    },
+    {
+      "test_id": "H-05",
+      "status": "BLOCKED",
+      "classification": "TEST_BENCH_UNSAFE",
+      "reason": "Physical controller is available, but no safe observable actuator load/output instrumentation is available for a command-to-output test."
+    },
+    {
+      "test_id": "H-06",
+      "status": "BLOCKED",
+      "classification": "TEST_BENCH_UNSAFE",
+      "reason": "Physical SensorTimeout -> Fault was observed, but the run lacks independent physical output-off instrumentation and a controlled valid-input recovery stimulus."
+    },
+    {
+      "test_id": "H-07",
+      "status": "BLOCKED",
+      "classification": "TEST_BENCH_UNSAFE",
+      "reason": "Physical controller configuration durability is now verified across a controlled USB/JTAG restart: revision 1 was persisted/applied, boot logged NVS restoration of revision 1, and the controller subsequently converged to revision 2. Full criterion still requires a true power-cycle."
+    },
+    {
+      "test_id": "H-08",
+      "status": "BLOCKED",
+      "classification": "TEST_BENCH_UNSAFE",
+      "reason": "A controlled one-device physical network interruption/reconnect procedure has not been executed. No network isolation control with independently observable device-only impact is currently available on the bench."
+    },
+    {
+      "test_id": "H-09",
+      "status": "BLOCKED",
+      "classification": "TEST_BENCH_UNSAFE",
+      "reason": "No safe contained dosing/mixing bench or observable load is available; simulator evidence cannot substitute for the physical criterion."
+    },
+    {
+      "test_id": "H-10",
+      "status": "BLOCKED",
+      "classification": "TEST_BENCH_UNSAFE",
+      "reason": "No controlled physical power-cut/recovery bench has been executed; this requires an operator-reachable safe power procedure."
+    }
+  ],
+  "acceptance": {
+    "AC-01": "PASS — real ESP32-C3 sensor booted and published canonical-shaped telemetry to the isolated/staging MQTT broker; sensor measurement values were not evaluated.",
+    "AC-02": "PASS — physical sensor -> isolated MQTT -> backend -> InfluxDB persistence -> backend API readback -> rendered frontend dashboard is proven for device_001; displayed measurement values were not evaluated.",
+    "AC-03": "PASS — physical controller build/flash/boot used source ~/export-esp.sh and reached normal connected runtime.",
+    "AC-04": "PASS — revisions 3 and 4 converged through backend sync, MQTT, physical controller persistence/runtime status, and the frontend canonical sync-status API/polling contract.",
+    "AC-05": "BLOCKED — no physical controller/actuator load.",
+    "AC-06": "PARTIAL — physical SensorTimeout -> Fault is proven; physical output-off and valid-input recovery are not separately captured.",
+    "AC-07": "PARTIAL — controlled physical USB/JTAG restart restored persisted controller config; true physical power-cycle remains unexecuted.",
+    "AC-08": "BLOCKED — no physical reconnect.",
+    "AC-09": "BLOCKED — safe physical dosing/mixing bench unavailable.",
+    "AC-10": "BLOCKED — no physical power-loss test.",
+    "AC-11": "PASS for executed physical claims — H-02 has physical serial/MQTT/status evidence; the remaining physical criteria are explicitly blocked.",
+    "AC-12": "PASS — controller HIL used an isolated LAN MQTT broker and isolated backend/PostgreSQL process; no production PostgreSQL was launched or accessed by the HIL backend.",
+    "AC-13": "PASS — the updated evidence records only non-secret device/topic/runtime facts and redacts environment values.",
+    "AC-14": "PASS — git diff --check exited 0; dirty worktree was preserved.",
+    "AC-15": "PASS — Domain 12 was not started."
+  },
+  "blockers": [
+    "H-05/AC-05 remains blocked: safe physical actuator command/output observation has not been executed through the live control endpoint.",
+    "H-06/AC-06 remains partial: physical SensorTimeout -> Fault is proven; physical output-off and valid-input recovery are not separately captured.",
+    "H-08/AC-08 remains blocked: no controlled one-device physical network interruption/reconnect test.",
+    "H-09/AC-09 remains blocked: no safe contained dosing/mixing bench.",
+    "H-10/AC-10 remains blocked: no controlled physical power-loss/recovery test.",
+    "H-07/AC-07 remains partial: controlled USB/JTAG restart durability is proven, but a true physical power-cycle has not been executed."
+  ],
+  "worktree_integrity": {
+    "dirty_worktree_preserved": true,
+    "production_postgresql_touched": false,
+    "domain_11_files_created": [
+      "docs/superpowers/specs/2026-09-17-domain-11-physical-hil-e2e.md",
+      "docs/evidence/DOMAIN-11-PHYSICAL-HIL-E2E-001.json"
+    ]
+  },
+  "test_records": [
+    {
+      "test_id": "H06-SAFETY-INVARIANT-CORE",
+      "status": "PASS_SUPPORTING",
+      "command": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml physical_safety_invariants -- --nocapture",
+      "exit_code": 0,
+      "observed": "Added and passed focused safety invariants: fault_all_outputs_off removes every pending actuator-ON event, emits a complete stop set for dosing/water/valves/Osaka, clears logical actuator state, and marks active actors for reset; SensorTimeout recovery requires fresh per-channel sensor timestamps before returning to Monitoring. 2 passed, 0 failed.",
+      "classification": "SUPPORTING_FAULT_ALL_OFF_AND_RECOVERY_INVARIANT_PASS"
+    },
+    {
+      "test_id": "H06-SAFETY-INVARIANT-E2E",
+      "status": "PASS_SUPPORTING",
+      "command": "cargo test --manifest-path hydragrow-controller-core/Cargo.toml --test e2e",
+      "exit_code": 0,
+      "observed": "Controller core physical-safety-related E2E suite passed 31/31, including sensor timeout fault/recovery, fault invariants that stop all actuators, NaN/Infinity fault handling, Osaka-without-valve shutdown, and terminal actor reset semantics. This remains supporting evidence and does not replace physical output observation.",
+      "classification": "SUPPORTING_PHYSICAL_SAFETY_E2E_PASS"
+    },
+    {
+      "test_id": "POST-FIX-CONTROLLER-BUILD",
+      "status": "PASS",
+      "command": "cd ESP32-C3-CONTROLLER-NODE && source ~/export-esp.sh && cargo build --locked",
+      "exit_code": 0,
+      "observed": "Controller firmware rebuilt successfully with the Domain-11 safety-invariant changes. Existing physical firmware evidence remains unchanged until a physical flash/boot observation is captured.",
+      "classification": "PHYSICAL_CONTROLLER_BUILD_PASS"
+    },
+    {
+      "test_id": "POST-FIX-REPO-INTEGRITY",
+      "status": "PASS",
+      "command": "git diff --check",
+      "exit_code": 0,
+      "observed": "No whitespace errors after Domain-11 safety invariant changes.",
+      "classification": "REPOSITORY_INTEGRITY_PASS"
+    },
+    {
+      "test_id": "H03-FRONTEND-PHYSICAL-TELEMETRY-RENDER",
+      "status": "PASS",
+      "command": "Vite staging frontend at http://127.0.0.1:14173/dashboard with device_001 explicitly configured; browser DOM observation",
+      "exit_code": 0,
+      "observed": "Browser rendered the staging frontend against the same isolated backend and selected physical device_001. Dashboard showed station Online, device_001, sensor status Tốt/Đang đo, and the real-time telemetry panel populated from the backend. No manual telemetry injection was used. Displayed measurement values were not evaluated.",
+      "classification": "PHYSICAL_TELEMETRY_BACKEND_FRONTEND_RENDER_PASS"
+    },
+    {
+      "test_id": "POST-FIX-DISPATCHER-FAULT-ON-GATE",
+      "status": "PASS_SUPPORTING",
+      "command": "source ~/export-esp.sh && cargo build --locked; cargo test --manifest-path ../hydragrow-controller-core/Cargo.toml --test e2e; cargo test --manifest-path ../hydragrow-controller-core/Cargo.toml physical_safety_invariants -- --nocapture; git diff --check",
+      "exit_code": 0,
+      "observed": "Added a hardware-dispatch boundary guard that suppresses stale actuator-ON events whenever the controller context is already Fault, covering dosing pumps, water-pump directions, mist/mix valves, Osaka PWM, and Osaka soft-start. Added focused gate tests; controller firmware build passed, controller-core E2E passed 31/31, focused physical_safety_invariants passed 2/2, and git diff --check passed. This is supporting safety evidence only and does not satisfy physical actuator observation.",
+      "classification": "SUPPORTING_DISPATCHER_FAULT_SAFETY_GATE_PASS"
+    }
+  ]
+}

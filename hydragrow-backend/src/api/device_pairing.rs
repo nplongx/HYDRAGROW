@@ -166,6 +166,20 @@ pub async fn require_device_owner(
     app_state: &web::Data<AppState>,
     device_id: &str,
 ) -> Result<i64, HttpResponse> {
+    let auth = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .ok_or_else(|| {
+            HttpResponse::Unauthorized().json(serde_json::json!({"error": "Unauthorized"}))
+        })?;
+
+    // Service principals are already authorized by ApiKeyAuth scopes and
+    // DeviceOwnershipAuth. They do not have a user ownership row to check.
+    if auth.user_id.is_none() {
+        return Ok(0);
+    }
+
     let user_id = user_id_from(req).ok_or_else(|| {
         HttpResponse::Unauthorized().json(serde_json::json!({"error": "Chưa đăng nhập"}))
     })?;
@@ -192,4 +206,28 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
             web::delete().to(unclaim_device),
         )
         .route("/devices/{device_id}/label", web::patch().to(rename_device));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[actix_web::test]
+    async fn service_principal_can_pass_device_guard() {
+        let req = actix_web::test::TestRequest::default().to_http_request();
+        req.extensions_mut().insert(AuthContext {
+            scopes: vec!["read:telemetry".to_string(), "write:config".to_string()],
+            user_id: None,
+            session_id: None,
+            service_key_label: Some("domain11-validation".to_string()),
+        });
+        let app_state = web::Data::new(crate::api::test_support::test_app_state());
+
+        let result = require_device_owner(&req, &app_state, "device_001").await;
+
+        assert_eq!(
+            result.expect("service principal should pass device guard"),
+            0
+        );
+    }
 }

@@ -1,0 +1,50 @@
+{
+  "requirement_id": "SAFETY-DATA-UNAVAILABLE-001",
+  "verified_at": "2026-09-17",
+  "status": "VERIFIED",
+  "repository": "/home/long/HYDRAGROW",
+  "worktree_policy": "dirty worktree preserved; unrelated changes not reverted",
+  "postgresql": {
+    "environment": "dedicated local PostgreSQL 16 Docker container",
+    "container": "hydragrow-readiness-postgres",
+    "endpoint": "127.0.0.1:55432",
+    "database": "hydragrow_test",
+    "production_database_touched": false
+  },
+  "implementation": {
+    "typed_classification": ["AVAILABLE", "MISSING", "DB_ERROR", "INVALID"],
+    "stable_reason_codes": ["SAFETY_DATA_MISSING", "SAFETY_DATA_DB_ERROR", "SAFETY_DATA_INVALID", "DOSING_CALIBRATION_MISSING", "DOSING_CALIBRATION_DB_ERROR", "DOSING_CALIBRATION_INVALID", "DOSING_HISTORY_DB_ERROR", "LAST_DOSE_DB_ERROR"],
+    "manual_safety": "fail-closed; no SafetyConfig::default fallback",
+    "automated_safety": "sensor and cron preserve explicit safety failure reasons",
+    "webhook_safety": "fail-closed with safety_data_unavailable",
+    "api_contract": "HTTP 503 with safety_data_unavailable; safe reason retained; raw DB details redacted",
+    "actuation_contract": "safety failure returns before actuator dispatch/publish path"
+  },
+  "verification": {
+    "targeted_safety_tests": {"passed": 6, "failed": 0},
+    "targeted_action_dispatch_tests": {"passed": 7, "failed": 0},
+    "api_safety_error_test": {"passed": 1, "failed": 0},
+    "full_backend": {"passed": 432, "failed": 0, "ignored": 0, "database": "isolated hydragrow_test"},
+    "clippy": "PASS",
+    "fmt": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "failure_classes_exercised": {
+    "safety_config_missing": "PASS",
+    "safety_config_db_error": "PASS",
+    "safety_config_invalid": "PASS",
+    "calibration_missing": "PASS",
+    "calibration_db_error": "PASS",
+    "calibration_invalid": "PASS",
+    "history_db_error": "PASS",
+    "last_dose_db_error": "PASS",
+    "successful_empty_history": "PASS",
+    "successful_no_previous_dose": "PASS",
+    "api_redaction": "PASS"
+  },
+  "notes": [
+    "Full backend verification used only the isolated local PostgreSQL endpoint, not the DATABASE_URL in hydragrow-backend/.env.",
+    "Historical 393-test and earlier baselines are not used as current Domain 6 evidence.",
+    "Current backend suite completed 432/432 with zero failures."
+  ]
+}

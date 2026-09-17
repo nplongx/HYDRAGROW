@@ -1,0 +1,77 @@
+{
+  "domain_id": "BACKEND-FULL-TEST-BASELINE-001",
+  "domain": "Full Rust backend build/test/lint/format verification baseline",
+  "status": "COMPLETE / VERIFIED",
+  "verified_at": "2026-09-16",
+  "scope": "hydragrow-backend",
+  "repository_state": "current worktree at verification time",
+  "environment": {
+    "os": "linux x86_64",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "1.98.1 (797e8a9bc 2026-08-05)",
+    "postgresql": "16.15",
+    "postgresql_endpoint": "127.0.0.1:55432",
+    "postgresql_database": "hydragrow_test",
+    "postgresql_isolation": "dedicated hydragrow-readiness-postgres container",
+    "migration_files_at_verification": 69
+  },
+  "verification": {
+    "build": {
+      "command": "cargo build --manifest-path hydragrow-backend/Cargo.toml",
+      "status": "PASS",
+      "duration_seconds": 44.38
+    },
+    "full_tests": {
+      "command": "DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55432/hydragrow_test' cargo test --manifest-path hydragrow-backend/Cargo.toml",
+      "status": "PASS",
+      "passed": 425,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 0,
+      "duration_seconds": 30.01
+    },
+    "clippy": {
+      "command": "DATABASE_URL='postgres://postgres:postgres@127.0.0.1:55432/hydragrow_test' cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings",
+      "status": "PASS",
+      "duration_seconds": 27.19
+    },
+    "fmt": {
+      "command": "cargo fmt --manifest-path hydragrow-backend/Cargo.toml -- --check",
+      "status": "PASS"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  },
+  "historical_comparison": {
+    "p1_0_backend_tests": {
+      "passed": 393,
+      "failed": 0,
+      "ignored": 0,
+      "duration_seconds": 291.14,
+      "source": "docs/evidence/P1.0-VERIFICATION-BASELINE.json",
+      "classification": "historical"
+    },
+    "current_backend_tests": {
+      "passed": 425,
+      "failed": 0,
+      "ignored": 0,
+      "classification": "current verified"
+    }
+  },
+  "environment_diagnosis": {
+    "initial_unqualified_run": "FAIL",
+    "failure_classification": "TEST_SETUP_FAILURE / ENVIRONMENT_SELECTION",
+    "failure": "config backup PostgreSQL tests resolved DATABASE_URL from repository .env to an external database whose _sqlx_migrations metadata still contained legacy version 20260506; sqlx::migrate!() returned VersionMissing(20260506)",
+    "resolution": "reran the complete suite with an explicit isolated PostgreSQL DATABASE_URL",
+    "production_mutation": "none observed; migration precondition failed before backup/restore test mutations"
+  },
+  "acceptance": {
+    "build": true,
+    "full_tests_zero_failures": true,
+    "clippy_warnings_denied": true,
+    "fmt_check": true
+  }
+}

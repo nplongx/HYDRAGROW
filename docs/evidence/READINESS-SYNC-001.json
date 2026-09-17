@@ -1,0 +1,72 @@
+{
+  "requirement_id": "READINESS-SYNC-001",
+  "verified_at": "2026-09-17",
+  "status": "VERIFIED",
+  "repository": "/home/long/HYDRAGROW",
+  "worktree": "dirty worktree preserved; unrelated changes not reset/cleaned/reverted",
+  "database": {
+    "type": "PostgreSQL 16",
+    "container": "hydragrow-readiness-postgres",
+    "host": "127.0.0.1",
+    "port": 55432,
+    "database": "hydragrow_test",
+    "migration_rows_observed": 69,
+    "production_touched": false
+  },
+  "implementation": {
+    "liveness": "GET /livez returns HTTP 200 without dependency probes",
+    "readiness": "GET /readyz returns 200 only when PostgreSQL, InfluxDB, MQTT, event fanout, ConfigurationSync worker, and command reconciliation worker are ready; otherwise 503",
+    "synchronization_health": {
+      "healthy": "worker_ready=true and transport_ready=true",
+      "blocked": "worker_ready=true and transport_ready=false",
+      "unavailable": "worker_ready=false"
+    },
+    "pending_or_failed_device_work": "does not independently gate global readiness",
+    "worker_lifecycle": "ConfigurationSync WorkerGuard clears readiness when task exits"
+  },
+  "focused_verification": {
+    "observability_tests_before_format": "8 passed / 0 failed",
+    "synchronization_health_regression_after_format": "1 passed / 0 failed",
+    "coverage": [
+      "healthy readiness body",
+      "each required dependency gates readiness",
+      "worker/transport synchronization health states",
+      "pending/failed device work does not appear as global readiness failure",
+      "liveness returns HTTP 200"
+    ]
+  },
+  "backend_verification": {
+    "build": "PASS",
+    "full_test": "437 passed / 0 failed / 0 ignored",
+    "full_test_database": "explicit isolated PostgreSQL at 127.0.0.1:55432/hydragrow_test",
+    "clippy": "PASS: cargo clippy --manifest-path hydragrow-backend/Cargo.toml --all-targets -- -D warnings",
+    "fmt": "PASS: cargo fmt --manifest-path hydragrow-backend/Cargo.toml -- --check",
+    "diff_check": "PASS: git diff --check"
+  },
+  "acceptance": {
+    "AC-01": "PASS",
+    "AC-02": "PASS",
+    "AC-03": "PASS",
+    "AC-04": "PASS",
+    "AC-05": "PASS",
+    "AC-06": "PASS",
+    "AC-07": "PASS",
+    "AC-08": "PASS",
+    "AC-09": "PASS",
+    "AC-10": "PASS",
+    "AC-11": "PASS",
+    "AC-12": "PASS",
+    "AC-13": "PASS",
+    "AC-14": "PASS",
+    "AC-15": "PASS",
+    "AC-16": "PASS",
+    "AC-17": "PASS",
+    "AC-18": "PASS"
+  },
+  "notes": [
+    "Historical 393/393, 425/425, and 426/426 counts are not used as current Domain 7 baseline.",
+    "Current backend baseline after Domain 7 is 437/437.",
+    "Domain 6 SafetyDataUnavailable semantics are not redefined by Domain 7.",
+    "No firmware domain was started."
+  ]
+}

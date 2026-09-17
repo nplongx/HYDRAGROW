@@ -79,16 +79,24 @@ async fn receive_webhook_action(
             .await;
     }
 
-    let safety_config =
-        match crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                error!("Failed to fetch safety config for webhook: {}", e);
-                return HttpResponse::InternalServerError().json(serde_json::json!({
-                    "error": "Internal server error"
-                }));
-            }
-        };
+    let safety_config = match crate::services::safety_data::load_safety_config(
+        &app_state.pg_pool,
+        &device_id,
+    )
+    .await
+    {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            error!(device_id = %device_id, error = ?e, reason_code = e.reason_code(), "Failed to fetch safety config for webhook");
+            return HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                "error": {
+                    "code": "safety_data_unavailable",
+                    "message": "Safety data unavailable",
+                    "details": {"reason": e.reason_code()}
+                }
+            }));
+        }
+    };
 
     let limits = hydragrow_shared::safety::DoseSafetyLimits {
         max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
@@ -96,17 +104,40 @@ async fn receive_webhook_action(
         cooldown_sec: safety_config.cooldown_sec as u64,
     };
 
-    let calibration = crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id)
-        .await
-        .unwrap_or(None);
+    let calibration = match crate::services::safety_data::classify_calibration(
+        crate::db::postgres::fetch_dosing_calibration(&app_state.pg_pool, &device_id).await,
+    ) {
+        Ok(calibration) => Some(calibration),
+        Err(reason) => {
+            error!(device_id = %device_id, reason_code = reason, "Webhook action denied: dosing calibration unavailable");
+            return HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                "error": {"code": "safety_data_unavailable", "message": "Safety data unavailable", "details": {"reason": reason}}
+            }));
+        }
+    };
 
-    let hourly_history_ml =
-        crate::db::postgres::get_dosing_history_last_hour(&app_state.pg_pool, &device_id)
-            .await
-            .unwrap_or_default();
-    let last_dose_at_sec = crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
-        .await
-        .unwrap_or(None);
+    let hourly_history_ml = match crate::services::safety_data::classify_history(
+        crate::db::postgres::get_dosing_history_last_hour(&app_state.pg_pool, &device_id).await,
+    ) {
+        Ok(history) => history,
+        Err(reason) => {
+            error!(device_id = %device_id, reason_code = reason, "Webhook action denied: dosing history unavailable");
+            return HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                "error": {"code": "safety_data_unavailable", "message": "Safety data unavailable", "details": {"reason": reason}}
+            }));
+        }
+    };
+    let last_dose_at_sec = match crate::services::safety_data::classify_last_dose(
+        crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id).await,
+    ) {
+        Ok(last_dose) => last_dose,
+        Err(reason) => {
+            error!(device_id = %device_id, reason_code = reason, "Webhook action denied: last-dose unavailable");
+            return HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                "error": {"code": "safety_data_unavailable", "message": "Safety data unavailable", "details": {"reason": reason}}
+            }));
+        }
+    };
     let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
 
     match crate::services::action_dispatch::dispatch_action_command(
@@ -272,46 +303,81 @@ async fn receive_webhook_flow_event(
         for (fired_script_id, res) in results {
             match res {
                 crate::mqtt::handlers::script_eval::ChainFireResult::ActionCommand(cmd) => {
-                    let safety_config =
-                        crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id)
-                            .await
-                            .ok();
-                    if let Some(cfg) = safety_config {
-                        let limits = hydragrow_shared::safety::DoseSafetyLimits {
-                            max_dose_per_cycle_ml: cfg.max_dose_per_cycle,
-                            max_dose_per_hour_ml: cfg.max_dose_per_hour,
-                            cooldown_sec: cfg.cooldown_sec as u64,
-                        };
-                        let calibration = crate::db::postgres::fetch_dosing_calibration(
+                    let safety_config = match crate::services::safety_data::classify_safety_config(
+                        crate::db::postgres::fetch_safety_config(&app_state.pg_pool, &device_id)
+                            .await,
+                    ) {
+                        Ok(cfg) => cfg,
+                        Err(e) => {
+                            error!(device_id = %device_id, reason_code = e.reason_code(), "Webhook flow action denied: safety data unavailable");
+                            crate::metrics::SAFETY_DECISIONS_TOTAL
+                                .with_label_values(&[e.reason_code(), "denied"])
+                                .inc();
+                            continue;
+                        }
+                    };
+                    let calibration = match crate::services::safety_data::classify_calibration(
+                        crate::db::postgres::fetch_dosing_calibration(
                             &app_state.pg_pool,
                             &device_id,
                         )
-                        .await
-                        .unwrap_or(None);
-                        let hourly_history_ml = crate::db::postgres::get_dosing_history_last_hour(
+                        .await,
+                    ) {
+                        Ok(calibration) => calibration,
+                        Err(reason) => {
+                            error!(device_id = %device_id, reason_code = reason, "Webhook flow action denied: dosing calibration unavailable");
+                            crate::metrics::SAFETY_DECISIONS_TOTAL
+                                .with_label_values(&[reason, "denied"])
+                                .inc();
+                            continue;
+                        }
+                    };
+                    let hourly_history_ml = match crate::services::safety_data::classify_history(
+                        crate::db::postgres::get_dosing_history_last_hour(
                             &app_state.pg_pool,
                             &device_id,
                         )
-                        .await
-                        .unwrap_or_default();
-                        let last_dose_at_sec =
-                            crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
-                                .await
-                                .unwrap_or(None);
-                        let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
+                        .await,
+                    ) {
+                        Ok(history) => history,
+                        Err(reason) => {
+                            error!(device_id = %device_id, reason_code = reason, "Webhook flow action denied: dosing history unavailable");
+                            crate::metrics::SAFETY_DECISIONS_TOTAL
+                                .with_label_values(&[reason, "denied"])
+                                .inc();
+                            continue;
+                        }
+                    };
+                    let last_dose_at_sec = match crate::services::safety_data::classify_last_dose(
+                        crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id).await,
+                    ) {
+                        Ok(last_dose) => last_dose,
+                        Err(reason) => {
+                            error!(device_id = %device_id, reason_code = reason, "Webhook flow action denied: last-dose unavailable");
+                            crate::metrics::SAFETY_DECISIONS_TOTAL
+                                .with_label_values(&[reason, "denied"])
+                                .inc();
+                            continue;
+                        }
+                    };
+                    let limits = hydragrow_shared::safety::DoseSafetyLimits {
+                        max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
+                        max_dose_per_hour_ml: safety_config.max_dose_per_hour,
+                        cooldown_sec: safety_config.cooldown_sec as u64,
+                    };
+                    let now_sec = (chrono::Utc::now().timestamp_millis() / 1000) as u64;
 
-                        let _ = crate::services::action_dispatch::dispatch_action_command(
-                            &app_state,
-                            &device_id,
-                            cmd,
-                            &limits,
-                            &hourly_history_ml,
-                            now_sec,
-                            last_dose_at_sec,
-                            calibration.as_ref(),
-                        )
-                        .await;
-                    }
+                    let _ = crate::services::action_dispatch::dispatch_action_command(
+                        &app_state,
+                        &device_id,
+                        cmd,
+                        &limits,
+                        &hourly_history_ml,
+                        now_sec,
+                        last_dose_at_sec,
+                        Some(&calibration),
+                    )
+                    .await;
                 }
                 crate::mqtt::handlers::script_eval::ChainFireResult::Alert(alert) => {
                     let script_name = all_chain_nodes

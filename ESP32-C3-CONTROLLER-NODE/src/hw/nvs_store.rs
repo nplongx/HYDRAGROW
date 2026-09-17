@@ -4,11 +4,13 @@
 use anyhow::{anyhow, Result};
 use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition, EspNvs};
 use hydragrow_controller_core::core::fsm::context::{NvsSnapshot, SystemContext};
-use hydragrow_shared::recipe::CropRecipe;
+use hydragrow_shared::{recipe::CropRecipe, ControllerConfig};
 use log::{info, warn};
 
 const ACTIVE_RECIPE_KEY: &str = "active_recipe";
 const ACTIVE_RECIPE_BUF_SIZE: usize = 4096;
+const CONTROLLER_CONFIG_KEY: &str = "ctrl_cfg";
+const CONTROLLER_CONFIG_BUF_SIZE: usize = 4096;
 
 /// NVS key holding the persistent logical device identity.
 pub const DEVICE_ID_KEY: &str = "device_id";
@@ -33,6 +35,12 @@ fn factory_device_id() -> String {
 
 pub struct NvsStore {
     nvs: Option<EspDefaultNvs>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct PersistedControllerConfig {
+    config_version: i64,
+    config: ControllerConfig,
 }
 
 impl NvsStore {
@@ -80,6 +88,45 @@ impl NvsStore {
             .as_mut()
             .ok_or_else(|| anyhow!("NVS namespace 'agitech' is not available"))?;
         nvs.remove(ACTIVE_RECIPE_KEY)?;
+        Ok(())
+    }
+
+    pub fn load_controller_config(&mut self) -> Result<Option<(Box<ControllerConfig>, i64)>> {
+        let Some(nvs) = self.nvs.as_mut() else {
+            return Ok(None);
+        };
+
+        let mut buf = [0u8; CONTROLLER_CONFIG_BUF_SIZE];
+        let Some(raw) = nvs.get_str(CONTROLLER_CONFIG_KEY, &mut buf)? else {
+            return Ok(None);
+        };
+
+        let persisted = serde_json::from_str::<PersistedControllerConfig>(raw)
+            .map_err(|error| anyhow!("invalid persisted controller config: {error}"))?;
+        Ok(Some((Box::new(persisted.config), persisted.config_version)))
+    }
+
+    pub fn save_controller_config(
+        &mut self,
+        config: &ControllerConfig,
+        config_version: i64,
+    ) -> Result<()> {
+        let nvs = self
+            .nvs
+            .as_mut()
+            .ok_or_else(|| anyhow!("NVS namespace 'agitech' is not available"))?;
+        let persisted = PersistedControllerConfig {
+            config_version,
+            config: config.clone(),
+        };
+        let serialized = serde_json::to_string(&persisted)?;
+        if serialized.len() >= CONTROLLER_CONFIG_BUF_SIZE {
+            return Err(anyhow!(
+                "persisted controller config exceeds NVS buffer: {} bytes",
+                serialized.len()
+            ));
+        }
+        nvs.set_str(CONTROLLER_CONFIG_KEY, &serialized)?;
         Ok(())
     }
 
@@ -221,6 +268,7 @@ impl NvsStore {
     pub fn factory_reset(&mut self) -> Result<()> {
         if let Some(nvs) = self.nvs.as_mut() {
             let _ = nvs.remove(ACTIVE_RECIPE_KEY);
+            let _ = nvs.remove(CONTROLLER_CONFIG_KEY);
             let _ = nvs.remove("runtime_snap");
             let _ = nvs.remove("current_stage");
             let _ = nvs.remove("last_w_change");

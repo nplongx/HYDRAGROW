@@ -1,0 +1,15 @@
+{
+  "requirement_id": "DOMAIN-10-FULL-CROSS-SYSTEM-VERIFICATION",
+  "domain": "Domain 10 — Full cross-system verification",
+  "status": "IMPLEMENTED / VERIFICATION IN PROGRESS",
+  "verified_at": null,
+  "repo": "/home/long/HYDRAGROW",
+  "environment_rule": "source ~/export-esp.sh before controller firmware build/test commands",
+  "scope": "Cross-system verification only; no HIL/physical E2E, no release-readiness audit, no schema redesign",
+  "verification": [],
+  "acceptance": {},
+  "worktree_integrity": {
+    "dirty_worktree_preserved": true,
+    "production_postgresql_touched": false
+  }
+}

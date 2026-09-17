@@ -22,9 +22,19 @@ pub enum ActionSafetyDecision {
 #[derive(Debug)]
 pub enum ActionDispatchError {
     Safety(DoseSafetyViolation),
+    SafetyData(String),
     UnknownPump(String),
     UnknownAction(String),
     Mqtt(anyhow::Error),
+}
+
+impl ActionDispatchError {
+    pub fn safety_reason_code(&self) -> Option<&str> {
+        match self {
+            Self::SafetyData(reason) => Some(reason.as_str()),
+            _ => None,
+        }
+    }
 }
 
 /// Thuần — test được không cần DB/MQTT. Thứ tự bắt buộc: check_dose (ml, không
@@ -298,5 +308,16 @@ mod tests {
         };
         let result = evaluate_action_safety(&output, &limits(), &[], 1_000, None, None);
         assert!(matches!(result, Err(ActionDispatchError::UnknownPump(_))));
+    }
+
+    #[test]
+    fn safety_data_error_keeps_machine_reason_separate_from_mqtt_errors() {
+        let error = ActionDispatchError::SafetyData("DOSING_HISTORY_DB_ERROR".to_string());
+        assert_eq!(error.safety_reason_code(), Some("DOSING_HISTORY_DB_ERROR"));
+        assert!(
+            ActionDispatchError::Mqtt(anyhow::anyhow!("db detail"))
+                .safety_reason_code()
+                .is_none()
+        );
     }
 }

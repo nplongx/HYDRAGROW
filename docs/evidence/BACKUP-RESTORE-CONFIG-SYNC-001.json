@@ -1,0 +1,44 @@
+{
+  "requirement_id": "BACKUP-RESTORE-CONFIG-SYNC-001",
+  "status": "COMPLETE / VERIFIED",
+  "verified_at": "2026-09-16",
+  "repository": "/long/HYDRAGROW",
+  "database": {
+    "type": "PostgreSQL",
+    "environment": "isolated Docker PostgreSQL 16",
+    "host_port": 55432,
+    "database": "hydragrow_test",
+    "production_database_touched": false
+  },
+  "implementation": {
+    "restore_path": "hydragrow-backend/src/api/config_backup.rs",
+    "durable_sync_db": "hydragrow-backend/src/db/config_sync.rs",
+    "durable_sync_worker": "hydragrow-backend/src/services/config_sync.rs",
+    "transactional_restore_sync": true,
+    "post_commit_legacy_sync_removed": true
+  },
+  "verification": {
+    "targeted_backup_restore_tests": "7 passed, 0 failed",
+    "durable_restore_revision": "PASS",
+    "controller_sensor_shared_revision": "PASS",
+    "restore_and_sync_same_transaction": "PASS",
+    "transaction_rollback_preserves_prior_sync_state": "PASS",
+    "mapped_target_payload_identity": "PASS",
+    "mqtt_independence": "PASS by durable pending-state/worker contract inspection; MQTT is not awaited by restore transaction",
+    "restart_recovery": "PASS by durable queue/worker startup reconciliation inspection",
+    "exact_revision_confirmation": "PASS via existing Domain 4 integration test",
+    "stale_unknown_revision_rejection": "PASS via existing Domain 4 integration test",
+    "preview_side_effect_free": "PASS via existing preview implementation/tests",
+    "recipe_conflict_rollback": "PASS via existing transactional recipe path/tests",
+    "restore_response_contract": "PASS by handler inspection and full backend test baseline",
+    "audit_separation": "PASS by handler inspection and full backend test baseline"
+  },
+  "backend_baseline": {
+    "build": "PASS",
+    "tests": "426 passed, 0 failed, 0 ignored",
+    "clippy_warnings_as_errors": "PASS",
+    "fmt_check": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "classification": "No unresolved Domain 5 failure. Historical backend/SQLx failures remain historical evidence and were not reproduced as Domain 5 failures."
+}

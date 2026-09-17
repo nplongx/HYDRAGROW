@@ -20,6 +20,7 @@ use hw::{connect_wifi, create_shared_sensor_data, sync_sntp_time, NvsStore, Pump
 use runtime::fsm_loop::start_fsm_control_loop;
 use runtime::health::run_main_health_loop;
 
+use crate::hw::mqtt_client::APPLIED_CONFIG_VERSION;
 use crate::hw::pcf857x::I2cExpander;
 
 /// Compile-time provisioning inputs are OPTIONAL: release firmware must
@@ -76,6 +77,41 @@ fn main() -> anyhow::Result<()> {
         let mut state = write_or_recover(&shared_config);
         state.base_config.device_id = device_id.clone();
     }
+
+    let config_restore_state = shared_config.clone();
+    let config_restore_device_id = device_id.clone();
+    let config_restore_nvs = nvs_partition.clone();
+    let config_restore_thread = std::thread::Builder::new()
+        .stack_size(24000)
+        .name("config_restore_thread".to_string())
+        .spawn(move || {
+            let mut nvs_store = NvsStore::new(config_restore_nvs);
+            match nvs_store.load_controller_config() {
+                Ok(Some((mut persisted_config, config_version))) => {
+                    // Device identity is provisioned separately and remains authoritative.
+                    persisted_config.device_id = config_restore_device_id;
+                    if let Err(errors) = persisted_config.validate() {
+                        warn!(
+                            "⚠️ [NVS] Persisted controller config rejected ({} errors): {:?}",
+                            errors.len(),
+                            errors
+                        );
+                    } else {
+                        info!(
+                            "💾 [NVS] Restored controller config revision {}",
+                            config_version
+                        );
+                        write_or_recover(&config_restore_state).set_base_config(*persisted_config);
+                        *APPLIED_CONFIG_VERSION.lock().unwrap() = config_version;
+                    }
+                }
+                Ok(None) => info!("💾 [NVS] No persisted controller config"),
+                Err(error) => warn!("⚠️ [NVS] Cannot restore controller config: {:?}", error),
+            }
+        })?;
+    config_restore_thread
+        .join()
+        .map_err(|_| anyhow::anyhow!("config restore thread panicked"))?;
 
     match nvs_store.load_active_recipe() {
         Ok(Some(recipe)) => {
@@ -322,20 +358,32 @@ fn main() -> anyhow::Result<()> {
             );
         })?;
 
-    run_main_health_loop(
-        MQTT_URL,
-        &mqtt_user,
-        &mqtt_password,
-        MQTT_COMMAND_SECRET,
-        shared_config,
-        shared_sensors,
-        conn_rx,
-        conn_tx,
-        cmd_tx,
-        health_fsm_tx,
-        fsm_rx,
-        dosing_report_rx,
-        sensor_cmd_rx,
-        nvs_partition.clone(),
-    )
+    let health_thread = std::thread::Builder::new()
+        .stack_size(20000)
+        .name("health_thread".to_string())
+        .spawn(move || {
+            if let Err(error) = run_main_health_loop(
+                MQTT_URL,
+                &mqtt_user,
+                &mqtt_password,
+                MQTT_COMMAND_SECRET,
+                shared_config,
+                shared_sensors,
+                conn_rx,
+                conn_tx,
+                cmd_tx,
+                health_fsm_tx,
+                fsm_rx,
+                dosing_report_rx,
+                sensor_cmd_rx,
+                nvs_partition,
+            ) {
+                log::error!("❌ Main health loop stopped: {:?}", error);
+            }
+        })?;
+
+    health_thread
+        .join()
+        .map_err(|_| anyhow::anyhow!("health thread panicked"))?;
+    Ok(())
 }

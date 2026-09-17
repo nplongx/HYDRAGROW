@@ -1,6 +1,6 @@
 {
   "requirement_id": "DOMAIN-11-PHYSICAL-HIL-E2E",
-  "domain": "Domain 11 — Physical / HIL E2E",
+  "domain": "Domain 11 \u2014 Physical / HIL E2E",
   "status": "IMPLEMENTED / H-01,H-02,H-03,H-04 VERIFIED / H-05,H-08,H-09,H-10 BLOCKED / H-06,H-07 PARTIAL",
   "verified_at": "2026-09-17T06:45:00Z",
   "repo": "/home/long/HYDRAGROW",
@@ -196,7 +196,7 @@
       "status": "PASS",
       "command": "cargo test --manifest-path hydragrow-backend/Cargo.toml api::device_pairing::tests::service_principal_can_pass_device_guard -- --nocapture",
       "exit_code": 0,
-      "observed": "1 passed, 0 failed. Service/API-key principals now pass require_device_owner after route-level scope authorization; this fixes the staging frontend/API path that previously returned 401 Chưa đăng nhập."
+      "observed": "1 passed, 0 failed. Service/API-key principals now pass require_device_owner after route-level scope authorization; this fixes the staging frontend/API path that previously returned 401 Ch\u01b0a \u0111\u0103ng nh\u1eadp."
     },
     {
       "test_id": "H04-BACKEND-SYNC-READINESS",
@@ -273,21 +273,21 @@
     }
   ],
   "acceptance": {
-    "AC-01": "PASS — real ESP32-C3 sensor booted and published canonical-shaped telemetry to the isolated/staging MQTT broker; sensor measurement values were not evaluated.",
-    "AC-02": "PASS — physical sensor -> isolated MQTT -> backend -> InfluxDB persistence -> backend API readback -> rendered frontend dashboard is proven for device_001; displayed measurement values were not evaluated.",
-    "AC-03": "PASS — physical controller build/flash/boot used source ~/export-esp.sh and reached normal connected runtime.",
-    "AC-04": "PASS — revisions 3 and 4 converged through backend sync, MQTT, physical controller persistence/runtime status, and the frontend canonical sync-status API/polling contract.",
-    "AC-05": "BLOCKED — no physical controller/actuator load.",
-    "AC-06": "PARTIAL — physical SensorTimeout -> Fault is proven; physical output-off and valid-input recovery are not separately captured.",
-    "AC-07": "PARTIAL — controlled physical USB/JTAG restart restored persisted controller config; true physical power-cycle remains unexecuted.",
-    "AC-08": "BLOCKED — no physical reconnect.",
-    "AC-09": "BLOCKED — safe physical dosing/mixing bench unavailable.",
-    "AC-10": "BLOCKED — no physical power-loss test.",
-    "AC-11": "PASS for executed physical claims — H-02 has physical serial/MQTT/status evidence; the remaining physical criteria are explicitly blocked.",
-    "AC-12": "PASS — controller HIL used an isolated LAN MQTT broker and isolated backend/PostgreSQL process; no production PostgreSQL was launched or accessed by the HIL backend.",
-    "AC-13": "PASS — the updated evidence records only non-secret device/topic/runtime facts and redacts environment values.",
-    "AC-14": "PASS — git diff --check exited 0; dirty worktree was preserved.",
-    "AC-15": "PASS — Domain 12 was not started."
+    "AC-01": "PASS \u2014 real ESP32-C3 sensor booted and published canonical-shaped telemetry to the isolated/staging MQTT broker; sensor measurement values were not evaluated.",
+    "AC-02": "PASS \u2014 physical sensor -> isolated MQTT -> backend -> InfluxDB persistence -> backend API readback -> rendered frontend dashboard is proven for device_001; displayed measurement values were not evaluated.",
+    "AC-03": "PASS \u2014 physical controller build/flash/boot used source ~/export-esp.sh and reached normal connected runtime.",
+    "AC-04": "PASS \u2014 revisions 3 and 4 converged through backend sync, MQTT, physical controller persistence/runtime status, and the frontend canonical sync-status API/polling contract.",
+    "AC-05": "BLOCKED \u2014 no physical controller/actuator load.",
+    "AC-06": "PARTIAL \u2014 physical SensorTimeout -> Fault is proven; physical output-off and valid-input recovery are not separately captured.",
+    "AC-07": "PARTIAL \u2014 controlled physical USB/JTAG restart restored persisted controller config; true physical power-cycle remains unexecuted.",
+    "AC-08": "BLOCKED \u2014 no physical reconnect.",
+    "AC-09": "BLOCKED \u2014 safe physical dosing/mixing bench unavailable.",
+    "AC-10": "BLOCKED \u2014 no physical power-loss test.",
+    "AC-11": "PASS for executed physical claims \u2014 H-02 has physical serial/MQTT/status evidence; the remaining physical criteria are explicitly blocked.",
+    "AC-12": "PASS \u2014 controller HIL used an isolated LAN MQTT broker and isolated backend/PostgreSQL process; no production PostgreSQL was launched or accessed by the HIL backend.",
+    "AC-13": "PASS \u2014 the updated evidence records only non-secret device/topic/runtime facts and redacts environment values.",
+    "AC-14": "PASS \u2014 git diff --check exited 0; dirty worktree was preserved.",
+    "AC-15": "PASS \u2014 Domain 12 was not started."
   },
   "blockers": [
     "H-05/AC-05 remains blocked: safe physical actuator command/output observation has not been executed through the live control endpoint.",
@@ -343,7 +343,7 @@
       "status": "PASS",
       "command": "Vite staging frontend at http://127.0.0.1:14173/dashboard with device_001 explicitly configured; browser DOM observation",
       "exit_code": 0,
-      "observed": "Browser rendered the staging frontend against the same isolated backend and selected physical device_001. Dashboard showed station Online, device_001, sensor status Tốt/Đang đo, and the real-time telemetry panel populated from the backend. No manual telemetry injection was used. Displayed measurement values were not evaluated.",
+      "observed": "Browser rendered the staging frontend against the same isolated backend and selected physical device_001. Dashboard showed station Online, device_001, sensor status T\u1ed1t/\u0110ang \u0111o, and the real-time telemetry panel populated from the backend. No manual telemetry injection was used. Displayed measurement values were not evaluated.",
       "classification": "PHYSICAL_TELEMETRY_BACKEND_FRONTEND_RENDER_PASS"
     },
     {
@@ -361,6 +361,38 @@
       "exit_code": 0,
       "observed": "Latest controller firmware containing the dispatcher Fault-state actuator-ON gate was physically flashed to the ESP32-C3 controller at /dev/ttyACM0; espflash reported Flashing has completed. A subsequent physical reset produced controller runtime serial output including WiFi association and IP 192.168.1.6. This proves deployment/boot observation of the rebuilt firmware, not physical actuator-gate behavior.",
       "classification": "PHYSICAL_CONTROLLER_POST_FIX_FLASH_PASS"
+    }
+  ],
+  "evidence": [
+    {
+      "acceptance_id": "AC-1",
+      "status": "PASS",
+      "source": "REAL-FIREBASE-AUTH-DEVICE-BINDING-E2E: authenticated frontend pairing and protected API requests were observed in staging."
+    },
+    {
+      "acceptance_id": "AC-2",
+      "status": "PASS",
+      "source": "Dashboard unavailable-state verification plus authoritative telemetry evidence; missing config/latest telemetry are represented as unavailable and sensor numeric values were not used as correctness evidence."
+    },
+    {
+      "acceptance_id": "AC-3",
+      "status": "PASS",
+      "source": "Device ownership/provisioning tests and physical config-sync evidence show safe manual-mode, outputs-disabled configuration."
+    },
+    {
+      "acceptance_id": "AC-4",
+      "status": "PASS",
+      "source": "H04 revision 1-4 physical config-sync evidence records backend revision, MQTT publication, controller application, and sync convergence."
+    },
+    {
+      "acceptance_id": "AC-5",
+      "status": "PASS",
+      "source": "Physical command evidence covers signature rejection and safety-preserving enter_calibration; no actuator activation or emergency-stop bypass was performed."
+    },
+    {
+      "acceptance_id": "AC-6",
+      "status": "PASS",
+      "source": "This evidence explicitly records deployment/HIL gaps and does not claim full physical HIL PASS; production deployment and broker topology remain separate from the isolated physical path."
     }
   ]
 }

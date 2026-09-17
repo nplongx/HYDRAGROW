@@ -247,6 +247,9 @@ async fn main() -> anyhow::Result<()> {
     mqttoptions.set_keep_alive(Duration::from_secs(30));
     mqttoptions.set_clean_session(false);
 
+    // The broker endpoint is deployment-owned configuration. Keep the local
+    // plaintext default explicit; production must opt into TLS when its broker
+    // is exposed outside the trusted LAN. Never infer transport from the port.
     // Provisioning relays WiFi secrets over MQTT, so TLS must be available
     // wherever the broker is not confined to a trusted local network.
     // Set MQTT_TLS=1 (and MQTT_PORT=8883 unless overridden) to use native

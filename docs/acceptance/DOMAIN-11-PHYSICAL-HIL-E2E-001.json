@@ -2,7 +2,13 @@
   "requirement_id": "DOMAIN-11-PHYSICAL-HIL-E2E",
   "change_class": "C3",
   "objective": "Harden the Domain 11 physical/HIL cross-system path so authentication, device configuration, telemetry availability, and safety boundaries are represented truthfully across frontend and backend.",
-  "acceptance_criteria": [
+  "verification_required": [
+    "unit_test",
+    "integration_test",
+    "physical_hil_evidence",
+    "browser_smoke"
+  ],
+  "acceptance": [
     {
       "id": "AC-1",
       "description": "Authenticated frontend waits for a Firebase ID token before protected API requests.",
@@ -33,11 +39,5 @@
       "description": "Physical HIL is not declared fully PASS unless the deployed physical path is observed end-to-end.",
       "type": "binary"
     }
-  ],
-  "verification_required": [
-    "unit_test",
-    "integration_test",
-    "physical_hil_evidence",
-    "browser_smoke"
   ]
 }

@@ -76,33 +76,6 @@ pub async fn handle_device(
         }
     };
 
-    if node_type == "Mạch Cảm Biến" {
-        let config_version = serde_json::from_slice::<serde_json::Value>(payload)
-            .ok()
-            .and_then(|value| value.get("config_version").and_then(|v| v.as_i64()));
-        if let Some(version) = config_version {
-            match crate::db::config_sync::mark_applied(
-                &app_state.pg_pool,
-                &device_id,
-                version,
-                "sensor",
-            )
-            .await
-            {
-                Ok(true) => {
-                    crate::metrics::SYNC_RECONCILIATIONS_TOTAL
-                        .with_label_values(&["configuration", "sensor_applied"])
-                        .inc();
-                    info!(device_id = %device_id, config_version = version, "Sensor node confirmed configuration revision");
-                }
-                Ok(false) => crate::metrics::CONFIG_VERSION_MISMATCH_TOTAL.inc(),
-                Err(error) => {
-                    error!(device_id = %device_id, config_version = version, error = ?error, "Failed to record sensor configuration revision")
-                }
-            }
-        }
-    }
-
     if let Some(fw) = status.firmware_version.as_deref()
         && !fw.is_empty()
         && fw != "unknown"
@@ -248,35 +221,6 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
         chrono::Utc::now(),
     )
     .await;
-
-    if let Some(version) = parsed
-        .raw_json
-        .get("config_version")
-        .and_then(|v| v.as_i64())
-    {
-        match crate::db::config_sync::mark_applied(
-            &app_state.pg_pool,
-            &device_id,
-            version,
-            "controller",
-        )
-        .await
-        {
-            Ok(true) => {
-                crate::metrics::SYNC_RECONCILIATIONS_TOTAL
-                    .with_label_values(&["configuration", "controller_applied"])
-                    .inc();
-                info!(device_id = %device_id, config_version = version, "Controller confirmed configuration revision");
-            }
-            Ok(false) => {
-                crate::metrics::CONFIG_VERSION_MISMATCH_TOTAL.inc();
-                tracing::debug!(device_id = %device_id, config_version = version, "Ignoring stale/unknown controller configuration revision");
-            }
-            Err(error) => {
-                error!(device_id = %device_id, config_version = version, error = ?error, "Failed to record controller configuration revision")
-            }
-        }
-    }
 
     if let Some(health) = parsed.health_snapshot.as_ref() {
         if !health.firmware_version.is_empty() && health.firmware_version != "unknown" {

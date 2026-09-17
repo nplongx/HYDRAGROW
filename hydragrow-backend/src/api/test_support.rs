@@ -30,7 +30,6 @@ pub(crate) fn test_app_state() -> crate::AppState {
         mqtt_client,
         mqtt_connected: crate::observability::new_mqtt_connection_state(),
         command_reconciliation_worker: crate::observability::new_mqtt_connection_state(),
-        configuration_sync_worker: crate::observability::new_mqtt_connection_state(),
         api_key: "test-api-key".to_string(),
         privileged_control_secret: "test-privileged-secret".to_string(),
         firebase_auth: std::sync::Arc::new(

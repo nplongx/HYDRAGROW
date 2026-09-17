@@ -1,12 +1,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StationProvider, useStationContext } from "./StationContext";
 
-const { apiGetMock, syncStatusMock } = vi.hoisted(() => ({ apiGetMock: vi.fn(), syncStatusMock: vi.fn() }));
+const { apiGetMock } = vi.hoisted(() => ({ apiGetMock: vi.fn() }));
 
-vi.mock("../lib/apiClient", () => ({ apiGet: apiGetMock }));
-vi.mock("../api/config", () => ({ configApi: { syncStatus: syncStatusMock } }));
+vi.mock("../lib/apiClient", () => ({
+  apiGet: apiGetMock,
+}));
 
 const devices = [
   {
@@ -26,16 +26,12 @@ const devices = [
 ];
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <StationProvider>{children}</StationProvider>
-  </QueryClientProvider>
+  <StationProvider>{children}</StationProvider>
 );
 
 describe("StationContext", () => {
   beforeEach(() => {
     apiGetMock.mockReset();
-    syncStatusMock.mockReset();
-    syncStatusMock.mockResolvedValue({});
     localStorage.clear();
   });
 
@@ -47,27 +43,6 @@ describe("StationContext", () => {
     await waitFor(() => expect(result.current.status).toBe("NoSelection"));
     expect(result.current.selectedDeviceId).toBeNull();
     expect(result.current.selectedDevice).toBeNull();
-  });
-
-  it("exposes durable configuration synchronization for the selected station", async () => {
-    localStorage.setItem(
-      "hydragrow_selected_device_id",
-      JSON.stringify("device-b"),
-    );
-    apiGetMock.mockResolvedValue(devices);
-    syncStatusMock.mockResolvedValue({
-      device_id: "device-b", config_version: 9, overall_state: "published",
-      controller: { state: "applied", attempts: 1, last_attempt_at: null, applied_at: "2026-09-16T01:00:00Z" },
-      sensor: { state: "published", attempts: 1, last_attempt_at: "2026-09-16T01:00:00Z", applied_at: null },
-      last_error: null, updated_at: "2026-09-16T01:00:00Z",
-    });
-
-    const { result } = renderHook(() => useStationContext(), { wrapper });
-
-    await waitFor(() => expect(result.current.configurationSync?.version).toBe(9));
-    expect(result.current.configurationSync?.status).toBe("published");
-    expect(result.current.configurationSync?.controller).toBe("applied");
-    expect(result.current.configurationSync?.sensor).toBe("published");
   });
 
   it("restores a valid persisted selection", async () => {

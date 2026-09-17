@@ -473,27 +473,33 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
                             .await;
                             continue;
                         }
-                        let dispatch_result = match crate::services::safety_data::classify_safety_config(
-                            crate::db::postgres::fetch_safety_config(&app_state.pg_pool, &script.device_id).await,
-                        ) {
+                        let dispatch_result = match crate::db::postgres::get_safety_config(
+                            &app_state.pg_pool,
+                            &script.device_id,
+                        )
+                        .await
+                        {
                             Ok(cfg) => {
                                 let limits = hydragrow_shared::safety::DoseSafetyLimits {
                                     max_dose_per_cycle_ml: cfg.max_dose_per_cycle,
                                     max_dose_per_hour_ml: cfg.max_dose_per_hour,
                                     cooldown_sec: cfg.cooldown_sec as u64,
                                 };
-                                let calibration = crate::services::safety_data::classify_calibration(crate::db::postgres::fetch_dosing_calibration(
+                                let calibration = crate::db::postgres::fetch_dosing_calibration(
                                     &app_state.pg_pool,
                                     &script.device_id,
-                                ).await);
-                                let hourly = crate::services::safety_data::classify_history(crate::db::postgres::get_dosing_history_last_hour(
+                                )
+                                .await;
+                                let hourly = crate::db::postgres::get_dosing_history_last_hour(
                                     &app_state.pg_pool,
                                     &script.device_id,
-                                ).await);
-                                let last_dose = crate::services::safety_data::classify_last_dose(crate::db::postgres::get_last_dose_at(
+                                )
+                                .await;
+                                let last_dose = crate::db::postgres::get_last_dose_at(
                                     &app_state.pg_pool,
                                     &script.device_id,
-                                ).await);
+                                )
+                                .await;
 
                                 match (calibration, hourly, last_dose) {
                                     (Ok(calibration), Ok(hourly), Ok(last_dose)) => {
@@ -507,16 +513,36 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
                                             &hourly,
                                             now_sec,
                                             last_dose,
-                                            Some(&calibration),
+                                            calibration.as_ref(),
                                         )
                                         .await
                                     }
-                                    (Err(reason), _, _) | (_, Err(reason), _) | (_, _, Err(reason)) => Err(
-                                        crate::services::action_dispatch::ActionDispatchError::SafetyData(reason.to_string())
+                                    (Err(error), _, _) => Err(
+                                        crate::services::action_dispatch::ActionDispatchError::Mqtt(
+                                            anyhow::anyhow!(
+                                                "dosing calibration unavailable: {error}"
+                                            ),
+                                        ),
+                                    ),
+                                    (_, Err(error), _) => Err(
+                                        crate::services::action_dispatch::ActionDispatchError::Mqtt(
+                                            anyhow::anyhow!("dosing history unavailable: {error}"),
+                                        ),
+                                    ),
+                                    (_, _, Err(error)) => Err(
+                                        crate::services::action_dispatch::ActionDispatchError::Mqtt(
+                                            anyhow::anyhow!(
+                                                "last dosing timestamp unavailable: {error}"
+                                            ),
+                                        ),
                                     ),
                                 }
                             }
-                            Err(error) => Err(crate::services::action_dispatch::ActionDispatchError::SafetyData(error.reason_code().to_string())),
+                            Err(error) => {
+                                Err(crate::services::action_dispatch::ActionDispatchError::Mqtt(
+                                    anyhow::anyhow!("safety config unavailable: {error}"),
+                                ))
+                            }
                         };
                         match dispatch_result {
                             Ok(()) => {
@@ -538,19 +564,15 @@ async fn tick_once(app_state: &crate::AppState) -> Result<(), sqlx::Error> {
                                 .await;
                             }
                             Err(error) => {
-                                let reason = match &error {
-                                    crate::services::action_dispatch::ActionDispatchError::SafetyData(reason) => reason.as_str(),
-                                    _ => "SAFETY_INPUT_ERROR",
-                                };
                                 SAFETY_DECISIONS_TOTAL
-                                    .with_label_values(&[reason, "denied"])
+                                    .with_label_values(&["SAFETY_INPUT_ERROR", "denied"])
                                     .inc();
-                                warn!(script_id = %script.id, device_id = %script.device_id, error = ?error, reason_code = reason, "cron action dispatch blocked");
+                                warn!(script_id = %script.id, device_id = %script.device_id, error = ?error, reason_code = "SAFETY_INPUT_ERROR", "cron action dispatch blocked");
                                 let _ = crate::services::execution_log::log_error(
                                     &app_state.pg_pool,
                                     script.id,
                                     &script.device_id,
-                                    reason,
+                                    "SAFETY_INPUT_ERROR",
                                     Some("cron_trigger"),
                                     None,
                                 )

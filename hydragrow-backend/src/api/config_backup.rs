@@ -8,13 +8,11 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::api::config::sync_config_to_esp32;
 use crate::api::device_pairing::require_device_owner;
 use crate::api::middleware::auth::AuthContext;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
 use crate::metrics::BACKUP_RESTORE_TOTAL;
-use crate::models::config::{
-    DeviceConfig, DosingCalibration, SafetyConfig, SensorCalibration, WaterConfig, from_db_rows,
-};
 
 #[cfg(test)]
 async fn ensure_config_backup_test_schema(pool: &sqlx::PgPool) {
@@ -644,51 +642,6 @@ async fn apply_recipe(conn: &mut PgConnection, recipe: &Value) -> Result<(), Str
     Ok(())
 }
 
-async fn persist_restore_sync(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    configuration: &Value,
-    source_device_id: &str,
-    target_device_id: &str,
-) -> Result<i64, String> {
-    let mapped =
-        |table: &str| mapped_domain(configuration, table, source_device_id, target_device_id);
-
-    let device: DeviceConfig = serde_json::from_value(mapped("device_config")?)
-        .map_err(|e| format!("Invalid restored device_config: {e}"))?;
-    let water: WaterConfig = serde_json::from_value(mapped("water_config")?)
-        .map_err(|e| format!("Invalid restored water_config: {e}"))?;
-    let safety: SafetyConfig = serde_json::from_value(mapped("safety_config")?)
-        .map_err(|e| format!("Invalid restored safety_config: {e}"))?;
-    let dosing: DosingCalibration = serde_json::from_value(mapped("dosing_calibration")?)
-        .map_err(|e| format!("Invalid restored dosing_calibration: {e}"))?;
-    let sensor: SensorCalibration = serde_json::from_value(mapped("sensor_calibration")?)
-        .map_err(|e| format!("Invalid restored sensor_calibration: {e}"))?;
-
-    let version = crate::db::config_sync::next_version(tx, target_device_id)
-        .await
-        .map_err(|e| format!("Failed to allocate restore config version: {e}"))?;
-
-    let mut desired_controller =
-        serde_json::to_value(from_db_rows(&device, &water, &safety, &dosing, &sensor))
-            .map_err(|e| format!("Failed to serialize restored controller config: {e}"))?;
-    let mut desired_sensor = serde_json::to_value(&sensor)
-        .map_err(|e| format!("Failed to serialize restored sensor config: {e}"))?;
-    desired_controller["config_version"] = json!(version);
-    desired_sensor["config_version"] = json!(version);
-
-    crate::db::config_sync::upsert_desired(
-        &mut **tx,
-        target_device_id,
-        version,
-        &desired_controller,
-        &desired_sensor,
-    )
-    .await
-    .map_err(|e| format!("Failed to persist restore configuration sync: {e}"))?;
-
-    Ok(version)
-}
-
 pub async fn export_backup(
     path: web::Path<String>,
     req: HttpRequest,
@@ -858,26 +811,6 @@ pub async fn import_backup(
         return HttpResponse::Conflict().json(json!({"status": "rejected", "error": e}));
     }
 
-    let config_version = match persist_restore_sync(
-        &mut tx,
-        &artifact.configuration,
-        &source_device_id,
-        &target_device_id,
-    )
-    .await
-    {
-        Ok(version) => version,
-        Err(e) => {
-            error!(%target_device_id, error = %e, "Restore ConfigurationSync persistence failed; rolling back");
-            let _ = tx.rollback().await;
-            BACKUP_RESTORE_TOTAL
-                .with_label_values(&["restore", "rejected"])
-                .inc();
-            return HttpResponse::InternalServerError()
-                .json(json!({"status": "rejected", "error": "config_sync_persistence_failed"}));
-        }
-    };
-
     if let Err(e) = tx.commit().await {
         error!(%target_device_id, ?e, "Restore transaction commit failed");
         BACKUP_RESTORE_TOTAL
@@ -910,16 +843,33 @@ pub async fn import_backup(
         warn!(%target_device_id, ?e, "Restore committed but audit event could not be persisted");
     }
 
-    BACKUP_RESTORE_TOTAL
-        .with_label_values(&["restore", "applied_sync_pending"])
-        .inc();
-    HttpResponse::Ok().json(json!({
-        "status": "applied_sync_pending",
-        "device_id": target_device_id,
-        "source_device_id": source_device_id,
-        "config_version": config_version,
-        "remote_confirmation": "not_confirmed"
-    }))
+    // Persistent DB state is already committed. Remote sync is deliberately post-commit.
+    match sync_config_to_esp32(&app_state, &target_device_id).await {
+        Ok(()) => {
+            BACKUP_RESTORE_TOTAL
+                .with_label_values(&["restore", "applied_sync_pending"])
+                .inc();
+            HttpResponse::Ok().json(json!({
+                "status": "applied_sync_pending",
+                "device_id": target_device_id,
+                "source_device_id": source_device_id,
+                "remote_confirmation": "not_confirmed"
+            }))
+        }
+        Err(e) => {
+            warn!(%target_device_id, error = %e, "Restore committed but remote sync failed");
+            BACKUP_RESTORE_TOTAL
+                .with_label_values(&["restore", "applied_sync_failed"])
+                .inc();
+            HttpResponse::Ok().json(json!({
+                "status": "applied_sync_failed",
+                "device_id": target_device_id,
+                "source_device_id": source_device_id,
+                "persistent_config": "committed",
+                "remote_sync": "failed"
+            }))
+        }
+    }
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
@@ -1134,141 +1084,6 @@ mod tests {
 
         sqlx::query("DELETE FROM device_config WHERE device_id = $1")
             .bind(&temp_id)
-            .execute(&pool)
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test]
-    async fn postgres_restore_persists_sync_revision_in_same_transaction() {
-        let _ = dotenvy::dotenv();
-        let Ok(database_url) = std::env::var("DATABASE_URL") else {
-            return;
-        };
-        let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
-        ensure_config_backup_test_schema(&pool).await;
-
-        let source_id: Option<String> = sqlx::query_scalar(
-            "SELECT d.device_id FROM device_config d JOIN water_config w USING(device_id) JOIN safety_config s USING(device_id) JOIN sensor_calibration se USING(device_id) JOIN dosing_calibration dc USING(device_id) ORDER BY d.device_id LIMIT 1",
-        )
-        .fetch_optional(&pool)
-        .await
-        .unwrap();
-        let Some(source_id) = source_id else {
-            return;
-        };
-
-        let mut export_conn = pool.acquire().await.unwrap();
-        let configuration = fetch_export_configuration(&mut export_conn, &source_id)
-            .await
-            .unwrap();
-        let artifact = build_artifact(configuration, source_id.clone());
-        let target_id = format!("p1-5-sync-{}", Uuid::new_v4());
-
-        let mut tx = pool.begin().await.unwrap();
-        for table in CONFIG_TABLES {
-            let mapped =
-                mapped_domain(&artifact.configuration, table, &source_id, &target_id).unwrap();
-            apply_domain(&mut *tx, table, &mapped).await.unwrap();
-        }
-        let version =
-            persist_restore_sync(&mut tx, &artifact.configuration, &source_id, &target_id)
-                .await
-                .unwrap();
-        tx.commit().await.unwrap();
-
-        let sync = crate::db::config_sync::get(&pool, &target_id)
-            .await
-            .unwrap()
-            .expect("restore sync row must be durable");
-        let mapped_device: DeviceConfig = serde_json::from_value(
-            mapped_domain(
-                &artifact.configuration,
-                "device_config",
-                &source_id,
-                &target_id,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        let mapped_water: WaterConfig = serde_json::from_value(
-            mapped_domain(
-                &artifact.configuration,
-                "water_config",
-                &source_id,
-                &target_id,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        let mapped_safety: SafetyConfig = serde_json::from_value(
-            mapped_domain(
-                &artifact.configuration,
-                "safety_config",
-                &source_id,
-                &target_id,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        let mapped_dosing: DosingCalibration = serde_json::from_value(
-            mapped_domain(
-                &artifact.configuration,
-                "dosing_calibration",
-                &source_id,
-                &target_id,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        let mapped_sensor: SensorCalibration = serde_json::from_value(
-            mapped_domain(
-                &artifact.configuration,
-                "sensor_calibration",
-                &source_id,
-                &target_id,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        let mut expected_controller = serde_json::to_value(from_db_rows(
-            &mapped_device,
-            &mapped_water,
-            &mapped_safety,
-            &mapped_dosing,
-            &mapped_sensor,
-        ))
-        .unwrap();
-        let mut expected_sensor = serde_json::to_value(&mapped_sensor).unwrap();
-        expected_controller["config_version"] = json!(version);
-        expected_sensor["config_version"] = json!(version);
-
-        assert_eq!(sync.config_version, version);
-        assert_eq!(sync.controller_state, crate::db::config_sync::PENDING);
-        assert_eq!(sync.sensor_state, crate::db::config_sync::PENDING);
-        assert_eq!(sync.desired_controller_config, expected_controller);
-        assert_eq!(sync.desired_sensor_config, expected_sensor);
-
-        let mut rollback_tx = pool.begin().await.unwrap();
-        let next_version = persist_restore_sync(
-            &mut rollback_tx,
-            &artifact.configuration,
-            &source_id,
-            &target_id,
-        )
-        .await
-        .unwrap();
-        assert_eq!(next_version, version + 1);
-        rollback_tx.rollback().await.unwrap();
-
-        let sync_after_rollback = crate::db::config_sync::get(&pool, &target_id)
-            .await
-            .unwrap()
-            .expect("original restore sync row must remain");
-        assert_eq!(sync_after_rollback.config_version, version);
-
-        sqlx::query("DELETE FROM device_config WHERE device_id = $1")
-            .bind(&target_id)
             .execute(&pool)
             .await
             .unwrap();

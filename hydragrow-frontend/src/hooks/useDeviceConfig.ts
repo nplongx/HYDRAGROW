@@ -41,17 +41,3 @@ export function useDeviceConfig(deviceIdOverride?: string | null) {
     enabled: Boolean(deviceId),
   });
 }
-
-export function useConfigurationSyncStatus(deviceIdOverride?: string | null) {
-  const stationContext = useOptionalStationContext();
-  const selectedDeviceId = stationContext?.selectedDeviceId ?? null;
-  const deviceId = deviceIdOverride ?? selectedDeviceId;
-
-  return useQuery({
-    queryKey: deviceId ? queryKeys.configSync(deviceId) : ["device-config-sync", null],
-    queryFn: ({ signal }) => configApi.syncStatus(deviceId!, signal),
-    enabled: Boolean(deviceId),
-    staleTime: 0,
-    refetchInterval: 2000,
-  });
-}

@@ -12,7 +12,7 @@ use crate::AppState;
 use crate::api::middleware::auth::AuthContext;
 use crate::api::mqtt_utils::publish_command;
 use crate::db::postgres::{NewSystemEventRecord, insert_system_event};
-use crate::models::config::DosingCalibration;
+use crate::models::config::{DosingCalibration, SafetyConfig};
 use crate::services::durable_command::{
     NewCommand, create_command_with_state, list_lifecycle_events, mark_publish_attempt,
     schedule_publish_retry_with_state, transition_with_state,
@@ -250,11 +250,7 @@ pub async fn control_pump(
             &auth,
             &req_data.action,
             &pump_name,
-            if resp.status() == actix_web::http::StatusCode::SERVICE_UNAVAILABLE {
-                "denied_safety_data"
-            } else {
-                "denied_safety_limit"
-            },
+            "denied_safety_limit",
             None,
             Some(duration_sec),
             Some(pwm),
@@ -665,32 +661,27 @@ async fn validate_manual_dose_safety(
         return Ok(());
     };
 
-    let dosing_cfg = load_dosing_calibration(pg_pool, device_id).await.map_err(|e| {
+    let dosing_cfg = load_dosing_calibration(pg_pool, device_id)
+        .await
+        .map_err(|e| {
             error!(
                 "Không thể tải dosing_calibration cho kiểm tra an toàn manual [{}]: {:?}",
                 device_id, e
             );
-            let reason = match &e {
-                crate::services::safety_data::SafetyDataError::Missing => "DOSING_CALIBRATION_MISSING",
-                crate::services::safety_data::SafetyDataError::Database => "DOSING_CALIBRATION_DB_ERROR",
-                crate::services::safety_data::SafetyDataError::Invalid => "DOSING_CALIBRATION_INVALID",
-            };
-            HttpResponse::ServiceUnavailable().json(json!({
-                "error": {"code": "safety_data_unavailable", "message": "Safety data unavailable", "details": {"reason": reason}}
-            }))
+            HttpResponse::InternalServerError().json(json!({"error": "DB Error"}))
         })?;
 
     let capacity_ml_per_sec = capacity_ml_per_sec(&dosing_cfg, normalized_pump);
     let estimated_ml = capacity_ml_per_sec * (pwm as f32 / 100.0) * duration_sec as f32;
 
-    let server_max = load_max_dose_per_cycle(pg_pool, device_id).await.map_err(|e| {
+    let server_max = load_max_dose_per_cycle(pg_pool, device_id)
+        .await
+        .map_err(|e| {
             error!(
                 "Không thể tải safety_config cho kiểm tra an toàn manual [{}]: {:?}",
                 device_id, e
             );
-            HttpResponse::ServiceUnavailable().json(json!({
-                "error": {"code": "safety_data_unavailable", "message": "Safety data unavailable", "details": {"reason": e.reason_code()}}
-            }))
+            HttpResponse::InternalServerError().json(json!({"error": "DB Error"}))
         })?;
 
     let max_allowed_ml = compute_effective_max_allowed_ml(manual_max_allowed_ml, server_max);
@@ -716,28 +707,30 @@ async fn validate_manual_dose_safety(
 async fn load_dosing_calibration(
     pg_pool: &PgPool,
     device_id: &str,
-) -> Result<DosingCalibration, crate::services::safety_data::SafetyDataError> {
+) -> anyhow::Result<DosingCalibration> {
     let dosing_cfg_res = sqlx::query_as::<_, DosingCalibration>(
         "SELECT * FROM dosing_calibration WHERE device_id = $1",
     )
     .bind(device_id)
     .fetch_optional(pg_pool)
-    .await;
-    crate::services::safety_data::classify_calibration(dosing_cfg_res).map_err(
-        |reason| match reason {
-            "DOSING_CALIBRATION_MISSING" => crate::services::safety_data::SafetyDataError::Missing,
-            "DOSING_CALIBRATION_INVALID" => crate::services::safety_data::SafetyDataError::Invalid,
-            _ => crate::services::safety_data::SafetyDataError::Database,
-        },
-    )
+    .await?;
+
+    dosing_cfg_res.ok_or_else(|| anyhow::anyhow!("Dosing calibration not found for {}", device_id))
 }
 
-async fn load_max_dose_per_cycle(
-    pg_pool: &PgPool,
-    device_id: &str,
-) -> Result<f32, crate::services::safety_data::SafetyDataError> {
-    let safety_cfg_res = crate::db::postgres::fetch_safety_config(pg_pool, device_id).await;
-    Ok(crate::services::safety_data::classify_safety_config(safety_cfg_res)?.max_dose_per_cycle)
+async fn load_max_dose_per_cycle(pg_pool: &PgPool, device_id: &str) -> anyhow::Result<f32> {
+    let safety_cfg_res =
+        sqlx::query_as::<_, SafetyConfig>("SELECT * FROM safety_config WHERE device_id = $1")
+            .bind(device_id)
+            .fetch_optional(pg_pool)
+            .await?;
+
+    Ok(safety_cfg_res
+        .unwrap_or_else(|| SafetyConfig {
+            device_id: device_id.to_string(),
+            ..Default::default()
+        })
+        .max_dose_per_cycle)
 }
 
 pub(crate) fn compute_effective_max_allowed_ml(

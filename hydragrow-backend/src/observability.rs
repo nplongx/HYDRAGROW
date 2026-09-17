@@ -191,17 +191,41 @@ pub async fn liveness() -> impl Responder {
     HttpResponse::Ok().json(serde_json::json!({"status":"ok"}))
 }
 
-pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
-    let postgres = sqlx::query_scalar::<_, i32>("SELECT 1")
-        .fetch_one(&state.pg_pool)
-        .await
-        .is_ok();
-    let influx = state.influx_client.health().await.is_ok();
-    let mqtt = state.mqtt_connected.load(Ordering::Relaxed);
-    let event_bus = true;
-    let configuration_sync_worker = "not_configured";
-    let command_reconciliation_worker = state.command_reconciliation_worker.load(Ordering::Relaxed);
-    let ready = postgres && influx && mqtt && event_bus && command_reconciliation_worker;
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+struct SynchronizationHealth {
+    worker_ready: bool,
+    transport_ready: bool,
+    health: &'static str,
+}
+
+fn synchronization_health(worker_ready: bool, transport_ready: bool) -> SynchronizationHealth {
+    let health = match (worker_ready, transport_ready) {
+        (true, true) => "healthy",
+        (true, false) => "blocked",
+        (false, _) => "unavailable",
+    };
+    SynchronizationHealth {
+        worker_ready,
+        transport_ready,
+        health,
+    }
+}
+
+fn readiness_body(
+    postgres: bool,
+    influx: bool,
+    mqtt: bool,
+    event_bus: bool,
+    configuration_sync_worker: bool,
+    command_reconciliation_worker: bool,
+) -> (bool, serde_json::Value) {
+    let ready = postgres
+        && influx
+        && mqtt
+        && event_bus
+        && configuration_sync_worker
+        && command_reconciliation_worker;
+    let synchronization = synchronization_health(configuration_sync_worker, mqtt);
     let body = serde_json::json!({
         "status": if ready { "ready" } else { "not_ready" },
         "dependencies": {
@@ -211,8 +235,30 @@ pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
             "event_websocket_fanout": event_bus,
             "configuration_synchronization_worker": configuration_sync_worker,
             "command_reconciliation_worker": command_reconciliation_worker
-        }
+        },
+        "synchronization": synchronization
     });
+    (ready, body)
+}
+
+pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
+    let postgres = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&state.pg_pool)
+        .await
+        .is_ok();
+    let influx = state.influx_client.health().await.is_ok();
+    let mqtt = state.mqtt_connected.load(Ordering::Relaxed);
+    let event_bus = true;
+    let configuration_sync_worker = state.configuration_sync_worker.load(Ordering::Relaxed);
+    let command_reconciliation_worker = state.command_reconciliation_worker.load(Ordering::Relaxed);
+    let (ready, body) = readiness_body(
+        postgres,
+        influx,
+        mqtt,
+        event_bus,
+        configuration_sync_worker,
+        command_reconciliation_worker,
+    );
     if ready {
         HttpResponse::Ok().json(body)
     } else {
@@ -266,5 +312,97 @@ mod tests {
         let ctx = request_context(&req);
         assert_eq!(ctx.request_id, ctx.correlation_id);
         assert!(valid_id(&ctx.request_id));
+    }
+
+    #[test]
+    fn readiness_body_reports_healthy_dependencies_and_sync_health() {
+        let (ready, body) = readiness_body(true, true, true, true, true, true);
+        assert!(ready);
+        assert_eq!(body["status"], "ready");
+        assert_eq!(body["dependencies"]["postgresql"], true);
+        assert_eq!(
+            body["dependencies"]["configuration_synchronization_worker"],
+            true
+        );
+        assert_eq!(body["synchronization"]["worker_ready"], true);
+        assert_eq!(body["synchronization"]["transport_ready"], true);
+        assert_eq!(body["synchronization"]["health"], "healthy");
+    }
+
+    #[test]
+    fn every_required_dependency_can_make_readiness_not_ready() {
+        let dependencies = [
+            (false, true, true, true, true, true, "postgresql"),
+            (true, false, true, true, true, true, "influxdb"),
+            (true, true, false, true, true, true, "mqtt"),
+            (
+                true,
+                true,
+                true,
+                false,
+                true,
+                true,
+                "event_websocket_fanout",
+            ),
+            (
+                true,
+                true,
+                true,
+                true,
+                false,
+                true,
+                "configuration_synchronization_worker",
+            ),
+            (
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+                "command_reconciliation_worker",
+            ),
+        ];
+
+        for (postgres, influx, mqtt, event_bus, config_worker, command_worker, dependency) in
+            dependencies
+        {
+            let (ready, body) = readiness_body(
+                postgres,
+                influx,
+                mqtt,
+                event_bus,
+                config_worker,
+                command_worker,
+            );
+            assert!(!ready, "{dependency} must gate readiness");
+            assert_eq!(body["status"], "not_ready");
+            assert_eq!(body["dependencies"][dependency], false);
+        }
+    }
+
+    #[test]
+    fn synchronization_health_distinguishes_worker_and_transport() {
+        assert_eq!(synchronization_health(true, true).health, "healthy");
+        assert_eq!(synchronization_health(true, false).health, "blocked");
+        assert_eq!(synchronization_health(false, true).health, "unavailable");
+        assert_eq!(synchronization_health(false, false).health, "unavailable");
+    }
+
+    #[test]
+    fn pending_or_failed_device_work_does_not_appear_in_readiness_contract() {
+        let (ready, body) = readiness_body(true, true, true, true, true, true);
+        assert!(ready);
+        assert_eq!(body["status"], "ready");
+        assert!(body.get("pending").is_none());
+        assert!(body.get("failed").is_none());
+    }
+
+    #[actix_web::test]
+    async fn liveness_does_not_probe_dependencies() {
+        let response = liveness()
+            .await
+            .respond_to(&actix_test::TestRequest::get().to_http_request());
+        assert_eq!(response.status(), actix_web::http::StatusCode::OK);
     }
 }

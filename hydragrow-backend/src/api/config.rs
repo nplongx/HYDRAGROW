@@ -1,8 +1,6 @@
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use hydragrow_shared::ControllerConfig;
-use hydragrow_shared::topics::topic_controller_config;
-use rumqttc::QoS;
 use serde_json::json;
 use tracing::{error, info, instrument};
 
@@ -149,69 +147,64 @@ pub async fn sync_config_to_esp32(
     app_state: &web::Data<AppState>,
     device_id: &str,
 ) -> Result<(), String> {
-    // 1. GỬI CẤU HÌNH TỔNG HỢP CHO CONTROLLER NODE
+    // Compatibility entry point for legacy mutation/restore paths. The actual
+    // side effect is now durable: desired state is recorded in PostgreSQL and
+    // the background worker owns MQTT delivery/reconciliation.
     let payload = fetch_unified_config_concurrently(&app_state.pg_pool, device_id).await?;
-    let mqtt_topic_controller = topic_controller_config(device_id);
-    let mqtt_bytes_controller =
-        serde_json::to_vec(&payload).map_err(|e| format!("Lỗi serialize payload: {:?}", e))?;
+    let desired_controller = serde_json::to_value(&payload)
+        .map_err(|e| format!("Lỗi serialize desired controller config: {e}"))?;
 
-    app_state
-        .mqtt_client
-        .publish(
-            &mqtt_topic_controller,
-            QoS::AtLeastOnce,
-            true,
-            mqtt_bytes_controller,
-        )
-        .await
-        .map_err(|e| format!("Lỗi gửi MQTT Controller: {:?}", e))?;
-
-    // 2. GỬI CẤU HÌNH CẢM BIẾN RIÊNG CHO SENSOR NODE
-    let sens = sqlx::query_as::<_, SensorCalibration>(
+    let sensor_config = sqlx::query_as::<_, SensorCalibration>(
         "SELECT * FROM sensor_calibration WHERE device_id = $1",
     )
     .bind(device_id)
     .fetch_optional(&app_state.pg_pool)
     .await
-    .map_err(|e| format!("Lỗi đọc Sensor Config: {:?}", e))?;
+    .map_err(|e| format!("Lỗi đọc Sensor Config: {e}"))?
+    .ok_or_else(|| "Sensor config not found".to_string())?;
 
-    if let Some(sensor_config) = sens {
-        let sensor_payload = json!({
-            "ph_v7":                   sensor_config.ph_v7,
-            "ph_v4":                   sensor_config.ph_v4,
-            "ph_v10":                  sensor_config.ph_v10,
-            "ph_calibration_mode":     sensor_config.ph_calibration_mode,
-            "ec_factor":               sensor_config.ec_factor,
-            "ec_offset":               sensor_config.ec_offset,
-            "temp_offset":             sensor_config.temp_offset,
-            "temp_compensation_beta":  sensor_config.temp_compensation_beta,
-            "moving_average_window":   sensor_config.moving_average_window,
-            "publish_interval":        sensor_config.publish_interval,
-            "enable_ph_sensor":        sensor_config.enable_ph_sensor,
-            "enable_ec_sensor":        sensor_config.enable_ec_sensor,
-            "enable_temp_sensor":      sensor_config.enable_temp_sensor,
-            "enable_water_level_sensor": sensor_config.enable_water_level_sensor,
-        });
+    let mut desired_sensor = json!({
+        "ph_v7": sensor_config.ph_v7,
+        "ph_v4": sensor_config.ph_v4,
+        "ph_v10": sensor_config.ph_v10,
+        "ph_calibration_mode": sensor_config.ph_calibration_mode,
+        "ec_factor": sensor_config.ec_factor,
+        "ec_offset": sensor_config.ec_offset,
+        "temp_offset": sensor_config.temp_offset,
+        "temp_compensation_beta": sensor_config.temp_compensation_beta,
+        "moving_average_window": sensor_config.moving_average_window,
+        "publish_interval": sensor_config.publish_interval,
+        "enable_ph_sensor": sensor_config.enable_ph_sensor,
+        "enable_ec_sensor": sensor_config.enable_ec_sensor,
+        "enable_temp_sensor": sensor_config.enable_temp_sensor,
+        "enable_water_level_sensor": sensor_config.enable_water_level_sensor,
+    });
 
-        let sensor_bytes = serde_json::to_vec(&sensor_payload)
-            .map_err(|e| format!("Lỗi serialize sensor config: {:?}", e))?;
+    let mut tx = app_state
+        .pg_pool
+        .begin()
+        .await
+        .map_err(|e| format!("Lỗi bắt đầu config sync transaction: {e}"))?;
+    let version = crate::db::config_sync::next_version(&mut tx, device_id)
+        .await
+        .map_err(|e| format!("Lỗi cấp config version: {e}"))?;
+    desired_sensor["config_version"] = json!(version);
+    let mut desired_controller = desired_controller;
+    desired_controller["config_version"] = json!(version);
+    crate::db::config_sync::upsert_desired(
+        &mut *tx,
+        device_id,
+        version,
+        &desired_controller,
+        &desired_sensor,
+    )
+    .await
+    .map_err(|e| format!("Lỗi lưu configuration sync: {e}"))?;
+    tx.commit()
+        .await
+        .map_err(|e| format!("Lỗi commit configuration sync: {e}"))?;
 
-        app_state
-            .mqtt_client
-            .publish(
-                hydragrow_shared::topics::topic_sensors_config(device_id),
-                QoS::AtLeastOnce,
-                true, // retain = true để sensor node nhận khi reconnect
-                sensor_bytes,
-            )
-            .await
-            .map_err(|e| format!("Lỗi gửi MQTT Sensor Config: {:?}", e))?;
-    }
-
-    info!(
-        "✅ Đã đồng bộ cấu hình FULL xuống Controller Node & Sensor Node ({})",
-        device_id
-    );
+    info!(device_id = %device_id, config_version = version, "Đã ghi desired configuration vào durable sync queue");
     Ok(())
 }
 
@@ -477,6 +470,30 @@ pub async fn update_unified_config(
         return HttpResponse::BadRequest().json(json!({"error": msg}));
     }
 
+    let desired_controller = from_db_rows(
+        &payload.device_config,
+        &payload.water_config,
+        &payload.safety_config,
+        &payload.dosing_calibration,
+        &payload.sensor_calibration,
+    );
+    let desired_sensor = json!({
+        "ph_v7": payload.sensor_calibration.ph_v7,
+        "ph_v4": payload.sensor_calibration.ph_v4,
+        "ph_v10": payload.sensor_calibration.ph_v10,
+        "ph_calibration_mode": payload.sensor_calibration.ph_calibration_mode,
+        "ec_factor": payload.sensor_calibration.ec_factor,
+        "ec_offset": payload.sensor_calibration.ec_offset,
+        "temp_offset": payload.sensor_calibration.temp_offset,
+        "temp_compensation_beta": payload.sensor_calibration.temp_compensation_beta,
+        "moving_average_window": payload.sensor_calibration.moving_average_window,
+        "publish_interval": payload.sensor_calibration.publish_interval,
+        "enable_ph_sensor": payload.sensor_calibration.enable_ph_sensor,
+        "enable_ec_sensor": payload.sensor_calibration.enable_ec_sensor,
+        "enable_temp_sensor": payload.sensor_calibration.enable_temp_sensor,
+        "enable_water_level_sensor": payload.sensor_calibration.enable_water_level_sensor,
+    });
+
     let mut tx = match app_state.pg_pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -508,6 +525,40 @@ pub async fn update_unified_config(
         error!("Failed to update dosing config: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error: Dosing"}));
     }
+    let config_version = match crate::db::config_sync::next_version(&mut tx, &device_id).await {
+        Ok(version) => version,
+        Err(e) => {
+            error!("Failed to allocate configuration version: {:?}", e);
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "DB Error: Configuration Version"}));
+        }
+    };
+    let mut desired_controller = match serde_json::to_value(&desired_controller) {
+        Ok(value) => value,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": format!("serialize desired controller config: {e}")}));
+        }
+    };
+    desired_controller["config_version"] = json!(config_version);
+    let mut desired_sensor = desired_sensor;
+    desired_sensor["config_version"] = json!(config_version);
+    if let Err(e) = crate::db::config_sync::upsert_desired(
+        &mut *tx,
+        &device_id,
+        config_version,
+        &desired_controller,
+        &desired_sensor,
+    )
+    .await
+    {
+        error!(
+            "Failed to persist configuration synchronization state: {:?}",
+            e
+        );
+        return HttpResponse::InternalServerError()
+            .json(json!({"error": "DB Error: Configuration Sync"}));
+    }
     if let Err(e) = tx.commit().await {
         error!("Failed to commit unified config transaction: {:?}", e);
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
@@ -534,15 +585,99 @@ pub async fn update_unified_config(
     };
     let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
 
-    if let Err(e) = sync_config_to_esp32(&app_state, &device_id).await {
-        error!("Lưu DB thành công nhưng lỗi MQTT: {}", e);
-        return HttpResponse::Accepted().json(json!({
-            "status": "partial_success",
-            "message": "Đã lưu CSDL nhưng không thể đồng bộ tới thiết bị do mất kết nối mạng."
-        }));
+    HttpResponse::Accepted().json(json!({
+        "status": "pending",
+        "config_version": config_version,
+        "message": "Đã lưu cấu hình bền vững; đồng bộ tới thiết bị đang chờ worker xác nhận."
+    }))
+}
+
+#[derive(serde::Serialize)]
+struct ConfigurationSyncTargetStatus {
+    state: String,
+    attempts: i32,
+    last_attempt_at: Option<DateTime<Utc>>,
+    applied_at: Option<DateTime<Utc>>,
+}
+
+#[derive(serde::Serialize)]
+struct ConfigurationSyncStatusResponse {
+    device_id: String,
+    config_version: i64,
+    controller: ConfigurationSyncTargetStatus,
+    sensor: ConfigurationSyncTargetStatus,
+    overall_state: String,
+    last_error: Option<String>,
+    updated_at: DateTime<Utc>,
+}
+
+fn configuration_sync_overall_state(controller: &str, sensor: &str) -> &'static str {
+    if controller == crate::db::config_sync::APPLIED && sensor == crate::db::config_sync::APPLIED {
+        "applied"
+    } else if controller == crate::db::config_sync::FAILED
+        || sensor == crate::db::config_sync::FAILED
+    {
+        "failed"
+    } else if controller == crate::db::config_sync::PENDING
+        || sensor == crate::db::config_sync::PENDING
+    {
+        "pending"
+    } else {
+        "published"
+    }
+}
+
+#[instrument(skip(app_state))]
+pub async fn get_configuration_sync_status(
+    path: web::Path<String>,
+    app_state: web::Data<AppState>,
+    http_req: HttpRequest,
+) -> impl Responder {
+    if let Err(resp) = require_read_telemetry_scope(&http_req) {
+        return resp;
+    }
+    let device_id = path.into_inner();
+    if let Err(resp) =
+        crate::api::device_pairing::require_device_owner(&http_req, &app_state, &device_id).await
+    {
+        return resp;
     }
 
-    HttpResponse::Ok().json(json!({"status": "success"}))
+    match crate::db::config_sync::get(&app_state.pg_pool, &device_id).await {
+        Ok(Some(sync)) => HttpResponse::Ok().json(ConfigurationSyncStatusResponse {
+            device_id: sync.device_id,
+            config_version: sync.config_version,
+            overall_state: configuration_sync_overall_state(
+                &sync.controller_state,
+                &sync.sensor_state,
+            )
+            .to_string(),
+            controller: ConfigurationSyncTargetStatus {
+                state: sync.controller_state,
+                attempts: sync.controller_attempts,
+                last_attempt_at: sync.controller_last_attempt_at,
+                applied_at: sync.controller_applied_at,
+            },
+            sensor: ConfigurationSyncTargetStatus {
+                state: sync.sensor_state,
+                attempts: sync.sensor_attempts,
+                last_attempt_at: sync.sensor_last_attempt_at,
+                applied_at: sync.sensor_applied_at,
+            },
+            last_error: sync.last_error,
+            updated_at: sync.updated_at,
+        }),
+        Ok(None) => HttpResponse::NotFound().json(json!({
+            "error": "Configuration synchronization state not found",
+            "reason": "configuration_sync_missing"
+        })),
+        Err(error) => {
+            error!(device_id = %device_id, error = ?error, "Failed to read configuration synchronization state");
+            HttpResponse::InternalServerError().json(json!({
+                "error": "Failed to read configuration synchronization state"
+            }))
+        }
+    }
 }
 
 #[instrument(skip(app_state))]
@@ -728,7 +863,7 @@ pub async fn update_config(
     let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
 
     match sync_config_to_esp32(&app_state, &device_id).await {
-        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Ok(()) => HttpResponse::Accepted().json(json!({"status": "pending"})),
         Err(e) => {
             error!("Lưu DB thành công nhưng lỗi đồng bộ config: {}", e);
             HttpResponse::Accepted().json(json!({
@@ -787,7 +922,7 @@ pub async fn update_water_config(
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     match sync_config_to_esp32(&app_state, &device_id).await {
-        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Ok(()) => HttpResponse::Accepted().json(json!({"status": "pending"})),
         Err(e) => {
             error!("Lưu water config thành công nhưng lỗi đồng bộ: {}", e);
             HttpResponse::Accepted().json(json!({
@@ -869,7 +1004,7 @@ pub async fn update_safety_config(
     let _ = insert_system_event(&app_state.pg_pool, &audit_event).await;
 
     match sync_config_to_esp32(&app_state, &device_id).await {
-        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Ok(()) => HttpResponse::Accepted().json(json!({"status": "pending"})),
         Err(e) => {
             error!("Lưu safety config thành công nhưng lỗi đồng bộ: {}", e);
             HttpResponse::Accepted().json(json!({
@@ -929,7 +1064,7 @@ pub async fn update_sensor_calibration(
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     match sync_config_to_esp32(&app_state, &device_id).await {
-        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Ok(()) => HttpResponse::Accepted().json(json!({"status": "pending"})),
         Err(e) => {
             error!("Lưu sensor config thành công nhưng lỗi đồng bộ: {}", e);
             HttpResponse::Accepted().json(json!({
@@ -1165,7 +1300,7 @@ pub async fn update_dosing_calibration(
         return HttpResponse::InternalServerError().json(json!({"error": "DB Error"}));
     }
     match sync_config_to_esp32(&app_state, &device_id).await {
-        Ok(()) => HttpResponse::Ok().json(json!({"status": "success"})),
+        Ok(()) => HttpResponse::Accepted().json(json!({"status": "pending"})),
         Err(e) => {
             error!("Lưu dosing config thành công nhưng lỗi đồng bộ: {}", e);
             HttpResponse::Accepted().json(json!({
@@ -1179,6 +1314,7 @@ pub async fn update_dosing_calibration(
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/config/unified", web::put().to(update_unified_config))
         .route("/config/unified", web::get().to(get_unified_device_config))
+        .route("/config/sync", web::get().to(get_configuration_sync_status))
         .route("/config", web::get().to(get_config))
         .route("/config", web::put().to(update_config))
         // Canonical config resource paths. Keep the legacy `/safety` GET and
@@ -1349,6 +1485,52 @@ mod tests {
             // Both statuses prove the canonical route matched before business logic.
             assert_eq!(response.status(), expected);
         }
+    }
+
+    #[test]
+    fn configuration_sync_overall_state_is_derived_from_both_targets() {
+        assert_eq!(
+            configuration_sync_overall_state("applied", "applied"),
+            "applied"
+        );
+        assert_eq!(
+            configuration_sync_overall_state("failed", "applied"),
+            "failed"
+        );
+        assert_eq!(
+            configuration_sync_overall_state("applied", "failed"),
+            "failed"
+        );
+        assert_eq!(
+            configuration_sync_overall_state("pending", "applied"),
+            "pending"
+        );
+        assert_eq!(
+            configuration_sync_overall_state("published", "pending"),
+            "pending"
+        );
+        assert_eq!(
+            configuration_sync_overall_state("published", "applied"),
+            "published"
+        );
+    }
+
+    #[actix_web::test]
+    async fn configuration_sync_status_route_is_registered() {
+        use actix_web::{App, test};
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(crate::api::test_support::test_app_state()))
+                .service(web::scope("/devices/{device_id}").configure(init_routes)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/devices/device-1/config/sync")
+            .to_request();
+        let response = test::call_service(&app, req).await;
+
+        assert_eq!(response.status(), actix_web::http::StatusCode::FORBIDDEN);
     }
 
     #[actix_web::test]

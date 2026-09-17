@@ -2,6 +2,7 @@ export const queryKeys = {
   devices: () => ['devices'] as const,
   device: (deviceId: string) => ['device', deviceId] as const,
   config: (deviceId: string) => ['device-config', deviceId] as const,
+  configSync: (deviceId: string) => ['device-config-sync', deviceId] as const,
   telemetry: (deviceId: string, range?: unknown) => ['device-telemetry', deviceId, ...(range === undefined ? [] : [range])] as const,
   analyticsHealth: (deviceId: string) => ['device-health', deviceId] as const,
   seasons: (deviceId: string) => ['seasons', deviceId] as const,

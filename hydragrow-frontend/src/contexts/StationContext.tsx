@@ -9,6 +9,10 @@ import {
   type ReactNode,
 } from "react";
 import { apiGet } from "../lib/apiClient";
+import { configApi } from "../api/config";
+import { queryKeys } from "../api/queryKeys";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ConfigurationSyncState } from "../types/models";
 import { getItem, removeItem, setItem } from "../platform/storage";
 import { loadAppSettings } from "../platform/settings";
 import type { OwnedDevice } from "../types/models";
@@ -33,6 +37,15 @@ export interface StationContextValue {
   switchDevice: (deviceId: string) => void;
   clearSelection: () => void;
   refreshAvailableDevices: () => Promise<OwnedDevice[] | null>;
+  configurationSync?: {
+    status: ConfigurationSyncState | null;
+    version: number | null;
+    controller: ConfigurationSyncState | null;
+    sensor: ConfigurationSyncState | null;
+    error: string | null;
+    isLoading: boolean;
+    refresh: () => Promise<unknown>;
+  };
 }
 
 const StationContext = createContext<StationContextValue | null>(null);
@@ -54,6 +67,17 @@ export function StationProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
   const initialLoadDoneRef = useRef(false);
   const requestSequenceRef = useRef(0);
+  const queryClient = useQueryClient();
+  const configurationSyncQuery = useQuery({
+    queryKey: selectedDeviceId
+      ? queryKeys.configSync(selectedDeviceId)
+      : ["device-config-sync", null],
+    queryFn: ({ signal }) => configApi.syncStatus(selectedDeviceId!, signal),
+    enabled: Boolean(selectedDeviceId),
+    staleTime: 0,
+    refetchInterval: 2000,
+  });
+
 
   const persistSelection = useCallback((deviceId: string | null) => {
     const operation =
@@ -110,9 +134,17 @@ export function StationProvider({ children }: { children: ReactNode }) {
       const devices = await refreshAvailableDevices();
       if (cancelled) return;
 
-      if (!devices) return;
-
       let persisted = await getItem<string>(STATION_SELECTION_STORAGE_KEY);
+      if (!devices) {
+        const configured = (await loadAppSettings())?.device_id?.trim() || null;
+        if (configured) {
+          persistSelection(configured);
+          setSelectedDeviceId(configured);
+          setStatus("Selected");
+        }
+        return;
+      }
+
       if (!persisted) {
         const legacySettings = await loadAppSettings();
         persisted = legacySettings?.device_id?.trim() || null;
@@ -191,6 +223,18 @@ export function StationProvider({ children }: { children: ReactNode }) {
     [availableDevices, selectedDeviceId],
   );
 
+  const configurationSync = useMemo(() => ({
+    status: configurationSyncQuery.data?.overall_state ?? null,
+    version: configurationSyncQuery.data?.config_version ?? null,
+    controller: configurationSyncQuery.data?.controller?.state ?? null,
+    sensor: configurationSyncQuery.data?.sensor?.state ?? null,
+    error: configurationSyncQuery.data?.last_error ?? null,
+    isLoading: configurationSyncQuery.isLoading,
+    refresh: () => queryClient.invalidateQueries({
+      queryKey: selectedDeviceId ? queryKeys.configSync(selectedDeviceId) : ["device-config-sync", null],
+    }),
+  }), [configurationSyncQuery.data, configurationSyncQuery.isLoading, queryClient, selectedDeviceId]);
+
   const value = useMemo<StationContextValue>(
     () => ({
       status,
@@ -202,6 +246,7 @@ export function StationProvider({ children }: { children: ReactNode }) {
       switchDevice: selectDevice,
       clearSelection,
       refreshAvailableDevices,
+      configurationSync,
     }),
     [
       status,
@@ -212,6 +257,7 @@ export function StationProvider({ children }: { children: ReactNode }) {
       selectDevice,
       clearSelection,
       refreshAvailableDevices,
+      configurationSync,
     ],
   );
 

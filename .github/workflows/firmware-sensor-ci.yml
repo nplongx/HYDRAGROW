@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - 'ESP32-C3-SENSOR-NODE/**'
+      - 'schema/contracts/**'
       - '.github/workflows/firmware-sensor-ci.yml'
   pull_request:
     paths:
       - 'ESP32-C3-SENSOR-NODE/**'
+      - 'schema/contracts/**'
       - '.github/workflows/firmware-sensor-ci.yml'
 
 jobs:

@@ -185,6 +185,26 @@ pub async fn get_safety_config(pool: &PgPool, device_id: &str) -> Result<SafetyC
     Ok(config)
 }
 
+pub async fn fetch_safety_config(
+    pool: &PgPool,
+    device_id: &str,
+) -> Result<Option<SafetyConfig>, sqlx::Error> {
+    sqlx::query_as::<_, SafetyConfig>(
+        r#"
+        SELECT
+            device_id, max_ec_limit, min_ec_limit, min_ph_limit, max_ph_limit, max_ec_delta, max_ph_delta,
+            max_dose_per_cycle, cooldown_sec, max_dose_per_hour, water_level_critical_min,
+            max_refill_cycles_per_hour, max_drain_cycles_per_hour, max_refill_duration_sec,
+            max_drain_duration_sec, min_temp_limit, max_temp_limit, emergency_shutdown,
+            ec_ack_threshold, ph_ack_threshold, water_ack_threshold, last_updated
+        FROM safety_config WHERE device_id = $1
+        "#,
+    )
+    .bind(device_id)
+    .fetch_optional(pool)
+    .await
+}
+
 #[instrument(skip(executor, config))]
 pub async fn upsert_safety_config(
     executor: impl Executor<'_, Database = sqlx::Postgres>,

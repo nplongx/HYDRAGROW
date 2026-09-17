@@ -86,6 +86,140 @@ pub fn fault_all_outputs_off(result: &mut TickResult) {
     result.delta.reset_active_actors = true;
 }
 
+#[cfg(test)]
+mod physical_safety_invariants {
+    use super::*;
+
+    #[test]
+    fn fault_all_outputs_off_removes_every_on_event_and_emits_complete_stop_set() {
+        let mut result = TickResult::default();
+        result.events = vec![
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: true,
+                pwm_percent: 80,
+            },
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::In,
+            },
+            OrchestratorEvent::SetMistValve { on: true },
+            OrchestratorEvent::SetMixValve { on: true },
+            OrchestratorEvent::StartOsakaSoft {
+                target_pwm_percent: 50,
+            },
+        ];
+
+        fault_all_outputs_off(&mut result);
+
+        assert!(!result.events.iter().any(|event| {
+            matches!(event, OrchestratorEvent::SetDosingPump { on: true, .. })
+                || matches!(event, OrchestratorEvent::SetWaterPump { direction: WaterDirection::In | WaterDirection::Out })
+                || matches!(event, OrchestratorEvent::SetMistValve { on: true })
+                || matches!(event, OrchestratorEvent::SetMixValve { on: true })
+                || matches!(event, OrchestratorEvent::SetOsakaPump { pwm_percent } if *pwm_percent > 0)
+                || matches!(event, OrchestratorEvent::StartOsakaSoft { .. })
+        }));
+
+        assert_eq!(
+            result
+                .events
+                .iter()
+                .filter(|event| {
+                    matches!(event, OrchestratorEvent::SetDosingPump {
+                        pump: DosingPumpTarget::NutrientA,
+                        on: false,
+                        pwm_percent: 0,
+                    })
+                })
+                .count(),
+            1
+        );
+        assert!(result.events.iter().any(|event| {
+            matches!(event, OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientB,
+                on: false,
+                pwm_percent: 0,
+            })
+        }));
+        assert!(result.events.iter().any(|event| {
+            matches!(event, OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::PhUp,
+                on: false,
+                pwm_percent: 0,
+            })
+        }));
+        assert!(result.events.iter().any(|event| {
+            matches!(event, OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::PhDown,
+                on: false,
+                pwm_percent: 0,
+            })
+        }));
+        assert!(result.events.iter().any(|event| {
+            matches!(event, OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop,
+            })
+        }));
+        assert!(result
+            .events
+            .iter()
+            .any(|event| matches!(event, OrchestratorEvent::SetMistValve { on: false })));
+        assert!(result
+            .events
+            .iter()
+            .any(|event| matches!(event, OrchestratorEvent::SetMixValve { on: false })));
+        assert!(result.events.iter().any(|event| {
+            matches!(event, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 })
+        }));
+
+        let peripherals = result.delta.peripherals.expect("fault must update peripherals");
+        assert_eq!(peripherals.pump_a, Some(false));
+        assert_eq!(peripherals.pump_b, Some(false));
+        assert_eq!(peripherals.ph_up, Some(false));
+        assert_eq!(peripherals.ph_down, Some(false));
+        assert_eq!(peripherals.water_pump_in, Some(false));
+        assert_eq!(peripherals.water_pump_out, Some(false));
+        assert_eq!(peripherals.mist_valve, Some(false));
+        assert_eq!(peripherals.mix_valve, Some(false));
+        assert_eq!(peripherals.osaka_pump, Some(false));
+        assert_eq!(peripherals.osaka_pwm, Some(0));
+        assert!(result.delta.reset_active_actors);
+    }
+
+    #[test]
+    fn sensor_timeout_recovery_requires_fresh_sensor_timestamp() {
+        let mut config = ControllerConfig::default();
+        config.enable_ec_sensor = true;
+        config.enable_ph_sensor = true;
+        config.enable_temp_sensor = true;
+        config.enable_water_level_sensor = true;
+        config.control_mode = ControlMode::Manual;
+        config.is_enabled = false;
+
+        let mut ctx = SystemContext::default();
+        ctx.phase = SystemPhase::Fault(FaultCode::SensorTimeout);
+
+        let mut sensors = SensorData::default();
+        sensors.ec_received_ms = Some(100_000);
+        sensors.ph_received_ms = Some(100_000);
+        sensors.temp_received_ms = Some(100_000);
+        sensors.water_received_ms = Some(100_000);
+
+        let recovered = tick(100_000, 100_000, &config, &sensors, 100_000, &mut ctx);
+        assert_eq!(recovered.delta.phase, Some(SystemPhase::Monitoring));
+
+        let mut stale_sensors = sensors.clone();
+        stale_sensors.ec_received_ms = Some(1);
+        stale_sensors.ph_received_ms = Some(1);
+        stale_sensors.temp_received_ms = Some(1);
+        stale_sensors.water_received_ms = Some(1);
+        ctx.phase = SystemPhase::Fault(FaultCode::SensorTimeout);
+
+        let still_faulted = tick(100_000, 100_000, &config, &stale_sensors, 100_000, &mut ctx);
+        assert_eq!(still_faulted.delta.phase, None);
+    }
+}
+
 pub fn tick(
     now_ms: u64,
     uptime_ms: u64, // SỬA: Nhận thêm uptime_ms

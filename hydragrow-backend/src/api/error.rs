@@ -96,7 +96,7 @@ pub fn normalize_error_json(status: StatusCode, value: Value, request_id: Option
             "error": {
                 "code": error.get("code").and_then(Value::as_str).unwrap_or_else(|| status_code_for(status)),
                 "message": safe_message(status, error.get("message").and_then(Value::as_str).unwrap_or("Request failed")),
-                "details": if status.is_server_error() { json!({}) } else { bound_details(error.get("details").cloned().unwrap_or_else(|| json!({}))) },
+                "details": if status.is_server_error() && error.get("code").and_then(Value::as_str) != Some("safety_data_unavailable") { json!({}) } else { bound_details(error.get("details").cloned().unwrap_or_else(|| json!({}))) },
                 "request_id": bounded_request_id(error.get("request_id").and_then(Value::as_str).or(request_id)),
             }
         });
@@ -139,7 +139,7 @@ pub fn normalize_error_json(status: StatusCode, value: Value, request_id: Option
         "error": {
             "code": code,
             "message": safe_message(status, message),
-            "details": if status.is_server_error() { json!({}) } else { bound_details(Value::Object(details)) },
+                "details": if status.is_server_error() && code != "safety_data_unavailable" { json!({}) } else { bound_details(Value::Object(details)) },
             "request_id": bounded_request_id(request_id),
         }
     })
@@ -325,5 +325,25 @@ mod tests {
         assert_eq!(body["error"]["code"], "forbidden");
         assert_eq!(body["error"]["details"]["required_scope"], "device:admin");
         assert_eq!(body["error"]["request_id"], "req-42");
+    }
+
+    #[test]
+    fn safety_data_unavailable_preserves_safe_reason_on_503() {
+        let value = normalize_error_json(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "error": {
+                    "code": "safety_data_unavailable",
+                    "message": "database connection failed: postgres://user:secret@db/hydragrow",
+                    "details": {"reason": "SAFETY_DATA_DB_ERROR"}
+                }
+            }),
+            Some("req-7"),
+        );
+        assert_eq!(value["error"]["code"], "safety_data_unavailable");
+        assert_eq!(value["error"]["message"], "Service unavailable");
+        assert_eq!(value["error"]["details"]["reason"], "SAFETY_DATA_DB_ERROR");
+        assert!(!value.to_string().contains("postgres://"));
+        assert!(!value.to_string().contains("secret"));
     }
 }

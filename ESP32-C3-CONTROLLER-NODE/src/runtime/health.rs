@@ -406,14 +406,18 @@ pub fn run_main_health_loop(
                     timestamp_ms: now_sec * 1000,
                 };
 
-                if let Ok(json_string) = serde_json::to_string(&health_payload) {
-                    let topic_health = topic_controller_status(&device_id);
-                    let _ = client.publish(
-                        &topic_health,
-                        QoS::AtMostOnce,
-                        false,
-                        json_string.as_bytes(),
-                    );
+                if let Ok(mut health_json) = serde_json::to_value(&health_payload) {
+                    health_json["config_version"] =
+                        serde_json::json!(crate::hw::mqtt_client::applied_config_version());
+                    if let Ok(json_string) = serde_json::to_string(&health_json) {
+                        let topic_health = topic_controller_status(&device_id);
+                        let _ = client.publish(
+                            &topic_health,
+                            QoS::AtMostOnce,
+                            false,
+                            json_string.as_bytes(),
+                        );
+                    }
                 }
             }
         }

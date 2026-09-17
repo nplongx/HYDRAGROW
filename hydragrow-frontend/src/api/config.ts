@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from '../lib/apiClient';
-import type { UnifiedDeviceConfig } from '../types/models';
+import type { ConfigurationSyncStatus, UnifiedDeviceConfig } from '../types/models';
 
 export type UnifiedConfigResponse = {
   device_config: Partial<UnifiedDeviceConfig>;
@@ -19,5 +19,7 @@ export type UnifiedConfigPayload = UnifiedConfigResponse;
 
 export const configApi = {
   get: async (deviceId: string, signal?: AbortSignal) => normalizeUnifiedConfig(await apiGet<UnifiedConfigResponse>(`/devices/${encodeURIComponent(deviceId)}/config/unified`, { signal }), deviceId),
-  update: (deviceId: string, payload: UnifiedConfigPayload) => apiPut<{ status?: string }>(`/devices/${encodeURIComponent(deviceId)}/config/unified`, payload),
+  update: (deviceId: string, payload: UnifiedConfigPayload) => apiPut<{ status?: string; config_version?: number }>(`/devices/${encodeURIComponent(deviceId)}/config/unified`, payload),
+  syncStatus: (deviceId: string, signal?: AbortSignal) =>
+    apiGet<ConfigurationSyncStatus>(`/devices/${encodeURIComponent(deviceId)}/config/sync`, { signal }),
 };

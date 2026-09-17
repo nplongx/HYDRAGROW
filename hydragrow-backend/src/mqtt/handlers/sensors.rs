@@ -245,40 +245,81 @@ pub async fn handle(device_id: String, payload: &[u8], app_state: web::Data<AppS
             });
 
             let safety_ctx = if has_action_commands {
-                if let Ok(safety_config) =
-                    crate::db::postgres::get_safety_config(&app_state.pg_pool, &device_id).await
-                {
-                    let calibration = crate::db::postgres::fetch_dosing_calibration(
-                        &app_state.pg_pool,
-                        &device_id,
-                    )
-                    .await
-                    .unwrap_or(None);
-                    let limits = hydragrow_shared::safety::DoseSafetyLimits {
-                        max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
-                        max_dose_per_hour_ml: safety_config.max_dose_per_hour,
-                        cooldown_sec: safety_config.cooldown_sec as u64,
-                    };
-                    let now_sec = (timestamp_ms / 1000) as u64;
-                    let hourly_history_ml = crate::db::postgres::get_dosing_history_last_hour(
-                        &app_state.pg_pool,
-                        &device_id,
-                    )
-                    .await
-                    .unwrap_or_default();
-                    let last_dose_at_sec =
-                        crate::db::postgres::get_last_dose_at(&app_state.pg_pool, &device_id)
-                            .await
-                            .unwrap_or(None);
-                    Some((
-                        limits,
-                        calibration,
-                        hourly_history_ml,
-                        now_sec,
-                        last_dose_at_sec,
-                    ))
-                } else {
-                    None
+                match crate::services::safety_data::classify_safety_config(
+                    crate::db::postgres::fetch_safety_config(&app_state.pg_pool, &device_id).await,
+                ) {
+                    Ok(safety_config) => {
+                        let calibration = match crate::services::safety_data::classify_calibration(
+                            crate::db::postgres::fetch_dosing_calibration(
+                                &app_state.pg_pool,
+                                &device_id,
+                            )
+                            .await,
+                        ) {
+                            Ok(calibration) => calibration,
+                            Err(reason) => {
+                                crate::metrics::SAFETY_DECISIONS_TOTAL
+                                    .with_label_values(&[reason, "denied"])
+                                    .inc();
+                                tracing::warn!(device_id = %device_id, reason_code = reason, "sensor action denied: dosing calibration unavailable");
+                                return;
+                            }
+                        };
+                        let limits = hydragrow_shared::safety::DoseSafetyLimits {
+                            max_dose_per_cycle_ml: safety_config.max_dose_per_cycle,
+                            max_dose_per_hour_ml: safety_config.max_dose_per_hour,
+                            cooldown_sec: safety_config.cooldown_sec as u64,
+                        };
+                        let now_sec = (timestamp_ms / 1000) as u64;
+                        let hourly_history_ml = match crate::services::safety_data::classify_history(
+                            crate::db::postgres::get_dosing_history_last_hour(
+                                &app_state.pg_pool,
+                                &device_id,
+                            )
+                            .await,
+                        ) {
+                            Ok(history) => history,
+                            Err(reason) => {
+                                crate::metrics::SAFETY_DECISIONS_TOTAL
+                                    .with_label_values(&[reason, "denied"])
+                                    .inc();
+                                tracing::warn!(device_id = %device_id, reason_code = reason, "sensor action denied: safety history unavailable");
+                                return;
+                            }
+                        };
+                        let last_dose_at_sec =
+                            match crate::services::safety_data::classify_last_dose(
+                                crate::db::postgres::get_last_dose_at(
+                                    &app_state.pg_pool,
+                                    &device_id,
+                                )
+                                .await,
+                            ) {
+                                Ok(last_dose) => last_dose,
+                                Err(reason) => {
+                                    crate::metrics::SAFETY_DECISIONS_TOTAL
+                                        .with_label_values(&[reason, "denied"])
+                                        .inc();
+                                    tracing::warn!(device_id = %device_id, reason_code = reason, "sensor action denied: last-dose unavailable");
+                                    return;
+                                }
+                            };
+                        Some((
+                            limits,
+                            Some(calibration),
+                            hourly_history_ml,
+                            now_sec,
+                            last_dose_at_sec,
+                        ))
+                    }
+                    Err(error) => {
+                        let reason = error.reason_code();
+                        crate::metrics::SAFETY_DECISIONS_TOTAL
+                            .with_label_values(&[reason, "denied"])
+                            .inc();
+                        tracing::warn!(device_id = %device_id, reason_code = reason, "sensor action denied: safety data unavailable");
+                        return;
+                    }
                 }
             } else {
                 None

@@ -142,9 +142,9 @@ function CapabilityGate({ definition, children }: { definition: RouteDefinition;
 }
 
 function DeviceScopeGate({ children }: { children: React.ReactNode }) {
-  const { status, selectedDevice } = useStationContext();
+  const { status, selectedDevice, selectedDeviceId } = useStationContext();
   if (status === 'LoadingSelection') return <LoadingState message="Đang xác định trạm đang chọn..." />;
-  if (status !== 'Selected' || !selectedDevice) return <RouteRecovery status={status} />;
+  if (status !== 'Selected' || (!selectedDevice && !selectedDeviceId)) return <RouteRecovery status={status} />;
   return <>{children}</>;
 }
 

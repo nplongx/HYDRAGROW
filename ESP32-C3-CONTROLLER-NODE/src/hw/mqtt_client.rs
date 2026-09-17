@@ -18,7 +18,7 @@ use hydragrow_shared::{
     SensorData,
 };
 use log::{debug, error, info, warn};
-use std::sync::{mpsc::Sender, Arc, RwLock};
+use std::sync::{mpsc::Sender, Arc, Mutex, RwLock};
 
 use crate::config::SharedConfig;
 use crate::hw::NvsStore;
@@ -81,6 +81,14 @@ pub fn get_wifi_rssi() -> i8 {
     } else {
         0
     }
+}
+
+// Required by pre-existing controller health work in this dirty worktree.
+// ESP32-C3 does not expose AtomicI64; retain i64 semantics with a Mutex.
+pub static APPLIED_CONFIG_VERSION: Mutex<i64> = Mutex::new(0);
+
+pub fn applied_config_version() -> i64 {
+    *APPLIED_CONFIG_VERSION.lock().unwrap()
 }
 
 #[allow(clippy::too_many_arguments)] // TODO(follow-up): group broker/auth args into an MqttClientConfig struct
@@ -156,6 +164,9 @@ pub fn init_mqtt_client(
 
                 // 1. Update Config
                 if topic_str == topic_config_cb {
+                    let config_version = serde_json::from_slice::<serde_json::Value>(data)
+                        .ok()
+                        .and_then(|value| value.get("config_version").and_then(|v| v.as_i64()));
                     match serde_json::from_slice::<ControllerConfig>(data) {
                         Ok(new_config) => {
                             if let Err(errors) = new_config.validate() {
@@ -165,8 +176,35 @@ pub fn init_mqtt_client(
                                     errors
                                 );
                             } else {
-                                info!("✅ New config received & applied: {}", new_config.device_id);
-                                if let Ok(mut config) = shared_config.write() {
+                                let current_version = applied_config_version();
+                                if config_version.is_some_and(|version| version < current_version) {
+                                    warn!(
+                                        "⚠️ Ignoring stale controller config revision {} < {}",
+                                        config_version.unwrap_or_default(),
+                                        current_version
+                                    );
+                                } else if let Some(version) = config_version {
+                                    let mut nvs_store = NvsStore::new(nvs_partition.clone());
+                                    match nvs_store.save_controller_config(&new_config, version) {
+                                        Ok(()) => {
+                                            info!(
+                                                "✅ New config received, persisted & applied: {} rev={}",
+                                                new_config.device_id, version
+                                            );
+                                            if let Ok(mut config) = shared_config.write() {
+                                                config.set_base_config(new_config);
+                                                *APPLIED_CONFIG_VERSION.lock().unwrap() = version;
+                                            }
+                                        }
+                                        Err(error) => warn!(
+                                            "⚠️ Controller config rejected because NVS persistence failed: {:?}",
+                                            error
+                                        ),
+                                    }
+                                } else if let Ok(mut config) = shared_config.write() {
+                                    info!(
+                                        "⚠️ New controller config applied without durable revision"
+                                    );
                                     config.set_base_config(new_config);
                                 }
                             }
@@ -315,4 +353,65 @@ pub fn init_mqtt_client(
     })?;
 
     Ok(client)
+}
+
+#[cfg(test)]
+mod canonical_fixture_tests {
+    use super::*;
+    use serde_json::Value;
+
+    const SENSOR_FIXTURE: &str =
+        include_str!("../../../schema/contracts/fixtures/sensor-data.json");
+    const COMMAND_FIXTURE: &str =
+        include_str!("../../../schema/contracts/fixtures/mqtt-command.json");
+
+    #[test]
+    fn controller_sensor_consumer_accepts_canonical_fixture() {
+        let value: Value = serde_json::from_str(SENSOR_FIXTURE).expect("canonical sensor JSON");
+        let payload: IncomingSensorPayload =
+            serde_json::from_value(value.clone()).expect("controller sensor parser");
+
+        assert_eq!(value["device_id"], "device-001");
+        assert_eq!(payload.ec, Some(1.5));
+        assert_eq!(payload.ph, Some(6.0));
+        assert_eq!(payload.temp, Some(27.0));
+        assert_eq!(payload.water_level, Some(20.0));
+        assert!(payload.time.is_some());
+        assert_eq!(payload.err_ec, Some(false));
+        assert!(payload.is_valid());
+
+        assert!(value.get("tds").is_none());
+        assert!(value.get("err_tds").is_none());
+    }
+
+    #[test]
+    fn controller_command_consumer_accepts_canonical_fixture() {
+        let mut value: Value =
+            serde_json::from_str(COMMAND_FIXTURE).expect("canonical command JSON");
+        let object = value
+            .as_object_mut()
+            .expect("canonical command fixture must be an object");
+
+        for legacy in ["pump", "pump_id", "duration_sec", "pwm"] {
+            assert!(
+                object.get(legacy).is_none(),
+                "legacy command field: {legacy}"
+            );
+        }
+
+        object.remove("ts");
+        object.remove("nonce");
+        object.remove("signature");
+
+        let command: MqttCommandIn =
+            serde_json::from_value(value).expect("controller command parser");
+        assert_eq!(command.action, "start");
+        assert_eq!(command.target.as_deref(), Some("device-001"));
+
+        let params = command.params.expect("canonical nested command params");
+        assert_eq!(params.pump_id.as_deref(), Some("pump_a"));
+        assert_eq!(params.duration_sec, Some(8));
+        assert_eq!(params.pwm, Some(70));
+        assert_eq!(params.state, Some(true));
+    }
 }

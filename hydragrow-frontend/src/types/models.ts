@@ -269,6 +269,25 @@ export interface WifiProvisionEntry {
   password?: string;
 }
 
+export type ConfigurationSyncState = "pending" | "published" | "applied" | "failed";
+
+export interface ConfigurationSyncTargetStatus {
+  state: ConfigurationSyncState;
+  attempts: number;
+  last_attempt_at: string | null;
+  applied_at: string | null;
+}
+
+export interface ConfigurationSyncStatus {
+  device_id: string;
+  config_version: number;
+  controller: ConfigurationSyncTargetStatus;
+  sensor: ConfigurationSyncTargetStatus;
+  overall_state: ConfigurationSyncState;
+  last_error: string | null;
+  updated_at: string;
+}
+
 export interface WifiConfigStatus {
   device_id: string;
   ssids: Array<{ ssid: string; priority: number }>;

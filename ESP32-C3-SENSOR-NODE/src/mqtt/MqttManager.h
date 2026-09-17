@@ -18,6 +18,7 @@ private:
     // Defer publish ra ngoài MQTT callback để tránh buffer corruption
     bool pendingStatusOk_ = false;
     bool pendingPublishSensor_ = false;
+    int64_t appliedConfigVersion_ = 0;
 
     static void mqttCallback(char* topic, byte* payload, unsigned int length);
 

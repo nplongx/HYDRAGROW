@@ -42,6 +42,19 @@ impl EventDispatcher {
         let mut first_fault = None;
 
         for event in events {
+            // A faulted controller must never execute a stale actuator-ON
+            // event that was queued before the phase transition.  Command
+            // parsing already blocks new ON commands in Fault/EmergencyStop,
+            // but this boundary also protects against automatically-generated
+            // or same-tick events that bypass command_handler.
+            if dc.ctx.phase.is_fault() && is_actuator_on_event(&event) {
+                warn!(
+                    "⛔ [DISPATCHER] Suppressing stale actuator-ON event while controller is in {:?}",
+                    dc.ctx.phase
+                );
+                continue;
+            }
+
             if let Some(fault) = Self::handle_event(event.clone(), dc) {
                 warn!(
                     "🚨 [DISPATCHER] Actuator command failed with fault {:?}, aborting remaining events",
@@ -462,5 +475,72 @@ impl EventDispatcher {
             _ => {}
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod safety_gate_tests {
+    use super::is_actuator_on_event;
+    use hydragrow_controller_core::core::fsm::events::{DosingPumpTarget, OrchestratorEvent};
+    use hydragrow_controller_core::WaterDirection;
+
+    #[test]
+    fn actuator_safety_gate_identifies_all_positive_outputs() {
+        let events = [
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: true,
+                pwm_percent: 1,
+            },
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::In,
+            },
+            OrchestratorEvent::SetMistValve { on: true },
+            OrchestratorEvent::SetMixValve { on: true },
+            OrchestratorEvent::SetOsakaPump { pwm_percent: 1 },
+            OrchestratorEvent::StartOsakaSoft {
+                target_pwm_percent: 1,
+            },
+        ];
+
+        assert!(events.iter().all(is_actuator_on_event));
+    }
+
+    #[test]
+    fn actuator_safety_gate_allows_only_stop_events() {
+        let events = [
+            OrchestratorEvent::SetDosingPump {
+                pump: DosingPumpTarget::NutrientA,
+                on: false,
+                pwm_percent: 0,
+            },
+            OrchestratorEvent::SetWaterPump {
+                direction: WaterDirection::Stop,
+            },
+            OrchestratorEvent::SetMistValve { on: false },
+            OrchestratorEvent::SetMixValve { on: false },
+            OrchestratorEvent::SetOsakaPump { pwm_percent: 0 },
+            OrchestratorEvent::StartOsakaSoft {
+                target_pwm_percent: 0,
+            },
+        ];
+
+        assert!(events.iter().all(|event| !is_actuator_on_event(event)));
+    }
+}
+
+fn is_actuator_on_event(event: &OrchestratorEvent) -> bool {
+    match event {
+        OrchestratorEvent::SetDosingPump { on: true, .. }
+        | OrchestratorEvent::SetWaterPump {
+            direction: WaterDirection::In | WaterDirection::Out,
+        }
+        | OrchestratorEvent::SetMistValve { on: true }
+        | OrchestratorEvent::SetMixValve { on: true } => true,
+        OrchestratorEvent::SetOsakaPump { pwm_percent }
+        | OrchestratorEvent::StartOsakaSoft {
+            target_pwm_percent: pwm_percent,
+        } => *pwm_percent > 0,
+        _ => false,
     }
 }

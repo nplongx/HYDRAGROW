@@ -1,0 +1,83 @@
+{
+  "requirement_id": "P1.9-FIRMWARE-FIXTURE-001",
+  "domain": "Domain 8 — P1.9 firmware fixture failure",
+  "status": "VERIFIED",
+  "verified_at": "2026-09-17",
+  "repo": "/home/long/HYDRAGROW",
+  "historical_failure": {
+    "source": "docs/evidence/P1.10-OBSERVABILITY-CROSS-SYSTEM-SYNC.json",
+    "command": "pio test --environment native",
+    "result": "15 test cases: 1 failed, 13 succeeded",
+    "failure": "test_p1_9_sensor_fixture_matches_arduinojson_wire_shape: Expected TRUE Was FALSE",
+    "classification": "historical"
+  },
+  "implementation": {
+    "fixture": "schema/contracts/fixtures/sensor-data.json",
+    "consumer_test": "ESP32-C3-SENSOR-NODE/test/test_wifi_provisioner.cpp::test_p1_9_sensor_fixture_matches_arduinojson_wire_shape",
+    "path_contract": "HYDRAGROW_PROJECT_DIR is supplied by PlatformIO and fixture path is resolved from repository root, not process cwd",
+    "canonical_assertions": [
+      "device_id == device-001",
+      "ec == 1.5",
+      "ph == 6.0",
+      "temp == 27.0",
+      "water_level == 20.0",
+      "pump_status is object",
+      "time is string",
+      "err_ec == false",
+      "tds key absent",
+      "err_tds key absent"
+    ],
+    "ci_trigger": "firmware-sensor-ci.yml runs on schema/contracts/** changes for push and pull_request"
+  },
+  "verification": [
+    {
+      "command": "pio test --environment native",
+      "status": "PASS",
+      "result": "14 test cases: 14 succeeded, 0 failed"
+    },
+    {
+      "command": "pio test --project-dir ESP32-C3-SENSOR-NODE --environment native",
+      "status": "PASS",
+      "result": "14 test cases: 14 succeeded, 0 failed; invoked from repository-root cwd"
+    },
+    {
+      "command": "cargo test --manifest-path hydragrow-shared/Cargo.toml --test p1_9_schema_registry",
+      "status": "PASS",
+      "result": "7 passed, 0 failed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "check": "firmware-sensor-ci schema/contracts path trigger",
+      "status": "PASS",
+      "result": "schema/contracts/** present in both push and pull_request path filters"
+    }
+  ],
+  "acceptance": {
+    "AC-01": "PASS — historical fixture failure retained as historical evidence",
+    "AC-02": "PASS — repository-root fixture path uses HYDRAGROW_PROJECT_DIR",
+    "AC-03": "PASS — ArduinoJson parses canonical fixture",
+    "AC-04": "PASS — representative required values asserted",
+    "AC-05": "PASS — err_ec asserted and err_tds absent",
+    "AC-06": "PASS — tds absent",
+    "AC-07": "PASS — native suite 14/14",
+    "AC-08": "PASS — firmware sensor CI watches schema/contracts/**",
+    "AC-09": "PASS — existing native tests remain green",
+    "AC-10": "PASS — only Domain 8 test/CI/spec/evidence touched; production PostgreSQL not used"
+  },
+  "worktree_integrity": {
+    "dirty_worktree_preserved": true,
+    "no_reset": true,
+    "no_clean": true,
+    "no_revert": true,
+    "no_stash": true,
+    "production_postgresql_touched": false
+  },
+  "notes": [
+    "The native fixture test already existed from an earlier firmware alignment commit; Domain 8 hardened its assertions and CI coupling rather than changing sensor production behavior.",
+    "The earlier P1.10 firmware investigation also recorded a separate Rust sensor-node toolchain block; that is not this domain and remains out of scope.",
+    "No Domain 9 controller firmware consumer work was performed."
+  ]
+}

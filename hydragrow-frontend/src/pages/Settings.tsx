@@ -46,7 +46,7 @@ const Settings = () => {
       : whoami?.role === 'viewer'
       ? 'Người xem'
       : undefined;
-  const { selectedDeviceId: ctxDeviceId } = useStationContext();
+  const { selectedDeviceId: ctxDeviceId, configurationSync } = useStationContext();
   const { data: telemetry } = useDeviceTelemetry(ctxDeviceId);
   const {
     data: remoteConfig,
@@ -513,6 +513,7 @@ const Settings = () => {
       }
 
       await refetchConfig();
+      await configurationSync?.refresh();
       window.dispatchEvent(new Event('hydragrow:settings-updated'));
       toast.success('Đã lưu cấu hình thành công.', { id: toastId });
     } catch (error: any) { toast.error(`Lỗi: ${error?.message}`, { id: toastId }); }
@@ -556,6 +557,33 @@ const Settings = () => {
       <Save size={17} /> {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
     </button>
   </header>
+
+  {ctxDeviceId && (
+    <div className="ui-card mb-6 p-4" role="status" aria-live="polite">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-primary-deep">Đồng bộ cấu hình</p>
+          <p className="text-xs text-text-muted">
+            {configurationSync?.version != null ? `Config v${configurationSync.version}` : 'Chưa có revision'}
+            {' · '}
+            {configurationSync?.status === 'applied' ? 'Đã xác nhận trên thiết bị'
+              : configurationSync?.status === 'failed' ? 'Đồng bộ thất bại'
+              : configurationSync?.status === 'published' ? 'Đã gửi, đang chờ thiết bị xác nhận'
+              : configurationSync?.status === 'pending' ? 'Đang chờ gửi xuống thiết bị'
+              : configurationSync?.isLoading ? 'Đang tải trạng thái' : 'Chưa có trạng thái'}
+          </p>
+        </div>
+        {configurationSync?.status && (
+          <span className="rounded-full border border-line px-3 py-1 text-xs font-semibold text-primary-deep">
+            Controller: {configurationSync.controller ?? '—'} · Sensor: {configurationSync.sensor ?? '—'}
+          </span>
+        )}
+      </div>
+      {configurationSync?.status === 'failed' && configurationSync.error && (
+        <p className="mt-2 text-xs text-red-700">{configurationSync.error}</p>
+      )}
+    </div>
+  )}
 
   <div className="ui-tabbar grid grid-cols-2 sm:grid-cols-4">
     {SETTINGS_TABS.map((tab) => (

@@ -29,6 +29,7 @@ SensorManager* sensorManager = nullptr;
 MqttManager* instance = nullptr;
 
 unsigned long lastReconnectAttempt = 0;
+int64_t appliedConfigVersion = 0;
 
 const String TOPIC_PREFIX   = String("AGITECH/") + DEVICE_ID + "/";
 const String TOPIC_SENSOR   = TOPIC_PREFIX + "sensors";
@@ -55,6 +56,7 @@ void publishSystemLogEvent(const char* level, const char* title, const char* mes
     doc["category"] = "system";
     doc["title"] = title;
     doc["message"] = message;
+    doc["config_version"] = appliedConfigVersion;
     doc["timestamp_ms"] = (uint64_t)time(nullptr) * 1000ULL;
 
     char buffer[384];
@@ -76,6 +78,7 @@ void publishStatus(const char* status, const char* message) {
     doc["device_id"] = MQTT_CLIENT_ID;
     doc["status"] = status;
     doc["message"] = message;
+    doc["config_version"] = appliedConfigVersion;
 
     char buffer[256];
     size_t len = serializeJson(doc, buffer, sizeof(buffer));
@@ -319,6 +322,10 @@ void MqttManager::handleConfig(const String& payload) {
 void MqttManager::handleConfigDocument(JsonDocument& doc) {
     Logger::debugPrintln("[CONFIG] Nhan cau hinh tu Backend, dang ap dung...");
     appConfig.applyFromJson(doc);
+    if (!doc["config_version"].isNull()) {
+        appliedConfigVersion_ = doc["config_version"].as<int64_t>();
+        appliedConfigVersion = appliedConfigVersion_;
+    }
 
     const float v686Mv = appConfig.sensor.phV686 * 1000.0f;
     const float v4Mv = appConfig.sensor.phV4 * 1000.0f;
@@ -360,6 +367,7 @@ void MqttManager::publishSensorData() {
     doc["time"]            = timeBuffer;
     doc["rssi"]            = WiFi.RSSI();
     doc["free_heap"]      = ESP.getFreeHeap();
+    doc["config_version"] = appliedConfigVersion_;
 
     doc["err_temp"]       = data.errTemperature;
     doc["err_water"]       = data.errWaterLevel;

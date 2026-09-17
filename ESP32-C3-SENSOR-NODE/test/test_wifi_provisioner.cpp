@@ -148,9 +148,14 @@ void test_p1_9_sensor_fixture_matches_arduinojson_wire_shape() {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.5f, doc["ec"].as<float>());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 6.0f, doc["ph"].as<float>());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 27.0f, doc["temp"].as<float>());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 20.0f, doc["water_level"].as<float>());
+    TEST_ASSERT_TRUE(doc["pump_status"].is<JsonObject>());
     TEST_ASSERT_TRUE(doc["time"].is<const char*>());
     TEST_ASSERT_FALSE(doc["err_ec"].isNull());
-    TEST_ASSERT_TRUE(doc["err_tds"].isNull());
+    TEST_ASSERT_FALSE(doc["err_ec"].as<bool>());
+    const std::string fixtureJson = contents.str();
+    TEST_ASSERT_TRUE(fixtureJson.find("\"tds\"") == std::string::npos);
+    TEST_ASSERT_TRUE(fixtureJson.find("\"err_tds\"") == std::string::npos);
 }
 
 int main(int argc, char **argv) {

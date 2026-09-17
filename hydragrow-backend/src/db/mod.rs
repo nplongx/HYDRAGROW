@@ -27,3 +27,5 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
+
+pub mod config_sync;

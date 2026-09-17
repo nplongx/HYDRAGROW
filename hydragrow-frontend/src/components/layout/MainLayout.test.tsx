@@ -7,9 +7,6 @@ vi.mock('../../hooks/useDeviceSync', () => ({ useDeviceSync: () => {} }));
 vi.mock('../../hooks/useDeviceTelemetry', () => ({
   useDeviceTelemetry: () => ({ data: { availability: 'ONLINE' } }),
 }));
-vi.mock('../../hooks/useDeviceConfig', () => ({
-  useDeviceConfig: () => ({ isLoading: false, error: null }),
-}));
 vi.mock('../../hooks/useSystemEvents', () => ({
   useSystemEvents: () => ({ data: [] }),
 }));
@@ -23,6 +20,21 @@ vi.mock('../../contexts/StationContext', () => ({
 }));
 
 describe('MainLayout sidebar', () => {
+
+  it('không khóa toàn bộ ứng dụng khi cấu hình thiết bị chưa tồn tại', () => {
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/dashboard" element={<div>dashboard-content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('dashboard-content')).toBeInTheDocument();
+    expect(screen.queryByText('Chưa kết nối máy chủ')).not.toBeInTheDocument();
+  });
   it('đánh dấu mục Tổng quan là active khi ở /dashboard', () => {
     render(
       <MemoryRouter initialEntries={['/dashboard']}>

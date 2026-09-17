@@ -266,15 +266,13 @@ async fn main() -> anyhow::Result<()> {
     // is exposed outside the trusted LAN. Never infer transport from the port.
     // Provisioning relays WiFi secrets over MQTT, so TLS must be available
     // wherever the broker is not confined to a trusted local network.
-    // Set MQTT_TLS=1 (and MQTT_PORT=8883 unless overridden) to use native
-    // platform certs. Plain TCP stays the default to avoid breaking existing
-    // local deployments; provisioning must not add any NEW plaintext path.
+    // Set MQTT_TLS=1 (and MQTT_PORT=8883 unless overridden) to use rustls with
+    // the platform CA store. Plain TCP stays the default to avoid breaking
+    // existing local deployments; provisioning must not add any NEW plaintext path.
     let mqtt_tls = env::var("MQTT_TLS").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     if mqtt_tls {
-        mqttoptions.set_transport(rumqttc::Transport::tls_with_config(
-            rumqttc::TlsConfiguration::Native,
-        ));
-        info!("MQTT TLS enabled (native platform certs)");
+        mqttoptions.set_transport(rumqttc::Transport::tls_with_default_config());
+        info!("MQTT TLS enabled (rustls + platform CA store)");
     }
 
     let mqtt_user = env::var("MQTT_USER").unwrap_or_default();
@@ -447,7 +445,7 @@ async fn main() -> anyhow::Result<()> {
                 Ok(_) => {}
                 Err(e) => {
                     mqtt_connected.store(false, std::sync::atomic::Ordering::Relaxed);
-                    error!("Mất kết nối MQTT, thử lại sau 5 giây... Lỗi: {:?}", e);
+                    error!(error = %e, debug = ?e, "Mất kết nối MQTT, thử lại sau 5 giây...");
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }

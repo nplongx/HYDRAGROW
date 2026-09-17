@@ -52,6 +52,11 @@ export function buildControlCommandRequest(
   };
 }
 
+export interface PrivilegedTokenResponse {
+  token: string;
+  expires_at: number;
+}
+
 export interface ControlCommandResponse {
   status: string;
   command_id: string;
@@ -69,10 +74,24 @@ export const controlApi = {
   listCommands: (deviceId: string, signal?: AbortSignal) =>
     apiGet<{ data?: CommandRecord[] }>(`/devices/${encodeURIComponent(deviceId)}/control/commands`, { signal })
       .then((response) => response.data ?? []),
-  send: (deviceId: string, payload: ControlCommandRequest, confirmed: boolean) =>
+  issuePrivilegedToken: (deviceId: string) =>
+    apiPost<PrivilegedTokenResponse, { action_class: 'dangerous_control' }>(
+      `/devices/${encodeURIComponent(deviceId)}/control/privileged-token`,
+      { action_class: 'dangerous_control' },
+      { 'X-User-Confirmed': 'true' },
+    ),
+  send: (
+    deviceId: string,
+    payload: ControlCommandRequest,
+    confirmed: boolean,
+    privilegedToken?: string,
+  ) =>
     apiPost<ControlCommandResponse, ControlCommandRequest>(
       `/devices/${encodeURIComponent(deviceId)}/control`,
       payload,
-      confirmed ? { 'X-User-Confirmed': 'true' } : undefined,
+      {
+        ...(confirmed ? { 'X-User-Confirmed': 'true' } : {}),
+        ...(privilegedToken ? { 'X-Privileged-Token': privilegedToken } : {}),
+      },
     ),
 };

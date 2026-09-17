@@ -243,13 +243,13 @@
     },
     {
       "test_id": "H-06",
-      "status": "BLOCKED",
+      "status": "PARTIAL",
       "classification": "TEST_BENCH_UNSAFE",
-      "reason": "Physical SensorTimeout -> Fault was observed, but the run lacks independent physical output-off instrumentation and a controlled valid-input recovery stimulus."
+      "reason": "Physical SensorTimeout -> Fault was observed. Latest controller firmware containing the dispatcher Fault-state actuator-ON gate has now been physically flashed and boot-observed, but physical output-off boundary behavior and controlled valid-input recovery remain unverified."
     },
     {
       "test_id": "H-07",
-      "status": "BLOCKED",
+      "status": "PARTIAL",
       "classification": "TEST_BENCH_UNSAFE",
       "reason": "Physical controller configuration durability is now verified across a controlled USB/JTAG restart: revision 1 was persisted/applied, boot logged NVS restoration of revision 1, and the controller subsequently converged to revision 2. Full criterion still requires a true power-cycle."
     },
@@ -353,6 +353,14 @@
       "exit_code": 0,
       "observed": "Added a hardware-dispatch boundary guard that suppresses stale actuator-ON events whenever the controller context is already Fault, covering dosing pumps, water-pump directions, mist/mix valves, Osaka PWM, and Osaka soft-start. Added focused gate tests; controller firmware build passed, controller-core E2E passed 31/31, focused physical_safety_invariants passed 2/2, and git diff --check passed. This is supporting safety evidence only and does not satisfy physical actuator observation.",
       "classification": "SUPPORTING_DISPATCHER_FAULT_SAFETY_GATE_PASS"
+    },
+    {
+      "test_id": "POST-FIX-PHYSICAL-CONTROLLER-FLASH",
+      "status": "PASS",
+      "command": "source ~/export-esp.sh && cargo build --locked; espflash flash --port /dev/ttyACM0 --chip esp32c3 --non-interactive target/riscv32imc-esp-espidf/debug/esp32-c3-mist-weaver-os",
+      "exit_code": 0,
+      "observed": "Latest controller firmware containing the dispatcher Fault-state actuator-ON gate was physically flashed to the ESP32-C3 controller at /dev/ttyACM0; espflash reported Flashing has completed. A subsequent physical reset produced controller runtime serial output including WiFi association and IP 192.168.1.6. This proves deployment/boot observation of the rebuilt firmware, not physical actuator-gate behavior.",
+      "classification": "PHYSICAL_CONTROLLER_POST_FIX_FLASH_PASS"
     }
   ]
 }

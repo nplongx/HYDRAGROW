@@ -1,0 +1,43 @@
+{
+  "requirement_id": "DOMAIN-11-PHYSICAL-HIL-E2E",
+  "change_class": "C3",
+  "objective": "Harden the Domain 11 physical/HIL cross-system path so authentication, device configuration, telemetry availability, and safety boundaries are represented truthfully across frontend and backend.",
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Authenticated frontend waits for a Firebase ID token before protected API requests.",
+      "type": "binary"
+    },
+    {
+      "id": "AC-2",
+      "description": "Missing device configuration or authoritative telemetry is shown as unavailable; the frontend does not fabricate sensor defaults.",
+      "type": "binary"
+    },
+    {
+      "id": "AC-3",
+      "description": "Device claiming provisions a safe durable configuration with manual control mode and outputs disabled.",
+      "type": "binary"
+    },
+    {
+      "id": "AC-4",
+      "description": "Configuration synchronization exposes the actual revision and convergence state reported by the backend.",
+      "type": "binary"
+    },
+    {
+      "id": "AC-5",
+      "description": "Physical actuator safety boundaries are preserved; no test requires actuator activation or emergency-stop bypass.",
+      "type": "binary"
+    },
+    {
+      "id": "AC-6",
+      "description": "Physical HIL is not declared fully PASS unless the deployed physical path is observed end-to-end.",
+      "type": "binary"
+    }
+  ],
+  "verification_required": [
+    "unit_test",
+    "integration_test",
+    "physical_hil_evidence",
+    "browser_smoke"
+  ]
+}

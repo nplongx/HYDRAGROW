@@ -16,7 +16,7 @@ use tokio::sync::{
     RwLock,
     broadcast::{self},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::filter::filter_fn;
 
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
@@ -251,15 +251,11 @@ async fn main() -> anyhow::Result<()> {
     info!("Đã khởi tạo client InfluxDB Cloud (v2 API)");
 
     let mqtt_host = env::var("MQTT_HOST").unwrap_or_else(|_| "localhost".to_string());
-    let mqtt_port: u16 = env::var("MQTT_PORT")
+    let configured_mqtt_port: u16 = env::var("MQTT_PORT")
         .unwrap_or_else(|_| "1883".to_string())
         .parse()?;
     let mqtt_client_id =
         env::var("MQTT_CLIENT_ID").unwrap_or_else(|_| "rust_backend_server".to_string());
-
-    let mut mqttoptions = MqttOptions::new(mqtt_client_id, mqtt_host, mqtt_port);
-    mqttoptions.set_keep_alive(Duration::from_secs(30));
-    mqttoptions.set_clean_session(false);
 
     // The broker endpoint is deployment-owned configuration. Keep the local
     // plaintext default explicit; production must opt into TLS when its broker
@@ -270,6 +266,20 @@ async fn main() -> anyhow::Result<()> {
     // the platform CA store. Plain TCP stays the default to avoid breaking
     // existing local deployments; provisioning must not add any NEW plaintext path.
     let mqtt_tls = env::var("MQTT_TLS").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let mqtt_port = if mqtt_tls && configured_mqtt_port == 1883 {
+        warn!(
+            configured_port = configured_mqtt_port,
+            secure_port = 8883,
+            "MQTT_TLS is enabled with the plaintext MQTT port; using secure port 8883"
+        );
+        8883
+    } else {
+        configured_mqtt_port
+    };
+    let mut mqttoptions = MqttOptions::new(mqtt_client_id, mqtt_host, mqtt_port);
+    mqttoptions.set_keep_alive(Duration::from_secs(30));
+    mqttoptions.set_clean_session(false);
+
     if mqtt_tls {
         mqttoptions.set_transport(rumqttc::Transport::tls_with_default_config());
         info!("MQTT TLS enabled (rustls + platform CA store)");

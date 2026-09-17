@@ -229,6 +229,20 @@ async fn main() -> anyhow::Result<()> {
         .connect(&database_url)
         .await?;
 
+    // Existing ownership rows may predate the safe-claim provisioning path.
+    // Backfill only the minimal disabled/manual base config required by the
+    // unified-config contract; never create sensor readings or enable outputs.
+    match crate::db::postgres::ensure_device_configs_for_claimed_devices(&pg_pool).await {
+        Ok(count) if count > 0 => {
+            info!(count, "Đã backfill cấu hình an toàn cho thiết bị đã claim")
+        }
+        Ok(_) => {}
+        Err(e) => {
+            error!(error = %e, "Không thể backfill cấu hình cho thiết bị đã claim");
+            return Err(e.into());
+        }
+    }
+
     let influx_url = env::var("INFLUX_URL").expect("Thiếu biến INFLUX_URL"); // startup: acceptable to panic — fail fast if INFLUX_URL is missing
     let influx_org = env::var("INFLUX_ORG").expect("Thiếu biến INFLUX_ORG"); // startup: acceptable to panic — fail fast if INFLUX_ORG is missing
     let influx_token = env::var("INFLUX_TOKEN").expect("Thiếu biến INFLUX_TOKEN"); // startup: acceptable to panic — fail fast if INFLUX_TOKEN is missing

@@ -7,7 +7,6 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useDeviceSync } from '../../hooks/useDeviceSync';
 import { useDeviceTelemetry } from '../../hooks/useDeviceTelemetry';
-import { useDeviceConfig } from '../../hooks/useDeviceConfig';
 import { useSystemEvents } from '../../hooks/useSystemEvents';
 import { useStationContext } from '../../contexts/StationContext';
 import { SystemEvent } from '../../types/models';
@@ -20,11 +19,7 @@ const MainLayout: React.FC = () => {
 
   const { selectedDeviceId: deviceId } = useStationContext();
   const { data: telemetry } = useDeviceTelemetry(deviceId);
-  const { isLoading: isConfigLoading, error: configError } = useDeviceConfig(deviceId);
   const { data: systemEvents = [] } = useSystemEvents(deviceId);
-  const isMissingConfig = Boolean(deviceId) && !isConfigLoading &&
-    (configError as { status?: number } | null)?.status === 404;
-
   const unreadAlertCount = useMemo(() => {
     if (!systemEvents || !Array.isArray(systemEvents)) return 0;
     return systemEvents.filter((ev: SystemEvent) => {
@@ -48,27 +43,6 @@ const MainLayout: React.FC = () => {
   const navItems = PRIMARY_ROUTE_IDS.map((id) => ({ id, ...navMetadata[id] }));
 
   const isActive = (id: CanonicalRouteId) => matchPath({ path: routePath(id), end: false }, location.pathname) !== null;
-
-  if (isMissingConfig && location.pathname !== '/settings') {
-    return (
-      <div className="min-h-screen bg-emerald-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full ui-card text-center space-y-5 p-8">
-          <div className="mx-auto w-16 h-16 bg-amber-50 border border-amber-100 rounded-2xl flex items-center justify-center">
-            <Settings size={28} className="text-amber-600" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold text-primary-deep">Chưa kết nối máy chủ</h2>
-            <p className="text-sm text-emerald-800/70 leading-relaxed">
-              Ứng dụng cần cấu hình backend để nhận dữ liệu trực tiếp. Vui lòng kiểm tra lại trong phần Cài đặt.
-            </p>
-          </div>
-          <button onClick={() => navigate(routePath('settings'))} className="ui-btn-primary w-full">
-            Đi tới Cài đặt
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-screen bg-page-bg text-primary-deep font-sans overflow-hidden">

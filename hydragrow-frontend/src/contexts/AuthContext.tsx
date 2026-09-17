@@ -40,11 +40,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribeAuthState = subscribeAuthState((nextUser) => {
       setUser(nextUser);
-      setStatus(nextUser ? 'authenticated' : 'unauthenticated');
+      // Do not expose an authenticated state to API consumers until the
+      // Firebase ID token callback has populated the in-memory token. This
+      // prevents the first API request after a page reload from falling back
+      // to the API-key path with an empty key.
+      if (!nextUser) {
+        setIdToken(null);
+        setStatus('unauthenticated');
+      } else {
+        setStatus('loading');
+      }
     });
 
     const unsubscribeIdToken = subscribeIdToken((token) => {
       setIdToken(token);
+      setStatus(token ? 'authenticated' : 'unauthenticated');
     });
 
     return () => {

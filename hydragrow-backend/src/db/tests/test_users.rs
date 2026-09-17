@@ -74,7 +74,10 @@ mod tests {
         assert_eq!(user.firebase_uid, "self-reg-uid-1");
         assert_eq!(user.email, "dana@example.com");
         assert!(user.is_active);
-        assert_eq!(user.scopes, vec!["read:telemetry".to_string()]);
+        assert_eq!(
+            user.scopes,
+            vec!["read:telemetry".to_string(), "health:read".to_string()]
+        );
     }
 
     #[sqlx::test]

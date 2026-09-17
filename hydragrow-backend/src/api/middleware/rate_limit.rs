@@ -75,6 +75,17 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        // CORS preflight is browser negotiation, not an application request.
+        // Counting OPTIONS against the API quota makes a multi-endpoint SPA
+        // burn the limiter before its real GET/POST traffic is served.
+        if req.method() == actix_web::http::Method::OPTIONS {
+            let fut = self.service.call(req);
+            return Box::pin(async move {
+                let res = fut.await?;
+                Ok(res.map_into_boxed_body())
+            });
+        }
+
         let client_ip = req
             .connection_info()
             .realip_remote_addr()

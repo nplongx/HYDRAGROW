@@ -134,7 +134,9 @@ pub async fn upsert_user(
 /// Tự cấp tài khoản lần đầu cho user Firebase mới (self-registration).
 /// CHỈ tạo khi chưa tồn tại; không bao giờ ghi đè scope/display_name của
 /// tài khoản đã có (khác `upsert_user` dành cho provisioning của admin).
-/// Scope mặc định chỉ gồm `read:telemetry`.
+/// Scope mặc định cho tài khoản mới gồm các quyền đọc-only mà dashboard
+/// cần để hoạt động mà không cấp quyền điều khiển.
+
 pub async fn provision_default_user(
     pool: &PgPool,
     firebase_uid: &str,
@@ -150,7 +152,10 @@ pub async fn provision_default_user(
     )
     .bind(firebase_uid)
     .bind(email)
-    .bind(vec!["read:telemetry".to_string()])
+    .bind(vec![
+        "read:telemetry".to_string(),
+        "health:read".to_string(),
+    ])
     .fetch_one(pool)
     .await
 }

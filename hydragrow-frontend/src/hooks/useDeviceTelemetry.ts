@@ -26,5 +26,10 @@ export function useDeviceTelemetry(deviceIdOverride?: string | null) {
     queryKey: deviceId ? deviceTelemetryQueryKey(deviceId) : ['device-telemetry', null],
     queryFn: ({ signal }) => telemetryApi.latest(deviceId!, signal),
     enabled: Boolean(deviceId),
+    // A 503 here means the backend has no authoritative current state yet.
+    // Retrying immediately only amplifies load and can trip the API limiter.
+    retry: false,
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
   });
 }

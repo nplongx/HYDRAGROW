@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useStationContext } from "../contexts/StationContext";
 import toast from "react-hot-toast";
 import { isTauriRuntime } from "../platform/settings";
@@ -6,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildControlCommandRequest, controlApi } from "../api/control";
 import { useDeviceTelemetry } from "./useDeviceTelemetry";
 import type { PumpStatus } from "../types/models";
+import { queryKeys } from "../api/queryKeys";
 
 export const INTERLOCK_PAIRS: Record<string, string> = {
   WATER_PUMP_IN: "WATER_PUMP_OUT",
@@ -93,33 +95,35 @@ export const useDeviceControl = (deviceId: string) => {
   );
   const [commandIds, setCommandIds] = useState<Record<string, string>>({});
 
+  // All control components share one React Query cache. Previously every
+  // useDeviceControl() instance fetched the same command history independently.
+  const commandHistoryQuery = useQuery({
+    queryKey: activeDeviceId
+      ? queryKeys.controlCommands(activeDeviceId)
+      : ["control-commands", null],
+    queryFn: ({ signal }) => controlApi.listCommands(activeDeviceId!, signal),
+    enabled: Boolean(activeDeviceId),
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
+  });
+
   useEffect(() => {
     setCommandIds({});
     setCommandStatus({});
     setProcessingPumpIds({});
-    if (!activeDeviceId) return;
-    let cancelled = false;
-    void controlApi.listCommands(activeDeviceId)
-      .then((records) => {
-        if (cancelled) return;
-        const ids: Record<string, string> = {};
-        const statuses: Record<string, string> = {};
-        for (const record of records) {
-          if (record.pump_id && !ids[record.pump_id]) {
-            ids[record.pump_id] = record.command_id;
-            statuses[record.pump_id] = record.lifecycle;
-          }
-        }
-        if (!cancelled) {
-          setCommandIds(ids);
-          setCommandStatus(statuses);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [activeDeviceId]);
+    const records = commandHistoryQuery.data;
+    if (!records) return;
+    const ids: Record<string, string> = {};
+    const statuses: Record<string, string> = {};
+    for (const record of records) {
+      if (record.pump_id && !ids[record.pump_id]) {
+        ids[record.pump_id] = record.command_id;
+        statuses[record.pump_id] = record.lifecycle;
+      }
+    }
+    setCommandIds(ids);
+    setCommandStatus(statuses);
+  }, [activeDeviceId, commandHistoryQuery.data]);
 
   useEffect(() => {
     const onLifecycle = (event: Event) => {
@@ -186,8 +190,18 @@ export const useDeviceControl = (deviceId: string) => {
       setIsProcessing(true);
       cooldownPump(pumpId, "REQUESTED");
       try {
-        const payload = buildControlCommandRequest(action, pumpId, duration_sec, pwm, dangerous);
-        const body = await controlApi.send(activeDeviceId, payload, isConfirmed);
+        const payload = buildControlCommandRequest(
+          action,
+          pumpId,
+          duration_sec,
+          pwm,
+          dangerous,
+        );
+        const body = await controlApi.send(
+          activeDeviceId,
+          payload,
+          isConfirmed,
+        );
         const commandId = body.command_id;
         if (commandId) {
           setCommandIds((prev) => ({ ...prev, [pumpId]: commandId }));

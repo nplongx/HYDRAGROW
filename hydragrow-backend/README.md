@@ -9,7 +9,7 @@ REST API + MQTT handler cho HYDRAGROW.
 - Rust stable toolchain (`rustup toolchain install stable`)
 - PostgreSQL 15+
 - InfluxDB 2.x
-- MQTT broker (e.g. EMQX, Mosquitto) accessible từ backend
+- MQTT broker (e.g. EMQX, Mosquitto, HiveMQ) accessible từ backend. Production dùng TLS (port 8883).
 
 ## Environment Variables
 
@@ -22,10 +22,10 @@ INFLUX_TOKEN=dev_only_token
 INFLUX_ORG=hydragrow
 INFLUX_BUCKET=sensors
 MQTT_HOST=localhost
-MQTT_PORT=1883
+MQTT_PORT=8883
 MQTT_USER=...
 MQTT_PASSWORD=...
-MQTT_TLS=false
+MQTT_TLS=true
 FIREBASE_PROJECT_ID=...
 API_KEY=...
 ```

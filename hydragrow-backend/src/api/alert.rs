@@ -164,9 +164,12 @@ pub async fn health_summary(
         .get::<AuthContext>()
         .cloned()
         .unwrap_or_default();
-    if !auth.has_scope("health:read") {
+    // health-summary is derived from telemetry/system events and is safe for
+    // the same read-only principals that can read telemetry. Keep health:read
+    // as a dedicated scope for richer controller-health endpoints.
+    if !auth.has_scope("health:read") && !auth.has_scope("read:telemetry") {
         return HttpResponse::Forbidden()
-            .json(json!({"error":"Missing required scope: health:read"}));
+            .json(json!({"error":"Missing required scope: health:read or read:telemetry"}));
     }
     let device_id = path.into_inner();
     let now = chrono::Utc::now().timestamp_millis();

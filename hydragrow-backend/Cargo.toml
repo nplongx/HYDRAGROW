@@ -17,9 +17,12 @@ futures-util = "0.3"
 
 # Database: InfluxDB
 
-# MQTT (Đã tắt TLS mặc định, dùng native)
+# MQTT
+# Use rustls so the Render Linux runtime does not depend on OpenSSL/native-tls
+# behaviour for the broker TLS handshake. The default rustls config loads the
+# platform CA store.
 rumqttc = { version = "0.24.0", default-features = false, features = [
-  "use-native-tls",
+  "use-rustls",
 ] }
 
 # Serialization

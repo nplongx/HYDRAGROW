@@ -136,7 +136,6 @@ pub async fn upsert_user(
 /// tài khoản đã có (khác `upsert_user` dành cho provisioning của admin).
 /// Scope mặc định cho tài khoản mới gồm các quyền đọc-only mà dashboard
 /// cần để hoạt động mà không cấp quyền điều khiển.
-
 pub async fn provision_default_user(
     pool: &PgPool,
     firebase_uid: &str,

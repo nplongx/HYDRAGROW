@@ -1,8 +1,8 @@
 {
   "requirement_id": "DOMAIN-11-PHYSICAL-HIL-E2E",
   "domain": "Domain 11 \u2014 Physical / HIL E2E",
-  "status": "IMPLEMENTED / H-01,H-02,H-03,H-04 VERIFIED / H-05,H-08,H-09,H-10 BLOCKED / H-06,H-07 PARTIAL",
-  "verified_at": "2026-09-17T06:45:00Z",
+  "status": "IMPLEMENTED / H-01,H-02,H-03,H-04 VERIFIED / H-05,H-08,H-09,H-10 BLOCKED / H-06,H-07 PARTIAL / DEPLOYED-CROSS-SYSTEM-RECHECK",
+  "verified_at": "2026-09-17T11:14:00Z",
   "repo": "/home/long/HYDRAGROW",
   "environment_rule": "source ~/export-esp.sh before controller build/check/flash commands",
   "scope": "Physical/HIL E2E only; no Domain 12 evidence refresh or release-readiness audit",
@@ -304,6 +304,13 @@
       "docs/superpowers/specs/2026-09-17-domain-11-physical-hil-e2e.md",
       "docs/evidence/DOMAIN-11-PHYSICAL-HIL-E2E-001.json"
     ]
+  },
+  "deployment_recheck": {
+    "status": "PASS_WITH_TELEMETRY_BLOCKER",
+    "observed_at": "2026-09-17T11:13:54Z",
+    "source": "Production Vercel browser + Render backend after merge commit 91e0c56c4",
+    "observed": "Authenticated production frontend successfully called /api/devices and selected device_001. GET /config/unified returned 404 reason=device_config_missing and GET /sensors/latest returned 503 dependency_unavailable; /health-summary remained 403 for the account's missing health:read permission. The UI rendered the truthful 'Không có dữ liệu telemetry' state and did not substitute numeric defaults.",
+    "next_fix": "Backend startup now backfills only the minimal disabled/manual device_config row for existing device_ownership rows. Live telemetry still requires the physical sensor to publish to the production broker consumed by the backend; no external-to-staging broker bridge was introduced."
   },
   "test_records": [
     {

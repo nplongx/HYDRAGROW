@@ -112,6 +112,31 @@ pub async fn get_device_config(pool: &PgPool, device_id: &str) -> Result<DeviceC
     Ok(config)
 }
 
+/// Ensure every claimed device has a durable base configuration.
+///
+/// Newly claimed devices start disabled and in manual mode. This creates the
+/// minimum authoritative row required by the unified-config API without
+/// inventing calibration/sensor measurements or enabling actuators.
+#[instrument(skip(executor))]
+pub async fn ensure_device_config(
+    executor: impl Executor<'_, Database = sqlx::Postgres>,
+    device_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO device_config (
+            device_id, ec_target, ec_tolerance, ph_target, ph_tolerance,
+            control_mode, is_enabled, delay_between_a_and_b_sec
+        ) VALUES ($1, 1.5, 0.1, 6.0, 0.2, 'manual', FALSE, 10)
+        ON CONFLICT (device_id) DO NOTHING
+        "#,
+    )
+    .bind(device_id)
+    .execute(executor)
+    .await
+    .map(|_| ())
+}
+
 #[instrument(skip(executor, config))]
 pub async fn upsert_device_config(
     executor: impl Executor<'_, Database = sqlx::Postgres>,

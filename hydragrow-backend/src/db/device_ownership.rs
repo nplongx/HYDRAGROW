@@ -98,6 +98,11 @@ pub async fn claim_device(
         Some((mqtt_username, mqtt_password, password_hash))
     };
 
+    // A successful claim must leave the device with the minimum durable base
+    // configuration required by GET /config/unified. Keep new devices disabled
+    // so claiming a device can never implicitly enable actuator operation.
+    crate::db::postgres::ensure_device_config(pool, device_id).await?;
+
     let record = if let Some((ref mqtt_username, _, ref password_hash)) = new_credentials {
         sqlx::query_as::<_, DeviceOwnershipRecord>(
             r#"

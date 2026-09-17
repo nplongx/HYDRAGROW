@@ -38,6 +38,24 @@ mod tests {
     // ── new tests ─────────────────────────────────────────────────────────────
 
     #[sqlx::test]
+    async fn claim_device_ensures_safe_base_config(pool: sqlx::PgPool) {
+        let uid = create_test_user(&pool, 9).await;
+
+        let _ = claim_device(&pool, uid, "dev-config", None, None)
+            .await
+            .unwrap();
+
+        let config = crate::db::postgres::get_device_config(&pool, "dev-config")
+            .await
+            .expect("claim must create the base device config");
+        assert_eq!(config.control_mode, "manual");
+        assert!(!config.is_enabled);
+        assert_eq!(config.delay_between_a_and_b_sec, 10);
+        assert!((config.ec_target - 1.5).abs() < f32::EPSILON);
+        assert!((config.ph_target - 6.0).abs() < f32::EPSILON);
+    }
+
+    #[sqlx::test]
     async fn claim_device_returns_mqtt_credentials_on_first_claim(pool: sqlx::PgPool) {
         let uid = create_test_user(&pool, 10).await;
         let (record, credentials) = claim_device(&pool, uid, "dev-new", Some("My Sensor"), None)

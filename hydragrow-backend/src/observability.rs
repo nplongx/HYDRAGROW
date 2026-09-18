@@ -13,7 +13,7 @@ use std::{
     },
     time::Instant,
 };
-use tracing::info_span;
+use tracing::{error, info_span};
 use uuid::Uuid;
 
 use crate::{AppState, metrics};
@@ -213,7 +213,25 @@ pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
         .fetch_one(&state.pg_pool)
         .await
         .is_ok();
-    let influx = state.influx_client.health().await.is_ok();
+    // InfluxDB Cloud does not expose the OSS `/health` semantics used by
+    // `Client::health()`. Listing buckets verifies Cloud reachability, token/org
+    // authorization, and that the configured bucket exists.
+    let influx = match state.influx_client.list_buckets(None).await {
+        Ok(buckets) => {
+            let bucket_exists = buckets
+                .buckets
+                .iter()
+                .any(|bucket| bucket.name == state.influx_bucket);
+            if !bucket_exists {
+                error!(bucket = %state.influx_bucket, "InfluxDB bucket is not available");
+            }
+            bucket_exists
+        }
+        Err(error) => {
+            error!(error = %error, "InfluxDB Cloud check failed");
+            false
+        }
+    };
     let mqtt = state.mqtt_connected.load(Ordering::Relaxed);
     let event_bus = true;
     let configuration_sync_worker = state.configuration_sync_worker.load(Ordering::Relaxed);

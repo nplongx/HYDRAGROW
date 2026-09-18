@@ -10,6 +10,7 @@ describe('control API contracts', () => {
   it('encodes device resource IDs before transport', () => {
     expect(encodeURIComponent('dev/a')).toBe('dev%2Fa');
     expect(controlApi.listCommands).toBeTypeOf('function');
+    expect(controlApi.issuePrivilegedToken).toBeTypeOf('function');
   });
 
   it('builds the canonical command envelope with nullable optional params', () => {
@@ -21,7 +22,8 @@ describe('control API contracts', () => {
     });
   });
 
-  it('keeps confirmed transport header explicit', () => {
+  it('keeps dangerous-command transport headers explicit', () => {
     expect('X-User-Confirmed').toBe('X-User-Confirmed');
+    expect('X-Privileged-Token').toBe('X-Privileged-Token');
   });
 });

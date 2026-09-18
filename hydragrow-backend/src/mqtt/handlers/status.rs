@@ -304,6 +304,40 @@ pub async fn handle_controller(device_id: String, payload: &[u8], app_state: web
 
     reconcile_command_confirmations(&app_state, &device_id, payload_json).await;
 
+    if let Some(config_version) = payload_json.get("config_version").and_then(|v| v.as_i64()) {
+        match crate::db::config_sync::get(&app_state.pg_pool, &device_id).await {
+            Ok(Some(sync)) if config_version < sync.config_version => {
+                if let Err(error) =
+                    crate::db::config_sync::mark_controller_pending(&app_state.pg_pool, &device_id)
+                        .await
+                {
+                    error!(device_id = %device_id, reported_version = config_version, desired_version = sync.config_version, error = %error, "Không thể requeue controller configuration after runtime config loss");
+                } else {
+                    info!(device_id = %device_id, reported_version = config_version, desired_version = sync.config_version, "Controller configuration revision behind desired state; queued resync");
+                }
+            }
+            Ok(Some(sync)) if config_version == sync.config_version => {
+                if let Err(error) = crate::db::config_sync::mark_applied(
+                    &app_state.pg_pool,
+                    &device_id,
+                    config_version,
+                    "controller",
+                )
+                .await
+                {
+                    error!(device_id = %device_id, config_version, error = %error, "Không ghi được controller configuration sync state");
+                }
+            }
+            Ok(Some(sync)) => {
+                tracing::debug!(device_id = %device_id, reported_version = config_version, desired_version = sync.config_version, "Ignoring controller status from unknown future configuration revision");
+            }
+            Ok(None) => {}
+            Err(error) => {
+                error!(device_id = %device_id, config_version, error = %error, "Không đọc được controller configuration sync state")
+            }
+        }
+    }
+
     let received_at = chrono::Utc::now().to_rfc3339();
     let cached_telemetry = app_state
         .device_states

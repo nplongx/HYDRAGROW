@@ -50,7 +50,7 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
           echo "$changed"
 
-          if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)|\.github/workflows/)' <<< "$changed"; then
+          if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/|ESP32-C3-(CONTROLLER-NODE|SENSOR-NODE|SENSOR-NODE-RUST)/|\.github/workflows/)' <<< "$changed"; then
             missing=()
             grep -Fq 'docs/project-state/TRACEABILITY.md' <<< "$changed" || missing+=("docs/project-state/TRACEABILITY.md")
             grep -Fq 'docs/project-state/CURRENT-STATUS.md' <<< "$changed" || missing+=("docs/project-state/CURRENT-STATUS.md")

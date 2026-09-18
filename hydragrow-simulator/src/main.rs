@@ -26,8 +26,15 @@ pub enum Commands {
         ticks: u64,
         #[arg(long, default_value_t = 1000)]
         tick_ms: u64,
+        #[arg(long, default_value_t = false)]
+        realtime: bool,
         #[arg(long, default_value = "sim-dev")]
         device_id: String,
+        /// Initial controller control mode. Defaults to AUTO to mirror the physical
+        /// controller; integration tests may select MANUAL through this same config
+        /// field rather than bypassing controller-core command semantics.
+        #[arg(long, default_value = "auto", value_parser = ["auto", "manual"])]
+        control_mode: String,
         #[arg(short, long)]
         mqtt: Option<String>,
         #[arg(short, long)]
@@ -54,19 +61,28 @@ fn main() -> Result<()> {
             scenario,
             ticks,
             tick_ms,
+            realtime,
             device_id,
+            control_mode,
             mqtt,
             record,
         } => {
+            let mut config = default_config;
+            config.control_mode = if control_mode == "manual" {
+                hydragrow_shared::ControlMode::Manual
+            } else {
+                hydragrow_shared::ControlMode::Auto
+            };
             let options = RunOptions {
                 scenario,
                 ticks,
                 tick_ms,
+                realtime,
                 device_id,
                 mqtt,
                 record,
             };
-            run_simulation(default_config, &options)?;
+            run_simulation(config, &options)?;
         }
         Commands::Step { scenario } => {
             let tank = if let Some(path) = &scenario {

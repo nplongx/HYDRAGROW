@@ -2,11 +2,20 @@
 pub struct VirtualPump {
     pub on: bool,
     pub pwm_percent: u8,
+    pub desired_on: bool,
+    pub desired_pwm_percent: u8,
 }
 
 impl VirtualPump {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn apply_command(&mut self, on: bool, pwm_percent: u8) {
+        self.desired_on = on;
+        self.desired_pwm_percent = pwm_percent.min(100);
+        self.on = self.desired_on;
+        self.pwm_percent = self.desired_pwm_percent;
     }
 }
 

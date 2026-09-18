@@ -16,7 +16,7 @@ use tokio::sync::{
     RwLock,
     broadcast::{self},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::filter::filter_fn;
 
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
@@ -97,6 +97,8 @@ pub struct AppState {
     // Messaging
     pub mqtt_client: AsyncClient,
     pub mqtt_connected: Arc<std::sync::atomic::AtomicBool>,
+    pub configuration_sync_worker: Arc<std::sync::atomic::AtomicBool>,
+    pub configuration_sync_healthy: Arc<std::sync::atomic::AtomicBool>,
     pub command_reconciliation_worker: Arc<std::sync::atomic::AtomicBool>,
 
     // Auth
@@ -251,15 +253,11 @@ async fn main() -> anyhow::Result<()> {
     info!("Đã khởi tạo client InfluxDB Cloud (v2 API)");
 
     let mqtt_host = env::var("MQTT_HOST").unwrap_or_else(|_| "localhost".to_string());
-    let mqtt_port: u16 = env::var("MQTT_PORT")
+    let configured_mqtt_port: u16 = env::var("MQTT_PORT")
         .unwrap_or_else(|_| "1883".to_string())
         .parse()?;
     let mqtt_client_id =
         env::var("MQTT_CLIENT_ID").unwrap_or_else(|_| "rust_backend_server".to_string());
-
-    let mut mqttoptions = MqttOptions::new(mqtt_client_id, mqtt_host, mqtt_port);
-    mqttoptions.set_keep_alive(Duration::from_secs(30));
-    mqttoptions.set_clean_session(false);
 
     // The broker endpoint is deployment-owned configuration. Keep the local
     // plaintext default explicit; production must opt into TLS when its broker
@@ -270,6 +268,20 @@ async fn main() -> anyhow::Result<()> {
     // the platform CA store. Plain TCP stays the default to avoid breaking
     // existing local deployments; provisioning must not add any NEW plaintext path.
     let mqtt_tls = env::var("MQTT_TLS").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let mqtt_port = if mqtt_tls && configured_mqtt_port == 1883 {
+        warn!(
+            configured_port = configured_mqtt_port,
+            secure_port = 8883,
+            "MQTT_TLS is enabled with the plaintext MQTT port; using secure port 8883"
+        );
+        8883
+    } else {
+        configured_mqtt_port
+    };
+    let mut mqttoptions = MqttOptions::new(mqtt_client_id, mqtt_host, mqtt_port);
+    mqttoptions.set_keep_alive(Duration::from_secs(30));
+    mqttoptions.set_clean_session(false);
+
     if mqtt_tls {
         mqttoptions.set_transport(rumqttc::Transport::tls_with_default_config());
         info!("MQTT TLS enabled (rustls + platform CA store)");
@@ -312,6 +324,8 @@ async fn main() -> anyhow::Result<()> {
 
     let (event_bus, _) = broadcast::channel(256);
     let mqtt_connected = crate::observability::new_mqtt_connection_state();
+    let configuration_sync_worker = crate::observability::new_mqtt_connection_state();
+    let configuration_sync_healthy = crate::observability::new_mqtt_connection_state();
     let command_reconciliation_worker = crate::observability::new_mqtt_connection_state();
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let firebase_project_id =
@@ -331,6 +345,8 @@ async fn main() -> anyhow::Result<()> {
         influx_bucket,
         mqtt_client: mqtt_client.clone(),
         mqtt_connected: mqtt_connected.clone(),
+        configuration_sync_worker: configuration_sync_worker.clone(),
+        configuration_sync_healthy: configuration_sync_healthy.clone(),
         command_reconciliation_worker: command_reconciliation_worker.clone(),
         api_key,
         privileged_control_secret: env::var("PRIVILEGED_CONTROL_SECRET")
@@ -355,6 +371,11 @@ async fn main() -> anyhow::Result<()> {
     crate::services::durable_command::spawn_recovery(
         app_state.clone().into_inner(),
         command_reconciliation_worker.clone(),
+    );
+    crate::services::config_sync::spawn(
+        app_state.clone().into_inner(),
+        configuration_sync_worker,
+        configuration_sync_healthy,
     );
 
     // Nạp lại toàn bộ script đã enable từ DB vào cache khi khởi động
@@ -433,6 +454,12 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Ok(rumqttc::Event::Incoming(rumqttc::Packet::ConnAck(_))) => {
                     mqtt_connected.store(true, std::sync::atomic::Ordering::Relaxed);
+                    if let Err(e) =
+                        crate::db::config_sync::mark_published_pending(&app_state_for_mqtt.pg_pool)
+                            .await
+                    {
+                        error!(error = %e, "Không thể requeue configuration sync sau MQTT reconnect");
+                    }
                     // A broker restart can lose the persistent subscription set.
                     // Re-install subscriptions on every successful connection; this
                     // does not fabricate device state or telemetry.

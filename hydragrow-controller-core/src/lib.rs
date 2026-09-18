@@ -8,6 +8,7 @@ pub mod core;
 pub mod device_identity;
 pub mod ota_verify;
 pub mod pump_types;
+pub mod runtime;
 pub mod utils;
 
 pub use hydragrow_shared;

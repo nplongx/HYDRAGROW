@@ -1,13 +1,45 @@
 {
   "requirement_id": "DOMAIN-10-FULL-CROSS-SYSTEM-VERIFICATION",
   "domain": "Domain 10 — Full cross-system verification",
-  "status": "IMPLEMENTED / VERIFICATION IN PROGRESS",
-  "verified_at": null,
+  "status": "SOFTWARE CROSS-SYSTEM VERIFIED / PHYSICAL HIL BLOCKED",
+  "verified_at": "2026-09-18",
   "repo": "/home/long/HYDRAGROW",
   "environment_rule": "source ~/export-esp.sh before controller firmware build/test commands",
   "scope": "Cross-system verification only; no HIL/physical E2E, no release-readiness audit, no schema redesign",
-  "verification": [],
-  "acceptance": {},
+  "verification": [
+    {"id":"V-01","status":"PASS","observed":"shared p1_9_schema_registry 7/7; full shared 71/71; clippy -D warnings PASS; fmt --check PASS"},
+    {"id":"V-02","status":"PASS","observed":"isolated PostgreSQL 16.15 at 127.0.0.1:55432/hydragrow_test; full backend 430/430 PASS; clippy -D warnings PASS; fmt --check PASS"},
+    {"id":"V-03","status":"PASS","observed":"frontend full Vitest 126/126 files and 604/604 tests PASS on 2026-09-18; SystemLog pagination passed when rerun alone; frontend prior TypeScript/build checks remain PASS"},
+    {"id":"V-04","status":"PASS","observed":"PlatformIO native C++ canonical fixture consumer 14/14 PASS"},
+    {"id":"V-05","status":"PARTIAL","observed":"source ~/export-esp.sh completed; controller cargo check --locked --target riscv32imc-esp-espidf PASS. Controller cargo test compiled the test binary but espflash runner failed with espflash::no_serial because no physical ESP32-C3 serial device is present."},
+    {"id":"V-06","status":"PASS","observed":"ConfigurationSync 2/2, safety_data 5/5, health_topics 7/7, config_backup 6/6, Influx tests 7/7; controller-core 31-test E2E evidence retained"},
+    {"id":"V-07","status":"PASS","observed":"git diff --check PASS; dirty worktree preserved; no production PostgreSQL endpoint used"},
+    {"id":"V-08","status":"PASS","observed":"Real Backend + PostgreSQL + Mosquitto + Digital Twin E2E: signed API pump command observed on canonical AGITECH/<device>/controller/command, Twin ACKNOWLEDGED, FSM/controller status observed with pump_a=true, backend persisted CONFIRMED; test backend_api_command_reaches_real_mqtt_broker_postgres_and_twin PASS on 2026-09-18."},
+    {"id":"V-09","status":"PASS","observed":"Digital Twin simulator regression: 29 lib + 1 main + 2 harness E2E + 1 MQTT + 1 recorder + 1 frozen-budget + 1 stagnant + 13 scenario + 1 snapshot = 50 tests PASS; controller-core 81 lib tests plus integration suites PASS; shared 71 lib tests plus integration suites PASS."},
+    {"id":"V-10","status":"PASS","observed":"ConfigurationSync real E2E: desired controller revision persisted while Twin offline; Backend worker published retained canonical AGITECH/<device>/controller/config; Twin reconnect applied revision 42 and Backend marked controller_state=applied. Twin restart first reported runtime config_version=0, Backend requeued desired revision, worker republished it, Twin restored revision 42, and DB returned to applied. Same test PASS on 2026-09-18."}
+  ],
+  "acceptance": {
+    "AC-01":"PASS",
+    "AC-02":"PASS",
+    "AC-03":"PASS",
+    "AC-04":"PASS",
+    "AC-05":"PASS",
+    "AC-06":"BLOCKED_BY_PHYSICAL_RUNNER",
+    "AC-07":"PASS",
+    "AC-08":"PASS",
+    "AC-09":"PASS",
+    "AC-10":"PASS",
+    "AC-11":"PASS",
+    "AC-12":"PASS"
+  },
+  "digital_twin_software_e2e": {
+    "backend_postgresql_mosquitto_twin": "PASS",
+    "canonical_mqtt_contract": "PASS",
+    "signed_command_semantics": "PASS",
+    "acknowledged_and_confirmed_lifecycle": "PASS",
+    "configuration_sync_offline_reconnect_restart": "PASS",
+    "physical_hil": "NOT VERIFIED"
+  },
   "worktree_integrity": {
     "dirty_worktree_preserved": true,
     "production_postgresql_touched": false

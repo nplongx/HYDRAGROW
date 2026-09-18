@@ -1,0 +1,58 @@
+{
+  "requirement_id": "RELEASE-READINESS-REFRESH-001",
+  "verified_at": "2026-09-18",
+  "status": "INTEGRATION_READY_WITH_VERIFICATION_BLOCKERS / PRODUCTION_CROSS_SYSTEM_RELEASE_BLOCKED",
+  "repository": "/long/HYDRAGROW",
+  "branch": "chore/p1-cross-system-hardening",
+  "worktree": {
+    "status": "DIRTY",
+    "policy": "Existing unrelated changes preserved; no reset, clean, revert, or stash performed.",
+    "files_changed_before_refresh": [
+      "ESP32-C3-SENSOR-NODE/partitions.csv",
+      "hydragrow-backend/src/main.rs",
+      "hydragrow-shared/src/lib.rs",
+      "hydragrow-shared/tests/p1_9_schema_registry.rs",
+      "hydragrow-shared/tests/schema_roundtrip_and_snapshots.rs"
+    ]
+  },
+  "current_gates": {
+    "p0_architecture": "GREEN",
+    "p1_core_architecture": "GREEN",
+    "configuration_sync": "VERIFIED — durable PostgreSQL configuration_sync state + worker + transactional restore sync are implemented; restart recovery is covered by existing evidence",
+    "safety_error_semantics": "VERIFIED — typed AVAILABLE/MISSING/DB_ERROR/INVALID classification and fail-closed actuation path are covered by existing evidence",
+    "migration_baseline": "VERIFIED on isolated PostgreSQL — prior VersionMissing(20260506) was caused by stale external database migration history selected through repository environment configuration, not by absence of repository migration 20260506000000",
+    "readiness_sync_health": "VERIFIED — /livez and /readyz distinguish dependency readiness, ConfigurationSync worker readiness, and synchronization transport health",
+    "shared_schema": "GREEN for shared/canonical parser and native C++ sensor fixture; controller firmware consumer executable verification requires physical ESP32-C3 runner",
+    "frontend": "YELLOW — current run 125/126 files PASS, 603/604 tests PASS; SystemLog pagination test timed out; TypeScript and build PASS; build retains ~1.41 MB main chunk warning",
+    "simulator": "GREEN — latest executed suite PASS",
+    "shared": "GREEN — 20 unit + 3 integration tests PASS; cargo fmt --check PASS",
+    "backend": "RED/YELLOW — latest full run with explicit DATABASE_URL ended 339 passed / 91 failed; failure set requires classification before any release claim",
+    "physical_hil": "NOT VERIFIED",
+    "full_cross_system": "IN PROGRESS — Domain 10 has implementation scope but no completed verification record",
+    "production_observability_deployment": "NOT VERIFIED"
+  },
+  "verification_evidence": {
+    "backend_full_baseline": "docs/evidence/DOMAIN-03-FULL-BACKEND-TEST-BASELINE.json — historical isolated baseline remains 425/425 PASS; latest full rerun did not reproduce that baseline and ended 339 passed / 91 failed, so historical evidence is not sufficient for current release gate",
+    "backup_restore_config_sync": "docs/evidence/BACKUP-RESTORE-CONFIG-SYNC-001.json — durable sync and transactional restore checks PASS",
+    "safety_data_unavailable": "docs/evidence/SAFETY-DATA-UNAVAILABLE-001.json — isolated backend 432/432 PASS; DB-error semantics PASS",
+    "readiness_sync": "docs/evidence/READINESS-SYNC-001.json — historical focused evidence remains PASS; current full backend rerun prevents treating backend runtime verification as globally green",
+    "sensor_firmware_fixture": "docs/evidence/P1.9-FIRMWARE-FIXTURE-001.json — native C++ 14/14 PASS",
+    "controller_firmware_fixture": "docs/evidence/P1.9-FIRMWARE-CANONICAL-CONSUMERS-001.json — firmware test binary compiles; physical runner blocks execution",
+    "physical_hil": "docs/evidence/DOMAIN-11-PHYSICAL-HIL-E2E-001.json — deployment/topology/HIL gaps remain"
+  },
+  "release_blockers": [
+    "Classify and resolve the current backend full-suite 91 failures; establish a reproducible clean PostgreSQL baseline before release.",
+    "Resolve the current frontend SystemLog pagination timeout and rerun the full frontend suite.",
+    "Complete Domain 10 executable cross-system verification across HTTP, MQTT, PostgreSQL, InfluxDB, WebSocket, frontend, and restart/recovery paths.",
+    "Execute controller canonical fixture tests on physical ESP32-C3 or equivalent supported HIL runner.",
+    "Execute production-topology physical sensor/controller E2E and record evidence; no actuator activation is implied by this gate.",
+    "Verify production observability deployment/export path if required by release environment.",
+    "Do not claim arbitrary legacy production-database compatibility until a supported upgrade-path test exists."
+  ],
+  "documentation_actions": [
+    "CURRENT-STATUS.md and TRACEABILITY.md refreshed to reference this record as canonical release-status index.",
+    "Historical evidence is retained unchanged and is not relabeled as current."
+  ],
+  "commit_created": false,
+  "production_postgresql_touched": false
+}

@@ -105,6 +105,7 @@ mod tests {
             pump_a: VirtualPump {
                 on: true,
                 pwm_percent: 100,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -132,6 +133,7 @@ mod tests {
             water_pump_in: VirtualPump {
                 on: true,
                 pwm_percent: 100,
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -162,6 +164,7 @@ mod tests {
             water_pump_out: VirtualPump {
                 on: true,
                 pwm_percent: 100,
+                ..Default::default()
             },
             ..Default::default()
         };

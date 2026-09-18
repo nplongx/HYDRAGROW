@@ -36,7 +36,8 @@ commands:
     lint_cmd:  "cd hydragrow-frontend && npx eslint . && npx tsc --noEmit"
     fmt_cmd:   "cd hydragrow-frontend && npx prettier --check ."
 
-  # Fallback — full workspace
+  # Fallback — all host-verifiable Rust crates + frontend. The repository has
+  # no root Cargo.toml; firmware targets use their dedicated CI workflows.
   default:
     build_cmd: "bash scripts/build.sh"
     test_cmd:  "bash scripts/test.sh"

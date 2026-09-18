@@ -1,5 +1,5 @@
 use hydragrow_shared::{
-    recipe::CropRecipe, IncomingSensorPayload, MqttCommandIn, MqttCommandOut, SensorData,
+    IncomingSensorPayload, MqttCommandIn, MqttCommandOut, SensorData, recipe::CropRecipe,
 };
 use serde_json::Value;
 use std::{collections::BTreeMap, fs, path::PathBuf};
@@ -123,9 +123,11 @@ fn typed_shared_payloads_round_trip_against_canonical_fixtures() {
     assert_eq!(recipe.stages[0].duration_sec, 604_800);
     assert_eq!(recipe.stages[1].name, "vegetative");
     let emitted = serde_json::to_value(&recipe).unwrap();
-    assert!(emitted["stages"][0]
-        .get("water_change_interval_days")
-        .is_none());
+    assert!(
+        emitted["stages"][0]
+            .get("water_change_interval_days")
+            .is_none()
+    );
     assert!(emitted["stages"][0].get("auto_dilute_ec_trigger").is_none());
 }
 
@@ -171,8 +173,7 @@ fn firmware_mqtt_parsers_accept_canonical_sensor_and_command_fixtures() {
     object.remove("ts");
     object.remove("nonce");
     object.remove("signature");
-    let command: MqttCommandIn =
-        serde_json::from_value(command).expect("firmware command parser");
+    let command: MqttCommandIn = serde_json::from_value(command).expect("firmware command parser");
     assert_eq!(command.action, "start");
     assert_eq!(command.target.as_deref(), Some("device-001"));
     let params = command.params.expect("canonical nested command params");

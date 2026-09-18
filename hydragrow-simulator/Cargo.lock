@@ -466,6 +466,7 @@ name = "hydragrow-simulator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "hydragrow-controller-core",
  "hydragrow-shared",

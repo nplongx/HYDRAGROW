@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
-          if grep -Eq '^hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/' <<< "$changed"; then
+          if grep -Eq '^(hydragrow-(backend|shared|frontend|controller-core|simulator|firmware)/|ESP32-C3-(CONTROLLER-NODE|SENSOR-NODE|SENSOR-NODE-RUST)/)' <<< "$changed"; then
             grep -Fq "$CONTRACT_PATH" <<< "$changed" || {
               echo "Material product change detected but the declared acceptance contract was not changed."
               exit 1

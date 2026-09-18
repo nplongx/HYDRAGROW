@@ -237,7 +237,8 @@ fn legacy_sensor_aliases_are_input_only_and_canonical_ec_is_emitted() {
         "time": "2026-09-16T10:00:00Z",
         "err_tds": true
     });
-    let sensor: SensorData = serde_json::from_value(legacy).expect("legacy aliases must remain readable");
+    let sensor: SensorData =
+        serde_json::from_value(legacy).expect("legacy aliases must remain readable");
     assert_eq!(sensor.ec, 1.23);
     assert_eq!(sensor.err_ec, Some(true));
 

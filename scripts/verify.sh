@@ -5,13 +5,43 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "== Rust format =="
-cargo fmt --all -- --check
+for manifest in \
+  hydragrow-shared/Cargo.toml \
+  hydragrow-controller-core/Cargo.toml \
+  hydragrow-simulator/Cargo.toml \
+  hydragrow-backend/Cargo.toml \
+  hydragrow-diagnostic-worker/Cargo.toml \
+  hydragrow-supervisor-cli/Cargo.toml \
+  hydragrow-supervisor-query/Cargo.toml \
+  hydragrow-watchdog/Cargo.toml; do
+  cargo fmt --manifest-path "$manifest" -- --check
+done
 
 echo "== Rust check =="
-cargo check --workspace
+for manifest in \
+  hydragrow-shared/Cargo.toml \
+  hydragrow-controller-core/Cargo.toml \
+  hydragrow-simulator/Cargo.toml \
+  hydragrow-backend/Cargo.toml \
+  hydragrow-diagnostic-worker/Cargo.toml \
+  hydragrow-supervisor-cli/Cargo.toml \
+  hydragrow-supervisor-query/Cargo.toml \
+  hydragrow-watchdog/Cargo.toml; do
+  cargo check --manifest-path "$manifest"
+done
 
 echo "== Rust tests =="
-cargo test --workspace
+for manifest in \
+  hydragrow-shared/Cargo.toml \
+  hydragrow-controller-core/Cargo.toml \
+  hydragrow-simulator/Cargo.toml \
+  hydragrow-backend/Cargo.toml \
+  hydragrow-diagnostic-worker/Cargo.toml \
+  hydragrow-supervisor-cli/Cargo.toml \
+  hydragrow-supervisor-query/Cargo.toml \
+  hydragrow-watchdog/Cargo.toml; do
+  cargo test --manifest-path "$manifest"
+done
 
 echo "== Frontend build =="
 cd "$ROOT/hydragrow-frontend"

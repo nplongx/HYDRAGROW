@@ -14,10 +14,25 @@ pub struct InitialTank {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum FaultEventKind {
+    MqttDisconnect,
+    MqttReconnect,
+    MqttDelay { delay_ms: u64 },
+    MqttDrop,
+    MqttDuplicate,
     PumpStuckOn { pump: String },
     PumpStuckOff { pump: String },
+    ActuatorDelayed { pump: String, delay_ms: u64 },
     SensorFrozen { sensor: String },
-    // more as needed mapping to fsm faults
+    SensorMissing { sensor: String },
+    SensorInvalid { sensor: String },
+    SensorOutlier { sensor: String, multiplier: f32 },
+    ControllerRestart,
+    BootLoop,
+    TelemetryPause,
+    ConfigurationLoss,
+    ClockJump { delta_ms: i64 },
+    TelemetryDelay { delay_ms: u64 },
+    TelemetryOutOfOrder,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +51,54 @@ pub struct Scenario {
 pub fn validate_scenario(scenario: &Scenario) -> Result<()> {
     for (i, fault) in scenario.faults.iter().enumerate() {
         match &fault.kind {
+            FaultEventKind::MqttDelay { delay_ms } => {
+                if *delay_ms == 0 {
+                    bail!("fault index {} MQTT delay must be greater than zero", i);
+                }
+            }
+            FaultEventKind::TelemetryDelay { delay_ms } => {
+                if *delay_ms == 0 {
+                    bail!(
+                        "fault index {} telemetry delay must be greater than zero",
+                        i
+                    );
+                }
+            }
+            FaultEventKind::MqttDisconnect
+            | FaultEventKind::MqttReconnect
+            | FaultEventKind::MqttDrop
+            | FaultEventKind::MqttDuplicate
+            | FaultEventKind::ControllerRestart
+            | FaultEventKind::BootLoop
+            | FaultEventKind::TelemetryPause
+            | FaultEventKind::ConfigurationLoss
+            | FaultEventKind::ClockJump { .. }
+            | FaultEventKind::TelemetryOutOfOrder => {}
+            FaultEventKind::ActuatorDelayed { pump, delay_ms } => {
+                if *delay_ms == 0 {
+                    bail!("fault index {} actuator delay must be greater than zero", i);
+                }
+                let p = pump.to_ascii_uppercase();
+                if !matches!(
+                    p.as_str(),
+                    "PUMP_A"
+                        | "PUMP_B"
+                        | "PUMP_PH_UP"
+                        | "PH_UP"
+                        | "PUMP_PH_DOWN"
+                        | "PH_DOWN"
+                        | "WATER_PUMP_IN"
+                        | "WATER_IN"
+                        | "WATER_PUMP_OUT"
+                        | "WATER_OUT"
+                ) {
+                    bail!(
+                        "fault index {} contains unknown pump target name: '{}'",
+                        i,
+                        pump
+                    );
+                }
+            }
             FaultEventKind::PumpStuckOn { pump } | FaultEventKind::PumpStuckOff { pump } => {
                 let p = pump.to_ascii_uppercase();
                 let valid = matches!(
@@ -67,6 +130,32 @@ pub fn validate_scenario(scenario: &Scenario) -> Result<()> {
                         "fault index {} contains unknown sensor target name: '{}'",
                         i,
                         sensor
+                    );
+                }
+            }
+            FaultEventKind::SensorMissing { sensor } | FaultEventKind::SensorInvalid { sensor } => {
+                let s = sensor.to_ascii_uppercase();
+                if !matches!(s.as_str(), "EC" | "PH" | "TEMP" | "WATER_LEVEL" | "WATER") {
+                    bail!(
+                        "fault index {} contains unknown sensor target name: '{}'",
+                        i,
+                        sensor
+                    );
+                }
+            }
+            FaultEventKind::SensorOutlier { sensor, multiplier } => {
+                let s = sensor.to_ascii_uppercase();
+                if !matches!(s.as_str(), "EC" | "PH" | "TEMP" | "WATER_LEVEL" | "WATER") {
+                    bail!(
+                        "fault index {} contains unknown sensor target name: '{}'",
+                        i,
+                        sensor
+                    );
+                }
+                if !multiplier.is_finite() {
+                    bail!(
+                        "fault index {} contains non-finite sensor outlier multiplier",
+                        i
                     );
                 }
             }

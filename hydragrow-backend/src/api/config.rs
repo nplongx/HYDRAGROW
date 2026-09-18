@@ -1,8 +1,6 @@
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, web};
 use chrono::{DateTime, Utc};
 use hydragrow_shared::ControllerConfig;
-use hydragrow_shared::topics::topic_controller_config;
-use rumqttc::QoS;
 use serde_json::json;
 use tracing::{error, info, instrument};
 
@@ -149,24 +147,9 @@ pub async fn sync_config_to_esp32(
     app_state: &web::Data<AppState>,
     device_id: &str,
 ) -> Result<(), String> {
-    // 1. GỬI CẤU HÌNH TỔNG HỢP CHO CONTROLLER NODE
+    // Persist desired state. ConfigurationSync owns MQTT delivery so offline
+    // devices converge after reconnect instead of losing an API update.
     let payload = fetch_unified_config_concurrently(&app_state.pg_pool, device_id).await?;
-    let mqtt_topic_controller = topic_controller_config(device_id);
-    let mqtt_bytes_controller =
-        serde_json::to_vec(&payload).map_err(|e| format!("Lỗi serialize payload: {:?}", e))?;
-
-    app_state
-        .mqtt_client
-        .publish(
-            &mqtt_topic_controller,
-            QoS::AtLeastOnce,
-            true,
-            mqtt_bytes_controller,
-        )
-        .await
-        .map_err(|e| format!("Lỗi gửi MQTT Controller: {:?}", e))?;
-
-    // 2. GỬI CẤU HÌNH CẢM BIẾN RIÊNG CHO SENSOR NODE
     let sens = sqlx::query_as::<_, SensorCalibration>(
         "SELECT * FROM sensor_calibration WHERE device_id = $1",
     )
@@ -175,8 +158,8 @@ pub async fn sync_config_to_esp32(
     .await
     .map_err(|e| format!("Lỗi đọc Sensor Config: {:?}", e))?;
 
-    if let Some(sensor_config) = sens {
-        let sensor_payload = json!({
+    let sensor_payload = if let Some(sensor_config) = sens {
+        json!({
             "ph_v7":                   sensor_config.ph_v7,
             "ph_v4":                   sensor_config.ph_v4,
             "ph_v10":                  sensor_config.ph_v10,
@@ -191,26 +174,25 @@ pub async fn sync_config_to_esp32(
             "enable_ec_sensor":        sensor_config.enable_ec_sensor,
             "enable_temp_sensor":      sensor_config.enable_temp_sensor,
             "enable_water_level_sensor": sensor_config.enable_water_level_sensor,
-        });
+        })
+    } else {
+        json!({})
+    };
 
-        let sensor_bytes = serde_json::to_vec(&sensor_payload)
-            .map_err(|e| format!("Lỗi serialize sensor config: {:?}", e))?;
-
-        app_state
-            .mqtt_client
-            .publish(
-                hydragrow_shared::topics::topic_sensors_config(device_id),
-                QoS::AtLeastOnce,
-                true, // retain = true để sensor node nhận khi reconnect
-                sensor_bytes,
-            )
-            .await
-            .map_err(|e| format!("Lỗi gửi MQTT Sensor Config: {:?}", e))?;
-    }
+    let controller_value = serde_json::to_value(&payload)
+        .map_err(|e| format!("Lỗi serialize controller config: {e:?}"))?;
+    let version = crate::services::configuration::persist_desired_revision(
+        &app_state.pg_pool,
+        device_id,
+        controller_value,
+        sensor_payload,
+    )
+    .await?;
 
     info!(
-        "✅ Đã đồng bộ cấu hình FULL xuống Controller Node & Sensor Node ({})",
-        device_id
+        device_id,
+        config_version = version,
+        "ConfigurationSync desired revision persisted"
     );
     Ok(())
 }

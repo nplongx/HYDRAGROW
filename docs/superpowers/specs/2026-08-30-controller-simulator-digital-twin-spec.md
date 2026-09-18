@@ -1,6 +1,6 @@
 # SPEC — `hydragrow-simulator`: Digital-Twin / Controller-in-the-Loop Simulator
 
-Status: Draft — chờ review trước khi Jules bắt đầu Phase 0.
+Status: **Implementation baseline / actively tracked** — Phase 0–4 have been implemented incrementally; this document is now the traceability baseline for the Digital Twin Runtime work. It does not claim overall Definition of Done until the remaining command/configuration/recipe/fault/scenario/backend-E2E evidence is green.
 Liên quan: [module-rules/controller-core.md](./module-rules/controller-core.md), [module-rules/shared.md](./module-rules/shared.md), README.md (bảng CI + kiến trúc tổng quan).
 
 ## 1. Bối cảnh
@@ -212,3 +212,67 @@ HYDRAGROW/
 - Không refactor `command_handler.rs`/`process_mqtt_commands` (ESP32 crate, phụ thuộc kiểu esp-idf ở một số điểm) để dùng chung với simulator — Phase 4 chỉ *publish* telemetry giả, việc *nhận lệnh MQTT thủ công* vào simulator là stretch-goal riêng, ghi rõ trong roadmap, không âm thầm mở rộng scope.
 - Không thêm `SystemPhase`/`FaultCode` mới trừ khi có xác nhận — theo đúng ràng buộc của `module-rules/controller-core.md`.
 - Không sửa `hydragrow-backend/migrations/` hay `server_wallet.json` (nằm trong danh sách "Không đụng vào" ở README.md/CONTRIBUTING.md).
+
+## 7. Implementation status — 2026-09-18
+
+This section records the current repository state against the Digital Twin Runtime target. **Implemented** means code exists and has been exercised by repository tests/build checks; **in progress** means the architectural path exists but the full contract/e2e acceptance is not yet demonstrated; **not implemented** means no claim is made.
+
+| Spec capability | Status | Current repository evidence / boundary |
+|---|---|---|
+| Host-native simulator crate | **Implemented** | `hydragrow-simulator` is an independent crate with path dependencies on `hydragrow-controller-core` and `hydragrow-shared`; no ESP-IDF dependency. |
+| Deterministic virtual clock | **Implemented** | `src/clock.rs` provides `VirtualClock` with deterministic `now_ms`, uptime, advance and restart semantics. |
+| Virtual controller lifecycle | **Implemented / in progress** | `src/controller.rs` models BOOT/CONNECTING/CONNECTED/RUNNING/DEGRADED/OFFLINE and restart/boot identity. Full MQTT/backend lifecycle acceptance remains. |
+| Real controller-core FSM execution | **Implemented** | Harness drives the real `hydragrow-controller-core` orchestrator and applies its `ContextDelta`; no duplicate FSM was introduced. |
+| Virtual actuator desired vs actual state | **Implemented** | Virtual pumps retain desired and actual state; actuator faults can create mismatch. |
+| Causal virtual plant | **Implemented** | Tank dynamics consume actuator actual state and controller configuration rather than independent random sensor values. |
+| Deterministic sensor model | **Implemented / in progress** | Sensor values originate from plant state; deterministic no-noise mode and sensor fault injection exist. Remaining timing/dropout semantics need scenario coverage. |
+| Canonical shared MQTT topics/schema | **Implemented** | MQTT bridge uses `hydragrow-shared` topic helpers and shared payload types; no production `/twin/...` protocol was introduced. |
+| Twin inbound MQTT subscription | **Implemented / in progress** | Bridge subscribes to controller config/command/recipe topics and tracks connection state. Full typed routing and end-to-end contract confirmation remain tracked work. |
+| Command semantic reuse | **Implemented / in progress** | Command processing has been moved behind `hydragrow-controller-core` semantics, with the ESP adapter retaining persistent dedupe. Confirmation must still be proven from observed actuator/telemetry state rather than self-declaration. |
+| Command lifecycle REQUESTED → SENT → ACKNOWLEDGED → CONFIRMED | **In progress** | Lifecycle publish plumbing exists; complete observed-state confirmation, timeout, retry and duplicate-command behavior still require executable cross-system scenarios. |
+| Configuration sync normal/offline/reconnect/restart | **In progress** | MQTT reconnect/subscription plumbing exists; convergence against backend `ConfigurationSync` is not yet accepted as complete. |
+| Recipe set/clear parity | **In progress** | Relevant shared MQTT subscriptions exist; complete Twin-side recipe semantics and tests remain. |
+| Communication faults | **In progress** | MQTT disconnect state exists; delay/drop/duplicate and deterministic reconnect scenario coverage remain. |
+| Sensor missing/invalid/outlier faults | **Implemented** | Scenario fault types and injector behavior exist, including explicit error classification and deterministic outlier behavior. |
+| Sensor stale / timing faults | **In progress** | Virtual clock foundation exists; stale, delayed and out-of-order telemetry need explicit executable scenarios. |
+| Actuator stuck on/off | **Implemented** | Faults alter actual actuator state while preserving desired state, enabling command-vs-observed mismatch. |
+| Actuator delayed | **Not implemented / not accepted** | No acceptance evidence yet. |
+| Controller restart | **Implemented / in progress** | Restart resets controller/runtime state, hardware state and clock and creates a new boot identity; reconnect/resync acceptance remains. |
+| Boot loop / telemetry pause / configuration loss | **Not implemented / not accepted** | No complete executable acceptance evidence yet. |
+| Scenario engine | **Implemented / in progress** | Scenario format/injector exist; baseline library now includes normal operation, controller restart, sensor unavailable/invalid, actuator stuck on/off, plus existing stagnant/frozen-sensor cases. Communication/timing/controller-fault matrix is still incomplete. |
+| Recorder / deterministic replay evidence | **Implemented / in progress** | Existing recorder and deterministic clock infrastructure exist; broader scenario evidence remains. |
+| Backend + Twin E2E | **Not yet demonstrated** | Required path is real backend + real MQTT contract + Twin + actuator/plant + telemetry/lifecycle confirmation. No claim of completion until this is executable and green. |
+| Physical HIL gate | **Separate / still required** | Twin verification supplements software cross-system verification; it does not replace the physical controller/sensor HIL gate. |
+
+### 7.1 Current implementation boundary
+
+The current architecture is intentionally:
+
+```text
+hydragrow-backend / scheduler / safety
+                ↕ real MQTT contract
+        hydragrow-simulator
+          ├─ VirtualController
+          ├─ controller-core::orchestrator::tick()
+          ├─ VirtualHardware (desired / actual)
+          ├─ VirtualPlant (causal)
+          ├─ VirtualSensors
+          ├─ FaultInjector + ScenarioEngine
+          └─ MQTT bridge / telemetry
+```
+
+The authoritative controller state machine remains in `hydragrow-controller-core`. The Twin is an adapter/runtime around that core, not a second implementation of the controller FSM. The authoritative wire contract remains `hydragrow-shared`.
+
+### 7.2 Verification snapshot
+
+At this checkpoint, the following previously executed checks are green: simulator library tests, simulator integration tests, controller-core tests, ESP32 controller host-side `cargo check --locked --target riscv32imc-esp-espidf`, and `git diff --check`. These checks establish implementation safety for the completed increments; they **do not** constitute completion of the Digital Twin Definition of Done.
+
+The remaining acceptance gate is the executable cross-system matrix covering command lifecycle, configuration/recipe synchronization, communication/timing faults, required scenario library, and backend↔Twin E2E behavior.
+
+### 7.3 Explicit non-claims
+
+- No 3D/full-physics/AI-ML/cloud Digital Twin platform is implied.
+- No second database or fake backend/authentication layer is part of the Twin.
+- No production MQTT `/twin/...` protocol is introduced.
+- Passing Twin tests does not remove the need for physical HIL verification.
+- Existing unrelated working-tree changes are outside this implementation status and must not be reverted as part of Twin work.

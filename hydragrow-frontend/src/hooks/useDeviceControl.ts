@@ -197,14 +197,14 @@ export const useDeviceControl = (deviceId: string) => {
           pwm,
           dangerous,
         );
-        const privilegedToken = dangerous
-          ? (await controlApi.issuePrivilegedToken(activeDeviceId)).token
-          : undefined;
+         const privilegedToken = dangerous
+           ? (await controlApi.issuePrivilegedToken(activeDeviceId)).token
+           : undefined;
         const body = await controlApi.send(
           activeDeviceId,
           payload,
           isConfirmed,
-          privilegedToken,
+           privilegedToken,
         );
         const commandId = body.command_id;
         if (commandId) {

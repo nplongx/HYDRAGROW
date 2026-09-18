@@ -1,5 +1,7 @@
 # ROADMAP — `hydragrow-simulator` (Digital-Twin / Controller-in-the-Loop)
 
+> **Status update (2026-09-18):** Phase 0–4 groundwork has been implemented incrementally. This roadmap is retained as historical phase structure; the live implementation/acceptance status is tracked in the companion Digital Twin spec, section 7. Remaining work must be driven by executable acceptance rather than by treating the original phase checklist as proof of completion.
+
 Đọc kèm: [2026-08-30-controller-simulator-digital-twin-spec.md](../specs/2026-08-30-controller-simulator-digital-twin-spec.md) — mọi quyết định kiến trúc, mọi trích dẫn code thật đều nằm ở đó. File này chỉ chia việc theo Phase.
 
 **Cách dùng file này (dành cho agent thực thi, VD Jules):**

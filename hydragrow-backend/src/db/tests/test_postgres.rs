@@ -633,4 +633,52 @@ mod configuration_sync_tests {
         assert_eq!(row[0].controller_state, config_sync::APPLIED);
         assert_eq!(row[0].sensor_state, config_sync::PENDING);
     }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn published_revision_is_not_republished_until_mqtt_reconnect(pool: sqlx::PgPool) {
+        upsert_device_config(
+            &pool,
+            &DeviceConfig {
+                device_id: "sync-device".to_string(),
+                ec_target: 1.2,
+                ec_tolerance: 0.05,
+                ph_target: 6.0,
+                ph_tolerance: 0.1,
+                control_mode: "auto".to_string(),
+                is_enabled: true,
+                delay_between_a_and_b_sec: 10,
+                last_updated: chrono::Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+        config_sync::upsert_desired(
+            &pool,
+            "sync-device",
+            1,
+            &serde_json::json!({"config_version":1}),
+            &serde_json::json!({"config_version":1}),
+        )
+        .await
+        .unwrap();
+        config_sync::mark_published(&pool, "sync-device", 1, "controller")
+            .await
+            .unwrap();
+        config_sync::mark_published(&pool, "sync-device", 1, "sensor")
+            .await
+            .unwrap();
+
+        assert!(
+            config_sync::list_pending(&pool, 10)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+
+        config_sync::mark_published_pending(&pool).await.unwrap();
+        let rows = config_sync::list_pending(&pool, 10).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].controller_state, config_sync::PENDING);
+        assert_eq!(rows[0].sensor_state, config_sync::PENDING);
+    }
 }

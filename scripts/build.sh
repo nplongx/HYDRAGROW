@@ -5,7 +5,17 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "== Rust build =="
-cargo build --workspace
+for manifest in \
+  hydragrow-shared/Cargo.toml \
+  hydragrow-controller-core/Cargo.toml \
+  hydragrow-simulator/Cargo.toml \
+  hydragrow-backend/Cargo.toml \
+  hydragrow-diagnostic-worker/Cargo.toml \
+  hydragrow-supervisor-cli/Cargo.toml \
+  hydragrow-supervisor-query/Cargo.toml \
+  hydragrow-watchdog/Cargo.toml; do
+  cargo build --manifest-path "$manifest"
+done
 
 echo "== Frontend build =="
 cd "$ROOT/hydragrow-frontend"

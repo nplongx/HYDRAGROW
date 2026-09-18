@@ -24,6 +24,16 @@ pub struct FleetSummaryEntry {
     pub warning_count: usize,
 }
 
+#[derive(Debug, Serialize)]
+pub struct FleetComparisonEntry {
+    pub device_id: String,
+    pub label: Option<String>,
+    pub crop: Option<String>,
+    pub ec_latest: Option<f32>,
+    pub ph_latest: Option<f32>,
+    pub operational_state: hydragrow_shared::telemetry::OperationalState,
+}
+
 async fn active_stage_name(pool: &sqlx::PgPool, device_id: &str) -> Option<String> {
     sqlx::query_scalar::<_, String>(
         r#"
@@ -182,8 +192,85 @@ pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> 
     HttpResponse::Ok().json(json!({ "status": "success", "data": entries }))
 }
 
+pub async fn fleet_compare(
+    req: HttpRequest,
+    query: web::Query<std::collections::HashMap<String, String>>,
+    app_state: web::Data<AppState>,
+) -> impl Responder {
+    let auth = req
+        .extensions()
+        .get::<crate::api::middleware::auth::AuthContext>()
+        .cloned()
+        .unwrap_or_default();
+    if !auth.has_scope("read:telemetry") {
+        return HttpResponse::Forbidden().json(json!({
+            "error": "Missing required scope",
+            "required_scope": "read:telemetry"
+        }));
+    }
+    let Some(user_id) = user_id_from(&req) else {
+        return HttpResponse::Unauthorized().json(json!({"error": "Chưa đăng nhập"}));
+    };
+    let ids: Vec<String> = query
+        .get("device_ids")
+        .map(|raw| {
+            raw.split(',')
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    if !(2..=4).contains(&ids.len()) {
+        return HttpResponse::BadRequest().json(json!({
+            "error": "device_ids must contain 2 to 4 devices"
+        }));
+    }
+
+    let owned = match device_ownership::list_devices_for_user(&app_state.pg_pool, user_id).await {
+        Ok(devices) => devices,
+        Err(e) => {
+            tracing::error!(?e, "fleet comparison ownership lookup failed");
+            return HttpResponse::InternalServerError()
+                .json(json!({"error": "Không thể kiểm tra quyền thiết bị"}));
+        }
+    };
+    let owned_ids: std::collections::HashSet<&str> =
+        owned.iter().map(|d| d.device_id.as_str()).collect();
+    if ids.iter().any(|id| !owned_ids.contains(id.as_str())) {
+        return HttpResponse::Forbidden().json(json!({"error": "Device ownership required"}));
+    }
+
+    let mut entries = Vec::with_capacity(ids.len());
+    for device_id in &ids {
+        let (_, _, operational_state) = status_from_cache(&app_state, device_id).await;
+        let (ec_latest, ph_latest) = latest_ec_ph(&app_state, device_id).await;
+        let crop = active_stage_name(&app_state.pg_pool, device_id).await;
+        let label = owned
+            .iter()
+            .find(|d| d.device_id == *device_id)
+            .and_then(|d| d.label.clone());
+        entries.push(FleetComparisonEntry {
+            device_id: device_id.clone(),
+            label,
+            crop,
+            ec_latest,
+            ph_latest,
+            operational_state,
+        });
+    }
+    let crops: Vec<&str> = entries.iter().filter_map(|e| e.crop.as_deref()).collect();
+    let same_crop = crops.len() == entries.len() && crops.windows(2).all(|pair| pair[0] == pair[1]);
+    HttpResponse::Ok().json(json!({
+        "status": "success",
+        "data": entries,
+        "comparison": { "same_crop": same_crop, "normalized": same_crop }
+    }))
+}
+
 pub fn init_fleet_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/fleet/summary", web::get().to(fleet_summary));
+    cfg.route("/fleet/summary", web::get().to(fleet_summary))
+        .route("/fleet/compare", web::get().to(fleet_compare));
 }
 
 #[cfg(test)]
@@ -235,5 +322,14 @@ mod tests {
         assert!(obj["ec_latest"].is_null());
         assert!(obj["ph_latest"].is_null());
         assert_eq!(obj["warning_count"], 0);
+    }
+
+    #[test]
+    fn fleet_comparison_requires_bounded_selection() {
+        assert!(!(2..=4).contains(&0usize));
+        assert!(!(2..=4).contains(&1usize));
+        assert!((2..=4).contains(&2usize));
+        assert!((2..=4).contains(&4usize));
+        assert!(!(2..=4).contains(&5usize));
     }
 }

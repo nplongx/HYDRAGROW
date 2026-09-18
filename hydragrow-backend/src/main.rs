@@ -97,6 +97,8 @@ pub struct AppState {
     // Messaging
     pub mqtt_client: AsyncClient,
     pub mqtt_connected: Arc<std::sync::atomic::AtomicBool>,
+    pub configuration_sync_worker: Arc<std::sync::atomic::AtomicBool>,
+    pub configuration_sync_healthy: Arc<std::sync::atomic::AtomicBool>,
     pub command_reconciliation_worker: Arc<std::sync::atomic::AtomicBool>,
 
     // Auth
@@ -322,6 +324,8 @@ async fn main() -> anyhow::Result<()> {
 
     let (event_bus, _) = broadcast::channel(256);
     let mqtt_connected = crate::observability::new_mqtt_connection_state();
+    let configuration_sync_worker = crate::observability::new_mqtt_connection_state();
+    let configuration_sync_healthy = crate::observability::new_mqtt_connection_state();
     let command_reconciliation_worker = crate::observability::new_mqtt_connection_state();
     let api_key = std::env::var("API_KEY").context("API_KEY must be set in .env")?;
     let firebase_project_id =
@@ -341,6 +345,8 @@ async fn main() -> anyhow::Result<()> {
         influx_bucket,
         mqtt_client: mqtt_client.clone(),
         mqtt_connected: mqtt_connected.clone(),
+        configuration_sync_worker: configuration_sync_worker.clone(),
+        configuration_sync_healthy: configuration_sync_healthy.clone(),
         command_reconciliation_worker: command_reconciliation_worker.clone(),
         api_key,
         privileged_control_secret: env::var("PRIVILEGED_CONTROL_SECRET")
@@ -365,6 +371,11 @@ async fn main() -> anyhow::Result<()> {
     crate::services::durable_command::spawn_recovery(
         app_state.clone().into_inner(),
         command_reconciliation_worker.clone(),
+    );
+    crate::services::config_sync::spawn(
+        app_state.clone().into_inner(),
+        configuration_sync_worker,
+        configuration_sync_healthy,
     );
 
     // Nạp lại toàn bộ script đã enable từ DB vào cache khi khởi động
@@ -443,6 +454,12 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Ok(rumqttc::Event::Incoming(rumqttc::Packet::ConnAck(_))) => {
                     mqtt_connected.store(true, std::sync::atomic::Ordering::Relaxed);
+                    if let Err(e) =
+                        crate::db::config_sync::mark_published_pending(&app_state_for_mqtt.pg_pool)
+                            .await
+                    {
+                        error!(error = %e, "Không thể requeue configuration sync sau MQTT reconnect");
+                    }
                     // A broker restart can lose the persistent subscription set.
                     // Re-install subscriptions on every successful connection; this
                     // does not fabricate device state or telemetry.

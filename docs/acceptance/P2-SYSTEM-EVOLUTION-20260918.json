@@ -1,0 +1,13 @@
+{
+  "requirement_id": "P2-SYSTEM-EVOLUTION-20260918",
+  "objective": "Decompose HYDRAGROW runtime boundaries without creating a second source of truth, while preserving authoritative configuration, command, telemetry, realtime, firmware contract, fleet analytics, and verification semantics.",
+  "acceptance": [
+    {"id":"AC-1","criterion":"Backend configuration desired-state persistence has an explicit application-service boundary while PostgreSQL remains authoritative.","verification":"Configuration service unit test; backend clippy and targeted configuration tests"},
+    {"id":"AC-2","criterion":"ConfigurationSync retains durable lifecycle and bounded recovery semantics without introducing a second configuration authority.","verification":"Existing ConfigurationSync tests and cross-system evidence; review of configuration service and sync paths"},
+    {"id":"AC-3","criterion":"Realtime events route through a deterministic best-effort boundary and reconnect/malformed-frame recovery returns to authoritative query state.","verification":"Frontend realtimeRouter tests and backend WebSocket tests"},
+    {"id":"AC-4","criterion":"Frontend route/data boundaries isolate heavy views, normalize query keys, and preserve StationContext and React Query authority.","verification":"Frontend build, TypeScript, ESLint, and full Vitest suite"},
+    {"id":"AC-5","criterion":"Production C++ sensor and controller firmware use the canonical shared MQTT contract, with firmware ownership explicit; experimental Rust sensor work does not replace production C++ ownership.","verification":"C++ sensor native fixture/build and controller target checks; Rust sensor remains separately identified as experimental"},
+    {"id":"AC-6","criterion":"Fleet comparison is bounded to 2–4 authorized devices and exports/proposals use existing fleet/configuration authorities.","verification":"Fleet backend tests and FleetView targeted tests"},
+    {"id":"AC-7","criterion":"Operational verification records synchronization/command lifecycle metrics and separates software evidence from physical HIL and production deployment evidence.","verification":"Metrics registration test and P2 evidence record"}
+  ]
+}

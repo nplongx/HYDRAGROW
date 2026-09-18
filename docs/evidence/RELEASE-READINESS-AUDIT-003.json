@@ -1,0 +1,60 @@
+{
+  "requirement_id": "RELEASE-READINESS-AUDIT-003",
+  "verified_at": "2026-09-18",
+  "status": "SOFTWARE_INTEGRATION_HARDENED / PRODUCTION_RELEASE_BLOCKED",
+  "repository": "/long/HYDRAGROW",
+  "branch": "chore/p1-cross-system-hardening",
+  "scope": [
+    "product/frontend architecture",
+    "backend/domain/persistence",
+    "controller and firmware",
+    "canonical schema/protocol",
+    "Digital Twin and cross-system synchronization",
+    "verification and CI governance",
+    "physical HIL/release deployment"
+  ],
+  "fresh_verification": {
+    "simulator": "51 tests PASS after actuator-delayed water-pump coverage; fmt PASS; clippy -D warnings PASS",
+    "controller_core": "81 unit tests plus integration suites PASS; fmt PASS; clippy -D warnings PASS",
+    "shared": "103 tests PASS in latest audited run; canonical registry validator PASS for 8 contracts",
+    "backend_configuration_sync": "3/3 targeted PostgreSQL configuration_sync tests PASS on isolated PostgreSQL 16.15",
+    "backend_clippy_fmt": "clippy -D warnings PASS; fmt --check PASS",
+    "backend_twin_e2e": "1/1 ignored real E2E PASS in 31.46s using PostgreSQL + Mosquitto + Backend + Digital Twin; command lifecycle and ConfigurationSync restart path exercised",
+    "frontend_system_log": "8/8 targeted tests PASS; prior final evidence records 604/604 full-suite PASS, but this audit does not re-certify the entire suite from the parallel run",
+    "migration_chain": "isolated E2E PostgreSQL has 69 repository migrations applied through 20260916110000; prior VersionMissing(20260506) finding is not reproduced",
+    "diff_hygiene": "git diff --check PASS"
+  },
+  "changes_made_by_this_audit": [
+    "readiness now requires ConfigurationSync worker health",
+    "HTTP error metrics use route templates instead of raw device-scoped paths",
+    "published configuration sync rows are not polled/re-published continuously; MQTT reconnect requeues published rows",
+    "added PostgreSQL regression coverage for published/reconnect configuration sync semantics",
+    "Digital Twin actuator delay now covers water pumps and has executable regression coverage",
+    "simulator and controller-core clippy/fmt regressions fixed",
+    "repository fallback scripts no longer assume a nonexistent root Cargo workspace",
+    "delivery/acceptance/evidence governance now recognizes actual ESP32-C3 firmware paths"
+  ],
+  "remaining_red": [
+    "physical HIL is not verified: safe actuator instrumentation, reconnect/power-cycle, dosing/mixing and power-loss acceptance remain blocked",
+    "Rust sensor firmware has no dedicated CI workflow or direct canonical fixture test",
+    "controller firmware clippy depends on supported ESP-IDF/esp-rs target environment; host invocation fails on x86_64-linux",
+    "production broker/backend/physical-device topology and production observability deployment are not verified",
+    "legacy production database upgrade-path compatibility remains unverified even though the current isolated migration chain is healthy"
+  ],
+  "remaining_yellow": [
+    "frontend documentation contains stale architecture statements; route-content audit also needs refresh",
+    "frontend WS lagged/reconnect recovery lacks explicit tests for all declared recovery edges",
+    "main frontend bundle remains about 1.41 MB minified / 421 kB gzip",
+    "Rust sensor firmware schema fixture coverage remains incomplete",
+    "backend AppState and large domain modules remain modular-monolith debt",
+    "legacy telemetry projection remains alongside canonical authoritative telemetry",
+    "physical C++/Rust sensor implementation ownership boundary is not fully documented"
+  ],
+  "release_gate": {
+    "software_cross_system": "VERIFIED",
+    "physical_hil": "NOT_VERIFIED",
+    "production_release": "BLOCKED"
+  },
+  "commit_created": false,
+  "production_postgresql_touched": false
+}

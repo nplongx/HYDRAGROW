@@ -24,9 +24,9 @@ pub use command::{
 };
 pub use sensors::IncomingSensorPayload;
 pub use wire::{
-    ApiErrorBody, ApiErrorEnvelope, CANONICAL_SCHEMA_VERSION, CommandWireRecord, DeviceId,
-    EventId, JournalEventEnvelope, OperationalTelemetryEnvelope, Principal, PrincipalKind,
-    ResourceId, UserId,
+    ApiErrorBody, ApiErrorEnvelope, CANONICAL_SCHEMA_VERSION, CommandWireRecord, DeviceId, EventId,
+    JournalEventEnvelope, OperationalTelemetryEnvelope, Principal, PrincipalKind, ResourceId,
+    UserId,
 };
 
 /// A WiFi network credential tried by a controller in ascending priority order.

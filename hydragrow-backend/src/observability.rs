@@ -124,7 +124,6 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let ctx = request_context(&req);
         let method = req.method().to_string();
-        let path = req.path().to_string();
         let endpoint = req
             .match_pattern()
             .unwrap_or_else(|| "unmatched".to_string())
@@ -175,7 +174,7 @@ where
                 }
                 Err(error) => {
                     metrics::HTTP_REQUESTS_TOTAL
-                        .with_label_values(&[method.as_str(), path.as_str(), "500"])
+                        .with_label_values(&[method.as_str(), endpoint.as_str(), "500"])
                         .inc();
                     metrics::HTTP_REQ_DURATION_SECONDS
                         .with_label_values(&[method.as_str(), endpoint.as_str()])
@@ -189,6 +188,24 @@ where
 
 pub async fn liveness() -> impl Responder {
     HttpResponse::Ok().json(serde_json::json!({"status":"ok"}))
+}
+
+fn readiness_ok(
+    postgres: bool,
+    influx: bool,
+    mqtt: bool,
+    event_bus: bool,
+    configuration_sync_worker: bool,
+    configuration_sync_healthy: bool,
+    command_reconciliation_worker: bool,
+) -> bool {
+    postgres
+        && influx
+        && mqtt
+        && event_bus
+        && configuration_sync_worker
+        && configuration_sync_healthy
+        && command_reconciliation_worker
 }
 
 pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
@@ -217,9 +234,18 @@ pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
     };
     let mqtt = state.mqtt_connected.load(Ordering::Relaxed);
     let event_bus = true;
-    let configuration_sync_worker = "not_configured";
+    let configuration_sync_worker = state.configuration_sync_worker.load(Ordering::Relaxed);
+    let configuration_sync_healthy = state.configuration_sync_healthy.load(Ordering::Relaxed);
     let command_reconciliation_worker = state.command_reconciliation_worker.load(Ordering::Relaxed);
-    let ready = postgres && influx && mqtt && event_bus && command_reconciliation_worker;
+    let ready = readiness_ok(
+        postgres,
+        influx,
+        mqtt,
+        event_bus,
+        configuration_sync_worker,
+        configuration_sync_healthy,
+        command_reconciliation_worker,
+    );
     let body = serde_json::json!({
         "status": if ready { "ready" } else { "not_ready" },
         "dependencies": {
@@ -228,6 +254,7 @@ pub async fn readiness(state: web::Data<AppState>) -> impl Responder {
             "mqtt": mqtt,
             "event_websocket_fanout": event_bus,
             "configuration_synchronization_worker": configuration_sync_worker,
+            "configuration_synchronization_health": configuration_sync_healthy,
             "command_reconciliation_worker": command_reconciliation_worker
         }
     });
@@ -284,5 +311,13 @@ mod tests {
         let ctx = request_context(&req);
         assert_eq!(ctx.request_id, ctx.correlation_id);
         assert!(valid_id(&ctx.request_id));
+    }
+
+    #[test]
+    fn readiness_requires_configuration_sync_worker() {
+        assert!(readiness_ok(true, true, true, true, true, true, true));
+        assert!(!readiness_ok(true, true, true, true, false, true, true));
+        assert!(!readiness_ok(true, true, true, true, true, false, true));
+        assert!(!readiness_ok(true, true, true, true, true, true, false));
     }
 }

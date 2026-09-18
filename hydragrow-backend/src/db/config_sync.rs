@@ -112,7 +112,7 @@ pub async fn list_pending(pool: &sqlx::PgPool, limit: i64) -> Result<Vec<Configu
                controller_last_attempt_at, sensor_last_attempt_at,
                controller_applied_at, sensor_applied_at, last_error, updated_at
         FROM configuration_sync
-        WHERE controller_state IN ('pending', 'published') OR sensor_state IN ('pending', 'published')
+        WHERE controller_state = 'pending' OR sensor_state = 'pending'
         ORDER BY updated_at ASC
         LIMIT $1
         "#,
@@ -152,6 +152,16 @@ pub async fn mark_published(
         .await
         .context("failed to mark configuration sync published")?;
     Ok(())
+}
+
+pub async fn mark_published_pending(pool: &sqlx::PgPool) -> Result<u64> {
+    let result = sqlx::query(
+        "UPDATE configuration_sync SET controller_state = CASE WHEN controller_state = 'published' THEN 'pending' ELSE controller_state END, sensor_state = CASE WHEN sensor_state = 'published' THEN 'pending' ELSE sensor_state END, updated_at = CURRENT_TIMESTAMP WHERE controller_state = 'published' OR sensor_state = 'published'",
+    )
+    .execute(pool)
+    .await
+    .context("failed to requeue published configuration synchronization")?;
+    Ok(result.rows_affected())
 }
 
 pub async fn mark_publish_failed(
@@ -208,4 +218,17 @@ pub async fn mark_applied(
         .await
         .context("failed to mark configuration sync applied")?;
     Ok(result.rows_affected() == 1)
+}
+
+pub async fn mark_controller_pending(
+    pool: &sqlx::PgPool,
+    device_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "UPDATE configuration_sync SET controller_state = 'pending', controller_attempts = 0, controller_last_attempt_at = NULL, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE device_id = $1 AND controller_state <> 'pending'",
+    )
+    .bind(device_id)
+    .execute(pool)
+    .await?;
+    Ok(())
 }

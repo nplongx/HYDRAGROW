@@ -1,14 +1,27 @@
 use hydragrow_controller_core::core::fsm::context::SystemContext;
 use hydragrow_controller_core::core::fsm::events::OrchestratorEvent;
+use hydragrow_controller_core::core::security::verify_signed_json_payload;
 use hydragrow_shared::SensorData;
 use hydragrow_shared::fsm::{FsmBudgets, FsmSnapshot};
 use hydragrow_shared::topics;
-use rumqttc::{Client, MqttOptions, QoS};
+use hydragrow_shared::{CommandLifecycle, CommandLifecycleEvent, ControllerConfig, MqttCommandIn};
+use rumqttc::{Client, MqttOptions, QoS, SubscribeFilter};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::time::Duration;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InboundMqttMessage {
+    pub topic: String,
+    pub payload: Vec<u8>,
+}
 
 pub struct MqttBridge {
     device_id: String,
     client: Client,
+    inbound_rx: Receiver<InboundMqttMessage>,
+    connected: Arc<AtomicBool>,
 }
 
 /// Builds the real FSM status payload for the `fsm/state` MQTT topic.
@@ -62,6 +75,19 @@ pub fn build_fsm_snapshot(ctx: &SystemContext, uptime_ms: u64) -> FsmSnapshot {
 
 impl MqttBridge {
     pub fn new(device_id: &str, broker_uri: &str) -> Self {
+        Self::new_with_subscriptions(device_id, broker_uri, true)
+    }
+
+    #[doc(hidden)]
+    pub fn new_without_subscriptions(device_id: &str, broker_uri: &str) -> Self {
+        Self::new_with_subscriptions(device_id, broker_uri, false)
+    }
+
+    fn new_with_subscriptions(
+        device_id: &str,
+        broker_uri: &str,
+        enable_subscriptions: bool,
+    ) -> Self {
         // Strip mqtt:// and parse host/port
         let uri = broker_uri.trim_start_matches("mqtt://");
         let mut parts = uri.split(':');
@@ -74,13 +100,57 @@ impl MqttBridge {
         mqttoptions.set_keep_alive(Duration::from_secs(5));
 
         let (client, mut connection) = Client::new(mqttoptions, 10);
+        let (inbound_tx, inbound_rx) = mpsc::channel();
+        let connected = Arc::new(AtomicBool::new(false));
+        let connected_thread = Arc::clone(&connected);
+        let subscription_topics = enable_subscriptions.then(|| {
+            [
+                topics::topic_controller_config(device_id),
+                topics::topic_controller_command(device_id),
+                topics::topic_controller_recipe(device_id),
+                topics::topic_recipe_set(device_id),
+                topics::topic_recipe_clear(device_id),
+            ]
+        });
+        let mut subscription_client = client.clone();
+        let device_id_for_thread = device_id.to_string();
 
         // Spawn background thread to poll connection
         std::thread::spawn(move || {
             for notification in connection.iter() {
-                if let Err(e) = notification {
-                    println!("MqttBridge Connection Error: {:?}", e);
-                    // Connection iterator usually yields the error and then terminates or reconnects
+                match notification {
+                    Ok(rumqttc::Event::Incoming(rumqttc::Packet::ConnAck(_))) => {
+                        connected_thread.store(true, Ordering::Release);
+                        let Some(subscription_topics) = subscription_topics.as_ref() else {
+                            continue;
+                        };
+                        let subscriptions = subscription_topics
+                            .iter()
+                            .cloned()
+                            .map(|topic| SubscribeFilter {
+                                path: topic,
+                                qos: QoS::AtLeastOnce,
+                            })
+                            .collect::<Vec<_>>();
+                        if let Err(e) = subscription_client.subscribe_many(subscriptions) {
+                            tracing::warn!(?e, device_id = %device_id_for_thread, "MqttBridge subscribe error");
+                        }
+                    }
+                    Ok(rumqttc::Event::Incoming(rumqttc::Packet::Disconnect)) => {
+                        connected_thread.store(false, Ordering::Release);
+                    }
+                    Ok(rumqttc::Event::Incoming(rumqttc::Packet::Publish(publish))) => {
+                        tracing::debug!(device_id = %device_id_for_thread, topic = %publish.topic, "Twin received MQTT publish");
+                        let _ = inbound_tx.send(InboundMqttMessage {
+                            topic: publish.topic,
+                            payload: publish.payload.to_vec(),
+                        });
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        connected_thread.store(false, Ordering::Release);
+                        tracing::warn!(?e, device_id = %device_id_for_thread, "MqttBridge connection error");
+                    }
                 }
             }
         });
@@ -88,7 +158,35 @@ impl MqttBridge {
         Self {
             device_id: device_id.to_string(),
             client,
+            inbound_rx,
+            connected,
         }
+    }
+
+    pub fn try_recv(&self) -> Result<InboundMqttMessage, TryRecvError> {
+        self.inbound_rx.try_recv()
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.connected.load(Ordering::Acquire)
+    }
+
+    /// Decode the same signed command envelope accepted by the physical controller.
+    /// No unsigned-command bypass is provided for the Twin.
+    pub fn decode_command(&self, payload: &[u8]) -> anyhow::Result<MqttCommandIn> {
+        let secret = std::env::var(format!(
+            "MQTT_COMMAND_SECRET_{}",
+            self.device_id.to_ascii_uppercase().replace('-', "_")
+        ))
+        .or_else(|_| std::env::var("MQTT_COMMAND_SECRET"))
+        .map_err(|_| anyhow::anyhow!("missing MQTT command signing secret"))?;
+        let value = verify_signed_json_payload(&self.device_id, payload, &secret)
+            .map_err(|e| anyhow::anyhow!("command signature verification failed: {:?}", e))?;
+        Ok(serde_json::from_value(value)?)
+    }
+
+    pub fn decode_config(&self, payload: &[u8]) -> anyhow::Result<ControllerConfig> {
+        Ok(serde_json::from_slice(payload)?)
     }
 
     pub fn publish_sensors(&mut self, data: &SensorData) {
@@ -109,6 +207,35 @@ impl MqttBridge {
             let payload = serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string());
             let _ = self.client.publish(topic, QoS::AtLeastOnce, false, payload);
         }
+    }
+
+    pub fn publish_command_lifecycle(
+        &mut self,
+        command_id: String,
+        lifecycle: CommandLifecycle,
+        reason: Option<String>,
+        timestamp_ms: u64,
+    ) {
+        let event = CommandLifecycleEvent {
+            command_id,
+            device_id: self.device_id.clone(),
+            lifecycle,
+            reason,
+            timestamp_ms: timestamp_ms as i64,
+        };
+        let topic = topics::topic_command_lifecycle(&self.device_id);
+        if let Ok(payload) = serde_json::to_vec(&event) {
+            let _ = self.client.publish(topic, QoS::AtLeastOnce, false, payload);
+        }
+    }
+
+    /// Publish the same authoritative controller/status contract used by the
+    /// physical controller. Extra additive fields are tolerated by the shared
+    /// health snapshot decoder and carry the actuator observation used by backend
+    /// command reconciliation.
+    pub fn publish_raw_controller_status(&mut self, payload: Vec<u8>) {
+        let topic = topics::topic_controller_status(&self.device_id);
+        let _ = self.client.publish(topic, QoS::AtLeastOnce, false, payload);
     }
 }
 

@@ -937,11 +937,12 @@ mod tests {
         };
         let pool = sqlx::PgPool::connect(&database_url).await.unwrap();
         ensure_config_backup_test_schema(&pool).await;
-        let source_id: Option<String> =
-            sqlx::query_scalar("SELECT device_id FROM device_config ORDER BY device_id LIMIT 1")
-                .fetch_optional(&pool)
-                .await
-                .unwrap();
+        let source_id: Option<String> = sqlx::query_scalar(
+            "SELECT d.device_id FROM device_config d JOIN water_config w USING(device_id) ORDER BY d.device_id LIMIT 1",
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
         let Some(source_id) = source_id else {
             return;
         };

@@ -38,16 +38,16 @@ const queryClient = new QueryClient({
   },
 });
 
-import Dashboard from './pages/Dashboard';
-import { Operations } from './pages/Operations';
-import Cultivation from './pages/Cultivation';
-import Journal from './pages/Journal';
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Operations = React.lazy(() => import('./pages/Operations').then((module) => ({ default: module.Operations })));
+const Cultivation = React.lazy(() => import('./pages/Cultivation'));
+const Journal = React.lazy(() => import('./pages/Journal'));
 const Settings = React.lazy(() => import('./pages/Settings'));
-import { DevicePairing } from './pages/DevicePairing';
-import { FleetView } from './pages/FleetView';
-import { ConfigBackup } from './pages/ConfigBackup';
-import { Roles } from './pages/Roles';
-import { UserManagement } from './pages/UserManagement';
+const DevicePairing = React.lazy(() => import('./pages/DevicePairing').then((module) => ({ default: module.DevicePairing })));
+const FleetView = React.lazy(() => import('./pages/FleetView').then((module) => ({ default: module.FleetView })));
+const ConfigBackup = React.lazy(() => import('./pages/ConfigBackup').then((module) => ({ default: module.ConfigBackup })));
+const Roles = React.lazy(() => import('./pages/Roles').then((module) => ({ default: module.Roles })));
+const UserManagement = React.lazy(() => import('./pages/UserManagement').then((module) => ({ default: module.UserManagement })));
 
 type AuthView = 'login' | 'register' | 'forgot';
 

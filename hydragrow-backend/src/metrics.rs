@@ -241,6 +241,10 @@ lazy_static! {
     pub static ref SYNC_RECONCILIATIONS_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_sync_reconciliations_total", "Synchronization reconciliation outcomes"), &["operation", "outcome"]).expect("metric can be created");
     pub static ref SYNC_PENDING: IntGaugeVec = IntGaugeVec::new(Opts::new("hydragrow_sync_pending", "Current pending synchronization items"), &["operation"]).expect("metric can be created");
     pub static ref SYNC_STALENESS_SECONDS: GaugeVec = GaugeVec::new(Opts::new("hydragrow_sync_staleness_seconds", "Synchronization observation staleness"), &["operation"]).expect("metric can be created");
+    pub static ref SYNC_PHASE_DURATION_SECONDS: HistogramVec = HistogramVec::new(
+        HistogramOpts::new("hydragrow_sync_phase_duration_seconds", "Configuration synchronization phase duration"),
+        &["operation", "phase"],
+    ).expect("metric can be created");
     pub static ref SYNC_CONFLICTS_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_sync_conflicts_total", "Synchronization conflicts"), &["operation"]).expect("metric can be created");
     pub static ref MQTT_DELIVERY_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_mqtt_delivery_total", "MQTT delivery outcomes"), &["operation", "outcome"]).expect("metric can be created");
     pub static ref MQTT_DELIVERY_FAILURES_TOTAL: IntCounterVec = IntCounterVec::new(Opts::new("hydragrow_mqtt_delivery_failures_total", "MQTT delivery failures"), &["operation", "reason_code"]).expect("metric can be created");
@@ -410,6 +414,9 @@ pub fn register_metrics() {
         REGISTRY.register(Box::new(SYNC_PENDING.clone())).unwrap();
         REGISTRY
             .register(Box::new(SYNC_STALENESS_SECONDS.clone()))
+            .unwrap();
+        REGISTRY
+            .register(Box::new(SYNC_PHASE_DURATION_SECONDS.clone()))
             .unwrap();
         REGISTRY
             .register(Box::new(SYNC_CONFLICTS_TOTAL.clone()))

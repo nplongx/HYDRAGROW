@@ -87,6 +87,7 @@ pub fn fault_all_outputs_off(result: &mut TickResult) {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod physical_safety_invariants {
     use super::*;
 
@@ -125,54 +126,78 @@ mod physical_safety_invariants {
                 .events
                 .iter()
                 .filter(|event| {
-                    matches!(event, OrchestratorEvent::SetDosingPump {
-                        pump: DosingPumpTarget::NutrientA,
-                        on: false,
-                        pwm_percent: 0,
-                    })
+                    matches!(
+                        event,
+                        OrchestratorEvent::SetDosingPump {
+                            pump: DosingPumpTarget::NutrientA,
+                            on: false,
+                            pwm_percent: 0,
+                        }
+                    )
                 })
                 .count(),
             1
         );
         assert!(result.events.iter().any(|event| {
-            matches!(event, OrchestratorEvent::SetDosingPump {
-                pump: DosingPumpTarget::NutrientB,
-                on: false,
-                pwm_percent: 0,
-            })
+            matches!(
+                event,
+                OrchestratorEvent::SetDosingPump {
+                    pump: DosingPumpTarget::NutrientB,
+                    on: false,
+                    pwm_percent: 0,
+                }
+            )
         }));
         assert!(result.events.iter().any(|event| {
-            matches!(event, OrchestratorEvent::SetDosingPump {
-                pump: DosingPumpTarget::PhUp,
-                on: false,
-                pwm_percent: 0,
-            })
+            matches!(
+                event,
+                OrchestratorEvent::SetDosingPump {
+                    pump: DosingPumpTarget::PhUp,
+                    on: false,
+                    pwm_percent: 0,
+                }
+            )
         }));
         assert!(result.events.iter().any(|event| {
-            matches!(event, OrchestratorEvent::SetDosingPump {
-                pump: DosingPumpTarget::PhDown,
-                on: false,
-                pwm_percent: 0,
-            })
+            matches!(
+                event,
+                OrchestratorEvent::SetDosingPump {
+                    pump: DosingPumpTarget::PhDown,
+                    on: false,
+                    pwm_percent: 0,
+                }
+            )
         }));
         assert!(result.events.iter().any(|event| {
-            matches!(event, OrchestratorEvent::SetWaterPump {
-                direction: WaterDirection::Stop,
+            matches!(
+                event,
+                OrchestratorEvent::SetWaterPump {
+                    direction: WaterDirection::Stop,
+                }
+            )
+        }));
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|event| matches!(event, OrchestratorEvent::SetMistValve { on: false }))
+        );
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|event| matches!(event, OrchestratorEvent::SetMixValve { on: false }))
+        );
+        assert!(
+            result.events.iter().any(|event| {
+                matches!(event, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 })
             })
-        }));
-        assert!(result
-            .events
-            .iter()
-            .any(|event| matches!(event, OrchestratorEvent::SetMistValve { on: false })));
-        assert!(result
-            .events
-            .iter()
-            .any(|event| matches!(event, OrchestratorEvent::SetMixValve { on: false })));
-        assert!(result.events.iter().any(|event| {
-            matches!(event, OrchestratorEvent::SetOsakaPump { pwm_percent: 0 })
-        }));
+        );
 
-        let peripherals = result.delta.peripherals.expect("fault must update peripherals");
+        let peripherals = result
+            .delta
+            .peripherals
+            .expect("fault must update peripherals");
         assert_eq!(peripherals.pump_a, Some(false));
         assert_eq!(peripherals.pump_b, Some(false));
         assert_eq!(peripherals.ph_up, Some(false));

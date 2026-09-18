@@ -9,31 +9,61 @@ fn spawn_mock_broker() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     std::thread::spawn(move || {
-        let mut buf = [0u8; 1024];
+        fn read_packet(conn: &mut std::net::TcpStream) -> std::io::Result<Vec<u8>> {
+            let mut header = [0u8; 2];
+            conn.read_exact(&mut header)?;
+            let mut remaining = 0usize;
+            let mut multiplier = 1usize;
+            let mut len_byte = header[1];
+            for _ in 0..4 {
+                remaining += ((len_byte & 0x7f) as usize) * multiplier;
+                if len_byte & 0x80 == 0 {
+                    break;
+                }
+                let mut byte = [0u8; 1];
+                conn.read_exact(&mut byte)?;
+                len_byte = byte[0];
+                multiplier *= 128;
+            }
+            let mut packet = vec![header[0]];
+            let mut encoded_remaining = remaining;
+            loop {
+                let mut byte = (encoded_remaining % 128) as u8;
+                encoded_remaining /= 128;
+                if encoded_remaining > 0 {
+                    byte |= 0x80;
+                }
+                packet.push(byte);
+                if encoded_remaining == 0 {
+                    break;
+                }
+            }
+            let mut body = vec![0u8; remaining];
+            conn.read_exact(&mut body)?;
+            packet.extend_from_slice(&body);
+            Ok(packet)
+        }
 
         // 1. Accept subscriber connection
         if let Ok((mut sub_conn, _)) = listener.accept() {
-            let _ = sub_conn.read(&mut buf); // CONNECT
+            let _ = read_packet(&mut sub_conn); // CONNECT
             let _ = sub_conn.write_all(&[0x20, 0x02, 0x00, 0x00]); // CONNACK
 
-            let _ = sub_conn.read(&mut buf); // SUBSCRIBE
+            let subscribe = read_packet(&mut sub_conn).unwrap(); // SUBSCRIBE
             // A basic QoS 0/1 subscribe has packet ID in 2nd and 3rd byte after remaining length
-            let pkt_id_msb = buf[2];
-            let pkt_id_lsb = buf[3];
+            let pkt_id_msb = subscribe[2];
+            let pkt_id_lsb = subscribe[3];
             let _ = sub_conn.write_all(&[0x90, 0x03, pkt_id_msb, pkt_id_lsb, 0x00]); // SUBACK
 
             // 2. Accept publisher connection
             if let Ok((mut pub_conn, _)) = listener.accept() {
-                let _ = pub_conn.read(&mut buf); // CONNECT
+                let _ = read_packet(&mut pub_conn); // CONNECT
                 let _ = pub_conn.write_all(&[0x20, 0x02, 0x00, 0x00]); // CONNACK
 
                 // 3. Read PUBLISH and forward
-                if let Ok(n) = pub_conn.read(&mut buf) {
-                    #[allow(clippy::collapsible_if)]
-                    if n > 0 {
-                        let _ = sub_conn.write_all(&buf[..n]);
-                        let _ = sub_conn.flush();
-                    }
+                if let Ok(packet) = read_packet(&mut pub_conn) {
+                    let _ = sub_conn.write_all(&packet);
+                    let _ = sub_conn.flush();
                 }
             }
         }
@@ -70,7 +100,8 @@ fn test_mqtt_publish_and_receive() {
     }
 
     // 2. Publish using bridge
-    let mut bridge = MqttBridge::new("sim-test", &format!("mqtt://127.0.0.1:{}", port));
+    let mut bridge =
+        MqttBridge::new_without_subscriptions("sim-test", &format!("mqtt://127.0.0.1:{}", port));
 
     // Let the background thread of the publisher connect
     std::thread::sleep(Duration::from_millis(100));

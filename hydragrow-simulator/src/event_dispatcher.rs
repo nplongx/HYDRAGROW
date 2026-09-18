@@ -15,8 +15,7 @@ pub fn apply_event(hw: &mut VirtualHardwareState, event: &OrchestratorEvent) {
                 DosingPumpTarget::PhUp => &mut hw.pump_ph_up,
                 DosingPumpTarget::PhDown => &mut hw.pump_ph_down,
             };
-            target.on = *on;
-            target.pwm_percent = (*pwm_percent).min(100) as u8;
+            target.apply_command(*on, (*pwm_percent).min(100) as u8);
         }
         OrchestratorEvent::SetWaterPump { direction } => {
             hw.water_pump_in.on = matches!(direction, WaterDirection::In);

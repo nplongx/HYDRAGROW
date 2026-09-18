@@ -10,6 +10,7 @@ pub struct RunOptions {
     pub scenario: Option<PathBuf>,
     pub ticks: u64,
     pub tick_ms: u64,
+    pub realtime: bool,
     pub device_id: String,
     pub mqtt: Option<String>,
     pub record: Option<PathBuf>,
@@ -32,6 +33,10 @@ pub fn build_harness(config: ControllerConfig, options: &RunOptions) -> Result<H
         .mqtt(options.mqtt.clone())
         .record(options.record.clone());
 
+    if options.realtime {
+        builder = builder.wall_clock_ms(chrono::Utc::now().timestamp_millis().max(0) as u64);
+    }
+
     if let Some(sc) = scenario {
         builder = builder.scenario(sc);
     }
@@ -47,6 +52,9 @@ pub fn run_simulation(config: ControllerConfig, options: &RunOptions) -> Result<
     );
 
     for tick_idx in 1..=options.ticks {
+        if options.realtime {
+            std::thread::sleep(std::time::Duration::from_millis(options.tick_ms));
+        }
         let result = harness.tick(options.tick_ms)?;
         println!(
             "Tick {}/{}: uptime={}ms phase={:?} events={}",

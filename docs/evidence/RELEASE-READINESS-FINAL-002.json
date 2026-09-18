@@ -1,0 +1,32 @@
+{
+  "requirement_id": "RELEASE-READINESS-FINAL-002",
+  "verified_at": "2026-09-18",
+  "status": "INTEGRATION VERIFIED / PRODUCTION CROSS-SYSTEM RELEASE BLOCKED",
+  "repository": "/long/HYDRAGROW",
+  "branch": "chore/p1-cross-system-hardening",
+  "verification": {
+    "backend": "430/430 PASS on isolated PostgreSQL 16.15 at 127.0.0.1:55432/hydragrow_test; clippy and fmt PASS",
+    "backend_failure_classification": "Prior 91-failure report was environment/setup instability; retained failing log shows DB PoolTimedOut while the dedicated container was unavailable. Restarting that isolated container produced 430/430 PASS.",
+    "frontend": "126/126 test files and 604/604 tests PASS; SystemLog pagination passes alone and in full suite; TypeScript/build remain PASS",
+    "shared": "p1_9 schema 7/7; full shared 71/71; clippy/fmt PASS",
+    "sensor_firmware": "native canonical fixture 14/14 PASS",
+    "controller_firmware": "BUILD/CHECK PASS after sourcing ~/export-esp.sh; canonical fixture test execution BLOCKED by espflash::no_serial because no physical ESP32-C3 serial device is present",
+    "domain_10": "SOFTWARE CROSS-SYSTEM VERIFIED; real Backend + PostgreSQL + Mosquitto + Digital Twin command/ACK/CONFIRMED E2E is green. Physical HIL/controller execution remains blocked without ESP32 serial hardware.",
+    "domain_11": "PARTIAL / BLOCKED; prior evidence contains isolated physical-path observations, but current run has no physical hardware and cannot verify production topology",
+    "production_topology": "NOT VERIFIED",
+    "digital_twin_e2e": "PASS — Backend API -> canonical MQTT -> Twin/controller-core -> actuator/FSM/controller-status -> Backend CONFIRMED; ConfigurationSync offline/reconnect/restart resync also PASS",
+    "production_observability": "NOT VERIFIED",
+    "repository_integrity": "git diff --check PASS; dirty worktree preserved; production PostgreSQL not touched"
+  },
+  "final_release_gate": {
+    "result": "BLOCKED",
+    "blockers": [
+      "Install/use the supported Espressif controller target/toolchain and execute controller canonical fixture tests on a supported runner.",
+      "Complete physical HIL acceptance with real sensor/controller hardware and safe actuator/fault/restart instrumentation.",
+      "Verify production broker/backend/physical-device topology and required observability deployment/export path.",
+      "Do not claim arbitrary legacy production-database compatibility without a supported upgrade-path test."
+    ]
+  },
+  "commit_created": false,
+  "production_postgresql_touched": false
+}

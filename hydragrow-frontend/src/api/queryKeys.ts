@@ -11,6 +11,10 @@ export const queryKeys = {
   analyticsHealth: (deviceId: string) => ["device-health", deviceId] as const,
   controlCommands: (deviceId: string) =>
     ["control-commands", deviceId] as const,
+  journal: (deviceId: string) => ["journal", deviceId] as const,
+  systemEvents: (deviceId: string) => ["system-events", deviceId] as const,
+  automationScripts: (deviceId?: string) =>
+    ["automation-scripts", ...(deviceId ? [deviceId] : [])] as const,
   seasons: (deviceId: string) => ["seasons", deviceId] as const,
   seasonActive: (deviceId: string) => ["seasons", deviceId, "active"] as const,
   seasonHistory: (deviceId: string) =>

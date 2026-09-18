@@ -56,7 +56,7 @@ async fn reconcile_once(app: &AppState) -> Result<usize, anyhow::Error> {
             } else {
                 &row.sensor_state
             };
-            if state != config_sync::PENDING {
+            if state != config_sync::PENDING && state != config_sync::PUBLISHED {
                 continue;
             }
             let attempts = if target == "controller" {
@@ -68,6 +68,17 @@ async fn reconcile_once(app: &AppState) -> Result<usize, anyhow::Error> {
                 continue;
             }
             work += 1;
+            let pending_age = chrono::Utc::now()
+                .signed_duration_since(row.updated_at)
+                .to_std()
+                .map(|duration| duration.as_secs_f64())
+                .unwrap_or(0.0);
+            crate::metrics::SYNC_STALENESS_SECONDS
+                .with_label_values(&["configuration"])
+                .set(pending_age);
+            crate::metrics::SYNC_PHASE_DURATION_SECONDS
+                .with_label_values(&["configuration", "pending_to_publish_attempt"])
+                .observe(pending_age);
             match publish_target(app, &row, target).await {
                 Ok(()) => {
                     config_sync::mark_published(
@@ -111,27 +122,34 @@ async fn reconcile_once(app: &AppState) -> Result<usize, anyhow::Error> {
     Ok(work)
 }
 
-struct WorkerGuard(Arc<AtomicBool>);
+struct WorkerGuard(Arc<AtomicBool>, Arc<AtomicBool>);
 impl Drop for WorkerGuard {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Relaxed);
+        self.1.store(false, Ordering::Relaxed);
     }
 }
 
-pub fn spawn(app_state: Arc<AppState>, readiness: Arc<AtomicBool>) {
+pub fn spawn(app_state: Arc<AppState>, readiness: Arc<AtomicBool>, health: Arc<AtomicBool>) {
     tokio::spawn(async move {
         readiness.store(true, Ordering::Relaxed);
-        let _guard = WorkerGuard(readiness);
-        if let Err(e) = reconcile_once(&app_state).await {
-            error!(error = %e, "Initial configuration synchronization failed");
+        health.store(false, Ordering::Relaxed);
+        let _guard = WorkerGuard(readiness, health.clone());
+        match reconcile_once(&app_state).await {
+            Ok(_) => health.store(true, Ordering::Relaxed),
+            Err(e) => error!(error = %e, "Initial configuration synchronization failed"),
         }
         loop {
             match reconcile_once(&app_state).await {
                 Ok(work) if work > 0 => {
+                    health.store(true, Ordering::Relaxed);
                     info!(count = work, "Configuration synchronization pass completed")
                 }
-                Ok(_) => {}
-                Err(e) => error!(error = %e, "Configuration synchronization pass failed"),
+                Ok(_) => health.store(true, Ordering::Relaxed),
+                Err(e) => {
+                    health.store(false, Ordering::Relaxed);
+                    error!(error = %e, "Configuration synchronization pass failed");
+                }
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
@@ -145,10 +163,13 @@ mod tests {
     #[test]
     fn worker_guard_clears_readiness() {
         let ready = Arc::new(AtomicBool::new(true));
+        let health = Arc::new(AtomicBool::new(true));
         {
-            let _guard = WorkerGuard(ready.clone());
+            let _guard = WorkerGuard(ready.clone(), health.clone());
             assert!(ready.load(Ordering::Relaxed));
+            assert!(health.load(Ordering::Relaxed));
         }
         assert!(!ready.load(Ordering::Relaxed));
+        assert!(!health.load(Ordering::Relaxed));
     }
 }

@@ -6,6 +6,8 @@ import { getIdToken } from '../lib/authToken';
 import toast from 'react-hot-toast';
 import { deviceTelemetryQueryKey, readSnapshot } from './useDeviceTelemetry';
 import type { AppSettings } from '../types/models';
+import { queryKeys } from '../api/queryKeys';
+import { isMalformedRealtimeFrame, routeRealtimeEvent } from '../lib/realtimeRouter';
 
 export type DeviceSyncConnectionState = 'connecting' | 'recovering' | 'connected' | 'degraded';
 
@@ -60,8 +62,8 @@ export function useDeviceSync() {
       setSyncState((prev) => ({ ...prev, connection: 'recovering' }));
       try {
         const deviceQueries = [
-          ['device-telemetry', deviceId], ['device-config', deviceId], ['device-health', deviceId],
-          ['system-events', deviceId], ['journal', deviceId],
+          queryKeys.telemetry(deviceId), queryKeys.config(deviceId), queryKeys.analyticsHealth(deviceId),
+          queryKeys.systemEvents(deviceId), queryKeys.journal(deviceId),
         ] as const;
         await Promise.all(deviceQueries.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
         await Promise.all(deviceQueries.map((queryKey) => queryClient.refetchQueries({ queryKey, type: 'active' })));
@@ -97,10 +99,14 @@ export function useDeviceSync() {
       };
 
       ws.onmessage = (event) => {
-        try {
-          if (!active) return;
-          const data = JSON.parse(event.data);
-          const payload = data?.payload;
+          try {
+            if (!active) return;
+            const data = JSON.parse(event.data);
+            if (isMalformedRealtimeFrame(data)) {
+              void recoverAuthoritativeState();
+              return;
+            }
+            const payload = data?.payload;
           if (payload?.device_id && payload.device_id !== deviceId) return;
           setSyncState((prev) => ({
             ...prev, lastEventAt: new Date().toISOString(),
@@ -108,7 +114,8 @@ export function useDeviceSync() {
             lastCommandId: typeof data.command_id === 'string' ? data.command_id : typeof payload?.command_id === 'string' ? payload.command_id : prev.lastCommandId,
           }));
 
-          if (data.type === 'sensor_update' || data.type === 'telemetry_snapshot') {
+          const route = routeRealtimeEvent(data.type);
+          if (route === 'telemetry') {
             if (data.type === 'telemetry_snapshot') {
               try {
                 const snapshot = readSnapshot({ data: payload }, deviceId);
@@ -131,35 +138,29 @@ export function useDeviceSync() {
           // Do not route contact/health/FSM events through telemetry. No dedicated
           // current-state query exists for every legacy event yet, so expose a
           // narrowly scoped session event for the remaining consumers.
-          if (
-            data.type === 'device_status' ||
-            data.type === 'fsm_state_update' ||
-            data.type === 'controller_status' ||
-            data.type === 'device_health' ||
-            data.type === 'health_snapshot'
-          ) {
-            queryClient.invalidateQueries({ queryKey: ['device-health', deviceId] });
-            queryClient.invalidateQueries({ queryKey: ['device-telemetry', deviceId] });
+          if (route === 'status') {
+            queryClient.invalidateQueries({ queryKey: queryKeys.analyticsHealth(deviceId) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.telemetry(deviceId) });
             window.dispatchEvent(
               new CustomEvent(`hydragrow:${data.type}`, { detail: data.payload }),
             );
             return;
           }
 
-          if (data.type === 'command_lifecycle') {
-            queryClient.invalidateQueries({ queryKey: ['device', deviceId, 'commands'] });
+          if (route === 'command_lifecycle') {
+            queryClient.invalidateQueries({ queryKey: queryKeys.controlCommands(deviceId) });
             window.dispatchEvent(
               new CustomEvent('hydragrow:command-lifecycle', { detail: data.payload }),
             );
             return;
           }
 
-          if (data.type === 'alert') {
+          if (route === 'alert') {
             const alert = payload;
             if (!alert) return;
 
-            queryClient.invalidateQueries({ queryKey: ['journal', deviceId] });
-            queryClient.invalidateQueries({ queryKey: ['system-events', deviceId] });
+            queryClient.invalidateQueries({ queryKey: queryKeys.journal(deviceId) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.systemEvents(deviceId) });
 
             if (alert.level === 'critical' || alert.level === 'warning') {
               toast.error(`${alert.title}\n${alert.message}`, {

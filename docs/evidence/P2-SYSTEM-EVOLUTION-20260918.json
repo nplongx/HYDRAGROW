@@ -1,0 +1,76 @@
+{
+  "evidence_id": "P2-SYSTEM-EVOLUTION-20260918",
+  "date": "2026-09-18",
+  "status": "FAIL",
+  "principle": "Decompose boundaries, not truth.",
+  "workstreams": {
+    "P2.1_backend_domain_application_decomposition": {
+      "status": "PASS",
+      "evidence": [
+        "services/configuration.rs owns durable desired revision allocation and commit",
+        "backend clippy -D warnings PASS",
+        "configuration application-service unit test PASS"
+      ]
+    },
+    "P2.2_configuration_synchronization_platform": {
+      "status": "PASS",
+      "evidence": [
+        "ConfigurationSync remains PostgreSQL-authoritative",
+        "desired revision persistence is transactional and bounded",
+        "existing restart/offline/reconnect behavior remains covered by prior cross-system evidence"
+      ],
+      "note": "Backup restore still performs desired-state reconciliation post-commit; atomic restore plus desired-row write is not claimed as a new PASS in this evidence."
+    },
+    "P2.3_realtime_recovery_boundary": {
+      "status": "PASS",
+      "evidence": [
+        "frontend realtimeRouter unit tests 8/8 PASS",
+        "WebSocket backend tests 7/7 PASS",
+        "malformed realtime frames trigger authoritative recovery rather than cache mutation"
+      ]
+    },
+    "P2.4_frontend_performance_data_boundaries": {
+      "status": "FAIL",
+      "evidence": [
+        "frontend build PASS",
+        "frontend tsc PASS",
+        "frontend ESLint PASS with existing warnings",
+        "route, realtime, FleetView targeted tests 12/12 PASS"
+      ],
+      "failure": "Full Vitest run: 125/127 files passed, 609/612 tests passed; existing SystemLog pagination timeout remains. Operations lazy-loading tests were repaired and targeted tests pass."
+    },
+    "P2.5_firmware_canonical_contract_pipeline": {
+      "status": "BLOCKED",
+      "evidence": [
+        "C++ sensor PlatformIO native fixture suite 14/14 PASS",
+        "C++ ESP32-C3 sensor firmware build PASS",
+        "controller firmware cargo check --locked target riscv32imc-esp-espidf PASS",
+        "controller canonical fixture test binary cargo test --no-run PASS"
+      ],
+      "blocker": "Rust sensor node host test/build cannot run because esp-idf-sys rejects x86_64-unknown-linux-gnu; riscv32imc-esp-espidf target is not installed in the current Rust toolchain. No physical HIL claimed."
+    },
+    "P2.6_fleet_operations_analytics": {
+      "status": "PASS",
+      "evidence": [
+        "GET /fleet/compare bounds selection to 2-4 devices and checks ownership",
+        "FleetView supports grid/map presentation, 2-4 comparison, CSV export, print-to-PDF workflow",
+        "threshold proposal writes through existing unified ConfigurationSync API",
+        "fleet comparison backend tests PASS",
+        "FleetView targeted tests PASS"
+      ]
+    },
+    "P2.7_verification_operational_slos": {
+      "status": "PASS",
+      "evidence": [
+        "configuration synchronization phase/staleness metrics added",
+        "command lifecycle phase-duration metrics added",
+        "metrics registration test PASS",
+        "no numeric SLO target invented"
+      ],
+      "note": "Operational target values and production observability evidence remain deployment-gate work; physical timing is not inferred from software metrics."
+    }
+  },
+  "physical_hil": "BLOCKED",
+  "production_topology_observability": "NOT_VERIFIED",
+  "legacy_production_db_upgrade_compatibility": "NOT_VERIFIED"
+}

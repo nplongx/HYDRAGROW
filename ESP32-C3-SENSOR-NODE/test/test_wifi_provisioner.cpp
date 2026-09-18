@@ -148,9 +148,15 @@ void test_p1_9_sensor_fixture_matches_arduinojson_wire_shape() {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.5f, doc["ec"].as<float>());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 6.0f, doc["ph"].as<float>());
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 27.0f, doc["temp"].as<float>());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 20.0f, doc["water_level"].as<float>());
     TEST_ASSERT_TRUE(doc["time"].is<const char*>());
-    TEST_ASSERT_FALSE(doc["err_ec"].isNull());
+    TEST_ASSERT_TRUE(doc["err_ec"].is<bool>());
+    TEST_ASSERT_FALSE(doc["err_ec"].as<bool>());
+    TEST_ASSERT_TRUE(doc["err_temp"].is<bool>());
+    TEST_ASSERT_TRUE(doc["err_water"].is<bool>());
+    TEST_ASSERT_TRUE(doc["err_ph"].is<bool>());
     TEST_ASSERT_TRUE(doc["err_tds"].isNull());
+    TEST_ASSERT_TRUE(doc["tds"].isNull());
 }
 
 int main(int argc, char **argv) {

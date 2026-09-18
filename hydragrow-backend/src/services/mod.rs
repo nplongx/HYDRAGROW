@@ -6,6 +6,7 @@ pub mod config_context;
 pub mod config_override;
 pub mod config_registry;
 pub mod config_sync;
+pub mod configuration;
 pub mod cron_scheduler;
 pub mod durable_command;
 pub mod execution_log;

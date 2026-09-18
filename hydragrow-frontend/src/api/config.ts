@@ -18,6 +18,8 @@ export function normalizeUnifiedConfig(response: Partial<UnifiedConfigResponse>,
 export type UnifiedConfigPayload = UnifiedConfigResponse;
 
 export const configApi = {
+  getRaw: async (deviceId: string, signal?: AbortSignal) =>
+    apiGet<UnifiedConfigResponse>(`/devices/${encodeURIComponent(deviceId)}/config/unified`, { signal }),
   get: async (deviceId: string, signal?: AbortSignal) => normalizeUnifiedConfig(await apiGet<UnifiedConfigResponse>(`/devices/${encodeURIComponent(deviceId)}/config/unified`, { signal }), deviceId),
   update: (deviceId: string, payload: UnifiedConfigPayload) => apiPut<{ status?: string; config_version?: number }>(`/devices/${encodeURIComponent(deviceId)}/config/unified`, payload),
   syncStatus: (deviceId: string, signal?: AbortSignal) =>

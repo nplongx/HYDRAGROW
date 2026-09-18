@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
+import React from 'react';
 import ControlPanel from './ControlPanel';
-import { Automation } from './Automation';
+const Automation = React.lazy(() => import('./Automation').then((module) => ({ default: module.Automation })));
 import { EmergencyStopButton } from '../components/safety/EmergencyStopButton';
 import { useStationContext } from '../contexts/StationContext';
 import { parseTab, serializeTab } from '../lib/routeState';
@@ -31,7 +32,13 @@ export function Operations() {
         ))}
       </div>
       <div className="flex-1 overflow-hidden pb-20 lg:pb-0">
-        {active === 'control' ? <ControlPanel variant="embedded" /> : <Automation />}
+        {active === 'control' ? (
+          <ControlPanel variant="embedded" />
+        ) : (
+          <React.Suspense fallback={null}>
+            <Automation />
+          </React.Suspense>
+        )}
       </div>
       <EmergencyStopButton deviceId={deviceId} variant="bar" />
     </div>

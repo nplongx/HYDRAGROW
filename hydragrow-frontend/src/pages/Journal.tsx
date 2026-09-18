@@ -1,8 +1,8 @@
 import { TabShell } from '../components/ui/TabShell';
-import { useSearchParams } from 'react-router-dom';
-import { parseTab, serializeTab } from '../lib/routeState';
 import SystemLog from './SystemLog';
 import Analytics from './Analytics';
+import { useSearchParams } from 'react-router-dom';
+import { parseTab, serializeTab } from '../lib/routeState';
 
 const Journal = () => {
   const [searchParams, setSearchParams] = useSearchParams();

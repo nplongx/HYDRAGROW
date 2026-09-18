@@ -68,6 +68,17 @@ async fn reconcile_once(app: &AppState) -> Result<usize, anyhow::Error> {
                 continue;
             }
             work += 1;
+            let pending_age = chrono::Utc::now()
+                .signed_duration_since(row.updated_at)
+                .to_std()
+                .map(|duration| duration.as_secs_f64())
+                .unwrap_or(0.0);
+            crate::metrics::SYNC_STALENESS_SECONDS
+                .with_label_values(&["configuration"])
+                .set(pending_age);
+            crate::metrics::SYNC_PHASE_DURATION_SECONDS
+                .with_label_values(&["configuration", "pending_to_publish_attempt"])
+                .observe(pending_age);
             match publish_target(app, &row, target).await {
                 Ok(()) => {
                     config_sync::mark_published(

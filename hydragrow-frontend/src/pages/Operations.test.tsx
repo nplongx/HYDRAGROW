@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -53,7 +53,7 @@ describe("Operations Page", () => {
     expect(screen.queryByTestId("automation-page")).not.toBeInTheDocument();
   });
 
-  it("switches to Automation tab on click", () => {
+  it("switches to Automation tab on click", async () => {
     renderOperations();
     fireEvent.click(screen.getByRole("tab", { name: /tự động hóa/i }));
     expect(screen.getByRole("tab", { name: /tự động hóa/i })).toHaveAttribute(
@@ -64,7 +64,7 @@ describe("Operations Page", () => {
       "aria-selected",
       "false",
     );
-    expect(screen.getByTestId("automation-page")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("automation-page")).toBeInTheDocument());
     expect(screen.queryByTestId("control-panel")).not.toBeInTheDocument();
   });
 });

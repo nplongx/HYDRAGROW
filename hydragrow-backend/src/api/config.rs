@@ -179,31 +179,15 @@ pub async fn sync_config_to_esp32(
         json!({})
     };
 
-    let mut controller_value = serde_json::to_value(&payload)
+    let controller_value = serde_json::to_value(&payload)
         .map_err(|e| format!("Lỗi serialize controller config: {e:?}"))?;
-    let mut sensor_value = sensor_payload;
-    let mut tx = app_state
-        .pg_pool
-        .begin()
-        .await
-        .map_err(|e| format!("Lỗi bắt đầu transaction config sync: {e:?}"))?;
-    let version = crate::db::config_sync::next_version(&mut tx, device_id)
-        .await
-        .map_err(|e| format!("Lỗi tạo config version: {e:?}"))?;
-    controller_value["config_version"] = json!(version);
-    sensor_value["config_version"] = json!(version);
-    crate::db::config_sync::upsert_desired(
-        &mut *tx,
+    let version = crate::services::configuration::persist_desired_revision(
+        &app_state.pg_pool,
         device_id,
-        version,
-        &controller_value,
-        &sensor_value,
+        controller_value,
+        sensor_payload,
     )
-    .await
-    .map_err(|e| format!("Lỗi lưu desired config: {e:?}"))?;
-    tx.commit()
-        .await
-        .map_err(|e| format!("Lỗi commit config sync: {e:?}"))?;
+    .await?;
 
     info!(
         device_id,

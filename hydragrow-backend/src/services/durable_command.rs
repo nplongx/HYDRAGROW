@@ -421,6 +421,16 @@ pub async fn transition(
     let current = parse_lifecycle(&row.try_get::<String, _>("lifecycle")?)?;
     let device_id: String = row.try_get("device_id")?;
     let attempt_no: i32 = row.try_get("attempt_count")?;
+    let phase_started_at: Option<DateTime<Utc>> = match current {
+        CommandLifecycle::Requested => row.try_get("requested_at")?,
+        CommandLifecycle::Sent => row.try_get("sent_at")?,
+        CommandLifecycle::Acknowledged => row.try_get("acknowledged_at")?,
+        CommandLifecycle::Confirmed
+        | CommandLifecycle::Rejected
+        | CommandLifecycle::Failed
+        | CommandLifecycle::Timeout
+        | CommandLifecycle::Unknown => row.try_get("last_observed_at")?,
+    };
     if current == next {
         tx.commit().await?;
         return Ok(TransitionResult::Duplicate);
@@ -462,6 +472,21 @@ pub async fn transition(
     )
     .await?;
     tx.commit().await?;
+    if let Some(started_at) = phase_started_at
+        && let Ok(duration) = (now - started_at).to_std()
+    {
+        let phase = match (current, next) {
+            (CommandLifecycle::Requested, CommandLifecycle::Sent) => "requested_to_sent",
+            (CommandLifecycle::Sent, CommandLifecycle::Acknowledged) => "sent_to_acknowledged",
+            (CommandLifecycle::Acknowledged, CommandLifecycle::Confirmed) => {
+                "acknowledged_to_confirmed"
+            }
+            _ => "other",
+        };
+        crate::metrics::SYNC_PHASE_DURATION_SECONDS
+            .with_label_values(&["command", phase])
+            .observe(duration.as_secs_f64());
+    }
     Ok(TransitionResult::Applied)
 }
 

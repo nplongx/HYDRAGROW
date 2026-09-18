@@ -422,7 +422,7 @@ pub async fn transition(
     let device_id: String = row.try_get("device_id")?;
     let attempt_no: i32 = row.try_get("attempt_count")?;
     let phase_started_at: Option<DateTime<Utc>> = match current {
-        CommandLifecycle::Requested => row.try_get("requested_at")?,
+        CommandLifecycle::Requested => row.try_get("created_at")?,
         CommandLifecycle::Sent => row.try_get("sent_at")?,
         CommandLifecycle::Acknowledged => row.try_get("acknowledged_at")?,
         CommandLifecycle::Confirmed

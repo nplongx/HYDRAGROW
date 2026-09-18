@@ -1,76 +1,12 @@
 {
-  "evidence_id": "P2-SYSTEM-EVOLUTION-20260918",
-  "date": "2026-09-18",
-  "status": "FAIL",
-  "principle": "Decompose boundaries, not truth.",
-  "workstreams": {
-    "P2.1_backend_domain_application_decomposition": {
-      "status": "PASS",
-      "evidence": [
-        "services/configuration.rs owns durable desired revision allocation and commit",
-        "backend clippy -D warnings PASS",
-        "configuration application-service unit test PASS"
-      ]
-    },
-    "P2.2_configuration_synchronization_platform": {
-      "status": "PASS",
-      "evidence": [
-        "ConfigurationSync remains PostgreSQL-authoritative",
-        "desired revision persistence is transactional and bounded",
-        "existing restart/offline/reconnect behavior remains covered by prior cross-system evidence"
-      ],
-      "note": "Backup restore still performs desired-state reconciliation post-commit; atomic restore plus desired-row write is not claimed as a new PASS in this evidence."
-    },
-    "P2.3_realtime_recovery_boundary": {
-      "status": "PASS",
-      "evidence": [
-        "frontend realtimeRouter unit tests 8/8 PASS",
-        "WebSocket backend tests 7/7 PASS",
-        "malformed realtime frames trigger authoritative recovery rather than cache mutation"
-      ]
-    },
-    "P2.4_frontend_performance_data_boundaries": {
-      "status": "FAIL",
-      "evidence": [
-        "frontend build PASS",
-        "frontend tsc PASS",
-        "frontend ESLint PASS with existing warnings",
-        "route, realtime, FleetView targeted tests 12/12 PASS"
-      ],
-      "failure": "Full Vitest run: 125/127 files passed, 609/612 tests passed; existing SystemLog pagination timeout remains. Operations lazy-loading tests were repaired and targeted tests pass."
-    },
-    "P2.5_firmware_canonical_contract_pipeline": {
-      "status": "BLOCKED",
-      "evidence": [
-        "C++ sensor PlatformIO native fixture suite 14/14 PASS",
-        "C++ ESP32-C3 sensor firmware build PASS",
-        "controller firmware cargo check --locked target riscv32imc-esp-espidf PASS",
-        "controller canonical fixture test binary cargo test --no-run PASS"
-      ],
-      "blocker": "Rust sensor node host test/build cannot run because esp-idf-sys rejects x86_64-unknown-linux-gnu; riscv32imc-esp-espidf target is not installed in the current Rust toolchain. No physical HIL claimed."
-    },
-    "P2.6_fleet_operations_analytics": {
-      "status": "PASS",
-      "evidence": [
-        "GET /fleet/compare bounds selection to 2-4 devices and checks ownership",
-        "FleetView supports grid/map presentation, 2-4 comparison, CSV export, print-to-PDF workflow",
-        "threshold proposal writes through existing unified ConfigurationSync API",
-        "fleet comparison backend tests PASS",
-        "FleetView targeted tests PASS"
-      ]
-    },
-    "P2.7_verification_operational_slos": {
-      "status": "PASS",
-      "evidence": [
-        "configuration synchronization phase/staleness metrics added",
-        "command lifecycle phase-duration metrics added",
-        "metrics registration test PASS",
-        "no numeric SLO target invented"
-      ],
-      "note": "Operational target values and production observability evidence remain deployment-gate work; physical timing is not inferred from software metrics."
-    }
-  },
-  "physical_hil": "BLOCKED",
-  "production_topology_observability": "NOT_VERIFIED",
-  "legacy_production_db_upgrade_compatibility": "NOT_VERIFIED"
+  "requirement_id": "P2-SYSTEM-EVOLUTION-20260918",
+  "evidence": [
+    {"acceptance_id":"AC-1","status":"PASS","actual":"Configuration application service owns durable desired revision allocation/commit; backend clippy passes.","source":"hydragrow-backend/src/services/configuration.rs; targeted unit test; cargo clippy","environment":"local host","verified_at":"2026-09-18"},
+    {"acceptance_id":"AC-2","status":"PASS","actual":"ConfigurationSync remains PostgreSQL-authoritative with durable bounded revision state; backup restore desired-row reconciliation remains explicitly outside atomic-restore claim.","source":"hydragrow-backend/src/services/config_sync.rs; prior ConfigurationSync evidence","environment":"local/integration evidence","verified_at":"2026-09-18","notes":"No second configuration authority introduced."},
+    {"acceptance_id":"AC-3","status":"PASS","actual":"Frontend realtimeRouter 8/8 and backend WebSocket tests 7/7 pass; malformed realtime input triggers authoritative recovery.","source":"hydragrow-frontend/src/lib/realtimeRouter.test.ts; backend WebSocket tests","environment":"local host","verified_at":"2026-09-18"},
+    {"acceptance_id":"AC-4","status":"FAIL","actual":"Frontend build, TypeScript and ESLint pass; post-merge full Vitest is still running/previous P2 evidence recorded 125/127 files and 609/612 tests with SystemLog pagination timeout.","source":"cd hydragrow-frontend && npm run build; npx tsc --noEmit; npx eslint .; npx vitest run","environment":"local host","verified_at":"2026-09-18","notes":"Targeted P2 frontend tests pass. Full-suite gate is not claimed PASS until complete."},
+    {"acceptance_id":"AC-5","status":"BLOCKED","actual":"C++ sensor native fixture 14/14 and ESP32-C3 build pass; controller target check and test binary build pass; Rust sensor target build is not yet verified and physical HIL is unavailable.","source":"PlatformIO sensor fixture/build; controller cargo check/test --no-run","environment":"local host with ESP-IDF export","verified_at":"2026-09-18","notes":"Rust sensor remains experimental; no physical actuation/HIL claim."},
+    {"acceptance_id":"AC-6","status":"PASS","actual":"Fleet compare enforces 2–4 owned devices; FleetView implements grid/map, comparison, CSV and print-to-PDF; threshold proposal uses existing unified config update path.","source":"hydragrow-backend/src/api/fleet.rs; FleetView tests","environment":"local host","verified_at":"2026-09-18"},
+    {"acceptance_id":"AC-7","status":"PASS","actual":"Configuration synchronization phase/staleness and command lifecycle duration metrics are registered; no numeric target was invented.","source":"hydragrow-backend/src/metrics.rs; metrics registration test","environment":"local host","verified_at":"2026-09-18","notes":"Production observability and physical timing remain deployment/HIL gates; legacy production DB upgrade compatibility is not verified."}
+  ]
 }

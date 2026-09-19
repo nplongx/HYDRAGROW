@@ -11,44 +11,59 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   onIdTokenChanged,
+  type Auth,
   type User,
 } from 'firebase/auth';
-import { app } from './firebase';
+import { app, hasRequiredFirebaseConfig } from './firebase';
 import { setIdToken } from './authToken';
 
-export const auth = getAuth(app);
+let auth: Auth | null = null;
+
+function getAuthInstance(): Auth {
+  if (auth) return auth;
+  if (!hasRequiredFirebaseConfig()) {
+    throw new Error('Firebase Auth chưa được cấu hình hợp lệ.');
+  }
+  auth = getAuth(app);
+  return auth;
+}
 
 /** Đăng nhập bằng email/password của tài khoản admin đã cấp sẵn. */
 export async function loginWithEmailPassword(email: string, password: string): Promise<User> {
-  const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+  const credential = await signInWithEmailAndPassword(getAuthInstance(), email.trim(), password);
   return credential.user;
 }
 
 /** Tự đăng ký tài khoản mới (backend tự cấp scope đọc mặc định ở lần truy cập đầu). */
 export async function registerWithEmailPassword(email: string, password: string): Promise<User> {
-  const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+  const credential = await createUserWithEmailAndPassword(getAuthInstance(), email.trim(), password);
   return credential.user;
 }
 
 /** Đăng nhập bằng Google (popup). */
 export async function signInWithGoogle(): Promise<User> {
-  const credential = await signInWithPopup(auth, new GoogleAuthProvider());
+  const credential = await signInWithPopup(getAuthInstance(), new GoogleAuthProvider());
   return credential.user;
 }
 
 /** Gửi email đặt lại mật khẩu qua Firebase. */
 export async function sendPasswordReset(email: string): Promise<void> {
-  await sendPasswordResetEmail(auth, email.trim());
+  await sendPasswordResetEmail(getAuthInstance(), email.trim());
 }
 
 export async function logout(): Promise<void> {
-  await firebaseSignOut(auth);
+  await firebaseSignOut(getAuthInstance());
   setIdToken(null);
 }
 
 /** Theo dõi trạng thái đăng nhập (đăng nhập/đăng xuất). */
 export function subscribeAuthState(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback);
+  try {
+    return onAuthStateChanged(getAuthInstance(), callback);
+  } catch {
+    callback(null);
+    return () => undefined;
+  }
 }
 
 /**
@@ -56,14 +71,19 @@ export function subscribeAuthState(callback: (user: User | null) => void): () =>
  * và bắn lại callback này, nên không cần tự đặt timer refresh thủ công.
  */
 export function subscribeIdToken(callback: (token: string | null) => void): () => void {
-  return onIdTokenChanged(auth, async (user) => {
-    if (!user) {
-      callback(null);
-      return;
-    }
-    const token = await user.getIdToken();
-    callback(token);
-  });
+  try {
+    return onIdTokenChanged(getAuthInstance(), async (user) => {
+      if (!user) {
+        callback(null);
+        return;
+      }
+      const token = await user.getIdToken();
+      callback(token);
+    });
+  } catch {
+    callback(null);
+    return () => undefined;
+  }
 }
 
 /** Map mã lỗi Firebase sang thông báo tiếng Việt dễ hiểu cho người dùng. */

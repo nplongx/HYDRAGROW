@@ -12,7 +12,7 @@ type FirebaseConfig = {
   measurementId?: string;
 };
 
-const firebaseConfig: FirebaseConfig = {
+export const firebaseConfig: FirebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -24,9 +24,13 @@ const firebaseConfig: FirebaseConfig = {
 
 const firebaseVapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
-export function hasRequiredFirebaseConfig(config: FirebaseConfig): boolean {
+export function hasValidFirebaseApiKey(apiKey?: string): boolean {
+  return /^AIza[0-9A-Za-z_-]{20,}$/.test(apiKey?.trim() ?? '');
+}
+
+export function hasRequiredFirebaseConfig(config: FirebaseConfig = firebaseConfig): boolean {
   return Boolean(
-    config.apiKey?.trim() &&
+    hasValidFirebaseApiKey(config.apiKey) &&
       config.authDomain?.trim() &&
       config.projectId?.trim() &&
       config.messagingSenderId?.trim() &&

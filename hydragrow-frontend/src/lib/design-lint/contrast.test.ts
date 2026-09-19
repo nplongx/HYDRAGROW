@@ -19,12 +19,15 @@ describe('WCAG AA contrast — token pairs actually used as body text', () => {
     expect(contrastRatio('#14532d', '#dcf0dc')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
-  it('the live --color-faint token in App.css meets AA on both backgrounds', () => {
-    const css = fs.readFileSync(path.resolve(__dirname, '../../App.css'), 'utf-8');
+  it('the live --color-faint token in design-system/tokens.css meets AA on current backgrounds', () => {
+    const css = fs.readFileSync(
+      path.resolve(__dirname, '../../design-system/tokens.css'),
+      'utf-8',
+    );
     const match = css.match(/--color-faint:\s*(#[0-9a-fA-F]{6})/);
     expect(match).not.toBeNull();
     const faintHex = match![1];
-    expect(contrastRatio(faintHex, '#dcf0dc')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(contrastRatio(faintHex, '#f7f7f7')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
     expect(contrastRatio(faintHex, '#ffffff')).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 });

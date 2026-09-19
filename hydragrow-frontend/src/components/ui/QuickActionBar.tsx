@@ -1,5 +1,5 @@
 import React from 'react';
-import { Droplets, Pause, Bell, Sprout } from 'lucide-react';
+import { Droplets, Pause, Bell, Sprout, Zap } from 'lucide-react';
 
 interface QuickActionBarProps {
   onWaterNow: () => void;
@@ -18,7 +18,7 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
 }) => (
   <div className="space-y-3">
     <h3 className="farm-section-title">
-      <span aria-hidden>⚡</span>
+      <Zap size={14} aria-hidden />
       <span>Thao tác nhanh</span>
     </h3>
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">

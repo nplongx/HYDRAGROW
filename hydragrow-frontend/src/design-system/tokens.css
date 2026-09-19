@@ -1,0 +1,183 @@
+/*
+ * HYDRAGROW design tokens
+ *
+ * Source: docs/design-system/DESIGN-TOKENS-VISUAL-SPEC.md
+ *         docs/hydragrow-hifi-spec.md
+ *
+ * Three layers:
+ * 1. Foundation primitives
+ * 2. Semantic product roles
+ * 3. Component dimensions
+ *
+ * Product code should consume semantic roles, not primitive color names.
+ */
+
+@theme {
+  /* Foundation — color */
+  --color-green-700: #2e7d32;
+  --color-green-100: #eaf6ec;
+  --color-green-50: #e8f5e9;
+  --color-warning-700: #b8590a;
+  --color-warning-50: #fff3e0;
+  --color-critical-700: #c62828;
+  --color-critical-50: #fdecea;
+  --color-ink-900: #111111;
+  --color-ink-700: #2b2b2b;
+  --color-ink-500: #6b6b6b;
+  --color-ink-400: #9a9a9a;
+  --color-line: #eeeeee;
+  --color-bg: #ffffff;
+  --color-bg-muted: #f7f7f7;
+  --color-bg-green: #f2f7f2;
+  --color-focus: #2e7d32;
+  --color-info-700: #1565c0;
+  --color-info-50: #eaf2ff;
+  --color-locked-700: #5f6368;
+  --color-locked-50: #f1f3f4;
+
+  /* Compatibility aliases used by existing Tailwind classes */
+  --color-primary: #2e7d32;
+  --color-primary-deep: #2e7d32;
+  --color-accent: #b8590a;
+  --color-success: #2e7d32;
+  --color-warning: #b8590a;
+  --color-warn-deep: #78350f;
+  --color-error: #c62828;
+  --color-water: #1565c0;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f7f7;
+  --color-border: #eeeeee;
+  --color-text: #111111;
+  --color-text-muted: #6b6b6b;
+  --color-faint: #556d5e;
+  --color-page-bg: #f7f7f7;
+  --color-status: #2e7d32;
+  --color-pill: #e8f5e9;
+  --color-toggleoff: #d9d9d9;
+  --color-config: #1565c0;
+  --color-config-soft: #eaf2ff;
+  --color-success-bg: #e8f5e9;
+  --color-danger-bg: #fdecea;
+  --color-warning-bg: #fff3e0;
+  --color-info-bg: #eaf2ff;
+  --color-info-fg: #1565c0;
+
+  /* Foundation — typography */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Foundation — spacing: 8pt base */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+
+  /* Semantic spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  /* Foundation — radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  /* Foundation — elevation */
+  --shadow-none: none;
+  --shadow-low: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-high: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  /* Component dimensions */
+  --spacing-control-compact: 2rem;
+  --spacing-control-standard: 2.75rem;
+  --spacing-control-large: 3.25rem;
+  --spacing-panel-padding: 1rem;
+  --spacing-table-row: 2.75rem;
+  --spacing-touch-target: 2.75rem;
+}
+
+:root {
+  /* Semantic color layer */
+  --color-surface-app: var(--color-bg-muted);
+  --color-surface-default: var(--color-bg);
+  --color-surface-subtle: var(--color-bg-muted);
+  --color-surface-elevated: var(--color-bg);
+  --color-surface-overlay: var(--color-bg);
+  --color-surface-disabled: #f1f1f1;
+  --color-surface-critical: var(--color-critical-50);
+
+  --color-text-primary: var(--color-ink-900);
+  --color-text-secondary: var(--color-ink-700);
+  --color-text-muted: var(--color-ink-500);
+  --color-text-disabled: var(--color-ink-400);
+  --color-text-on-accent: #ffffff;
+
+  --color-border-default: var(--color-line);
+  --color-border-subtle: #f3f3f3;
+  --color-border-strong: #d6d6d6;
+  --color-border-focus: var(--color-focus);
+  --color-border-warning: var(--color-warning-700);
+  --color-border-fault: var(--color-critical-700);
+
+  --color-control-primary: var(--color-green-700);
+  --color-control-secondary: var(--color-bg);
+  --color-control-destructive: var(--color-critical-700);
+
+  --color-status-normal: var(--color-green-700);
+  --color-status-success: var(--color-green-700);
+  --color-status-warning: var(--color-warning-700);
+  --color-status-fault: var(--color-critical-700);
+  --color-status-unavailable: var(--color-ink-700);
+  --color-status-pending: var(--color-warning-700);
+  --color-status-locked: var(--color-locked-700);
+  --color-status-info: var(--color-info-700);
+
+  --color-status-normal-bg: var(--color-green-50);
+  --color-status-success-bg: var(--color-green-50);
+  --color-status-warning-bg: var(--color-warning-50);
+  --color-status-fault-bg: var(--color-critical-50);
+  --color-status-unavailable-bg: var(--color-bg-muted);
+  --color-status-pending-bg: var(--color-warning-50);
+  --color-status-locked-bg: var(--color-locked-50);
+  --color-status-info-bg: var(--color-info-50);
+
+  --focus-ring: 0 0 0 3px rgba(46, 125, 50, 0.25);
+
+  /* Semantic typography */
+  --font-size-display: 1.5rem;
+  --font-size-page-title: 1.125rem;
+  --font-size-section-title: 1rem;
+  --font-size-card-title: 0.875rem;
+  --font-size-body: 0.75rem;
+  --font-size-label: 0.625rem;
+  --font-size-caption: 0.6875rem;
+  --font-size-telemetry-value: 1.25rem;
+  --font-size-telemetry-unit: 0.6875rem;
+  --font-size-status: 0.6875rem;
+  --line-height-tight: 1.25;
+  --line-height-body: 1.5;
+  --line-height-relaxed: 1.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-standard: 0ms;
+    --motion-duration-slow: 0ms;
+  }
+}

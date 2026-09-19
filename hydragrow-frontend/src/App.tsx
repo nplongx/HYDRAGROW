@@ -48,6 +48,7 @@ const FleetView = React.lazy(() => import('./pages/FleetView').then((module) => 
 const ConfigBackup = React.lazy(() => import('./pages/ConfigBackup').then((module) => ({ default: module.ConfigBackup })));
 const Roles = React.lazy(() => import('./pages/Roles').then((module) => ({ default: module.Roles })));
 const UserManagement = React.lazy(() => import('./pages/UserManagement').then((module) => ({ default: module.UserManagement })));
+const DesignLab = React.lazy(() => import('./pages/DesignLab'));
 
 type AuthView = 'login' | 'register' | 'forgot';
 
@@ -199,6 +200,7 @@ function AppRoutes() {
       <AppToaster />
       <Suspense fallback={<LoadingState message="Đang tải trang..." />}>
         <Routes>
+          <Route path="/design-lab" element={<DesignLab />} />
           <Route path="/" element={<MainLayout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             {CANONICAL_ROUTES.map((route) => (

@@ -41,6 +41,20 @@ pub async fn find_active_by_firebase_uid(
     .await
 }
 
+/// Tìm user đang hoạt động theo internal id — chỉ dùng bởi local development auth.
+pub async fn find_active_by_id(pool: &PgPool, id: i64) -> Result<Option<UserRecord>, sqlx::Error> {
+    sqlx::query_as::<_, UserRecord>(
+        r#"
+        SELECT id, firebase_uid, email, display_name, role, preferences, scopes, is_active
+        FROM users
+        WHERE id = $1 AND is_active = TRUE
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
 /// Danh sách mọi user (không lọc theo is_active) — dùng bởi GET /api/admin/users.
 pub async fn list_users(pool: &PgPool) -> Result<Vec<UserRecord>, sqlx::Error> {
     sqlx::query_as::<_, UserRecord>(

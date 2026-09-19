@@ -24,6 +24,7 @@ export function useDeviceSync() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [syncState, setSyncState] = useState<DeviceSyncState>({ connection: 'degraded', lastEventAt: null, lastCorrelationId: null, lastCommandId: null });
   const recoveryInFlightRef = useRef(false);
+  const lastTelemetryRefreshAtRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +74,12 @@ export function useDeviceSync() {
       } finally {
         recoveryInFlightRef.current = false;
       }
+    };
+    const refreshTelemetry = () => {
+      const now = Date.now();
+      if (now - lastTelemetryRefreshAtRef.current < 5_000) return;
+      lastTelemetryRefreshAtRef.current = now;
+      void queryClient.invalidateQueries({ queryKey: deviceTelemetryQueryKey(deviceId) });
     };
 
     const connectWs = () => {
@@ -130,7 +137,7 @@ export function useDeviceSync() {
                 void recoverAuthoritativeState();
               }
             } else {
-              queryClient.invalidateQueries({ queryKey: deviceTelemetryQueryKey(deviceId) });
+              refreshTelemetry();
             }
             return;
           }
@@ -140,7 +147,6 @@ export function useDeviceSync() {
           // narrowly scoped session event for the remaining consumers.
           if (route === 'status') {
             queryClient.invalidateQueries({ queryKey: queryKeys.analyticsHealth(deviceId) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.telemetry(deviceId) });
             window.dispatchEvent(
               new CustomEvent(`hydragrow:${data.type}`, { detail: data.payload }),
             );

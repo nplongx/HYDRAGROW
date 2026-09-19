@@ -1,0 +1,790 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1440" height="1344" viewBox="0 0 1440 1344">
+  <defs>
+    <clipPath id="clip0">
+      <rect width="304" height="126"/>
+    </clipPath>
+    <filter id="fx1">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.08"/>
+    </filter>
+    <filter id="fx2">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.13"/>
+    </filter>
+    <filter id="fx3">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#C62828" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <g>
+    <rect width="1440" height="1320" fill="#F7F7F7"/>
+    <g transform="translate(24, 24)">
+      <rect width="1392" height="88" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(20, 11.5)">
+        <g>
+          <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#6B6B6B">HYDRAGROW · P0 COMPONENT LIBRARY</text>
+        </g>
+        <g transform="translate(0, 17)">
+          <text x="0" y="24" font-family="Inter" font-size="24" font-weight="700" fill="#2E7D32">Operational UI primitives</text>
+        </g>
+        <g transform="translate(0, 50)">
+          <text x="0" y="12" font-family="Inter" font-size="12" fill="#6B6B6B">1440px desktop · 8pt spacing · semantic states · touch target ≥ 44px</text>
+        </g>
+      </g>
+      <g transform="translate(1242, 29.5)">
+        <rect width="130" height="29" rx="999" ry="999" fill="#E8F5E9"/>
+        <g transform="translate(12, 10.5)">
+          <ellipse cx="4" cy="4" rx="4" ry="4" fill="#2E7D32"/>
+        </g>
+        <g transform="translate(28, 8)">
+          <text x="0" y="11" font-family="Inter" font-size="11" font-weight="600" fill="#2E7D32">P0 VISUAL SPEC</text>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(24, 128)">
+      <rect width="1392" height="96" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <g>
+          <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#9A9A9A">SURFACE + TYPE</text>
+        </g>
+        <g transform="translate(0, 18)">
+          <text x="0" y="16" font-family="Inter" font-size="16" font-weight="700" fill="#111111">Calm operational hierarchy</text>
+        </g>
+        <g transform="translate(0, 43)">
+          <text x="0" y="11" font-family="Inter" font-size="11" fill="#6B6B6B">Inter · regular / medium / semibold / bold</text>
+        </g>
+      </g>
+      <g transform="translate(312, 16)">
+        <g>
+          <rect width="72" height="48" rx="12" ry="12" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(19.5, 18.5)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">surface</text>
+          </g>
+        </g>
+        <g transform="translate(80, 0)">
+          <rect width="72" height="48" rx="12" ry="12" fill="#F7F7F7" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(23, 18.5)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">subtle</text>
+          </g>
+        </g>
+        <g transform="translate(160, 0)">
+          <rect width="72" height="48" rx="12" ry="12" fill="#E8F5E9"/>
+          <g transform="translate(21, 18.5)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#2E7D32">normal</text>
+          </g>
+        </g>
+        <g transform="translate(240, 0)">
+          <rect width="72" height="48" rx="12" ry="12" fill="#FFF3E0"/>
+          <g transform="translate(18.5, 18.5)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#B8590A">warning</text>
+          </g>
+        </g>
+        <g transform="translate(320, 0)">
+          <rect width="72" height="48" rx="12" ry="12" fill="#FDECEA"/>
+          <g transform="translate(26.5, 18.5)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#C62828">fault</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(688, 16)">
+        <g>
+          <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#9A9A9A">GEOMETRY</text>
+        </g>
+        <g transform="translate(0, 18)">
+          <text x="0" y="12" font-family="Inter" font-size="12" font-weight="600" fill="#111111">16px panel radius · 12/16px gaps · 40px control · 44px touch</text>
+        </g>
+        <g transform="translate(0, 39)">
+          <text x="0" y="11" font-family="Inter" font-size="11" fill="#6B6B6B">Critical actions stay visually unique.</text>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(24, 240)">
+      <g>
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">AppShell</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Navigation rail + utility + content canvas</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="126" rx="12" ry="12" fill="#F7F7F7"/>
+          <g clip-path="url(#clip0)">
+            <g>
+              <rect width="72" height="126" fill="#2E7D32"/>
+              <g transform="translate(10, 10)">
+                <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#FFFFFF">HG</text>
+              </g>
+              <g transform="translate(10, 30)">
+                <text x="0" y="8" font-family="Inter" font-size="8" fill="#E8F5E9">Overview</text>
+              </g>
+              <g transform="translate(10, 48)">
+                <text x="0" y="8" font-family="Inter" font-size="8" fill="#E8F5E9">Operations</text>
+              </g>
+              <g transform="translate(10, 66)">
+                <text x="0" y="8" font-family="Inter" font-size="8" fill="#E8F5E9">Journal</text>
+              </g>
+            </g>
+            <g transform="translate(72, 0)">
+              <g transform="translate(12, 12)">
+                <text x="0" y="14" font-family="Inter" font-size="14" font-weight="700" fill="#2E7D32">Dashboard</text>
+              </g>
+              <g transform="translate(12, 37)">
+                <rect width="208" height="54" rx="10" ry="10" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(352, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">PageHeader</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Eyebrow · title · description · actions</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="79" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(12, 12)">
+            <g>
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#6B6B6B">STATION 01</text>
+            </g>
+            <g transform="translate(0, 15)">
+              <text x="0" y="20" font-family="Inter" font-size="20" font-weight="700" fill="#2E7D32">Overview</text>
+            </g>
+            <g transform="translate(0, 43)">
+              <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Live station health and telemetry</text>
+            </g>
+          </g>
+          <g transform="translate(230, 37)">
+            <rect width="62" height="30" rx="10" ry="10" fill="#2E7D32"/>
+            <g transform="translate(12, 9)">
+              <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#FFFFFF">Refresh</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(704, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Panel</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Default surface · subtle border · low elevation</text>
+        </g>
+        <g transform="translate(16, 64)" filter="url(#fx1)">
+          <rect width="304" height="101" rx="12" ry="12" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(12, 12)">
+            <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">Station health</text>
+          </g>
+          <g transform="translate(12, 37)">
+            <rect width="280" height="52" rx="10" ry="10" fill="#F7F7F7"/>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(1056, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Button</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Primary · secondary · danger · pending</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <rect width="63" height="32" rx="10" ry="10" fill="#2E7D32"/>
+            <g transform="translate(12, 10)">
+              <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#FFFFFF">Primary</text>
+            </g>
+          </g>
+          <g transform="translate(71, 0)">
+            <rect width="78" height="30" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="1"/>
+            <g transform="translate(12, 9)">
+              <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#2E7D32">Secondary</text>
+            </g>
+          </g>
+          <g transform="translate(157, 0)">
+            <rect width="60" height="32" rx="10" ry="10" fill="#C62828"/>
+            <g transform="translate(12, 10)">
+              <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#FFFFFF">Danger</text>
+            </g>
+          </g>
+          <g transform="translate(225, 0)">
+            <rect width="75" height="32" rx="10" ry="10" fill="#FFF3E0"/>
+            <g transform="translate(12, 10)">
+              <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#B8590A">Pending…</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(16, 106)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#9A9A9A">One primary action per local group.</text>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(24, 464)">
+      <g>
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">StatusPill / DeviceStatePill</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Text + dot/icon + semantic treatment</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <rect width="62" height="23" rx="999" ry="999" fill="#E8F5E9"/>
+            <g transform="translate(10, 8)">
+              <ellipse cx="3.5" cy="3.5" rx="3.5" ry="3.5" fill="#2E7D32"/>
+            </g>
+            <g transform="translate(23, 6)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#2E7D32">Online</text>
+            </g>
+          </g>
+          <g transform="translate(70, 0)">
+            <rect width="71" height="23" rx="999" ry="999" fill="#FFF3E0"/>
+            <g transform="translate(10, 8)">
+              <ellipse cx="3.5" cy="3.5" rx="3.5" ry="3.5" fill="#B8590A"/>
+            </g>
+            <g transform="translate(23, 6)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#B8590A">Warning</text>
+            </g>
+          </g>
+          <g transform="translate(149, 0)">
+            <rect width="85" height="23" rx="999" ry="999" fill="#F1F3F4"/>
+            <g transform="translate(10, 8)">
+              <ellipse cx="3.5" cy="3.5" rx="3.5" ry="3.5" fill="#5F6368"/>
+            </g>
+            <g transform="translate(23, 6)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#5F6368">Unavailable</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(16, 97)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#9A9A9A">Never color-only semantics.</text>
+        </g>
+      </g>
+      <g transform="translate(352, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">TelemetryCard</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Value &gt; unit &gt; label &gt; freshness</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="84" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(12, 12)">
+            <text x="0" y="10" font-family="Inter" font-size="10" font-weight="600" fill="#6B6B6B">pH</text>
+          </g>
+          <g transform="translate(12, 28)">
+            <g>
+              <text x="0" y="24" font-family="Inter" font-size="24" font-weight="700" fill="#111111">6.2</text>
+            </g>
+            <g transform="translate(44, 17)">
+              <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">pH</text>
+            </g>
+          </g>
+          <g transform="translate(12, 61)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#2E7D32">Updated 8s ago · stable</text>
+          </g>
+        </g>
+        <g transform="translate(16, 158)">
+          <rect width="304" height="25" rx="10" ry="10" fill="#FDECEA"/>
+          <g transform="translate(10, 7)">
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#C62828">STALE · value not live</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(704, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">TelemetryGroup</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Group by operational meaning</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <rect width="96" height="68" rx="10" ry="10" fill="#F7F7F7"/>
+            <g transform="translate(10, 10)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">EC</text>
+            </g>
+            <g transform="translate(10, 24)">
+              <text x="0" y="17" font-family="Inter" font-size="17" font-weight="700" fill="#111111">1.8</text>
+            </g>
+            <g transform="translate(10, 48)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">mS/cm</text>
+            </g>
+          </g>
+          <g transform="translate(104, 0)">
+            <rect width="96" height="68" rx="10" ry="10" fill="#F7F7F7"/>
+            <g transform="translate(10, 10)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">pH</text>
+            </g>
+            <g transform="translate(10, 24)">
+              <text x="0" y="17" font-family="Inter" font-size="17" font-weight="700" fill="#111111">6.2</text>
+            </g>
+            <g transform="translate(10, 48)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">normal</text>
+            </g>
+          </g>
+          <g transform="translate(208, 0)">
+            <rect width="96" height="68" rx="10" ry="10" fill="#F7F7F7"/>
+            <g transform="translate(10, 10)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Temp</text>
+            </g>
+            <g transform="translate(10, 24)">
+              <text x="0" y="17" font-family="Inter" font-size="17" font-weight="700" fill="#111111">23.4</text>
+            </g>
+            <g transform="translate(10, 48)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">°C</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(1056, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">ActuatorCard</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Physical state dominates pending command</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="75" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(12, 12)">
+            <g>
+              <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#111111">Pump A</text>
+            </g>
+            <g transform="translate(0, 17)">
+              <rect width="54" height="20" rx="999" ry="999" fill="#E8F5E9"/>
+              <g transform="translate(8, 5)">
+                <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#2E7D32">RUNNING</text>
+              </g>
+            </g>
+            <g transform="translate(0, 41)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Physical feedback confirmed</text>
+            </g>
+          </g>
+          <g transform="translate(248, 25.5)">
+            <rect width="44" height="24" rx="999" ry="999" fill="#2E7D32"/>
+            <g transform="translate(3, 3)">
+              <ellipse cx="9" cy="9" rx="9" ry="9" fill="#FFFFFF"/>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(16, 149)">
+          <rect width="304" height="25" rx="10" ry="10" fill="#FFF3E0"/>
+          <g transform="translate(10, 7)">
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#B8590A">Command pending · not physical success</text>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(24, 688)">
+      <g>
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">QuickActionBar</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">High-frequency, reversible actions only</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="49" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(10, 10)">
+            <rect width="54" height="29" rx="10" ry="10" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+            <g transform="translate(10, 9)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#111111">Refresh</text>
+            </g>
+          </g>
+          <g transform="translate(72, 10)">
+            <rect width="63" height="29" rx="10" ry="10" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+            <g transform="translate(10, 9)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#111111">View logs</text>
+            </g>
+          </g>
+          <g transform="translate(143, 10)">
+            <rect width="50" height="29" rx="10" ry="10" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+            <g transform="translate(10, 9)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#111111">Details</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(352, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Banner</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Severity = icon + text + semantic color</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="66" rx="12" ry="12" fill="#FFF3E0"/>
+          <g transform="translate(12, 12)">
+            <ellipse cx="9" cy="9" rx="9" ry="9" fill="#B8590A"/>
+          </g>
+          <g transform="translate(40, 12)">
+            <g>
+              <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#78350F">Telemetry attention</text>
+            </g>
+            <g transform="translate(0, 16)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#78350F">EC reading is outside preferred range.</text>
+            </g>
+            <g transform="translate(0, 31)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#B8590A">Review telemetry</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(704, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">StateView</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Empty · unavailable · error · loading</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="133" rx="12" ry="12" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(131, 12)">
+            <rect width="42" height="42" rx="999" ry="999" fill="#E8F5E9"/>
+            <g transform="translate(5, 13.5)">
+              <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#2E7D32">DATA</text>
+            </g>
+          </g>
+          <g transform="translate(107, 60)">
+            <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#2E7D32">No telemetry yet</text>
+          </g>
+          <g transform="translate(70.5, 79)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Connect a station to receive first data.</text>
+          </g>
+          <g transform="translate(107, 96)">
+            <rect width="90" height="25" rx="10" ry="10" fill="#2E7D32"/>
+            <g transform="translate(10, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#FFFFFF">Connect station</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(1056, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Switch</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Label explains behavior · pending distinct</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="90" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(12, 12)">
+            <g transform="translate(0, 2)">
+              <g>
+                <text x="0" y="10" font-family="Inter" font-size="10" font-weight="600" fill="#111111">Auto dosing</text>
+              </g>
+              <g transform="translate(0, 14)">
+                <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Maintain recipe automatically</text>
+              </g>
+            </g>
+            <g transform="translate(111, 0)">
+              <rect width="48" height="28" rx="999" ry="999" fill="#2E7D32"/>
+              <g transform="translate(3, 3)">
+                <ellipse cx="11" cy="11" rx="11" ry="11" fill="#FFFFFF"/>
+              </g>
+            </g>
+          </g>
+          <g transform="translate(12, 50)">
+            <g transform="translate(0, 8.5)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#B8590A">Saving…</text>
+            </g>
+            <g transform="translate(37, 0)">
+              <rect width="48" height="28" rx="999" ry="999" fill="#FFF3E0"/>
+              <g transform="translate(3, 3)">
+                <ellipse cx="11" cy="11" rx="11" ry="11" fill="#FFFFFF"/>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(24, 912)">
+      <g>
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">InputGroup</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Label · control · unit/help/error</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#6B6B6B">Target pH</text>
+          </g>
+          <g transform="translate(0, 16)">
+            <rect width="304" height="40" rx="10" ry="10" fill="#FFFFFF" stroke="#2E7D32" stroke-width="1"/>
+            <g transform="translate(10, 10)">
+              <text x="0" y="10" font-family="Inter" font-size="10" fill="#111111">6.20</text>
+            </g>
+            <g transform="translate(281, 10)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">pH</text>
+            </g>
+          </g>
+          <g transform="translate(0, 61)">
+            <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Allowed range 5.5–6.5</text>
+          </g>
+        </g>
+        <g transform="translate(16, 145)">
+          <rect width="304" height="22" rx="8" ry="8" fill="#FDECEA"/>
+          <g transform="translate(9, 6)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="600" fill="#C62828">Value must stay within recipe limits.</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(352, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">TabShell</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">One clear active tab · horizontal overflow</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="35" rx="10" ry="10" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(4, 4)">
+            <rect width="67" height="27" rx="8" ry="8" fill="#2E7D32"/>
+            <g transform="translate(12, 8)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#FFFFFF">Overview</text>
+            </g>
+          </g>
+          <g transform="translate(75, 4)">
+            <rect width="68" height="27" rx="8" ry="8" fill="#F7F7F7"/>
+            <g transform="translate(12, 8)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#6B6B6B">Telemetry</text>
+            </g>
+          </g>
+          <g transform="translate(147, 4)">
+            <rect width="56" height="27" rx="8" ry="8" fill="#F7F7F7"/>
+            <g transform="translate(12, 8)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#6B6B6B">History</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(704, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">DataTable</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Primary cell content &gt; metadata</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="100" rx="10" ry="10" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g>
+            <rect width="304" height="28" fill="#F7F7F7"/>
+            <g transform="translate(8, 8)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#6B6B6B">EVENT</text>
+            </g>
+            <g transform="translate(128, 8)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#6B6B6B">STATE</text>
+            </g>
+            <g transform="translate(198, 8)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#6B6B6B">TIME</text>
+            </g>
+          </g>
+          <g transform="translate(0, 28)">
+            <g transform="translate(8, 12.5)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#111111">Dose nutrient</text>
+            </g>
+            <g transform="translate(128, 13)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#2E7D32">Success</text>
+            </g>
+            <g transform="translate(198, 13)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">10:42</text>
+            </g>
+          </g>
+          <g transform="translate(0, 64)">
+            <g transform="translate(8, 12.5)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#111111">Sensor stale</text>
+            </g>
+            <g transform="translate(128, 13)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#B8590A">Warning</text>
+            </g>
+            <g transform="translate(198, 13)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">10:39</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(1056, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Modal / ConfirmDialog</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Explicit consequence · action row</text>
+        </g>
+        <g transform="translate(16, 64)" filter="url(#fx2)">
+          <rect width="304" height="102" rx="12" ry="12" fill="#FFFFFF" stroke="#D6D6D6" stroke-width="1"/>
+          <g transform="translate(12, 12)">
+            <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">Stop dosing?</text>
+          </g>
+          <g transform="translate(12, 35)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">This sends a command to the station. Physical state changes only after confirmation.</text>
+          </g>
+          <g transform="translate(12, 65)">
+            <g>
+              <rect width="51" height="25" rx="9" ry="9" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+              <g transform="translate(10, 7)">
+                <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#6B6B6B">Cancel</text>
+              </g>
+            </g>
+            <g transform="translate(59, 0)">
+              <rect width="73" height="25" rx="9" ry="9" fill="#C62828"/>
+              <g transform="translate(10, 7)">
+                <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#FFFFFF">Stop dosing</text>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(24, 1136)">
+      <g>
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Responsive behavior</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Same component geometry; composition reflows</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <rect width="92" height="108" rx="10" ry="10" fill="#F7F7F7"/>
+            <g transform="translate(8, 8)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#2E7D32">Desktop</text>
+            </g>
+            <g transform="translate(8, 24)">
+              <rect width="100" height="10" rx="4" ry="4" fill="#2E7D32"/>
+            </g>
+            <g transform="translate(8, 40)">
+              <rect width="100" height="24" rx="5" ry="5" fill="#FFFFFF"/>
+            </g>
+            <g transform="translate(8, 70)">
+              <rect width="100" height="24" rx="5" ry="5" fill="#FFFFFF"/>
+            </g>
+          </g>
+          <g transform="translate(100, 0)">
+            <rect width="92" height="108" rx="10" ry="10" fill="#F7F7F7"/>
+            <g transform="translate(8, 8)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#2E7D32">Mobile</text>
+            </g>
+            <g transform="translate(8, 24)">
+              <rect width="100" height="10" rx="4" ry="4" fill="#2E7D32"/>
+            </g>
+            <g transform="translate(8, 40)">
+              <rect width="100" height="38" rx="5" ry="5" fill="#FFFFFF"/>
+            </g>
+            <g transform="translate(8, 84)">
+              <rect width="100" height="38" rx="5" ry="5" fill="#FFFFFF"/>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(352, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">State priority</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Pending ≠ success · unavailable ≠ disabled</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <rect width="103" height="25" rx="9" ry="9" fill="#E8F5E9"/>
+            <g transform="translate(10, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#2E7D32">Confirmed</text>
+            </g>
+            <g transform="translate(57, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#2E7D32">success</text>
+            </g>
+          </g>
+          <g transform="translate(0, 31)">
+            <rect width="92" height="25" rx="9" ry="9" fill="#FFF3E0"/>
+            <g transform="translate(10, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#B8590A">Pending</text>
+            </g>
+            <g transform="translate(46, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#B8590A">awaiting</text>
+            </g>
+          </g>
+          <g transform="translate(0, 62)">
+            <rect width="109" height="25" rx="9" ry="9" fill="#F1F3F4"/>
+            <g transform="translate(10, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#5F6368">Unavailable</text>
+            </g>
+            <g transform="translate(61, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#5F6368">resource</text>
+            </g>
+          </g>
+          <g transform="translate(0, 93)">
+            <rect width="71" height="25" rx="9" ry="9" fill="#FDECEA"/>
+            <g transform="translate(10, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" font-weight="600" fill="#C62828">Fault</text>
+            </g>
+            <g transform="translate(32, 7)">
+              <text x="0" y="9" font-family="Inter" font-size="9" fill="#C62828">critical</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(704, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Design-to-code handoff</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Pen captures geometry; React owns behavior</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <g>
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#111111">• Reuse existing UI primitives.</text>
+          </g>
+          <g transform="translate(0, 17)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#111111">• Bind semantic tokens; no one-off colors.</text>
+          </g>
+          <g transform="translate(0, 34)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#111111">• Preserve keyboard + AT semantics.</text>
+          </g>
+          <g transform="translate(0, 51)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#111111">• Validate browser rendering against this gallery.</text>
+          </g>
+        </g>
+        <g transform="translate(16, 136)">
+          <rect width="137" height="27" rx="9" ry="9" fill="#E8F5E9"/>
+          <g transform="translate(10, 8)">
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#2E7D32">P0 · visual source of intent</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(1056, 0)">
+        <rect width="336" height="208" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(16, 16)">
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">EmergencyStopButton</text>
+        </g>
+        <g transform="translate(16, 42)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Unique safety treatment · confirmation mandatory</text>
+        </g>
+        <g transform="translate(16, 64)">
+          <rect width="304" height="128" rx="12" ry="12" fill="#FDECEA"/>
+          <g transform="translate(120, 32)" filter="url(#fx3)">
+            <rect width="64" height="64" rx="999" ry="999" fill="#C62828"/>
+            <g transform="translate(17, 25.5)">
+              <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#FFFFFF">STOP</text>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

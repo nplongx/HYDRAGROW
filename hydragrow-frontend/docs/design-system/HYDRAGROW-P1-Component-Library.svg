@@ -1,0 +1,833 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1436" height="1926" viewBox="0 0 1436 1926">
+  <g>
+    <rect width="761" height="92" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+    <g transform="translate(20, 13.5)">
+      <g>
+        <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#6B6B6B">HYDRAGROW · P1 COMPONENT LIBRARY</text>
+      </g>
+      <g transform="translate(0, 17)">
+        <text x="0" y="24" font-family="Inter" font-size="24" font-weight="700" fill="#14532D">Domain assets + reusable operational components</text>
+      </g>
+      <g transform="translate(0, 50)">
+        <text x="0" y="12" font-family="Inter" font-size="12" fill="#6B6B6B">Cultivation · Fleet · Automation · Observability · P1 UI primitives</text>
+      </g>
+    </g>
+    <g transform="translate(613, 31.5)">
+      <rect width="128" height="29" rx="999" ry="999" fill="#D1FAE5"/>
+      <g transform="translate(12, 10.5)">
+        <ellipse cx="4" cy="4" rx="4" ry="4" fill="#047857"/>
+      </g>
+      <g transform="translate(28, 8)">
+        <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#047857">P1 VISUAL SPEC</text>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 108)">
+    <g>
+      <g>
+        <g>
+          <text x="0" y="15" font-family="Inter" font-size="15" font-weight="700" fill="#14532D">Cultivation asset family</text>
+        </g>
+        <g transform="translate(0, 21)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Flat botanical vectors · no status encoded in artwork</text>
+        </g>
+      </g>
+      <g transform="translate(248, 22)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">A06 · A07 · A08</text>
+      </g>
+    </g>
+    <g transform="translate(0, 43)">
+      <g>
+        <rect width="222" height="260" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(14, 14)">
+          <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">CropIllustration / Lettuce</text>
+        </g>
+        <g transform="translate(14, 37)">
+          <rect width="194" height="170" rx="12" ry="12" fill="#F0FDF4"/>
+          <g transform="translate(58, -36)">
+            <rect width="78" height="52" rx="40" ry="40" fill="#86EFAC"/>
+          </g>
+          <g transform="translate(68, 16)">
+            <rect width="58" height="42" rx="40" ry="40" fill="#4ADE80"/>
+          </g>
+          <g transform="translate(78, 58)">
+            <rect width="38" height="30" rx="40" ry="40" fill="#22C55E"/>
+          </g>
+          <g transform="translate(93, 88)">
+            <rect width="8" height="64" rx="8" ry="8" fill="#65A30D"/>
+          </g>
+        </g>
+        <g transform="translate(14, 215)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Default · compact 48px crop identity</text>
+        </g>
+      </g>
+      <g transform="translate(234, 0)">
+        <rect width="222" height="260" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(14, 14)">
+          <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">CropIllustration / Basil</text>
+        </g>
+        <g transform="translate(14, 37)">
+          <rect width="194" height="170" rx="12" ry="12" fill="#F0FDF4"/>
+          <g transform="translate(93, -22)">
+            <rect width="8" height="90" rx="8" ry="8" fill="#65A30D"/>
+          </g>
+          <g transform="translate(80, 68)">
+            <ellipse cx="17" cy="11" rx="17" ry="11" fill="#4ADE80"/>
+          </g>
+          <g transform="translate(80, 90)">
+            <ellipse cx="17" cy="11" rx="17" ry="11" fill="#22C55E"/>
+          </g>
+          <g transform="translate(82, 112)">
+            <ellipse cx="15" cy="10" rx="15" ry="10" fill="#86EFAC"/>
+          </g>
+          <g transform="translate(82, 132)">
+            <ellipse cx="15" cy="10" rx="15" ry="10" fill="#16A34A"/>
+          </g>
+        </g>
+        <g transform="translate(14, 215)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Simple leaf silhouette · no text baked in</text>
+        </g>
+      </g>
+      <g transform="translate(468, 0)">
+        <rect width="222" height="260" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(14, 14)">
+          <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">CropIllustration / Strawberry</text>
+        </g>
+        <g transform="translate(14, 37)">
+          <rect width="194" height="170" rx="12" ry="12" fill="#FFF7ED"/>
+          <g transform="translate(69, 27.5)">
+            <rect width="56" height="70" rx="999" ry="999" fill="#F87171"/>
+          </g>
+          <g transform="translate(76, 97.5)">
+            <rect width="42" height="24" rx="999" ry="999" fill="#22C55E"/>
+          </g>
+          <g transform="translate(93.5, 121.5)">
+            <ellipse cx="3.5" cy="3.5" rx="3.5" ry="3.5" fill="#FDE68A"/>
+          </g>
+          <g transform="translate(93.5, 128.5)">
+            <ellipse cx="3.5" cy="3.5" rx="3.5" ry="3.5" fill="#FDE68A"/>
+          </g>
+          <g transform="translate(93.5, 135.5)">
+            <ellipse cx="3.5" cy="3.5" rx="3.5" ry="3.5" fill="#FDE68A"/>
+          </g>
+        </g>
+        <g transform="translate(14, 215)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Compact fruit identity · calm saturation</text>
+        </g>
+      </g>
+      <g transform="translate(702, 0)">
+        <rect width="222" height="260" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(14, 14)">
+          <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">CropIllustration / Tomato</text>
+        </g>
+        <g transform="translate(14, 37)">
+          <rect width="194" height="170" rx="12" ry="12" fill="#FFF7ED"/>
+          <g transform="translate(60, 20)">
+            <ellipse cx="37" cy="31" rx="37" ry="31" fill="#EF4444"/>
+          </g>
+          <g transform="translate(80, 82)">
+            <rect width="34" height="18" rx="999" ry="999" fill="#16A34A"/>
+          </g>
+          <g transform="translate(93.5, 100)">
+            <rect width="7" height="50" rx="8" ry="8" fill="#65A30D"/>
+          </g>
+        </g>
+        <g transform="translate(14, 215)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Base crop silhouette · recipe taxonomy driven</text>
+        </g>
+      </g>
+      <g transform="translate(936, 0)">
+        <rect width="222" height="260" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+        <g transform="translate(14, 14)">
+          <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">CropIllustration / Other</text>
+        </g>
+        <g transform="translate(14, 37)">
+          <rect width="194" height="170" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(93, 23)">
+            <rect width="8" height="76" rx="8" ry="8" fill="#65A30D"/>
+          </g>
+          <g transform="translate(78, 99)">
+            <ellipse cx="19" cy="12" rx="19" ry="12" fill="#A7F3D0"/>
+          </g>
+          <g transform="translate(78, 123)">
+            <ellipse cx="19" cy="12" rx="19" ry="12" fill="#86EFAC"/>
+          </g>
+        </g>
+        <g transform="translate(14, 215)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Fallback only when taxonomy has no named artwork</text>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 408)">
+    <g>
+      <rect width="540" height="250" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">SeasonStageChecklist</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Preparation → establishment → growth → harvest/completion</text>
+      </g>
+      <g transform="translate(16, 64)">
+        <g>
+          <rect width="74" height="74" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(22, 20)">
+            <ellipse cx="15" cy="12" rx="15" ry="12" fill="#A7F3D0"/>
+          </g>
+          <g transform="translate(32.5, 44)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#6B6B6B">01</text>
+          </g>
+        </g>
+        <g transform="translate(82, 36)">
+          <rect width="54.67" height="2" fill="#D1FAE5"/>
+        </g>
+        <g transform="translate(144.67, 0)">
+          <rect width="74" height="74" rx="12" ry="12" fill="#ECFDF5"/>
+          <g transform="translate(20, 18)">
+            <ellipse cx="17" cy="14" rx="17" ry="14" fill="#4ADE80"/>
+          </g>
+          <g transform="translate(31.5, 46)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">02</text>
+          </g>
+        </g>
+        <g transform="translate(226.67, 36)">
+          <rect width="54.67" height="2" fill="#D1FAE5"/>
+        </g>
+        <g transform="translate(289.33, 0)">
+          <rect width="74" height="74" rx="12" ry="12" fill="#ECFDF5"/>
+          <g transform="translate(18, 17)">
+            <ellipse cx="19" cy="15" rx="19" ry="15" fill="#22C55E"/>
+          </g>
+          <g transform="translate(31.5, 47)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">03</text>
+          </g>
+        </g>
+        <g transform="translate(371.33, 36)">
+          <rect width="54.67" height="2" fill="#E5E7EB"/>
+        </g>
+        <g transform="translate(434, 0)">
+          <rect width="74" height="74" rx="12" ry="12" fill="#F7F7F7"/>
+          <g transform="translate(18, 17)">
+            <ellipse cx="19" cy="15" rx="19" ry="15" fill="#D1D5DB"/>
+          </g>
+          <g transform="translate(31.5, 47)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#6B6B6B">04</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 148)">
+        <rect width="508" height="29" rx="10" ry="10" fill="#F0FDF4"/>
+        <g transform="translate(9, 9)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#047857">Giai đoạn: Growth</text>
+        </g>
+        <g transform="translate(450, 9)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#047857">Còn 8 ngày</text>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(552, 0)">
+      <rect width="540" height="250" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">SeasonCompletionSummary</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Confirmed completion moment · restrained, not confetti-heavy</text>
+      </g>
+      <g transform="translate(16, 64)">
+        <rect width="508" height="140" rx="12" ry="12" fill="#F0FDF4"/>
+        <g transform="translate(14, 14)">
+          <g transform="translate(33, -22)">
+            <rect width="54" height="72" rx="30" ry="30" fill="#22C55E"/>
+          </g>
+          <g transform="translate(22, 50)">
+            <ellipse cx="38" cy="17" rx="38" ry="17" fill="#86EFAC"/>
+          </g>
+          <g transform="translate(35, 84)">
+            <ellipse cx="25" cy="14" rx="25" ry="14" fill="#4ADE80"/>
+          </g>
+        </g>
+        <g transform="translate(150, 45.5)">
+          <g>
+            <text x="0" y="15" font-family="Inter" font-size="15" font-weight="700" fill="#14532D">Đã hoàn thành mùa vụ</text>
+          </g>
+          <g transform="translate(0, 22)">
+            <text x="0" y="10" font-family="Inter" font-size="10" fill="#047857">Tomato · 72 ngày · 18 ảnh</text>
+          </g>
+          <g transform="translate(0, 38)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Artwork celebrates completion; metrics remain authoritative UI data.</text>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 676)">
+    <g>
+      <rect width="280" height="220" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">StationTower / Compact 48px</text>
+      </g>
+      <g transform="translate(16, 39)">
+        <rect width="248" height="130" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(110, 13)">
+          <rect width="28" height="86" rx="10" ry="10" fill="#D1FAE5" stroke="#047857" stroke-width="1"/>
+        </g>
+        <g transform="translate(102, 99)">
+          <rect width="44" height="8" rx="8" ry="8" fill="#86EFAC"/>
+        </g>
+        <g transform="translate(119, 107)">
+          <ellipse cx="5" cy="5" rx="5" ry="5" fill="#0284C7"/>
+        </g>
+      </g>
+      <g transform="translate(16, 177)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Base identity only; status overlay stays UI</text>
+      </g>
+    </g>
+    <g transform="translate(292, 0)">
+      <rect width="360" height="220" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">StationTower / Card</text>
+      </g>
+      <g transform="translate(16, 39)">
+        <rect width="328" height="130" rx="12" ry="12" fill="#F0FDF4"/>
+        <g transform="translate(97, 15)">
+          <rect width="58" height="100" rx="12" ry="12" fill="#D1FAE5" stroke="#047857" stroke-width="1"/>
+        </g>
+        <g transform="translate(175, 37)">
+          <g>
+            <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#14532D">Trạm Alpha</text>
+          </g>
+          <g transform="translate(0, 19)">
+            <rect width="46" height="20" rx="999" ry="999" fill="#D1FAE5"/>
+            <g transform="translate(8, 5)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">ONLINE</text>
+            </g>
+          </g>
+          <g transform="translate(0, 46)">
+            <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">EC 1.8 · pH 6.2</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 177)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Online/offline/warning are semantic overlays, not separate artwork.</text>
+      </g>
+    </g>
+    <g transform="translate(664, 0)">
+      <rect width="480" height="220" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="12" font-family="Inter" font-size="12" font-weight="700" fill="#111111">StationTower / Empty-state</text>
+      </g>
+      <g transform="translate(16, 39)">
+        <rect width="448" height="130" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(85, 11)">
+          <rect width="64" height="108" rx="14" ry="14" fill="#D1FAE5" stroke="#047857" stroke-width="1"/>
+        </g>
+        <g transform="translate(173, 37)">
+          <g>
+            <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#14532D">Chưa kết nối trạm</text>
+          </g>
+          <g transform="translate(0, 17)">
+            <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Illustration supports CTA; it does not encode fault.</text>
+          </g>
+          <g transform="translate(0, 32)">
+            <rect width="67" height="24" rx="9" ry="9" fill="#15803D"/>
+            <g transform="translate(10, 7)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#FFFFFF">Kết nối trạm</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 177)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Same base silhouette at 240–320px empty state.</text>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 912)">
+    <rect width="1294" height="300" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+    <g transform="translate(16, 16)">
+      <g>
+        <g>
+          <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">AutomationNodeIconSet</text>
+        </g>
+        <g transform="translate(0, 19)">
+          <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Shared geometry · base glyph + semantic accent · React Flow ports remain separate</text>
+        </g>
+      </g>
+      <g transform="translate(399, 0)">
+        <rect width="84" height="22" rx="999" ry="999" fill="#EEF2FF"/>
+        <g transform="translate(9, 6)">
+          <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#4F46E5">config exception</text>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(16, 59)">
+      <g>
+        <rect width="96" height="88" rx="12" ry="12" fill="#F0F9FF" stroke="#BAE6FD" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#0284C7"/>
+        </g>
+        <g transform="translate(28, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#075985">TRIGGER</text>
+        </g>
+      </g>
+      <g transform="translate(106, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#FAF5FF" stroke="#E9D5FF" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#7E22CE"/>
+        </g>
+        <g transform="translate(23.5, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#6B21A8">SCHEDULE</text>
+        </g>
+      </g>
+      <g transform="translate(212, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#D97706"/>
+        </g>
+        <g transform="translate(22, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#92400E">CONDITION</text>
+        </g>
+      </g>
+      <g transform="translate(318, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#059669"/>
+        </g>
+        <g transform="translate(35.5, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#065F46">DOSE</text>
+        </g>
+      </g>
+      <g transform="translate(424, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#0284C7"/>
+        </g>
+        <g transform="translate(32, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#075985">WATER</text>
+        </g>
+      </g>
+      <g transform="translate(530, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#15803D"/>
+        </g>
+        <g transform="translate(23, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#166534">ACTUATOR</text>
+        </g>
+      </g>
+      <g transform="translate(636, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#FFF7ED" stroke="#FED7AA" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#EA580C"/>
+        </g>
+        <g transform="translate(33, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#9A3412">ALERT</text>
+        </g>
+      </g>
+      <g transform="translate(742, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#65A30D"/>
+        </g>
+        <g transform="translate(33, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#3F6212">STAGE</text>
+        </g>
+      </g>
+      <g transform="translate(848, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#F7FEE7" stroke="#D9F99D" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#4D7C0F"/>
+        </g>
+        <g transform="translate(38.5, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#365314">END</text>
+        </g>
+      </g>
+      <g transform="translate(954, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#475569"/>
+        </g>
+        <g transform="translate(33, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#334155">CHAIN</text>
+        </g>
+      </g>
+      <g transform="translate(1060, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#4F46E5"/>
+        </g>
+        <g transform="translate(30, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#3730A3">CONFIG</text>
+        </g>
+      </g>
+      <g transform="translate(1166, 0)">
+        <rect width="96" height="88" rx="12" ry="12" fill="#FEF2F2" stroke="#FECACA" stroke-width="1"/>
+        <g transform="translate(33, 10)">
+          <ellipse cx="15" cy="15" rx="15" ry="15" fill="#DC2626"/>
+        </g>
+        <g transform="translate(30, 47)">
+          <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#991B1B">SAFETY</text>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 1228)">
+    <g>
+      <rect width="350" height="250" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">FlowOverviewCard</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <rect width="318" height="122" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(12, 12)">
+          <g>
+            <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#111111">Morning mist</text>
+          </g>
+          <g transform="translate(71, 0)">
+            <rect width="52" height="18" rx="999" ry="999" fill="#D1FAE5"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">ENABLED</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(12, 38)">
+          <g>
+            <rect width="47" height="18" rx="999" ry="999" fill="#F0F9FF"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#075985">SENSOR</text>
+            </g>
+          </g>
+          <g transform="translate(53, 0)">
+            <rect width="50" height="18" rx="999" ry="999" fill="#ECFDF5"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#065F46">3 NODES</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(12, 64)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Last run 10:42 · success</text>
+        </g>
+        <g transform="translate(12, 83)">
+          <rect width="140" height="27" rx="9" ry="9" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(8, 8)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#111111">Trigger → condition → action</text>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(362, 0)">
+      <rect width="350" height="250" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">NodeEditorPanel</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Selected node inspector · validation adjacent</text>
+      </g>
+      <g transform="translate(16, 64)">
+        <rect width="318" height="116" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(12, 12)">
+          <g>
+            <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#14532D">CONDITION</text>
+          </g>
+          <g transform="translate(64, 0)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Node 02</text>
+          </g>
+        </g>
+        <g transform="translate(12, 33)">
+          <rect width="104" height="37" rx="9" ry="9" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+          <g transform="translate(8, 8)">
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#111111">EC greater than 2.5</text>
+          </g>
+          <g transform="translate(8, 19)">
+            <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Then continue to DOSE</text>
+          </g>
+        </g>
+        <g transform="translate(12, 78)">
+          <rect width="138" height="26" rx="9" ry="9" fill="#FEF2F2"/>
+          <g transform="translate(8, 8)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="600" fill="#991B1B">Invalid: sensor field unavailable</text>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(724, 0)">
+      <rect width="350" height="250" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">TestPanel</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <text x="0" y="10" font-family="Inter" font-size="10" fill="#6B6B6B">Idle · running · success · failure</text>
+      </g>
+      <g transform="translate(16, 64)">
+        <rect width="318" height="109" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(12, 12)">
+          <g>
+            <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#111111">Dry run</text>
+          </g>
+          <g transform="translate(37, 0)">
+            <rect width="56" height="22" rx="9" ry="9" fill="#15803D"/>
+            <g transform="translate(8, 6)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#FFFFFF">RUN TEST</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(12, 42)">
+          <rect width="161" height="37" rx="9" ry="9" fill="#D1FAE5"/>
+          <g transform="translate(8, 8)">
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#047857">Success</text>
+          </g>
+          <g transform="translate(8, 19)">
+            <text x="0" y="8" font-family="Inter" font-size="8" fill="#047857">3 nodes evaluated · no command sent</text>
+          </g>
+        </g>
+        <g transform="translate(12, 87)">
+          <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Test output is simulation, not physical confirmation.</text>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(1086, 0)">
+      <rect width="350" height="250" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">AutomationConflictBanner</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <rect width="318" height="66" rx="12" ry="12" fill="#FFF7ED"/>
+        <g transform="translate(12, 12)">
+          <ellipse cx="10" cy="10" rx="10" ry="10" fill="#D97706"/>
+        </g>
+        <g transform="translate(42, 12)">
+          <g>
+            <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#92400E">Automation conflict</text>
+          </g>
+          <g transform="translate(0, 16)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#92400E">Two flows target same actuator window.</text>
+          </g>
+          <g transform="translate(0, 31)">
+            <text x="0" y="9" font-family="Inter" font-size="9" font-weight="700" fill="#B45309">Review conflict</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 118)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Conflict remains actionable and text-first.</text>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 1498)">
+    <g>
+      <rect width="350" height="230" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">HealthScore</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <g>
+          <rect width="90" height="90" rx="999" ry="999" fill="#D1FAE5"/>
+          <g transform="translate(29, 25)">
+            <text x="0" y="25" font-family="Inter" font-size="25" font-weight="700" fill="#047857">92</text>
+          </g>
+          <g transform="translate(36.5, 55)">
+            <text x="0" y="8" font-family="Inter" font-size="8" fill="#047857">/100</text>
+          </g>
+        </g>
+        <g transform="translate(106, 23)">
+          <g>
+            <text x="0" y="11" font-family="Inter" font-size="11" font-weight="700" fill="#14532D">Healthy</text>
+          </g>
+          <g transform="translate(0, 19)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Stable telemetry and contact</text>
+          </g>
+          <g transform="translate(0, 36)">
+            <rect width="180" height="8" rx="999" ry="999" fill="#E5E7EB"/>
+            <rect width="165" height="8" rx="999" ry="999" fill="#15803D"/>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 142)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Variants: great · attention · critical · offline</text>
+      </g>
+    </g>
+    <g transform="translate(362, 0)">
+      <rect width="350" height="230" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">SensorBentoCard</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <rect width="318" height="96" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(12, 12)">
+          <g>
+            <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#111111">EC</text>
+          </g>
+          <g transform="translate(14, 0)">
+            <rect width="51" height="18" rx="999" ry="999" fill="#D1FAE5"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">OPTIMAL</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(12, 37)">
+          <g>
+            <text x="0" y="25" font-family="Inter" font-size="25" font-weight="700" fill="#111111">1.8</text>
+          </g>
+          <g transform="translate(40, 19)">
+            <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">mS/cm</text>
+          </g>
+        </g>
+        <g transform="translate(12, 74)">
+          <text x="0" y="8" font-family="Inter" font-size="8" fill="#6B6B6B">Target 1.6–2.2 · updated 8s ago</text>
+        </g>
+      </g>
+      <g transform="translate(16, 148)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Normal · compact · warning · danger · unavailable</text>
+      </g>
+    </g>
+    <g transform="translate(724, 0)">
+      <rect width="350" height="230" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">DosingSummaryCard</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <rect width="318" height="97" rx="12" ry="12" fill="#F7F7F7"/>
+        <g transform="translate(12, 12)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Today</text>
+        </g>
+        <g transform="translate(12, 30)">
+          <text x="0" y="25" font-family="Inter" font-size="25" font-weight="700" fill="#14532D">128 mL</text>
+        </g>
+        <g transform="translate(12, 67)">
+          <g>
+            <rect width="43" height="18" rx="999" ry="999" fill="#D1FAE5"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#047857">A 52mL</text>
+            </g>
+          </g>
+          <g transform="translate(49, 0)">
+            <rect width="44" height="18" rx="999" ry="999" fill="#D1FAE5"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#047857">B 48mL</text>
+            </g>
+          </g>
+          <g transform="translate(99, 0)">
+            <rect width="60" height="18" rx="999" ry="999" fill="#DBEAFE"/>
+            <g transform="translate(7, 4)">
+              <text x="0" y="8" font-family="Inter" font-size="8" fill="#1D4ED8">Water 28mL</text>
+            </g>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 149)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Populated · no-dose</text>
+      </g>
+    </g>
+    <g transform="translate(1086, 0)">
+      <rect width="350" height="230" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+      <g transform="translate(16, 16)">
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">FaultExplanation</text>
+      </g>
+      <g transform="translate(16, 42)">
+        <rect width="318" height="99" rx="12" ry="12" fill="#FEF2F2"/>
+        <g transform="translate(12, 12)">
+          <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#991B1B">FAULT F-204</text>
+        </g>
+        <g transform="translate(12, 30)">
+          <text x="0" y="10" font-family="Inter" font-size="10" font-weight="700" fill="#111111">Pump A did not confirm start</text>
+        </g>
+        <g transform="translate(12, 48)">
+          <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Check power and interlock state before retry.</text>
+        </g>
+        <g transform="translate(12, 65)">
+          <rect width="66" height="22" rx="8" ry="8" fill="#FFFFFF" stroke="#FECACA" stroke-width="1"/>
+          <g transform="translate(9, 6)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#991B1B">View details</text>
+          </g>
+        </g>
+      </g>
+      <g transform="translate(16, 151)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Known · unknown · dismissible</text>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(0, 1746)">
+    <rect width="1159" height="180" rx="16" ry="16" fill="#FFFFFF" stroke="#EEEEEE" stroke-width="1"/>
+    <g transform="translate(16, 16)">
+      <g>
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Responsive rules</text>
+      </g>
+      <g transform="translate(0, 23)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Domain components stack on mobile; artwork shrinks before data density.</text>
+      </g>
+      <g transform="translate(0, 41)">
+        <g>
+          <rect width="120" height="86" rx="10" ry="10" fill="#F7F7F7"/>
+          <g transform="translate(8, 8)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#14532D">Desktop</text>
+          </g>
+          <g transform="translate(8, 23)">
+            <rect width="100" height="20" rx="6" ry="6" fill="#D1FAE5"/>
+          </g>
+          <g transform="translate(8, 48)">
+            <rect width="100" height="20" rx="6" ry="6" fill="#FFFFFF"/>
+          </g>
+        </g>
+        <g transform="translate(128, 0)">
+          <rect width="80" height="86" rx="10" ry="10" fill="#F7F7F7"/>
+          <g transform="translate(8, 8)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#14532D">Mobile</text>
+          </g>
+          <g transform="translate(8, 23)">
+            <rect width="100" height="18" rx="6" ry="6" fill="#D1FAE5"/>
+          </g>
+          <g transform="translate(8, 46)">
+            <rect width="100" height="28" rx="6" ry="6" fill="#FFFFFF"/>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(460, 16)">
+      <g>
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">Semantic state rules</text>
+      </g>
+      <g transform="translate(0, 23)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">Artwork never proves runtime state. UI text/icon remains authoritative.</text>
+      </g>
+      <g transform="translate(0, 41)">
+        <g>
+          <rect width="62" height="24" rx="9" ry="9" fill="#D1FAE5"/>
+          <g transform="translate(10, 7)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">Confirmed</text>
+          </g>
+        </g>
+        <g transform="translate(70, 0)">
+          <rect width="53" height="24" rx="9" ry="9" fill="#FEF3C7"/>
+          <g transform="translate(10, 7)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#92400E">Pending</text>
+          </g>
+        </g>
+        <g transform="translate(131, 0)">
+          <rect width="66" height="24" rx="9" ry="9" fill="#F3F4F6"/>
+          <g transform="translate(10, 7)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#4B5563">Unavailable</text>
+          </g>
+        </g>
+        <g transform="translate(205, 0)">
+          <rect width="40" height="24" rx="9" ry="9" fill="#FEE2E2"/>
+          <g transform="translate(10, 7)">
+            <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#991B1B">Fault</text>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g transform="translate(783, 16)">
+      <g>
+        <text x="0" y="13" font-family="Inter" font-size="13" font-weight="700" fill="#111111">P1 handoff</text>
+      </g>
+      <g transform="translate(0, 23)">
+        <text x="0" y="9" font-family="Inter" font-size="9" fill="#6B6B6B">OpenPencil captures geometry and variants. React owns runtime behavior, accessibility, responsive logic and API state.</text>
+      </g>
+      <g transform="translate(0, 52)">
+        <rect width="187" height="26" rx="9" ry="9" fill="#F0FDF4"/>
+        <g transform="translate(10, 8)">
+          <text x="0" y="8" font-family="Inter" font-size="8" font-weight="700" fill="#047857">No competing control authority introduced</text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -100,4 +100,21 @@ describe('Dashboard component wiring', () => {
     expect(screen.getByText('Châm dinh dưỡng hôm nay')).toBeInTheDocument();
     expect(screen.getByText(/3 lần/)).toBeInTheDocument();
   });
+
+  it('hiển thị hierarchy vận hành và không dùng emoji cho greeting', () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tổng quan' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Trạng thái trạm' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Thông số thời gian thực' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Vận hành hiện tại' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sự kiện gần đây' })).toBeInTheDocument();
+    expect(screen.getByText('Xin chào, Nam')).toBeInTheDocument();
+    expect(screen.queryByText(/👋/)).not.toBeInTheDocument();
+  });
 });

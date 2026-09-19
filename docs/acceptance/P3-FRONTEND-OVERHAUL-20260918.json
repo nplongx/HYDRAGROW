@@ -1,0 +1,15 @@
+{
+  "requirement_id": "P3-FRONTEND-OVERHAUL-20260918",
+  "objective": "Freeze the P3 frontend navigation/data/state/responsive contracts, decompose the application shell, and standardize repeated semantic UI primitives without changing domain authority or route behavior.",
+  "acceptance": [
+    {"id":"AC-1","criterion":"P3 primary navigation remains exactly Dashboard, Operations, Cultivation, Journal, Settings, with existing canonical route targets.","verification":"Route manifest and MainLayout tests"},
+    {"id":"AC-2","criterion":"P3.0 documents frontend authority, state semantics, responsive shell, design-system rules, and explicit non-goals.","verification":"P3 frontend contract document review"},
+    {"id":"AC-3","criterion":"App shell is decomposed into presentation components without introducing data fetching or a second frontend state authority.","verification":"MainLayout/AppShell source review and TypeScript check"},
+    {"id":"AC-4","criterion":"Desktop and mobile shell preserve the same navigation targets, active-route semantics, safe-area behavior, and fixed-navigation content clearance.","verification":"MainLayout test suite and frontend build"},
+    {"id":"AC-5","criterion":"Frontend verification remains green after P3.0/P3.1 changes.","verification":"Frontend build, TypeScript, ESLint, and full Vitest suite"},
+    {"id":"AC-6","criterion":"Repeated frontend state/form/navigation patterns use shared semantic primitives without introducing a second state authority, domain thresholds, command lifecycle, or controller logic.","verification":"Primitive source review, focused component tests, TypeScript, ESLint, build, full Vitest"},
+    {"id":"AC-7","criterion":"Dashboard answers current station status, critical/fault state, core telemetry, active operation, quick actions, and recent events using existing frontend authorities and canonical destinations; it adds no analytics or recommendations.","verification":"Dashboard source/tests, focused Dashboard/QuickActionBar tests, TypeScript, build, full Vitest"},
+    {"id":"AC-8","criterion":"Operations preserves the existing Control + Automation structure, safe manual controls, actuator state, command lifecycle distinction, automation flow/config surfaces, and emergency-stop confirmation without introducing a second controller/state authority.","verification":"Operations/ControlPanel/Automation/EmergencyStop source review, focused Operations/control/safety tests, authenticated local browser inspection, TypeScript, build"},
+    {"id":"AC-9","criterion":"Local browser inspection can use an explicit development-only authenticated DB user without trusting generic user-id headers or weakening production authentication; owned device telemetry is available through the existing MQTT -> authoritative state -> REST path and telemetry refreshes are bounded.","verification":"Backend auth tests, authenticated HTTP smoke checks, MQTT sensor ingress smoke check, browser network inspection, auth/useDeviceSync source review"}
+  ]
+}

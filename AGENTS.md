@@ -131,3 +131,21 @@ Cross-subsystem architecture task
 ```
 
 Graft graph cached in `graft/` (gitignored), auto-updates.
+
+---
+
+## 9. Penpot MCP
+
+* React remains production source of truth; Penpot is visual design/component exploration.
+* Inspect Penpot before mutation: `high_level_overview` first, then `execute_code`.
+* Inspect React source/spec before inventing components.
+* Use real Penpot library components and instances; do not build galleries from duplicate artwork.
+* Prefer small mutation batches. Read back after every significant batch.
+* Use `penpot_api_info` instead of guessing unfamiliar Penpot API members.
+* Keep component naming/path aligned with the design contract; variants may be represented by Penpot variant properties where the API does not expose independent leaf names.
+* Reuse existing design tokens. If the Penpot token catalog is empty, use the documented HYDRAGROW visual tokens as the raw source and do not claim token binding.
+* Keep the MCP URL/token out of tracked files. `.mcp.json` is local-only and uses `PENPOT_MCP_URL`.
+* MCP credentials are runtime secrets. Never print, commit, or paste them into source.
+* Visual QA: Penpot export/screenshot plus browser rendering. A successful MCP mutation is not visual proof.
+* Inspo MCP is read-only visual reference. Use it for new visual exploration or when references are explicitly requested; project design tokens, contracts, and existing components take precedence.
+* Start Inspo exploration with `recommend(brief)` or `search_screens`; inspect the returned source/site details before copying any pattern.

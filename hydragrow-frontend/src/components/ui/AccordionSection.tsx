@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ChevronDown, LucideIcon } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { ChevronDown, LucideIcon } from "lucide-react";
 
 interface AccordionSectionProps {
   id?: string;
@@ -15,6 +15,7 @@ interface AccordionSectionProps {
 }
 
 export const AccordionSection: React.FC<AccordionSectionProps> = ({
+  id,
   title,
   icon: Icon,
   color,
@@ -26,7 +27,9 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   hidden = false,
 }) => {
   const isControlled = controlledIsOpen !== undefined;
-  const [internalOpen, setInternalOpen] = useState(defaultOpen || controlledIsOpen === true);
+  const [internalOpen, setInternalOpen] = useState(
+    defaultOpen || controlledIsOpen === true,
+  );
 
   // Settings uses controlledIsOpen for active tab selection, not accordion state.
   // Sync the local accordion state when the active tab changes.
@@ -35,6 +38,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   }, [controlledIsOpen, isControlled]);
 
   const open = internalOpen;
+  const contentId = `${id ?? title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-content`;
 
   const handleToggle = () => {
     setInternalOpen((current) => !current);
@@ -43,19 +47,25 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
   };
 
   return (
-    <div className={`ui-card overflow-hidden p-0 ${hidden ? 'hidden' : ''}`}>
+    <div className={`ui-card overflow-hidden p-0 ${hidden ? "hidden" : ""}`}>
       <button
         type="button"
         onClick={handleToggle}
+        aria-expanded={open}
+        aria-controls={contentId}
         className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-emerald-50/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           {Icon && (
-            <div className={`p-1.5 rounded-lg bg-pill border border-line ${color || 'text-primary'}`}>
+            <div
+              className={`p-1.5 rounded-lg bg-pill border border-line ${color || "text-primary"}`}
+            >
               <Icon size={16} strokeWidth={2} />
             </div>
           )}
-          <span className="text-sm font-semibold text-emerald-900">{title}</span>
+          <span className="text-sm font-semibold text-emerald-900">
+            {title}
+          </span>
           {badge && (
             <span className="px-2 py-0.5 rounded-full bg-pill text-status text-[10px] font-bold">
               {badge}
@@ -65,11 +75,11 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
         <ChevronDown
           size={16}
           strokeWidth={2.5}
-          className={`text-emerald-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`text-emerald-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
       {open && (
-        <div className="border-t border-line px-4 pb-4 pt-3">
+        <div id={contentId} className="border-t border-line px-4 pb-4 pt-3">
           {children}
         </div>
       )}

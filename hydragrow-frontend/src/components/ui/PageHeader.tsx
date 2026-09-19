@@ -1,5 +1,5 @@
-import React from 'react';
-import { LucideIcon } from 'lucide-react';
+import React from "react";
+import { LucideIcon } from "lucide-react";
 
 interface PageHeaderProps {
   title: string;
@@ -9,8 +9,14 @@ interface PageHeaderProps {
   className?: string;
 }
 
-export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon: Icon, action, className = '' }) => (
-  <div className={`page-header ${className}`}>
+export const PageHeader: React.FC<PageHeaderProps> = ({
+  title,
+  subtitle,
+  icon: Icon,
+  action,
+  className = "",
+}) => (
+  <header className={`page-header ${className}`}>
     <div className="page-header-main">
       {Icon && (
         <div className="page-header-icon">
@@ -23,5 +29,5 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon: I
       </div>
     </div>
     {action && <div className="shrink-0">{action}</div>}
-  </div>
+  </header>
 );

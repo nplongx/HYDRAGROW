@@ -101,6 +101,67 @@ where
             }
         };
 
+        // Local browser inspection only: authenticate against one explicitly configured
+        // active user without weakening Firebase/service authentication in other environments.
+        if let Some(dev_token) = req
+            .headers()
+            .get("X-Dev-Auth-Token")
+            .and_then(|value| value.to_str().ok())
+        {
+            let expected_token = std::env::var("DEV_AUTH_TOKEN").unwrap_or_default();
+            let configured_user_id = std::env::var("DEV_AUTH_USER_ID")
+                .ok()
+                .and_then(|value| value.parse::<i64>().ok());
+            let is_development = std::env::var("ENVIRONMENT")
+                .map(|value| value.eq_ignore_ascii_case("development"))
+                .unwrap_or(false);
+            let is_loopback = req.peer_addr().is_some_and(|addr| addr.ip().is_loopback());
+
+            if !is_development
+                || !is_loopback
+                || expected_token.is_empty()
+                || configured_user_id.is_none()
+                || dev_token != expected_token
+            {
+                let response = HttpResponse::Unauthorized()
+                    .json(serde_json::json!({"error": "Invalid local development authentication"}))
+                    .map_into_right_body();
+                let (http_req, _payload) = req.into_parts();
+                return Box::pin(ready(Ok(ServiceResponse::new(http_req, response))));
+            }
+
+            let user_id = configured_user_id.expect("checked above");
+            let srv = Rc::clone(&self.service);
+            return Box::pin(async move {
+                match crate::db::users::find_active_by_id(&app_state.pg_pool, user_id).await {
+                    Ok(Some(user)) => {
+                        req.extensions_mut().insert(AuthContext {
+                            scopes: user.scopes,
+                            user_id: Some(user.id.to_string()),
+                            session_id: Some(format!("dev-local:{}", user.id)),
+                            service_key_label: None,
+                        });
+                        let res = srv.call(req).await?;
+                        Ok(res.map_into_left_body())
+                    }
+                    Ok(None) => {
+                        let response = HttpResponse::Unauthorized()
+                            .json(serde_json::json!({"error": "Local development user is not active"}))
+                            .map_into_right_body();
+                        let (http_req, _payload) = req.into_parts();
+                        Ok(ServiceResponse::new(http_req, response))
+                    }
+                    Err(_) => {
+                        let response = HttpResponse::InternalServerError()
+                            .json(serde_json::json!({"error": "Local development authentication lookup failed"}))
+                            .map_into_right_body();
+                        let (http_req, _payload) = req.into_parts();
+                        Ok(ServiceResponse::new(http_req, response))
+                    }
+                }
+            });
+        }
+
         // 2. Ưu tiên xác thực bằng Firebase ID token (Authorization: Bearer <token>)
         if req.path().contains("/webhook/")
             && let Some(token) = req

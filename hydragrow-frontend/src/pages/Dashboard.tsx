@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
-  LineChart, ArrowRight
+  LineChart, ArrowRight, AlertTriangle, Clock3
 } from 'lucide-react';
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
@@ -16,6 +16,8 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { DeviceStatePill } from '../components/ui/DeviceStatePill';
 import { HealthScore } from '../components/ui/HealthScore';
+import { PageHeader } from '../components/ui/PageHeader';
+import { StateView } from '../components/ui/StateView';
 import { useFCM } from '../hooks/useFCM';
 import { useSystemHealthSummary } from '../hooks/useSystemHealthSummary';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -37,6 +39,14 @@ const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => 
     {label}
   </span>
 );
+
+const formatEventTime = (timestampMs: number) =>
+  new Date(timestampMs).toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  });
 
 const formatNumber = (value: any, digits = 1) => {
   const num = Number(value);
@@ -132,34 +142,41 @@ const Dashboard = () => {
 
   if (stationStatus !== 'Selected' || !deviceId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-5 p-6 text-center">
-        <div className="p-6 bg-white rounded-3xl border border-line shadow-xl shadow-primary/10">
-          <Settings size={40} className="text-primary" />
-        </div>
-        <div className="space-y-2 max-w-xs">
-          <h2 className="text-xl font-bold text-primary-deep">
-            {stationStatus === 'InvalidSelection' ? 'Thiết bị không còn khả dụng' : 'Chưa chọn thiết bị'}
-          </h2>
-          <p className="text-sm text-text-muted leading-relaxed">
-            {stationStatus === 'InvalidSelection'
-              ? 'Thiết bị đã chọn không còn nằm trong danh sách trạm có thể truy cập.'
-              : stationStatus === 'PermissionDenied'
-                ? 'Bạn không có quyền truy cập danh sách trạm.'
-                : stationStatus === 'Unavailable'
-                  ? 'Không thể tải danh sách trạm. Vui lòng thử lại.'
-                  : 'Vui lòng chọn một trạm từ trang Tổng Quan Thiết Bị.'}
-          </p>
-        </div>
-      </div>
+      <StateView
+        icon={Settings}
+        tone={stationStatus === 'PermissionDenied' || stationStatus === 'Unavailable' ? 'danger' : 'warning'}
+        title={
+          stationStatus === 'InvalidSelection'
+            ? 'Thiết bị không còn khả dụng'
+            : stationStatus === 'PermissionDenied'
+              ? 'Không có quyền truy cập'
+              : stationStatus === 'Unavailable'
+                ? 'Không thể tải danh sách trạm'
+                : 'Chưa chọn thiết bị'
+        }
+        description={
+          stationStatus === 'InvalidSelection'
+            ? 'Thiết bị đã chọn không còn nằm trong danh sách trạm có thể truy cập.'
+            : stationStatus === 'PermissionDenied'
+              ? 'Bạn không có quyền truy cập danh sách trạm.'
+              : stationStatus === 'Unavailable'
+                ? 'Không thể tải danh sách trạm. Vui lòng thử lại.'
+                : 'Vui lòng chọn một trạm từ danh sách thiết bị.'
+        }
+        className="min-h-[60vh]"
+      />
     );
   }
 
   if (telemetryError || !authoritativeTelemetry) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[80vh] space-y-3 p-6 text-center">
-        <h2 className="text-xl font-bold text-primary-deep">Không có dữ liệu telemetry</h2>
-        <p className="text-sm text-text-muted">Không thể đọc trạng thái hiện tại của trạm. Dữ liệu không được thay bằng giá trị mặc định.</p>
-      </div>
+      <StateView
+        icon={AlertTriangle}
+        tone="danger"
+        title="Không có dữ liệu telemetry"
+        description="Không thể đọc trạng thái hiện tại của trạm. Dữ liệu không được thay bằng giá trị mặc định."
+        className="min-h-[60vh]"
+      />
     );
   }
 
@@ -198,8 +215,20 @@ const Dashboard = () => {
 
   return (
     <div className="app-page">
-      {/* Header Bento Box */}
-      <div className="ui-card relative overflow-hidden p-6 md:p-8">
+      <PageHeader
+        title="Tổng quan"
+        subtitle={friendlyState.description}
+        icon={Activity}
+        action={
+          <DeviceStatePill
+            state={isOnline ? 'online' : isOffline ? 'offline' : 'warning'}
+            label={isOnline ? 'Trạm Online' : isOffline ? 'Trạm Offline' : 'Trạng thái chưa rõ'}
+          />
+        }
+      />
+
+      <section aria-labelledby="dashboard-station-status" className="ui-card relative overflow-hidden p-6 md:p-8">
+        <h2 id="dashboard-station-status" className="sr-only">Trạng thái trạm</h2>
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-4 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
@@ -221,11 +250,8 @@ const Dashboard = () => {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-primary-deep">
-                {greetingName ? `Xin chào, ${greetingName} 👋` : friendlyState.label}
+                {greetingName ? `Xin chào, ${greetingName}` : friendlyState.label}
               </h1>
-              <p className="text-sm md:text-base text-text-muted leading-relaxed mt-2">
-                {greetingName ? friendlyState.description : friendlyState.description}
-              </p>
             </div>
             <Banner
               tone={isCritical ? 'danger' : hasActionableIssue ? 'warning' : 'info'}
@@ -278,7 +304,7 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Cảnh báo cạn bình dung dịch */}
       {hasTankAlert && (
@@ -361,9 +387,15 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Active Device Pumps */}
-      <div className="ui-card space-y-3">
-        <h3 className="farm-section-title"><Zap size={14} /> Thiết bị đang chạy</h3>
+      <section aria-labelledby="dashboard-active-operation" className="ui-card space-y-3">
+        <h2 id="dashboard-active-operation" className="farm-section-title"><Zap size={14} /> Vận hành hiện tại</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <DeviceStatePill
+            state={isCritical ? 'offline' : hasActionableIssue ? 'warning' : 'online'}
+            label={friendlyState.label}
+          />
+          <span className="farm-status-pill bg-soft text-text-muted border-line">{modeLabel}</span>
+        </div>
         <div className="flex flex-wrap gap-2">
           {authoritativeTelemetry?.actuator && Object.values(pumps).some(v => v === true) ? (
             Object.entries(pumps).map(([key, isRunning]) => {
@@ -380,12 +412,48 @@ const Dashboard = () => {
             </span>
           )}
         </div>
-      </div>
+      </section>
 
       <DosingSummaryCard
         totalCount={dosingTotalCount}
         lastDosedAt={healthSummary?.latest_ph_dosing_at ?? null}
       />
+
+      <section aria-labelledby="dashboard-recent-events" className="ui-card space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="dashboard-recent-events" className="farm-section-title">
+            <Clock3 size={14} />
+            <span>Sự kiện gần đây</span>
+          </h2>
+          <Link
+            to={routePath('journal')}
+            className="text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+          >
+            Mở Nhật ký
+          </Link>
+        </div>
+        {systemEvents.length === 0 ? (
+          <StateView
+            icon={Clock3}
+            title="Chưa có sự kiện gần đây"
+            description="Chưa ghi nhận sự kiện mới cho trạm này."
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {systemEvents.slice(0, 5).map((event) => (
+              <li key={String(event.id ?? `${event.timestamp_ms}-${event.message}`)} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-primary-deep truncate">{event.message}</p>
+                  <p className="mt-1 text-xs text-text-muted">{event.category} · {event.level}</p>
+                </div>
+                <time className="shrink-0 text-xs text-faint" dateTime={new Date(event.timestamp_ms).toISOString()}>
+                  {formatEventTime(event.timestamp_ms)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <EmergencyStopButton deviceId={deviceId} variant="floating" />
     </div>

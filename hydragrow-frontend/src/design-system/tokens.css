@@ -51,6 +51,10 @@
   --color-faint: #556d5e;
   --color-page-bg: #f7f7f7;
   --color-status: #2e7d32;
+  --color-status-success: #2e7d32;
+  --color-status-warning: #b8590a;
+  --color-status-fault: #c62828;
+  --color-status-info: #1565c0;
   --color-pill: #e8f5e9;
   --color-toggleoff: #d9d9d9;
   --color-config: #1565c0;
@@ -60,6 +64,13 @@
   --color-warning-bg: #fff3e0;
   --color-info-bg: #eaf2ff;
   --color-info-fg: #1565c0;
+  --color-status-success-bg: #e8f5e9;
+  --color-status-warning-bg: #fff3e0;
+  --color-status-fault-bg: #fdecea;
+  --color-status-info-bg: #eaf2ff;
+  --color-border-info: #1565c0;
+  --color-border-warning: #b8590a;
+  --color-border-fault: #c62828;
   --color-selection-bg: #d1fae5;
   --color-selection-fg: #14532d;
   --color-scrollbar-thumb: #cbd8cf;
@@ -142,17 +153,21 @@
   --color-text-muted: var(--color-ink-500);
   --color-text-disabled: var(--color-ink-400);
   --color-text-on-accent: #ffffff;
+  --color-text-on-critical: #ffffff;
 
   --color-border-default: var(--color-line);
   --color-border-subtle: #f3f3f3;
   --color-border-strong: #d6d6d6;
   --color-border-focus: var(--color-focus);
+  --color-border-control: var(--color-border-default);
   --color-border-warning: var(--color-warning-700);
   --color-border-fault: var(--color-critical-700);
 
   --color-control-primary: var(--color-green-700);
   --color-control-secondary: var(--color-bg);
   --color-control-destructive: var(--color-critical-700);
+  --color-control-primary-hover: #256b2a;
+  --color-control-destructive-hover: #a92222;
 
   --color-status-normal: var(--color-green-700);
   --color-status-success: var(--color-green-700);
@@ -172,6 +187,13 @@
   --color-status-locked-bg: var(--color-locked-50);
   --color-status-info-bg: var(--color-info-50);
 
+  /* Component surfaces */
+  --color-surface-interactive-hover: #f4f8f4;
+  --color-surface-interactive-active: var(--color-green-50);
+  --color-surface-danger-hover: #fbe2e0;
+  --color-surface-warning-hover: #ffead0;
+  --color-surface-info-hover: #e1ecff;
+
   --focus-ring: 0 0 0 3px rgba(46, 125, 50, 0.25);
 
   /* Semantic typography */
@@ -185,9 +207,13 @@
   --font-size-telemetry-value: 1.25rem;
   --font-size-telemetry-unit: 0.6875rem;
   --font-size-status: 0.6875rem;
+  --font-size-button: 0.875rem;
+  --font-size-input: 0.875rem;
+  --font-size-overline: 0.625rem;
   --line-height-tight: 1.25;
   --line-height-body: 1.5;
   --line-height-relaxed: 1.75;
+  --line-height-control: 1.25;
 }
 
 @media (prefers-reduced-motion: reduce) {

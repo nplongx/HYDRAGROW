@@ -16,19 +16,19 @@ interface SensorBentoCardProps {
 }
 
 const themeClasses: Record<string, string> = {
-  blue: "text-sky-700 bg-sky-50 border-sky-100",
-  fuchsia: "text-fuchsia-700 bg-fuchsia-50 border-fuchsia-100",
-  orange: "text-orange-700 bg-orange-50 border-orange-100",
-  cyan: "text-cyan-700 bg-cyan-50 border-cyan-100",
-  rose: "text-rose-700 bg-rose-50 border-rose-100",
-  emerald: "text-emerald-700 bg-emerald-50 border-emerald-100",
+  blue: "text-status-info bg-status-info-bg border-border-info/20",
+  fuchsia: "text-config bg-config-soft border-config/20",
+  orange: "text-status-warning bg-status-warning-bg border-border-warning/20",
+  cyan: "text-status-info bg-status-info-bg border-border-info/20",
+  rose: "text-status-fault bg-status-fault-bg border-border-fault/20",
+  emerald: "text-status-success bg-status-success-bg border-line",
 };
 
 const statusClasses: Record<string, string> = {
   good: "bg-pill text-status border-transparent",
   warn: "bg-warning-bg text-warn-deep border-transparent",
   danger: "bg-danger-bg text-error border-transparent",
-  info: "bg-sky-50 text-sky-700 border-transparent",
+  info: "bg-status-info-bg text-status-info border-transparent",
 };
 
 const sparkColor: Record<string, string> = {

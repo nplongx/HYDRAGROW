@@ -173,7 +173,7 @@ export function DesktopSidebar({
   onNavigate,
 }: NavProps & StationStatusProps) {
   return (
-    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-[272px] flex-col border-r border-line bg-white px-5 pb-5 pt-6">
+    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-20 w-64 flex-col border-r border-line bg-white px-5 pb-5 pt-6">
       <Link
         to="/dashboard"
         className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
@@ -213,7 +213,7 @@ export function MobileBottomNav({
       aria-label="Điều hướng chính mobile"
       className="fixed bottom-0 left-0 right-0 z-50 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden"
     >
-      <div className="mx-auto flex max-w-md items-center justify-between rounded-2xl border border-line bg-white/95 px-2 py-2 shadow-[0_-10px_30px_rgba(20,83,45,0.10)] backdrop-blur-md">
+      <div className="mx-auto flex max-w-md items-center justify-between rounded-2xl border border-line bg-white/95 px-2 py-2 shadow-medium backdrop-blur-md">
         {items.map((item) => (
           <NavButton key={item.id} item={item} mobile onNavigate={onNavigate} />
         ))}
@@ -246,7 +246,7 @@ export function AppShell({
         deviceId={deviceId}
         onNavigate={onNavigate}
       />
-      <main className="relative z-10 flex-1 overflow-y-auto pb-24 scroll-smooth custom-scrollbar lg:ml-[272px] lg:pb-6">
+      <main className="relative z-10 flex-1 overflow-y-auto pb-24 scroll-smooth custom-scrollbar lg:ml-64 lg:pb-6">
         {children}
       </main>
       <MobileBottomNav items={navItems} onNavigate={onNavigate} />

@@ -52,7 +52,7 @@ p {
   }
 
   .page-header-icon {
-    @apply rounded-xl border border-emerald-100 bg-emerald-50 p-2.5 text-primary;
+    @apply rounded-xl border border-line bg-pill p-2.5 text-primary;
   }
 
   .page-header-title {
@@ -64,7 +64,7 @@ p {
   }
 
   .ui-card {
-    @apply rounded-2xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(20,83,45,0.04)] md:p-5;
+    @apply rounded-2xl border border-line bg-white p-4 shadow-low md:p-5;
   }
 
   .ui-form-row {
@@ -165,8 +165,8 @@ p {
 }
 
 ::selection {
-  background: #d1fae5;
-  color: #14532d;
+  background: var(--color-selection-bg);
+  color: var(--color-selection-fg);
 }
 
 button, a, input, select, textarea {
@@ -175,12 +175,12 @@ button, a, input, select, textarea {
 
 .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd8cf; border-radius: 999px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9fb2a5; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-scrollbar-thumb); border-radius: 999px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-scrollbar-thumb-hover); }
 
 .toggle-checkbox {
   @apply appearance-none w-[38px] h-[22px] rounded-full relative cursor-pointer outline-none transition-colors duration-300;
-  background-color: #d9e5db;
+  background-color: var(--color-toggle-off);
 }
 
 .toggle-checkbox::before {
@@ -189,7 +189,7 @@ button, a, input, select, textarea {
 }
 
 .toggle-checkbox:checked {
-  background-color: #15803d;
+  background-color: var(--color-toggle-on);
 }
 
 .toggle-checkbox:checked::before {

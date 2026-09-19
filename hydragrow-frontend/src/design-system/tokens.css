@@ -61,6 +61,12 @@
   --color-warning-bg: #fff3e0;
   --color-info-bg: #eaf2ff;
   --color-info-fg: #1565c0;
+  --color-selection-bg: #d1fae5;
+  --color-selection-fg: #14532d;
+  --color-scrollbar-thumb: #cbd8cf;
+  --color-scrollbar-thumb-hover: #9fb2a5;
+  --color-toggle-off: #d9e5db;
+  --color-toggle-on: #15803d;
 
   /* Foundation — typography */
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

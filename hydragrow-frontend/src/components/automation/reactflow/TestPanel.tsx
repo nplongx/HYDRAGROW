@@ -93,16 +93,16 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white overflow-hidden shadow-xl sm:w-96 rounded-l-xl z-20 border-l border-emerald-100">
-      <div className="flex items-center justify-between border-b px-4 py-3 bg-emerald-50">
-        <h2 className="text-lg font-semibold text-emerald-900">
+    <div className="flex h-full flex-col bg-white overflow-hidden shadow-xl sm:w-96 rounded-l-xl z-20 border-l border-line">
+      <div className="flex items-center justify-between border-b px-4 py-3 bg-pill">
+        <h2 className="text-lg font-semibold text-primary-deep">
           Chạy thử (Dry Run)
         </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div>
-          <h3 className="text-sm font-medium text-emerald-950 mb-3">
+          <h3 className="text-sm font-medium text-primary-deep mb-3">
             Giá trị mẫu (Input)
           </h3>
           <div className="space-y-3">
@@ -112,10 +112,10 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
               return (
                 <div key={field} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-emerald-900">
+                    <label className="text-sm font-medium text-primary-deep">
                       {field}{" "}
                       {isWindow && (
-                        <span className="text-xs text-emerald-600 font-normal">
+                        <span className="text-xs text-primary font-normal">
                           ({mode})
                         </span>
                       )}
@@ -130,7 +130,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                     />
                   </div>
                   {isWindow && (
-                    <span className="text-[11px] text-emerald-800/60 text-right">
+                    <span className="text-[11px] text-text-muted/60 text-right">
                       Nhập nhiều điểm, cách nhau bởi dấu phẩy
                     </span>
                   )}
@@ -138,7 +138,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
               );
             })}
           </div>
-          <div className="rounded border border-sky-100 bg-sky-50 p-3 mt-4 mb-4 text-xs text-sky-800">
+          <div className="rounded border border-line bg-info-bg p-3 mt-4 mb-4 text-xs text-info">
             <strong>Lưu ý: Đối với điều kiện time-window</strong>
             <br />
             Các điều kiện lấy mẫu theo thời gian (mean/min/max) nhận chuỗi số
@@ -157,15 +157,15 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
 
         {testMutation.data && (
           <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-emerald-950 mb-3">
+            <h3 className="text-sm font-medium text-primary-deep mb-3">
               Kết quả (Output)
             </h3>
 
             <div
               className={`mb-4 p-3 rounded-lg flex items-center gap-2 font-medium ${
                 testMutation.data.will_fire
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-amber-50 text-amber-700 border border-amber-200"
+                  ? "bg-pill text-status border border-line"
+                  : "bg-warning-bg text-warning border border-warning"
               }`}
             >
               {testMutation.data.will_fire ? (
@@ -182,22 +182,22 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
             </div>
 
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">
+              <h4 className="text-xs font-semibold text-text-muted/70 uppercase">
                 Trace Điều Kiện
               </h4>
               {testMutation.data.trace.map(
                 (entry: ConditionTraceEntry, idx: number) => (
                   <div key={idx} className="flex items-start gap-2 text-sm">
                     {entry.passed ? (
-                      <Check className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                      <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                     ) : (
-                      <X className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                      <X className="h-4 w-4 text-error mt-0.5 shrink-0" />
                     )}
                     <div className="flex-1">
-                      <div className="font-mono text-xs text-emerald-900">
+                      <div className="font-mono text-xs text-primary-deep">
                         {entry.description}
                       </div>
-                      <div className="text-xs text-emerald-800/70">
+                      <div className="text-xs text-text-muted/70">
                         Actual:{" "}
                         {entry.actual_value !== null
                           ? entry.actual_value
@@ -208,7 +208,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                 ),
               )}
               {testMutation.data.trace.length === 0 && (
-                <div className="text-sm text-emerald-800/70 italic">
+                <div className="text-sm text-text-muted/70 italic">
                   Không có điều kiện.
                 </div>
               )}
@@ -220,35 +220,35 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                 ir.actions.some((a) => a.type === "config_override")) && (
                 <div className="space-y-2 mt-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold text-indigo-900 uppercase">
+                    <h4 className="text-xs font-semibold text-config uppercase">
                       SO SÁNH CONFIG (DIFF)
                     </h4>
-                    <span className="bg-indigo-600 text-white text-[9px] font-semibold px-1 rounded">
+                    <span className="bg-config text-white text-[9px] font-semibold px-1 rounded">
                       MỚI
                     </span>
                   </div>
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                  <div className="rounded-xl border border-line bg-config-soft/40 p-3 text-xs space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted font-mono">
                       <span>CONFIG KEY</span>
-                      <span className="font-bold text-indigo-950">
+                      <span className="font-bold text-primary-deep">
                         {targetKey}
                       </span>
                     </div>
-                    <div className="flex items-baseline justify-between pt-1 border-t border-indigo-100/80">
+                    <div className="flex items-baseline justify-between pt-1 border-t border-line/80">
                       <div>
-                        <span className="text-[10px] text-slate-400 block uppercase">
+                        <span className="text-[10px] text-text-muted block uppercase">
                           TRƯỚC
                         </span>
-                        <span className="line-through text-slate-500 font-medium">
+                        <span className="line-through text-text-muted font-medium">
                           {actualBeforeVal} {bound.unit}
                         </span>
                       </div>
-                      <span className="text-indigo-400 font-bold">&rarr;</span>
+                      <span className="text-config font-bold">&rarr;</span>
                       <div className="text-right">
-                        <span className="text-[10px] text-indigo-700 block uppercase font-semibold">
+                        <span className="text-[10px] text-config block uppercase font-semibold">
                           SAU KHI GHI ĐÈ
                         </span>
-                        <span className="text-sm font-bold text-indigo-700">
+                        <span className="text-sm font-bold text-config">
                           {overrideVal} {bound.unit}
                         </span>
                       </div>
@@ -260,7 +260,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                         Number.isNaN(parsed) ? bound.defaultVal : parsed,
                       );
                       return clamp.clamped ? (
-                        <div className="text-[11px] text-amber-700 flex items-center gap-1 font-medium">
+                        <div className="text-[11px] text-warning flex items-center gap-1 font-medium">
                           <X className="w-3.5 h-3.5" />
                           <span>
                             Vượt giới hạn — giá trị sẽ bị kẹp (clamp) về{" "}
@@ -269,7 +269,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                           </span>
                         </div>
                       ) : (
-                        <div className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
+                        <div className="text-[11px] text-status flex items-center gap-1 font-medium">
                           <Check className="w-3.5 h-3.5" />
                           <span>
                             Trong giới hạn cho phép ({bound.min} – {bound.max}{" "}
@@ -278,7 +278,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
                         </div>
                       );
                     })()}
-                    <div className="text-[11px] text-slate-600">
+                    <div className="text-[11px] text-text-muted">
                       &circlearrowright; Tự động khôi phục {actualBeforeVal}{" "}
                       {bound.unit} khi điều kiện hết đúng
                     </div>
@@ -287,21 +287,21 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
               )}
 
             <div className="space-y-2 mt-4">
-              <h4 className="text-xs font-semibold text-emerald-800/70 uppercase">
+              <h4 className="text-xs font-semibold text-text-muted/70 uppercase">
                 Actions Preview
               </h4>
               {testMutation.data.actions_preview.map(
                 (action: Record<string, unknown>, idx: number) => (
                   <pre
                     key={idx}
-                    className="text-xs font-mono bg-emerald-50/50 p-2 rounded border border-emerald-100 overflow-x-auto text-emerald-900"
+                    className="text-xs font-mono bg-pill/50 p-2 rounded border border-line overflow-x-auto text-primary-deep"
                   >
                     {JSON.stringify(action, null, 2)}
                   </pre>
                 ),
               )}
               {testMutation.data.actions_preview.length === 0 && (
-                <div className="text-sm text-emerald-800/70 italic">
+                <div className="text-sm text-text-muted/70 italic">
                   Không có hành động (hoặc điều kiện không thỏa).
                 </div>
               )}

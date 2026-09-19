@@ -39,7 +39,7 @@ function LeafEditor({
   const sensorSuggestions = Array.from(new Set([...fields, ...availableVariables]));
 
   return (
-    <div className="mb-2 flex flex-col gap-1 rounded border border-emerald-100 p-1.5">
+    <div className="mb-2 flex flex-col gap-1 rounded border border-line p-1.5">
       <div className="flex items-center gap-1">
         <VariableCombobox
           id={`sensor-${condition.sensor || 'new'}-${Math.random().toString(36).slice(2, 8)}`}
@@ -81,7 +81,7 @@ function LeafEditor({
         )}
         <button
           type="button"
-          className="p-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-900"
+          className="p-1 text-[10px] font-semibold text-status hover:text-primary-deep"
           onClick={() => {
             const nextUsesVariable = !usesVariable;
             setLocalVariableMode(nextUsesVariable);
@@ -95,7 +95,7 @@ function LeafEditor({
         </button>
         <button
           type="button"
-          className="p-1 text-xs font-bold text-red-600 hover:text-red-800"
+          className="p-1 text-xs font-bold text-error hover:text-error"
           onClick={onRemove}
         >
           ✕
@@ -133,7 +133,7 @@ function LeafEditor({
               value={Math.round((condition.windowSec ?? DEFAULT_WINDOW_SEC) / 60)}
               onChange={(e) => onChange({ ...condition, windowSec: Math.max(1, Number(e.target.value)) * 60 })}
             />
-            <span className="text-[11px] text-emerald-800/70">phút</span>
+            <span className="text-[11px] text-text-muted/70">phút</span>
           </>
         )}
       </div>
@@ -173,9 +173,9 @@ export function ConditionGroupEditor({
   };
 
   return (
-    <div className={isRoot ? '' : 'ml-3 border-l border-emerald-200 pl-3 my-2'}>
+    <div className={isRoot ? '' : 'ml-3 border-l border-line pl-3 my-2'}>
       <div className="mb-2 flex items-center gap-2">
-        {!isRoot && <span className="text-xs font-medium text-emerald-800/70">Nhóm con</span>}
+        {!isRoot && <span className="text-xs font-medium text-text-muted/70">Nhóm con</span>}
         <Segmented
           options={[
             { value: "and", label: "AND — tất cả đúng" },
@@ -206,10 +206,10 @@ export function ConditionGroupEditor({
         ),
       )}
       <div className="flex gap-3 text-xs mt-2">
-        <button type="button" className="font-medium text-emerald-700 hover:text-emerald-900" onClick={addLeaf}>
+        <button type="button" className="font-medium text-status hover:text-primary-deep" onClick={addLeaf}>
           + Thêm điều kiện
         </button>
-        <button type="button" className="font-medium text-emerald-700 hover:text-emerald-900" onClick={addGroup}>
+        <button type="button" className="font-medium text-status hover:text-primary-deep" onClick={addGroup}>
           + Thêm nhóm con (AND/OR)
         </button>
       </div>

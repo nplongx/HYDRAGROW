@@ -83,15 +83,15 @@ export function NodeEditorPanel({
 
     return (
       <InspectorShell title="Trigger" onClose={onClose}>
-        <div className="mb-3 flex border-b border-emerald-100 text-xs">
+        <div className="mb-3 flex border-b border-line text-xs">
           {(["sensor", "fsm", "cron", "webhook"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               className={`flex-1 py-1 text-center font-medium capitalize cursor-pointer transition-colors ${
                 currentKind === tab
-                  ? "border-b-2 border-emerald-600 font-semibold text-emerald-900"
-                  : "text-emerald-700/60 hover:text-emerald-800"
+                  ? "border-b-2 border-primary font-semibold text-primary-deep"
+                  : "text-status/60 hover:text-text-muted"
               }`}
               onClick={() => {
                 setTriggerTab(tab);
@@ -107,7 +107,7 @@ export function NodeEditorPanel({
 
           {currentKind === "sensor" && (
             <div className="flex flex-col gap-3">
-              <h4 className="text-sm font-bold text-slate-900 leading-snug">
+              <h4 className="text-sm font-bold text-text leading-snug">
                 {(node.data.title as string) || "pH (thời gian thực)"}
               </h4>
 
@@ -184,10 +184,10 @@ export function NodeEditorPanel({
 
           {currentKind === "fsm" && (
             <div className="flex flex-col gap-3">
-              <h4 className="text-sm font-bold text-slate-900 leading-snug">
+              <h4 className="text-sm font-bold text-text leading-snug">
                 Giai đoạn canh tác (FSM)
               </h4>
-              <p className="text-xs text-emerald-900/80 leading-relaxed">
+              <p className="text-xs text-primary-deep/80 leading-relaxed">
                 Flow này sẽ chạy khi Condition bên dưới đúng — giống hệt mọi Flow khác, không có cấu
                 hình trigger riêng cho FSM. Dùng Condition để chọn thời điểm (vd. số ngày trong giai
                 đoạn, giá trị cảm biến), và chọn action <code className="font-mono text-[11px]">advance_stage</code>{" "}
@@ -199,7 +199,7 @@ export function NodeEditorPanel({
 
           {currentKind === "cron" && (
             <div className="flex flex-col gap-3">
-              <h4 className="text-sm font-bold text-slate-900 leading-snug">
+              <h4 className="text-sm font-bold text-text leading-snug">
                 {(node.data.title as string) || "07:00 mỗi ngày"}
               </h4>
 
@@ -330,7 +330,7 @@ export function NodeEditorPanel({
 
           {currentKind === "webhook" && (
             <div className="flex flex-col gap-3">
-              <h4 className="text-sm font-bold text-slate-900 leading-snug">
+              <h4 className="text-sm font-bold text-text leading-snug">
                 {(node.data.title as string) || "Nhận dữ liệu từ bên ngoài"}
               </h4>
 
@@ -348,7 +348,7 @@ export function NodeEditorPanel({
                 />
               </FieldGroup>
 
-              <p className="text-[11px] text-emerald-800/70 leading-relaxed">
+              <p className="text-[11px] text-text-muted/70 leading-relaxed">
                 Cấu hình chi tiết ánh xạ trường ở panel Webhook & Chain phía dưới canvas — nơi đó cũng cho
                 thấy Flow này sẽ nối tiếp sang Flow nào.
               </p>
@@ -408,12 +408,12 @@ export function NodeEditorPanel({
     // 3.3 ACTION · CHAIN
     if ((node.data as any)?.type === "chain" || (firstAction as any)?.type === "chain") {
       return (
-        <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+        <div className="w-96 shrink-0 overflow-y-auto border-l border-line bg-white p-3.5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-emerald-950">Hành động — Kích hoạt Flow khác</h3>
+            <h3 className="text-sm font-semibold text-primary-deep">Hành động — Kích hoạt Flow khác</h3>
             <button
               type="button"
-              className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+              className="text-xs font-medium text-status/70 hover:text-primary-deep cursor-pointer"
               onClick={onClose}
             >
               Đóng
@@ -423,7 +423,7 @@ export function NodeEditorPanel({
           <ConfigCard tone="emerald">
             <Badge tone="emerald">ACTION · CHAIN</Badge>
 
-            <h4 className="text-sm font-bold text-slate-900 leading-snug">
+            <h4 className="text-sm font-bold text-text leading-snug">
               {(node.data.title as string) || "Chạy tiếp Flow khác"}
             </h4>
 
@@ -516,12 +516,12 @@ export function NodeEditorPanel({
       const dosePwm = isDose && firstAction?.type === "dose" ? firstAction.pwm : Number(node.data.pwm ?? 60);
 
       return (
-        <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+        <div className="w-96 shrink-0 overflow-y-auto border-l border-line bg-white p-3.5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-emerald-950">Action — Điều khiển</h3>
+            <h3 className="text-sm font-semibold text-primary-deep">Action — Điều khiển</h3>
             <button
               type="button"
-              className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+              className="text-xs font-medium text-status/70 hover:text-primary-deep cursor-pointer"
               onClick={onClose}
             >
               Đóng
@@ -531,7 +531,7 @@ export function NodeEditorPanel({
           <ConfigCard tone="emerald">
             <Badge tone="emerald">ACTION · DOSE/WATER</Badge>
 
-            <h4 className="text-sm font-bold text-slate-900 leading-snug">
+            <h4 className="text-sm font-bold text-text leading-snug">
               {(node.data.title as string) || "Định lượng dinh dưỡng A"}
             </h4>
 
@@ -638,12 +638,12 @@ export function NodeEditorPanel({
         firstAction?.type === "advance_stage" ? firstAction.targetStageOffset : 1;
 
       return (
-        <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+        <div className="w-96 shrink-0 overflow-y-auto border-l border-line bg-white p-3.5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-emerald-950">Action — Recipe</h3>
+            <h3 className="text-sm font-semibold text-primary-deep">Action — Recipe</h3>
             <button
               type="button"
-              className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+              className="text-xs font-medium text-status/70 hover:text-primary-deep cursor-pointer"
               onClick={onClose}
             >
               Đóng
@@ -723,12 +723,12 @@ export function NodeEditorPanel({
     const message = alertAct?.message ?? (node.data?.message as string) ?? "EC vượt ngưỡng điểm: {ec} mS/cm lúc {time}";
 
       return (
-        <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+        <div className="w-96 shrink-0 overflow-y-auto border-l border-line bg-white p-3.5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-emerald-950">Action — Alert</h3>
+            <h3 className="text-sm font-semibold text-primary-deep">Action — Alert</h3>
             <button
               type="button"
-              className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+              className="text-xs font-medium text-status/70 hover:text-primary-deep cursor-pointer"
               onClick={onClose}
             >
               Đóng
@@ -738,7 +738,7 @@ export function NodeEditorPanel({
           <ConfigCard tone="emerald">
             <Badge tone="emerald">ACTION · ALERT</Badge>
 
-            <h4 className="text-sm font-bold text-slate-900 leading-snug">
+            <h4 className="text-sm font-bold text-text leading-snug">
               {(node.data.heading as string) || "Gửi cảnh báo mức warning"}
             </h4>
 
@@ -788,7 +788,7 @@ export function NodeEditorPanel({
                 <option value="always">Luôn gửi</option>
                 <option value="never">Không bao giờ gửi</option>
               </select>
-              <p className="mt-1 text-[11px] text-slate-500">
+              <p className="mt-1 text-[11px] text-text-muted">
                 Đây là kênh thông báo duy nhất đang hoạt động thật. Email/Webhook ra ngoài chưa được xây
                 — chọn ở đây không có nghĩa là sẽ gửi qua các kênh đó.
               </p>
@@ -818,7 +818,7 @@ export function NodeEditorPanel({
                     key={v}
                     type="button"
                     aria-label={v}
-                    className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                    className="rounded-full border border-line bg-pill px-2 py-0.5 text-[10px] font-medium text-text-muted hover:bg-pill cursor-pointer"
                     onClick={() =>
                       setAction({
                         type: "alert",
@@ -842,10 +842,10 @@ export function NodeEditorPanel({
               for (const v of availableVariables) sample[v] = `⟨${v}⟩`;
               for (const t of BUILTIN_TEMPLATE_TOKENS) sample[t] = `⟨${t}⟩`;
               return (
-                <div className="rounded bg-emerald-50/70 p-2 text-[11px] text-emerald-900">
+                <div className="rounded bg-pill/70 p-2 text-[11px] text-primary-deep">
                   <span className="font-semibold">Xem trước:</span> {renderTemplatePreview(message, sample)}
                   {unknownTokens.length > 0 && (
-                    <p className="mt-1 text-amber-700">
+                    <p className="mt-1 text-warning">
                       Biến chưa xác định: {unknownTokens.join(", ")}
                     </p>
                   )}
@@ -881,12 +881,12 @@ export function NodeEditorPanel({
 
     // 4.1 CONFIG · ĐỌC (MỚI)
     if (variant === "read") {      return (
-        <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+        <div className="w-96 shrink-0 overflow-y-auto border-l border-line bg-white p-3.5 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-emerald-950">Config — Đọc</h3>
+            <h3 className="text-sm font-semibold text-primary-deep">Config — Đọc</h3>
             <button
               type="button"
-              className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+              className="text-xs font-medium text-status/70 hover:text-primary-deep cursor-pointer"
               onClick={onClose}
             >
               Đóng
@@ -896,7 +896,7 @@ export function NodeEditorPanel({
           <ConfigCard tone="indigo">
             <Badge tone="indigo">CONFIG · ĐỌC (MỚI)</Badge>
 
-            <h4 className="text-sm font-bold text-slate-900 leading-snug">
+            <h4 className="text-sm font-bold text-text leading-snug">
               {(node.data.title as string) || "Đọc ph_target hiện tại"}
             </h4>
 

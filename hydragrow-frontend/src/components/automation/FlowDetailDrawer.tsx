@@ -178,30 +178,30 @@ export function FlowDetailDrawer({
   return (
     <div
       data-testid="flow-detail-drawer"
-      className="flex h-full flex-col p-4 overflow-y-auto bg-slate-50/40"
+      className="flex h-full flex-col p-4 overflow-y-auto bg-surface-muted/40"
     >
       {/* Top Header matching Reference 02 */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-2 border-b border-line bg-white p-3 rounded-2xl shadow-2xs">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-text">
             {isNew ? "Flow mới" : `Sửa: ${script.name}`}
           </h2>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="ui-input font-bold text-base text-slate-900 px-2.5 py-1 w-52"
+            className="ui-input font-bold text-base text-text px-2.5 py-1 w-52"
             placeholder="Tên Flow..."
           />
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-config-soft text-config border border-info">
             {builder.kind.toUpperCase()}
           </span>
-          <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer ml-2">
+          <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer ml-2">
             <input
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="rounded accent-indigo-600"
+              className="rounded accent-config"
             />
             <span>Đang bật</span>
           </label>
@@ -212,7 +212,7 @@ export function FlowDetailDrawer({
             <button
               type="button"
               onClick={handleDelete}
-              className="px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl border border-fault bg-danger-bg text-error text-xs font-semibold hover:bg-danger-bg transition-colors cursor-pointer"
             >
               Xóa Flow
             </button>
@@ -220,7 +220,7 @@ export function FlowDetailDrawer({
           <button
             type="button"
             onClick={() => setShowTestPanel(!showTestPanel)}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl border border-line bg-white text-text-secondary text-xs font-semibold hover:bg-surface-muted transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             Chạy thử
           </button>
@@ -228,14 +228,14 @@ export function FlowDetailDrawer({
             type="button"
             onClick={handleSave}
             disabled={createScript.isPending || updateScript.isPending}
-            className="px-4 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors shadow-2xs cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-config text-white text-xs font-bold hover:bg-config transition-colors shadow-2xs cursor-pointer"
           >
             Lưu Flow
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-xl border border-line text-text-muted text-xs font-semibold hover:bg-surface-muted transition-colors cursor-pointer"
           >
             Đóng ✕
           </button>
@@ -247,7 +247,7 @@ export function FlowDetailDrawer({
         onUpdateTrigger={builder.updateTrigger}
       />
 
-      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden rounded-2xl border border-slate-200 bg-white relative my-2 min-h-[420px]">
+      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden rounded-2xl border border-line bg-white relative my-2 min-h-[420px]">
         <div className="h-full w-full flex-1 relative">
           <ReactFlow
             nodes={builder.nodes}
@@ -265,15 +265,15 @@ export function FlowDetailDrawer({
           </ReactFlow>
 
           {showTestPanel && (
-            <div className="absolute right-0 top-0 h-full w-96 shadow-2xl z-30 flex flex-col border-l border-slate-200 bg-white">
+            <div className="absolute right-0 top-0 h-full w-96 shadow-2xl z-30 flex flex-col border-l border-line bg-white">
               <div className="flex items-center justify-between p-2 border-b">
-                <span className="text-xs font-bold text-slate-500 uppercase px-2">
+                <span className="text-xs font-bold text-text-muted uppercase px-2">
                   Dry Run Simulator
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowTestPanel(false)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-600"
+                  className="p-1 rounded text-text-muted hover:text-text-muted"
                 >
                   ✕
                 </button>

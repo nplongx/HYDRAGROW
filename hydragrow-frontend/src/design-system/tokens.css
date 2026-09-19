@@ -41,7 +41,6 @@
   --color-accent: #b8590a;
   --color-success: #2e7d32;
   --color-warning: #b8590a;
-  --color-warn-deep: #78350f;
   --color-error: #c62828;
   --color-water: #1565c0;
   --color-surface: #ffffff;
@@ -67,6 +66,17 @@
   --color-scrollbar-thumb-hover: #9fb2a5;
   --color-toggle-off: #d9e5db;
   --color-toggle-on: #15803d;
+
+  /* Semantic utility aliases for migrated product surfaces */
+  --color-text-primary: #111111;
+  --color-text-secondary: #2b2b2b;
+  --color-text-disabled: #9a9a9a;
+  --color-border-info: #1565c0;
+  --color-border-warning: #b8590a;
+  --color-border-fault: #c62828;
+  --color-info: #1565c0;
+  --color-warning: #b8590a;
+  --color-warn-deep: #78350f;
 
   /* Foundation — typography */
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

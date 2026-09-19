@@ -35,21 +35,21 @@ export function WebhookAndChainPanel({
   const selectedNextFlows = scripts.filter((s) => selectedNextFlowIds.includes(s.id));
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-emerald-100 bg-white p-4">
-      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/20 p-4">
-        <div className="mb-3 flex items-center gap-1.5 text-xs font-bold text-emerald-950">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-line bg-white p-4">
+      <div className="rounded-2xl border border-line bg-pill/20 p-4">
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-bold text-primary-deep">
           <Link2 className="h-3.5 w-3.5" />
           WEBHOOK URL
         </div>
-        <div className="mb-4 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white p-2">
+        <div className="mb-4 flex items-center gap-1.5 rounded-lg border border-line bg-white p-2">
           <input
             readOnly
             value={webhookUrl ?? "(được cấp khi lưu Flow lần đầu)"}
-            className="flex-1 bg-transparent text-xs font-mono text-emerald-950 outline-none"
+            className="flex-1 bg-transparent text-xs font-mono text-text-primary outline-none"
           />
           <button
             type="button"
-            className="rounded p-1 text-emerald-600 hover:bg-emerald-100"
+            className="rounded p-1 text-primary hover:bg-pill"
             onClick={() => webhookUrl && navigator.clipboard?.writeText(webhookUrl)}
             aria-label="Sao chép webhook URL"
           >
@@ -65,34 +65,34 @@ export function WebhookAndChainPanel({
         />
       </div>
 
-      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/20 p-4">
-        <div className="mb-3 text-xs font-bold text-indigo-950">XEM TRƯỚC CHUỖI THỰC THI</div>
+      <div className="rounded-2xl border border-config-soft bg-config-soft/20 p-4">
+        <div className="mb-3 text-xs font-bold text-config">XEM TRƯỚC CHUỖI THỰC THI</div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-semibold text-indigo-900">
+          <span className="rounded-full bg-config-soft px-2.5 py-1 font-semibold text-config">
             Webhook: {currentScriptName} ({currentScriptKind.toUpperCase()})
           </span>
           {configOverwriteSummary && (
             <>
-              <ArrowRight className="h-3.5 w-3.5 text-indigo-400" />
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-900">
+              <ArrowRight className="h-3.5 w-3.5 text-config" />
+              <span className="rounded-full bg-status-warning-bg px-2.5 py-1 font-semibold text-status-warning">
                 Ghi đè Config ({configOverwriteSummary})
               </span>
             </>
           )}
           {selectedNextFlows.map((flow) => (
             <span key={flow.id} className="contents">
-              <ArrowRight className="h-3.5 w-3.5 text-indigo-400" />
-              <span className="rounded-full bg-white border border-indigo-200 px-2.5 py-1 font-semibold text-indigo-900">
+              <ArrowRight className="h-3.5 w-3.5 text-config" />
+              <span className="rounded-full bg-white border border-config-soft px-2.5 py-1 font-semibold text-config">
                 {flow.name} ({flow.kind.toUpperCase()})
               </span>
             </span>
           ))}
           {selectedNextFlows.length === 0 && !configOverwriteSummary && (
-            <span className="text-indigo-800/60 italic">Chưa chọn Flow kế tiếp — chỉ Flow này chạy.</span>
+            <span className="text-text-muted italic">Chưa chọn Flow kế tiếp — chỉ Flow này chạy.</span>
           )}
         </div>
 
-        <div className="mt-4 border-t border-indigo-100 pt-3">
+        <div className="mt-4 border-t border-config-soft pt-3">
           <NextFlowSelector
             scripts={scripts}
             selectedIds={selectedNextFlowIds}

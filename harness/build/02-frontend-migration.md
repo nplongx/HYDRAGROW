@@ -1,6 +1,6 @@
 # P3.2 — Frontend migration
 
-Status: PROPOSED
+Status: IMPLEMENTING
 
 ## Goal
 

@@ -94,6 +94,20 @@ Skills in `.agents/skills/<name>/SKILL.md` (UI/UX: `.codex/skills/ui-ux-pro-max/
 
 No trigger → no skill load. Task template: `.agent/prompts/Task_Template.md`.
 
+## 7.1 Harness (Progressive Disclosure)
+
+The repository uses a Codex-style, repository-local harness layered on the existing agent runtime and skills.
+
+* `GOALS.md` — harness outcomes and non-goals.
+* `PLANS.md` — phase sequence and authority map.
+* `PROMPTS.md` — phase start/close workflow.
+* `harness/build/` — scope, acceptance criteria, verification, and approval gate for each phase.
+* `harness/context/` — material discoveries and decisions that must survive sessions.
+* `harness/build-log.md` — observed progress and verification evidence.
+* `harness/checks/` — deterministic harness invariants.
+
+Do not duplicate application contracts in harness files. Point to the authoritative `docs/` source instead. Planning-only requests must not authorize implementation. Do not start the next phase without explicit approval.
+
 ---
 
 ## 8. Code Retrieval

@@ -1,35 +1,63 @@
-// src/lib/firebase.ts
+import { initializeApp } from 'firebase/app';
+import { getMessaging, getToken, onMessage, type MessagePayload, type Messaging } from 'firebase/messaging';
+import { debugLog, redactSecret } from './redact';
 
-import { initializeApp } from "firebase/app";
-// SỬA: Import toàn bộ từ firebase/messaging thay vì rải rác
-import { getMessaging, getToken, onMessage, MessagePayload } from "firebase/messaging";
-import { debugLog, redactSecret } from "./redact";
+type FirebaseConfig = {
+  apiKey?: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  measurementId?: string;
+};
 
-// Configure Firebase with Vite environment variables from a local .env file.
-// See README.md for the required VITE_FIREBASE_* and VITE_FIREBASE_VAPID_KEY values.
-const firebaseConfig = {
+const firebaseConfig: FirebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-
 const firebaseVapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+
+export function hasRequiredFirebaseConfig(config: FirebaseConfig): boolean {
+  return Boolean(
+    config.apiKey?.trim() &&
+      config.authDomain?.trim() &&
+      config.projectId?.trim() &&
+      config.messagingSenderId?.trim() &&
+      config.appId?.trim(),
+  );
+}
+
 export const app = initializeApp(firebaseConfig);
 
-// Khởi tạo Messaging instance
-export const messaging = getMessaging(app);
+let messaging: Messaging | null = null;
 
-export const requestForWebToken = async () => {
+function getMessagingInstance(): Messaging | null {
+  if (messaging) return messaging;
+  if (typeof window === 'undefined' || !hasRequiredFirebaseConfig(firebaseConfig)) return null;
+
   try {
-    // Đăng ký service worker trước, rồi truyền vào getToken
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    messaging = getMessaging(app);
+    return messaging;
+  } catch (error) {
+    console.error('[v0] Firebase Messaging unavailable:', error);
+    return null;
+  }
+}
 
-    const currentToken = await getToken(messaging, {
+export const requestForWebToken = async (): Promise<string | null> => {
+  const messagingInstance = getMessagingInstance();
+  if (!messagingInstance || !firebaseVapidKey || !('serviceWorker' in navigator)) return null;
+
+  try {
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const currentToken = await getToken(messagingInstance, {
       vapidKey: firebaseVapidKey,
       serviceWorkerRegistration: registration,
     });
@@ -39,22 +67,21 @@ export const requestForWebToken = async () => {
       return currentToken;
     }
     debugLog('Không thể lấy FCM token.');
-    return null;
-  } catch (err) {
-    console.error('Lỗi khi lấy token:', err);
-    return null;
+  } catch (error) {
+    console.error('[v0] Lỗi khi lấy token:', error);
   }
+
+  return null;
 };
 
-// Hàm lắng nghe thông báo khi Web App đang mở (Foreground)
-export const onWebMessageListener = () =>
-  new Promise<MessagePayload>((resolve) => {
-    // SỬA: Dùng onMessage (chữ M hoa) và định nghĩa type cho payload
-    onMessage(messaging, (payload: MessagePayload) => {
-      resolve(payload);
-    });
+export const onWebMessageListener = (): Promise<MessagePayload> =>
+  new Promise((resolve) => {
+    const messagingInstance = getMessagingInstance();
+    if (!messagingInstance) return;
+    onMessage(messagingInstance, resolve);
   });
 
-export const subscribeWebMessages = (handler: (payload: MessagePayload) => void) => {
-  return onMessage(messaging, handler);
+export const subscribeWebMessages = (handler: (payload: MessagePayload) => void): (() => void) => {
+  const messagingInstance = getMessagingInstance();
+  return messagingInstance ? onMessage(messagingInstance, handler) : () => undefined;
 };

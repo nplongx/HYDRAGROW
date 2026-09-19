@@ -22,7 +22,7 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
       <span>Thao tác nhanh</span>
     </h3>
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-      <button type="button" onClick={onWaterNow} className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-[18px] py-[14px] text-[13px] font-semibold text-primary-deep hover:bg-soft transition-colors">
+      <button type="button" onClick={onWaterNow} className="ui-btn-outline w-full">
         <Sprout size={15} className="text-status" />
         Tưới ngay
       </button>
@@ -30,11 +30,11 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
         <Droplets size={15} />
         Châm dinh dưỡng
       </button>
-      <button type="button" onClick={onPausePumps} className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-[18px] py-[14px] text-[13px] font-semibold text-primary-deep hover:bg-soft transition-colors">
+      <button type="button" onClick={onPausePumps} className="ui-btn-outline w-full">
         <Pause size={15} />
         {pumpsPaused ? 'Tiếp tục bơm' : 'Tạm dừng bơm'}
       </button>
-      <button type="button" onClick={onViewAlerts} className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-[18px] py-[14px] text-[13px] font-semibold text-primary-deep hover:bg-soft transition-colors">
+      <button type="button" onClick={onViewAlerts} className="ui-btn-outline w-full">
         <Bell size={15} />
         Xem cảnh báo
       </button>

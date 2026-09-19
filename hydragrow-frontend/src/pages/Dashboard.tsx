@@ -243,15 +243,15 @@ const Dashboard = () => {
               <Link
                 to={routePath('fleet')}
                 title="Quản lý các thiết bị đã liên kết"
-                className="farm-status-pill bg-white text-text-muted border-line hover:bg-soft transition-colors"
+                className="farm-status-pill bg-surface text-text-muted border-line hover:bg-soft transition-colors"
               >
                 ID: {deviceId}
               </Link>
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-primary-deep">
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-primary-deep">
                 {greetingName ? `Xin chào, ${greetingName}` : friendlyState.label}
-              </h1>
+              </h2>
             </div>
             <Banner
               tone={isCritical ? 'danger' : hasActionableIssue ? 'warning' : 'info'}
@@ -286,13 +286,13 @@ const Dashboard = () => {
 
           <div className="grid grid-cols-2 gap-3 w-full lg:w-72">
             <div className="rounded-2xl border border-line bg-surface-muted p-4">
-              <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Sức khỏe trạm</span>
+              <span className="ui-overline">Sức khỏe trạm</span>
               <div className="mt-2 flex justify-center">
                 <HealthScore score={computedHealth.score} label={computedHealth.label} />
               </div>
             </div>
             <div className="rounded-2xl border border-line bg-surface-muted p-4 text-center">
-              <span className="text-[10px] text-faint font-bold uppercase tracking-wider">Cảm biến</span>
+              <span className="ui-overline">Cảm biến</span>
               <div className={`text-2xl font-black mt-3 ${
                 isSensorUnknown ? 'text-faint' : isSensorOnline ? 'text-status' : 'text-error'
               }`}>
@@ -330,10 +330,10 @@ const Dashboard = () => {
       {/* Sensor Bento Grid */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="farm-section-title">
+          <h2 className="farm-section-title">
             <LineChart size={14} />
             <span>Thông số thời gian thực</span>
-          </h3>
+          </h2>
         </div>
         <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 transition-all duration-500 ${!isSensorOnline ? 'opacity-60 grayscale' : ''}`}>
           <SensorBentoCard

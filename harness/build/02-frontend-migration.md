@@ -1,17 +1,24 @@
-# P3.2 — Frontend migration
+# P3.2 — Page-by-page frontend migration
 
 Status: IMPLEMENTING
 
 ## Goal
 
-Migrate remaining frontend presentation surfaces onto the established semantic design system while preserving operational state meaning and existing architecture.
+Migrate the frozen page sequence onto the established semantic design system, one page at a time, while preserving operational state meaning and existing architecture.
 
 ## Scope
 
-- Shared UI components and page-level surfaces identified by the existing palette audit.
-- Remaining automation/configuration visual drift.
-- Safety/fault surfaces where palette usage can be converted without changing behavior.
-- Page-level presentation migration after shared primitives are stable.
+- Dashboard
+- Fleet
+- Control
+- Cultivation / Recipes
+- Automation
+- Logs
+- Settings / Admin
+
+Shared components, safety/fault surfaces, and automation/configuration clusters may be migrated when required by the current page, but they do not define the execution order.
+
+P3-MIGRATION-MAP.md remains the audit/classification source. It must not be interpreted as the page execution sequence.
 
 ## Non-goals
 
@@ -31,17 +38,21 @@ Migrate remaining frontend presentation surfaces onto the established semantic d
 
 ## Required workflow
 
-1. Audit the target surface before editing.
-2. Identify the semantic role of each visual state.
-3. Reuse existing tokens/primitives; add a token only when a repeated semantic role is missing.
-4. Preserve loading, unavailable, stale/degraded, fault, pending, and confirmed distinctions.
-5. Run targeted tests after each logical cluster.
-6. Run the required frontend verification before phase completion.
-7. Perform a scope/regression review and record evidence.
+1. Select the next page from the fixed P3.2 order.
+2. Audit the whole page before editing, including its page-level components.
+3. Identify the semantic role of each visual state.
+4. Reuse existing tokens/primitives; add a token only when a repeated semantic role is missing.
+5. Preserve loading, unavailable, stale/degraded, fault, pending, and confirmed distinctions.
+6. Verify the page contract: hierarchy, spacing, states, responsive behavior, accessibility, typography, color, and interaction states.
+7. Run targeted tests and design-lint checks for the page.
+8. Perform a scope/regression review and record page-level evidence.
+9. Do not begin the next page until the current page has explicit PASS evidence against every page-contract criterion.
+10. Run the required frontend verification before phase completion.
 
 ## Acceptance criteria
 
-- Remaining page/component palette usage is classified as semantic/domain-safe or migrated to an existing semantic role.
+- Each page in the fixed sequence has explicit PASS, FAIL, or BLOCKED evidence for the shared page contract.
+- Remaining page/component palette usage is classified as semantic/domain-safe or migrated to an existing semantic role within the approved page scope.
 - No second visual language is introduced.
 - Canonical component contracts remain satisfied.
 - Safety/control authority boundaries remain unchanged.

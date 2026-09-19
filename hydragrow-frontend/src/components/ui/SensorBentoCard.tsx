@@ -55,7 +55,7 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
 }) => (
   <article
     aria-label={title}
-    className={`bg-white border rounded-[18px] flex flex-col justify-between transition-all hover:border-primary/40 hover:shadow-md shadow-sm ${compact ? "p-3.5 min-h-[140px]" : "p-4 md:p-5 min-h-[176px]"} ${statusTone === "danger" ? "border-error/40 bg-danger-bg/30" : statusTone === "warn" ? "border-warning/40 bg-warning-bg/30" : "border-line"}`}
+    className={`bg-surface border rounded-2xl flex flex-col justify-between transition-[border-color,box-shadow,background-color] hover:border-primary/40 hover:shadow-medium shadow-low ${compact ? "p-3.5 min-h-[140px]" : "p-4 md:p-5 min-h-[176px]"} ${statusTone === "danger" ? "border-error/40 bg-danger-bg/30" : statusTone === "warn" ? "border-warning/40 bg-warning-bg/30" : "border-line"}`}
   >
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2.5">

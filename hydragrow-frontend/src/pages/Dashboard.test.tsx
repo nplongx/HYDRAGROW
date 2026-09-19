@@ -114,6 +114,9 @@ describe('Dashboard component wiring', () => {
     expect(screen.getByRole('heading', { name: 'Thông số thời gian thực' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Vận hành hiện tại' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sự kiện gần đây' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tổng quan', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Xin chào, Nam', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Thông số thời gian thực', level: 2 })).toBeInTheDocument();
     expect(screen.getByText('Xin chào, Nam')).toBeInTheDocument();
     expect(screen.queryByText(/👋/)).not.toBeInTheDocument();
   });

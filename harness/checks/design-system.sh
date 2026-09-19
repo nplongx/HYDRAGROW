@@ -14,7 +14,7 @@ test -f harness/build/02-frontend-migration.md
 test -f harness/build/03-hardening.md
 
 grep -q 'repository-local harness' AGENTS.md
-grep -q 'P3.2 — Frontend migration' PLANS.md
+grep -q 'P3.2 — Page-by-page frontend migration' PLANS.md
 grep -q 'harness/build/' AGENTS.md
 
 echo 'HYDRAGROW harness structural checks: PASS'

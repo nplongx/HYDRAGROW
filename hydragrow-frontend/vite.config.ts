@@ -32,9 +32,9 @@ export default defineConfig(({ mode }) => {
     },
 
     server: {
-      // Tauri expects a fixed port, fail if that port is not available.
+      // Tauri expects a fixed port, while web preview should recover if 1420 is occupied.
       port: 1420,
-      strictPort: true,
+      strictPort: isTauriTarget,
       host: true,
       proxy: { '/api': { target: 'http://localhost:8080', changeOrigin: true, ws: true } },
       hmr: isTauriDevRuntime

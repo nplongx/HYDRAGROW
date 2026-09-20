@@ -7,7 +7,7 @@ import { useWhoami } from '../../hooks/useWhoami';
 
 interface EmergencyStopButtonProps {
   deviceId: string | null;
-  variant: 'floating' | 'bar';
+  variant: 'floating' | 'bar' | 'status';
 }
 
 export const EmergencyStopButton = ({ deviceId, variant }: EmergencyStopButtonProps) => {
@@ -72,12 +72,27 @@ export const EmergencyStopButton = ({ deviceId, variant }: EmergencyStopButtonPr
 
   return (
     <>
+      {variant === 'status' && (
+        <div
+          className={`w-full rounded-xl border px-3 py-2 text-xs font-semibold ${
+            emergencyStopSafetyState === 'CONFIRMED_OFF'
+              ? 'border-status/30 bg-status/5 text-status'
+              : emergencyStopLifecycle === 'FAILED' || emergencyStopLifecycle === 'REJECTED' || emergencyStopLifecycle === 'TIMEOUT'
+                ? 'border-error/40 bg-error/5 text-error'
+                : 'border-warning/50 bg-warning-bg text-warn-deep'
+          }`}
+          role="status"
+          data-estop-status="true"
+        >
+          Dừng khẩn cấp: {safetyLabel}. Lệnh: {lifecycleLabel}.
+        </div>
+      )}
       {persistentSafetyMessage && (
         <div className="fixed left-4 right-4 top-4 lg:left-[17rem] lg:right-6 z-40 rounded-xl border border-warning/50 bg-warning-bg px-4 py-2 text-xs font-semibold text-warn-deep shadow-low" role="status" data-estop-persistent-state={emergencyStopSafetyState}>
           {persistentSafetyMessage}
         </div>
       )}
-      {variant === 'floating' ? (
+      {variant === 'status' ? null : variant === 'floating' ? (
         <button
           onClick={() => void handleEmergencyStop()}
           disabled={!canEmergencyStop || isSubmitting}

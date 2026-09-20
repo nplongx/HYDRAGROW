@@ -53,7 +53,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
         onClick={handleToggle}
         aria-expanded={open}
         aria-controls={contentId}
-        className="flex min-h-12 w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-surface-interactive-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-inset"
+        className="w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-emerald-50/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           {Icon && (
@@ -63,7 +63,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
               <Icon size={16} strokeWidth={2} />
             </div>
           )}
-          <span className="ui-section-title">
+          <span className="text-sm font-semibold text-emerald-900">
             {title}
           </span>
           {badge && (
@@ -75,7 +75,7 @@ export const AccordionSection: React.FC<AccordionSectionProps> = ({
         <ChevronDown
           size={16}
           strokeWidth={2.5}
-          className={`text-primary transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`text-emerald-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
       {open && (

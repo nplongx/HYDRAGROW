@@ -59,14 +59,14 @@ export const InputGroup: React.FC<InputGroupProps> = ({
   };
 
   return (
-    <div className="ui-form-row">
+    <div className="ui-form-row flex flex-col gap-1">
       <label
         htmlFor={inputId}
-        className="ui-form-label"
+        className="ui-form-label text-sm font-semibold text-primary-deep"
       >
         {label}
         {unit && (
-          <span className="ml-1 font-normal text-text-muted">({unit})</span>
+          <span className="ml-1 font-normal text-emerald-700/50">({unit})</span>
         )}
       </label>
       {children ? (
@@ -84,23 +84,23 @@ export const InputGroup: React.FC<InputGroupProps> = ({
           placeholder={placeholder}
           aria-invalid={displayError ? "true" : undefined}
           aria-describedby={errorId ?? helperId}
-          className={`ui-input ${
+          className={`w-full bg-white text-primary-deep text-sm rounded-lg p-2.5 outline-none transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${
             displayError
-              ? "border-error/50 focus:border-error focus:ring-2 focus:ring-error/20"
-              : ""
+              ? "border-red-300 focus:border-red-600 focus:ring-2 focus:ring-red-500/20"
+              : "border-line focus:border-primary focus:ring-2 focus:ring-primary/20 hover:border-primary/40"
           }`}
         />
       )}
       {displayHelper && !displayError && (
         <p
           id={helperId}
-          className="ui-helper-text"
+          className="ui-helper-text text-xs text-emerald-700/75 mt-0.5 leading-relaxed"
         >
           {displayHelper}
         </p>
       )}
       {displayError && (
-        <p id={errorId} className="mt-1 text-[11px] font-medium text-error">
+        <p id={errorId} className="text-[11px] font-medium text-red-600 mt-1">
           {displayError}
         </p>
       )}

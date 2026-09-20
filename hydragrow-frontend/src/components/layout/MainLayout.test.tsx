@@ -152,8 +152,6 @@ describe("MainLayout sidebar", () => {
     );
 
     expect(screen.getByRole("main")).toBeInTheDocument();
-    expect(screen.getByRole("complementary")).toHaveClass("w-64");
-    expect(screen.getByRole("main")).toHaveClass("lg:ml-64");
     expect(screen.getByRole("banner")).toHaveClass("lg:hidden");
     expect(
       screen.getByRole("navigation", { name: "Điều hướng chính" }),

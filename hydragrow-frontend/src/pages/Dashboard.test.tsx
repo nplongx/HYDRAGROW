@@ -163,4 +163,24 @@ describe('Dashboard component wiring', () => {
     expect(screen.getByRole('button', { name: /tất cả trạm/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Thông số thời gian thực' })).toBeInTheDocument();
   });
+
+  it('hiển thị hierarchy vận hành và không dùng emoji cho greeting', () => {
+    stationSelected = true;
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole('banner')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'dev-001' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Trạng thái trạm' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Thông số thời gian thực' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Vận hành hiện tại' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sự kiện gần đây' })).toBeInTheDocument();
+    expect(screen.getByText('Xin chào, Nam')).toBeInTheDocument();
+    expect(screen.queryByText(/👋/)).not.toBeInTheDocument();
+  });
 });

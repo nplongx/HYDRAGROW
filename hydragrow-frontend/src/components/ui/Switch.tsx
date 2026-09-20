@@ -50,7 +50,7 @@ export const Switch: React.FC<SwitchProps> = ({
         aria-labelledby={label ? labelId : undefined}
         disabled={disabled}
         onClick={() => handleToggle(!isChecked)}
-  className={`relative inline-flex items-center ${trackW} ${trackH} rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:ring-offset-1 ${isChecked ? activeColor : "bg-toggleoff"}`}
+        className={`relative inline-flex items-center ${trackW} ${trackH} rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-1 ${isChecked ? activeColor : "bg-toggleoff"}`}
       >
         <span
           className={`absolute left-0.5 inline-block ${thumbS} bg-white rounded-full shadow-sm transition-transform duration-200 ${isChecked ? translate : "translate-x-0"}`}

@@ -34,6 +34,15 @@ describe('useSystemHealthSummary', () => {
     expect(apiGet).toHaveBeenCalledWith('/devices/device-1/health-summary');
   });
 
+  it('surfaces API failure instead of exposing a default summary', async () => {
+    const { apiGet } = await import('../lib/apiClient');
+    vi.mocked(apiGet).mockRejectedValueOnce(new Error('health summary unavailable'));
+    const { result } = renderHook(() => useSystemHealthSummary('device-2'), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+    expect(result.current.error).toEqual(expect.objectContaining({ message: 'health summary unavailable' }));
+  });
+
   it('stays disabled with no deviceId', () => {
     const { result } = renderHook(() => useSystemHealthSummary(''), { wrapper });
     expect(result.current.fetchStatus).toBe('idle');

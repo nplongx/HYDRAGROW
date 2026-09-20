@@ -19,7 +19,7 @@ describe("ConfigPanelUI", () => {
   it("renders a badge with tone-based classes", () => {
     render(<Badge tone="sky">TRIGGER · SENSOR</Badge>);
     const badge = screen.getByText("TRIGGER · SENSOR");
-    expect(badge.className).toMatch(/sky/);
+    expect(badge.className).toMatch(/info/);
   });
 
   it("renders an emphasized config card with thicker border", () => {

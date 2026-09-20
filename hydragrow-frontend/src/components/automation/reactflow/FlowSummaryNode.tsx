@@ -20,33 +20,33 @@ export function FlowSummaryNode({
       return {
         label: "No trigger",
         Icon: Activity,
-        badge: "bg-emerald-100/60 text-emerald-800/70",
+        badge: "bg-pill text-text-muted/70",
       };
     const trigger = ir_json.nodes.find((n) => n.id === "trigger");
     if (!trigger)
       return {
         label: "No trigger",
         Icon: Activity,
-        badge: "bg-emerald-100/60 text-emerald-800/70",
+        badge: "bg-pill text-text-muted/70",
       };
 
     if (trigger.data.kind === "cron")
       return {
         label: "CRON",
         Icon: Calendar,
-        badge: "bg-purple-100 text-purple-700",
+        badge: "bg-config-soft text-config",
       };
     if (trigger.data.kind === "webhook")
       return {
         label: "WEBHOOK",
         Icon: Webhook,
-        badge: "bg-indigo-100 text-indigo-700",
+        badge: "bg-config-soft text-config",
       };
     if (trigger.data.kind === "sensor")
       return {
         label: "SENSOR",
         Icon: Activity,
-        badge: "bg-sky-100 text-sky-800",
+        badge: "bg-info-bg text-info",
       };
     if (trigger.data.kind === "fsm")
       return {
@@ -57,7 +57,7 @@ export function FlowSummaryNode({
     return {
       label: "TRIGGER",
       Icon: Activity,
-      badge: "bg-emerald-100/60 text-emerald-800/70",
+      badge: "bg-pill text-text-muted/70",
     };
   };
 
@@ -65,12 +65,12 @@ export function FlowSummaryNode({
   const kindBadge = kind === "alert" ? "Cảnh báo" : "Hành động";
   const kindColors =
     kind === "alert"
-      ? "bg-amber-100 text-amber-800"
-      : "bg-emerald-100 text-emerald-800";
+      ? "bg-warning-bg text-warning"
+      : "bg-pill text-text-muted";
 
   return (
     <div
-      className={`ui-card p-3 w-64 ${!enabled ? "opacity-50 grayscale" : "hover:shadow-md cursor-pointer transition-shadow"} border-2 ${enabled ? "border-emerald-200" : "border-emerald-200/50"}`}
+      className={`ui-card p-3 w-64 ${!enabled ? "opacity-50 grayscale" : "hover:shadow-md cursor-pointer transition-shadow"} border-2 ${enabled ? "border-line" : "border-line"}`}
       onClick={onClick}
     >
       <Handle type="target" position={Position.Top} className="opacity-0" />
@@ -92,13 +92,13 @@ export function FlowSummaryNode({
         </div>
       </div>
 
-      <div className="text-xs text-emerald-800/70 truncate">
+      <div className="text-xs text-text-muted/70 truncate">
         {ir_json?.nodes?.length ? `${ir_json.nodes.length} nodes` : "No nodes"}
       </div>
 
       {!enabled && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-emerald-950 text-white text-xs px-2 py-1 rounded font-bold uppercase tracking-wider opacity-90">
+          <div className="bg-primary-deep text-white text-xs px-2 py-1 rounded font-bold uppercase tracking-wider opacity-90">
             Đã tắt
           </div>
         </div>

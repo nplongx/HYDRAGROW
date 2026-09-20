@@ -13,22 +13,24 @@ interface SensorBentoCardProps {
   description?: string;
   compact?: boolean;
   sparkline?: number;
+  observedAt?: string | null;
+  quality?: string;
 }
 
 const themeClasses: Record<string, string> = {
-  blue: "text-sky-700 bg-sky-50 border-sky-100",
-  fuchsia: "text-fuchsia-700 bg-fuchsia-50 border-fuchsia-100",
-  orange: "text-orange-700 bg-orange-50 border-orange-100",
-  cyan: "text-cyan-700 bg-cyan-50 border-cyan-100",
-  rose: "text-rose-700 bg-rose-50 border-rose-100",
-  emerald: "text-emerald-700 bg-emerald-50 border-emerald-100",
+  blue: "text-status-info bg-status-info-bg border-border-info/20",
+  fuchsia: "text-config bg-config-soft border-config/20",
+  orange: "text-status-warning bg-status-warning-bg border-border-warning/20",
+  cyan: "text-status-info bg-status-info-bg border-border-info/20",
+  rose: "text-status-fault bg-status-fault-bg border-border-fault/20",
+  emerald: "text-status-success bg-status-success-bg border-line",
 };
 
 const statusClasses: Record<string, string> = {
   good: "bg-pill text-status border-transparent",
   warn: "bg-warning-bg text-warn-deep border-transparent",
   danger: "bg-danger-bg text-error border-transparent",
-  info: "bg-sky-50 text-sky-700 border-transparent",
+  info: "bg-status-info-bg text-status-info border-transparent",
 };
 
 const sparkColor: Record<string, string> = {
@@ -52,10 +54,12 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
   description,
   compact = false,
   sparkline,
+  observedAt,
+  quality,
 }) => (
   <article
     aria-label={title}
-    className={`bg-white border rounded-[18px] flex flex-col justify-between transition-all hover:border-primary/40 hover:shadow-md shadow-sm ${compact ? "p-3.5 min-h-[140px]" : "p-4 md:p-5 min-h-[176px]"} ${statusTone === "danger" ? "border-error/40 bg-danger-bg/30" : statusTone === "warn" ? "border-warning/40 bg-warning-bg/30" : "border-line"}`}
+    className={`bg-surface border rounded-2xl flex flex-col justify-between transition-[border-color,box-shadow,background-color] hover:border-primary/40 hover:shadow-medium shadow-low ${compact ? "p-3.5 min-h-[140px]" : "p-4 md:p-5 min-h-[176px]"} ${statusTone === "danger" ? "border-error/40 bg-danger-bg/30" : statusTone === "warn" ? "border-warning/40 bg-warning-bg/30" : "border-line"}`}
   >
     <div className="flex items-start justify-between gap-2">
       <div className="flex items-center gap-2.5">
@@ -98,6 +102,11 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
       )}
       {description && (
         <p className="text-xs text-faint/80 leading-relaxed">{description}</p>
+      )}
+      {(observedAt || quality) && (
+        <p className="text-[10px] text-faint" data-testid={`sensor-meta-${title}`}>
+          {quality ? `Chất lượng: ${quality}` : ''}{quality && observedAt ? ' · ' : ''}{observedAt ? `Quan sát: ${new Date(observedAt).toLocaleString('vi-VN')}` : ''}
+        </p>
       )}
     </div>
     {sparkline != null && (

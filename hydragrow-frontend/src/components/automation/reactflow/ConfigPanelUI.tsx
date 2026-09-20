@@ -3,24 +3,24 @@ import type { ReactNode } from "react";
 export type Tone = "sky" | "amber" | "indigo" | "emerald";
 
 const BADGE_TONE: Record<Tone, string> = {
-  sky: "bg-sky-100 text-sky-700",
-  amber: "bg-amber-50 text-amber-800",
-  indigo: "bg-indigo-50 text-indigo-700",
-  emerald: "bg-emerald-50 text-emerald-700",
+  sky: "bg-info-bg text-info",
+  amber: "bg-warning-bg text-warning",
+  indigo: "bg-config-soft text-config",
+  emerald: "bg-pill text-status",
 };
 
 const CARD_BORDER_TONE: Record<Tone, string> = {
-  sky: "border-emerald-100",
-  amber: "border-emerald-100",
-  indigo: "border-indigo-200",
-  emerald: "border-emerald-100",
+  sky: "border-line",
+  amber: "border-line",
+  indigo: "border-info",
+  emerald: "border-line",
 };
 
 const CARD_EMPHASIZED_BORDER_TONE: Record<Tone, string> = {
-  sky: "border-sky-600",
-  amber: "border-amber-600",
-  indigo: "border-indigo-600",
-  emerald: "border-emerald-600",
+  sky: "border-info",
+  amber: "border-warning",
+  indigo: "border-config",
+  emerald: "border-primary",
 };
 
 export function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
@@ -66,24 +66,24 @@ export function FieldGroup({
   if (as === "div") {
     return (
       <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] text-emerald-800/70">{label}</span>
+        <span className="text-[11px] text-text-muted/70">{label}</span>
         {children}
       </div>
     );
   }
   return (
     <label htmlFor={htmlFor} className="flex flex-col gap-1.5">
-      <span className="text-[11px] text-emerald-800/70">{label}</span>
+      <span className="text-[11px] text-text-muted/70">{label}</span>
       {children}
     </label>
   );
 }
 
 const CHIP_TONE: Record<Tone, string> = {
-  sky: "bg-sky-100 text-sky-700",
-  amber: "bg-amber-100 text-amber-800",
-  indigo: "bg-indigo-100 text-indigo-700",
-  emerald: "bg-emerald-50 text-emerald-700",
+  sky: "bg-info-bg text-info",
+  amber: "bg-warning-bg text-warning",
+  indigo: "bg-config-soft text-config",
+  emerald: "bg-pill text-status",
 };
 
 export function Chip({
@@ -123,7 +123,7 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-[10px] border border-emerald-100 p-0.5">
+    <div className="flex gap-0.5 rounded-[10px] border border-line p-0.5">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -131,8 +131,8 @@ export function Segmented<T extends string>({
           aria-pressed={value === opt.value}
           className={`flex-1 rounded-lg px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors ${
             value === opt.value
-              ? "bg-emerald-700 text-white"
-              : "text-emerald-800/70 hover:bg-emerald-50"
+              ? "bg-primary-deep text-white"
+              : "text-text-muted/70 hover:bg-pill"
           }`}
           onClick={() => onChange(opt.value)}
         >
@@ -154,7 +154,7 @@ export function ToggleRow({
 }) {
   return (
     <label className="flex w-full items-center justify-between gap-3 cursor-pointer">
-      <span className="text-[11.5px] text-emerald-950">{label}</span>
+      <span className="text-[11.5px] text-primary-deep">{label}</span>
       <input
         type="checkbox"
         role="switch"
@@ -170,7 +170,7 @@ export function ToggleRow({
 
 export function SafeNote({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700">
+    <div className="flex items-center gap-1.5 rounded-lg bg-pill px-2.5 py-1.5 text-[11px] font-medium text-status">
       <span className="font-bold">✓</span>
       <span>{children}</span>
     </div>
@@ -217,7 +217,7 @@ export function InputWithSuffix({
         placeholder={placeholder}
         className="ui-input w-full pr-14 text-xs font-medium"
       />
-      <span className="pointer-events-none absolute right-2.5 text-xs text-slate-400 select-none font-medium">
+      <span className="pointer-events-none absolute right-2.5 text-xs text-text-muted select-none font-medium">
         {suffix}
       </span>
     </div>
@@ -244,12 +244,12 @@ export function InputWithButton({
         readOnly={readOnly}
         aria-label={ariaLabel}
         value={value}
-        className="ui-input w-full pr-20 text-xs font-mono text-slate-700 bg-slate-50/50"
+        className="ui-input w-full pr-20 text-xs font-mono text-text-secondary bg-surface-muted/50"
       />
       <button
         type="button"
         onClick={onButtonClick}
-        className="absolute right-1 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors cursor-pointer"
+        className="absolute right-1 px-2.5 py-1 text-[11px] font-semibold text-info hover:text-info bg-info-bg hover:bg-info-bg rounded-md transition-colors cursor-pointer"
       >
         {buttonText}
       </button>
@@ -270,12 +270,12 @@ export function PillsSelector({
 }) {
   const activeBg =
     tone === "emerald"
-      ? "bg-emerald-100 border-emerald-300 text-emerald-900"
+      ? "bg-pill border-line text-primary-deep"
       : tone === "amber"
-        ? "bg-amber-100 border-amber-300 text-amber-900"
+        ? "bg-warning-bg border-warning text-warn-deep"
         : tone === "indigo"
-          ? "bg-indigo-100 border-indigo-300 text-indigo-900"
-          : "bg-sky-100 border-sky-300 text-sky-900";
+          ? "bg-config-soft border-line text-config"
+          : "bg-info-bg border-info text-info";
 
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -289,7 +289,7 @@ export function PillsSelector({
             className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
               isSelected
                 ? `${activeBg} font-semibold`
-                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                : "bg-white border-line text-text-muted hover:bg-surface-muted"
             }`}
           >
             {opt.label} {isSelected && "✓"}
@@ -308,13 +308,13 @@ export function DashedTag({
   onRemove?: () => void;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-sky-300 bg-sky-50/60 text-[11px] font-mono text-sky-800">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-dashed border-info bg-info-bg/60 text-[11px] font-mono text-info">
       {label}
       {onRemove && (
         <button
           type="button"
           onClick={onRemove}
-          className="text-sky-600 hover:text-sky-900 font-bold ml-0.5 cursor-pointer"
+          className="text-info hover:text-info font-bold ml-0.5 cursor-pointer"
           aria-label={`Xóa ${label}`}
         >
           ×
@@ -334,12 +334,12 @@ export function InspectorShell({
   children: ReactNode;
 }) {
   return (
-    <div className="w-96 shrink-0 overflow-y-auto border-l border-emerald-100 bg-white p-3.5 shadow-sm">
+    <div className="w-96 shrink-0 overflow-y-auto border-l border-line bg-white p-3.5 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-emerald-950">{title}</h3>
+        <h3 className="text-sm font-semibold text-primary-deep">{title}</h3>
         <button
           type="button"
-          className="text-xs font-medium text-emerald-700/70 hover:text-emerald-900 cursor-pointer"
+          className="text-xs font-medium text-status/70 hover:text-primary-deep cursor-pointer"
           onClick={onClose}
         >
           Đóng

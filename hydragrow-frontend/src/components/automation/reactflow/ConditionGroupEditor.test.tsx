@@ -33,7 +33,7 @@ describe("ConditionGroupEditor", () => {
 
     // root AND selected; nested group OR selected;
     const andButtons = screen.getAllByRole("button", { name: "AND — tất cả đúng" });
-    expect(andButtons[0]).toHaveClass("bg-emerald-700");
+    expect(andButtons[0]).toHaveClass("bg-primary-deep");
     expect(andButtons[0]).toHaveAttribute("aria-pressed", "true");
 
     // leaf rows render

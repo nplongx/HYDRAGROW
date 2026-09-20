@@ -1,5 +1,7 @@
 export const queryKeys = {
   devices: () => ["devices"] as const,
+  fleetSummary: () => ["fleet-summary"] as const,
+  fleetCompare: (deviceIds: string[]) => ["fleet-compare", ...deviceIds] as const,
   device: (deviceId: string) => ["device", deviceId] as const,
   config: (deviceId: string) => ["device-config", deviceId] as const,
   telemetry: (deviceId: string, range?: unknown) =>

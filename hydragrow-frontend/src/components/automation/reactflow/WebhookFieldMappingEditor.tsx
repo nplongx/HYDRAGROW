@@ -43,27 +43,27 @@ export function WebhookFieldMappingEditor({ config, onChange }: WebhookFieldMapp
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1 block text-xs font-medium text-emerald-950">Chế độ Webhook</label>
+        <label className="mb-1 block text-xs font-medium text-primary-deep">Chế độ Webhook</label>
         <div className="flex gap-2">
-          <label className="flex flex-1 cursor-pointer items-center justify-center rounded border border-emerald-200 p-1.5 text-xs">
+          <label className="flex flex-1 cursor-pointer items-center justify-center rounded border border-line p-1.5 text-xs">
             <input
               type="radio"
               name="webhookMode"
               value="flow"
               checked={mode === 'flow'}
               onChange={() => setMode('flow')}
-              className="mr-1.5 text-emerald-600"
+              className="mr-1.5 text-primary"
             />
             <span>Chạy qua Flow</span>
           </label>
-          <label className="flex flex-1 cursor-pointer items-center justify-center rounded border border-emerald-200 p-1.5 text-xs">
+          <label className="flex flex-1 cursor-pointer items-center justify-center rounded border border-line p-1.5 text-xs">
             <input
               type="radio"
               name="webhookMode"
               value="direct"
               checked={mode === 'direct'}
               onChange={() => setMode('direct')}
-              className="mr-1.5 text-emerald-600"
+              className="mr-1.5 text-primary"
             />
             <span>Gọi lệnh trực tiếp</span>
           </label>
@@ -72,10 +72,10 @@ export function WebhookFieldMappingEditor({ config, onChange }: WebhookFieldMapp
 
       <div>
         <div className="mb-1.5 flex items-center justify-between">
-          <label className="text-xs font-medium text-emerald-950">Ánh xạ trường (Field Mappings)</label>
+          <label className="text-xs font-medium text-primary-deep">Ánh xạ trường (Field Mappings)</label>
           <button
             type="button"
-            className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
+            className="text-xs font-medium text-status hover:text-text-muted"
             onClick={addMapping}
           >
             + Thêm ánh xạ
@@ -83,11 +83,11 @@ export function WebhookFieldMappingEditor({ config, onChange }: WebhookFieldMapp
         </div>
 
         {mappings.length === 0 ? (
-          <p className="text-xs text-emerald-800/60 italic">Chưa có ánh xạ nào. Mặc định sẽ copy nguyên JSON body.</p>
+          <p className="text-xs text-text-muted/60 italic">Chưa có ánh xạ nào. Mặc định sẽ copy nguyên JSON body.</p>
         ) : (
           <div className="space-y-2">
             {mappings.map((m, idx) => (
-              <div key={idx} className="flex items-center gap-1.5 rounded border border-emerald-100 bg-emerald-50/50 p-1.5">
+              <div key={idx} className="flex items-center gap-1.5 rounded border border-line bg-pill p-1.5">
                 <input
                   type="text"
                   placeholder="bodyPath (vd: data.ph)"
@@ -95,7 +95,7 @@ export function WebhookFieldMappingEditor({ config, onChange }: WebhookFieldMapp
                   value={m.bodyPath}
                   onChange={(e) => updateMapping(idx, { ...m, bodyPath: e.target.value })}
                 />
-                <span className="text-xs text-emerald-600">→</span>
+                <span className="text-xs text-primary">→</span>
                 <input
                   type="text"
                   placeholder="target (vd: ph)"
@@ -105,7 +105,7 @@ export function WebhookFieldMappingEditor({ config, onChange }: WebhookFieldMapp
                 />
                 <button
                   type="button"
-                  className="text-xs font-bold text-red-600 hover:text-red-700 px-1"
+                  className="text-xs font-bold text-error hover:text-error px-1"
                   onClick={() => removeMapping(idx)}
                 >
                   ×

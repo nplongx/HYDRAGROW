@@ -94,18 +94,18 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-emerald-100 p-6 shadow-sm space-y-6">
+    <div className="bg-white rounded-3xl border border-line p-6 shadow-sm space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-pill text-text-muted">
             TÍNH NĂNG MỚI
           </span>
         </div>
-        <h2 className="text-xl font-bold text-emerald-950">
+        <h2 className="text-xl font-bold text-primary-deep">
           Áp Flow template cho nhiều thiết bị
         </h2>
-        <p className="text-xs text-emerald-800/70 mt-1 max-w-4xl">
+        <p className="text-xs text-text-muted/70 mt-1 max-w-4xl">
           Nhân bản một Flow (bao gồm cả node Đọc/Ghi đè Config) sang nhiều thiết bị cùng lúc — tự động phát hiện và giữ nguyên các thiết bị đang có cấu hình override cục bộ để tránh ghi đè ngoài ý muốn.
         </p>
       </div>
@@ -114,13 +114,13 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
         {/* Left Column: Device Selection */}
         <div className="lg:col-span-7 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-950">
+            <span className="text-xs font-bold text-primary-deep">
               Chọn thiết bị đích ({devices.length} thiết bị)
             </span>
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer"
+              className="text-xs font-semibold text-status hover:text-primary-deep transition-colors cursor-pointer"
             >
               {allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
             </button>
@@ -128,7 +128,7 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
 
           <div className="space-y-2.5">
             {devices.length === 0 && (
-              <div className="py-6 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-4">
+              <div className="py-6 text-center text-xs text-text-muted bg-surface-muted rounded-2xl border border-dashed border-line p-4">
                 Không tìm thấy thiết bị nào trong tài khoản để triển khai mẫu.
               </div>
             )}
@@ -140,8 +140,8 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
                   onClick={() => toggleDevice(d.id)}
                   className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
                     isChecked
-                      ? "border-emerald-300 bg-emerald-50/40 shadow-sm"
-                      : "border-slate-200/80 bg-white hover:border-slate-300"
+                      ? "border-line bg-pill/40 shadow-sm"
+                      : "border-line/80 bg-white hover:border-line"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -150,20 +150,20 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
                       checked={isChecked}
                       onChange={() => toggleDevice(d.id)}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
                     />
                     <div>
-                      <div className="text-xs font-bold text-emerald-950">{d.name}</div>
+                      <div className="text-xs font-bold text-primary-deep">{d.name}</div>
                     </div>
                   </div>
 
                   <div>
                     {d.hasLocalOverride ? (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-warning-bg text-warning border border-warning">
                         Có override cục bộ
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-100/70 text-emerald-800 border border-emerald-200/70">
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-pill/70 text-text-muted border border-line/70">
                         Giống gốc
                       </span>
                     )}
@@ -175,28 +175,28 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
         </div>
 
         {/* Right Column: Impact Preview Panel */}
-        <div className="lg:col-span-5 bg-indigo-50/40 rounded-3xl border border-indigo-100 p-5 space-y-4">
+        <div className="lg:col-span-5 bg-config-soft/40 rounded-3xl border border-line p-5 space-y-4">
           <div>
-            <div className="text-[10px] uppercase font-bold tracking-wider text-indigo-900 mb-1">
+            <div className="text-[10px] uppercase font-bold tracking-wider text-config mb-1">
               XEM TRƯỚC ẢNH HƯỞNG
             </div>
-            <div className="text-2xl font-black text-indigo-950">
-              {selectedCount} <span className="text-sm font-medium text-indigo-900/70">/ {devices.length} thiết bị sẽ áp dụng Flow này</span>
+            <div className="text-2xl font-black text-primary-deep">
+              {selectedCount} <span className="text-sm font-medium text-config/70">/ {devices.length} thiết bị sẽ áp dụng Flow này</span>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-indigo-100 p-3.5 space-y-2 text-xs">
-            <div className="font-semibold text-indigo-950">
+          <div className="bg-white rounded-2xl border border-line p-3.5 space-y-2 text-xs">
+            <div className="font-semibold text-primary-deep">
               {targetConfigKey
                 ? `${targetConfigKey} sẽ được ghi đè → ${targetConfigValue}`
                 : "Flow này không chứa node Ghi đè Config — các thiết bị sẽ nhận toàn bộ Trigger/Condition/Action"}
             </div>
-            <div className="text-[11px] text-emerald-700 flex items-center gap-1.5">
+            <div className="text-[11px] text-status flex items-center gap-1.5">
               <Check className="w-3.5 h-3.5 shrink-0" />
               <span>{fullApplyCount} thiết bị: áp dụng đầy đủ Flow + Config Override</span>
             </div>
             {keepOverrideCount > 0 && (
-              <div className="text-[11px] text-amber-700 flex items-start gap-1.5">
+              <div className="text-[11px] text-warning flex items-start gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>{keepOverrideCount} thiết bị: giữ nguyên override cục bộ, chỉ nhận phần Trigger/Condition/Action</span>
               </div>
@@ -204,14 +204,14 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
           </div>
 
           {/* Amber Safety Note */}
-          <div className="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-3 text-[11px] text-amber-950 leading-relaxed">
-            <div className="font-bold text-amber-900 mb-1">Lưu ý an toàn</div>
+          <div className="bg-warning-bg/90 border border-warning rounded-2xl p-3 text-[11px] text-warn-deep leading-relaxed">
+            <div className="font-bold text-warn-deep mb-1">Lưu ý an toàn</div>
             Thiết bị có override cục bộ sẽ được giữ nguyên cấu hình config hiện tại — chỉ Trigger/Condition/Action của Flow được đồng bộ, không ghi đè giá trị đã tùy chỉnh riêng.
           </div>
 
           {/* Per-device checklist */}
           <div className="space-y-1.5 pt-1">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
               THEO TỪNG THIẾT BỊ
             </div>
             <div className="space-y-1 text-xs">
@@ -221,12 +221,12 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
                 return (
                   <div key={d.id} className="flex items-center gap-2 py-0.5">
                     {d.hasLocalOverride ? (
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
                     ) : (
-                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <Check className="w-3.5 h-3.5 text-primary shrink-0" />
                     )}
-                    <span className="font-medium text-slate-800 text-[11px]">{d.name}</span>
-                    <span className="text-[10px] text-slate-500 ml-auto">
+                    <span className="font-medium text-text text-[11px]">{d.name}</span>
+                    <span className="text-[10px] text-text-muted ml-auto">
                       {d.hasLocalOverride
                         ? `Giữ override cục bộ · ${targetConfigKey ?? "config"} hiện tại ${d.currentOverrideVal}`
                         : "Áp dụng đầy đủ"}
@@ -237,12 +237,12 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
             </div>
           </div>
 
-          <div className="text-[10px] text-slate-500 pt-2 border-t border-indigo-100/60 leading-tight">
+          <div className="text-[10px] text-text-muted pt-2 border-t border-line/60 leading-tight">
             Cả {selectedCount} lượt áp dụng (kể cả {keepOverrideCount} lượt giữ nguyên override) đều được ghi vào Nhật ký ghi đè toàn hệ thống.
           </div>
 
           {applyMutation.isSuccess && (
-            <div className="p-2 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl">
+            <div className="p-2 text-xs bg-pill text-status border border-line rounded-xl">
               Áp dụng thành công cho {selectedCount} thiết bị!
             </div>
           )}
@@ -253,8 +253,8 @@ export function AutomationMultiDeviceTemplatePanel({ currentScript }: Props) {
             onClick={handleApply}
             className={`w-full py-2.5 px-4 rounded-xl font-semibold text-xs text-white shadow-sm transition-all cursor-pointer ${
               selectedCount === 0 || applyMutation.isPending
-                ? "bg-indigo-400 opacity-50 cursor-not-allowed"
-                : "bg-indigo-600 hover:bg-indigo-700"
+                ? "bg-config opacity-50 cursor-not-allowed"
+                : "bg-config hover:bg-config"
             }`}
           >
             {applyMutation.isPending

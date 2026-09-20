@@ -238,6 +238,7 @@ export interface OperationalState {
   actuator: ActuatorKnowledge;
   classified_at: string | null;
   observed_at: string | null;
+  received_at?: string | null;
 }
 
 export interface TankAlert {

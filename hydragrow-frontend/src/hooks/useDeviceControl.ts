@@ -4,7 +4,7 @@ import { useStationContext } from "../contexts/StationContext";
 import toast from "react-hot-toast";
 import { isTauriRuntime } from "../platform/settings";
 import { invoke } from "@tauri-apps/api/core";
-import { buildControlCommandRequest, controlApi } from "../api/control";
+import { buildControlCommandRequest, controlApi, type CommandLifecycle } from "../api/control";
 import { useDeviceTelemetry } from "./useDeviceTelemetry";
 import type { PumpStatus } from "../types/models";
 import { queryKeys } from "../api/queryKeys";
@@ -94,6 +94,9 @@ export const useDeviceControl = (deviceId: string) => {
     {},
   );
   const [commandIds, setCommandIds] = useState<Record<string, string>>({});
+  const [emergencyStopCommandId, setEmergencyStopCommandId] = useState<string | null>(null);
+  const [emergencyStopLifecycle, setEmergencyStopLifecycle] =
+    useState<CommandLifecycle | null>(null);
 
   // All control components share one React Query cache. Previously every
   // useDeviceControl() instance fetched the same command history independently.
@@ -111,6 +114,8 @@ export const useDeviceControl = (deviceId: string) => {
     setCommandIds({});
     setCommandStatus({});
     setProcessingPumpIds({});
+    setEmergencyStopCommandId(null);
+    setEmergencyStopLifecycle(null);
     const records = commandHistoryQuery.data;
     if (!records) return;
     const ids: Record<string, string> = {};
@@ -120,6 +125,13 @@ export const useDeviceControl = (deviceId: string) => {
         ids[record.pump_id] = record.command_id;
         statuses[record.pump_id] = record.lifecycle;
       }
+    }
+    const latestEmergencyStop = records.find(
+      (record) => record.action === "emergency_stop",
+    );
+    if (latestEmergencyStop) {
+      setEmergencyStopCommandId(latestEmergencyStop.command_id);
+      setEmergencyStopLifecycle(latestEmergencyStop.lifecycle);
     }
     setCommandIds(ids);
     setCommandStatus(statuses);
@@ -136,6 +148,9 @@ export const useDeviceControl = (deviceId: string) => {
       if (!pumpId) return;
       const lifecycle = String(detail.lifecycle || "").toUpperCase();
       setCommandStatus((prev) => ({ ...prev, [pumpId]: lifecycle }));
+      if (detail.command_id === emergencyStopCommandId) {
+        setEmergencyStopLifecycle(lifecycle as CommandLifecycle);
+      }
       if (
         ["CONFIRMED", "REJECTED", "FAILED", "TIMEOUT", "UNKNOWN"].includes(
           lifecycle,
@@ -147,7 +162,7 @@ export const useDeviceControl = (deviceId: string) => {
     window.addEventListener("hydragrow:command-lifecycle", onLifecycle);
     return () =>
       window.removeEventListener("hydragrow:command-lifecycle", onLifecycle);
-  }, [activeDeviceId, commandIds]);
+  }, [activeDeviceId, commandIds, emergencyStopCommandId]);
 
   const cooldownPump = useCallback((pumpId: string, status: string) => {
     setProcessingPumpIds((prev) => ({ ...prev, [pumpId]: true }));
@@ -209,14 +224,23 @@ export const useDeviceControl = (deviceId: string) => {
         const commandId = body.command_id;
         if (commandId) {
           setCommandIds((prev) => ({ ...prev, [pumpId]: commandId }));
+          if (action === "emergency_stop") {
+            setEmergencyStopCommandId(commandId);
+          }
         }
         setCommandStatus((prev) => ({ ...prev, [pumpId]: "SENT" }));
+        if (action === "emergency_stop") {
+          setEmergencyStopLifecycle(body.lifecycle);
+        }
         toast.success(`Đã gửi lệnh: ${action} -> ${pumpId}`);
         return true;
       } catch (error) {
         const status = (error as Error & { status?: number })?.status;
         const lifecycle = status === 429 ? "REJECTED" : "UNKNOWN";
         setCommandStatus((prev) => ({ ...prev, [pumpId]: lifecycle }));
+        if (action === "emergency_stop") {
+          setEmergencyStopLifecycle(lifecycle);
+        }
         toast.error(
           status ? `Từ chối: ${lifecycle}` : "Lỗi mạng khi gửi lệnh!",
         );
@@ -238,10 +262,23 @@ export const useDeviceControl = (deviceId: string) => {
   const emergencyStop = () =>
     sendCommand("ALL", "emergency_stop", undefined, undefined, true);
 
+  const emergencyStopSafetyState =
+    telemetry?.operational_state.actuator === "KNOWN" &&
+    telemetry.actuator_contradictory === false &&
+    telemetry.actuator != null &&
+    Object.values(telemetry.actuator.pump_status).every(
+      (state) => typeof state !== "boolean" || state === false,
+    )
+      ? "CONFIRMED_OFF"
+      : "UNRESOLVED";
+
   return {
     isProcessing,
     processingPumpIds,
     commandStatus,
+    commandIds,
+    emergencyStopLifecycle,
+    emergencyStopSafetyState,
     togglePump,
     forceOn,
     setPwm,

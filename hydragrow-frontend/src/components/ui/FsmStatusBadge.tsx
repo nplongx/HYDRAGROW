@@ -30,10 +30,10 @@ export const FsmStatusBadge: React.FC<{ state?: string }> = ({ state }) => {
 
   const renderBadge = (tone: 'default' | 'warn' | 'danger' | 'success' | 'info' | 'mist', content: string) => {
     const toneClass =
-      tone === 'danger' ? 'bg-red-50 border-red-200 text-red-700'
-        : tone === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800'
+      tone === 'danger' ? 'bg-status-fault-bg border-border-fault text-status-fault'
+        : tone === 'warn' ? 'bg-status-warning-bg border-border-warning text-status-warning'
         : tone === 'success' ? 'bg-pill border-line text-status'
-        : tone === 'info' ? 'bg-sky-50 border-sky-200 text-sky-700'
+        : tone === 'info' ? 'bg-status-info-bg border-border-info text-status-info'
         : tone === 'mist' ? EVENT_CATEGORY_THEME.device.badge
         : 'bg-soft border-line text-primary-deep';
 

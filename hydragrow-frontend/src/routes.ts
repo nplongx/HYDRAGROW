@@ -29,7 +29,7 @@ export interface LegacyRouteDefinition extends RouteDefinition {
 }
 
 export const CANONICAL_ROUTES = [
-  { id: 'dashboard', path: '/dashboard', class: 'authenticated', scope: 'device', entryPolicy: 'render' },
+  { id: 'dashboard', path: '/dashboard', class: 'authenticated', scope: 'global', entryPolicy: 'render' },
   { id: 'operations', path: '/operations', class: 'authenticated', scope: 'device', entryPolicy: 'render' },
   { id: 'cultivation', path: '/cultivation', class: 'authenticated', scope: 'device', entryPolicy: 'render' },
   { id: 'journal', path: '/journal', class: 'authenticated', scope: 'device', entryPolicy: 'render' },

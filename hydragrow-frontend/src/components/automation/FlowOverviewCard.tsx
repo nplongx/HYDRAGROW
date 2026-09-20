@@ -50,7 +50,7 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
   const getKindBadgeClass = () => {
     switch (kind) {
       case "ALERT":
-        return "bg-amber-100 text-amber-800 border-amber-200";
+        return "bg-status-warning-bg text-status-warning border-status-warning";
       case "RECIPE":
       case "RECIPE_OVERRIDE":
         return "bg-pill text-status border-pill";
@@ -59,7 +59,7 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
         return "bg-config-soft text-config border-config-soft";
       case "ACTION":
       case "ACTION_COMMAND":
-        return "bg-sky-100 text-sky-800 border-sky-200";
+        return "bg-status-info-bg text-status-info border-status-info";
       default:
         return "bg-pill text-status border-pill";
     }
@@ -106,12 +106,12 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
             {kind === "ACTION_COMMAND" ? "ACTION" : kind === "RECIPE_OVERRIDE" ? "RECIPE" : kind}
           </span>
           {showCronBadge && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-config-soft text-config border border-config-soft">
               CRON
             </span>
           )}
           {showWebhookBadge && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-status-info-bg text-status-info border border-status-info">
               WEBHOOK
             </span>
           )}

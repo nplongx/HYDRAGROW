@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from './Dashboard';
 
 vi.mock('../hooks/useFCM', () => ({
@@ -55,8 +56,41 @@ vi.mock('../hooks/useSystemEvents', () => ({
   useSystemEvents: () => ({ data: [] }),
 }));
 
+vi.mock('../hooks/useDashboardFleet', () => ({
+  useDashboardFleet: () => ({
+    stations: [
+      {
+        device_id: 'dev-001',
+        label: 'Trạm Alpha',
+        is_online: true,
+        last_seen: null,
+        operational_state: { contact: 'CONTACTED', freshness: 'FRESH' },
+        crop: 'Rau xà lách',
+        ec_latest: 1.2,
+        ph_latest: 6,
+        warning_count: 0,
+      },
+      {
+        device_id: 'dev-002',
+        label: 'Trạm Beta',
+        is_online: false,
+        last_seen: '2026-09-19T10:00:00Z',
+        operational_state: { contact: 'NOT_CONTACTED', freshness: 'STALE' },
+        crop: null,
+        ec_latest: null,
+        ph_latest: null,
+        warning_count: 2,
+      },
+    ],
+    isLoading: false,
+    isFetching: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 vi.mock('../hooks/useDeviceControl', () => ({
-  useDeviceControl: () => ({ forceOn: vi.fn() }),
+  useDeviceControl: () => ({ forceOn: vi.fn(), commandStatus: {}, commandIds: {} }),
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -69,9 +103,11 @@ vi.mock('../contexts/AuthContext', () => ({
   }),
 }));
 
+let stationSelected = false;
+
 vi.mock('../contexts/StationContext', () => ({
   useStationContext: () => ({
-    status: 'Selected', selectedDeviceId: 'dev-001', selectedDevice: null,
+    status: stationSelected ? 'Selected' : 'NoSelection', selectedDeviceId: stationSelected ? 'dev-001' : null, selectedDevice: null,
     availableDevices: [], error: null, selectDevice: vi.fn(), switchDevice: vi.fn(),
     clearSelection: vi.fn(), refreshAvailableDevices: vi.fn(),
   }),
@@ -86,30 +122,60 @@ describe('Dashboard pumpColors token', () => {
 });
 
 describe('Dashboard component wiring', () => {
-  it('hiển thị QuickActionBar và DosingSummaryCard', () => {
+  it('hiển thị All Stations Overview với summary, filter và station cards', () => {
+    stationSelected = false;
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/dashboard?station=']}>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
-    expect(screen.getByText('Thao tác nhanh')).toBeInTheDocument();
-    expect(screen.getByText('Châm dinh dưỡng')).toBeInTheDocument();
-    expect(screen.getByText('Tạm dừng bơm')).toBeInTheDocument();
-    expect(screen.getByText('Xem cảnh báo')).toBeInTheDocument();
-    expect(screen.getByText('Châm dinh dưỡng hôm nay')).toBeInTheDocument();
-    expect(screen.getByText(/3 lần/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tổng quan', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Tổng số trạm')).toBeInTheDocument();
+    expect(screen.getByText('Đang online')).toBeInTheDocument();
+    expect(screen.getByText('Cảnh báo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mở trạm Trạm Alpha/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mở trạm Trạm Beta/i })).toBeInTheDocument();
+    expect(screen.getByText('2 cảnh báo')).toBeInTheDocument();
+    const cards = screen.getByTestId('dashboard-station-grid').querySelectorAll('button');
+    expect(cards[0]).toHaveAccessibleName('Mở trạm Trạm Beta');
+    expect(cards[1]).toHaveAccessibleName('Mở trạm Trạm Alpha');
+    expect(screen.queryByText(/độ ẩm|CO2|áp suất|lưu lượng/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Cần chú ý/i }));
+    expect(screen.queryByRole('button', { name: /Mở trạm Trạm Alpha/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mở trạm Trạm Beta/i })).toBeInTheDocument();
+  });
+
+  it('hiển thị Selected Station Detail khi StationContext có trạm được chọn', () => {
+    stationSelected = true;
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('ID: dev-001')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /tất cả trạm/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Thông số thời gian thực' })).toBeInTheDocument();
   });
 
   it('hiển thị hierarchy vận hành và không dùng emoji cho greeting', () => {
+    stationSelected = true;
     render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     expect(screen.getByRole('banner')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Tổng quan' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'dev-001' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Trạng thái trạm' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Thông số thời gian thực' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Vận hành hiện tại' })).toBeInTheDocument();

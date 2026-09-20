@@ -75,23 +75,23 @@ export function ConfigNodeInspector({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-3xl shadow-2xl border border-emerald-100 max-w-5xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-6">
+      <div className="bg-white rounded-3xl shadow-2xl border border-line max-w-5xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-emerald-50 pb-4">
+        <div className="flex items-start justify-between border-b border-line pb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-config-soft text-config">
                 NODE MỚI
               </span>
-              <span className="text-xs text-emerald-800/60 font-medium">
+              <span className="text-xs text-text-muted/60 font-medium">
                 Panel chi tiết trong Flow Editor · Thay thế NodeEditorPanel khi
                 chọn node Config
               </span>
             </div>
-            <h2 className="text-xl font-bold text-emerald-950">
+            <h2 className="text-xl font-bold text-primary-deep">
               Đọc & Ghi đè Config theo điều kiện
             </h2>
-            <p className="text-xs text-emerald-800/70 mt-1">
+            <p className="text-xs text-text-muted/70 mt-1">
               Cho phép Flow đọc giá trị cấu hình hiện tại của thiết bị, và ghi
               đè có kiểm soát khi điều kiện của Flow đúng — có giới hạn an toàn,
               chế độ áp dụng, và tự động khôi phục.
@@ -101,7 +101,7 @@ export function ConfigNodeInspector({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-emerald-800/60 hover:text-emerald-950 hover:bg-emerald-50 transition-colors"
+            className="p-1.5 rounded-xl text-text-muted/60 hover:text-primary-deep hover:bg-pill transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -110,20 +110,20 @@ export function ConfigNodeInspector({
         {/* 3 Panels */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Panel 1: Đọc Config */}
-          <div className="bg-emerald-50/20 rounded-2xl border border-emerald-100 p-4 flex flex-col justify-between">
+          <div className="bg-pill/20 rounded-2xl border border-line p-4 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-primary-deep flex items-center gap-1.5">
                   (1) Đọc Config
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-config-soft text-config">
                   NGUỒN DỮ LIỆU
                 </span>
               </div>
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-emerald-900/80 block mb-1 uppercase tracking-wider">
+                  <label className="text-[11px] font-semibold text-primary-deep/80 block mb-1 uppercase tracking-wider">
                     CONFIG KEY
                   </label>
                   <select
@@ -139,32 +139,32 @@ export function ConfigNodeInspector({
                   </select>
                 </div>
 
-                <div className="text-[11px] text-emerald-800/70">
+                <div className="text-[11px] text-text-muted/70">
                   Thuộc nhóm:{" "}
-                  <span className="font-medium text-emerald-950">
+                  <span className="font-medium text-primary-deep">
                     {bound.sourceGroup}
                   </span>
                 </div>
 
-                <div className="bg-white rounded-xl p-3 border border-emerald-100">
-                  <div className="text-[10px] font-semibold text-emerald-800/60 uppercase">
+                <div className="bg-white rounded-xl p-3 border border-line">
+                  <div className="text-[10px] font-semibold text-text-muted/60 uppercase">
                     GIÁ TRỊ HIỆN TẠI (LIVE)
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-emerald-950">
+                    <span className="text-sm font-bold text-primary-deep">
                       {currentOriginalVal} {bound.unit}
                     </span>
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                    <span className="text-[11px] text-status bg-pill px-2 py-0.5 rounded">
                       nguồn: {settings ? "Cấu hình thiết bị" : "Mặc định"}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl p-3 border border-emerald-100">
-                  <div className="text-[10px] font-semibold text-emerald-800/60 uppercase mb-1">
+                <div className="bg-white rounded-xl p-3 border border-line">
+                  <div className="text-[10px] font-semibold text-text-muted/60 uppercase mb-1">
                     GIỚI HẠN CHO PHÉP (TỪ SCHEMA THIẾT BỊ)
                   </div>
-                  <div className="flex items-center justify-between text-xs font-medium text-emerald-950">
+                  <div className="flex items-center justify-between text-xs font-medium text-primary-deep">
                     <span>Min {bound.min}</span>
                     <span>
                       Max {bound.max} {bound.unit}
@@ -176,36 +176,36 @@ export function ConfigNodeInspector({
           </div>
 
           {/* Panel 2: Điều kiện áp dụng */}
-          <div className="bg-emerald-50/20 rounded-2xl border border-emerald-100 p-4 flex flex-col justify-between">
+          <div className="bg-pill/20 rounded-2xl border border-line p-4 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-emerald-950">
+                <span className="text-xs font-bold text-primary-deep">
                   (2) Điều kiện áp dụng
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-warning-bg text-warning">
                   DÙNG CHUNG FLOW
                 </span>
               </div>
 
-              <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3 mb-4">
-                <div className="font-semibold text-xs text-amber-950">
+              <div className="bg-warning-bg/60 border border-warning rounded-xl p-3 mb-4">
+                <div className="font-semibold text-xs text-warn-deep">
                   Điều kiện của Flow
                 </div>
-                <div className="text-[11px] text-amber-900/80 font-mono mt-0.5">
+                <div className="text-[11px] text-warn-deep/80 font-mono mt-0.5">
                   {conditionSummary}
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-emerald-100">
-                <label className="text-[11px] font-semibold text-emerald-900/80 block uppercase tracking-wider mb-2">
+              <div className="mt-4 pt-3 border-t border-line">
+                <label className="text-[11px] font-semibold text-primary-deep/80 block uppercase tracking-wider mb-2">
                   KHI ĐIỀU KIỆN SAI
                 </label>
-                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-emerald-100 text-xs text-emerald-950 cursor-pointer hover:bg-emerald-50/40">
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-line text-xs text-primary-deep cursor-pointer hover:bg-pill/40">
                   <input
                     type="checkbox"
                     checked={autoRestore}
                     onChange={(e) => setAutoRestore(e.target.checked)}
-                    className="text-emerald-600 rounded"
+                    className="text-primary rounded"
                   />
                   <span>
                     Tự động khôi phục giá trị gốc ({bound.defaultVal}{" "}
@@ -217,19 +217,19 @@ export function ConfigNodeInspector({
           </div>
 
           {/* Panel 3: Ghi đè giá trị */}
-          <div className="bg-emerald-50/20 rounded-2xl border border-emerald-100 p-4 flex flex-col justify-between">
+          <div className="bg-pill/20 rounded-2xl border border-line p-4 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-emerald-950">
+                <span className="text-xs font-bold text-primary-deep">
                   (3) Ghi đè giá trị
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-800">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-info-bg text-info">
                   AN TOÀN
                 </span>
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-emerald-900/80 block uppercase tracking-wider mb-1">
+                <label className="text-[11px] font-semibold text-primary-deep/80 block uppercase tracking-wider mb-1">
                   GIÁ TRỊ GHI ĐÈ
                 </label>
                 <div className="relative">
@@ -238,15 +238,15 @@ export function ConfigNodeInspector({
                     step={bound.step}
                     value={overrideValue}
                     onChange={(e) => handleValueChange(e.target.value)}
-                    className="ui-input text-lg font-bold text-indigo-900 w-full pr-14"
+                    className="ui-input text-lg font-bold text-config w-full pr-14"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-text-muted">
                     {bound.unit}
                   </span>
                 </div>
 
                 {clamped && (
-                  <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-warning bg-warning-bg p-2 rounded-lg border border-warning">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>
                       Giá trị vượt cận biên! Tự động kẹp về {clampedVal}{" "}
@@ -257,20 +257,20 @@ export function ConfigNodeInspector({
 
                 {/* Range bar */}
                 <div className="mt-4">
-                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden flex">
+                  <div className="w-full bg-surface-muted rounded-full h-2 overflow-hidden flex">
                     <div
-                      className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                      className="bg-config h-2 rounded-full transition-all duration-300"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
-                  <div className="text-[11px] text-emerald-800/60 mt-1.5">
+                  <div className="text-[11px] text-text-muted/60 mt-1.5">
                     Khoảng cho phép: {bound.min} – {bound.max} {bound.unit} (kẹp
                     cứng theo schema thiết bị)
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-emerald-900/80 block uppercase tracking-wider mb-1">
+                  <label className="text-[11px] font-semibold text-primary-deep/80 block uppercase tracking-wider mb-1">
                     ĐỘ ƯU TIÊN (PRIORITY)
                   </label>
                   <input
@@ -285,8 +285,8 @@ export function ConfigNodeInspector({
                 </div>
 
                 {/* Conflict warning */}
-                <div className="mt-4 bg-amber-50 border border-amber-200/80 rounded-xl p-3 text-[11px] text-amber-950 leading-relaxed">
-                  <div className="font-bold flex items-center gap-1.5 text-amber-800 mb-1">
+                <div className="mt-4 bg-warning-bg border border-warning rounded-xl p-3 text-[11px] text-warn-deep leading-relaxed">
+                  <div className="font-bold flex items-center gap-1.5 text-warning mb-1">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     CẢNH BÁO AN TOÀN
                   </div>
@@ -315,19 +315,19 @@ export function ConfigNodeInspector({
         </div>
 
         {/* Panel 4: Nhật ký ghi đè của Node */}
-        <div className="border-t border-emerald-50 pt-5">
+        <div className="border-t border-line pt-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+            <h3 className="text-xs font-bold text-primary-deep flex items-center gap-2">
               (4) Nhật ký ghi đè (audit log) — minh bạch & có thể truy vết
-              <span className="bg-emerald-600 text-white text-[9px] font-semibold px-1.5 py-0.2 rounded">
+              <span className="bg-primary text-white text-[9px] font-semibold px-1.5 py-0.2 rounded">
                 MỚI
               </span>
             </h3>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-emerald-100">
+          <div className="overflow-x-auto rounded-xl border border-line">
             <table className="w-full text-left text-xs">
-              <thead className="bg-emerald-50/40 text-slate-500 font-semibold uppercase text-[10px]">
+              <thead className="bg-pill/40 text-text-muted font-semibold uppercase text-[10px]">
                 <tr>
                   <th className="py-2.5 px-3">THỜI GIAN</th>
                   <th className="py-2.5 px-3">GIÁ TRỊ GỐC</th>
@@ -336,11 +336,11 @@ export function ConfigNodeInspector({
                   <th className="py-2.5 px-3">TRẠNG THÁI</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-emerald-50 text-[11px]">
+              <tbody className="divide-y divide-line text-[11px]">
                 {(auditLogs ?? []).filter((l) => l.configKey === configKey)
                   .length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-slate-500">
+                    <td colSpan={5} className="py-6 text-center text-text-muted">
                       Chưa có nhật ký ghi đè nào cho tham số này. Nhật ký sẽ
                       được ghi nhận khi Flow kích hoạt.
                     </td>
@@ -349,32 +349,32 @@ export function ConfigNodeInspector({
                   (auditLogs ?? [])
                     .filter((l) => l.configKey === configKey)
                     .map((log) => (
-                      <tr key={log.id} className="hover:bg-emerald-50/20">
-                        <td className="py-2 px-3 font-mono text-slate-500">
+                      <tr key={log.id} className="hover:bg-pill/20">
+                        <td className="py-2 px-3 font-mono text-text-muted">
                           {log.timestamp}
                         </td>
-                        <td className="py-2 px-3 text-slate-600">
+                        <td className="py-2 px-3 text-text-muted">
                           {log.originalValue} {bound.unit}
                         </td>
-                        <td className="py-2 px-3 font-bold text-indigo-700">
+                        <td className="py-2 px-3 font-bold text-config">
                           {log.overrideValue} {bound.unit}
                         </td>
-                        <td className="py-2 px-3 text-slate-700">
+                        <td className="py-2 px-3 text-text-secondary">
                           {log.reason}
                         </td>
                         <td className="py-2 px-3">
                           {log.status === "applied" && (
-                            <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
+                            <span className="text-status font-semibold inline-flex items-center gap-1">
                               <ShieldCheck className="w-3.5 h-3.5" /> Đã áp dụng
                             </span>
                           )}
                           {log.status === "restored" && (
-                            <span className="text-sky-700 font-semibold inline-flex items-center gap-1">
+                            <span className="text-info font-semibold inline-flex items-center gap-1">
                               <RefreshCw className="w-3 h-3" /> Đã khôi phục
                             </span>
                           )}
                           {log.status === "clamped_warning" && (
-                            <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
+                            <span className="text-warning font-semibold inline-flex items-center gap-1">
                               <AlertTriangle className="w-3.5 h-3.5" /> Cảnh báo
                               - Đã kẹp
                             </span>

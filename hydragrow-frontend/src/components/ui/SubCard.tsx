@@ -10,7 +10,7 @@ export const SubCard: React.FC<SubCardProps> = ({ title, children, className = '
   <div className={`farm-muted-panel ${className}`}>
     {title && (
       <h3 className="text-sm font-semibold text-primary-deep mb-4 flex items-center gap-2">
-        <span className="w-1.5 h-4 rounded-sm bg-emerald-600" />
+      <span className="h-4 w-1.5 rounded-sm bg-primary" />
         {title}
       </h3>
     )}

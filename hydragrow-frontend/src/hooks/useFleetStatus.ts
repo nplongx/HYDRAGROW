@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { apiGet } from '../lib/apiClient';
 import type { OperationalState } from '../types/models';
+import { useDashboardFleet } from './useDashboardFleet';
 
 export interface FleetDevice {
   device_id: string;
@@ -19,43 +18,19 @@ interface FleetStatusState {
 }
 
 export function useFleetStatus(): FleetStatusState {
-  const [devices, setDevices] = useState<FleetDevice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useDashboardFleet();
+  const devices: FleetDevice[] = query.stations.map((station) => ({
+    device_id: station.device_id,
+    label: station.label ?? null,
+    is_online: station.is_online ?? undefined,
+    last_seen: station.last_seen ?? undefined,
+    operational_state: station.operational_state,
+  }));
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Lấy danh sách device đã claimed
-      const owned = await apiGet<FleetDevice[]>('/devices');
-
-      // Lấy trạng thái online/firmware của từng device từ backend
-      const enriched = await Promise.allSettled(
-        owned.map(async (d) => {
-          try {
-            const status = await apiGet<{ is_online?: boolean; firmware_version: string; last_seen?: string; operational_state?: OperationalState }>(
-              `/devices/${d.device_id}/status`
-            );
-            return { ...d, ...status };
-          } catch {
-            return d;
-          }
-        })
-      );
-
-      setDevices(
-        enriched.map((r, index) => (r.status === 'fulfilled' ? r.value : owned[index]))
-      );
-    } catch (e: any) {
-      setError(e.message);
-      setDevices([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  return { devices, loading, error, refresh };
+  return {
+    devices,
+    loading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
+    refresh: () => void query.refresh(),
+  };
 }

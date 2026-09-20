@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Droplets, Thermometer, Activity, Waves, Settings, Zap, Cpu,
   LineChart, ArrowRight, AlertTriangle, Clock3
@@ -6,7 +6,7 @@ import {
 import { eval_sensor_status_safe } from '../../gleam_core/build/dev/javascript/gleam_core/dashboard.mjs';
 import { extract_fault_code_str, friendly_state, compute_health_safe } from '../../gleam_core/build/dev/javascript/gleam_core/fsm.mjs';
 import { get_fault_guide } from '../../gleam_core/build/dev/javascript/gleam_core/faults.mjs';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { SensorBentoCard } from '../components/ui/SensorBentoCard';
 import { QuickActionBar } from '../components/ui/QuickActionBar';
 import { DosingSummaryCard } from '../components/ui/DosingSummaryCard';
@@ -30,7 +30,9 @@ import { useStationContext } from '../contexts/StationContext';
 import { useDeviceTelemetry } from '../hooks/useDeviceTelemetry';
 import { useDeviceConfig } from '../hooks/useDeviceConfig';
 import { useSystemEvents } from '../hooks/useSystemEvents';
+import { useDashboardFleet, type DashboardFleetStation } from '../hooks/useDashboardFleet';
 import type { TelemetryQuality } from '../types/models';
+import { normalizeStationCardState } from '../contracts/stationCard';
 import { routePath } from '../routes';
 
 const ActiveDeviceTag = ({ label, color }: { label: string; color: string }) => (
@@ -70,8 +72,173 @@ const sensorStatus = (quality: TelemetryQuality | undefined, value: unknown, min
   return { label: res.label, tone: res.tone as 'good' | 'warn' | 'danger' | 'info' };
 };
 
-const Dashboard = () => {
-  const { status: stationStatus, selectedDeviceId: deviceId } = useStationContext();
+const DashboardStationCard = ({
+  station,
+  onSelect,
+}: {
+  station: DashboardFleetStation;
+  onSelect: (deviceId: string) => void;
+}) => {
+  const label = station.label?.trim() || station.device_id;
+  const state = normalizeStationCardState(station);
+  const online = state.connection === 'ONLINE';
+  const offline = state.connection === 'OFFLINE';
+  const warningUnknown = !state.warning.known;
+  const warning = warningUnknown || station.warning_count > 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(station.device_id)}
+      aria-label={'Mở trạm ' + label}
+      className={
+        'w-full text-left rounded-2xl border bg-white p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ' +
+        (warning ? 'border-warning/60 hover:border-warning' : 'border-line hover:border-primary/40')
+      }
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-primary-deep truncate">{label}</h2>
+          <p className="mt-1 text-xs font-mono text-faint truncate">{station.device_id}</p>
+        </div>
+        <DeviceStatePill
+          state={online ? 'online' : offline ? 'offline' : 'warning'}
+          label={online ? 'Online' : offline ? 'Offline' : 'Chưa rõ'}
+        />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-xl bg-surface-muted p-3">
+          <span className="block text-[11px] font-semibold text-text-muted">EC</span>
+          <strong className="mt-1 block text-primary-deep">
+            {station.ec_quality === 'ERROR' ? 'Lỗi' : station.ec_quality === 'INVALID' ? 'Không hợp lệ' : station.ec_quality === 'STALE' ? 'Cũ' : station.ec_quality === 'VALID' ? station.ec_latest ?? '—' : '—'}
+          </strong>
+        </div>
+        <div className="rounded-xl bg-surface-muted p-3">
+          <span className="block text-[11px] font-semibold text-text-muted">pH</span>
+          <strong className="mt-1 block text-primary-deep">
+            {station.ph_quality === 'ERROR' ? 'Lỗi' : station.ph_quality === 'INVALID' ? 'Không hợp lệ' : station.ph_quality === 'STALE' ? 'Cũ' : station.ph_quality === 'VALID' ? station.ph_latest ?? '—' : '—'}
+          </strong>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        {station.crop && (
+          <span className="rounded-full bg-pill px-2.5 py-1 font-semibold text-status">{station.crop}</span>
+        )}
+        {warningUnknown ? (
+          <span className="rounded-full bg-warning-bg px-2.5 py-1 font-semibold text-warn-deep">
+            Cảnh báo: chưa xác định
+          </span>
+        ) : warning ? (
+          <span className="rounded-full bg-warning-bg px-2.5 py-1 font-semibold text-warn-deep">
+            {station.warning_count} cảnh báo
+          </span>
+        ) : (
+          <span className="text-text-muted">Không có cảnh báo trong dữ liệu tổng hợp</span>
+        )}
+      </div>
+      {station.telemetry_freshness !== 'FRESH' && (station.telemetry_observed_at || station.last_seen) && (
+        <p className="mt-3 text-xs text-text-muted">
+          Telemetry {station.telemetry_freshness === 'STALE' ? 'cũ' : 'chưa xác định'} · Lần cuối quan sát: {new Date(station.telemetry_observed_at ?? station.last_seen!).toLocaleString('vi-VN')}
+        </p>
+      )}
+    </button>
+  );
+};
+
+const AllStationsOverview = () => {
+  const navigate = useNavigate();
+  const { selectDevice } = useStationContext();
+  const { stations, isLoading, isFetching, error, refresh } = useDashboardFleet();
+  const [filter, setFilter] = useState<'all' | 'warning'>('all');
+
+  const visibleStations = useMemo(() => {
+    const filtered =
+        filter === 'warning'
+        ? stations.filter((station) => station.warning_count_known === false || station.warning_count > 0)
+        : stations;
+    return [...filtered].sort((a, b) => {
+      const attentionRank = (station: DashboardFleetStation) => {
+        const state = normalizeStationCardState(station);
+        if (state.operational.actuator === 'UNKNOWN' || state.operational.actuator === 'CONTRADICTORY') return 0;
+        if (state.connection === 'UNKNOWN' || state.connection === 'STALE') return 1;
+        if (state.operational.readiness === 'UNKNOWN' || state.operational.readiness === 'NOT_READY') return 1;
+        if (!state.warning.known) return 1;
+        if (state.warning.count > 0) return 3;
+        return 5;
+      };
+      const rankDiff = attentionRank(a) - attentionRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      if (b.warning_count !== a.warning_count) return b.warning_count - a.warning_count;
+      return (a.label || a.device_id).localeCompare(b.label || b.device_id, 'vi');
+    });
+  }, [filter, stations]);
+
+  const onlineCount = stations.filter((station) => normalizeStationCardState(station).connection === 'ONLINE').length;
+  const knownWarningCount = stations.reduce((sum, station) => sum + station.warning_count, 0);
+  const unknownWarningStations = stations.filter((station) => station.warning_count_known === false).length;
+
+  const selectStation = (deviceId: string) => {
+    selectDevice(deviceId);
+    navigate(routePath('dashboard'), { state: { dashboardView: 'detail' } });
+  };
+
+  return (
+    <div className="app-page">
+      <PageHeader
+        title="Tổng quan"
+        subtitle="Theo dõi các trạm có thể truy cập, xác định trạm cần chú ý rồi mở chi tiết trạm."
+        icon={Activity}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="farm-status-pill bg-soft text-text-muted border-line">{stations.length} trạm</span>
+            <Button size="sm" variant="secondary" onClick={() => void refresh()} disabled={isFetching}>
+              {isFetching ? 'Đang làm mới…' : 'Làm mới'}
+            </Button>
+            <Button size="sm" onClick={() => navigate(routePath('pairing'))}>Thêm trạm</Button>
+          </div>
+        }
+      />
+
+      <section aria-label="Tóm tắt đội trạm" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="ui-card"><span className="ui-overline">Tổng số trạm</span><strong className="mt-2 block text-2xl text-primary-deep">{stations.length}</strong></div>
+        <div className="ui-card"><span className="ui-overline">Đang online</span><strong className="mt-2 block text-2xl text-status">{onlineCount}</strong></div>
+        <div className="ui-card"><span className="ui-overline">Cảnh báo</span><strong className="mt-2 block text-2xl text-warn-deep">{knownWarningCount}{unknownWarningStations > 0 ? ' + ?' : ''}</strong></div>
+      </section>
+
+      <section aria-labelledby="dashboard-monitoring-controls" className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="dashboard-monitoring-controls" className="farm-section-title">Giám sát trạm</h2>
+          <p className="mt-1 text-xs text-text-muted">Ưu tiên trạm có cảnh báo để kiểm tra trước.</p>
+        </div>
+        <div className="flex rounded-xl border border-line bg-surface-muted p-1" role="group" aria-label="Bộ lọc trạm">
+          <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} className={'rounded-lg px-3 py-1.5 text-xs font-semibold ' + (filter === 'all' ? 'bg-white text-primary-deep shadow-sm' : 'text-text-muted')}>Tất cả ({stations.length})</button>
+          <button type="button" aria-pressed={filter === 'warning'} onClick={() => setFilter('warning')} className={'rounded-lg px-3 py-1.5 text-xs font-semibold ' + (filter === 'warning' ? 'bg-white text-warn-deep shadow-sm' : 'text-text-muted')}>Cần chú ý ({stations.filter((station) => station.warning_count_known === false || station.warning_count > 0).length})</button>
+        </div>
+      </section>
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" aria-label="Đang tải danh sách trạm">
+          {[1, 2, 3, 4, 5, 6].map((item) => <div key={item} className="h-48 rounded-2xl bg-line/50 animate-pulse" />)}
+        </div>
+      ) : error ? (
+        <StateView icon={AlertTriangle} tone="danger" title="Không thể tải danh sách trạm" description="Không thể lấy dữ liệu tổng hợp của các trạm. Không thay thế bằng dữ liệu giả." action={<Button size="sm" variant="secondary" onClick={() => void refresh()}>Thử lại</Button>} />
+      ) : stations.length === 0 ? (
+        <StateView icon={Settings} title="Chưa có trạm có thể truy cập" description="Liên kết một trạm để bắt đầu theo dõi." action={<Button size="sm" onClick={() => navigate(routePath('pairing'))}>Thêm trạm</Button>} />
+      ) : visibleStations.length === 0 ? (
+        <StateView icon={AlertTriangle} tone="info" title="Không có trạm cần chú ý" description="Bộ lọc hiện tại không có trạm phù hợp." action={<Button size="sm" variant="secondary" onClick={() => setFilter('all')}>Xem tất cả</Button>} />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="dashboard-station-grid">
+          {visibleStations.map((station) => (
+            <DashboardStationCard key={station.device_id} station={station} onSelect={selectStation} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SelectedStationDetail = () => {
+  const { status: stationStatus, selectedDeviceId: deviceId, selectedDevice } = useStationContext();
   const {
     data: authoritativeTelemetry,
     isLoading: isTelemetryLoading,
@@ -106,11 +273,13 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { forceOn } = useDeviceControl(deviceId ?? '');
+  const { forceOn, commandStatus } = useDeviceControl(deviceId ?? '');
   const { permission, enableNotifications } = useFCM();
-  const { data: healthSummary } = useSystemHealthSummary(deviceId ?? '');
+  const { data: healthSummary, isLoading: isHealthSummaryLoading, isError: isHealthSummaryError } = useSystemHealthSummary(deviceId ?? '');
   const { shouldShowOnboarding } = useOnboardingState();
-  const dosingTotalCount = (healthSummary?.ec_dosing_count ?? 0) + (healthSummary?.ph_dosing_count ?? 0);
+  const dosingTotalCount = healthSummary
+    ? healthSummary.ec_dosing_count + healthSummary.ph_dosing_count
+    : null;
 
   const displayName = user?.displayName?.trim() || user?.email?.split('@')[0] || undefined;
   const greetingName = displayName ? (displayName[0].toUpperCase() + displayName.slice(1)) : '';
@@ -191,7 +360,11 @@ const Dashboard = () => {
   const phAxis = telemetryAxis('ph');
   const tempAxis = telemetryAxis('temp');
   const waterAxis = telemetryAxis('water_level');
-  const modeLabel = settings?.control_mode === 'auto' ? 'Tự động' : 'Thủ công';
+  const modeLabel = settings?.control_mode === 'auto'
+    ? 'Tự động'
+    : settings?.control_mode === 'manual'
+      ? 'Thủ công'
+      : 'Chưa rõ';
 
   const ecStatus = sensorStatus(ecAxis?.quality, ecAxis?.value, getTdsSetting(settings, 'min_ec_limit', 'min_ec_limit'), getTdsSetting(settings, 'max_ec_limit', 'max_ec_limit'));
   const phStatus = sensorStatus(phAxis?.quality, phAxis?.value, settings?.min_ph_limit, settings?.max_ph_limit);
@@ -212,20 +385,38 @@ const Dashboard = () => {
 
   const hasActionableIssue = Boolean(faultCode) || isOffline || isSensorUnknown || !isSensorOnline;
   const isCritical = isOffline;
+  const waterCommandStatus = commandStatus.WATER_PUMP_IN;
 
   return (
     <div className="app-page">
       <PageHeader
-        title="Tổng quan"
-        subtitle={friendlyState.description}
+        title={selectedDevice?.label?.trim() || deviceId}
+        subtitle={'Dashboard / Trạm đang chọn · ID: ' + deviceId + ' · ' + friendlyState.description}
         icon={Activity}
         action={
-          <DeviceStatePill
-            state={isOnline ? 'online' : isOffline ? 'offline' : 'warning'}
-            label={isOnline ? 'Trạm Online' : isOffline ? 'Trạm Offline' : 'Trạng thái chưa rõ'}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(routePath('dashboard'), { state: { dashboardView: 'overview' } })}
+              className="ui-btn-outline"
+            >
+              ← Tất cả trạm
+            </button>
+            <DeviceStatePill
+              state={isOnline ? 'online' : isOffline ? 'offline' : 'warning'}
+              label={isOnline ? 'Online' : isOffline ? 'Offline' : 'Chưa rõ'}
+            />
+          </div>
         }
       />
+
+      <section aria-label="An toàn và kết nối" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface-muted px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <span className="farm-status-pill bg-soft text-text-muted border-line">Kết nối: {isOnline ? 'Online' : isOffline ? 'Offline' : 'Chưa rõ'}</span>
+          <span className="farm-status-pill bg-soft text-text-muted border-line">Trạng thái vật lý: {friendlyState.label}</span>
+        </div>
+        <span className="text-xs text-text-muted">Không suy diễn trạng thái vật lý từ kết nối.</span>
+      </section>
 
       <section aria-labelledby="dashboard-station-status" className="ui-card relative overflow-hidden p-6 md:p-8">
         <h2 id="dashboard-station-status" className="sr-only">Trạng thái trạm</h2>
@@ -240,13 +431,9 @@ const Dashboard = () => {
                 <Cpu size={13} />
                 {modeLabel}
               </span>
-              <Link
-                to={routePath('fleet')}
-                title="Quản lý các thiết bị đã liên kết"
-                className="farm-status-pill bg-surface text-text-muted border-line hover:bg-soft transition-colors"
-              >
+              <span className="farm-status-pill bg-surface text-text-muted border-line">
                 ID: {deviceId}
-              </Link>
+              </span>
             </div>
             <div>
               <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-primary-deep">
@@ -323,6 +510,7 @@ const Dashboard = () => {
         onDose={() => navigate(routePath('operations'))}
         onPausePumps={() => navigate(routePath('operations'))}
         onViewAlerts={() => navigate(routePath('journal'))}
+        commandStatus={waterCommandStatus}
       />
 
       {shouldShowOnboarding && <OnboardingWizard className="mb-6" />}
@@ -339,14 +527,15 @@ const Dashboard = () => {
           <SensorBentoCard
             title="Dinh dưỡng EC"
             value={ecAxis?.quality === 'ERROR' ? "Lỗi" : ecAxis?.quality === 'INVALID' ? "Không hợp lệ" : ecAxis?.quality === 'STALE' ? "Cũ" : ecAxis?.quality === 'VALID' ? formatNumber(ecAxis.value, 2) : "Chưa có dữ liệu"}
-            unit={ecAxis?.quality === 'VALID' ? "ppm" : ""}
+            unit=""
             icon={Activity}
             theme={ecAxis?.quality === 'ERROR' || ecAxis?.quality === 'INVALID' ? "rose" : "blue"}
             statusLabel={ecStatus.label}
             statusTone={ecStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber(getTdsSetting(settings, 'ec_target', 'ec_target'), 2)} ± ${formatNumber(getTdsSetting(settings, 'ec_tolerance', 'ec_tolerance'), 2)}`}
             description={ecAxis?.quality === 'ERROR' ? 'Lỗi cảm biến EC.' : 'Nồng độ dinh dưỡng bồn chứa.'}
-            sparkline={ecAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, (Number(ecAxis.value) / (Number(getTdsSetting(settings, 'ec_max_limit', 'ec_max_limit')) || 1)) * 100)) : undefined}
+            quality={ecAxis?.quality}
+            observedAt={ecAxis?.observed_at ?? null}
           />
           <SensorBentoCard
             title="Độ pH"
@@ -358,7 +547,8 @@ const Dashboard = () => {
             statusTone={phStatus.tone}
             rangeLabel={`Mục tiêu ${formatNumber((settings as any)?.ph_target, 2)} ± ${formatNumber((settings as any)?.ph_tolerance, 2)}`}
             description={phAxis?.quality === 'ERROR' ? 'Cần hiệu chuẩn pH.' : 'Độ cân bằng axit/kiềm.'}
-            sparkline={phAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, (Number(phAxis.value) / 14) * 100)) : undefined}
+            quality={phAxis?.quality}
+            observedAt={phAxis?.observed_at ?? null}
           />
           <SensorBentoCard
             title="Nhiệt độ"
@@ -370,7 +560,8 @@ const Dashboard = () => {
             statusTone={tempStatus.tone}
             rangeLabel={`An toàn ${formatNumber((settings as any)?.min_temp_limit, 0)}-${formatNumber((settings as any)?.max_temp_limit, 0)}°C`}
             description={tempAxis?.quality === 'ERROR' ? 'Lỗi cảm biến nhiệt độ.' : 'Nhiệt độ dung dịch bồn chứa.'}
-            sparkline={tempAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, (Number(tempAxis.value) / 50) * 100)) : undefined}
+            quality={tempAxis?.quality}
+            observedAt={tempAxis?.observed_at ?? null}
           />
           <SensorBentoCard
             title="Mực nước"
@@ -382,7 +573,8 @@ const Dashboard = () => {
             statusTone={waterStatus.tone}
             rangeLabel={`Giữ quanh ${formatNumber((settings as any)?.water_level_target, 0)}%`}
             description={waterAxis?.quality === 'ERROR' ? 'Kiểm tra phao siêu âm.' : 'Đảm bảo bơm không chạy khô.'}
-            sparkline={waterAxis?.quality === 'VALID' ? Math.max(0, Math.min(100, Number(waterAxis.value))) : undefined}
+            quality={waterAxis?.quality}
+            observedAt={waterAxis?.observed_at ?? null}
           />
         </div>
       </div>
@@ -414,10 +606,16 @@ const Dashboard = () => {
         </div>
       </section>
 
-      <DosingSummaryCard
-        totalCount={dosingTotalCount}
-        lastDosedAt={healthSummary?.latest_ph_dosing_at ?? null}
-      />
+      {isHealthSummaryLoading ? (
+        <StateView icon={Clock3} title="Đang tải dữ liệu châm dinh dưỡng" description="Chưa có dữ liệu health summary để hiển thị." />
+      ) : isHealthSummaryError || !healthSummary || dosingTotalCount === null ? (
+        <StateView icon={AlertTriangle} tone="danger" title="Không thể tải dữ liệu châm dinh dưỡng" description="Dữ liệu health summary không khả dụng. Không hiển thị số liệu mặc định." />
+      ) : (
+        <DosingSummaryCard
+          totalCount={dosingTotalCount}
+          lastDosedAt={healthSummary.latest_ph_dosing_at}
+        />
+      )}
 
       <section aria-labelledby="dashboard-recent-events" className="ui-card space-y-3">
         <div className="flex items-center justify-between gap-3">
@@ -458,6 +656,15 @@ const Dashboard = () => {
       <EmergencyStopButton deviceId={deviceId} variant="floating" />
     </div>
   );
+};
+
+const Dashboard = () => {
+  const { selectedDeviceId, status } = useStationContext();
+  const location = useLocation();
+  const isOverview = location.state?.dashboardView === 'overview';
+  return selectedDeviceId && status === 'Selected' && !isOverview
+    ? <SelectedStationDetail />
+    : <AllStationsOverview />;
 };
 
 export default Dashboard;

@@ -1,36 +1,50 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { RefreshCw, Cpu, ArrowLeft, PlusCircle, AlertTriangle, Layers, Sprout, Map, Grid2X2, Download, Printer, GitCompare } from 'lucide-react';
-import { useFleetStatus, FleetDevice } from '../hooks/useFleetStatus';
+import { useDashboardFleet, useFleetComparison } from '../hooks/useDashboardFleet';
 import { useStationContext } from '../contexts/StationContext';
 import { useNavigate } from 'react-router-dom';
-import { apiGet } from '../lib/apiClient';
 import { FleetStationCard, FleetStationCardSummary } from '../components/fleet';
 import { routePath } from '../routes';
 import { configApi } from '../api/config';
+import { normalizeStationCardState } from '../contracts/stationCard';
 
 interface FleetSummaryEntry {
   device_id: string;
   label?: string | null;
-  crop: string | null;
-  ec_latest: number | null;
-  ph_latest: number | null;
+  crop?: string | null;
+  ec_latest?: number | null;
+  ph_latest?: number | null;
   warning_count: number;
+  is_online?: boolean | null;
+  last_seen?: string | null;
+  operational_state?: import('../types/models').OperationalState;
 }
 
 export function FleetView() {
-  const { devices, loading, error, refresh } = useFleetStatus();
-  const { selectDevice: setSelectedDevice } = useStationContext();
+  const { availableDevices, selectDevice: setSelectedDevice } = useStationContext();
+  const { stations, isLoading: loading, error, refresh } = useDashboardFleet();
   const navigate = useNavigate();
 
-  const [summaries, setSummaries] = useState<Record<string, FleetSummaryEntry>>({});
+  const summaries = useMemo(() => {
+    const map: Record<string, FleetSummaryEntry> = {};
+    stations.forEach((entry) => {
+      map[entry.device_id] = entry;
+    });
+    return map;
+  }, [stations]);
+  const devices = useMemo(() => availableDevices.map((device) => {
+    const summary = summaries[device.device_id];
+    return {
+      ...device,
+      is_online: summary?.is_online ?? undefined,
+      last_seen: summary?.last_seen ?? undefined,
+      operational_state: summary?.operational_state,
+    };
+  }), [availableDevices, summaries]);
   const [filter, setFilter] = useState<'all' | 'warning'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
-  const [comparison, setComparison] = useState<{
-    data: FleetSummaryEntry[];
-    same_crop: boolean;
-    normalized: boolean;
-  } | null>(null);
+  const comparison = useFleetComparison(selectedForComparison);
 
   const toggleComparison = (deviceId: string) => {
     setSelectedForComparison((current) =>
@@ -39,16 +53,6 @@ export function FleetView() {
         : current.length < 4 ? [...current, deviceId] : current,
     );
   };
-
-  async function compareSelected() {
-    if (selectedForComparison.length < 2) return;
-    const ids = encodeURIComponent(selectedForComparison.join(','));
-    const result = await apiGet<{
-      data: FleetSummaryEntry[];
-      comparison: { same_crop: boolean; normalized: boolean };
-    }>(`/fleet/compare?device_ids=${ids}`);
-    setComparison({ data: result.data, ...result.comparison });
-  }
 
   async function proposeAckThreshold(deviceId: string) {
     const raw = window.prompt('Nhập ngưỡng EC ACK mới. Giá trị phải > 0.');
@@ -81,29 +85,11 @@ export function FleetView() {
     URL.revokeObjectURL(url);
   }
 
-  useEffect(() => {
-    if (devices.length === 0) return;
-    let cancelled = false;
-    apiGet<{ data: FleetSummaryEntry[] }>('/fleet/summary')
-      .then((res) => {
-        if (cancelled) return;
-        const map: Record<string, FleetSummaryEntry> = {};
-        res.data.forEach((entry) => {
-          map[entry.device_id] = entry;
-        });
-        setSummaries(map);
-      })
-      .catch(() => {
-        if (!cancelled) setSummaries({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [devices]);
-
   function selectDevice(deviceId: string) {
+    if (!availableDevices.some((item) => item.device_id === deviceId)) return;
+    // StationContext is the sole identity authority. Dashboard reads it directly.
     setSelectedDevice(deviceId);
-    navigate(routePath('dashboard'));
+    navigate(routePath('dashboard'), { state: { dashboardView: 'detail' } });
   }
 
   function goBack() {
@@ -118,18 +104,20 @@ export function FleetView() {
   // Warning-first sort: stations with warning_count > 0 always surface to top
   const sortedAndFilteredDevices = useMemo(() => {
     const list = filter === 'warning'
-      ? devices.filter((d) => (summaries[d.device_id]?.warning_count ?? 0) > 0)
+      ? devices.filter((d) => normalizeStationCardState(summaries[d.device_id]).warning.count > 0 || !normalizeStationCardState(summaries[d.device_id]).warning.known)
       : [...devices];
 
     return list.sort((a, b) => {
-      const warnB = summaries[b.device_id]?.warning_count ?? 0;
-      const warnA = summaries[a.device_id]?.warning_count ?? 0;
+      const stateA = normalizeStationCardState(summaries[a.device_id]);
+      const stateB = normalizeStationCardState(summaries[b.device_id]);
+      const warnB = stateB.warning.count;
+      const warnA = stateA.warning.count;
       if (warnB !== warnA) {
         return warnB - warnA; // Descending warnings
       }
       // Tie-breaker: online stations first
-      const onlineA = a.is_online ? 1 : 0;
-      const onlineB = b.is_online ? 1 : 0;
+      const onlineA = stateA.connection === 'ONLINE' ? 1 : 0;
+      const onlineB = stateB.connection === 'ONLINE' ? 1 : 0;
       return onlineB - onlineA;
     });
   }, [devices, summaries, filter]);
@@ -142,7 +130,7 @@ export function FleetView() {
       return [{ groupName: null, items: sortedAndFilteredDevices }];
     }
 
-    const groups: Record<string, FleetDevice[]> = {};
+    const groups: Record<string, typeof devices> = {};
     for (const d of sortedAndFilteredDevices) {
       const crop = summaries[d.device_id]?.crop?.trim();
       const groupKey = crop ? crop : 'Chưa thiết lập cây trồng';
@@ -160,7 +148,7 @@ export function FleetView() {
 
   // Total warning count badge for filter tab
   const totalWarningCount = useMemo(() => {
-    return devices.reduce((acc, d) => acc + (summaries[d.device_id]?.warning_count ?? 0), 0);
+    return devices.reduce((acc, d) => acc + normalizeStationCardState(summaries[d.device_id]).warning.count, 0);
   }, [devices, summaries]);
 
   return (
@@ -191,7 +179,7 @@ export function FleetView() {
           <button type="button" onClick={exportCsv} disabled={sortedAndFilteredDevices.length === 0} className="flex items-center gap-1.5 px-3 py-2 border border-line rounded-xl text-xs font-semibold"><Download size={14} /> CSV</button>
           <button type="button" onClick={() => window.print()} disabled={sortedAndFilteredDevices.length === 0} className="flex items-center gap-1.5 px-3 py-2 border border-line rounded-xl text-xs font-semibold"><Printer size={14} /> PDF</button>
           <button
-            onClick={refresh}
+            onClick={() => void refresh()}
             disabled={loading}
             className="flex items-center gap-1.5 px-3 py-2 border border-line rounded-xl text-xs font-semibold text-primary-deep bg-white hover:bg-soft transition-colors shadow-sm"
           >
@@ -214,15 +202,15 @@ export function FleetView() {
         <span className="text-xs text-text-muted">{selectedForComparison.length}/4 đã chọn</span>
         <button
           type="button"
-          onClick={() => void compareSelected()}
+          onClick={() => void comparison.refetch()}
           disabled={selectedForComparison.length < 2}
           className="ui-btn-primary flex items-center gap-1.5 text-xs disabled:opacity-50"
         >
           <GitCompare size={14} /> So sánh
         </button>
-        {comparison && (
-          <span className={`text-xs font-semibold ${comparison.normalized ? 'text-status' : 'text-text-muted'}`}>
-            {comparison.same_crop ? 'Cùng crop/stage: có thể chuẩn hóa' : 'Khác crop/stage: không chuẩn hóa'}
+        {comparison.data && (
+          <span className={`text-xs font-semibold ${comparison.data.comparison.normalized ? 'text-status' : 'text-text-muted'}`}>
+            {comparison.data.comparison.same_crop ? 'Cùng crop/stage: có thể chuẩn hóa' : 'Khác crop/stage: không chuẩn hóa'}
           </span>
         )}
       </div>
@@ -281,7 +269,7 @@ export function FleetView() {
       {error && (
         <div className="mb-6 p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm flex items-center gap-2">
           <AlertTriangle size={16} className="flex-shrink-0" />
-          <span>{error}</span>
+          <span>{error instanceof Error ? error.message : String(error)}</span>
         </div>
       )}
 
@@ -375,22 +363,22 @@ export function FleetView() {
         </div>
       )}
 
-      {comparison && (
+      {comparison.data && (
         <section className="mt-6 ui-card print:shadow-none">
           <div className="flex items-center justify-between mb-3">
             <h2 className="farm-section-title">So sánh trạm</h2>
-            <button type="button" onClick={() => setComparison(null)} className="text-xs text-text-muted">Đóng</button>
+            <button type="button" onClick={() => setSelectedForComparison([])} className="text-xs text-text-muted">Đóng</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr className="border-b border-line"><th className="text-left p-2">Trạm</th><th className="text-left p-2">Crop/stage</th><th className="text-left p-2">EC</th><th className="text-left p-2">pH</th><th className="text-left p-2">Ngưỡng</th></tr></thead>
               <tbody>
-                {comparison.data.map((entry) => (
+                {comparison.data.data.map((entry) => (
                   <tr key={entry.device_id} className="border-b border-line">
                     <td className="p-2 font-semibold">{entry.label ?? entry.device_id}</td>
                     <td className="p-2">{entry.crop ?? 'Thiếu dữ liệu'}</td>
-                    <td className="p-2">{entry.ec_latest ?? 'Thiếu dữ liệu'}</td>
-                    <td className="p-2">{entry.ph_latest ?? 'Thiếu dữ liệu'}</td>
+                    <td className="p-2">{entry.ec_quality === 'ERROR' ? 'Lỗi' : entry.ec_quality === 'INVALID' ? 'Không hợp lệ' : entry.ec_quality === 'STALE' ? 'Cũ' : entry.ec_quality === 'VALID' ? entry.ec_latest ?? 'Thiếu dữ liệu' : 'Chưa rõ'}</td>
+                    <td className="p-2">{entry.ph_quality === 'ERROR' ? 'Lỗi' : entry.ph_quality === 'INVALID' ? 'Không hợp lệ' : entry.ph_quality === 'STALE' ? 'Cũ' : entry.ph_quality === 'VALID' ? entry.ph_latest ?? 'Thiếu dữ liệu' : 'Chưa rõ'}</td>
                     <td className="p-2"><button type="button" onClick={() => void proposeAckThreshold(entry.device_id)} className="text-status font-semibold">Đề xuất ngưỡng EC</button></td>
                   </tr>
                 ))}

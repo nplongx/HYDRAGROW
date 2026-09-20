@@ -8,9 +8,11 @@ vi.mock('../platform/settings', () => ({
   saveWebSettings: vi.fn(),
 }));
 
+const stationState = vi.hoisted(() => ({ status: 'Selected' as 'Selected' | 'InvalidSelection' }));
+
 vi.mock('../contexts/StationContext', () => ({
   useStationContext: () => ({
-    status: 'Selected', selectedDeviceId: 'device-1', selectedDevice: null,
+    status: stationState.status, selectedDeviceId: 'device-1', selectedDevice: null,
     availableDevices: [], error: null, selectDevice: vi.fn(), switchDevice: vi.fn(),
     clearSelection: vi.fn(), refreshAvailableDevices: vi.fn(),
   }),
@@ -43,6 +45,15 @@ beforeEach(() => {
 });
 
 describe('useDeviceSync WebSocket alert handling', () => {
+  it('does not open a device socket for an invalid station selection', async () => {
+    stationState.status = 'InvalidSelection';
+    render(<QueryClientProvider client={new QueryClient()}><Harness /></QueryClientProvider>);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    stationState.status = 'Selected';
+  });
+
+
   it('refetches authoritative device queries after reconnect', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const refetchQueries = vi.spyOn(client, 'refetchQueries').mockResolvedValue(undefined);

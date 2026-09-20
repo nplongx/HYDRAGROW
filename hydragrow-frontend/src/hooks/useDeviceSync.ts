@@ -19,7 +19,7 @@ export interface DeviceSyncState {
 }
 
 export function useDeviceSync() {
-  const { selectedDeviceId: deviceId } = useStationContext();
+  const { selectedDeviceId: deviceId, status: stationStatus } = useStationContext();
   const queryClient = useQueryClient();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [syncState, setSyncState] = useState<DeviceSyncState>({ connection: 'degraded', lastEventAt: null, lastCorrelationId: null, lastCommandId: null });
@@ -51,7 +51,7 @@ export function useDeviceSync() {
 
   // WebSocket remains a transport/orchestration adapter during migration.
   useEffect(() => {
-    if (!deviceId || !settings?.backend_url) return;
+    if (stationStatus !== 'Selected' || !deviceId || !settings?.backend_url) return;
     let active = true;
     let ws: WebSocket | undefined;
     let pingInterval: ReturnType<typeof setInterval> | undefined;
@@ -201,7 +201,7 @@ export function useDeviceSync() {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       ws?.close();
     };
-  }, [deviceId, settings?.backend_url, settings?.api_key, queryClient]);
+  }, [deviceId, stationStatus, settings?.backend_url, settings?.api_key, queryClient]);
 
   return syncState;
 }

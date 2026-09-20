@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AlertOctagon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useStationContext } from '../../contexts/StationContext';
 import { useDeviceControl } from '../../hooks/useDeviceControl';
-import { useDeviceTelemetry } from '../../hooks/useDeviceTelemetry';
-import { EmergencyStopConfirmDialog } from './EmergencyStopConfirmDialog';
+import { useWhoami } from '../../hooks/useWhoami';
 
 interface EmergencyStopButtonProps {
   deviceId: string | null;
@@ -11,73 +11,100 @@ interface EmergencyStopButtonProps {
 }
 
 export const EmergencyStopButton = ({ deviceId, variant }: EmergencyStopButtonProps) => {
-  const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { data: telemetry } = useDeviceTelemetry(deviceId);
-  const pumpStatus = telemetry?.actuator?.pump_status;
-  const pumps: Record<string, boolean | undefined> = {
-    pump_a: pumpStatus?.pump_a,
-    pump_b: pumpStatus?.pump_b,
-    ph_up: pumpStatus?.ph_up,
-    ph_down: pumpStatus?.ph_down,
-    osaka_pump: pumpStatus?.osaka_pump,
-    mist_valve: pumpStatus?.mist_valve,
-    mix_valve: pumpStatus?.mix_valve,
-    water_pump_in: pumpStatus?.water_pump_in,
-    water_pump_out: pumpStatus?.water_pump_out,
-  };
-  const { emergencyStop } = useDeviceControl(deviceId || '');
+  const { selectedDeviceId } = useStationContext();
+  const activeDeviceId = selectedDeviceId === deviceId ? selectedDeviceId : null;
+  const {
+    emergencyStop,
+    emergencyStopLifecycle,
+    emergencyStopSafetyState,
+  } = useDeviceControl(activeDeviceId || '');
+  const {
+    data: whoami,
+    isLoading: isCapabilityLoading,
+    isError: isCapabilityError,
+  } = useWhoami();
+  const hasEmergencyStopCapability =
+    whoami?.scopes.includes('*') || whoami?.scopes.includes('control:emergency') || false;
+  const capabilityKnown = !isCapabilityLoading && !isCapabilityError && Boolean(whoami);
+  const canEmergencyStop =
+    Boolean(activeDeviceId) && capabilityKnown && hasEmergencyStopCapability;
 
-  const runningPwm = useMemo(() => {
-    const map: Record<string, number> = {};
-    if (!pumpStatus) return map;
-    (['pump_a', 'pump_b', 'ph_up', 'ph_down', 'osaka_pump'] as const).forEach((pumpId) => {
-      const pwm = (pumpStatus as unknown as Record<string, unknown>)[`${pumpId}_pwm`];
-      if (typeof pwm === 'number') map[pumpId] = pwm;
-    });
-    return map;
-  }, [pumpStatus]);
-
-  const handleConfirm = async () => {
+  const handleEmergencyStop = async () => {
+    if (!canEmergencyStop || isSubmitting) return;
     setIsSubmitting(true);
     try {
       const success = await emergencyStop();
       if (success) {
         toast.success('Đã gửi lệnh dừng khẩn cấp.');
-        setOpen(false);
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const lifecycleLabel = emergencyStopLifecycle ?? 'IDLE';
+  const safetyLabel =
+    emergencyStopSafetyState === 'CONFIRMED_OFF'
+      ? 'Đã xác nhận tất cả cơ cấu chấp hành đã tắt'
+      : 'Chưa xác nhận trạng thái an toàn';
+  const capabilityLabel = hasEmergencyStopCapability
+    ? 'Có quyền dừng khẩn cấp'
+    : 'Tài khoản không có quyền dừng khẩn cấp';
+  const statusLabel =
+    'Trạng thái an toàn: ' +
+    safetyLabel +
+    '. Vòng đời lệnh: ' +
+    lifecycleLabel +
+    '. ' +
+    capabilityLabel +
+    '.';
+  const persistentSafetyMessage =
+    emergencyStopLifecycle && emergencyStopLifecycle !== 'CONFIRMED'
+      ? emergencyStopLifecycle === 'TIMEOUT'
+        ? 'Dừng khẩn cấp: chưa nhận được xác nhận vật lý.'
+        : emergencyStopLifecycle === 'FAILED' || emergencyStopLifecycle === 'REJECTED'
+          ? 'Dừng khẩn cấp: lệnh không thành công.'
+          : 'Dừng khẩn cấp: đang chờ xác nhận vật lý.'
+      : emergencyStopSafetyState === 'CONFIRMED_OFF'
+        ? 'An toàn: đã xác nhận cơ cấu chấp hành tắt.'
+        : null;
+
   return (
     <>
+      {persistentSafetyMessage && (
+        <div className="fixed left-4 right-4 top-4 lg:left-[17rem] lg:right-6 z-40 rounded-xl border border-warning/50 bg-warning-bg px-4 py-2 text-xs font-semibold text-warn-deep shadow-low" role="status" data-estop-persistent-state={emergencyStopSafetyState}>
+          {persistentSafetyMessage}
+        </div>
+      )}
       {variant === 'floating' ? (
         <button
-          onClick={() => setOpen(true)}
-          aria-label="Dừng khẩn cấp"
-          className="fixed bottom-[76px] right-4 lg:bottom-6 lg:right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-950/30 transition-all active:scale-95 cursor-pointer"
+          onClick={() => void handleEmergencyStop()}
+          disabled={!canEmergencyStop || isSubmitting}
+          aria-label={'Dừng khẩn cấp. ' + statusLabel}
+          title={statusLabel}
+          data-estop-lifecycle={lifecycleLabel}
+          data-safety-state={emergencyStopSafetyState}
+          data-capability={hasEmergencyStopCapability ? 'control:emergency' : 'denied'}
+          className="fixed bottom-[76px] right-4 lg:bottom-6 lg:right-6 z-40 flex items-center justify-center w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-950/30 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <AlertOctagon size={24} />
         </button>
       ) : (
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => void handleEmergencyStop()}
+          disabled={!canEmergencyStop || isSubmitting}
+          aria-label={'Dừng khẩn cấp. ' + statusLabel}
+          title={statusLabel}
+          data-estop-lifecycle={lifecycleLabel}
+          data-safety-state={emergencyStopSafetyState}
+          data-capability={hasEmergencyStopCapability ? 'control:emergency' : 'denied'}
           className="fixed bottom-[76px] left-4 right-4 lg:left-[17rem] lg:right-6 lg:bottom-6 z-40 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-lg shadow-red-950/30 transition-all active:scale-[0.99] cursor-pointer"
         >
           <AlertOctagon size={16} /> Dừng khẩn cấp
+          <span className="sr-only">{statusLabel}</span>
         </button>
       )}
-
-      <EmergencyStopConfirmDialog
-        open={open}
-        runningPumps={pumps}
-        runningPwm={runningPwm}
-        onCancel={() => setOpen(false)}
-        onConfirm={handleConfirm}
-        isSubmitting={isSubmitting}
-      />
     </>
   );
 };

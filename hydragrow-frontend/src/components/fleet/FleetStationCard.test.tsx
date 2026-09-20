@@ -18,7 +18,11 @@ describe('FleetStationCard', () => {
     ec_latest: 1.8,
     ph_latest: 6.0,
     warning_count: 0,
-  };
+    telemetry_freshness: 'FRESH',
+    telemetry_observed_at: new Date().toISOString(),
+    ec_quality: 'VALID',
+    ph_quality: 'VALID',
+  } as const;
 
   it('renders device name and status correctly', () => {
     const handleSelect = vi.fn();
@@ -69,13 +73,33 @@ describe('FleetStationCard', () => {
     render(
       <FleetStationCard
         device={mockDevice}
-        summary={{ crop: null, ec_latest: null, ph_latest: null, warning_count: 0 }}
+        summary={{ crop: null, ec_latest: null, ph_latest: null, warning_count: 0, telemetry_freshness: 'UNKNOWN', telemetry_observed_at: null, ec_quality: 'UNKNOWN', ph_quality: 'UNKNOWN' }}
         onSelect={handleSelect}
       />
     );
 
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not render a numeric value when an axis is explicitly errored or stale', () => {
+    render(
+      <FleetStationCard
+        device={mockDevice}
+        summary={{
+          ...mockSummary,
+          ec_latest: 9.9,
+          ec_quality: 'ERROR',
+          ph_latest: 5.8,
+          ph_quality: 'STALE',
+        }}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Lỗi')).toBeInTheDocument();
+    expect(screen.getByText('Cũ')).toBeInTheDocument();
+    expect(screen.queryByText('9.9')).not.toBeInTheDocument();
   });
 
   it('calls onSelect with device_id on click', () => {

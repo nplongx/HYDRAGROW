@@ -49,8 +49,14 @@
 - Production build: passed; vite build completed in 6.17s.
 - Harness structural checks: passed.
 - git diff --check: passed.
-- Browser review reached the application's login gate, so authenticated Dashboard visual review is **BLOCKED** until an authenticated browser session is available.
-- Dashboard page contract status: **BLOCKED** on browser visual review; do not hand off or advance to Fleet yet.
+- Authenticated browser review completed against `http://localhost:1421/dashboard?mock_auth=true`.
+- StationContext resolved device `e2e-full-01`; Dashboard rendered `Trạm Online`, health score, sensor status, quick actions, onboarding, realtime metrics, current operation, dosing summary, recent events, and emergency stop.
+- Live browser/backend path was previously verified end-to-end with the Digital Twin; current Dashboard review consumed the resulting authenticated station context without the prior `Thiếu ngữ cảnh trạm` blocker.
+- Dashboard targeted tests: 1 file / 3 tests passed.
+- Production build: passed; vite build completed in 8.17s.
+- Frontend lint: 0 errors, 182 warnings.
+- `git diff --check`: passed.
+- Dashboard page contract status: **ACCEPTED**. Fleet remains blocked until a new explicit P3.2 page-start decision.
 
 ## 2026-09-19 — Cross-system collapsed-card regression fixed
 
@@ -65,3 +71,22 @@
 ## Evidence rule
 
 Entries describe observed repository state or executed verification only. Failed attempts are preserved rather than rewritten as successes.
+
+## P3 Dashboard overhaul — initial implementation pass (2026-09-19)
+
+- Dashboard reworked into two modes: All Stations Overview and Selected Station Detail.
+- Dashboard route changed to global scope so overview is reachable without an existing station selection.
+- Added React Query-backed `/fleet/summary` hook: `src/hooks/useDashboardFleet.ts`.
+- Added source-backed fleet summary strip: total stations, online count, warning count.
+- Added warning-first station ordering, all/warning filter, refresh, add-station handoff, loading/error/empty/filter-empty states.
+- Added Dashboard-native station cards using only spec-backed identity, connection, crop, EC, pH, warning count, and offline last-seen.
+- Station selection now updates existing StationContext and navigates to `/dashboard?station=<device_id>`; Fleet → Dashboard handoff uses the same context/query contract.
+- Selected Station Detail now exposes explicit station identity and a `← Tất cả trạm` return path.
+- Removed unsupported EC `ppm` display and arbitrary telemetry sparklines from Dashboard detail.
+- E-STOP changed to immediate command dispatch without generic confirmation, matching the supplied canonical safety contract.
+- Targeted tests: 15/15 passed across Dashboard, FleetView, routes, and E-STOP guard. React test emitted an `act(...)` warning in the E-STOP test; behavior passed and this warning remains follow-up cleanup.
+- Production build: PASS, 5.96s.
+- Lint: PASS, 0 errors / 182 warnings.
+- `git diff --check`: PASS.
+- Browser review with authenticated Digital Twin: All Stations Overview rendered; station card opened Selected Station Detail; explicit station identity and return control rendered; warning filter empty state rendered correctly. Twin simulator completed 30 ticks and supplied source-backed station state. Simulator values were EC=0.00, pH=0.00, so telemetry UI showed source-derived attention states; no fallback data was injected.
+- Dashboard is NOT ACCEPTED yet. Remaining spec work: complete selected-detail data-contract cleanup/interaction coverage, prove cross-page station-context persistence, harden state-matrix tests, and run final browser acceptance against the full Dashboard spec.

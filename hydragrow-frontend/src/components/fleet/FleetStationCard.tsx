@@ -1,5 +1,6 @@
 import { Wifi, AlertTriangle, ChevronRight, Activity, Clock } from 'lucide-react';
 import type { OperationalState } from '../../types/models';
+import { normalizeStationCardState } from '../../contracts/stationCard';
 
 export interface FleetStationCardDevice {
   device_id: string;
@@ -15,6 +16,11 @@ export interface FleetStationCardSummary {
   ec_latest?: number | null;
   ph_latest?: number | null;
   warning_count: number;
+  warning_count_known?: boolean;
+  telemetry_freshness?: 'UNKNOWN' | 'FRESH' | 'STALE';
+  telemetry_observed_at?: string | null;
+  ec_quality?: 'UNKNOWN' | 'VALID' | 'STALE' | 'ERROR' | 'INVALID' | null;
+  ph_quality?: 'UNKNOWN' | 'VALID' | 'STALE' | 'ERROR' | 'INVALID' | null;
 }
 
 export interface FleetStationCardProps {
@@ -83,11 +89,25 @@ function getPhStatusClass(ph: number | null | undefined): { bg: string; text: st
   return { bg: 'bg-red-50 border border-red-200', text: 'text-red-700', label: 'Nguy hiểm' };
 }
 
+function formatAxisValue(value: number | null | undefined, quality: FleetStationCardSummary['ec_quality'], digits: number, unit: string) {
+  if (quality === 'ERROR') return 'Lỗi';
+  if (quality === 'INVALID') return 'Không hợp lệ';
+  if (quality === 'STALE') return 'Cũ';
+  if (quality !== 'VALID' || value === null || value === undefined) return '—';
+  return unit ? `${value.toFixed(digits)} ${unit}` : value.toFixed(digits);
+}
+
 export function FleetStationCard({ device, summary, onSelect }: FleetStationCardProps) {
-  const isOnline = device.operational_state?.contact === 'CONTACTED' && device.operational_state?.freshness === 'FRESH';
-  const isOffline = device.operational_state?.contact === 'NOT_CONTACTED';
+  const state = normalizeStationCardState({
+    operational_state: device.operational_state,
+    warning_count: summary?.warning_count,
+    warning_count_known: summary?.warning_count_known,
+  });
+  const isOnline = state.connection === 'ONLINE';
+  const isOffline = state.connection === 'OFFLINE';
   const isUnknown = !isOnline && !isOffline;
-  const warningCount = summary?.warning_count ?? 0;
+  const warningCount = state.warning.count;
+  const warningCountKnown = state.warning.known;
   const label = device.label || device.device_id;
   const ec = summary?.ec_latest;
   const ph = summary?.ph_latest;
@@ -97,9 +117,9 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
   const phStyle = getPhStatusClass(ph);
 
   const ariaLabel = `Trạm ${label}: ${isOnline ? 'Đang hoạt động' : isOffline ? 'Ngoại tuyến' : 'Chưa rõ trạng thái'}${
-    warningCount > 0 ? `, ${warningCount} cảnh báo` : ''
-  }${ec !== null && ec !== undefined ? `, EC ${ec.toFixed(1)}` : ''}${
-    ph !== null && ph !== undefined ? `, pH ${ph.toFixed(1)}` : ''
+    !warningCountKnown ? ', số cảnh báo chưa xác định' : warningCount > 0 ? `, ${warningCount} cảnh báo` : ''
+  }${summary?.ec_quality ? `, EC ${formatAxisValue(ec, summary.ec_quality, 1, '')}` : ''}${
+    summary?.ph_quality ? `, pH ${formatAxisValue(ph, summary.ph_quality, 1, '')}` : ''
   }`;
 
   return (
@@ -108,7 +128,9 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
       onClick={() => onSelect(device.device_id)}
       aria-label={ariaLabel}
       className={`w-full min-h-[48px] text-left p-4 rounded-2xl border transition-all duration-150 flex flex-col justify-between group focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 bg-white ${
-        warningCount > 0
+        !warningCountKnown
+          ? 'border-amber-300 hover:border-amber-400 hover:shadow-md'
+          : warningCount > 0
           ? 'border-amber-300 hover:border-amber-400 hover:shadow-md'
           : 'border-line hover:border-primary/40 hover:shadow-sm'
       }`}
@@ -136,7 +158,13 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {warningCount > 0 && (
+            {!warningCountKnown && (
+              <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold">
+                <AlertTriangle size={12} />
+                Chưa rõ
+              </span>
+            )}
+            {warningCountKnown && warningCount > 0 && (
               <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-bold">
                 <AlertTriangle size={12} />
                 {warningCount}
@@ -168,7 +196,7 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
             <span className="text-xs font-semibold text-text-muted">EC</span>
           </div>
           <span className={`text-xs font-bold ${ecStyle.text}`}>
-            {ec !== null && ec !== undefined ? ec.toFixed(1) : '—'}
+            {formatAxisValue(ec, summary?.ec_quality, 1, '')}
           </span>
         </div>
 
@@ -177,10 +205,17 @@ export function FleetStationCard({ device, summary, onSelect }: FleetStationCard
             <span className="text-xs font-semibold text-text-muted">pH</span>
           </div>
           <span className={`text-xs font-bold ${phStyle.text}`}>
-            {ph !== null && ph !== undefined ? ph.toFixed(1) : '—'}
+            {formatAxisValue(ph, summary?.ph_quality, 1, '')}
           </span>
         </div>
       </div>
+
+      {summary?.telemetry_freshness !== 'FRESH' && (
+        <p className="mt-2 text-[11px] text-text-muted">
+          Telemetry {summary?.telemetry_freshness === 'STALE' ? 'cũ' : 'chưa xác định'}
+          {summary?.telemetry_observed_at ? ` · ${formatRelativeTime(summary.telemetry_observed_at)}` : ''}
+        </p>
+      )}
 
       {/* Footer: relative last seen & firmware */}
       <div className="flex items-center justify-between text-[11px] text-faint pt-2 mt-1">

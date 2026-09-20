@@ -13,6 +13,8 @@ interface SensorBentoCardProps {
   description?: string;
   compact?: boolean;
   sparkline?: number;
+  observedAt?: string | null;
+  quality?: string;
 }
 
 const themeClasses: Record<string, string> = {
@@ -52,6 +54,8 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
   description,
   compact = false,
   sparkline,
+  observedAt,
+  quality,
 }) => (
   <article
     aria-label={title}
@@ -98,6 +102,11 @@ export const SensorBentoCard: React.FC<SensorBentoCardProps> = ({
       )}
       {description && (
         <p className="text-xs text-faint/80 leading-relaxed">{description}</p>
+      )}
+      {(observedAt || quality) && (
+        <p className="text-[10px] text-faint" data-testid={`sensor-meta-${title}`}>
+          {quality ? `Chất lượng: ${quality}` : ''}{quality && observedAt ? ' · ' : ''}{observedAt ? `Quan sát: ${new Date(observedAt).toLocaleString('vi-VN')}` : ''}
+        </p>
       )}
     </div>
     {sparkline != null && (

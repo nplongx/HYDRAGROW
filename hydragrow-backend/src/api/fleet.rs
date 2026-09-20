@@ -22,6 +22,16 @@ pub struct FleetSummaryEntry {
     pub ec_latest: Option<f32>,
     pub ph_latest: Option<f32>,
     pub warning_count: usize,
+    /// False means the warning query failed; zero must never be interpreted as
+    /// confirmed absence of warnings.
+    pub warning_count_known: bool,
+    pub telemetry_freshness: hydragrow_shared::telemetry::FreshnessState,
+    pub telemetry_observed_at: Option<String>,
+    pub telemetry_received_at: Option<String>,
+    pub ec_quality: Option<hydragrow_shared::telemetry::TelemetryQuality>,
+    pub ec_observed_at: Option<String>,
+    pub ph_quality: Option<hydragrow_shared::telemetry::TelemetryQuality>,
+    pub ph_observed_at: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -32,6 +42,22 @@ pub struct FleetComparisonEntry {
     pub ec_latest: Option<f32>,
     pub ph_latest: Option<f32>,
     pub operational_state: hydragrow_shared::telemetry::OperationalState,
+    pub telemetry_freshness: hydragrow_shared::telemetry::FreshnessState,
+    pub telemetry_observed_at: Option<String>,
+    pub telemetry_received_at: Option<String>,
+    pub ec_quality: Option<hydragrow_shared::telemetry::TelemetryQuality>,
+    pub ec_observed_at: Option<String>,
+    pub ph_quality: Option<hydragrow_shared::telemetry::TelemetryQuality>,
+    pub ph_observed_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct FleetTelemetrySnapshot {
+    freshness: hydragrow_shared::telemetry::FreshnessState,
+    observed_at: Option<String>,
+    received_at: Option<String>,
+    ec: Option<hydragrow_shared::telemetry::TelemetryAxis>,
+    ph: Option<hydragrow_shared::telemetry::TelemetryAxis>,
 }
 
 async fn active_stage_name(pool: &sqlx::PgPool, device_id: &str) -> Option<String> {
@@ -116,17 +142,27 @@ async fn status_from_cache(
     };
     (is_online, last_seen, state)
 }
-async fn warning_count_in_last_hour(pool: &sqlx::PgPool, device_id: &str) -> usize {
+async fn warning_count_in_last_hour(pool: &sqlx::PgPool, device_id: &str) -> (usize, bool) {
     let now = chrono::Utc::now().timestamp_millis();
     let window_ms = 3_600_000i64;
 
     match get_system_events(pool, device_id, &[], 500, None, None, None).await {
-        Ok(events) => events
-            .into_iter()
-            .filter(|e| now.saturating_sub(e.timestamp) <= window_ms)
-            .filter(|e| e.level == "warning")
-            .count(),
-        Err(_) => 0,
+        Ok(events) => (
+            events
+                .into_iter()
+                .filter(|e| now.saturating_sub(e.timestamp) <= window_ms)
+                .filter(|e| e.level == "warning")
+                .count(),
+            true,
+        ),
+        Err(e) => {
+            tracing::warn!(
+                ?e,
+                device_id,
+                "Không thể lấy warning count cho fleet summary"
+            );
+            (0, false)
+        }
     }
 }
 
@@ -141,6 +177,29 @@ async fn latest_ec_ph(app_state: &AppState, device_id: &str) -> (Option<f32>, Op
         Ok(data) => (Some(data.ec), Some(data.ph)),
         Err(_) => (None, None),
     }
+}
+
+async fn authoritative_fleet_telemetry(
+    app_state: &AppState,
+    device_id: &str,
+) -> Option<FleetTelemetrySnapshot> {
+    let raw = app_state.device_states.read().await.get(device_id).cloned();
+    let raw = raw?;
+    let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+    let value = parsed.get("telemetry")?;
+    let snapshot = serde_json::from_value::<
+        hydragrow_shared::telemetry::AuthoritativeTelemetrySnapshot,
+    >(value.clone())
+    .ok()?;
+    let ec = snapshot.axes.iter().find(|axis| axis.name == "ec").cloned();
+    let ph = snapshot.axes.iter().find(|axis| axis.name == "ph").cloned();
+    Some(FleetTelemetrySnapshot {
+        freshness: snapshot.operational_state.freshness,
+        observed_at: snapshot.observed_at,
+        received_at: snapshot.received_at,
+        ec,
+        ph,
+    })
 }
 
 pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> impl Responder {
@@ -172,8 +231,50 @@ pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> 
     for rec in devices {
         let (is_online, last_seen, operational_state) =
             status_from_cache(&app_state, &rec.device_id).await;
-        let (ec_latest, ph_latest) = latest_ec_ph(&app_state, &rec.device_id).await;
-        let warning_count = warning_count_in_last_hour(&app_state.pg_pool, &rec.device_id).await;
+        let authoritative = authoritative_fleet_telemetry(&app_state, &rec.device_id).await;
+        let (fallback_ec, fallback_ph) = if authoritative.is_none() {
+            latest_ec_ph(&app_state, &rec.device_id).await
+        } else {
+            (None, None)
+        };
+        let telemetry_freshness = authoritative
+            .as_ref()
+            .map(|snapshot| snapshot.freshness)
+            .unwrap_or(hydragrow_shared::telemetry::FreshnessState::Unknown);
+        let telemetry_observed_at = authoritative
+            .as_ref()
+            .and_then(|snapshot| snapshot.observed_at.clone());
+        let telemetry_received_at = authoritative
+            .as_ref()
+            .and_then(|snapshot| snapshot.received_at.clone());
+        let ec_quality = authoritative
+            .as_ref()
+            .and_then(|snapshot| snapshot.ec.as_ref().map(|axis| axis.quality));
+        let ec_observed_at = authoritative.as_ref().and_then(|snapshot| {
+            snapshot
+                .ec
+                .as_ref()
+                .and_then(|axis| axis.observed_at.clone())
+        });
+        let ph_quality = authoritative
+            .as_ref()
+            .and_then(|snapshot| snapshot.ph.as_ref().map(|axis| axis.quality));
+        let ph_observed_at = authoritative.as_ref().and_then(|snapshot| {
+            snapshot
+                .ph
+                .as_ref()
+                .and_then(|axis| axis.observed_at.clone())
+        });
+        let authoritative_ec = authoritative
+            .as_ref()
+            .and_then(|snapshot| snapshot.ec.as_ref().and_then(|axis| axis.value))
+            .map(|v| v as f32);
+        let authoritative_ph = authoritative
+            .as_ref()
+            .and_then(|snapshot| snapshot.ph.as_ref().and_then(|axis| axis.value))
+            .map(|v| v as f32);
+        let (warning_count, warning_count_known) =
+            warning_count_in_last_hour(&app_state.pg_pool, &rec.device_id).await;
         let crop = active_stage_name(&app_state.pg_pool, &rec.device_id).await;
 
         entries.push(FleetSummaryEntry {
@@ -183,9 +284,17 @@ pub async fn fleet_summary(req: HttpRequest, app_state: web::Data<AppState>) -> 
             last_seen,
             operational_state,
             crop,
-            ec_latest,
-            ph_latest,
+            ec_latest: authoritative_ec.or(fallback_ec),
+            ph_latest: authoritative_ph.or(fallback_ph),
             warning_count,
+            warning_count_known,
+            telemetry_freshness,
+            telemetry_observed_at,
+            telemetry_received_at,
+            ec_quality,
+            ec_observed_at,
+            ph_quality,
+            ph_observed_at,
         });
     }
 
@@ -244,7 +353,12 @@ pub async fn fleet_compare(
     let mut entries = Vec::with_capacity(ids.len());
     for device_id in &ids {
         let (_, _, operational_state) = status_from_cache(&app_state, device_id).await;
-        let (ec_latest, ph_latest) = latest_ec_ph(&app_state, device_id).await;
+        let authoritative = authoritative_fleet_telemetry(&app_state, device_id).await;
+        let (ec_latest, ph_latest) = if authoritative.is_none() {
+            latest_ec_ph(&app_state, device_id).await
+        } else {
+            (None, None)
+        };
         let crop = active_stage_name(&app_state.pg_pool, device_id).await;
         let label = owned
             .iter()
@@ -257,6 +371,34 @@ pub async fn fleet_compare(
             ec_latest,
             ph_latest,
             operational_state,
+            telemetry_freshness: authoritative
+                .as_ref()
+                .map(|snapshot| snapshot.freshness)
+                .unwrap_or(hydragrow_shared::telemetry::FreshnessState::Unknown),
+            telemetry_observed_at: authoritative
+                .as_ref()
+                .and_then(|snapshot| snapshot.observed_at.clone()),
+            telemetry_received_at: authoritative
+                .as_ref()
+                .and_then(|snapshot| snapshot.received_at.clone()),
+            ec_quality: authoritative
+                .as_ref()
+                .and_then(|snapshot| snapshot.ec.as_ref().map(|axis| axis.quality)),
+            ec_observed_at: authoritative.as_ref().and_then(|snapshot| {
+                snapshot
+                    .ec
+                    .as_ref()
+                    .and_then(|axis| axis.observed_at.clone())
+            }),
+            ph_quality: authoritative
+                .as_ref()
+                .and_then(|snapshot| snapshot.ph.as_ref().map(|axis| axis.quality)),
+            ph_observed_at: authoritative.as_ref().and_then(|snapshot| {
+                snapshot
+                    .ph
+                    .as_ref()
+                    .and_then(|axis| axis.observed_at.clone())
+            }),
         });
     }
     let crops: Vec<&str> = entries.iter().filter_map(|e| e.crop.as_deref()).collect();
@@ -290,6 +432,14 @@ mod tests {
             ec_latest: Some(1.4),
             ph_latest: Some(6.0),
             warning_count: 2,
+            warning_count_known: true,
+            telemetry_freshness: hydragrow_shared::telemetry::FreshnessState::Fresh,
+            telemetry_observed_at: Some("2026-09-10T00:00:00Z".to_string()),
+            telemetry_received_at: Some("2026-09-10T00:00:01Z".to_string()),
+            ec_quality: Some(hydragrow_shared::telemetry::TelemetryQuality::Valid),
+            ec_observed_at: Some("2026-09-10T00:00:00Z".to_string()),
+            ph_quality: Some(hydragrow_shared::telemetry::TelemetryQuality::Valid),
+            ph_observed_at: Some("2026-09-10T00:00:00Z".to_string()),
         };
         let v = serde_json::to_value(&entry).unwrap();
         let obj = v.as_object().unwrap();
@@ -315,6 +465,14 @@ mod tests {
             ec_latest: None,
             ph_latest: None,
             warning_count: 0,
+            warning_count_known: false,
+            telemetry_freshness: hydragrow_shared::telemetry::FreshnessState::Unknown,
+            telemetry_observed_at: None,
+            telemetry_received_at: None,
+            ec_quality: None,
+            ec_observed_at: None,
+            ph_quality: None,
+            ph_observed_at: None,
         };
         let v = serde_json::to_value(&entry).unwrap();
         let obj = v.as_object().unwrap();
@@ -322,6 +480,7 @@ mod tests {
         assert!(obj["ec_latest"].is_null());
         assert!(obj["ph_latest"].is_null());
         assert_eq!(obj["warning_count"], 0);
+        assert_eq!(obj["warning_count_known"], false);
     }
 
     #[test]
@@ -331,5 +490,60 @@ mod tests {
         assert!((2..=4).contains(&2usize));
         assert!((2..=4).contains(&4usize));
         assert!(!(2..=4).contains(&5usize));
+    }
+
+    #[test]
+    fn authoritative_snapshot_preserves_partial_axis_quality_without_fallback() {
+        let snapshot = hydragrow_shared::telemetry::AuthoritativeTelemetrySnapshot {
+            device_id: "dev-03".to_string(),
+            observed_at: Some("2026-09-10T00:00:00Z".to_string()),
+            received_at: Some("2026-09-10T00:00:01Z".to_string()),
+            availability: hydragrow_shared::telemetry::TelemetryAvailability::Online,
+            axes: vec![
+                hydragrow_shared::telemetry::TelemetryAxis {
+                    name: "ec".to_string(),
+                    value: None,
+                    unit: "mS/cm".to_string(),
+                    quality: hydragrow_shared::telemetry::TelemetryQuality::Error,
+                    observed_at: Some("2026-09-10T00:00:00Z".to_string()),
+                    received_at: Some("2026-09-10T00:00:01Z".to_string()),
+                    source: hydragrow_shared::telemetry::TelemetrySource::ControllerSensor,
+                    error_code: Some("ec_sensor_error".to_string()),
+                },
+                hydragrow_shared::telemetry::TelemetryAxis {
+                    name: "ph".to_string(),
+                    value: Some(6.1),
+                    unit: "pH".to_string(),
+                    quality: hydragrow_shared::telemetry::TelemetryQuality::Valid,
+                    observed_at: Some("2026-09-10T00:00:00Z".to_string()),
+                    received_at: Some("2026-09-10T00:00:01Z".to_string()),
+                    source: hydragrow_shared::telemetry::TelemetrySource::ControllerSensor,
+                    error_code: None,
+                },
+            ],
+            controller_health: None,
+            actuator: None,
+            fsm: None,
+            runtime_ready: None,
+            actuator_contradictory: false,
+            operational_state: hydragrow_shared::telemetry::OperationalState::default(),
+        };
+        let raw = serde_json::json!({"telemetry": snapshot});
+        let parsed = serde_json::from_value::<
+            hydragrow_shared::telemetry::AuthoritativeTelemetrySnapshot,
+        >(raw["telemetry"].clone())
+        .unwrap();
+        let ec = parsed.axes.iter().find(|axis| axis.name == "ec").unwrap();
+        let ph = parsed.axes.iter().find(|axis| axis.name == "ph").unwrap();
+        assert_eq!(
+            ec.quality,
+            hydragrow_shared::telemetry::TelemetryQuality::Error
+        );
+        assert_eq!(ec.value, None);
+        assert_eq!(
+            ph.quality,
+            hydragrow_shared::telemetry::TelemetryQuality::Valid
+        );
+        assert_eq!(ph.value, Some(6.1));
     }
 }

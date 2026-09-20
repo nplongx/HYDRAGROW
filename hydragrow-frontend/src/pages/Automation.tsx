@@ -33,7 +33,7 @@ const nodeTypes = {
 };
 
 export function Automation() {
-  const { status: stationStatus, selectedDeviceId } = useStationContext();
+  const { status: stationStatus, selectedDeviceId, selectedDevice } = useStationContext();
   const deviceId = selectedDeviceId ?? "";
   const { data: scripts, isLoading, isError } = useAutomationScripts(deviceId, {
     enabled: !!deviceId,
@@ -59,6 +59,11 @@ export function Automation() {
 
   const toggleScriptEnabled = async (script: UserScript, e: React.MouseEvent) => {
     e.stopPropagation();
+    const mutating = script.kind === "action_command" || script.kind === "recipe_override";
+    if (!script.enabled && mutating) {
+      canvas.openEditor(script);
+      return;
+    }
     try {
       await updateScript.mutateAsync({
         scriptId: script.id,
@@ -144,6 +149,8 @@ export function Automation() {
       <AutomationPageHeader
         onNewFlow={() => canvas.openEditor("new")}
         onOpenConfigExplorer={() => setCurrentView("config_explorer")}
+        stationName={selectedDevice?.label ?? undefined}
+        stationId={deviceId}
       />
 
       {/* 4 KPI Cards */}
@@ -259,7 +266,7 @@ export function Automation() {
               ))}
               {filteredScripts.length === 0 && (
                 <div className="col-span-2 py-12 text-center text-xs text-faint bg-white rounded-2xl border border-line">
-                  Không tìm thấy Flow nào phù hợp bộ lọc.
+                  Không có Automation phù hợp bộ lọc/tìm kiếm.
                 </div>
               )}
             </div>

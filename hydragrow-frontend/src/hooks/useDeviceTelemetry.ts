@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useStationContext } from '../contexts/StationContext';
+import { useOptionalStationContext } from '../contexts/StationContext';
 import type { AuthoritativeTelemetrySnapshot } from '../types/models';
 import { telemetryApi, normalizeLatestTelemetry } from '../api/telemetry';
 import { queryKeys } from '../api/queryKeys';
@@ -19,7 +19,8 @@ export function readSnapshot(
 }
 
 export function useDeviceTelemetry(deviceIdOverride?: string | null) {
-  const { selectedDeviceId } = useStationContext();
+  const stationContext = useOptionalStationContext();
+  const selectedDeviceId = stationContext?.selectedDeviceId ?? null;
   const deviceId = deviceIdOverride ?? selectedDeviceId;
 
   return useQuery({

@@ -7,6 +7,7 @@ import {
   type AutomationIr,
 } from "../../../lib/automation/ir";
 import { useDeviceConfig } from "../../../hooks/useDeviceConfig";
+import { useDeviceTelemetry } from "../../../hooks/useDeviceTelemetry";
 import type { ConditionTraceEntry } from "../../../types/automation";
 
 interface TestPanelProps {
@@ -42,6 +43,7 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
   const [sampleRaw, setSampleRaw] = useState<Record<string, string>>({});
   const testMutation = useTestAutomationScript(deviceId);
   const { data: settings } = useDeviceConfig(deviceId);
+  const { data: telemetry } = useDeviceTelemetry(deviceId);
 
   const targetKey = (ir.configOverwrite?.configKey ??
     (ir.actions?.find((a) => a.type === "config_override") as any)?.key ??
@@ -99,11 +101,26 @@ export function TestPanel({ deviceId, ir, fields }: TestPanelProps) {
           Chạy thử (Dry Run)
         </h2>
       </div>
+      <div className="mx-4 mt-3 rounded-xl border border-primary bg-info-bg px-3 py-2 text-xs font-semibold text-primary">
+        Mô phỏng — không gửi lệnh
+      </div>
+      <div className="mx-4 mt-3 rounded-xl border border-line bg-white p-3 text-xs">
+        <div className="font-semibold text-primary-deep">Giá trị hiện tại</div>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-text-muted">
+          {(telemetry?.axes ?? []).slice(0, 4).map((axis) => (
+            <div key={axis.name} className="flex justify-between gap-2">
+              <span>{axis.name}</span>
+              <span className="font-mono text-primary-deep">{axis.value ?? "Unknown"}</span>
+            </div>
+          ))}
+          {!telemetry && <span className="col-span-2 text-faint">Chưa có telemetry authoritative; giữ Unknown.</span>}
+        </div>
+      </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div>
           <h3 className="text-sm font-medium text-primary-deep mb-3">
-            Giá trị mẫu (Input)
+            Giá trị mô phỏng (Input)
           </h3>
           <div className="space-y-3">
             {fields.map((field) => {

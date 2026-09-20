@@ -90,9 +90,25 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
 
   const showCronBadge = triggerKind === "cron";
   const showWebhookBadge = triggerKind === "webhook";
+  const action = script.ir_json?.actions?.[0];
+  const impact = action?.type === "dose"
+    ? `Châm ${action.doseMl} ml · ${action.pump} · PWM ${action.pwm}%`
+    : action?.type === "water_on"
+      ? `Bật ${action.pump} · ${action.durationSec}s`
+      : action?.type === "water_off"
+        ? `Tắt ${action.pump}`
+        : action?.type === "advance_stage"
+          ? `Chuyển giai đoạn ${action.targetStageOffset >= 0 ? "+" : ""}${action.targetStageOffset}`
+          : action?.type === "end_season"
+            ? "Kết thúc vụ"
+            : action?.type === "alert"
+              ? `Cảnh báo ${action.level}`
+              : "Tác động chưa xác định";
+  const safetyWarning = script.kind === "action_command" || script.kind === "recipe_override";
 
   return (
     <div
+      data-testid="automation-card"
       onClick={onClick}
       className={`ui-card p-4 rounded-2xl bg-white border border-line hover:border-primary/50 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-36 group ${
         !script.enabled ? "opacity-75" : ""
@@ -143,10 +159,14 @@ export function FlowOverviewCard({ script, onClick, onToggleEnabled }: Props) {
         <p className="text-xs text-text-muted mt-1 line-clamp-1">
           {getSummary()}
         </p>
+        <p className="text-[11px] text-primary-deep mt-1 line-clamp-1">
+          Tác động: {impact}
+        </p>
       </div>
 
       <div className="text-[11px] text-faint flex items-center justify-between pt-1 border-t border-line">
         <span>{lastRunLabel(script.last_run_at)}</span>
+        {safetyWarning && <span className="text-warning font-semibold">Safety Review</span>}
         <span className="group-hover:translate-x-0.5 transition-transform text-primary font-medium">Chi tiết &rarr;</span>
       </div>
     </div>
